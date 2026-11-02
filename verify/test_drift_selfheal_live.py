@@ -1,0 +1,153 @@
+# ABOUTME: E2E drill for #205: delete a managed NetworkPolicy on a live cluster and time Argo CD putting it back,
+# ABOUTME: against the window docs/floor.md documents. Needs kubectl and CONTEXT; anything missing is a failure.
+# SUITE: e2e
+"""Usage: CONTEXT=<kube-context> python3 verify/test_drift_selfheal_live.py
+
+The target is the one managed NetworkPolicy every profile carries (TARGET below). The 30 s window holds only
+when the owning app has not self-healed recently: at one git revision the controller backs each further
+self-heal off (2 s, 6 s, 18 s, 54 s, 162 s, then 300 s), counted from the previous sync's finish. So the drill
+first waits for QUIET_S of quiet on the app, and fails if it cannot get it in QUIET_WAIT_S, because an app that
+self-heals that often is drift worth knowing about. Then it deletes the policy and times its return.
+
+Every kubectl call carries --context "$CONTEXT" (CLAUDE.md, Kube-context safety). The current-context is never
+read. If the policy does not come back, the drill asks Argo CD for a refresh before it exits, so a failed run
+does not leave the console without egress.
+"""
+from __future__ import annotations
+
+import datetime
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+
+TARGET = ("agent", "platform-console-egress", "ai-layer")  # namespace, NetworkPolicy, owning Application
+WINDOW_S = 30          # docs/floor.md: back within this, given QUIET_S without a self-heal on the owning app
+QUIET_S = 300          # the self-heal backoff cap; past it the next heal is immediate whatever the count
+QUIET_WAIT_S = 600     # how long to wait for that quiet before calling the app itself the finding
+GIVE_UP_S = 330        # past the window, keep watching this long so a miss reports the real time
+TRACKING = "argocd.argoproj.io/tracking-id"
+
+CONTEXT = os.environ.get("CONTEXT", "")
+failures: list[str] = []
+
+
+def check(name: str, cond: bool) -> None:
+    print(f"  {'PASS' if cond else 'FAIL'}  {name}")
+    if not cond:
+        failures.append(name)
+
+
+def kubectl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["kubectl", "--context", CONTEXT, "--request-timeout=15s", *args],
+                          capture_output=True, text=True)
+
+
+def get_json(*args: str) -> dict | None:
+    p = kubectl("get", *args, "-o", "json")
+    if p.returncode != 0:
+        if "NotFound" in p.stderr:
+            return None
+        raise RuntimeError(f"kubectl get {' '.join(args)}: {p.stderr.strip()}")
+    return json.loads(p.stdout)
+
+
+def since_last_sync(app: dict) -> float | None:
+    fin = ((app.get("status") or {}).get("operationState") or {}).get("finishedAt")
+    if not fin:
+        return None
+    t = datetime.datetime.fromisoformat(fin.replace("Z", "+00:00"))
+    return (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds()
+
+
+def finish() -> int:
+    print()
+    if failures:
+        print(f"FAILED: {len(failures)} check(s)")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    print("Self-heal drill passed.")
+    return 0
+
+
+def main() -> int:
+    ns, name, app_name = TARGET
+    print("== prerequisites ==")
+    check("kubectl is on PATH", shutil.which("kubectl") is not None)
+    check("CONTEXT names the cluster to drill", bool(CONTEXT))
+    if failures:
+        return finish()
+    app = get_json("-n", "argocd", "application", app_name)
+    check(f"Application {app_name} exists on {CONTEXT}", app is not None)
+    if app is None:
+        return finish()
+    auto = (app["spec"].get("syncPolicy") or {}).get("automated") or {}
+    check(f"{app_name} self-heals and prunes", auto.get("selfHeal") is True and auto.get("prune") is True)
+    before = get_json("-n", ns, "networkpolicy", name)
+    check(f"{ns}/{name} exists before the drill", before is not None)
+    if before is None:
+        return finish()
+    check(f"{ns}/{name} carries Argo CD's tracking annotation (it is managed)",
+          TRACKING in (before["metadata"].get("annotations") or {}))
+    if failures:
+        return finish()
+
+    print(f"== waiting for {QUIET_S}s without a sync on {app_name} (the self-heal backoff cap) ==")
+    waited = 0.0
+    while True:
+        app = get_json("-n", "argocd", "application", app_name) or {}
+        quiet = since_last_sync(app)
+        if quiet is None or quiet >= QUIET_S:
+            break
+        if waited >= QUIET_WAIT_S:
+            break
+        step = min(QUIET_S - quiet, 15.0)
+        time.sleep(step)
+        waited += step
+    count = (((app.get("status") or {}).get("operationState") or {}).get("operation") or {}).get(
+        "sync", {}).get("selfHealAttemptsCount", 0)
+    print(f"  {app_name}: last sync {quiet if quiet is not None else 'never'}s ago, selfHealAttemptsCount {count}")
+    check(f"{app_name} went {QUIET_S}s without syncing within {QUIET_WAIT_S}s of waiting "
+          "(if not, it is healing something all the time: that is the finding)",
+          quiet is None or quiet >= QUIET_S)
+    if failures:
+        return finish()
+
+    print(f"== delete {ns}/{name} and time its return ==")
+    old_uid = before["metadata"]["uid"]
+    p = kubectl("-n", ns, "delete", "networkpolicy", name, "--wait=false")
+    check(f"the delete is admitted ({p.stderr.strip() or 'ok'})", p.returncode == 0)
+    if p.returncode != 0:
+        return finish()
+    t0 = time.monotonic()
+    back, after = None, None
+    while time.monotonic() - t0 < GIVE_UP_S:
+        after = get_json("-n", ns, "networkpolicy", name)
+        if after is not None and after["metadata"]["uid"] != old_uid:
+            back = time.monotonic() - t0
+            break
+        time.sleep(1)
+    if back is None:
+        print(f"  not back after {GIVE_UP_S}s; requesting a refresh so the console keeps its egress")
+        kubectl("-n", "argocd", "annotate", "application", app_name, "argocd.argoproj.io/refresh=normal", "--overwrite")
+        check(f"{ns}/{name} came back at all within {GIVE_UP_S}s", False)
+        return finish()
+    print(f"  back after {back:.1f}s")
+    check(f"{ns}/{name} came back within the documented {WINDOW_S}s (took {back:.1f}s)", back <= WINDOW_S)
+    check("as a new object (a new uid), so it was re-created and not merely never deleted",
+          after["metadata"]["uid"] != old_uid)
+    check("carrying Argo CD's tracking annotation", TRACKING in (after["metadata"].get("annotations") or {}))
+    check("with the spec git has", after.get("spec") == before.get("spec"))
+
+    app = get_json("-n", "argocd", "application", app_name) or {}
+    op = (app.get("status") or {}).get("operationState") or {}
+    check(f"the sync that did it was automated and succeeded (phase {op.get('phase')})",
+          op.get("phase") == "Succeeded" and (op.get("operation", {}).get("initiatedBy") or {}).get("automated") is True)
+    return finish()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

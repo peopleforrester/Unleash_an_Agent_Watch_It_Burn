@@ -71,7 +71,8 @@ python3 infra/org/pipeline.py run --show /tmp/show-head.json --base /tmp/show-ba
     --suite cluster --profile <profile> --region us-west-2
 ```
 
-Use `--suite boundary` for a plan of `infra/org/boundary`. Each check also runs alone:
+Use `--suite boundary` for a plan of `infra/org/boundary`, and `--suite audit` for a plan of
+`infra/terraform/aws/audit`, the per-account AWS Config recorder and CloudTrail trail (#205). Each check also runs alone:
 `extract`, `structural`, `syntax`, `diff`, `effect`.
 
 A document that is known only after apply (a policy naming a KMS key the same apply creates, for
@@ -127,7 +128,7 @@ Checks 1, 2 and 4 call AWS and are not in that job. They run from the command li
   and check 3 in both `pipeline.py` and `iam.rego`; and the boundary, with a check 4 case for each,
   explicitly denies every org-policy write.
 - `verify/test_iam_policy_structural.py` (E2E; conftest v0.71.1, terraform): Rego unit tests, then the
-  repo's real cluster and boundary plans pass, and a plan with the agent's Condition removed fails at
+  repo's real cluster, boundary and audit plans pass, and a plan with the agent's Condition removed fails at
   `Statement[0]`. `verify/iam_plan_render.py` renders those plans without an AWS account.
 - `verify/test_iam_policy_aws.py` (E2E; aws CLI, `IAM_PIPELINE_PROFILE`, `IAM_PIPELINE_REGION`): checks 1
   and 4 on the real documents, and check 2 failing a widened agent policy.

@@ -9,7 +9,8 @@
 import os, pathlib, shutil, subprocess, sys, tempfile
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-ROOTS = ["infra/terraform/aws/cluster", "infra/terraform/aws/network", "infra/org/boundary", "infra/terraform/dashboards"]
+ROOTS = ["infra/terraform/aws/cluster", "infra/terraform/aws/network", "infra/terraform/aws/audit", "infra/org/boundary",
+         "infra/terraform/dashboards"]
 failures = []
 
 

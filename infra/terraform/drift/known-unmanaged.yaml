@@ -1,0 +1,42 @@
+# ABOUTME: The AWS half of the unmanaged register: S3 buckets and EKS clusters the fleet accounts are EXPECTED to
+# ABOUTME: hold outside every Terraform state. drift-report.py lists anything else as a finding. Prose: docs/floor.md.
+#
+# An entry names a resource kind, the accounts it applies to ("*" for every fleet account), and either a
+# `name` (shell glob) or a `tag` (every key/value must match). `made_by` says what creates it and `why` says
+# why it is not in Terraform; an entry nobody can explain is not one to add. When the drift report finds a
+# resource that belongs here, add it here in the same commit that says who made it, and add its row to
+# docs/floor.md's register (verify/test_drift_floor.py holds the two together).
+#
+# Kinds: s3-bucket, eks-cluster.
+entries:
+  - kind: s3-bucket
+    name: watch-it-burn-exfil-hoop
+    accounts: ["*"]
+    made_by: games/eso-s3-exfil/s3-hoop-setup.sh
+    why: >-
+      The optional ESO exfil game's target bucket, made by a setup script on the day and removed by
+      games/eso-s3-exfil/teardown.sh. It is tagged project=watch-it-burn but no Terraform root owns it.
+  - kind: eks-cluster
+    tag: { "lab-platform:managed": "true" }
+    accounts: ["*"]
+    made_by: lab-platform (labctl event up), which builds an event's clusters in the fleet accounts
+    why: >-
+      lab-platform provisions, records and tears down its own clusters (peopleforrester/lab-platform); they are
+      in its records, not in a Terraform state here. Its Argo CD then syncs this repo's gitops/bootstrap.
+  - kind: s3-bucket
+    tag: { "lab-platform:managed": "true" }
+    accounts: ["*"]
+    made_by: lab-platform (labctl), for the events it runs in the fleet accounts
+    why: Same owner rule as its clusters.
+  - kind: s3-bucket
+    tag: { Workshop: packt }
+    accounts: [accen-dev]
+    made_by: the Packt project (co-tenant in accen-dev)
+    why: >-
+      accen-dev is shared with Packt, who tag their resources Workshop=packt (infra/terraform/aws/network/main.tf).
+      Theirs, in their own state; we never touch them.
+  - kind: eks-cluster
+    tag: { Workshop: packt }
+    accounts: [accen-dev]
+    made_by: the Packt project (co-tenant in accen-dev)
+    why: Same co-tenant rule as their buckets.

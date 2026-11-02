@@ -1,4 +1,4 @@
-# ABOUTME: Renders `terraform show -json` of the cluster and boundary roots' IAM resources with no AWS account,
+# ABOUTME: Renders `terraform show -json` of the cluster, boundary and audit roots' IAM resources with no AWS account,
 # ABOUTME: so the policy pipeline's E2E checks read the documents the repo would apply today, not a recorded copy.
 """How. Every IAM document in these roots is computed locally (jsonencode, templatefile, and the modules'
 aws_iam_policy_document data sources). The only AWS calls a plan of them makes are STS GetCallerIdentity and
@@ -24,8 +24,10 @@ import urllib.parse
 REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER = REPO / "infra/terraform/aws/cluster"
 BOUNDARY = REPO / "infra/org/boundary"
+# The per-account Config recorder and trail (#205). Planned whole: its only AWS reads are the two below.
+AUDIT = REPO / "infra/terraform/aws/audit"
 # Every root the pipeline runs on (pipeline.ROOTS); test_iam_policy_coverage.py holds the two the same.
-ROOTS = {"cluster": CLUSTER, "boundary": BOUNDARY}
+ROOTS = {"cluster": CLUSTER, "boundary": BOUNDARY, "audit": AUDIT}
 ACCOUNT = "111122223333"
 BOUNDARY_NAME = "watch-it-burn-permissions-boundary"
 CLUSTER_NAME = "watch-it-burn-attendee-001"
@@ -126,7 +128,7 @@ def _plugin_cache() -> str:
 
 
 def render(root: str, edit=None) -> dict:
-    """`terraform show -json` for 'cluster' or 'boundary'. edit(main_tf) -> main_tf mutates the copy first."""
+    """`terraform show -json` for 'cluster', 'boundary' or 'audit'. edit(main_tf) -> main_tf mutates the copy first."""
     src = ROOTS[root]
     tf = terraform_binary()
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
@@ -149,7 +151,7 @@ def render(root: str, edit=None) -> dict:
             r = run("init", "-input=false", "-no-color")
             if r.returncode:
                 raise SystemExit(f"FAIL: terraform init of {root} failed:\n{r.stderr or r.stdout}")
-            # event has no default in either root (#494, #507), nor the cluster root's hostname (#602) or
+            # event has no default in any root (#494, #507, #205), nor the cluster root's hostname (#602) or
             # role (#636).
             args = ["plan", "-input=false", "-no-color", "-refresh=false", "-out=render.tfplan", "-var", "profile=render",
                     "-var", "event=render"]

@@ -230,7 +230,7 @@ print("effect-tests.yaml")
 spec = yaml.safe_load((REPO / "infra/org/effect-tests.yaml").read_text(encoding="utf-8"))
 cluster_tf = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
 declared = {f"{t}.{n}" for t, n in re.findall(r'^resource "(aws_iam_policy|aws_iam_user_policy)" "([^"]+)"', cluster_tf, re.M)}
-check("both suites are present and non-empty", all(spec.get(s) for s in ("boundary", "cluster")))
+check("every suite is present and non-empty", all(spec.get(s) for s in ("boundary", "cluster", "audit")))
 for suite, cases in spec.items():
     for c in cases:
         ok = {"name", "action", "expect", "identity"} <= set(c) and c["expect"] in ("allowed", "explicitDeny", "implicitDeny", "denied")
@@ -241,7 +241,7 @@ for suite, cases in spec.items():
         if suite == "cluster" and c.get("identity") != "allow-all":
             check(f"cluster: {c['name']!r} names policies the cluster root declares", set(c["identity"]) <= declared, c["identity"])
 check("the effect tests hold an allowed case in each suite, so a deny-everything policy cannot pass",
-      all(any(c["expect"] == "allowed" for c in spec[s]) for s in ("boundary", "cluster")))
+      all(any(c["expect"] == "allowed" for c in spec[s]) for s in ("boundary", "cluster", "audit")))
 
 print("reading AWS's answers")
 rec = {"address": "aws_iam_policy.a", "attribute": "policy", "kind": "identity", "document": json.loads(doc(ALLOW))}

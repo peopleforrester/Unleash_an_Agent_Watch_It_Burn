@@ -40,7 +40,7 @@ check("every iam_test.rego case passes", r.returncode == 0 and re.search(r"\b0 f
       r.stdout + r.stderr)
 
 print("the repo's own plans")
-for root in ("boundary", "cluster"):
+for root in ("boundary", "cluster", "audit"):
     ext = p.extract(iam_plan_render.render(root))
     check(f"{root}: every document is known at plan time", ext["unknown"] == [], ext["unknown"])
     msgs = p.structural(ext)
@@ -53,6 +53,15 @@ for root in ("boundary", "cluster"):
         check("cluster: the attendee user's inline policy is a document the checks read (#549)",
               any(d["address"] == "aws_iam_user_policy.attendee_eks" and d["kind"] == "identity" for d in ext["documents"]),
               sorted(d["address"] for d in ext["documents"]))
+    if root == "audit":
+        check("audit: the recorder's role is its only role, and it carries the boundary (#205)",
+              [r["address"] for r in ext["roles"]] == ["aws_iam_role.config"]
+              and ext["roles"][0]["permissions_boundary"].endswith(f":policy/{p.BOUNDARY_NAME}"), ext["roles"])
+        check("audit: the delivery grant, the trust policy and the trail's bucket policy are all read",
+              {(d["address"], d["kind"]) for d in ext["documents"]}
+              == {("aws_iam_role_policy.config_delivery", "identity"), ("aws_iam_role.config", "trust"),
+                  ("aws_s3_bucket_policy.audit", "s3-bucket")},
+              sorted((d["address"], d["kind"]) for d in ext["documents"]))
 
 
 print("a plan that breaks the rules")

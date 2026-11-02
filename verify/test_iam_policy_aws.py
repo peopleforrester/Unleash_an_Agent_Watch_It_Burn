@@ -32,7 +32,7 @@ if missing:
     sys.exit(1)
 PROFILE, REGION = os.environ["IAM_PIPELINE_PROFILE"], os.environ["IAM_PIPELINE_REGION"]
 
-shows = {root: iam_plan_render.render(root) for root in ("boundary", "cluster")}
+shows = {root: iam_plan_render.render(root) for root in ("boundary", "cluster", "audit")}
 exts = {root: p.extract(show) for root, show in shows.items()}
 
 print("check 1: Access Analyzer validate-policy")
@@ -62,7 +62,7 @@ got = p.diff(narrower, base, PROFILE, REGION, accept_new=[])
 check("a narrowing identity policy passes check 2", got == [], got)
 
 print("check 4: effect tests (iam simulate-custom-policy)")
-for root, suite in (("boundary", "boundary"), ("cluster", "cluster")):
+for root, suite in (("boundary", "boundary"), ("cluster", "cluster"), ("audit", "audit")):
     got = p.effect(exts[root], shows[root], suite, PROFILE, REGION)
     check(f"{suite}: every case in effect-tests.yaml gets the decision it expects", got == [], "\n        ".join(got))
 

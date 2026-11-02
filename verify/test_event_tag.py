@@ -31,6 +31,7 @@ check("and its default is the KubeCon NA value (#454)", settings == ["kubecon-na
 # Every root takes event from a variable that has no default.
 for root, main_tf in (("aws/network", TF / "aws" / "network" / "main.tf"),
                       ("aws/cluster", TF / "aws" / "cluster" / "main.tf"),
+                      ("aws/audit", TF / "aws" / "audit" / "main.tf"),
                       ("org/boundary", ORG / "boundary" / "main.tf")):
     txt = main_tf.read_text()
     m = re.search(r'variable "event" \{(.*?)\n\}', txt, re.S)

@@ -11,3 +11,5 @@ crash.log
 *.log
 *.apply.log
 *.reapply.log
+# The daily drift report's copies (drift/scheduled-drift.sh); the record that matters is the GitHub issue.
+drift/logs/

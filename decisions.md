@@ -8694,3 +8694,78 @@ Expected on each: ten PASS lines and `All live /toggle exposure checks passed.`,
 before and after. The tool pod's in-cluster call to guard-proxy:8080/toggle stays open on purpose, the mesh
 challenge candidate in `docs/research/2026-10-24-istio-ambient-evaluation.md` section 2.1; closing it is
 Michael's decision and is not part of #520.
+
+## 2026-11-02 · #205 · Drift on both planes: a documented self-heal window, a daily refresh-only plan that covers the standby regions, and a Config and CloudTrail record that joins the IAM pipeline
+
+**What #205 asked.** Document and detect out-of-band change on both planes. Deleting a managed NetworkPolicy
+returns within the documented window; a hand-made bucket via attendee keys shows in AWS Config and the next
+drift plan; `docs/floor.md` gets an "unmanaged" register.
+
+**The design.** Kubernetes plane: `docs/floor.md` documents two clocks. A deleted or hand-edited managed object comes
+back within 30 s, provided its app has not self-healed in the previous 5 minutes. Repeated heals at one revision back
+off 2/6/18/54/162 s, then 300 s. A push lands within 180 s on a `staging` cluster (no webhook is configured) and never
+on a lab-platform cluster, which is pinned to one commit. This was read from the Argo CD v3.5.2 source
+(`deploy-full-idp.sh`, chart 10.8.4) and the v3.5.6 source (lab-platform, chart 10.11.3, still its pin on
+2026-11-02), and both behave the same. `verify/test_drift_floor.py` (offline) holds the doc to the chart.
+`verify/test_drift_selfheal_live.py` (E2E) deletes `agent/platform-console-egress` and requires it back within
+30 s. AWS plane: `infra/terraform/drift/drift-report.py` runs refresh-only plans and reads `resource_drift`, then
+sweeps for unmanaged S3 buckets and EKS clusters, naming each creator from CloudTrail and saying whether Config
+recorded it. `scheduled-drift.sh` is the daily cron wrapper, and driftctl is not added. `infra/terraform/aws/audit`
+is the per-account Config recorder and multi-region trail, and it is the IAM policy pipeline's third root (suite
+`audit`).
+
+**What differs from the draft.** The previous draft was d7bb3ff on `origin/agent/205-12982` (2026-10-30), cut from the
+staging of that day, and it never reached staging. `bash verify/draft-drift.sh origin/agent/205-12982 origin/staging`
+named three drift lines (`VERSIONS.lock`, `decisions.md`, `verify/run-e2e.sh`), and staging had moved 125 commits.
+Those three were only context changes, but the 125 commits also changed what the draft describes. Each claim was
+checked against today's tree, and the draft's own gate, run here, found the first two of the changes below:
+
+- **The standbys (#643) are in two more regions.** `infra/terraform/fleet/backups.tsv` builds standbys in us-east-1
+  and us-east-2. Outside the home region each account keeps one lab VPC state per region,
+  `aws/network/states/<profile>.<region>.tfstate` (`fleet.sh lab_vpc_state_for`). The draft would have planned a
+  us-east-1 standby with us-west-2's `vpc_id`. It never planned the regional lab VPC states, and it listed clusters
+  only in us-west-2, so a standby left running after its state went was never found. The report now keys lab VPCs
+  by account and region and plans each regional state in its own region. Each cluster is planned against its own
+  region's VPC. Clusters are listed in us-west-2, every region in `backups.tsv`, and every region a state is in.
+  `verify/test_drift_report.py` adds a us-east-1 standby and an orphan in us-east-2, and the draft's report fails
+  eight of the new checks.
+- **The audit root stays one per account, in us-west-2.** Config is regional, so an unmanaged resource in a standby
+  region is reported as "in <region>; the recorder is in us-west-2". The recorder's IAM role is global and named
+  once per account, so a second regional apply would collide on it, and the standbys live for hours. The trail is
+  multi-region, so CloudTrail still names the creator there. Applying it per region can be added later, if Config
+  coverage there is wanted.
+- **Two ignores added since the draft (#643).** The Bedrock ModelConfigs' `.spec.bedrock.region` and agentgateway's
+  `BEDROCK_REGION` env now have register rows.
+- **The Agent's ignores moved app (#707).** `workshop-agent` is its own Application now, without
+  `RespectIgnoreDifferences`. The draft's row still named `ai-layer`, and its gate passed anyway because it only
+  looked for the app's name anywhere in the row, where the Agent's own name matched. The gate now requires the
+  row's App column to be exactly the owning app, and fails on the old row.
+- **`deploy-full-idp.sh` now passes `--kube-context` to helm.** The gate's chart-pin pattern did not match the new
+  line, so it now allows flags between `helm` and `upgrade`. The chart is still 10.8.4.
+- **Unchanged, and rechecked.** The drill target `agent/platform-console-egress` is still in
+  `gitops/ai-layer/resources.yaml`, and every profile still lists `ai-layer`. No Kyverno policy refuses its deletion.
+  The attendee grant is still `aws_iam_user_policy.attendee_eks`, with the two EKS reads. The boundary still denies
+  stopping the recorder and the trail. `mint_attendee_key` still writes `name,region,access_key,secret_key`.
+
+**The schedule stays cron.** The question asked on #205 on 2026-10-24 (where the daily run lives) stands with its
+default, and this run does not ask it again. `infra/terraform/drift/scheduled-drift.sh` runs from cron on the machine that holds the states. #201,
+which would move state to a remote backend, is still open. `.github/workflows/plan-policy.yml` plans against a
+moto mock, which is right for policy and useless for drift.
+
+**Dependency.** The audit root's lock records hashicorp/aws 6.71.0, the newest 6.x when d7bb3ff was written (2026-10-30), under the
+same `~> 6.0` constraint as the other roots; `terraform init` with the pinned Terraform v1.15.6 wrote it.
+
+**Tests.** `verify/test_drift_floor.py` (offline, new) was mutation-tested: a dropped register field, a disabled
+selfHeal, a Kyverno rule refusing NetworkPolicy deletes, a moved chart and a row under the wrong app each fail it. `verify/test_drift_report.py`
+(offline, new) runs the report against terraform, aws and gh shims, standbys included. `verify/test_drift_selfheal_live.py` and
+`verify/test_drift_aws_live.py` (E2E, new) fail by name without CONTEXT, DRIFT_PROFILE or ATTENDEE_CLUSTER.
+
+**Not yet run on a cluster.** Owed on a build with AWS access:
+- `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`, the NetworkPolicy drill, on a fresh attendee
+  cluster;
+- the boundary, then `terraform -chdir=infra/terraform/aws/audit apply -state=states/<profile>.tfstate -var
+  profile=<profile> -var event="${WIB_EVENT}"` in each fleet account, after checking for an existing recorder;
+- `DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`;
+- `IAM_PIPELINE_PROFILE=<p> IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py` for the new
+  audit suite and the new cluster case;
+- one `python3 infra/terraform/drift/drift-report.py` by hand, then the cron line from `docs/floor.md`.
