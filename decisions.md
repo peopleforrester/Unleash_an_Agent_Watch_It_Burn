@@ -10009,3 +10009,24 @@ image and pushed it over the same tag. Clusters pull by digest, so nothing runni
 write and the signing key (`verify/sign-images.sh`), which this run has neither of: point the tag back at the pinned
 digest, or pin the new digest and sign it. It belongs to #714, and the workflow will move the tag again on its next
 push run unless it stops overwriting a tag that already exists.
+
+## 2026-11-03 · #746 · Third re-dispatch: cluster access was handed over but could not be read, so the live look is still owed
+
+**No code changed.** The one-root copy (241f8e6) and #783's own trace id for it (67c956a) are on staging, and
+`verify/test_trace_shape_e2e.py` still pins the shape offline. Hecaton run 16420 is the first #746 dispatch given
+cluster access: an env file, a kubeconfig naming `watch-it-burn-community` and `watch-it-burn-private`, and accen-dev
+credentials under the run's `clusters/` directory. Those files are mode 640, group `hecaton`, and the run's user
+(`hecaton-s3-claude-certkraken`) is not in that group, so sourcing the env and every `kubectl` call failed with
+"permission denied", and `aws sts get-caller-identity` found no credentials. Nothing was read on a cluster or in Datadog.
+
+**The order of the owed look.** #783's fix changes what the look reads, so it goes first. The commands are the ones in
+the 2026-11-02 · #783 entry: on each cluster, the `otel-collector` Application's revision must contain 67c956a with
+the sync Succeeded, and the collector log must show no `llmobs` export error. Then
+`python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`. After that, send
+the HC-666 chat to each bot, as step 4 of the 2026-11-02 · #746 re-dispatch entry says, and read the four checks on
+its row in LLM Observability (`ml_app:burritobot`): one root row, the prompt and the reply on it, `read_support_ticket`
+and `deploy_app` under it, and a duration that covers the whole chat. A green `agent_obs_flow.py` with two roots or
+an empty root is #746's failure; a red one is #783's.
+
+**Not yet run on a cluster.** All of the above, on both clusters. A run whose user can read its `clusters/` files, or
+a session with accen-dev, runs it and records the trace ids here.
