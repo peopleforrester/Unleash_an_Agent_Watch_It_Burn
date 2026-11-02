@@ -9365,8 +9365,8 @@ and the gate test the issue asks for comes with them.
   copies in the public, signed watch-it-burn package, by digest.
 - **Implicit Docker Hub pulls.** The `curlimages/curl` helper pods in beat-02.sh, beat-cost.sh and two
   FACILITATOR.md commands now run the workshop-mcp image. It carries curl and is signed (verify/probe_pod.py's
-  reasoning). The clown file's bare `busybox` is an untagged `lab-platform/promo/joker`, which the registry rule
-  refuses and which has no `:latest` to pull, so even a cluster with no Kyverno pulls nothing. A render of every app
+  reasoning). The clown file's bare `busybox` is lab-platform's `promo/joker` by digest, on the path the registry
+  rule refuses (`verify/test_image_pins.py` holds our images to a digest, so it cannot be left untagged). A render of every app
   in `gitops/bootstrap/apps` with the pinned Helm found three more Docker Hub images besides Falco's two:
   falcosidekick's `curlimages/curl` and otel-operator's `busybox:latest`. All three are Pods annotated
   `helm.sh/hook: test` or `test-success`. Argo CD skips Helm test hooks, so no node pulls them; the live check below
@@ -9375,7 +9375,7 @@ and the gate test the issue asks for comes with them.
   their catchphrases from build.sh at `45e62f0`. So the M and V lines stay, and the Docker Hub roster push, its PAT
   login, `ORG` and `BASE` go. A roster name is now refused before anything is pushed.
 - **games/villain-apps** built three nginx villains for a Docker Hub user namespace. That build is removed, and the
-  beat deploys C6's Joker on 8080, on a path the registry rule refuses.
+  beat deploys C6's Joker by its digest, on 8080, on a path the registry rule refuses.
 - **Terraform and fleet.sh.** The cluster module's `dockerhub_auth_b64` variable is gone, and so is the cloud-config
   part that wrote the node's Docker Hub `hosts.toml`. fleet.sh's loading of the PAT goes with them, along with
   `WIB_DOCKERHUB_ENV` in three fleet tests. infra/harbor had only README text. #664 needs no Docker Hub token (the

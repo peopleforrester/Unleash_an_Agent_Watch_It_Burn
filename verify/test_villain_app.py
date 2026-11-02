@@ -39,7 +39,8 @@ check("autogen is not switched off", "autogen" not in spec)
 check(f"allowlist permits nothing on Docker Hub (#714): {allow}", not any("docker" in p for p in allow))
 sys.path.insert(0, str(REPO / "gitops/ai-layer"))
 import ticket_site  # noqa: E402
-check(f"villain image is C6's Joker, the image images/villains/build.sh pushes ({img})", img == ticket_site.C6_IMAGE)
+check(f"villain image is C6's Joker, the image images/villains/build.sh pushes, by digest ({img})",
+      img.startswith(ticket_site.C6_IMAGE + "@sha256:"))
 check("villain image is NOT in the allowlist (nor ECR) -> C2 refuses it", not allowed(img))
 check("villain deploys to the apps namespace", dep["metadata"]["namespace"] == "apps")
 # The run-of-show reads the refusal aloud and the lab quotes it; Kyverno prefixes it with the policy name.
