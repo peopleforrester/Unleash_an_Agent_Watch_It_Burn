@@ -8905,3 +8905,50 @@ session with the accen-dev profile runs it on watch-it-burn-community:
 
 A 200 through the port-forward closes #583. Any other status prints Bedrock's reply, which names the encoding the
 path needs.
+## 2026-11-02 · #651 · burritobot.co on every viewer surface, start trusted on both domains, the kagent and party-app hosts retired
+
+Run 15834 took #651 up again on base 43dd3a0. The two earlier drafts, run 10468 (`origin/agent/651-10468`) and run
+10712 (`origin/agent/651-10712`), never reached staging. `verify/draft-drift.sh origin/agent/651-10712 origin/staging`
+named 28 drifted paths, so the design was made again on today's layout rather than cherry-picked.
+
+**What differs from the 10712 draft.**
+- Backstage stays routed. #244 (Michael, 2026-11-01) put `backstage-<cluster>` on both domains after the draft, so
+  `WIB_SERVICE_HOSTS` is grafana, argocd and backstage, and the issue's "retire backstage" is overtaken by that entry.
+  The C6 hosts are maintenance-shell and support (#640). The roster table goes to 24 hosts, two clusters with a
+  console and five service hosts each, on both domains.
+- `published_address` in workshop-mcp-server.py already hands out the burritobot.co twin on staging (#663), so it is
+  not touched.
+- guard-proxy fb6e2bf reads CONSOLE_ORIGIN as a comma list. resources.yaml now lists start.burritobot.co and
+  start.agenticburn.com, so the instructor console reads every cluster on either domain, which the issue asks for.
+  The follow-up for guard-proxy-agenticburn the 10468 report filed is not needed.
+- The Backstage catalog is a page a viewer opens, so it no longer links provisioning.agenticburn.com (apex returns
+  404 for it since 2026-10-29), its apex-router link is https://burritobot.co, and the party apps' descriptions name
+  no host. Repo names (provisioning-agenticburn, apex-agenticburn) stay, as the issue says.
+- The run-of-show's dated history entries keep the names they ran on. Its live instructions (the /cost read, the
+  Grafana view, the /kubecon gate, check-tls, the two probe runs) name burritobot.co. check-tls also runs on the two
+  agenticburn.com twins, since both domains are served.
+
+**What a viewer now sees.** The six pages (burritbot, lab, kubecon, brief, platform, links), the lab text, the
+prompt catalogue, the C1 prompts and fallbacks, the terminal catalogue and the Backstage catalog name
+prompts.burritobot.co, feedback.burritobot.co, beacon.burritobot.co/beacon and `<service>-<cluster>.burritobot.co`.
+`verify/test_two_domains.py` fails on any visible "agenticburn" on the six pages, on an agenticburn.com host in the
+Backstage catalog, and on a CONSOLE_ORIGIN that leaves out either start.
+
+**Retired on both domains.** kagent- and the five party-app prefixes: fleet.sh no longer routes them, console.conf
+serves none of them, and /platform and the terminal show them as in-cluster only. The shrink guard discounts their
+rows by `WIB_RETIRED_SERVICE_HOSTS` and now counts burritobot.co rows too; before, a lost burritobot.co row did not
+register. Checked live with read-only curl on 2026-11-02: provisioning, walkthrough, monitoring, mystery, harbor, s,
+x, round1, michael-admin and the standalone grafana host all get the router's unknown-host 404. They still resolve,
+because `*.agenticburn.com` and `*.burritobot.co` are wildcard records the cluster hosts need; the router's 404 is the
+retirement. Nothing in this repo pulls an image from harbor.agenticburn.com. Kept, by Michael's later calls: rounds
+(rounds-agenticburn#43), feedback (the lab's /quick) and agenticburn.com/beacon (question 877).
+
+**Not yet run on a cluster.** kagent-attackme.burritobot.co and unicorn-attackme.agenticburn.com still answer 200 on
+2026-11-02, because the live routes table predates this change. Once this is on main and Argo CD has synced the console,
+a session with the accen-dev profile runs, from `infra/terraform/fleet/`:
+
+    ./fleet.sh routes roster && ./fleet.sh router-check && ./fleet.sh wall-check
+
+`routes roster` must not refuse, and the retired hosts must then get the router's 404. Then the Night Before list's
+`check-tls` line, the beacon-view curl and the two `kubecon_probe.py` runs, on the burritobot.co names.
+`verify/test_service_hosts_live.py` covers the kept service hosts.
