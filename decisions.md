@@ -9109,6 +9109,12 @@ submodule's `config/scanners.yml` loading BanTopics from `${WIB_ZS_MODEL_DIR}`, 
 PROJECT_STATE.md, the readiness table's row 8, the run-of-show and `kubecon.html` that named llm-guard-cpu-offline#2 as BanTopics'
 blocker now name #719's image choice. llm-guard-cpu-offline closed #2 and #15 on 2026-11-01.
 
+**`verify/ensure-submodules.sh` fixed on the way.** With images/llm-guard checked out and guard-proxy not, the first
+`verify/run-tests.sh` failed 40-odd checks on a missing `proxy.py`. The script piped `git submodule status` into `grep -q`
+under `pipefail`, so grep left at the first `-` line, git took SIGPIPE and the pipeline read as no match, and the missing
+submodule was never initialised. It now reads the status whole and then matches. Under the same partial checkout it
+initialised guard-proxy.
+
 **Not yet run on a cluster.** Nothing deployed changes in this entry. Once the image is chosen and pinned, the checks owed
 belong to #455: `bash verify/run-e2e.sh` on a fresh attendee cluster, where `verify/test_topic_classifier.py` and the probe
 (#503) judge BanTopics' real scores, and `bash verify/input-guard.sh <host> <kube-context> <aws-profile>`, which checks that the

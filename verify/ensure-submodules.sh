@@ -8,7 +8,11 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 [[ -e "${REPO_DIR}/.git" ]] || exit 0
-if git -C "${REPO_DIR}" submodule status | grep -q '^-'; then
+# Read the status whole before matching. Piped straight into grep -q under pipefail, grep exits at the first
+# '-' line, git takes SIGPIPE writing the next one, and the pipeline reads as no match: with one submodule
+# checked out and the other not, the missing one was never initialised (#719).
+status="$(git -C "${REPO_DIR}" submodule status)"
+if grep -q '^-' <<<"${status}"; then
     printf 'initialising submodules\n'
     git -C "${REPO_DIR}" submodule update --init \
         || { printf 'FAILED to initialise submodules; the guard-proxy checks cannot run\n' >&2; exit 1; }
