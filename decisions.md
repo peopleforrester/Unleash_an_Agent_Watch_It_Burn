@@ -8987,3 +8987,46 @@ point 4, which are the three read-only commands in the morning's run report. The
 Michael's go for about $1 of bring-up, which run 15438 asked for in issue comment 6562456139.
 
 **Not yet run on a cluster.** Unchanged from the morning's entry.
+## 2026-11-02 · #562 · The "next cluster build" #562 waits for has happened: run the check on the two up KubeCon clusters
+
+**No code changed.** The 2026-10-25 #562 entry and the last two runs' reports waited on a bring-up after #513, and
+Michael's first answer to question 857 on #610 (the KubeCon rehearsal bring-up) held one off. That wait is over.
+watch-it-burn-community (attackme) and watch-it-burn-private (burritobot-private) were built on 2026-10-27 and
+rebuilt on 2026-10-28 in accen-dev, us-west-2, from a staging that has #513 and deb4c68 (`git merge-base
+--is-ancestor deb4c68 7210a3b` holds; 7210a3b is the probe's base in PROJECT_STATE). Michael changed question 857's
+answer on 2026-10-31 to keep the private and the public cluster running while the live issues are worked, and the
+2026-11-01 "Live rollout" entry above found both up. So the check needs no new bring-up and no spend beyond one chat
+turn (about $0.003) per cluster and the IAM pipeline's two billed check-no-new-access calls.
+
+What the build already shows, and what it does not:
+- **Check 1, in part.** The 10-27 bring-up called CreateInferenceProfile for every application profile and got a
+  400 on the comma in their descriptions (09a8931, #610). Terraform plan does not catch that, so the profiles were
+  being made live, and the rebuild went through after the fix. Nobody has yet read their tags or their state.
+- **Check 3, in part.** The KubeCon probe was GREEN on both (community 6/6, private 24/24), so BurritoBot answers. A
+  reply alone does not say which model id the agent called, which is the gap `verify/bedrock_profile_check.py`
+  closes: it holds the live ModelConfigs and kagent's rendered config to the cluster's ARN before it counts a reply.
+- **Checks 2, 4 and 5** have no record. Check 2's `ModelConfig bedrock-nova now calls arn:...` line was in the
+  bring-up's log, which is not kept here; `bedrock_profile_check.py` reads the same fact from the live ModelConfigs.
+
+Both clusters are `fleet_tags` clusters, so their profiles carry `attendee=<cluster name>` like an attendee
+cluster's, and `event=kubecon-na-2026`, `event.sh`'s default. The check takes them as they are.
+
+Hecaton run 15783 has no AWS credentials or kubeconfig, and this repo's rules keep it off clusters it did not
+provision, so it ran none of this. `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` were run on this
+base; their results are in the run's report.
+
+**Not yet run on a cluster:** from a session with accen-dev, at the repo root, for C in each of
+`watch-it-burn-community` and `watch-it-burn-private` (checks 1 to 3, must exit 0):
+
+    K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev python3 verify/bedrock_profile_check.py --context "$CTX" \
+        --profile accen-dev --region us-west-2
+
+then, once, with no cluster: `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`, which must
+end `MODEL PIN GREEN` (check 4), and `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3
+verify/test_iam_policy_aws.py`, which must pass the five application-profile cases in `infra/org/effect-tests.yaml`
+(check 5; its check 2 reports both Bedrock policies as widened, as #513 intends). A green run on either cluster
+closes #562; record it here. If both clusters are down by then, the next fleet.sh bring-up of any cluster runs
+the same commands, and nothing else changes.
