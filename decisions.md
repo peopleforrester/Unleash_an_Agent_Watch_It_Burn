@@ -8373,3 +8373,48 @@ commits, so there was nothing to reuse.
 **Not yet run on a cluster:** every exercise. The note's "Validation owed on a cluster" section names the checks a
 session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh` tier once the build lands, on or
 after 2026-11-13.
+## 2026-11-02 · #770 · The presenters' ttyd refuses a websocket with no, an empty or a wrong credential; the 101 tls-check saw opens nothing
+
+**The question.** On 2026-11-01 lab-platform's tls-check on burritobot-private.agenticburn.com saw GET /terminal/ answer
+401 but a websocket upgrade on /terminal/ with no credential answer 101. lab-platform#347 could not send the first
+message on the presenters' cluster, because if the check were broken it would start a shell there.
+
+**What ttyd 1.7.7 does with `-c user:password`.** This was measured on the binary the pod runs, with the entrypoint's
+own flags, on loopback. The image gitops/ai-layer/resources.yaml pins (`web-terminal@sha256:68004fb5…`, amd64
+manifest `9060bb0c…`) was read anonymously from ghcr.io. Its `/usr/local/bin/ttyd` has SHA-256 `8a217c96…7be4f55`,
+the same as the 1.7.7 release's `ttyd.x86_64` in the release's SHA256SUMS. The pod's entrypoint comes from the
+`web-terminal-entrypoint` ConfigMap, which is gitops/ai-layer/web-terminal/entrypoint.sh, so the flags are this repo's.
+
+- **The 101 is not the shell.** An upgrade that asks for no subprotocol, as tls-check's curl probe sends it, or for
+  `http-only`, gets 101 from anyone. libwebsockets binds that socket to ttyd's first protocol, the HTTP handler, which
+  never spawns a command. No AuthToken starts a shell there, not even the right one with the right Basic credential.
+- **The shell's protocol wants the credential at the upgrade.** On `tty`, the only protocol bound to the shell, a
+  missing or wrong Basic credential means the connection is dropped and no 101 is sent, whatever the first message
+  would have said.
+- **With the Basic credential right, the AuthToken is checked as well.** An empty, wrong or missing AuthToken, or
+  the password sent unencoded, is closed with 1008 and starts nothing. Keystrokes sent before the AuthToken drop the
+  connection.
+- **The positive control** is the right Basic credential and the right AuthToken. That starts exactly one shell,
+  seen both in the spawned script's record and in ttyd's "started process" log line.
+
+So the issue's question is answered for the binary and the flags. A socket whose first message carries an empty or
+wrong AuthToken is closed without a shell, and an unauthenticated socket never gets that far. The terminal is not open
+to anyone who knows the hostname.
+
+**What changed.**
+- `verify/test_ttyd_ws_auth.py`, tools tier, holds all of the above. It reads the credentialed `exec ttyd` line from
+  the mounted entrypoint and fails if that line loses `-c`, `-b /terminal` or `-W`, or gains `--auth-header`. With
+  `-c` removed it fails 37 checks. `verify/ttyd_ws.py` is the stdlib websocket client it uses. It sends one first
+  message and never types into a shell.
+- `verify/e2e-tools.lock` pins ttyd 1.7.7 by that SHA-256. run-e2e-tools.sh and run-e2e.sh point `$TTYD` at it.
+  `test_e2e_tools_tier.py` holds the pin to the version images/web-terminal/Dockerfile downloads.
+- `infra/terraform/fleet/check-tls.sh` gains a second upgrade probe with `Sec-WebSocket-Protocol: tty` and no
+  credential, and fails on a 101. Its existing probe's 101 shows the upgrade gets through, but it cannot tell an open
+  terminal from a closed one. `verify/test_check_tls_shell_probe.sh` holds the new probe with curl stubbed. Run
+  against the old script, it fails 4 of 7 checks.
+- `verify/test_terminal_ws_auth_live.py`, the live half, runs through the public host, the router, nginx and the pod,
+  and counts shell starts in ttyd's log.
+
+**Not yet run on a cluster:** `CONTEXT=<a cluster you own> python3 verify/test_terminal_ws_auth_live.py` (it is in
+`bash verify/run-e2e.sh`), and `./fleet.sh check-tls burritobot-private.agenticburn.com` with the new probe. This run
+has no cluster. The live test starts one shell, its positive control, and closes it at once.

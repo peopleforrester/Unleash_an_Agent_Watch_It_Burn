@@ -15,7 +15,7 @@ failed fetch or a missing prerequisite before any test runs, and that includes P
 from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
 
 run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
-the gate's binaries, otelcol-contrib included since #654. Its scratch copy is run with a fixture lock of the six tools: the fetched kubectl, not one
+the gate's binaries, otelcol-contrib included since #654 and ttyd since #770. Its scratch copy is run with a fixture lock of the seven tools: the fetched kubectl, not one
 already on PATH, is what checks the cluster, and a failed fetch is listed as missing with no kubectl run at all.
 Some prerequisite is always left missing there, so the run stops before any check or cluster call.
 """
@@ -58,8 +58,8 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm and otelcol-contrib ({sorted(tools)})",
-      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib"})
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd ({sorted(tools)})",
+      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -67,7 +67,9 @@ for name, row in tools.items():
     _, version, sha, url, _member = row
     check(f"{name}: a 64-hex SHA-256", re.fullmatch(r"[0-9a-f]{64}", sha) is not None, sha)
     check(f"{name}: an https URL naming {version}", url.startswith("https://") and version.lstrip("v") in url, url)
-    check(f"{name}: a linux x86_64 artifact", re.search(r"linux[_/-](amd64|x86_64)", url, re.I) is not None, url)
+    # ttyd's release names its Linux builds by architecture alone (ttyd.x86_64).
+    check(f"{name}: a linux x86_64 artifact",
+          re.search(r"linux[_/-](amd64|x86_64)|/ttyd\.x86_64$", url, re.I) is not None, url)
 
 # otelcol-contrib runs the PII scrub test (#647) on the collector the clusters run, so its pin is the image tag
 # every gitops/bootstrap/apps/otel-collector*.yaml file names (lab-platform's mirror tag is <version>-<digest>).
@@ -79,6 +81,13 @@ check(f"otelcol-contrib is the collector image's version {sorted(collector_tags)
 want = re.search(r'^OTELCOL_VERSION = "([^"]+)"', (VERIFY / "test_lab_pipeline_collector.py").read_text(), re.M)
 check("otelcol-contrib is the version test_lab_pipeline_collector.py demands",
       bool(want) and "otelcol-contrib" in tools and tools["otelcol-contrib"][1] == f"v{want.group(1)}")
+
+# ttyd runs test_ttyd_ws_auth.py (#770) on the terminal the clusters run, so its pin is the one the web-terminal
+# image downloads.
+want = re.search(r"tsl0922/ttyd/releases/download/([0-9.]+)/ttyd\.",
+                 (REPO / "images/web-terminal/Dockerfile").read_text())
+check(f"ttyd is the web-terminal image's version ({want.group(1) if want else None})",
+      bool(want) and "ttyd" in tools and tools["ttyd"][1] == want.group(1))
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
@@ -110,7 +119,7 @@ tier = [t for t in tests if re.search(r"^# E2E TIER: tools", t.read_text(), re.M
 names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
              "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
-             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py"):
+             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_ttyd_ws_auth.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()
@@ -132,7 +141,7 @@ for var in ("CONTEXT", "IAM_PIPELINE_PROFILE", "IAM_PIPELINE_REGION", "AWS_PROFI
     check(f"run-e2e-tools.sh runs each tier test with {var} unset", f"-u {var}" in code)
 check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECONFIG=/dev/null" in code)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd")):
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
 check("run-e2e-tools.sh puts the fetched tools first on PATH", 'PATH="${TOOLS_BIN}:${PATH}"' in code)
 
@@ -196,13 +205,13 @@ FIXTURES = {
     "beta_linux_amd64.zip": zipped("beta", b"#!/bin/sh\necho beta\n"),
     "gamma-linux-amd64": b"#!/bin/sh\necho gamma\n",
 }
-# run-e2e.sh's six tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
-SIX = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib")
-for _tool in SIX:
+# run-e2e.sh's seven tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
+SEVEN = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd")
+for _tool in SEVEN:
     FIXTURES[f"{_tool}-linux-amd64"] = (
         b'#!/bin/sh\necho "fetched $*" >>"$KUBECTL_LOG"\nexit 1\n' if _tool == "kubectl" else b"#!/bin/sh\nexit 0\n")
-SIX_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} https://fixture.invalid/{t}-linux-amd64 -\n"
-                   for t in SIX)
+SEVEN_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} https://fixture.invalid/{t}-linux-amd64 -\n"
+                     for t in SEVEN)
 GOOD_LOCK = (
     "# fixture lock\n"
     f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
@@ -356,7 +365,7 @@ check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools
 check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
 check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd")):
     check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
 check("run-e2e.sh never looks for otelcol-contrib on PATH (#654)",
       "command -v" not in "\n".join(line for line in live.splitlines() if "otelcol" in line.lower()))
@@ -379,14 +388,14 @@ def kubectl_calls(tmp: pathlib.Path) -> list[str]:
 LIVE_CANNOT_RUN = "E2E SUITE CANNOT RUN; this is a failure, not a skip"
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, SIX_LOCK, (FETCH, RUN_E2E))
+    vdir = scratch(tmp, SEVEN_LOCK, (FETCH, RUN_E2E))
     make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL})
     r = run_live(tmp, vdir)
     check(f"run-e2e.sh stops in its prerequisite check (exit {r.returncode})",
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
-    check("it fetched all six tools into its .tools/bin",
-          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in SIX), r.stdout + r.stderr)
+    check("it fetched all seven tools into its .tools/bin",
+          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in SEVEN), r.stdout + r.stderr)
     check("otelcol-contrib is not listed as missing", "otelcol" not in r.stderr, r.stderr)
     check("a good fetch is not listed as missing", "could not be fetched" not in r.stderr
           and "were not fetched" not in r.stderr, r.stderr)
@@ -405,7 +414,7 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
     check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl, helm and otelcol-contrib could not be fetched" in r.stderr,
+          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd could not be fetched" in r.stderr,
           r.stderr)
     check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
     check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))

@@ -577,8 +577,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       anything that would block. A quota rejection found mid-build costs the window.
 
   check-tls <host...> BEFORE doors: per hostname assert https 200, a validating chain whose SAN covers
-                      it, at least 7 days of cert life, an http->https redirect, and that the websocket
-                      upgrade the terminal needs is accepted. Pass --no-ws for hosts with no terminal.
+                      it, at least 7 days of cert life, an http->https redirect, that the websocket
+                      upgrade the terminal needs is accepted, and that the shell's own protocol (tty)
+                      refuses an upgrade with no credential. Pass --no-ws for hosts with no terminal.
 
   routes [roster]     Write the apex router's table from the live console LBs, record it in the apex
                       repo and reload the live router. 'roster' publishes the roster clusters and their

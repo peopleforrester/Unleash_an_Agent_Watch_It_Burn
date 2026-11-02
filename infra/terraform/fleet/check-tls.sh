@@ -36,6 +36,7 @@ Asserts, per hostname:
   * the certificate is valid for at least ${MARGIN_DAYS} more days
   * http:// redirects to https://
   * a websocket Upgrade on ${WS_PATH} is accepted (pinned to HTTP/1.1)
+  * the same Upgrade on ttyd's shell protocol (tty) with no credential is NOT accepted
 
 Read-only. Exits non-zero if any host fails.
 EOF
@@ -108,6 +109,23 @@ for host in "$@"; do
         401) ok "websocket endpoint reachable, auth required (401) — expected once ttyd has a credential" ;;
         *)   bad "websocket upgrade returned '${ws:-no response}' (expected 101, or 401 when credentialed)" ;;
     esac
+
+    # The shell's own protocol, with no credential (#770). The probe above asks for no subprotocol, and ttyd binds
+    # such a socket to its HTTP handler, which never starts a shell, so it answers 101 to anyone: that 101 says the
+    # upgrade gets through, not that the terminal is closed. ttyd's shell is only on the `tty` subprotocol, which
+    # checks the Basic credential at the upgrade, so a credentialed terminal never answers 101 here (ttyd drops the
+    # socket, which the console's nginx turns into a 502). A 101 means the terminal hands a shell to anyone who can
+    # reach the host. verify/test_ttyd_ws_auth.py holds ttyd's side of this. `|| true` because curl exits non-zero
+    # on a dropped socket; what it printed is still the code.
+    shell="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --http1.1 \
+        -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Protocol: tty" \
+        -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
+        "https://${host}${WS_PATH}" 2>/dev/null)" || true
+    if [[ "${shell}" == "101" ]]; then
+        bad "the terminal's shell protocol (tty) accepted an upgrade with NO credential (101): anyone who knows ${host} gets a shell"
+    else
+        ok "the terminal's shell protocol (tty) refuses an upgrade with no credential (${shell:-no response})"
+    fi
     echo
 done
 
