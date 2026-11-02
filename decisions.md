@@ -8418,3 +8418,31 @@ to anyone who knows the hostname.
 **Not yet run on a cluster:** `CONTEXT=<a cluster you own> python3 verify/test_terminal_ws_auth_live.py` (it is in
 `bash verify/run-e2e.sh`), and `./fleet.sh check-tls burritobot-private.agenticburn.com` with the new probe. This run
 has no cluster. The live test starts one shell, its positive control, and closes it at once.
+
+## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
+
+**Question 899:** Should the PR-gated apply path for the attendee fleet in #201 (a pull request runs a Terraform
+plan, a human approves in a protected `fleet-prod` environment, and GitHub Actions applies with OIDC credentials,
+with `fleet.sh` from a laptop kept as break-glass) be built now, held until a live event that needs the
+shared-account fleet is confirmed, or closed?
+
+**Answer:** Hold until a live fleet event is confirmed.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael. The basis is Michael's own
+pattern of 2026-09-07 on #112, #113, #116 and #117, recorded in this file's question 575 entry: post-Portland work
+that is still wanted stays open on its labelled issue for a later event instead of being closed.
+
+**What it changes:** nothing is built. No workflow, IAM role, Terraform backend block or state migration is added,
+and `infra/terraform/fleet/fleet.sh` from a laptop, with one local state file per cluster across the five attendee
+accounts in `WIB_ATTENDEE_ACCOUNTS`, stays the only apply path. #201 stays open, labelled post-portland, and waits
+for the KubeCon Europe 2027 decisions on 2026-12-07 (talks-knowledge `talks/register.md`), which show whether a
+Barcelona run needs the shared-account fleet. If one does, the next run asks the shape question this one left
+open: the full gated pipeline or only the S3 state move with `use_lockfile = true`, and whether apply runs on merge
+to `main`, as the issue says, or to `staging`, where CLAUDE.md routes every pull request. That run also starts from
+these facts: there is no S3 backend or DynamoDB lock table to cut over, only local state, so the work is a full
+state migration; `infra/README.md` does not exist, and the Terraform docs are in `infra/terraform/README.md`; and
+the repo was created 2026-06-15, before the 2026-07-15 cut-off for the immutable OIDC `sub` claim, so the trust
+policy matches the older repo-and-environment subject. If no live fleet event is confirmed, the next run asks
+whether to close #201.
+
+**Not yet run on a cluster:** nothing; no code changed.
