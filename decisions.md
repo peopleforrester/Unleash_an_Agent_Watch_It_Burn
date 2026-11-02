@@ -8805,3 +8805,76 @@ the v2 events-search endpoint, which is a different endpoint from the aggregate 
 **Not yet run on a cluster.** Run `CONTEXT=<ctx> python3 verify/test_tool_audit_live.py` (it runs itself under
 `uv` on mcp 1.29.1) on watch-it-burn-private (admin, armed Kyverno) and on watch-it-burn-community (burn). Each
 cluster's credentials go into an isolated kubeconfig with `--alias`, so the context name is known.
+## 2026-11-02 · #629 · KubeArmor's KubeArmorConfig becomes a resource Argo CD tracks, so #662's log names reach a running cluster
+
+**What was still failing.** The one run of `verify/test_datadog_sandbox_live.py` so far (2026-10-31, recorded under
+#711 above) passed the span check on both clusters. It failed the log check, because logs from argocd, kubearmor and
+aws-load-balancer-controller still carried their image names as service. #662 had given all three a `burritobot-`
+service on 10-29, and its render test passes. The three have one thing in common: Argo CD never applies a git change
+to them. There was no earlier draft of this to check against staging; the agent/629-* branches are all merged.
+
+- **Argo CD and the AWS Load Balancer Controller** are Helm releases that `infra/deploy-full-idp.sh` installs once,
+  outside Argo CD. `infra/argocd-values.yaml` and `infra/aws-load-balancer-controller-values.yaml` reach a cluster
+  only when that script, or its two `helm upgrade` lines, runs again. watch-it-burn-private was built on 2026-10-28
+  (PROJECT_STATE.md, "KubeCon platform up"), the day before #662. There is no code to change here. The upgrade is
+  owed on a cluster, below.
+- **KubeArmor is a real bug, fixed here.** `kubearmor-operator` 1.7.4 writes the `kubearmor-default` KubeArmorConfig,
+  where #662's DD_SERVICE and DD_ENV live, from `templates/ka-config.yaml` as a `helm.sh/hook: post-install,post-upgrade`
+  hook. Argo CD runs that as a PostSync hook. Three facts follow, each read 2026-11-02:
+  - Argo CD leaves hooks out of sync status. controller/state.go at v3.5.2 says: "For resource hooks ... don't store
+    sync status, and do not affect overall sync status". So a change to `kubearmorConfig` alone never set the kubearmor
+    Application OutOfSync, and automated sync never ran.
+  - On a sync that does run, a hook with no delete policy is deleted and created again (BeforeHookCreation, per Argo
+    CD's sync-waves page).
+  - The operator applies a config's images and env to the DaemonSet, relay and controller it already runs only on an
+    in-place update (`UpdateFunc` -> `UpdateKubeArmorImages`, pkg/KubeArmorOperator/internal/controller/cluster.go at
+    v1.7.4). A re-created config goes through `AddFunc`. That path records the new values and updates nothing that
+    exists, and `UpdateDaemonsets` only creates a DaemonSet that is missing.
+- **The fix.** `gitops/bootstrap/apps/kubearmor.yaml` now has two sources. The first is the operator chart with
+  `autoDeploy: false`, so it renders no hook. The second is `gitops/kubearmor-config`, a new one-template local chart
+  at the root's revision, which renders `kubearmor-default` as a plain resource. It takes the same `kubearmorConfig`
+  values that used to sit under the chart source. Its `values.yaml` copies the operator chart's own `kubearmorConfig`
+  defaults, which the hook merged under them. The resource is wave 1, after the operator's Deployment as the PostSync
+  hook was, and it carries `SkipDryRunOnMissingResource=true` because its CRD comes from the operator chart in the same
+  sync. It keeps the hook's name, so on a running cluster Argo CD applies it over the existing config instead of adding
+  a second one, which the operator would mark Error. The template's spec line sits behind a YAML comment, so the
+  unrendered file still loads for the tests that sweep gitops/.
+- **Tests.**
+  - `verify/test_kubearmor_config_tracked.py` (offline) holds the two-source shape, `autoDeploy: false`, and a template
+    with no hook annotation. On the old app file, 6 of its checks fail.
+  - `verify/test_kubearmor_config_render.py` (tools tier) renders the root, the operator chart and the local chart. It
+    holds that the operator chart as set renders no KubeArmorConfig, and that the local spec equals, key for key, the
+    one the hook rendered from the same values. Changing one default in the copy fails it.
+  - `verify/test_datadog_log_services_render.py` now renders a local chart source through Helm, so it still sees the
+    KubeArmorConfig's env. It also fails if the kubearmor app's config is a hook.
+  - `verify/test_image_registry_render.py` renders every chart source an app has, so the four KubeArmor images named
+    in the config are still checked.
+  - `verify/test_c3_fallback.py` reads `enableStdOutAlerts` from the config source.
+
+**Not yet run on a cluster.** All of it needs a session with the accen-dev profile, after this commit is on staging.
+For each of watch-it-burn-private (profile admin) and watch-it-burn-community (profile burn):
+
+    C=watch-it-burn-private; K=/tmp/$C.kubeconfig; R=us-west-2
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region $R
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] || exit 1
+    VPC=$(AWS_PROFILE=accen-dev aws eks describe-cluster --name $C --region $R --query cluster.resourcesVpcConfig.vpcId --output text)
+    KUBECONFIG=$K helm --kube-context "$CTX" upgrade --install argocd argo/argo-cd --version 10.8.4 -n argocd \
+      --values infra/argocd-values.yaml
+    KUBECONFIG=$K helm --kube-context "$CTX" upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+      --version 1.14.0 -n kube-system --values infra/aws-load-balancer-controller-values.yaml --set clusterName=$C \
+      --set region=$R --set vpcId=$VPC --set serviceAccount.create=true --set serviceAccount.name=aws-load-balancer-controller
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd patch application kubearmor --type merge -p '{"operation":{"sync":{}}}'
+
+(`helm repo add argo https://argoproj.github.io/argo-helm` and `helm repo add eks https://aws.github.io/eks-charts`
+first, if they are missing.) The kubearmor sync is run by hand once. Until it runs, the live `kubearmor-default`
+still carries the hook annotation, and Argo CD tests the live object, so the change does not set the app OutOfSync on
+its own. Then check:
+- `kubectl -n kubearmor get kubearmorconfig kubearmor-default -o jsonpath='{.metadata.annotations}'` shows no
+  `helm.sh/hook`, so the next change syncs by itself.
+- The `kubearmor-app=kubearmor` DaemonSets' first container has `DD_SERVICE=burritobot-kubearmor`.
+- The argocd and aws-load-balancer-controller pods carry `tags.datadoghq.com/service: burritobot-*`.
+
+Then drive one /chat on each cluster (`verify/kubecon_probe.py`) and run
+`WIB_DD_LOOKBACK_MIN=30 WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3 verify/test_datadog_sandbox_live.py`
+at least 30 minutes after the relabel, so the window holds no log from before it. When every check passes, #629
+closes.

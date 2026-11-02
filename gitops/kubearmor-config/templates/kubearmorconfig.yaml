@@ -1,0 +1,28 @@
+# ABOUTME: The kubearmor-default KubeArmorConfig, a plain resource of the kubearmor Application, with no Helm hook
+# ABOUTME: annotation, so Argo CD diffs it and the operator applies a change to the pods it built (#629).
+#
+# Why not the operator chart's own. kubearmor-operator 1.7.4's templates/ka-config.yaml writes this resource with
+# helm.sh/hook: post-install,post-upgrade, which Argo CD runs as a PostSync hook. Argo CD leaves hooks out of an
+# Application's sync status (controller/state.go at v3.5.2: "For resource hooks ... do not affect overall sync
+# status"), so a change to kubearmorConfig alone never set the kubearmor Application OutOfSync, and automated sync
+# never ran. When a sync did run, the hook's default policy, BeforeHookCreation, deleted the resource and created it
+# again. The operator (pkg/KubeArmorOperator/internal/controller/cluster.go at v1.7.4) pushes a config's images and
+# env into the DaemonSet, relay and controller it already runs only from an in-place update (UpdateFunc ->
+# UpdateKubeArmorImages); a re-created config goes through AddFunc, which records the values and updates nothing
+# that exists. That is how #662's DD_SERVICE and DD_ENV stayed off a running cluster's KubeArmor pods, whose logs
+# then reached Whitney's sandbox org under service kubearmor (decisions.md, 2026-10-31, #711).
+#
+# Wave 1, after the operator's Deployment (wave 0 of the same Application), as the PostSync hook came after it.
+# The CRD comes from the operator chart's crds/ in the same sync, so a first sync's dry run of this resource is
+# skipped until the CRD exists. The name is the one the hook used, so on a cluster the hook already built Argo CD
+# applies this over that resource instead of adding a second config, which the operator would refuse.
+apiVersion: operator.kubearmor.com/v1
+kind: KubeArmorConfig
+metadata:
+  name: kubearmor-default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # The spec is written in after this comment, so the unrendered file is still YAML for the tests that read gitops/.
+  # {{- printf "\n%s" (toYaml .Values.kubearmorConfig | indent 2) }}

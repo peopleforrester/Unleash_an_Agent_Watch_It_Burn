@@ -93,6 +93,17 @@ def render_app(app: dict) -> list:
                 files = [vals] + [REPO / vf.replace("$values/", "") for vf in h.get("valueFiles", [])]
                 docs += helm(h.get("releaseName") or app["metadata"]["name"], src["chart"], src["repoURL"],
                              str(src["targetRevision"]), ns, files)
+        elif "path" in src and (REPO / src["path"] / "Chart.yaml").exists():
+            # A chart in this repo (gitops/kubearmor-config), rendered the way Argo CD renders it: by Helm.
+            h = src.get("helm") or {}
+            with tempfile.TemporaryDirectory() as tmp:
+                vals = pathlib.Path(tmp) / "values.yaml"
+                vals.write_text(yaml.safe_dump(h.get("valuesObject") or {}))
+                r = subprocess.run(["helm", "template", h.get("releaseName") or app["metadata"]["name"],
+                                    str(REPO / src["path"]), "-n", ns, "-f", str(vals)], capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError(f"helm template {src['path']}: {(r.stderr.strip().splitlines() or ['helm failed'])[-1][:200]}")
+            docs += load_all(r.stdout)
         elif "path" in src:
             path = REPO / src["path"]
             if (path / "kustomization.yaml").exists():
@@ -194,6 +205,15 @@ for f in sorted(APPS.glob("*.yaml")):
             check(f"{where} renders", False, str(e))
             continue
         judge_docs(where, docs, ad, kustomize_images(app))
+        if app["metadata"]["name"] == "kubearmor":
+            # The operator applies a config's env to the pods it already runs only when the config is updated in
+            # place. A Helm hook is deleted and re-created on each sync and never sets the Application OutOfSync, so
+            # the config must be a plain resource of the Application (#629, gitops/kubearmor-config).
+            kac = [d for d in docs if d.get("kind") == "KubeArmorConfig"]
+            hooks = [k for d in kac for k in (d["metadata"].get("annotations") or {})
+                     if k in ("helm.sh/hook", "argocd.argoproj.io/hook")]
+            check(f"{where} renders one KubeArmorConfig, kubearmor-default, as a plain resource (no hook {hooks})",
+                  [d["metadata"]["name"] for d in kac] == ["kubearmor-default"] and not hooks)
         for d in docs:
             kind = d.get("kind")
             if kind == "Prometheus":

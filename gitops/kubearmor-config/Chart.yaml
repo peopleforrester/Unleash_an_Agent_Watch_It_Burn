@@ -1,0 +1,11 @@
+# ABOUTME: Renders KubeArmor's kubearmor-default KubeArmorConfig as a plain resource the kubearmor Application tracks,
+# ABOUTME: in place of the operator chart's post-install hook, so a change to it reaches a running cluster (#629).
+#
+# The kubearmor Application (gitops/bootstrap/apps/kubearmor.yaml) installs kubearmor-operator 1.7.4 with
+# autoDeploy off and sources this chart beside it, with the config in its valuesObject. Why the hook had to go is in
+# templates/kubearmorconfig.yaml.
+apiVersion: v2
+name: kubearmor-config
+description: The KubeArmorConfig the KubeArmor operator builds the enforcement DaemonSet, relay and controller from.
+type: application
+version: 1.0.0

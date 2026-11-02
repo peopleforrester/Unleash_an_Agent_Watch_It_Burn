@@ -1,0 +1,19 @@
+# ABOUTME: kubearmor-operator 1.7.4's own kubearmorConfig defaults, which its hook merged under the app's values.
+# ABOUTME: The kubearmor Application's valuesObject sets the rest (images, env, enableStdOutAlerts) over these.
+#
+# Copied from the chart's values.yaml at 1.7.4 (helm pull kubearmor-operator --version 1.7.4, read 2026-11-02), so
+# the spec this chart renders is the one the operator chart's ka-config.yaml rendered before. The chart's
+# autoDeploy defaults to false and is the Application's to set; it is off there.
+kubearmorConfig:
+  defaultCapabilitiesPosture: audit
+  defaultFilePosture: audit
+  defaultNetworkPosture: audit
+  defaultVisibility: process,network
+  enableStdOutLogs: false
+  enableStdOutAlerts: false
+  enableStdOutMsgs: false
+  seccompEnabled: false
+  alertThrottling: true
+  maxAlertPerSec: 10
+  throttleSec: 30
+  matchArgs: true

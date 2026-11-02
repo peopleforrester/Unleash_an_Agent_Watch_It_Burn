@@ -143,12 +143,16 @@ check("an Audit alert does not count as the block's alert", rc != 0)
 
 print("== the relay prints the alert the fallback reads ==")
 app = yaml.safe_load(KUBEARMOR_APP.read_text())
-values = app["spec"]["source"]["helm"]["valuesObject"]
-check("kubearmor.yaml keeps autoDeploy (the operator creates the KubeArmorConfig)", values.get("autoDeploy") is True)
+# The KubeArmorConfig is the gitops/kubearmor-config source's, not the operator chart's hook (#629).
+config_src = [s for s in app["spec"].get("sources") or [] if s.get("path") == "gitops/kubearmor-config"]
+check("kubearmor.yaml renders the KubeArmorConfig from gitops/kubearmor-config", len(config_src) == 1)
+values = (config_src[0]["helm"]["valuesObject"] if config_src else {})
 check("kubearmor.yaml sets kubearmorConfig.enableStdOutAlerts: true",
       (values.get("kubearmorConfig") or {}).get("enableStdOutAlerts") is True)
 check("only alerts go to stdout, not every process log",
       (values.get("kubearmorConfig") or {}).get("enableStdOutLogs") in (None, False))
+defaults = yaml.safe_load((REPO / "gitops/kubearmor-config/values.yaml").read_text())["kubearmorConfig"]
+check("the chart defaults under them do not turn stdout process logs on", defaults.get("enableStdOutLogs") is False)
 
 print("== Challenge 2's C3 beat names the signal that fires ==")
 ros = RUN_OF_SHOW.read_text()

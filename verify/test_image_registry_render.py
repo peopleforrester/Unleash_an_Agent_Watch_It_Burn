@@ -173,25 +173,44 @@ def upstream_chart(src: dict) -> pathlib.Path | str:
 
 
 def chart_render(name: str, app: dict) -> str | None:
-    """The app's chart rendered with the helm block the root produced; None (and a FAIL) if it cannot be."""
+    """Every chart the app sources, upstream or in this repo, rendered with the helm blocks the root produced and
+    joined; None (and a FAIL) if one cannot be. kubearmor's KubeArmorConfig, and so four of its images, is the
+    gitops/kubearmor-config source's (#629)."""
     sp = app["spec"]
-    src = next(s for s in ([sp["source"]] if "source" in sp else sp["sources"]) if "chart" in s)
-    chart = upstream_chart(src)
-    if not isinstance(chart, pathlib.Path):
-        check(f"{name}: chart {src['chart']} {src['targetRevision']} is fetched", False, chart)
-        return None
+    outs = []
+    for src in ([sp["source"]] if "source" in sp else sp["sources"]):
+        if "chart" in src:
+            chart = upstream_chart(src)
+            if not isinstance(chart, pathlib.Path):
+                check(f"{name}: chart {src['chart']} {src['targetRevision']} is fetched", False, chart)
+                return None
+        elif "path" in src and (REPO / src["path"] / "Chart.yaml").exists():
+            chart = REPO / src["path"]
+        else:
+            continue
+        out = source_render(name, app, src, chart, len(outs))
+        if out is None:
+            return None
+        outs.append(out)
+    return "\n---\n".join(outs)
+
+
+def source_render(name: str, app: dict, src: dict, chart: pathlib.Path, n: int) -> str | None:
+    """One chart source rendered with its helm block; None (and a FAIL) if it cannot be."""
+    sp = app["spec"]
+    label = src.get("chart") or src["path"]
     helm = src.get("helm") or {}
     args = []
     for vf in helm.get("valueFiles", []):
         args += ["-f", str(REPO / vf.removeprefix("$values/"))]
     for key, text in (("values", helm.get("values")), ("valuesObject", helm.get("valuesObject"))):
         if text is not None:
-            f = WORK / f"{name}-{key}.yaml"
+            f = WORK / f"{name}-{n}-{key}.yaml"
             f.write_text(text if isinstance(text, str) else yaml.safe_dump(text), encoding="utf-8")
             args += ["-f", str(f)]
     r = subprocess.run([HELM, "template", helm.get("releaseName", app["metadata"]["name"]), str(chart),
                         "-n", sp["destination"]["namespace"], *args], capture_output=True, text=True)
-    check(f"{name}: chart {src['chart']} renders with the root's values", r.returncode == 0,
+    check(f"{name}: chart {label} renders with the root's values", r.returncode == 0,
           r.stderr.strip()[:300])
     return r.stdout if r.returncode == 0 else None
 
