@@ -14696,3 +14696,20 @@ watch-it-burn-private ...` must end `KUBECON PROBE GREEN` with `c5-on` passing a
 **The suites (run 16897, at `62593b23`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage,
 `bash verify/run-tests.sh`, ran 247 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "54 checks
 ran (the offline suite and 53 tier tests) in 24m04s" and "ALL E2E TOOLS TIER CHECKS GREEN".
+## 2026-11-02 · #520 · Both halves of #481's live check have passed on both KubeCon clusters, so #520 is done
+
+**No code changed.** Run 15943 took #520 up after Michael's 2026-11-02 08:29Z comment on the issue (escalation 705,
+elevated tier). From a staging checkout at `6ce4faa` with the accen-dev profile, each cluster's kubeconfig in an
+isolated `/tmp/<cluster>.kubeconfig` and its context checked as `*cluster/<name>` first, he ran
+`verify/test_console_no_toggle_live.py` against `watch-it-burn-private` (burritobot-private, the admin cluster) and
+`watch-it-burn-community` (attackme, the community cluster). Both printed every check as PASS and ended
+`All live /toggle exposure checks passed.`: the cluster records its public host, guard-proxy answers `/guards` over
+kubectl exec, the console's `/guards` answers through the router, `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle`
+are refused with 404 and nothing from guard-proxy, the terminal's `_px` helper sets output=off, `guards-status` reads
+the guards, and no probe changed the guard state. Every guard was off before and after on both clusters.
+
+This is the in-cluster half the 2026-10-30, 11-01 and 11-02 entries above said was still owed; the public half had
+already passed from outside on both clusters under both domains. Nothing is now owed on a cluster for #520. The tool
+pod's in-cluster call to `guard-proxy:8080/toggle` stays open on purpose, as the issue says: it is the mesh challenge
+candidate in `docs/research/2026-10-24-istio-ambient-evaluation.md` section 2.1, and closing it is Michael's call,
+not part of #520.
