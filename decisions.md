@@ -9651,3 +9651,11 @@ and #773 will both move these):
 
 **Not yet run on a cluster.** Nothing for #775 yet; its live check is the KubeCon probe's Challenge 3 beat
 (`verify/test_kubecon_probe.py` through `verify/agent_probe.py`) on both KubeCon clusters with the guardrails switch on.
+
+**Re-dispatch (hecaton run 16125, same day).** Run 16043 stalled waiting on `bash verify/run-e2e-tools.sh`: the suite
+runs longer than ten minutes, its first try hit the background limit, and the wait on the retry printed nothing for
+fifteen minutes, so the run was judged stalled. Nothing in the repo caused it. Since that run, #773 has landed on
+staging (`24d4ce3` to `e3b4b73`): `deploy_app` takes `requested_by` and `ticket_site.py` serves the deployments page, so
+item 2's witch-name row needs only HC-666's paragraph to ask the bot to pass the name. #774 has not landed:
+`git grep registry.burritobot.co origin/staging` outside decisions.md is still empty, so the wait above stands on #774
+alone.
