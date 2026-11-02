@@ -10732,3 +10732,20 @@ nothing here touches an image. The workshop-mcp reference check in the same test
 `5ef84f383407`. Then on the public storefront an HC-666 chat lands `joker-<visitor slug>`, not `joker-burritobot`, and
 the wall shows the visitor's name (#762's live check). No E2E test sends a named `/chat` to a live cluster;
 `verify/test_storefront_witch_name_e2e.py` covers the page's side only.
+## 2026-11-02 · #603 · Every locked digest still resolves; the netcup save still waits on an account that can write the archive
+
+**No code changed.** Hecaton run 15793 found images.lock unchanged in shape since the 2026-10-30 entry, with
+staging's later rows (#715's web, #730's llm-guard, Backstage and its postgres) in it. `mirror-images.sh check .`,
+read from llm-coding-workflow through sources, reports 27 references and 1 declared row, and its 22 problems are
+all "never saved". All 22 rows with a digest resolved anonymously from their registries on 2026-11-02 by
+`podman manifest inspect name@sha256`. None fails yet, and that includes lab-platform's llm-guard, web and
+four KubeArmor mirror copies, so the 2026-10-30 entry's note that the save needs a ghcr login for lab-platform's packages no longer holds: they read anonymously.
+watch-it-burn:tool-pin is still `build:` with digest `-`, which save skips.
+
+**Why the tarballs are still not saved.** This run now has a rootless podman behind the docker CLI, so it could
+pull. It still cannot write `~michael/repos/private/image-archive`, the directory nightly replication copies off
+netcup. That directory does not exist yet, so no repo has been saved into it (llm-coding-workflow#372 asks for that
+across the fleet). A tarball written anywhere else would not be retained, and a saved date recorded for it would be
+false. As michael, in `~/repos/talks/Unleash_an_Agent_Watch_It_Burn` on staging:
+`~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save . && ~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh check .`,
+then commit images.lock with the dates it writes. vllm-qwen3 is about 5 GB.
