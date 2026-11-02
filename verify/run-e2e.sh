@@ -78,6 +78,14 @@ if [[ -z "${CONTEXT:-}" ]]; then
 elif [[ "${tools_ready}" -eq 1 ]] \
     && ! kubectl --context "${CONTEXT}" --request-timeout=15s get --raw /readyz >/dev/null 2>&1; then
     missing+=("cluster for context '${CONTEXT}' is not reachable (kubectl --context ${CONTEXT} get --raw /readyz failed)")
+elif [[ "${tools_ready}" -eq 1 ]]; then
+    # The name the cluster reports to Datadog under (infra/datadog-cluster-identity.sh), so the live Datadog check
+    # looks at this cluster's telemetry and not the KubeCon clusters' in the same org and env (#461).
+    DD_KUBE_CLUSTER="$(kubectl --context "${CONTEXT}" --request-timeout=15s -n datadog get configmap cluster-identity \
+        -o jsonpath='{.data.datadog-cluster-name}' 2>/dev/null || true)"
+    [[ -n "${DD_KUBE_CLUSTER}" ]] \
+        || missing+=("context '${CONTEXT}' has no datadog/cluster-identity datadog-cluster-name: the cluster was not bootstrapped with Datadog (infra/datadog-cluster-identity.sh)")
+    export DD_KUBE_CLUSTER
 fi
 if [[ -z "${COMMUNITY_CONTEXT:-}" ]]; then
     missing+=("COMMUNITY_CONTEXT is not set: name the kube-context of the community cluster (attackme) the KubeCon probe's Challenge 3 beat runs on (test_kubecon_c3_live.py)")

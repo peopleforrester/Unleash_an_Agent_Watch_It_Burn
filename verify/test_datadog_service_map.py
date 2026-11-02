@@ -16,6 +16,10 @@
 #   WITB_ENV_FILE=/path/to/creds.env python3 verify/... [<trace_id>]
 #   - With no trace_id: runs the Service Map edge + platform-component UST assertions.
 #   - With a trace_id:  also runs both log<->trace pivot assertions.
+#   DD_KUBE_CLUSTER is required: the Datadog name of the cluster under test (burritobot-attendee-001 for the
+#   test attendee cluster). Whitney's sandbox org also holds the KubeCon clusters' telemetry under the same env,
+#   so a check scoped by env alone passes on their data even when the cluster under test ships nothing (#461).
+#   run-e2e.sh reads it from the cluster's datadog/cluster-identity ConfigMap.
 import json
 import os
 import pathlib
@@ -120,6 +124,11 @@ def _load_from_secrets_manager():
 
 _ENV_SOURCE = load_credentials()
 _missing = [k for k in ("DD_API_KEY", "DD_APP_KEY") if not os.environ.get(k)]
+if not os.environ.get("DD_KUBE_CLUSTER"):
+    print("FAIL: DD_KUBE_CLUSTER is not set: name the Datadog cluster under test (kube_cluster_name), e.g.\n"
+          "  burritobot-attendee-001. Without it every check here would also pass on the KubeCon clusters' data.",
+          file=sys.stderr)
+    sys.exit(2)
 if _missing:
     # Exit 2, the repo's SKIP code, not 1, so a direct run says why it did nothing. This test is in the
     # E2E suite (run-e2e.sh), which counts exit 2 as a failure: that suite must not go green without it.
@@ -136,6 +145,7 @@ DD_API_KEY = os.environ["DD_API_KEY"]
 DD_APP_KEY = os.environ["DD_APP_KEY"]
 DD_SITE = os.environ.get("DD_SITE", "datadoghq.com")
 DD_ENV = os.environ.get("DD_ENV", "burritobot-kubecon-na-26")  # the UST env every pod carries since 57ad24d (#629)
+DD_KUBE_CLUSTER = os.environ["DD_KUBE_CLUSTER"]
 HEADERS = {"DD-API-KEY": DD_API_KEY, "DD-APPLICATION-KEY": DD_APP_KEY}
 
 # Internal Service Map edges the AI layer is expected to render. guard-proxy sets peer.service in code
@@ -189,8 +199,33 @@ def _downstreams(deps, service):
     return val
 
 
+def _has_points(query, seconds=1800):
+    """True if a /api/v1/query over the last <seconds> returns at least one series with points."""
+    now = int(time.time())
+    resp = _request("GET", f"https://api.{DD_SITE}/api/v1/query",
+                    params={"from": now - seconds, "to": now, "query": query})
+    return any(s.get("pointlist") for s in resp.get("series", []))
+
+
+def test_cluster_ships():
+    """The cluster under test itself ships: its Agent reports, and its own AI-layer spans arrived.
+
+    service_dependencies takes an env and no cluster, so the edge check below cannot tell this cluster's
+    traffic from the KubeCon clusters' in the same org. These two can: the Agent's heartbeat and the collector's
+    span metrics (counted before sampling, resource attributes kept) both carry kube_cluster_name.
+    """
+    scope = f"kube_cluster_name:{DD_KUBE_CLUSTER},env:{DD_ENV}"
+    check(f"{DD_KUBE_CLUSTER}: the Agent reports (datadog.agent.running{{{scope}}})",
+          _has_points(f"avg:datadog.agent.running{{{scope}}}"))
+    check(f"{DD_KUBE_CLUSTER}: its own burritobot spans arrived (traces.span.metrics.calls{{{scope},service:burritobot}})",
+          _has_points(f"sum:traces.span.metrics.calls{{{scope},service:burritobot}}.as_count()"))
+
+
 def test_service_map_edges():
-    """Assert every expected service-dependency edge is present (GET /api/v1/service_dependencies)."""
+    """Assert every expected service-dependency edge is present (GET /api/v1/service_dependencies).
+
+    Scoped by env only, which is all the endpoint takes; test_cluster_ships is what ties the run to this cluster.
+    """
     now = int(time.time())
     deps = _request(
         "GET",
@@ -229,15 +264,9 @@ def _metrics_for_service(service):
 
 
 def _series_has_points(metric, service):
-    """True if <metric> has live points scoped to service:<service> AND env:<DD_ENV> (GET /api/v1/query)."""
-    now = int(time.time())
-    resp = _request(
-        "GET",
-        f"https://api.{DD_SITE}/api/v1/query",
-        params={"from": now - 3600, "to": now,
-                "query": f"avg:{metric}{{service:{service},env:{DD_ENV}}}"},
-    )
-    return any(s.get("pointlist") for s in resp.get("series", []))
+    """True if <metric> has live points scoped to service:<service>, env:<DD_ENV> and the cluster under test."""
+    return _has_points(f"avg:{metric}{{service:{service},env:{DD_ENV},kube_cluster_name:{DD_KUBE_CLUSTER}}}",
+                       seconds=3600)
 
 
 def test_platform_component_ust():
@@ -253,7 +282,7 @@ def test_platform_component_ust():
         metrics = _metrics_for_service(svc)
         check(f"{svc}: >=1 metric reports with service:{svc} (found {len(metrics)})", bool(metrics))
         confirmed = any(_series_has_points(m, svc) for m in metrics[:5])
-        check(f"{svc}: live metric data carries service:{svc} + env:{DD_ENV}", confirmed)
+        check(f"{svc}: live metric data carries service:{svc} + env:{DD_ENV} from {DD_KUBE_CLUSTER}", confirmed)
 
 
 def test_log_trace_forward_pivot(trace_id):
@@ -277,6 +306,7 @@ def test_log_trace_reverse_pivot(trace_id):
 
 
 if __name__ == "__main__":
+    test_cluster_ships()
     test_service_map_edges()
     test_platform_component_ust()
     if len(sys.argv) > 1:

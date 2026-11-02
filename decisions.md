@@ -11769,3 +11769,120 @@ the escalated `crane tag` that publishes it. The first attempt at this run lost 
 emptied mid-run, so the log of the second sat in the run's own directory.
 
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.
+## 2026-11-02 · question 926 · #461: the one-off live E2E cluster gets a one-row Datadog pool from the sandbox key
+
+**Answer:** Seed a one-row pool from the sandbox key for the run.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**The question.** #461 is the one live run of `bash verify/run-e2e.sh` that Michael's answer to question 550 (#442)
+set up: a cluster built for the run only, at the smallest size that works, torn down in the same session, held
+until #454 sorted the Datadog credentials. #454 closed on 2026-10-29 with no per-attendee pool: Datadog no longer
+issues per-student orgs, and the KubeCon clusters ship to Whitney's sandbox org with the one key in
+`watch-it-burn/datadog` (#629). fleet.sh's `bootstrap_one` refuses an attendee cluster whose pool row does not
+resolve, so `fleet.sh up 1` was either refused or picked up an expired June row. The question asked where the test
+cluster's telemetry goes.
+
+**What it changes.**
+- **`verify/live-e2e-session.sh`, the whole session as one command.** It refuses if `watch-it-burn-attendee-001`
+  already exists, so it never adopts or tears down a cluster it did not build. It saves
+  `watch-it-burn/datadog-pool`'s value if there is one and writes the pool as one row carrying the sandbox org's
+  api and app keys (from a file, never on a command line, no key printed). It runs `fleet.sh up
+  watch-it-burn-attendee-001` with `WIB_NO_INGEST=1`, so the cluster is never in lab-platform's handout pool where
+  someone could claim it, at the module default of 1 x t3.2xlarge in the existing lab VPC. It pulls an isolated
+  kubeconfig, stops unless its context is that cluster, and runs `run-e2e.sh` with that context, the sandbox keys as
+  the instructor org's `WITB_DD_ADMIN_API_KEY` and `WITB_DD_ADMIN_APP_KEY` (read by `test_lab_pipeline_live.py`
+  since #587), and `WIB_DEFAULT_ACCOUNT` and `WIB_REGION`, which `test_datadog_sandbox_live.py` reads the secret as.
+  On every exit, a failed build, a failed suite and Ctrl-C included, it runs `WIB_APPLY=1 fleet.sh down` on the
+  cluster, checks EKS no longer lists it, and puts the pool back: the saved value byte for byte, or no secret when
+  there was none. Anything left behind is printed last with the command that fixes it, and the exit is non-zero.
+  The profile and region are required (`E2E_PROFILE`, `E2E_REGION`), never taken from defaults.
+- **No fleet.sh change.** The cluster reports as `burritobot-attendee-001` (`infra/datadog-cluster-identity.sh`),
+  inside the `burritobot-` names Whitney filters on, and since its own key and the instructor org's key are the same
+  key, the identity script turns dual shipping off rather than sending everything twice (one org by design, #587).
+  The guard that refuses an attendee cluster without an org stays as it was.
+- **The service-map check's blind spot is closed in code, not by hand on the day.** The question's cons named it:
+  `verify/test_datadog_service_map.py` scoped by env alone, so the KubeCon clusters' data in the same org and env
+  could pass it with the test cluster shipping nothing. It now requires `DD_KUBE_CLUSTER` (exit 2 without it,
+  which `run-e2e.sh` counts as a failure), checks that cluster's Agent heartbeat and its own `burritobot` span
+  metrics, and scopes every platform-component UST series to it. The service-dependency edges stay per env, which
+  is all that endpoint takes. `run-e2e.sh` reads the name from the cluster's `datadog/cluster-identity` ConfigMap
+  (`datadog-cluster-name`) as a prerequisite and exports it, so a cluster bootstrapped without Datadog is a listed
+  prerequisite failure before anything runs.
+- **Tests.** `verify/test_live_e2e_session.sh` (offline; aws, kubectl, fleet.sh and run-e2e.sh are shims, 35 checks):
+  the refusals, the row fleet.sh sees at `up`, the tags and the file-only write, the context, kubeconfig and keys
+  run-e2e.sh gets, the region fleet.sh reads the pool from, teardown and restore after a passing suite, a failing
+  suite and a failed build, the loud report of a cluster still up or a pool not restored, and the cluster scoping of
+  the live Datadog check.
+
+**Rebuilt on staging at 680c17e (run 15752), not cherry-picked.** Two drafts came before this one and neither
+reached staging: eb11632 on `origin/agent/461-12584` and d244646 on `origin/agent/461-13034` (cut from 3f30ee3).
+`verify/draft-drift.sh origin/agent/461-13034 origin/staging` named two drifts: this file, which staging appended to,
+and `verify/run-e2e.sh`, where b3fd565 (#770) added the pinned ttyd and #548's `backstage-footprint.sh` step. The
+draft's eight-line `DD_KUBE_CLUSTER` prerequisite sits in the context check those commits did not touch, and went
+in unchanged; `test_datadog_service_map.py` has not changed since the draft. One thing differs from the draft.
+#643 gave fleet.sh `WIB_SECRETS_REGION`, the region it reads `watch-it-burn/datadog` and the pool from, and it
+defaults to the fleet's home region, not `WIB_REGION`. The session writes the pool row in `E2E_REGION`, so it now
+passes `WIB_SECRETS_REGION` set to that region to every fleet.sh call. With `E2E_REGION=us-west-2` the two agree
+either way; with any other region the draft would have built a cluster that read the pool from us-west-2 and found
+the old row or none. One new offline check covers it, and removing the variable fails that check. #732 made
+`datadog-cluster-identity.sh` take `CONTEXT`; the session never calls it, and fleet.sh's bootstrap passes it.
+
+**Not yet run on a cluster.** The run itself, which is #461's whole criterion. This run had no AWS profile, and
+CLAUDE.md's "Dispatched runs" rule 1 says a run does not bring clusters up. Michael's answer to question 550 is the
+go for the spend: about $1 at list prices (1 x t3.2xlarge at $0.3328 an hour plus $0.10 an hour for EKS, about two
+hours). A session with accen-dev access, from the repo root on this branch:
+
+    E2E_PROFILE=accen-dev E2E_REGION=us-west-2 IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 \
+        bash verify/live-e2e-session.sh
+
+then records the result here under #461. Three things to know before it. `test_datadog_sandbox_live.py`, one of the
+`# SUITE: e2e` checks, reads the two KubeCon clusters, not the test one, so drive one `/chat` on each within the
+hour before. `test_lab_pipeline_live.py` fails until the fleet-analytics dashboard is applied to the sandbox org,
+which takes a write app key Whitney issues (#587's entry has the command). The new cluster-scoped Datadog queries
+(`datadog.agent.running` and `traces.span.metrics.calls` by `kube_cluster_name`) have not run against any cluster.
+
+## 2026-11-03 · #461: run 16703 ports the live E2E session onto staging at 6408699, and the run itself is still owed
+
+**What this run took from the draft.** `bash verify/prior-drafts.sh 461 origin/staging` named run 15752's draft
+(bb2113a on `origin/agent/461-15752`, cut from 6f0866b, 144 staging commits behind) as the start. Its verdict was
+one drift in place, `verify/run-e2e.sh`, and a decisions.md append, so the draft was cherry-picked and both
+decisions.md entries kept. The draft's `DD_KUBE_CLUSTER` prerequisite applied cleanly next to the lines 01a0366 added.
+
+**What differs from the draft.** Two commits since the draft's base made `run-e2e.sh` require three variables that
+the draft's session never set, so the draft's command would have built the cluster and then stopped at
+run-e2e.sh's prerequisite list. 939cd82 (#205) added `DRIFT_PROFILE` and `ATTENDEE_CLUSTER` for
+`test_drift_aws_live.py`, and 01a0366 (#807) added `COMMUNITY_CONTEXT` for `test_kubecon_c3_live.py`, which runs
+on the community cluster. `verify/live-e2e-session.sh` now does the following:
+- It requires `COMMUNITY_CONTEXT`, and a kubeconfig that holds it (`COMMUNITY_KUBECONFIG`, else `KUBECONFIG`). It
+  checks that the community cluster answers `/readyz` before it touches AWS, so no cluster is built for a run that
+  cannot start. run-e2e.sh gets `KUBECONFIG=<isolated test-cluster file>:<community file>`, so both contexts
+  resolve. Every kubectl call still names its context, and the context check on the isolated file is unchanged.
+- It passes `DRIFT_PROFILE` and `DRIFT_REGION` (the session's profile and region), `ATTENDEE_CLUSTER`
+  (watch-it-burn-attendee-001) and `WIB_ATTENDEE_ACCOUNTS` (the session's profile only). fleet.sh's bootstrap writes
+  that cluster's attendee key to `infra/terraform/fleet/aws-pool/watch-it-burn-attendee-001.csv`, which is the file
+  the drift check reads, and fleet.sh's down deletes it. The drift check also needs a Config recorder recording in
+  the account (`infra/terraform/aws/audit`). The session does not apply it, and the check fails by name without it.
+- `verify/test_live_e2e_session.sh` went from 35 checks to 41. The new ones cover the refusal without
+  `COMMUNITY_CONTEXT` or a kubeconfig for it, the refusal when the community cluster does not answer (nothing
+  built), the merged kubeconfig, `COMMUNITY_CONTEXT`, and the drift variables run-e2e.sh gets. Three mutations were
+  tried: dropping `DRIFT_PROFILE`, dropping the community kubeconfig from the merged `KUBECONFIG`, and skipping the
+  community check. Each one makes the test fail.
+
+**Why the live run did not happen in this run.** Hecaton gave this run the files `clusters/env`,
+`clusters/kubeconfig`, `clusters/aws-credentials` and `clusters/aws-config` under `/var/lib/hecaton/runs/16703/`.
+They are owned by `hecaton:hecaton`, mode 640. This run's user, `hecaton-s6-claude-certkraken`, is not in group
+`hecaton`, so `. "$HECATON_CLUSTER_ENV"` answered "Permission denied", `aws sts get-caller-identity` answered
+"Unable to locate credentials", and kubectl could not open `$KUBECONFIG`. That is hecaton's to fix (hecaton#508).
+No cluster was built, no secret was written, and nothing is left up.
+
+**Not yet run on a cluster.** The run itself, which is #461's whole criterion. From the repo root, in a session that
+can read the accen-dev credentials and the kubeconfig holding the community context:
+
+    E2E_PROFILE=accen-dev E2E_REGION=us-west-2 IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 \
+        COMMUNITY_CONTEXT=watch-it-burn-community COMMUNITY_KUBECONFIG="$KUBECONFIG" \
+        bash verify/live-e2e-session.sh
+
+The three cautions in the entry above still hold. It builds watch-it-burn-attendee-001. CLAUDE.md's "Dispatched
+runs" rule 1 says a run does not bring clusters up, but this run's governance allows a run to create and tear down
+a cluster its tests need, and the session tears the cluster down on every exit.
