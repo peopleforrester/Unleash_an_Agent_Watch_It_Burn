@@ -69,9 +69,10 @@ given = me_page.split('id="witch-name">', 1)[1].split("<", 1)[0]
 HARNESS = r"""
 const vm = require('vm');
 const [src, cases] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-const out = cases.map(([host, cookie]) => {
+const out = cases.map(([host, cookie, rnd]) => {
   const el = {hidden: true, textContent: '', href: '', removeAttribute(a) { this[a] = ''; }};
-  const ctx = {location: {hostname: host}, Math,
+  const M = rnd === undefined ? Math : Object.assign(Object.create(Math), {random: () => rnd});
+  const ctx = {location: {hostname: host}, Math: M,
                document: {cookie, getElementById: (id) => id === 'witch' ? el : null}};
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
@@ -86,12 +87,14 @@ CASES = [
     ("attackme.agenticburn.com", cookie),
     ("burritobot-private.burritobot.co", cookie),
     ("attackme.burritobot.co", "wib_witch=big-rude-word"),
+    # Math.random pinned so the replacement's first name is Prudence, which contains "rude".
+    ("attackme.burritobot.co", "wib_witch=big-rude-word", (site.FIRST.index("Prudence") + 0.5) / len(site.FIRST)),
 ]
 r = subprocess.run(["node", "-e", HARNESS], input=json.dumps([BLOCK, CASES]), capture_output=True, text=True)
 if r.returncode != 0:
     print(f"FAILED: node exited {r.returncode}: {r.stderr[-400:]}")
     sys.exit(1)
-named, none, other_domain, private, rude = json.loads(r.stdout)
+named, none, other_domain, private, rude, rude_prudence = json.loads(r.stdout)
 
 
 
@@ -119,8 +122,15 @@ check("on .burritobot.co, for the desk to read", "; Domain=.burritobot.co" in no
 check("and shows and sends that name", not none["hidden"] and none["textContent"].endswith(f"You are {fresh}")
       and none["sent"] == fresh, repr(none))
 replaced = written_name(rude)
+# The bad cookie's words, not the bare "rude": a vocabulary name such as "Prudence the Pixie" contains "rude".
 check("a cookie that is not a generated name is replaced with one", replaced is not None
-      and "rude" not in rude["textContent"] and rude["textContent"].endswith(f"You are {replaced}"), repr(rude))
+      and "big-rude-word" not in rude["cookie"] and "rude word" not in rude["textContent"].lower()
+      and rude["textContent"].endswith(f"You are {replaced}"), repr(rude))
+prudence = written_name(rude_prudence)
+check("a replacement named Prudence passes too: the check looks for the bad cookie's words, not 'rude'",
+      prudence is not None and prudence.startswith("Prudence the ")
+      and "big-rude-word" not in rude_prudence["cookie"] and "rude word" not in rude_prudence["textContent"].lower()
+      and rude_prudence["textContent"].endswith(f"You are {prudence}"), repr(rude_prudence))
 check("agenticburn.com shows nothing (the cookie is not sent there)", other_domain["hidden"] is True
       and other_domain["sent"] == "", repr(other_domain))
 

@@ -8878,3 +8878,30 @@ Then drive one /chat on each cluster (`verify/kubecon_probe.py`) and run
 `WIB_DD_LOOKBACK_MIN=30 WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3 verify/test_datadog_sandbox_live.py`
 at least 30 minutes after the relabel, so the window holds no log from before it. When every check passes, #629
 closes.
+## 2026-11-02 · #583 · The live Bedrock call is still owed, and the witch-name E2E check no longer fails on a Prudence
+
+**No change on the Bedrock path.** Run 15808 took #583 up again on base 845b697. Since run 15784's base, f43680e,
+staging has changed only decisions.md. 1181a88 is still the last commit to touch
+`verify/test_gateway_bedrock_tagged_live.py` and `verify/gateway_forward.py`, `gitops/ai-layer/agentgateway.yaml` is
+still agentgateway v1.7.0, and `infra/terraform/fleet/fleet.sh` still calls `pin_bedrock_profiles` after bootstrap
+and in the repair pass (lines 1411 and 1545). Run here with `CONTEXT=none-15808`, the live test exits 1 at "cluster
+for context 'none-15808' is reachable".
+
+**Fixed on the way: a 1-in-32 failure in `verify/test_storefront_witch_name_e2e.py`.** This run's E2E tools tier
+failed it once: the check that a cookie the vocabulary did not make is replaced asserted `"rude" not in` the shown
+text, and the page had picked "Prudence the Pixie" at random. Prudence is one of the 32 first names, so the check
+failed on about one run in 32 with nothing wrong in the page. The check now looks for the bad cookie's own words
+(`big-rude-word` not in the written cookie, "rude word" not in the shown text), and a new case pins `Math.random` in
+the node vm so the replacement is always a Prudence. With the old predicate put back, that case fails; with the fix,
+the test passed 12 runs in a row.
+
+**Not yet run on a cluster:** `verify/test_gateway_bedrock_tagged_live.py`, unchanged from the 2026-10-31 entry. A
+session with the accen-dev profile runs it on watch-it-burn-community:
+
+    C=watch-it-burn-community; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_gateway_bedrock_tagged_live.py
+
+A 200 through the port-forward closes #583. Any other status prints Bedrock's reply, which names the encoding the
+path needs.
