@@ -23,6 +23,12 @@ one sandbox org, #629, and question 926's one-row pool) it has no admin secret a
 once. Which way is read from the cluster: its datadog-secret's key is, or is not, WITB_DD_ADMIN_API_KEY. The Datadog
 cluster name is cluster-identity's datadog-cluster-name, burritobot-attendee-NNN (#629), not the EKS name.
 
+It also runs on the two instructor-roster clusters, watch-it-burn-community (burritobot-public) and
+watch-it-burn-private (burritobot-private), which take fleet.sh's instructor path: one org, the instructor org's key,
+no datadog-admin-secret (verify/lab_live_clusters.py says which kind a cluster is). Sections 1 to 4 are the same
+there. Pass 6 leaves those two clusters out of lab-progress.csv by design, so on them section 5 checks that it does,
+and the row it writes for an attendee is still owed by a run on an attendee cluster.
+
 The markers carry a fresh alias (verify-<hex>), so the series found are this run's and no student's. The dashboard is
 checked, not applied: applying infra/terraform/dashboards is an operator step with the instructor org's DD_API_KEY and
 DD_APP_KEY, and this check fails until the applied dashboard matches the file.
@@ -48,6 +54,9 @@ import urllib.request
 import uuid
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+import lab_live_clusters  # noqa: E402
+
 CONTEXT = os.environ.get("CONTEXT", "")
 ADMIN_API = os.environ.get("WITB_DD_ADMIN_API_KEY", "")
 ADMIN_APP = os.environ.get("WITB_DD_ADMIN_APP_KEY", "")
@@ -57,7 +66,6 @@ STUDENT_SITE = "datadoghq.com"
 COLLECTOR_SVC = "otel-collector-opentelemetry-collector"
 DASH = json.loads((REPO / "infra/terraform/dashboards/fleet-analytics.json").read_text(encoding="utf-8"))
 PASS6 = REPO / "scripts/harvest/06-lab-progress.py"
-STUDENT_CLUSTER = re.compile(r"-attendee-\d+$")
 
 failures: list[str] = []
 
@@ -121,19 +129,23 @@ def secret_value(ns: str, name: str, key: str) -> str:
     return base64.b64decode(got.stdout).decode() if got.returncode == 0 and got.stdout.strip() else ""
 
 
-print(f"== on {CONTEXT}: an attendee cluster that ships to the instructor org ==")
+print(f"== on {CONTEXT}: a cluster that ships to the instructor org ==")
 CLUSTER = config_value("monitoring", "cluster-identity", "cluster-name")
 DD_CLUSTER = config_value("monitoring", "cluster-identity", "datadog-cluster-name")
 HOST = config_value("agent", "cluster-identity", "public-host")
-check(f"cluster-identity names an attendee cluster ({CLUSTER or 'none'})", bool(STUDENT_CLUSTER.search(CLUSTER)))
-check(f"cluster-identity carries its Datadog name, burritobot-attendee-NNN ({DD_CLUSTER or 'none'})",
-      DD_CLUSTER.startswith("burritobot-") and bool(STUDENT_CLUSTER.search(DD_CLUSTER)))
+KIND = lab_live_clusters.kind(CLUSTER, DD_CLUSTER)
+check(f"cluster-identity names an attendee cluster (watch-it-burn-attendee-NNN as burritobot-attendee-NNN) or the "
+      f"Community or private cluster (burritobot-public, burritobot-private): {CLUSTER or 'none'} as "
+      f"{DD_CLUSTER or 'none'} is {KIND or 'neither'}", bool(KIND))
 check(f"cluster-identity in agent carries the public console host ({HOST or 'none'})", bool(HOST))
 STUDENT_API = secret_value("datadog", "datadog-secret", "api-key")
 STUDENT_APP = secret_value("datadog", "datadog-secret", "app-key")
 check("datadog-secret in datadog carries the cluster's own api and app keys", bool(STUDENT_API and STUDENT_APP))
 ADMIN_ON_CLUSTER = secret_value("monitoring", "datadog-admin-secret", "api-key")
 ONE_ORG = STUDENT_API == ADMIN_API
+if KIND == "instructor":
+    check("an instructor cluster's own key is the instructor org's (fleet.sh datadog_keys_for), so the markers "
+          "land there", ONE_ORG)
 if ONE_ORG:
     check("one org (the cluster's key is the instructor org's): no datadog-admin-secret in monitoring, "
           "so nothing is shipped there twice", not ADMIN_ON_CLUSTER)
@@ -273,11 +285,18 @@ try:
     print("        " + (run.stdout + run.stderr).strip().replace("\n", "\n        "))
     check("06-lab-progress.py exits 0", run.returncode == 0)
     csv_path = out / "lab-progress.csv"
+    check("lab-progress.csv was written", csv_path.exists())
     rows = [r for r in csv.DictReader(csv_path.open(encoding="utf-8")) if r["alias"] == ALIAS] if csv_path.exists() else []
-    check(f"lab-progress.csv has one row for {ALIAS} on {DD_CLUSTER}", len(rows) == 1 and rows[0]["cluster"] == DD_CLUSTER)
-    fixed = sorted({c for n, c in SENT if n == "lab.control.installed"}, key=int)
-    check(f"that row has the fixes the page measured on ({';'.join(fixed)})",
-          len(rows) == 1 and rows[0]["fixed"] == ";".join(fixed))
+    if KIND == "attendee":
+        check(f"lab-progress.csv has one row for {ALIAS} on {DD_CLUSTER}",
+              len(rows) == 1 and rows[0]["cluster"] == DD_CLUSTER)
+        fixed = sorted({c for n, c in SENT if n == "lab.control.installed"}, key=int)
+        check(f"that row has the fixes the page measured on ({';'.join(fixed)})",
+              len(rows) == 1 and rows[0]["fixed"] == ";".join(fixed))
+    else:
+        check(f"lab-progress.csv has no row for {ALIAS}: pass 6 leaves {DD_CLUSTER} out, as it does the Community "
+              "and admin clusters", csv_path.exists() and not rows)
+        print("        the row pass 6 writes for an attendee is still owed by a run on an attendee cluster")
     check("LAB-PROGRESS.md was written", (out / "LAB-PROGRESS.md").exists())
 finally:
     # Synthetic markers, not an event's data: nothing of this run stays in .harvest/.

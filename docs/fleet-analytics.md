@@ -173,3 +173,9 @@ these markers fall under must return data. Last, pass 6 runs over the window and
 with the fixes the page measured on. It deletes that synthetic `.harvest/` output afterwards. It does not apply
 the dashboard: apply `infra/terraform/dashboards` with the instructor org's keys first. It also does not look at
 the widgets in a browser, so the `@event`/`@rule` parsing in step 4 is still checked by eye.
+
+It runs on the Community and private clusters too (`watch-it-burn-community` as `burritobot-public`,
+`watch-it-burn-private` as `burritobot-private`; `verify/lab_live_clusters.py` decides which kind a cluster is). Both
+take fleet.sh's instructor path: their own key is the instructor org's, so the check requires one org there. Steps 1 to
+4 are the same. Pass 6 leaves those clusters out of `lab-progress.csv` by design, so on them the check asserts there
+is no row for the alias, and the attendee row in step 5 is still owed by a run on an attendee cluster.

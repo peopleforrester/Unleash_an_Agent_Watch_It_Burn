@@ -13678,3 +13678,56 @@ No dependency was added.
 **The suites (run 16834, on `ded328a4`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 24m21s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests,
 all green, `verify/test_ghcr_version_tag.py` among them, and `test_image_version_tags.py` passes in the tier.
+
+## 2026-11-02 · #587 · The live lab-pipeline check runs on the Community and private clusters as well as an attendee one
+
+The coordinator asked on 2026-11-02 for `verify/test_lab_pipeline_live.py` to be run against the two clusters that
+exist, watch-it-burn-community and watch-it-burn-private (accen-dev, us-west-2), without building an attendee
+cluster. As written, the check would have failed at its first section on both. It required cluster-identity's
+cluster-name to end `-attendee-NNN` and its datadog-cluster-name to be `burritobot-attendee-NNN`. Those two clusters
+are `burritobot-public` and `burritobot-private`.
+
+**Why they are valid targets.** fleet.sh's `datadog_keys_for` gives both of them the instructor path: their
+datadog-secret is the `watch-it-burn/datadog` key, the instructor org's, and they carry no datadog-admin-secret. Every
+profile's collector (instructor, attendee and burn, rendered by `verify/collector_render.py`) sends `traces/lab` and
+`metrics/lab` to `datadog` and serves `otlp/lab` on 4319. The burn and admin profiles both deploy ai-layer, so the
+console's `/lab-events` route is there. So sections 1 to 4 (the receiver, the public route, `witb.lab.calls` in the
+instructor org counted once, the dashboard's queries) mean the same on these clusters as on a one-org attendee one.
+
+**What differs.** Harvest pass 6 keeps only `-attendee-NNN` clusters (`STUDENT_CLUSTER` in
+`scripts/harvest/06-lab-progress.py`). It leaves the Community and admin clusters out on purpose, because the room
+shares the Community cluster and an admin cluster's lab reports itself as a student. On these clusters, section 5 now
+checks that pass 6 exits 0, writes its files, and has no row for the run's alias. On an attendee cluster it checks the
+row as before. Pass 6 was not widened to make a row for them, since that would put the shared room cluster into the
+per-attendee join with the feedback app.
+
+**The change.** `verify/lab_live_clusters.py` names the two kinds. An attendee cluster is an EKS/Datadog name pair
+with the same NNN. An instructor cluster is watch-it-burn-community, or its `-bNN` standby, as burritobot-public, or
+watch-it-burn-private, or its `-bNN` standby, as burritobot-private. `<owner>-admin` clusters stay refused, because
+the coordinator named the two shared clusters only. On an instructor cluster the live check requires the cluster's key to be
+the instructor org's. `verify/test_lab_live_clusters.py` (offline) runs `infra/datadog-cluster-identity.sh` against
+a kubectl shim for each roster name and checks the kind. It also checks that pass 6's regex makes a row of exactly
+the attendee kind, and that the live check uses the module and these branches.
+
+**Tests.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`; results in the run report.
+
+**Not yet run on a cluster.** This run (hecaton 16004) had no AWS profile, no EKS session in its run directory and
+no Datadog keys, so `verify/test_lab_pipeline_live.py` did not run. A session with accen-dev runs it after this
+commit is on staging, once for each cluster:
+
+    for C in watch-it-burn-community watch-it-burn-private; do
+      K=/tmp/$C.kubeconfig
+      AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+      CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/$C ]] || exit 1
+      DD=$(AWS_PROFILE=accen-dev aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog \
+           --region us-west-2 --query SecretString --output text)
+      KUBECONFIG=$K CONTEXT="$CTX" WITB_DD_ADMIN_API_KEY=$(jq -r '."api-key"' <<<"$DD") \
+        WITB_DD_ADMIN_APP_KEY=$(jq -r '."app-key"' <<<"$DD") python3 verify/test_lab_pipeline_live.py
+    done
+
+Section 4 fails until the dashboard is applied:
+`DD_API_KEY=… DD_APP_KEY=… terraform -chdir=infra/terraform/dashboards init && terraform -chdir=infra/terraform/dashboards apply`,
+with the same instructor-org keys. The module keeps local state, so a fresh checkout's apply makes a second
+dashboard if one was applied before, and section 4 wants exactly one with that title. When the instructor org already
+has one, `terraform import datadog_dashboard_json.fleet_analytics <id>` first. A pass on both clusters validates everything in #587 except pass 6's attendee row,
+which needs an attendee cluster.
