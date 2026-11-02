@@ -104,12 +104,13 @@ _evil() { local p c
   c=(kubectl -n agent patch agent workshop-agent --type=json -p "$p")
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
 # _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root lab-bootstrap is
-# labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml): there it is agentgateway's rule. Returns 1 anywhere else: there
+# labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml), or the KubeCon private one, labelled
+# kubecon-private (values-kubecon-private.yaml, #774): there it is agentgateway's rule. Returns 1 anywhere else: there
 # it is the toolNames allow-list. Returns 2 when Argo CD could not be asked, so a flaky lookup never picks
 # the wrong control for an admin cluster's stage demo.
 _c7gw() { local r c=(kubectl -n argocd get application lab-bootstrap --ignore-not-found \
   -o jsonpath='{.metadata.labels.lab-platform/profile}')
-  _show "${c[@]}"; r="$("${c[@]}" 2>/dev/null)" || return 2; [ "$r" = admin ]; }
+  _show "${c[@]}"; r="$("${c[@]}" 2>/dev/null)" || return 2; [ "$r" = admin ] || [ "$r" = kubecon-private ]; }
 # _c7rule on|off : rewrite the one rule line in agentgateway-c7-config (on = get_weather only, off = 'true').
 # The JSON patch tests the resourceVersion it read, so it never writes over a change it did not see. Then it
 # touches the gateway pod: a pod update makes the kubelet refresh the ConfigMap volume now instead of on its
@@ -136,6 +137,81 @@ _mcp() { local all='["get_weather","read_internal_config","apply_optimization"]'
     1:off) _evil "$all" && echo toolnames ;;
     *) return 1 ;;
   esac; }
+# The KubeCon breakout's switch (#774, Michael's spec 2026-11-01): the four Kubernetes guardrails, RBAC, Kyverno,
+# KubeArmor and egress, turned on or off on this cluster AND on the other KubeCon cluster at once, from either
+# terminal. The other cluster is reached with the kubeconfig `fleet.sh guardrails-link` writes into the
+# guardrails-switch/guardrails-peer Secret: its endpoint, its CA and the token of its guardrails-switch ServiceAccount,
+# whose grant is these four guardrails' objects and nothing else (gitops/guardrails-switch/).
+# _peer : write that kubeconfig to ~/.kube/peer and print the other cluster's name. Prints nothing, failing, when this
+# cluster has not been linked.
+_peer() { local c k n
+  c=(kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}')
+  _show "${c[@]}"; k="$("${c[@]}" 2>/dev/null | base64 -d 2>/dev/null)"
+  c=(kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}')
+  _show "${c[@]}"; n="$("${c[@]}" 2>/dev/null | base64 -d 2>/dev/null)"
+  [ -n "$k" ] && [ -n "$n" ] || return 1
+  mkdir -p "$HOME/.kube"; ( umask 077; printf '%s\n' "$k" > "$HOME/.kube/peer" )
+  printf '%s\n' "$n"; }
+# _kg on|off rbac|kyverno|kubearmor|egress <kubectl...> : one guardrail on one cluster, through the kubectl given
+# (kubectl for this cluster; kubectl --kubeconfig ~/.kube/peer --context <name> for the other). The objects are the
+# ones the chat page's badges read (guard-proxy's /controls): the workshop-agent Role, restrict-image-registries'
+# action, block-recipe-snoop and agent-egress-allowlist. Kyverno is read back; the rest go by kubectl's exit code.
+_kg() { local st="$1" g="$2" c a p; shift 2
+  case "$st:$g" in
+    on:rbac)       c=("$@" apply -f "$HOME/challenges/c5-scoped-role.yaml") ;;
+    off:rbac)      c=("$@" apply -f "$HOME/challenges/c8-broad-role.yaml") ;;
+    on:kubearmor)  c=("$@" apply -f "$HOME/challenges/c3-kubearmor-policy.yaml") ;;
+    off:kubearmor) c=("$@" delete --ignore-not-found -f "$HOME/challenges/c3-kubearmor-policy.yaml") ;;
+    on:egress)     c=("$@" apply -f "$HOME/challenges/c1-network-policy.yaml") ;;
+    off:egress)    c=("$@" delete --ignore-not-found -f "$HOME/challenges/c1-network-policy.yaml") ;;
+    on:kyverno|off:kyverno)
+      a=Deny; [ "$st" = off ] && a=Audit
+      for p in restrict-image-registries deny-external-registries; do
+        c=("$@" patch validatingpolicy "$p" --type=json \
+          -p "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"$a\"]}]")
+        _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1
+        c=("$@" get validatingpolicy "$p" -o 'jsonpath={.spec.validationActions[0]}')
+        _show "${c[@]}"; [ "$("${c[@]}" 2>/dev/null)" = "$a" ] || return 1
+      done
+      return 0 ;;
+    *) return 1 ;;
+  esac
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
+# _guardrails on|off [seconds] : the switch itself. One guardrail at a time, here and then on the other cluster, so
+# each badge lights (or goes dark) on both chat pages together; [seconds] waits between guardrails, so the room can
+# watch each one arrive (the page polls every 12 seconds). Says what changed, names anything that did not, and fails
+# when either cluster missed a guardrail or the other cluster could not be reached at all.
+_guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
+  case "$pause" in ''|*[!0-9]*) echo "Usage: guardrails-$st [seconds between guardrails, default 0]"; return 2 ;; esac
+  peer="$(_peer)" || peer=""
+  for g in rbac kyverno kubearmor egress; do
+    _kg "$st" "$g" kubectl || bad+=("$g on this cluster")
+    if [ -n "$peer" ]; then
+      _kg "$st" "$g" kubectl --kubeconfig "$HOME/.kube/peer" --context "$peer" || bad+=("$g on $peer")
+    fi
+    case "$st:$g" in
+      on:rbac)       line="🛡️  RBAC ON: agent-sa reads one Secret by name, its own config. The CEO's record is Forbidden." ;;
+      on:kyverno)    line="🛡️  Kyverno ON: admission denies every image outside registry.burritobot.co for what BurritoBot deploys." ;;
+      on:kubearmor)  line="🛡️  KubeArmor ON: the kernel blocks reads of the recipe files in the agent's tool pod." ;;
+      on:egress)     line="🛡️  Egress ON: the agent namespace reaches its model, DNS, telemetry and the cluster; the internet is cut off." ;;
+      off:rbac)      line="🔓 RBAC OFF: agent-sa reads every Secret in its namespace again." ;;
+      off:kyverno)   line="🔓 Kyverno OFF: the registry rules only report; any image BurritoBot deploys is admitted." ;;
+      off:kubearmor) line="🔓 KubeArmor OFF: the recipe files are readable from the agent's tool pod again." ;;
+      off:egress)    line="🔓 Egress OFF: the agent namespace can reach the internet again." ;;
+    esac
+    echo "$line"
+    [ "$g" = egress ] || [ "$pause" = 0 ] || sleep "$pause"
+  done
+  if [ -z "$peer" ]; then
+    echo "⚠️  This cluster is not linked to the other KubeCon cluster (no guardrails-switch/guardrails-peer Secret),"
+    echo "    so only this one was switched. From the fleet host: infra/terraform/fleet/fleet.sh guardrails-link"
+    return 1
+  fi
+  if [ "${#bad[@]}" -gt 0 ]; then
+    echo "⚠️  These did not switch $st: ${bad[*]}. Run 'guardrails-$st' again; it is safe to repeat."
+    return 1
+  fi
+  echo "Both clusters, this one and $peer: all four Kubernetes guardrails are $st."; }
 EOS
 
 # The rule rewrite behind _c7rule. Reads the ConfigMap as JSON on stdin and prints the JSON patch. Exactly
@@ -247,6 +323,7 @@ for k in ("output","input_blocklist","input_classifier","budget","topic"):
 echo
 echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  guard-topic-on  (or guards-on / guards-off)"
 echo "Cluster fixes: guard-rbac-on (the CEO's record)  guard-admission-on (the support ticket's image)"
+echo "KubeCon: guardrails-on / guardrails-off (the four Kubernetes guardrails, on both clusters at once)"
 EOS
 
 # Combined: flip EVERY AI guard at once (the "reset and explore" convenience). guards-on leaves the on-topic
@@ -537,7 +614,20 @@ else
   echo "⚠️  restrict-image-registries is not in Audit. Wait a moment and try 'guard-admission-off' again."; exit 1
 fi
 EOS
+# guardrails-on / guardrails-off: the KubeCon breakout's one command for the four Kubernetes guardrails on both
+# clusters (#774; _guardrails in .guardlib). An optional number of seconds waits between guardrails.
+cat > "$HOME/guardrails-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+_guardrails on "${1:-0}"
+EOS
+cat > "$HOME/guardrails-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+_guardrails off "${1:-0}"
+EOS
 chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
+  "$HOME"/guardrails-on "$HOME"/guardrails-off \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off \
   "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/guard-rbac-on "$HOME"/guard-rbac-off \
