@@ -9142,3 +9142,62 @@ lab-platform has no issue for it, open or closed (searched on 2026-11-02 by "con
 `CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` on the next attendee bring-up, where each party
 host must answer its page through the console's host map and the 8080 target.
 `verify/test_console_no_toggle_live.py` is owed once the console moves.
+## 2026-11-02 · #717 · The IMDS beat was live-validated by the coordinator; #748 left the facilitator doc and the script header describing the removed `aws sts get-caller-identity`, now fixed
+
+**Context.** #717 asks to live-validate the IMDS credential-theft beat (#113, OWASP Agentic **ASI03,
+Identity and Privilege Abuse**: a compromised pod on the unguarded community cluster steals the EC2 node
+instance-role credentials off `169.254.169.254` and pivots into the AWS account, while every attendee/admin
+cluster blocks it). The live half needs real EKS clusters and AWS credentials, which a dispatched hecaton
+run has neither the access nor the governance to incur (CLAUDE.md, Dispatched runs rule 1). The coordinator
+(Michael, with AWS access) ran the live half and recorded it on the issue, so this run's job was to check
+the result against the shipped code and reconcile anything stale.
+
+**What the coordinator validated (on #717).**
+- **2026-10-31 (first pass):** against the already-running `watch-it-burn-community` node, the steal script
+  printed `IMDS: BLOCKED` — a FAIL vs the beat, because that node was still at IMDS hop limit **1**, never
+  reprovisioned with the `imds_hop_limit=2` the burn role sets. The guarded `watch-it-burn-private` node
+  (hop limit 1) correctly printed `IMDS: BLOCKED`, and `verify/test_bedrock_profile_live.py` confirmed Pod
+  Identity / Bedrock still answers on the community cluster. Root cause was the stale running node, not the
+  fleet.sh wiring (which `verify/test_imds_credential_theft.py` proves offline).
+- **2026-11-01 (after rebuild):** the rebuilt `watch-it-burn-community` node came up at IMDS hop limit **2**
+  (via `imds_hop_limit_for_role=community`). The steal script from the tool pod REACHED IMDS and the node
+  handed out its instance-role name — the theft lands (ASI03). One gap noted on stage: the pre-#748 script's
+  closing `aws sts get-caller-identity` printed `aws: not found`, because the `workshop-mcp` tool-pod image
+  carries no aws CLI. That gap was filed as #748 and fixed the same day (commit `7805261`): the script now
+  reads the node **instance-identity document** with the stolen token and prints the node role name plus its
+  AWS account and region — same cloud-account reach, nothing to go missing.
+
+**What this run found and fixed (doc drift from #748).** Commit `7805261` (#748) changed
+`challenges/imds-node-creds/steal-node-creds.sh` and `verify/test_imds_credential_theft.py` to the
+identity-document pivot, but did **not** update the two places that describe what the script does, so they
+still told presenters to expect `aws sts get-caller-identity` and a `node-role ARN
+(arn:aws:sts::<acct>:assumed-role/...)` that the script no longer prints:
+- `challenges/imds-node-creds/steal-node-creds.sh`: the ABOUTME header (and an inline comment) said the
+  script "runs `aws sts get-caller-identity`" — contradicting its own body. Reworded to "names the AWS
+  account they belong to" and "no aws CLI, which the minimal tool-pod image lacks (#748)".
+- `challenges/imds-node-creds/FACILITATOR.md`: the ABOUTME, the "Run the theft" paragraph, the node-role-
+  scope gotcha, and the "Not yet run on a cluster" section all named `aws sts get-caller-identity` / the STS
+  ARN. Rewritten to describe the instance-identity-document pivot (node role name + AWS account + region) and
+  why there is no aws call. The "Not yet run on a cluster" section now records the coordinator's live
+  validation above and names the residual still owed.
+
+**Not changed (conceptual attack descriptions, still true).** The comments in
+`gitops/bootstrap/values-burn.yaml`, `infra/terraform/aws/cluster/main.tf` and
+`infra/terraform/fleet/fleet.sh` say a compromised pod *can* steal the node creds and run `aws sts
+get-caller-identity` to a node role. That describes the vulnerability class (what the stolen credential is
+capable of), not our demo script's literal commands, and remains accurate, so they are left alone. The
+presenter/attendee narrative copy that names the script and still says it runs `aws sts get-caller-identity`
+(`facilitation/kubecon-na-2026-run-of-show.md`, `docs/RUN-OF-SHOW-2026-08.md`, `gitops/ai-layer/web/kubecon.html`,
+`gitops/ai-layer/web/brief.html`) is Michael's voice and is filed as a follow-up rather than rewritten here.
+
+**Tests.** `python3 -I verify/test_imds_credential_theft.py` passes (the FACILITATOR edits keep the
+`ASI03`, `attackme`/`community`, `attendee step` and `Not yet run on a cluster` assertions it checks), and
+`bash verify/run-tests.sh` is green.
+
+**Not yet run on a cluster.** The residual the beat still owes, which needs a session Michael runs with AWS
+access (cluster spend; the go is already on #717): at the next community/attendee bring-up
+(`fleet.sh instructors up community`), re-run `CONTEXT=<community-ctx>
+challenges/imds-node-creds/steal-node-creds.sh` and confirm the current (#748) script names the node role
+and its AWS account/region (the identity-document output has not been seen live; the 2026-11-01 run used the
+pre-#748 script), then run it against a fresh attendee cluster and confirm `IMDS: BLOCKED` (so far shown only
+on the guarded `watch-it-burn-private`, not a fresh attendee cluster).
