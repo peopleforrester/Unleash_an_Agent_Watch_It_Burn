@@ -27,7 +27,11 @@ window.WIB_EVENT = {
   // Hide the storefront's Terminal button on publicUrl's host (#645). The room attacks from phones and
   // the presenters keep their terminal on the private bot. Set false for the 2-hour workshop.
   hideTerminalOnPublic: true,
+  // Hide the storefront's Datadog button on publicUrl's host too (#647, Whitney 2026-11-01): the room gets
+  // no QR, link or share URL to any Datadog view and sees Datadog only on the big screen. The presenters'
+  // private bot and every attendee cluster keep it. Set false for the 2-hour workshop.
+  hideDatadogOnPublic: true,
   // Every name the public bot answers on (#651: agenticburn.com and burritobot.co are both served). The
-  // Terminal button hides on each of them; publicUrl's host is always included.
+  // Terminal and Datadog buttons hide on each of them; publicUrl's host is always included.
   publicHosts: ["attackme.agenticburn.com", "attackme.burritobot.co"]
 };

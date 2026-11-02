@@ -41,6 +41,9 @@ before either transcript is stored in `transcripts/`, Drive, or anywhere else.
   scrubbed from Whitney's org after the talk regardless.
   Settled (#647, decisions.md 2026-10-29): attackme's collector scrubs e-mails, card numbers,
   SSNs and phone numbers from trace content before export; no attendee gets a Datadog account.
+  Superseded for the room view (Whitney on #647, 2026-11-01; decisions.md 2026-11-02): the room
+  gets no QR, link or share URL to any Datadog view, and sees Datadog only on the big screen.
+  The read-only view above is dropped (#665, #767). The post-talk purge still applies.
 
 ## Datadog on stage
 

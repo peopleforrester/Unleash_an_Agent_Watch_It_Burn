@@ -7,7 +7,8 @@
 1. The page's real `(function init(){...})();` block, cut from burritbot.html, runs in a node vm with a
    stub DOM: once with the committed event.js and once with no event at all. The Feedback href that comes
    out is what a phone would get. With the event set it must be the survey URL exactly, with no cluster
-   or user. Without it, it must be the workshop's /quick form carrying both.
+   or user. Without it, it must be the workshop's /quick form carrying both. On the public bot's hosts the
+   Terminal button (#645) and the Datadog button (#647) are hidden; elsewhere both stay.
 2. scripts/audience-qr.py --check re-renders the QR from event.js with segno 1.6.6 (through `uv run`, so
    nothing is installed globally) and fails if the committed SVG differs by one byte.
 
@@ -55,7 +56,7 @@ HARNESS = r"""
 const vm = require('vm');
 const [eventSrc, initSrc, search, host, quick] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const els = {};
-for (const id of ['vttbtn', 'bbbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
+for (const id of ['vttbtn', 'bbbtn', 'ddbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
 els.fbbtn.href = quick;
 const window = {};
 const ctx = {
@@ -68,7 +69,8 @@ const ctx = {
 vm.createContext(ctx);
 if (eventSrc) vm.runInContext(eventSrc, ctx);
 vm.runInContext(initSrc, ctx);
-process.stdout.write(JSON.stringify({ fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true }));
+process.stdout.write(JSON.stringify({ fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true,
+                                       datadogHidden: els.ddbtn.hidden === true }));
 """
 
 
@@ -76,7 +78,7 @@ def run_init(event_src: str, host: str = "attackme.agenticburn.com") -> dict:
     payload = json.dumps([event_src, INIT, "?cluster=watch-it-burn-community&user=a%40b.example", host, QUICK])
     r = subprocess.run(["node", "-e", HARNESS], input=payload, capture_output=True, text=True)
     if r.returncode != 0:
-        return {"fb": f"<node failed: {r.stderr.strip()}>", "terminalHidden": None}
+        return {"fb": f"<node failed: {r.stderr.strip()}>", "terminalHidden": None, "datadogHidden": None}
     return json.loads(r.stdout)
 
 
@@ -107,6 +109,19 @@ for host in ("burritobot-private.agenticburn.com", "burritobot-private.burritobo
     check(f"on the presenters' {host} it stays", run_init(EVENT_JS, host)["terminalHidden"] is False)
 check("on an attendee's own cluster it stays", run_init(EVENT_JS, "soot-ember.agenticburn.com")["terminalHidden"] is False)
 check("with no event set (the workshop) it stays, even on attackme", run_init("")["terminalHidden"] is False)
+
+print("== the room gets no Datadog button on the public host (#647, Whitney 2026-11-01) ==")
+for host in ("attackme.agenticburn.com", "attackme.burritobot.co"):
+    check(f"on {host}, with the committed event.js, the Datadog button is hidden",
+          run_init(EVENT_JS, host)["datadogHidden"] is True)
+for host in ("burritobot-private.agenticburn.com", "burritobot-private.burritobot.co"):
+    check(f"on the presenters' {host} it stays", run_init(EVENT_JS, host)["datadogHidden"] is False)
+check("on an attendee's own cluster it stays", run_init(EVENT_JS, "soot-ember.agenticburn.com")["datadogHidden"] is False)
+check("with no event set (the workshop) it stays, even on attackme", run_init("")["datadogHidden"] is False)
+check("hiding the Terminal alone leaves the Datadog button, so each knob is its own",
+      run_init('window.WIB_EVENT = { hideTerminalOnPublic: true, publicHosts: ["attackme.agenticburn.com"] };')
+      == {"fb": QUICK + "&cluster=watch-it-burn-community&user=a%40b.example", "terminalHidden": True,
+          "datadogHidden": False})
 
 print("== the committed QR is exactly segno's rendering of publicUrl ==")
 r = subprocess.run(["uv", "run", "--no-project", "--with", "segno==1.6.6", "python", "-I",

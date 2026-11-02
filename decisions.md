@@ -8905,3 +8905,39 @@ session with the accen-dev profile runs it on watch-it-burn-community:
 
 A 200 through the port-forward closes #583. Any other status prints Bedrock's reply, which names the encoding the
 path needs.
+## 2026-11-02 · #647 · Whitney's ruling: attendees get no Datadog view; the public bot hides its Datadog button; the scrub stays
+
+The 2026-10-29 #647 entry recorded the scrub and "no attendee gets a Datadog account", and let the room's read-only
+`burritobot-public` view the planning call proposed go ahead (#665 built it as a public shared dashboard). Whitney
+answered the access question on #647 (comment 6558724475, 2026-11-01): for the KubeCon NA 2026 breakout the room
+gets no QR code, link or share URL to any Datadog view, and sees Datadog only when the presenters show it on the
+big screen. That supersedes the 2026-10-29 entry's "may now go ahead" for the room view. #665 is closed on it, and
+#767 (1732c0b) took the second QR and its Night Before build step out of the run-of-show.
+
+- **What this changes here.** The storefront the room opens on `attackme.burritobot.co` (`gitops/ai-layer/web/burritbot.html`)
+  still carried a Datadog header button to `https://app.datadoghq.com`, the one Datadog link left on the room's page.
+  It now hides on the public hosts through the event knob, the same way the Terminal button does (#645):
+  `hideDatadogOnPublic: true` in `gitops/ai-layer/web/event.js`, tested against the same `publicHosts` list. The
+  presenters' private bot and every attendee cluster keep the button, and with no event set (the 2-hour workshop)
+  it shows everywhere, because workshop students do get their own Datadog orgs.
+- **Why a knob, not a deleted button.** The same page is every attendee cluster's front door, and their button
+  opens the student's own org. A separate knob, rather than reusing `hideTerminalOnPublic`, keeps each hide
+  readable and switchable on its own.
+- **The scrub stays.** Keeping the room out of Datadog does not cover the `burritobot-public` tab Whitney projects or
+  the copy stored in her org until the purge, which were the reasons the 2026-10-29 entry chose the scrub. Both
+  answers the issue allowed now hold: the PII is scrubbed before spans leave attackme, and attendees get no view.
+- **Not touched.** `lab.html`'s Datadog button is on the terminal page, which the room is never sent to (its
+  Terminal button is hidden on the public bot). `infra/datadog-room/` stays as code; whether to delete it was #665's
+  call, and #665 closed without asking for that. `kubecon.html` is the presenters' brief behind the roster gate.
+- **Still owed after the talk.** The purge of `burritobot-public` from Whitney's org, per the run-of-show's Teardown
+  step (2026-10-30 entry), on or after 2026-11-13. It needs a sign-in to her org.
+
+**Tests.** `verify/test_audience_event.py` (offline) checks the knob, the init line that reads it, that it shares the
+Terminal hide's public-host test, and that no Datadog share link or room-view QR is back in the run-of-show.
+`verify/test_audience_page_e2e.py` (E2E tools tier) runs the page's own init in node: the Datadog button is hidden on
+both public hosts, stays on both private hosts, on an attendee host and with no event, and hiding the Terminal alone
+leaves it. With the burritbot.html change reverted, the offline test fails 3 checks and the E2E test 2.
+
+**Not yet run on a cluster.** Owed on the next attackme bring-up, with the phone check
+(`facilitation/kubecon-na-2026-phone-check.md`): open `https://attackme.burritobot.co/` on a phone and see no
+Datadog button in the header, then open `burritobot-private` and see it there.

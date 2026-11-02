@@ -740,8 +740,13 @@
     // Both domains serve the public bot (#651), so every name in publicHosts counts, plus publicUrl's host.
     var pubHosts=Array.isArray(ev.publicHosts) ? ev.publicHosts.slice() : [];
     try{ if(ev.publicUrl) pubHosts.push(new URL(ev.publicUrl).hostname); }catch(e){}
+    var onPublic=pubHosts.indexOf(location.hostname)>=0;
     var vtb=document.getElementById('vttbtn');
-    if(vtb && ev.hideTerminalOnPublic===true && pubHosts.indexOf(location.hostname)>=0) vtb.hidden=true;
+    if(vtb && ev.hideTerminalOnPublic===true && onPublic) vtb.hidden=true;
+    // Nor a Datadog button (#647, Whitney 2026-11-01): the room gets no link to any Datadog view and sees
+    // Datadog only when the presenters put it on the big screen.
+    var ddb=document.getElementById('ddbtn');
+    if(ddb && ev.hideDatadogOnPublic===true && onPublic) ddb.hidden=true;
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that

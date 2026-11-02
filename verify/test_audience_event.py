@@ -5,7 +5,8 @@
 The storefront's Feedback button was hardcoded to feedback.agenticburn.com/quick. For the KubeCon breakout
 that app stays off (#448), so a room of phones would tap Feedback and land nowhere. The destination is now
 set once per event in event.js, never edited into the page, and the projector QR is rendered from the
-same file, so the slide and the page cannot disagree about where the room is.
+same file, so the slide and the page cannot disagree about where the room is. The same knob hides the
+storefront's Datadog button on the public bot, because the room gets no link to any Datadog view (#647).
 
 Offline string checks: no network, no browser, no segno. Executing the page's own init code and
 re-rendering the QR byte for byte is verify/test_audience_page_e2e.py, in the E2E suite.
@@ -74,6 +75,22 @@ check("the workshop default is still /quick in the markup",
 check("the event URL is not hardcoded into the page", SURVEY not in PAGE)
 check("the button opens in a new tab, so the chat is still there afterwards",
       re.search(r'id="fbbtn"[^>]*target="_blank"', PAGE) is not None)
+
+print("== the room gets no link to Datadog (#647, Whitney 2026-11-01) ==")
+# The room sees Datadog only on the big screen: no QR, link or share URL to any Datadog view. The storefront's
+# Datadog button is the one such link on the page the room opens, so the event hides it on the public hosts.
+check("event.js sets hideDatadogOnPublic: true",
+      re.search(r"^\s*hideDatadogOnPublic:\s*true,?\s*$", EVENT, re.M) is not None)
+check("the storefront still has its Datadog button for the private bot and attendee clusters",
+      re.search(r'<a class="hb" id="ddbtn" href="https://app\.datadoghq\.com"', PAGE) is not None)
+check("a hidden header button is not displayed", "header a.hb[hidden]{display:none}" in PAGE)
+check("init hides the Datadog button only when the event asks and the host is public",
+      "if(ddb && ev.hideDatadogOnPublic===true && onPublic) ddb.hidden=true;" in init)
+check("the public test is the same publicHosts list the Terminal hide uses",
+      "var onPublic=pubHosts.indexOf(location.hostname)>=0;" in init
+      and "if(vtb && ev.hideTerminalOnPublic===true && onPublic) vtb.hidden=true;" in init)
+check("no Datadog share link or room-view QR is back in the run-of-show (#767)",
+      not re.search(r"p\.datadoghq\.com|/s/[A-Za-z0-9-]{6,}|room-view-qr|datadog-room/share\.json", ROS))
 
 print("== the projector QR encodes the knob's public URL ==")
 svg = QR.read_text(encoding="utf-8") if QR.exists() else ""
