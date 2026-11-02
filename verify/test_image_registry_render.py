@@ -1,5 +1,5 @@
-# ABOUTME: Renders gitops/bootstrap with the pinned Helm with and without imageRegistry (#622): set, no
-# ABOUTME: ghcr.io/peopleforrester reference is left; unset, the render is today's, lab-platform images on ghcr.io.
+# ABOUTME: Renders gitops/bootstrap with the pinned Helm with and without imageRegistry (#622): set, no lab-platform
+# ABOUTME: ghcr.io reference is left; unset, the render is today's, lab-platform images on ghcr.io.
 # SUITE: e2e (needs helm, and the network for each mirror/ copy app's upstream chart)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
@@ -44,6 +44,9 @@ COMMIT = "0123456789abcdef0123456789abcdef01234567"
 # The shape lab-platform#214 passes: <account>.dkr.ecr.<region>.amazonaws.com/<cache prefix>/peopleforrester/lab-platform.
 CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
 GHCR_OWNER = "ghcr.io/peopleforrester"
+# Our own public registry, which imageRegistry does not cover (the cache path is lab-platform's): the manifests name
+# its images literally, and since question 1041 (#719) so does ai-layer.yaml's llm-guard entry, cpu.5.
+OUR_GHCR = GHCR_OWNER + "/watch-it-burn"
 
 
 def render(chart: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
@@ -86,8 +89,11 @@ for profile in profiles():
     if not ok:
         continue
     check(f"{profile}: unset is the render at {LAB_PLATFORM_GHCR}, the chart's default", unset.stdout == default.stdout)
-    left = naming(cache.stdout, GHCR_OWNER)
-    check(f"{profile}: at the cache path, no {GHCR_OWNER} reference is left {left[:3]}", not left)
+    left = naming(cache.stdout, LAB_PLATFORM_GHCR)
+    check(f"{profile}: at the cache path, no {LAB_PLATFORM_GHCR} reference is left {left[:3]}", not left)
+    other = [s for s in naming(cache.stdout, GHCR_OWNER) if OUR_GHCR not in s]
+    check(f"{profile}: and every other {GHCR_OWNER} reference is {OUR_GHCR}, public and not the cache's {other[:3]}",
+          not other)
     today = naming(unset.stdout, LAB_PLATFORM_GHCR + "/")
     check(f"{profile}: at the cache path, the render is today's with each of its {len(today)} lab-platform "
           "reference(s) moved to the cache, and nothing else changed",

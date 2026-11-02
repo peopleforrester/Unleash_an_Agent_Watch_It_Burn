@@ -9523,6 +9523,11 @@ tier, `verify/test_kyverno_cel_policies.py` runs Kyverno's offline key check on 
 lab-platform's v1 and its cache path, and under a wrong key both fail. That re-checks Michael's 2026-11-01 signature
 with the policy's own key. `verify/test_bootstrap_chart_render.py` builds the bundle as Argo CD does and checks that
 the llm-guard Deployment runs cpu.5 unset and at a cache path, and that no other container changes.
+`verify/test_image_registry_render.py` (#622) used to require that a cache-path render name no `ghcr.io/peopleforrester`
+reference at all. The literal cpu.5 entry broke that, and the test now asks for what the value can actually change:
+no `ghcr.io/peopleforrester/lab-platform` reference is left, and every other `ghcr.io/peopleforrester` reference is the
+public `watch-it-burn` registry, which the cache path does not serve. The first run of the tier also failed on a
+GitHub 500 while fetching the falcosidekick 0.14.0 chart. That fetch passed when the test was run again.
 
 **Not yet run on a cluster.** On a fresh attendee cluster:
 `kubectl --context <ctx> -n agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must
