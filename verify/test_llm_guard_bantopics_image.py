@@ -2,13 +2,13 @@
 # ABOUTME: model, loaded from /home/user/models/zero-shot; images/llm-guard pins llm-guard-cpu-offline 31962f2, src/ unchanged.
 """Why this exists (#719, #455, lab-platform#341).
 
-The on-topic guard (#455) waits on LLM Guard's BanTopics scanner, which needs the zero-shot model
-deberta-v3-base-zeroshot-v2.0 at revision 8e7e5af5 baked into the image. The deployed image is lab-platform's
-llm-guard:v1 (#652, sha256:6cdbf3a2... since #730), which carries only the prompt-injection model. lazy_load is off,
-so a BanTopics entry in llm-guard-scanners with that image would stop LLM Guard at start, and guard-proxy fails
-closed on every prompt. Two images bake the model at /home/user/models/zero-shot (WIB_ZS_MODEL_DIR):
-llm-guard-cpu-offline's cpu.5, signed with the workshop key on 2026-11-01, and lab-platform's rebuild under
-lab-platform#341, which is not built yet. Which one BanTopics runs in is the question #719 asks.
+The on-topic guard (#455) needs LLM Guard's BanTopics scanner, which needs the zero-shot model
+deberta-v3-base-zeroshot-v2.0 at revision 8e7e5af5 baked into the image. lab-platform's llm-guard:v1 (#652,
+sha256:6cdbf3a2... since #730) carries only the prompt-injection model. lazy_load is off, so a BanTopics entry in
+llm-guard-scanners with that image would stop LLM Guard at start, and guard-proxy fails closed on every prompt. Two
+images bake the model at /home/user/models/zero-shot (WIB_ZS_MODEL_DIR): llm-guard-cpu-offline's cpu.5, signed with
+the workshop key on 2026-11-01, and lab-platform's rebuild under lab-platform#341, not built yet. Question 1041 (#719)
+put the guard on cpu.5 now and back on lab-platform's image once that rebuild is signed.
 
 So the gate here is an allow-list, not a deny-list: BanTopics in scanners.yml fails unless the llm-guard image is
 pinned at a digest known to bake the model, and its model_path must be that directory. An unknown digest fails
@@ -81,6 +81,8 @@ digest = entry["digest"] if entry else container["image"].partition("@")[2]
 
 print("== BanTopics runs only in an image known to bake the zero-shot model ==")
 check("the llm-guard image is pinned by digest", digest.startswith("sha256:"), container["image"])
+check("since question 1041 it is cpu.5, which bakes the zero-shot model, so #455 can add BanTopics", digest == CPU5,
+      digest)
 problems = bantopics_problems(scanners, digest)
 check("llm-guard-scanners and the pinned image agree on BanTopics", not problems, "; ".join(problems))
 

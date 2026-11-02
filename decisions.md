@@ -9481,3 +9481,52 @@ initialised guard-proxy.
 belong to #455: `bash verify/run-e2e.sh` on a fresh attendee cluster, where `verify/test_topic_classifier.py` and the probe
 (#503) judge BanTopics' real scores, and `bash verify/input-guard.sh <host> <kube-context> <aws-profile>`, which checks that the
 injection classifier still blocks through the new image.
+
+## 2026-11-02 · #719 · question 1041 · BanTopics runs in llm-guard-cpu-offline's cpu.5 now, and the guard returns to lab-platform's image after lab-platform#341
+
+**Question 1041:** should the on-topic guard's BanTopics scanner run in llm-guard-cpu-offline's signed cpu.5 image now,
+or wait for lab-platform's rebuilt llm-guard image under lab-platform#341? **Answer:** use cpu.5 now, return to
+lab-platform later. **Decided by** hecaton's research under Michael's standing rules, not by Michael (comment
+6572786844 on #719). The rule it rests on is objective 2026q4.H's "a hard-dated workshop never waits on lab_system"
+(personal-knowledge `okr/okrs.yaml`, questions 312 and 729 there). KubeCon NA runs 2026-11-09 to 11-12, and the KR
+kubecon-na-burritobot, "BurritoBot breakout with Whitney Lee and its demo platform ready, in line with the accepted
+abstract", is priority 1 and due 2026-11-08. lab-fold-complete is priority 3 and due 2026-12-31. The fold inventory's
+container-images row was not folded when the answer was given, so using cpu.5 now unfolds nothing.
+
+**What it changes.** The ai-layer Application's `kustomize.images` entry sets the kustomize image `llm-guard` to
+`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791`
+in place of lab-platform's `llm-guard:v1@sha256:6cdbf3a2…` (#652, #730). The entry stays, so the return is a change to that one
+line, back to `{{ .Values.imageRegistry }}/llm-guard:<tag>@<digest>`.
+- **Named literally, not at the root's registry.** cpu.5 is a public watch-it-burn image, named like every other one.
+  `imageRegistry` is lab-platform's path, and the ECR pull-through cache behind it exists for lab-platform's private
+  packages (#622). A cache root therefore pulls cpu.5 from ghcr.io, as it pulls workshop-mcp and the web terminal.
+- **Admission.** `verify-image-signatures` already matches `ghcr.io/peopleforrester/watch-it-burn*` under the workshop
+  key, so the policy is unchanged apart from its header comment. Its lab-platform llm-guard globs stay for the return.
+  `restrict-image-registries` admits it.
+- **The container.** It is unchanged. cpu.5 binds 0.0.0.0:8000 as uid 1000, reads `/home/user/app/config`, serves
+  `/healthz` and starts only with `APP_WORKERS=1`, all of which the Deployment already sets (images/llm-guard at 31962f2,
+  `Dockerfile`, `src/entrypoint.sh`, `src/app/app.py`). `NETWORK_BOUNDARY=sandbox` is read only by lab-platform's
+  entrypoint. It stays, with a comment, so the return needs no other edit. PromptInjection's `model_path` is the same
+  directory in both images.
+- **Records.** The images.lock `llm-guard` row names cpu.5 and llm-guard-cpu-offline as its source. v1 at 6cdbf3a2
+  becomes a declared row kept for the return. VERSIONS.lock, `docs/MASTER-RECREATION-SPEC.md`, the comments in
+  `resources.yaml` and `ai-layer.yaml`, and the BanTopics notes (PROJECT_STATE.md, readiness row 8, the run-of-show,
+  `kubecon.html`) now say the image has the model and that the scanner entry is #455's.
+- **Not in this change.** The BanTopics scanner entry, guard-proxy's `scanners_suppress`, and tuning BanTopics' threshold
+  on a cluster belong to #455, which this unblocks. `verify/test_llm_guard_bantopics_image.py` now passes a BanTopics
+  entry at the pinned digest, and still refuses one at v1 or an unchecked digest.
+
+**Tests.** `verify/test_llm_guard_image.py` holds the cpu.5 entry, the images.lock row and the container contract,
+`APP_WORKERS=1` included. `verify/test_image_signing.py` checks that the deployed guard is in the signature scope, and
+that lab-platform's llm-guard stays in scope at ghcr.io and through a cache, judged at v1's digest. In the E2E tools
+tier, `verify/test_kyverno_cel_policies.py` runs Kyverno's offline key check on the deployed cpu.5 as well as on
+lab-platform's v1 and its cache path, and under a wrong key both fail. That re-checks Michael's 2026-11-01 signature
+with the policy's own key. `verify/test_bootstrap_chart_render.py` builds the bundle as Argo CD does and checks that
+the llm-guard Deployment runs cpu.5 unset and at a cache path, and that no other container changes.
+
+**Not yet run on a cluster.** On a fresh attendee cluster:
+`kubectl --context <ctx> -n agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must
+print the cpu.5 reference above. The pod must become Ready within its startup probe: the image is 1,650 MB compressed,
+so time the first pull. `bash verify/input-guard.sh <host> <kube-context> <aws-profile>` must pass the benign prompt and
+block the injection through cpu.5. Then #455 runs `verify/test_topic_classifier.py` and the probe (#503) once its
+BanTopics entry is in.

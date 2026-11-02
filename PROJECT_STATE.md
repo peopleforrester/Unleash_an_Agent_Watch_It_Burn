@@ -16,7 +16,7 @@ without touching its children. Not yet run on a cluster; details in decisions.md
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
 Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667):
 6 READY, 3 PARTIAL (5 the Kubernetes layers, one shown after the LLM guards and the rest named, so the bar
-"shown before the LLM-specific layer" is #456's call; 8 the BanTopics paraphrase, which waits on #719's choice of a zero-shot image, cpu.5 or lab-platform#341's; 9
+"shown before the LLM-specific layer" is #456's call; 8 the BanTopics paraphrase: the guard runs cpu.5, which bakes the zero-shot model, since #719, and the scanner entry is #455's; 9
 ballroom sizing #450, phones #451 and the recorded fallback #452), 0 MISSING. The probe was green on both
 clusters on 2026-10-28, before the three-challenge order (#639) and C6's fetched ticket (#640). Update its rows
 and its record as fixes land.

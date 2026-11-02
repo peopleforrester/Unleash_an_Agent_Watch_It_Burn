@@ -77,13 +77,17 @@ WEB = "ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8
 JOKER = "ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0"
 SIGNED = ("ghcr.io/peopleforrester/watch-it-burn:busybox-1.36"
           "@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662")
-# lab-platform's llm-guard as the ai-layer Application pins it (#652), signed by lab-platform with the workshop
-# key (#669), at the chart's default registry and at an ECR pull-through cache path a root can pass instead.
+# The llm-guard the ai-layer Application pins: llm-guard-cpu-offline's cpu.5 since question 1041 (#719), a
+# watch-it-burn image signed with the workshop key on 2026-11-01.
 _GUARD = next(i for i in kustomize_images(yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8")))
               if i["name"] == "llm-guard")
-GUARD = f"{_GUARD['newName']}:{_GUARD['newTag']}@{_GUARD['digest']}".replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
+GUARD = f"{_GUARD['newName']}:{_GUARD['newTag']}@{_GUARD['digest']}"
+# lab-platform's llm-guard, signed by lab-platform with the workshop key (#669), at the digest it ran at until
+# question 1041 (#730), and the scope it returns to after lab-platform#341: at the chart's default registry and at an
+# ECR pull-through cache path a root can pass instead.
+LP_GUARD = f"{LAB_PLATFORM_GHCR}/llm-guard:v1@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
 CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
-GUARD_CACHE = GUARD.replace(LAB_PLATFORM_GHCR, CACHE)
+LP_GUARD_CACHE = LP_GUARD.replace(LAB_PLATFORM_GHCR, CACHE)
 # lab-platform's web image as the demo apps pin it (#715), by digest alone, signed with the same key (#734).
 _WEB = next(i for i in kustomize_images(yaml.safe_load((APPS / "demo-app-hedgehog.yaml").read_text(encoding="utf-8")))
             if i["name"] == "web")
@@ -434,8 +438,10 @@ g = run(SIG, [pod("ours-signed", "agent", [c(SIGNED)]),
               pod("third-party", "agent", [c("cr.agentgateway.dev/agentgateway:v1.5.0")])])
 expect("our signed image passes against policies/cosign/watch-it-burn.pub", g, "ours-signed", "pass")
 expect("a third-party image is not asked for our signature", g, "third-party", "pass")
-g = run(SIG, [pod("llm-guard", "agent", [c(GUARD)]), pod("llm-guard-cache", "agent", [c(GUARD_CACHE)])])
-expect(f"lab-platform's llm-guard ({GUARD.split('@')[0]}) passes against the same key", g, "llm-guard", "pass")
+g = run(SIG, [pod("llm-guard", "agent", [c(GUARD)]), pod("llm-guard-lp", "agent", [c(LP_GUARD)]),
+              pod("llm-guard-cache", "agent", [c(LP_GUARD_CACHE)])])
+expect(f"the deployed llm-guard ({GUARD.split('@')[0]}) passes against the same key", g, "llm-guard", "pass")
+expect(f"lab-platform's llm-guard ({LP_GUARD.split('@')[0]}) passes against the same key", g, "llm-guard-lp", "pass")
 # The fixture's ECR account is no one's, so Kyverno's read of the guard there is refused. That it reads there at
 # all is what says the cache path is in scope; a reference out of scope is never fetched.
 expect("the guard at an ECR cache path is in scope: Kyverno reads its manifest from the cache", g, "llm-guard-cache",
@@ -460,10 +466,12 @@ with tempfile.TemporaryDirectory() as tmp:
         wrong = pathlib.Path(tmp) / "wrong-key.yaml"
         wrong.write_text(text[:start] + ("\n" + indent).join(pub.splitlines()) + text[end:])
         g = run(wrong, [pod("ours-signed", "agent", [c(SIGNED)]), pod("llm-guard", "agent", [c(GUARD)]),
+                        pod("llm-guard-lp", "agent", [c(LP_GUARD)]),
                         pod("web", "apps", [c(WEB)]), pod("mirror", "agent", [c(MIRROR)]), pod("villain", "agent", [c(VILLAIN)])])
         expect("the same image under a different key fails with the named message", g, "ours-signed", "fail",
                "must carry a valid cosign signature")
-        expect("so does lab-platform's llm-guard", g, "llm-guard", "fail", "must carry a valid cosign signature")
+        expect("so does the deployed llm-guard", g, "llm-guard", "fail", "must carry a valid cosign signature")
+        expect("and lab-platform's llm-guard", g, "llm-guard-lp", "fail", "must carry a valid cosign signature")
         expect("and lab-platform's web", g, "web", "fail", "must carry a valid cosign signature")
         # Under a key that signed nothing, an image in scope fails; these pass because they are out of it.
         expect(f"an unsigned lab-platform mirror/ copy ({MIRROR.split('@')[0]}) is not in scope", g, "mirror", "pass")

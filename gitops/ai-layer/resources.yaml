@@ -191,22 +191,21 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          # lab-platform's llm-guard:v1 (#652, lab-platform#91), built there from pinned inputs: CPython
-          # 3.12.16 by digest, the API's 130 distributions by sha256 (torch from PyTorch's CPU index), the
-          # source at llm-guard-cpu-offline f2fcb8f (src/ is the same tree at 31962f2, images/llm-guard's pin
-          # since #719), and the classifier's ONNX files at Hub revision 90c9989b, baked in at
-          # /home/user/models/prompt-injection with HF offline (#241, #414). It has no zero-shot model, so
-          # BanTopics waits on #719's image (verify/test_llm_guard_bantopics_image.py).
+          # llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5 (#719, question 1041), built from images/llm-guard at
+          # 31962f2: CPU-only torch, the vendored API source (src/ verbatim), OpenTelemetry past GHSA-xcq7-p3pf-p88h,
+          # and two classifiers baked in with HF offline, prompt-injection at /home/user/models/prompt-injection
+          # (Hub revision 90c9989b, #241, #414) and BanTopics' zero-shot model at /home/user/models/zero-shot
+          # (8e7e5af5, #455). Its entrypoint refuses APP_WORKERS above 1, and it exits when a scanner cannot be built (#7 there).
           # "llm-guard" is a kustomize image name, not a pullable reference: the ai-layer Application
-          # (gitops/bootstrap/apps/ai-layer.yaml) sets it to {{ .Values.imageRegistry }}/llm-guard:v1 by
-          # digest, because a lab-platform image takes the registry the root passes down (#622).
+          # (gitops/bootstrap/apps/ai-layer.yaml) sets it by digest, so the return to lab-platform's image after
+          # lab-platform#341 (#652, #622) is a change to that one entry.
           image: llm-guard
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:
             - { name: APP_WORKERS, value: "1" }
-            # The entrypoint binds loopback unless told the pod's namespace is the network boundary, as every
-            # lab-platform image that listens does; without this the pod answers nothing on 8000.
+            # lab-platform's entrypoint binds loopback unless told the pod's namespace is the network boundary;
+            # cpu.5 binds 0.0.0.0 and does not read it. Kept so the return to lab-platform's image is one repin.
             - { name: NETWORK_BOUNDARY, value: sandbox }
             - name: AUTH_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }

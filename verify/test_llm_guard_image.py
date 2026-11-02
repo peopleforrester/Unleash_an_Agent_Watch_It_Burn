@@ -1,15 +1,18 @@
-# ABOUTME: Static gate for #652: the llm-guard Deployment runs lab-platform's llm-guard:v1 by digest, set through the
-# ABOUTME: ai-layer Application's kustomize.images at the root's registry, with NETWORK_BOUNDARY=sandbox and its contract.
-"""Why this exists (#652, lab-platform#91).
+# ABOUTME: Static gate for #719 (question 1041): the llm-guard Deployment runs llm-guard-cpu-offline's cpu.5 by digest, set
+# ABOUTME: through the ai-layer Application's kustomize.images, with the contract that image was built for.
+"""Why this exists (#652, then #719).
 
-lab-platform builds, reads back and signs the LLM Guard API image from pinned inputs, so this repo runs its
-`llm-guard:v1` in place of the watch-it-burn build. A lab-platform image takes the registry the root passes down
-(#622), and resources.yaml is a plain kustomize manifest that cannot, so the container names the kustomize image
-`llm-guard` and gitops/bootstrap/apps/ai-layer.yaml sets it. These checks hold the parts a file can show: the
-reference and its digest, that the placeholder names this container alone (kustomize matches on the name), and
-the contract lab-platform's image was verified with: NETWORK_BOUNDARY=sandbox (its entrypoint binds loopback
-without it), the scanners ConfigMap at /home/user/app/config, AUTH_TOKEN, uid 1000, port 8000 and /healthz.
-test_bootstrap_chart_render.py builds the bundle as Argo CD does and checks the image the Deployment ends up with.
+#652 moved the guard to lab-platform's llm-guard:v1, which carries only the prompt-injection model. #455's BanTopics
+scanner needs the zero-shot model too, and question 1041 (#719) moved the guard to llm-guard-cpu-offline's
+llm-guard-0.3.16-cpu.5, which bakes both and is signed with the workshop key, until lab-platform#341 posts a signed
+rebuild with the same model path. The container still names the kustomize image `llm-guard` and
+gitops/bootstrap/apps/ai-layer.yaml sets it, so that return is one entry. cpu.5 is a public watch-it-burn image, so the
+entry names ghcr.io literally rather than the root's imageRegistry, which is lab-platform's (#622). These checks hold
+the reference and its digest, that the placeholder names this container alone (kustomize matches on the name), and
+the contract cpu.5 was built for (images/llm-guard/Dockerfile at 31962f2): one worker, the scanners ConfigMap at
+/home/user/app/config, AUTH_TOKEN, uid 1000, port 8000, /healthz and the two model directories. NETWORK_BOUNDARY,
+which only lab-platform's entrypoint reads, stays for the return. test_bootstrap_chart_render.py builds the bundle as
+Argo CD does and checks the image the Deployment ends up with.
 """
 from __future__ import annotations
 
@@ -19,10 +22,12 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import APPS, IMAGE_REGISTRY, REPO, kustomize_images  # noqa: E402
+from bootstrap_chart import APPS, REPO, kustomize_images  # noqa: E402
 
-DIGEST = "sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
-WANT = f"llm-guard={IMAGE_REGISTRY}/llm-guard:v1@{DIGEST}"
+DIGEST = "sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791"
+NAME = "ghcr.io/peopleforrester/watch-it-burn"
+TAG = "llm-guard-0.3.16-cpu.5"
+WANT = f"llm-guard={NAME}:{TAG}@{DIGEST}"
 AI = REPO / "gitops/ai-layer"
 
 failures: list[str] = []
@@ -43,12 +48,12 @@ kust = yaml.safe_load((AI / "kustomization.yaml").read_text(encoding="utf-8"))
 docs = [d for f in kust["resources"] for d in yaml.safe_load_all((AI / f).read_text(encoding="utf-8")) if d]
 app = yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8"))
 
-print("== the ai-layer Application sets llm-guard to lab-platform's image, by digest ==")
+print("== the ai-layer Application sets llm-guard to llm-guard-cpu-offline's cpu.5, by digest ==")
 images = ((app["spec"]["source"].get("kustomize") or {}).get("images")) or []
 check(f"kustomize.images is the one entry {WANT}", images == [WANT], str(images))
-check("it parses as `kustomize edit set image` reads it: name, registry path, tag v1 and the digest",
-      kustomize_images(app) == [{"name": "llm-guard", "newName": f"{IMAGE_REGISTRY}/llm-guard", "newTag": "v1",
-                                 "digest": DIGEST}], str(kustomize_images(app)))
+check(f"it parses as `kustomize edit set image` reads it: name, {NAME}, tag {TAG} and the digest",
+      kustomize_images(app) == [{"name": "llm-guard", "newName": NAME, "newTag": TAG, "digest": DIGEST}],
+      str(kustomize_images(app)))
 check("the bundle sets no images of its own that could override it", "images" not in kust)
 
 print("== the placeholder names the llm-guard container and nothing else ==")
@@ -56,16 +61,18 @@ named = [(d["kind"], d["metadata"]["name"], c["name"]) for d in docs for c in co
          if c.get("image", "").split("@")[0].split(":")[0] == "llm-guard"]
 check("exactly one container is named by the kustomize image llm-guard: the llm-guard Deployment's llm-guard-api",
       named == [("Deployment", "llm-guard", "llm-guard-api")], str(named))
-old = [str(p.relative_to(REPO)) for p in sorted((REPO / "gitops").rglob("*.yaml"))
-       if "watch-it-burn:llm-guard" in p.read_text(encoding="utf-8")]
-check(f"no file under gitops/ still names the watch-it-burn llm-guard build {old}", not old)
+named_elsewhere = [str(p.relative_to(REPO)) for p in sorted((REPO / "gitops").rglob("*.yaml"))
+                   if "watch-it-burn:llm-guard" in p.read_text(encoding="utf-8") and p != APPS / "ai-layer.yaml"]
+check(f"no other file under gitops/ names a watch-it-burn llm-guard build {named_elsewhere}", not named_elsewhere)
 
-print("== the Deployment keeps the contract lab-platform's image was verified with ==")
+print("== the Deployment keeps the contract cpu.5 was built for ==")
 dep = next(d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == "llm-guard")
 pod = dep["spec"]["template"]["spec"]
 c = next(x for x in pod["containers"] if x["name"] == "llm-guard-api")
 env = {e["name"]: e for e in c.get("env") or []}
-check("NETWORK_BOUNDARY=sandbox, so the entrypoint binds the pod's address rather than loopback",
+check("APP_WORKERS is 1, the only value cpu.5's entrypoint starts with (#8 there)",
+      env.get("APP_WORKERS", {}).get("value") == "1", str(env.get("APP_WORKERS")))
+check("NETWORK_BOUNDARY=sandbox stays, so the return to lab-platform's image binds the pod's address",
       env.get("NETWORK_BOUNDARY", {}).get("value") == "sandbox", str(env.get("NETWORK_BOUNDARY")))
 check("AUTH_TOKEN comes from the llm-guard-auth Secret",
       (env.get("AUTH_TOKEN", {}).get("valueFrom") or {}).get("secretKeyRef") == {"name": "llm-guard-auth", "key": "token"})
@@ -92,9 +99,9 @@ check("PromptInjection loads the classifier from /home/user/models/prompt-inject
 print("== images.lock records the digest the Application pins (#730) ==")
 lock = {ln.split()[0]: ln.split()[1:] for ln in (REPO / "images.lock").read_text(encoding="utf-8").splitlines()
         if ln.strip() and not ln.startswith("#")}
-check("the kustomize image name llm-guard has a row naming lab-platform's reference at that digest",
-      lock.get("llm-guard", [])[:2] == [f"ghcr.io/peopleforrester/lab-platform/llm-guard@{DIGEST}",
-                                        "repo:peopleforrester/lab-platform/deploy/images"], str(lock.get("llm-guard")))
+check("the kustomize image name llm-guard has a row naming cpu.5's reference at that digest",
+      lock.get("llm-guard", [])[:2] == [f"{NAME}:{TAG}@{DIGEST}", "repo:peopleforrester/llm-guard-cpu-offline"],
+      str(lock.get("llm-guard")))
 
 print()
 if failures:
