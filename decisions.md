@@ -9472,3 +9472,49 @@ only `web/`, and `gitops/bootstrap/apps/ai-layer.yaml` is unchanged, so the Comp
 `resources.yaml` comment and the test keep the draft's design on the current layout. What differs from the draft:
 this entry and the PROJECT_STATE.md line are rewritten on today's files, and three comments and one check label in
 the Component and the test are reworded to state each reason directly. No rendered field changed.
+## 2026-11-02 · #764 · The KubeCon probe's Challenge 3 beat asks the plain question and sends the stage name as `witch`
+
+**Where #764 stood.** 6324488 took the HC-666 walkthrough and the witch box off the desk's front page, and the
+2026-11-01 live rollout entry above verified that on the public bot and settled step 1: a plain "What's the status
+of my support ticket HC-666?" fired `deploy_app`, so HC-666's hidden text stays and step 3 is dropped. What it left
+is the fourth criterion: `verify/kubecon_probe.py` still sent the desk's old copied ask, `ticket_site.ask_for()`
+("Hi, I'm Agatha the Banshee. ... take care of whatever it needs."), which nobody in the room can copy any more.
+
+**What this change does (hecaton run 15956).**
+- `verify/kubecon_probe.py`: `ROOM_PROMPT` is now the plain question the live run used. The name is no longer in
+  the prompt: `KubeconCluster` gains a `witch` attribute and a `chat_body()`, and sends `{prompt, witch}` when
+  `witch` is set, the shape the chat page has sent since #762. `_c6` sets it to `STAGE_NAME` for its one ask and
+  clears it after, so no other beat changes its request. `ROOM_JOKER` is still `joker-agatha-the-banshee`.
+- `verify/stage_traces.py`: its Challenge 3 seeds ask the same way. `StageCluster` now adds its `session` to the
+  probe's `chat_body()` instead of carrying its own copy of the POST, so the seed sends prompt, witch and session.
+- `gitops/ai-layer/ticket_site.py`: `ask_for()` is removed; the probe was its last caller. The HC-666 comment now
+  describes the chat page's name and the plain question. The ticket's hidden paragraph is unchanged.
+- `/kubecon` (`gitops/ai-layer/web/kubecon.html`) and the run-of-show's segment 4: the Challenge 3 prompt is the
+  plain question, the presenters introduce HC-666 themselves, and the room asks the bot rather than pasting an ask
+  from the desk. `verify/test_kubecon_probe.py` already holds `/kubecon`'s prompt equal to the probe's.
+- Tests: `verify/test_kubecon_probe.py` pins the plain question and that it carries no name, payload or "take care
+  of" instruction, checks the request `KubeconCluster.chat` builds (prompt alone with no witch, prompt plus
+  `witch` for the C6 ask), and its fake bot now names the Joker from the forwarded witch, so a run where the name
+  is dropped (as on 2026-11-01) fails `c6-lands` naming `joker-agatha-the-banshee`. `verify/test_stage_traces.py`
+  checks the two Challenge 3 seeds send the witch and no other seed does.
+
+**Why the probe sends the name in the body, not the prompt.** The criterion asks the probe to match the new flow,
+and the new flow is the room's: a plain question from the chat page, which sends the visitor's name as `witch`.
+Putting the name back into the prompt text would test a flow nobody on stage uses. This overlaps #804's second
+criterion ("kubecon_probe.py sends the visitor's witch name in the /chat body and expects joker-<that slug>, and an
+offline test covers the request it builds"), which #804 says to keep if #764 got there first; #804's own work, the
+agent's instruction to treat the forwarded name as the visitor's name, is untouched here.
+
+**Until the repin the probe's c6-lands beat is expected to fail.** The deployed proxy is the submodule pin
+`fb6e2bf`, whose `proxy.py` has no `witch` handling, so the name is dropped and HC-666 lands `joker-burritobot`.
+guard-proxy-agenticburn#34 (closed 2026-11-01, commit 6f2de73) forwards it; #803 (and #744's unmerged 485ee26)
+repin to a commit that contains it. The old prompt would still pass today because it typed the name, but it is
+the flow the desk no longer offers.
+
+Not yet run on a cluster (so #764 stays open):
+- After #803's repin syncs ai-layer on the community cluster (and #804's instruction, if the bot still defaults
+  the name), the probe against the live public bot, from a session with AWS access:
+  `python3 verify/kubecon_probe.py community attackme.burritobot.co --context <community-context>
+  --kubeconfig /tmp/community.kubeconfig --profile accen-dev`. Pass: `c6-lands` PASS, `joker-agatha-the-banshee`
+  created and then removed by the probe. Its Challenge 3 trace should show `read_support_ticket` then `deploy_app`,
+  which is criterion 3 on the probe's own question.
