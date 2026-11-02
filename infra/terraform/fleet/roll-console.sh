@@ -35,9 +35,19 @@ for c in $(AWS_PROFILE=$PROFILE aws eks list-clusters --region $REGION --query '
     # auto-sync left the ConfigMap un-updated inside the 200s marker window on several clusters
     # (2026-09-04), so the pod was never cycled and served stale config. An explicit sync operation
     # makes the ConfigMap update promptly and deterministically, which is what the marker wait needs.
+    #
+    # The operation carries ai-layer's own syncOptions (#583). Argo CD reads a sync's options from the operation
+    # alone, and one written with kubectl has none: the bare {"sync":{"revision":"staging"}} this used to write ran
+    # without RespectIgnoreDifferences, so every roll put agentgateway's BEDROCK_NOVA_MODEL back to the untagged
+    # system id and cleared guard-proxy's live toggles. No options read, no sync: a bare one is that same revert.
     "${K[@]}" -n argocd annotate app ai-layer argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1
+    OPTS="$("${K[@]}" -n argocd get app ai-layer -o json 2>/dev/null | jq -c '.spec.syncPolicy.syncOptions // empty' 2>/dev/null)"
+    if [[ -z "${OPTS}" || "${OPTS}" == "[]" ]]; then
+        echo "  $c: could not read ai-layer's syncOptions, NOT syncing (a sync without them reverts its ignored fields)"
+        failed=$((failed+1)); continue
+    fi
     "${K[@]}" -n argocd patch app ai-layer --type merge \
-        -p '{"operation":{"sync":{"revision":"staging"}}}' >/dev/null 2>&1
+        -p "$(jq -cn --argjson o "${OPTS}" '{operation: {sync: {revision: "staging", syncOptions: $o}}}')" >/dev/null 2>&1
     if [[ -n "$MARKER" ]]; then
         ok=0
         for _ in $(seq 1 40); do   # up to ~200s

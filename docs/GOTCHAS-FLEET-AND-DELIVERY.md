@@ -204,6 +204,30 @@ on both. Then `fleet.sh converge` should print the rolled-out line.
 Always verify after: `kubectl -n agent exec deploy/guard-proxy -- sh -c 'echo $MODEL_TIER'` and confirm
 the drift guard is back on `Enforce`.
 
+## A sync written to `.operation` by hand runs with no syncOptions (#583)
+
+Argo CD v3.5.2's controller takes a sync's options from the operation alone (`controller/sync.go`,
+`syncOp.SyncOptions`). `argocd app sync` and the automated sync both copy them in from `spec.syncPolicy.syncOptions`.
+An operation written with `kubectl patch app ... -p '{"operation":{"sync":{...}}}'` has none. On ai-layer that sync runs
+without `RespectIgnoreDifferences=true`, `ServerSideApply=true` and `Force=true`. It is a client-side apply of git over
+every ignored field. agentgateway's `BEDROCK_NOVA_MODEL` and `BEDROCK_REGION` go back to the system id and us-west-2,
+which is untagged Bedrock spend. guard-proxy's live toggles go back to git's values. Nothing puts the ARN back until
+`pin_bedrock_profiles` runs again. That is how watch-it-burn-community's gateway showed `us.amazon.nova-pro-v1:0` on
+2026-11-02, two days after the pin was read live. `roll-console.sh` and converge's `repair_failed_syncs` both wrote
+bare operations then.
+
+Write the Application's own options into every operation:
+
+```
+OPTS="$(kubectl --context "$CONTEXT" -n argocd get app ai-layer -o json | jq -c '.spec.syncPolicy.syncOptions')"
+kubectl --context "$CONTEXT" -n argocd patch app ai-layer --type merge \
+  -p "$(jq -cn --argjson o "$OPTS" '{operation: {sync: {revision: "staging", syncOptions: $o}}}')"
+```
+
+Both scripts do that now (fleet.sh's `sync_operation`), and `verify/test_sync_operation_options.sh` fails on any
+tracked script that writes a sync operation without them. After a bare sync, `fleet.sh converge <name>` re-pins the
+ARN.
+
 ## Changing a profile's app list: it reaches a cluster at the root's revision, not before
 
 **Since #609** each profile is the `apps` list in `gitops/bootstrap/values-<profile>.yaml`, and the one root,

@@ -9569,3 +9569,60 @@ timestamps answer the first-move question in the 11-01 entry. Then the guard hal
 Wait a minute past the next selfHeal, then read evil-mcp's toolNames with
 `-o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`. It must read
 `["get_weather"]`. Then run `"$HOME/guard-mcp-off"` the same way. Record the readings here; a pass closes #733.
+## 2026-11-02 · #583 · A sync written to `.operation` by kubectl ran ai-layer with no syncOptions and reverted the Bedrock pin
+
+**The bug.** Elevated run 15801 found agentgateway's `BEDROCK_NOVA_MODEL` on watch-it-burn-community back at the system
+id `us.amazon.nova-pro-v1:0`. Two days earlier, on 2026-10-31, it read as the application profile ARN
+`arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/5l72jg8rnz71`. Argo CD v3.5.2's controller takes
+a sync's options from the operation alone. `SyncAppState` in `controller/sync.go` reads `syncOp.SyncOptions` for
+`RespectIgnoreDifferences=true`, `ServerSideApply`, `Replace` and the rest. Argo CD's API server (`argocd app sync`)
+and its automated sync (`appcontroller.go`) copy them in from `spec.syncPolicy.syncOptions`. An operation written with
+`kubectl patch` gets only what it says. Two scripts here wrote one with none:
+
+- `infra/terraform/fleet/roll-console.sh` syncs ai-layer on every live cluster with `{"sync":{"revision":"staging"}}`.
+  The 2026-11-01 web commits (the sponsor footer on nine pages, the chat page edits) are what it is for.
+- `fleet.sh` converge's `repair_failed_syncs` re-syncs any app that is OutOfSync with a failed last operation, ai-layer
+  included, with `{"sync":{"prune":true}}`. It runs before `pin_bedrock_profiles` in `repair_one`, and the operation
+  is asynchronous, so the pin could read the ARN, and the sync could land the system id after it.
+
+Without `RespectIgnoreDifferences` such a sync is a client-side apply of git over every field ai-layer ignores. That
+covers agentgateway's `BEDROCK_NOVA_MODEL` and `BEDROCK_REGION`, the Bedrock ModelConfigs' model and region, and
+guard-proxy's live toggles. Nothing puts the ARN back until the next bootstrap or converge pin.
+
+**What was ruled out.** `repair_env_order` (#679) rewrites agentgateway's env in git's order with the live values
+(`want` is built from the live `env` entries), so it cannot write the system id. The chart values and
+`gitops/bootstrap/apps/ai-layer.yaml` still ignore both env entries by name and keep `RespectIgnoreDifferences=true`,
+`verify/test_c7_gateway_toggle.py` and `test_pin_bedrock_profiles.sh` hold that, and they pass. `reset-bot` deletes
+only objects without an Argo CD manager. Which of the two writers fired between 10-31 and 11-02 cannot be read from
+here. Either one reverts the pin, so both are fixed.
+
+**The fix.** Each operation now carries the Application's own syncOptions, as Argo CD's API server writes it.
+`fleet.sh` gains `sync_operation`, which builds the patch from the app's JSON, and `repair_failed_syncs` passes each
+app's JSON through the loop. `roll-console.sh` reads ai-layer's syncOptions and writes them with the revision. When
+it cannot read them, it does not sync that cluster and counts it as failed, since a bare sync is the revert. The
+by-hand rollout recipe in `docs/DECISION-LOG.md` and a new section in `docs/GOTCHAS-FLEET-AND-DELIVERY.md` say the same.
+
+**Tests.** `verify/test_fleet_converge_repairs.sh` checks that the patch for an app carries its four syncOptions,
+through an app JSON with a quote, a backslash and a tab in it, and that an app without options gets a sync with none.
+The first check fails on the old fleet.sh. The new `verify/test_sync_operation_options.sh` runs roll-console.sh
+against aws and kubectl shims. The operation must carry ai-layer's syncOptions. An unreadable or empty list must
+write no operation, cycle nothing and exit non-zero. A scan of every tracked `*.sh` outside the tests fails on a
+`patch app`/`patch application` that writes a sync operation without syncOptions. Seven of its eight checks fail on
+the old scripts.
+
+**Not yet run on a cluster** (so #583 stays open). This run has no kube context and no AWS credentials. Once this
+commit is on staging, a session with accen-dev access re-pins both KubeCon clusters with the fixed converge, from
+infra/terraform/fleet in a checkout that holds their states:
+
+    AWS_PROFILE=accen-dev ./fleet.sh converge watch-it-burn-community watch-it-burn-private
+
+It should print "agentgateway's BEDROCK_NOVA_MODEL now calls arn:aws:bedrock:us-west-2:...:application-inference-profile/..."
+for each cluster, or nothing for that target if it is already pinned. Then the live test, per cluster:
+
+    K=/tmp/<cluster>.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name <cluster> --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/<cluster> ]] || exit 1
+    KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_gateway_bedrock_tagged_live.py
+
+A 200 through agentgateway :3002 closes #583. Any other status prints Bedrock's reply, which shows the encoding the
+`%2F` path needs.

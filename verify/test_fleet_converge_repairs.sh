@@ -340,10 +340,18 @@ check "only the operation Running past the threshold is terminated" \
   'grep -q "patch application prometheus --type json" "${CALLS}" && ! grep -q "patch application kagent\|patch application ai-layer" "${CALLS}"'
 
 echo "== repair_failed_syncs =="
-printf '{"items":[{"metadata":{"name":"otel-operator"},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Failed"}}},{"metadata":{"name":"ai-layer-otel"},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Error"}}},{"metadata":{"name":"busy"},"operation":{"sync":{}},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Failed"}}},{"metadata":{"name":"fine"},"status":{"sync":{"status":"Synced"},"operationState":{"phase":"Failed"}}}]}' >"${T}/apps.json"
+# ai-layer-otel carries ai-layer's syncOptions, and a message with a quote, a backslash and a tab in it, as a failed
+# operation's message can: the app's JSON travels on one line through the loop and must come out whole.
+printf '%s' '{"items":[{"metadata":{"name":"otel-operator"},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Failed"}}},{"metadata":{"name":"ai-layer-otel"},"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true},"syncOptions":["CreateNamespace=true","ServerSideApply=true","Force=true","RespectIgnoreDifferences=true"]}},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Error","message":"one or more \"objects\" failed C:\\path\there"}}},{"metadata":{"name":"busy"},"operation":{"sync":{}},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Failed"}}},{"metadata":{"name":"fine"},"status":{"sync":{"status":"Synced"},"operationState":{"phase":"Failed"}}}]}' >"${T}/apps.json"
 : >"${CALLS}"; src 'repair_failed_syncs c /dev/null'
 check "OutOfSync apps whose last operation failed get a sync operation; a Synced one and one already running do not" \
   'grep -q "patch application otel-operator --type merge" "${CALLS}" && grep -q "patch application ai-layer-otel --type merge" "${CALLS}" && ! grep -q "patch application busy\|patch application fine" "${CALLS}"'
+# Argo CD reads a sync's options from the operation alone (#583): a bare one ran ai-layer without
+# RespectIgnoreDifferences and put agentgateway's BEDROCK_NOVA_MODEL back to the untagged system id.
+check "the operation carries the app's own syncOptions, RespectIgnoreDifferences and ServerSideApply among them" \
+  'grep -qF "patch application ai-layer-otel --type merge -p {\"operation\":{\"initiatedBy\":{\"username\":\"fleet-converge\"},\"sync\":{\"prune\":true,\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\",\"Force=true\",\"RespectIgnoreDifferences=true\"]}}}" "${CALLS}"'
+check "an app with no syncOptions gets a sync with none, as Argo CD's own API server writes it" \
+  'grep -qF "patch application otel-operator --type merge -p {\"operation\":{\"initiatedBy\":{\"username\":\"fleet-converge\"},\"sync\":{\"prune\":true}}}" "${CALLS}"'
 
 echo "== repair_agent_injection =="
 mkpods() { printf '{"items":[{"metadata":{"name":"workshop-agent-a","namespace":"agent","annotations":{"instrumentation.opentelemetry.io/inject-python":"watch-it-burn-python"}},"spec":{"initContainers":%s,"containers":[]}},{"metadata":{"name":"guard-proxy-b","namespace":"agent"},"spec":{"containers":[]}}]}' "$1" >"${T}/agentpods.json"; }

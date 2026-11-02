@@ -221,7 +221,9 @@ public (no REST API for user-package visibility; one-time UI step).
 **Rollout mechanism (so a later session doesn't relearn it).** Clusters track `staging`. To push an
 ai-layer change live: annotate the `ai-layer` Application `argocd.argoproj.io/refresh=hard` + patch its
 `operation.sync` (the argocd controller is the allowed principal, so `block-argocd-drift` doesn't block
-it), then bounce the changed pods. The agent prompt arrives via a kagent-generated Secret
+it), then bounce the changed pods. The patched `operation.sync` must carry ai-layer's own `syncOptions`
+(#583). Without them the sync runs without RespectIgnoreDifferences and reverts the Bedrock pin and the
+guard toggles to git. See `docs/GOTCHAS-FLEET-AND-DELIVERY.md`. The agent prompt arrives via a kagent-generated Secret
 `workshop-agent` mounted at `/config` (delete the `kagent=workshop-agent` pod; kagent can't roll it
 itself because the drift policy blocks its Deployment annotation bump). Web pages come from the
 `console-src` ConfigMap (delete the console pod). `proxy.py` is in guard-proxy's ConfigMap (delete

@@ -970,15 +970,28 @@ verify_one() {
 # dependency was down (otel-operator behind cert-manager's webhook, 2026-09-06) stays Failed forever.
 # Creating the operation is what the CLI's 'app sync' does; this does the same for OutOfSync apps whose
 # last operation ended in Failed or Error and nothing is running.
+#
+# The operation carries the Application's own syncOptions (#583). Argo CD v3.5.2's controller reads the options of
+# a sync from the operation alone (controller/sync.go: syncOp.SyncOptions); its API server and its automated sync
+# copy them in from spec.syncPolicy, and an operation written with kubectl gets none. An ai-layer sync without
+# RespectIgnoreDifferences=true applies git over every ignored field: agentgateway's BEDROCK_NOVA_MODEL went back to
+# the system id us.amazon.nova-pro-v1:0 on watch-it-burn-community by 2026-11-02, untagged spend, and the same sync
+# drops guard-proxy's live toggles. Without ServerSideApply=true it is a client-side apply as well.
+sync_operation() { # $1 Application JSON; prints the merge patch that starts its sync, with its own syncOptions
+    jq -c '{operation: {initiatedBy: {username: "fleet-converge"},
+                        sync: ({prune: true} + if (.spec.syncPolicy.syncOptions // []) == [] then {}
+                                               else {syncOptions: .spec.syncPolicy.syncOptions} end)}}' <<<"$1"
+}
 repair_failed_syncs() {
-    local name="$1" kcfg="$2" apps a
+    local name="$1" kcfg="$2" apps a app
     apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)" || return 0
-    while read -r a; do
+    # One line per app, its name then its compact JSON: tojson escapes every tab and newline inside it.
+    while IFS=$'\t' read -r a app; do
         [[ -n "${a}" ]] || continue
         log "  ${name}: re-triggering sync of ${a} (last operation failed, revision unchanged)"
         KUBECONFIG="${kcfg}" kubectl -n argocd patch application "${a}" --type merge \
-            -p '{"operation":{"initiatedBy":{"username":"fleet-converge"},"sync":{"prune":true}}}' >/dev/null 2>&1 || true
-    done < <(jq -r '.items[] | select(.status.sync.status=="OutOfSync" and (.status.operationState.phase=="Failed" or .status.operationState.phase=="Error") and (.operation == null)) | .metadata.name' <<<"${apps}" 2>/dev/null)
+            -p "$(sync_operation "${app}")" >/dev/null 2>&1 || true
+    done < <(jq -r '.items[] | select(.status.sync.status=="OutOfSync" and (.status.operationState.phase=="Failed" or .status.operationState.phase=="Error") and (.operation == null)) | "\(.metadata.name)\t\(tojson)"' <<<"${apps}" 2>/dev/null)
 }
 
 # The OTel operator's pod webhook fails OPEN (mpod.kb.io failurePolicy Ignore): a pod created before the
