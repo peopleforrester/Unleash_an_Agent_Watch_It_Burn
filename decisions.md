@@ -9604,3 +9604,91 @@ health.
 **Not yet run on a cluster.** Unchanged: points 1 and 2 and the attendee half of point 4 on a new attendee cluster,
 which waits on Michael's go for about $1, and point 3 and the admin half of point 4 on watch-it-burn-private. The
 same attendee bring-up also covers the `verify/test_service_hosts_live.py` run the #668 entry owes.
+
+## 2026-11-02 · #773 · Challenge 2: the room deploys a public image by its plain name, and deployments-<cluster> lists every one
+
+**What Michael approved** (his comment on #773, 2026-11-01, which is the spec). In Challenge 2 the room can deploy
+a public image, shown on a deployments page. Each student gets a single-replica Deployment, and nothing scales it
+up. The image comes from a small curated list that a student names in plain language ("deploy nginx", "run
+busybox"), and the bot puts in the real image, so nobody types a registry path on a phone. The builder picks image
+sources that fit the no-Docker-Hub rule (#714) and restrict-image-registries. These deploys land while the
+guardrails are off; once #774's switch arms Kyverno, the same deploys are refused.
+
+**What changed.**
+- `deploy_app` (`gitops/ai-layer/workshop-mcp-server.py`). `PUBLIC_IMAGES` lists six images: busybox, alpine,
+  nginx, httpd, redis and the 2048 game, with aliases (apache, docker-2048). A container whose image is a Docker
+  Hub reference (a bare name, `user/name` or `docker.io/...`) is read for its repository: "nginx",
+  "nginx:latest" and "docker.io/library/nginx:1.27" all become the pinned nginx. A Docker Hub repository off the
+  list is refused before the apply, and the refusal names the list so the model can pick from it. An image that
+  names its own registry (ghcr.io, quay.io, the villains, C6's Joker) is applied exactly as written. A workload with
+  a listed image is a room deployment: one replica (Deployment, StatefulSet, ReplicaSet), requests 5m and 16Mi,
+  limits 50m and 64Mi, and a scale to zero after `JOKER_SCALE_DOWN_SECONDS` (300 on the cluster), as #685's room
+  Jokers get. busybox and alpine with no command get `sleep 3600`, so the pod stays up. The tool takes
+  `requested_by`, the name the person chatting gave, and the description lists the names it can use.
+- The report to the desk carries the image and `requested_by`. `ticket_site.py` keeps the name only when the
+  witch vocabulary makes it (any case or spacing), else falls back to a `joker-<slug>` name, else none.
+  `/wall.json` now records the image (the 2026-11-01 test's wall had none).
+- The deployments page. The fake-ticket site serves it by Host: under `deployments-<cluster>` and
+  `deployments.burritobot.co` it answers `/` (every landed deployment, newest first, polled every 3 s), `/mine`
+  (one visitor's, by `?witch=<slug>` or the `wib_witch` cookie), `/deployments.json` and `/healthz`, and 404s
+  everything else, POSTs included. A row reads "tron (nginx) deployed by Edgar the Kelpie at 16:22:34". Refusals
+  are left off. The page says "Joker" nowhere and links to nothing, so it gives away no later challenge. The
+  console has a server for the name that passes only those three paths, GET only (`console.conf`), and
+  `fleet.sh`'s `WIB_VILLAIN_HOSTS` publishes `deployments-<cluster>`.
+- The chat page's "see your deployments" link, hidden until the visitor has a row. The page asks its own host's
+  `/deployments.json?witch=<slug>` on load, after each reply and once more 4 s later, since the report goes on its
+  own thread; the main console server proxies that one path to the fake-ticket site. The link goes to
+  `deployments-<this cluster>.burritobot.co/mine`, which works as soon as `fleet.sh routes` has run, with no
+  router change.
+- `/kubecon`: Challenge 2's beat is "Deploy any public image", with the 2026-11-01 Tron ask and its follow-up as two
+  `.prompt` blocks, so `?sheet=1` carries both. The run-of-show's segment 3 says the same.
+- The desk listens with a backlog of 128. Python's default of 5 left reports waiting out a SYN retry in the new
+  test, and the page is polled by every phone that has it open.
+
+**Why public.ecr.aws.** Amazon's public registry serves Docker's official images under `docker/library/`, at the
+same digests as Docker Hub, so no copy is needed and nothing pulls from Docker Hub. restrict-image-registries
+allows `ghcr.io/`, Harbor, the kagent and agentgateway registries, `registry.k8s.io/` and private ECR
+(`<account>.dkr.ecr.<region>.amazonaws.com`). `public.ecr.aws` is none of them, so where the rule is at Deny the
+room's deploys are refused today, and #774's "deny external registries" keeps refusing them. A ghcr.io copy would
+be admitted by today's rule. 2048 is the image AWS's EKS load-balancer tutorials deploy, from ECR Public account
+`l6m2t8p7`, which nobody here knows: the untrusted source is the lesson (`images/villains/README.md`). Each digest
+is the index public.ecr.aws served on 2026-11-02, and `images.lock` declares all six.
+
+**The workshop.** Nothing here needed a profile gate. The workshop's Challenge 2 deploys
+`ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1`, a full reference, which deploy_app leaves alone, so
+its replicas, limits and image are as before; C3 and C6's Jokers likewise. A bare Docker Hub name now resolves to
+the list or is refused on every cluster, which is what #714 asks of the whole lab. The witch name, the link and the
+`/me` rows exist only on burritobot.co hosts, and attendee clusters are on agenticburn.com. The deployments page
+is one more host on every cluster, as `support-<cluster>` is.
+
+**Left open.**
+- The witch name reaches the model only through guard-proxy's witch forwarding (guard-proxy-agenticburn 6f2de73
+  and aaf1872). This repo pins guard-proxy at fb6e2bf, which predates it; the repin is #762's remaining step. Until
+  then the model has no name to pass, and rows read "deployed by someone who gave no name".
+- `deployments.burritobot.co` itself needs the apex-agenticburn router to look it up under
+  `deployments-attackme.burritobot.co`'s row, as it does for `support.burritobot.co` (filed as a follow-up).
+- The one-pod cap holds on deploy_app. `run_shell` can still patch a Deployment's replicas with workshop-mcp's
+  token, which is Challenge 2's shell surface; the scale to zero still runs at the window.
+- The issue's question 5, whether the model's reasoning should show in its replies, is not in the approval. It is
+  asked in run 15977's report, and nothing here changes the prompt or the reply.
+
+**Tests.** `verify/test_public_images.py` (offline) runs the real deploy_app against a stand-in API server and the
+real desk: the list on public.ecr.aws, pinned and in images.lock; the registry rule refusing each; fifteen
+spellings resolving; Docker Hub names off the list refused with the list named and nothing applied; images with a
+registry of their own left alone; one replica, the room's resources, the scale to zero, the shell sleep; the page's
+rows, witch matching and refusals left off; the host serving no desk page; the console server, the chat link and
+the `/kubecon` beat. Four mutants (no cap, no `requested_by`, no Host routing, refusals shown) each fail it.
+`verify/test_public_images_served.py` (tools tier) reads every pinned digest from public.ecr.aws anonymously and
+checks linux/amd64. `test_c6_villain_endpoint.py`'s CronJob case used the image `x`, now refused as a Docker Hub
+name, so it uses C6's image; its host list check names `deployments`. `test_console_no_toggle.py` counts five
+servers. `test_demo_app_web_image.py`'s Docker Hub nginx pattern skips `public.ecr.aws/docker/library/nginx`,
+which is Amazon's registry. `test_instructor_brief.py` reads its banned words outside the `.prompt` blocks, since
+the Tron ask is about the festival's "attendees", and caps the visible `/kubecon` at 2,100 words: the two prompts
+are 83 words where promo-mascot's was 41, and the beat's marker was cut to one line (2,007 words now). `/kubecon`'s
+header also links "Deployments" beside the Joker wall.
+
+**Not yet run on a cluster.** Owed in a session with the KubeCon clusters' credentials, after `fleet.sh routes`:
+`CONTEXT=<public-context> python3 verify/test_deployments_page_live.py` (the attack lands at Audit), the same with
+`CONTEXT=<private-context>` (refused at Deny, naming restrict-image-registries), then on the public bot, as a
+witch, "deploy nginx", and confirm the row on `deployments-attackme.burritobot.co` and the chat page's "see your
+deployments" link. The witch name on the row needs #762's repin first.

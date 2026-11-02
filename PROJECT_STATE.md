@@ -11,6 +11,15 @@ Every cluster now has one root, `lab-bootstrap`: the `gitops/bootstrap` chart, a
 built before it need `infra/deploy-full-idp.sh <profile>` again, which replaces the old `app-of-apps*` root
 without touching its children. Not yet run on a cluster; details in decisions.md, 2026-10-26 · #609.
 
+## Challenge 2's public images and deployments page (#773)
+
+Built on staging, not yet run on a cluster. `deploy_app` turns a plain name (busybox, alpine, nginx, httpd, redis,
+2048) into a pinned public.ecr.aws image, runs it as one small replica and scales it to zero after 5 minutes.
+`deployments-<cluster>` lists every landed deployment by name, image and witch name, and the chat page shows "see
+your deployments" once the visitor has one. Owed: #762's guard-proxy repin (so the witch name reaches the model),
+apex-agenticburn's `deployments.burritobot.co` lookup, and `verify/test_deployments_page_live.py` on both KubeCon
+clusters. Details in decisions.md, 2026-11-02 · #773.
+
 ## KubeCon NA 2026 abstract readiness (#456)
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
