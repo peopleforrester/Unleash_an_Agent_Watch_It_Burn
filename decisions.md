@@ -9315,3 +9315,24 @@ with a link. It reads the tokens and cost that #784 owns too, so a red there on 
 A pass on both clusters closes #746; record it here with the trace ids. A pass in Tempo and APM with no Agent
 Observability row is #783, not a #746 shape failure. Offline, the shape stays pinned by
 `python3 verify/test_trace_shape_e2e.py`, which `bash verify/run-e2e-tools.sh` runs.
+## 2026-11-02 · #750 · Re-dispatch: #644's re-run has not happened, and the run-of-show's two greps match the logs
+
+**No code changed.** Hecaton run 15926 is the second dispatch of #750. It has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig, so nothing ran on a cluster.
+
+**#644's re-run is still ahead.** The 2026-11-01 #750 entry above put the check in the Night Before #644 step of
+`facilitation/kubecon-na-2026-run-of-show.md`, and that step is unchanged on staging `6ce4faa`. #644 is open, and
+its last comment is still Michael's 2026-11-01 go to re-run after #450 drops the per-network limit. #450 and #786
+(the ruling that drops console nginx's per-network zone) are both open on 2026-11-02. So no load replay has made a
+turn past `PROXY_TIMEOUT` since the fix, and #750 stays held on #644.
+
+**The two greps match what each container writes.** KubeCon runs `proxy.py` from the submodule pin `fb6e2bf`
+(the M5 entry above), not the Go build. Its `_TraceJsonFormatter` writes `json.dumps(payload)` with the default
+separators, so its lines read `"event": "task_cancel"`, with the space the run-of-show's `grep -E` expects. The
+`forward_error` that sends the cancel logs `chat forward failed: %s`, as the step says. workshop-mcp's `shim`
+container writes through `tool_audit.py`, whose `separators=(",", ":")` give `"event":"tool_invocation"` with no
+space, as the step's second grep has it. The Go build's slog lines would read `"event":"task_cancel"`, so if
+KubeCon ever moves to it, the first grep has to drop its spaces.
+
+**Not yet run on a cluster.** Unchanged from the 2026-11-01 #750 entry: the two log reads and the Datadog search,
+on attackme during #644's re-run.
