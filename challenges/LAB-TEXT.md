@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| Copied out | 2026-11-01 |
+| Copied out | 2026-11-02 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `6eaeb89c065199a6a79e7bddaf41c545e3bda37a` (the last commit to change lab.html, on 2026-11-01) |
-| Source blob | `49f56395159ff3b33a49d44be05c6be99c4f035e` |
+| Source commit | `61f261534254427f6f41de84372415264dfe5b39` (the last commit to change lab.html, on 2026-11-02) |
+| Source blob | `3731dae797dd8e8066b934a6607a4f06f4ccc150` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -323,7 +323,7 @@ The other two announce themselves in their own logs as well, and they are not th
 > ```
 > restrict-image-registries: Images must come from allowed
 > registries: the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
-> docker.io/library, registry.k8s.io, or ECR, and not from the
+> registry.k8s.io, or ECR, and not from the
 > lab-platform/promo/ or festival-ops/ paths.
 > ```
 >
