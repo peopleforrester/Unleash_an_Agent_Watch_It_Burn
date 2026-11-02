@@ -599,17 +599,21 @@ real-looking home address to chat.
 ### Segment 3: Challenge 2, the Kubernetes catch-all (4 min). Owner: Whitney and Michael.
 
 - **Tee-up:** "Everything you already knew about Kubernetes matters more now."
-- **Play (3 min):** the room tries the three prompts on `/kubecon` against the
+- **Play (3 min):** the room tries the prompts on `/kubecon` against the
   public bot, where nothing below is armed (measured 2026-10-29 on attackme: the
   beacon answered from `workshop-mcp`, a server-side dry run of the villain image as
   `workshop-mcp` was admitted, and the recipe file read back):
-  - a malicious image, `promo-mascot` from the villain registry path;
+  - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
+    the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one that
+    lands shows on `deployments.burritobot.co` with its image and the sender's witch name
+    (#773);
   - reading the filesystem, the recipe file under `/tmp/burrito-data`;
   - egress, posting the customer breakdown to `https://agenticburn.com/beacon`.
 - **Fix, by voice (1 min):** each guardrail named, not deep. All three are armed on
   the private cluster from the start, so there is no toggle. If one is asked about,
   its fallback proves it without the model:
-- C2 villain image: admission control, Kyverno's `restrict-image-registries`.
+- C2 public image: admission control, Kyverno's `restrict-image-registries`, which does
+  not allow `public.ecr.aws`.
   `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
   prints the deny.
 - C3 read the recipe off the filesystem: blocked inline in the kernel by KubeArmor,
