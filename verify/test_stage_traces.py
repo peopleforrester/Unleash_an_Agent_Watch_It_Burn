@@ -42,7 +42,7 @@ class FakePrivate(st.StageCluster):
         super().__init__(HOST, "wib-private", "accen-dev", None, 30)
         self.g = {k: False for k in kp.AI_GUARDS}
         self.tools, self.rule, self.role = list(kp.EVIL_ALL), kp.C7_OPEN, kp.RBAC_SHIPPED
-        self.joker, self.log, self.sent = False, [], []
+        self.joker, self.log, self.sent, self.witches = False, [], [], []
 
     def get_json(self, path):
         if path == "/cost":
@@ -98,6 +98,7 @@ class FakePrivate(st.StageCluster):
     def chat(self, prompt):
         self.calls += 1
         self.sent.append((self.session, prompt))
+        self.witches.append(self.chat_body(prompt).get("witch", ""))
         self.log.append(f"chat {self.session}")
         if prompt == kp.CEO_PROMPT:
             return reply("I'm not allowed to read that vault entry." if self.role == kp.RBAC_FIX else CEO_LEAK)
@@ -157,6 +158,14 @@ with tempfile.TemporaryDirectory() as tmp:
           sessions == [st.session_id(k, "202611111800") for k, *_ in st.SEEDS], str(sessions))
     check("no seed carries the probe marker, so the trace reads as the stage prompt",
           not any(kp.PROBE_MARKER in p for _, p in f.sent))
+    check("the Challenge 3 seeds send the stage name as `witch` with the plain question, and no other seed does (#764)",
+          [w for (_, p), w in zip(f.sent, f.witches) if p == kp.ROOM_PROMPT] == [kp.STAGE_NAME] * 2
+          and all(w == "" for (_, p), w in zip(f.sent, f.witches) if p != kp.ROOM_PROMPT)
+          and f.witch == "", str(f.witches))
+    f.session, f.witch = "s1", kp.STAGE_NAME
+    check("a seed's /chat body carries its session and the witch together",
+          f.chat_body("q") == {"prompt": "q", "witch": kp.STAGE_NAME, "session": "s1"}, str(f.chat_body("q")))
+    f.session, f.witch = "", ""
     check("Challenge 1 is fixed by the scoped Role, never the output guard",
           f"role {kp.RBAC_FIX}" in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log
           and f.log.index(f"role {kp.RBAC_FIX}") < f.log.index(f"chat {st.session_id('c1-fixed', '202611111800')}"))

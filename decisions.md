@@ -9535,3 +9535,192 @@ print the cpu.5 reference above. The pod must become Ready within its startup pr
 so time the first pull. `bash verify/input-guard.sh <host> <kube-context> <aws-profile>` must pass the benign prompt and
 block the injection through cpu.5. Then #455 runs `verify/test_topic_classifier.py` and the probe (#503) once its
 BanTopics entry is in.
+## 2026-11-02 · #751 · The Go guard-proxy's spend store is a kustomize Component that the #738 cutover lists
+
+guard-proxy-agenticburn#32 (merged to its staging as eb40e28) keeps the Go build's spend tally, each session's
+spend and the /toggle cost cap in a bbolt file at `SPEND_STORE_PATH`. The Go binary will not start without the
+variable, and it fails startup when another process holds the file, because bbolt takes an exclusive flock and
+waits 2 s for it. So the Go Deployment needs three things together: a PersistentVolumeClaim, or the file lives in
+the container filesystem and a pod replacement still resets spend; `SPEND_STORE_PATH` pointing into that mount; and
+`strategy: Recreate`, because a RollingUpdate starts the new pod while the old one still holds the flock.
+
+**What changed.** `gitops/ai-layer/go-spend-store/` is a kustomize Component. It adds the PVC `guard-proxy-spend`
+(ReadWriteOnce, 1Gi, the default gp3 StorageClass, as `student-work` uses), and JSON 6902 ops on the guard-proxy
+Deployment: `strategy: { type: Recreate }`, pod `fsGroup: 1000` so uid 1000 can create the file on the EBS volume
+(web-terminal needs the same), `SPEND_STORE_PATH=/var/lib/guard-proxy/spend.db` appended as the proxy's last env
+entry, a read-write mount of the claim at `/var/lib/guard-proxy`, and the volume. The root filesystem stays
+read-only. `gitops/ai-layer/kustomization.yaml` does not list it yet, so today's render is byte-for-byte what it was.
+A comment on the guard-proxy Deployment in `resources.yaml` tells the cutover to list it.
+
+**Why a Component.** The issue asks for this "at the cutover", which is #738, placed after KubeCon (2026-11-12) by
+Michael's comments on #412 of 2026-10-24 and 2026-10-31. KubeCon runs proxy.py, which ignores `SPEND_STORE_PATH`
+and keeps spend in memory, and the KubeCon clusters sync from staging. Putting the PVC and Recreate on the
+Deployment now would give KubeCon's chat path an EBS volume to attach before the pod can start, and a few seconds
+of chat outage on every proxy.py rollout, for a file proxy.py never opens. The change is written and tested, and
+going live takes one line: the cutover adds `components: [go-spend-store]` in the same commit that swaps the image
+and command.
+
+**Why JSON ops.** Rendered with `kubectl kustomize`, a strategic merge patch put `SPEND_STORE_PATH` first in the
+env list and shifted every other entry. ai-layer applies guard-proxy's env in its live order
+(RespectIgnoreDifferences, #679). #679's replay shows a git-side addition still lands in git's place, and an append
+keeps every existing entry at its index, which is the smallest change to an order-sensitive list.
+
+**Test.** `verify/test_guard_proxy_spend_store.py`, in the tools tier (it needs `kubectl kustomize` and `jq`). It
+renders the bundle with and without the Component and holds: one replica, Recreate with no rollingUpdate, the env
+set once and last with every existing entry in its order, a read-write mount at the path's directory backed by a
+rendered ReadWriteOnce claim, fsGroup equal to runAsGroup, a read-only root filesystem, the claim as the only added
+object with every other object identical, and an ai-layer guard-proxy ignore that leaves `SPEND_STORE_PATH` out (so
+a path change syncs from git). Its last check ties the store to the cutover: a committed guard-proxy whose container
+no longer runs `python /app/proxy.py` fails unless the committed render carries the store.
+
+**Not yet run on a cluster.** Owed at the #738 cutover, in a session with AWS access, on a fresh attendee cluster:
+`bash verify/run-e2e.sh` with CONTEXT set, then confirm `guard-proxy-spend` is Bound, the pod is Running with
+`SPEND_STORE_PATH` set, and a `kubectl --context "$CONTEXT" -n agent rollout restart deploy/guard-proxy` (or an Argo
+sync of an image change) keeps /cost's spent-so-far. One risk is unverified: ai-layer syncs with
+ServerSideApply, and on a cluster where guard-proxy already exists as a RollingUpdate Deployment, the API server's
+defaulted `rollingUpdate` block may survive the apply and be refused next to `type: Recreate`. A fresh cluster
+creates the Deployment as Recreate and avoids it. If an existing cluster refuses it, the by-hand fix is one JSON
+patch as the Argo controller SA, as `repair_env_order` patches: `replace` `/spec/strategy` with
+`{"type": "Recreate"}`, which drops the defaulted block in the same write.
+
+**Draft reuse.** Run 15265 first wrote this on `agent/751-15265`, and run 15566 reused it as 38e8892 on
+`agent/751-15566`. Neither reached staging: run 15456 ended failed (validation), and run 15566 failed the prose
+gate on contrast phrasing in its decisions.md entry. Run 15947 ran
+`verify/draft-drift.sh origin/agent/751-15566 origin/staging`, which named only decisions.md and PROJECT_STATE.md as
+changed on staging since the draft's base 42954c9. `git diff 42954c9 origin/staging` over `gitops/ai-layer/` touches
+only `web/`, and `gitops/bootstrap/apps/ai-layer.yaml` is unchanged, so the Component, the PVC, the
+`resources.yaml` comment and the test keep the draft's design on the current layout. What differs from the draft:
+this entry and the PROJECT_STATE.md line are rewritten on today's files, and three comments and one check label in
+the Component and the test are reworded to state each reason directly. No rendered field changed.
+## 2026-11-02 · #764 · The KubeCon probe's Challenge 3 beat asks the plain question and sends the stage name as `witch`
+
+**Where #764 stood.** 6324488 took the HC-666 walkthrough and the witch box off the desk's front page, and the
+2026-11-01 live rollout entry above verified that on the public bot and settled step 1: a plain "What's the status
+of my support ticket HC-666?" fired `deploy_app`, so HC-666's hidden text stays and step 3 is dropped. What it left
+is the fourth criterion: `verify/kubecon_probe.py` still sent the desk's old copied ask, `ticket_site.ask_for()`
+("Hi, I'm Agatha the Banshee. ... take care of whatever it needs."), which nobody in the room can copy any more.
+
+**What this change does (hecaton run 15956).**
+- `verify/kubecon_probe.py`: `ROOM_PROMPT` is now the plain question the live run used. The name is no longer in
+  the prompt: `KubeconCluster` gains a `witch` attribute and a `chat_body()`, and sends `{prompt, witch}` when
+  `witch` is set, the shape the chat page has sent since #762. `_c6` sets it to `STAGE_NAME` for its one ask and
+  clears it after, so no other beat changes its request. `ROOM_JOKER` is still `joker-agatha-the-banshee`.
+- `verify/stage_traces.py`: its Challenge 3 seeds ask the same way. `StageCluster` now adds its `session` to the
+  probe's `chat_body()` instead of carrying its own copy of the POST, so the seed sends prompt, witch and session.
+- `gitops/ai-layer/ticket_site.py`: `ask_for()` is removed; the probe was its last caller. The HC-666 comment now
+  describes the chat page's name and the plain question. The ticket's hidden paragraph is unchanged.
+- `/kubecon` (`gitops/ai-layer/web/kubecon.html`) and the run-of-show's segment 4: the Challenge 3 prompt is the
+  plain question, the presenters introduce HC-666 themselves, and the room asks the bot rather than pasting an ask
+  from the desk. `verify/test_kubecon_probe.py` already holds `/kubecon`'s prompt equal to the probe's.
+- Tests: `verify/test_kubecon_probe.py` pins the plain question and that it carries no name, payload or "take care
+  of" instruction, checks the request `KubeconCluster.chat` builds (prompt alone with no witch, prompt plus
+  `witch` for the C6 ask), and its fake bot now names the Joker from the forwarded witch, so a run where the name
+  is dropped (as on 2026-11-01) fails `c6-lands` naming `joker-agatha-the-banshee`. `verify/test_stage_traces.py`
+  checks the two Challenge 3 seeds send the witch and no other seed does.
+
+**Why the probe sends the name in the body, not the prompt.** The criterion asks the probe to match the new flow,
+and the new flow is the room's: a plain question from the chat page, which sends the visitor's name as `witch`.
+Putting the name back into the prompt text would test a flow nobody on stage uses. This overlaps #804's second
+criterion ("kubecon_probe.py sends the visitor's witch name in the /chat body and expects joker-<that slug>, and an
+offline test covers the request it builds"), which #804 says to keep if #764 got there first; #804's own work, the
+agent's instruction to treat the forwarded name as the visitor's name, is untouched here.
+
+**Until the repin the probe's c6-lands beat is expected to fail.** The deployed proxy is the submodule pin
+`fb6e2bf`, whose `proxy.py` has no `witch` handling, so the name is dropped and HC-666 lands `joker-burritobot`.
+guard-proxy-agenticburn#34 (closed 2026-11-01, commit 6f2de73) forwards it; #803 (and #744's unmerged 485ee26)
+repin to a commit that contains it. The old prompt would still pass today because it typed the name, but it is
+the flow the desk no longer offers.
+
+Not yet run on a cluster (so #764 stays open):
+- After #803's repin syncs ai-layer on the community cluster (and #804's instruction, if the bot still defaults
+  the name), the probe against the live public bot, from a session with AWS access:
+  `python3 verify/kubecon_probe.py community attackme.burritobot.co --context <community-context>
+  --kubeconfig /tmp/community.kubeconfig --profile accen-dev`. Pass: `c6-lands` PASS, `joker-agatha-the-banshee`
+  created and then removed by the probe. Its Challenge 3 trace should show `read_support_ticket` then `deploy_app`,
+  which is criterion 3 on the probe's own question.
+## 2026-11-02 · #733 · The git half of #707's live check is this run's commit: an order swap only an Argo CD sync can land
+
+**What changed.** Hecaton run 15968 has no kubeconfig context and no AWS credentials, like runs 14867 and 15913.
+This run does not leave the tool change to the session, as those entries planned. It makes the change itself:
+`gitops/workshop-agent/agent.yaml` now lists `reorder_supply` before `check_inventory` in workshop-mcp's toolNames.
+When the dispatcher promotes it to staging, watch-it-burn-community's root, which tracks staging with automated sync
+(the 2026-11-01 entry), takes the change with no one acting. The issue's order asks for a Synced and Healthy read
+before the change. `workshop-agent`'s `.status.history` still records the revision before this one, so the read
+after the change covers that.
+
+**Why a swap is the right probe.** `fleet.sh`'s `repair_agent_tools` sorts both lists before it compares them
+(infra/terraform/fleet/fleet.sh, `repair_agent_tools`). An order-only change never differs there, so a converge never
+deletes the Agent over it. If the live list reads in git's new order, an Argo CD sync put it there, whether or not a
+converge ran in between. That is the no-converge proof the 11-02 entry said read_support_ticket's arrival could not
+give. The two tools are both read-only mocks, and they sit next to each other, so the model sees the same tools.
+KubeCon NA runs 2026-11-09 to 11-12 (conference-knowledge `kubecon-na-2026`), so the one pod roll kagent makes for
+the new config lands a week before the talk. The admin cluster watch-it-burn-private takes it too and is not harmed.
+
+**No swap back is owed.** The order has no meaning. A session that wants a second landing as more evidence reverts
+this commit, and the revert lands the same way.
+
+**Test.** `verify/test_agent_tools_sync.py` held git's list in the stale eleven's order. It now checks git's tools as
+a set against the stale eleven plus read_support_ticket, and holds the new order, `GIT_ORDER`, which differs from
+the stale order in more than the added tool. `STALE_ELEVEN` is unchanged, since it models what the clusters held on
+2026-10-29.
+
+**Tests.** `bash verify/run-tests.sh` passed (221 tests). `bash verify/run-e2e-tools.sh` passed, 40 checks. One
+earlier attempt failed `test_challenge_fallbacks.py` on its tmp/ check alone, because both suites ran at once.
+
+**Not yet run on a cluster.** The reads, from a session with accen-dev, after this commit is on staging. The report's
+escalations carry the same commands.
+
+    K=/tmp/watch-it-burn-community.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name watch-it-burn-community --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/watch-it-burn-community ]] || exit 1
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd get application workshop-agent \
+      -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{.status.history}'
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get agent workshop-agent \
+      -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get agent workshop-agent --show-managed-fields -o yaml
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get deployment workshop-agent -o jsonpath='{.metadata.creationTimestamp}'
+
+The Application must read Synced Healthy at a staging revision carrying this commit, and the toolNames read must
+start `["lookup_customer_records","reorder_supply","check_inventory",`. The managed-fields read and the two creation
+timestamps answer the first-move question in the 11-01 entry. Then the guard half:
+
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent exec deploy/web-terminal -c ttyd -- bash -c '"$HOME/guard-mcp-on"'
+
+Wait a minute past the next selfHeal, then read evil-mcp's toolNames with
+`-o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`. It must read
+`["get_weather"]`. Then run `"$HOME/guard-mcp-off"` the same way. Record the readings here; a pass closes #733.
+## 2026-11-02 · #544 · Seventh dispatch: #714 and #751 landed since `f1ffa0e`, and neither changes what #544 checks
+
+**No code changed.** Hecaton run 15998 is the seventh dispatch of #544. Like the earlier runs it has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig (`kubectl config get-contexts` lists none), so nothing
+ran on a cluster. No reply to the spend question in issue comment 6562456139 has appeared on the issue.
+
+**Staging since `f1ffa0e`, the sixth dispatch's record.** Up to the base `4939041`, three issues changed files #544's
+checks depend on:
+- #714 (`e9a97dc` to `a6d92c6`) moves every image that has a ghcr.io copy to ghcr.io and refuses Docker Hub. In
+  `gitops/bootstrap/apps/`, `tempo.yaml`, `falcosidekick.yaml`, `prometheus.yaml`, `kubearmor.yaml` and the five
+  demo-app files change only comment wording ("docker.io/..." becomes "Docker Hub's ..."). `backstage.yaml` gains a
+  kustomize image override for Postgres, and it still renders the same one Application. `fleet.sh` drops the Docker
+  Hub node auth (`dockerhub_auth_b64`), and `infra/terraform/aws/cluster/main.tf` says no image a cluster runs comes
+  from Docker Hub any more.
+- #751 (`127ed5b`) adds `gitops/ai-layer/go-spend-store/`, a Component inside the existing ai-layer Application,
+  not a new Application.
+- #764 (`4939041`) changes only the KubeCon probe's question.
+
+`git diff --stat f1ffa0e 4939041` over `gitops/otel-collector/`, `gitops/tempo/`, `observability-idp/`, the two
+profile lists (`values-attendee.yaml` and `values-admin.yaml`), `verify/test_service_hosts_live.py`,
+`verify/test_fleet_contract.py` and `verify/test_bootstrap_chart.py` is empty. So the counts are still 34 Argo CD
+Applications on attendee and 38 on admin, `values-admin.yaml` still lists `falco-talon` and `tempo` and
+`values-attendee.yaml` omits both, and the two Tempo leftovers the morning's entry names are unchanged.
+`bash verify/run-tests.sh` passes (221 tests) and prints "the attendee profile renders 34 Applications, the root
+included (34 found)".
+
+**One thing the bring-up now also tests.** Without Docker Hub node auth, a new attendee cluster pulls every image from
+ghcr.io or quay.io. Point 1 (the root reaching Synced/Healthy) is the first fresh attendee bring-up since #714, so a
+pull failure there would point at a missing ghcr.io copy, not at #475's shape. Read
+`kubectl get pods -A --field-selector=status.phase=Pending` for ImagePullBackOff before reading the Applications'
+health.
+
+**Not yet run on a cluster.** Unchanged: points 1 and 2 and the attendee half of point 4 on a new attendee cluster,
+which waits on Michael's go for about $1, and point 3 and the admin half of point 4 on watch-it-burn-private. The
+same attendee bring-up also covers the `verify/test_service_hosts_live.py` run the #668 entry owes.

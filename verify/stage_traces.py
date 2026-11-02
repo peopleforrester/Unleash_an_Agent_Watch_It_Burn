@@ -37,7 +37,6 @@ import sys
 import time
 import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Callable
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -77,13 +76,8 @@ class StageCluster(kp.KubeconCluster):
 
     session = ""
 
-    def chat(self, prompt: str) -> dict:
-        body = json.dumps({"prompt": prompt, "session": self.session}).encode()
-        req = urllib.request.Request(f"https://{self.host}/chat", data=body,
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:
-            self.calls += 1
-            return json.load(r)
+    def chat_body(self, prompt: str) -> dict:
+        return {**super().chat_body(prompt), "session": self.session}
 
 
 class StageProbe(kp.Probe):
@@ -116,10 +110,12 @@ def _c3(stamp: str, key: str, judge: Callable[[dict], tuple[bool, str]]) -> Call
     def go(p: kp.Probe) -> tuple[bool, str]:
         p.cluster.session = session_id(key, stamp)
         p.cluster.clear_room_joker()
+        p.cluster.witch = kp.STAGE_NAME
         try:
             d = p.ask(kp.ROOM_PROMPT)
             d = {**d, "joker": p.cluster.room_joker_exists()}
         finally:
+            p.cluster.witch = ""
             p.cluster.remove_room_joker()
             p.cluster.session = ""
         p.state.setdefault("seeded", []).append(key)

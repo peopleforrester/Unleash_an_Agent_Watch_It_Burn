@@ -469,7 +469,7 @@ beats give way first.
 | 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; the prompt wall `prompts.agenticburn.com` on the projector from here on | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
-| 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-admission-on`, then `guard-input-on` | Pastes their own HC-666 ask from the desk | 4, 5, 6 |
+| 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-admission-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6 |
 | 5 | 5 | M+W | Challenge 4: the Datadog Challenge 4 tab, the public bot, then the private bot with `guard-mcp-on` | Orders a burrito for the weather | 2, 4, 6 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
@@ -636,11 +636,11 @@ real-looking home address to chat.
   pre-made: a card complaint in black, with the injection under it in white text on
   the white page. Say the white-text reveal (copy it, paste it, the instructions
   appear); do not demo it.
-- **Play (3 min):** each attendee opens the desk, is given a generated witchy name
-  (Agatha the Banshee, Edgar the Ghoul), and copies the ready-made ask with their
-  name in it: "Hi, I'm <name>. I filed support ticket HC-666...". They paste it into
-  BurritoBot, which reads the ticket with `read_support_ticket` and deploys
-  `joker-<their-name>`. Project the wall,
+- **Play (3 min):** the presenters introduce HC-666 themselves; the desk no longer
+  hands out an ask (#764). Each attendee's chat page has given them a generated
+  witchy name (Agatha the Banshee, Edgar the Ghoul) and sends it with every question
+  (#762). They ask BurritoBot "What's the status of my support ticket HC-666?", and it
+  reads the ticket with `read_support_ticket` and deploys `joker-<their-name>`. Project the wall,
   `https://support.burritobot.co/wall`, where every Joker shows as it
   lands; each attendee also sees their own at `/me`. Room Jokers run tiny and scale
   to zero after five minutes (#685). They may also file their own ticket and try

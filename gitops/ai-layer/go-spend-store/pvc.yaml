@@ -1,0 +1,12 @@
+# ABOUTME: The Go guard-proxy's spend store volume (#751), so the bbolt file outlives a pod replacement.
+# ABOUTME: Default StorageClass (gp3, infra/gp3-storageclass.yaml), as student-work uses; 1Gi is far more than a tally.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: guard-proxy-spend
+  labels: { app.kubernetes.io/name: guard-proxy }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
