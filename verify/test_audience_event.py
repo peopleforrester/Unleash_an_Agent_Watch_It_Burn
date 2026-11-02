@@ -70,7 +70,7 @@ check("an event URL replaces the button's href", "if(fb&&evfb)fb.href=evfb;" in 
 # The survey belongs to a third party. A student's email in its query string is a leak, not a feature.
 check("cluster and user are NOT appended to an event URL", "if(fb&&!evfb)fb.href+=" in init)
 check("the workshop default is still /quick in the markup",
-      re.search(r'id="fbbtn"[^>]*href="https://feedback\.agenticburn\.com/quick\?', PAGE) is not None)
+      re.search(r'id="fbbtn"[^>]*href="https://feedback\.burritobot\.co/quick\?', PAGE) is not None)
 check("the event URL is not hardcoded into the page", SURVEY not in PAGE)
 check("the button opens in a new tab, so the chat is still there afterwards",
       re.search(r'id="fbbtn"[^>]*target="_blank"', PAGE) is not None)

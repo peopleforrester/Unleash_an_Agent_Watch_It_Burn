@@ -86,7 +86,7 @@ OFF_TOPIC_TRIES = 3
 STOREFRONT = REPO / "gitops/ai-layer/web/burritbot.html"
 C3_FALLBACK = REPO / "challenges/c3-secret-grep/fallback.kubectl.sh"
 # The lab's own C1 proof (lab.html, Challenge 1): curl from the pod BurritoBot's tools run in, six seconds.
-BEACON = "https://agenticburn.com/beacon"
+BEACON = "https://beacon.burritobot.co/beacon"
 C1_CHECK = ["-n", "agent", "exec", "deploy/workshop-mcp", "-c", "shim", "--",
             "curl", "-s", "-m", "6", "-o", "/dev/null", "-w", "%{http_code}", BEACON]
 # C2: the lab's villain image, created as the agent's ServiceAccount, server-side dry run so nothing lands.

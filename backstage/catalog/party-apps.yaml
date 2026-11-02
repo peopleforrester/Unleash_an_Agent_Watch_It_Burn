@@ -1,5 +1,5 @@
 # ABOUTME: The five *-party demo apps: ordinary neighbours that share the cluster with BurritoBot. Each is
-# ABOUTME: nginx serving one animated page from a ConfigMap, at <animal>-<cluster>.agenticburn.com.
+# ABOUTME: nginx serving one animated page from a ConfigMap, in-cluster only since #651 retired their hosts.
 apiVersion: backstage.io/v1alpha1
 kind: System
 metadata:
@@ -17,7 +17,7 @@ kind: Component
 metadata:
   name: unicorn-party
   title: Unicorn Party
-  description: One animated page, served by nginx at unicorn-<cluster>.agenticburn.com.
+  description: One animated page, served by nginx inside the cluster.
   annotations:
     backstage.io/kubernetes-label-selector: app=demo-app-unicorn
     backstage.io/kubernetes-namespace: apps
@@ -34,7 +34,7 @@ kind: Component
 metadata:
   name: hedgehog-party
   title: Hedgehog Party
-  description: One animated page, served by nginx at hedgehog-<cluster>.agenticburn.com.
+  description: One animated page, served by nginx inside the cluster.
   annotations:
     backstage.io/kubernetes-label-selector: app=demo-app-hedgehog
     backstage.io/kubernetes-namespace: apps
@@ -51,7 +51,7 @@ kind: Component
 metadata:
   name: wombat-party
   title: Wombat Party
-  description: One animated page, served by nginx at wombat-<cluster>.agenticburn.com.
+  description: One animated page, served by nginx inside the cluster.
   annotations:
     backstage.io/kubernetes-label-selector: app=demo-app-wombat
     backstage.io/kubernetes-namespace: apps
@@ -68,7 +68,7 @@ kind: Component
 metadata:
   name: spider-party
   title: Spider Party
-  description: One animated page, served by nginx at spider-<cluster>.agenticburn.com.
+  description: One animated page, served by nginx inside the cluster.
   annotations:
     backstage.io/kubernetes-label-selector: app=demo-app-spider
     backstage.io/kubernetes-namespace: apps
@@ -85,7 +85,7 @@ kind: Component
 metadata:
   name: mantis-shrimp-party
   title: Mantis Shrimp Party
-  description: One animated page, served by nginx at mantis-shrimp-<cluster>.agenticburn.com.
+  description: One animated page, served by nginx inside the cluster.
   annotations:
     backstage.io/kubernetes-label-selector: app=demo-app-mantis-shrimp
     backstage.io/kubernetes-namespace: apps

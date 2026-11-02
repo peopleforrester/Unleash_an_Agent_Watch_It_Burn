@@ -55,11 +55,10 @@ kind: System
 metadata:
   name: provisioning
   title: Provisioning (external)
-  description: Hands each attendee a cluster and its logins. Runs on Railway, outside every cluster.
+  description: >-
+    Hands each attendee a cluster and its logins, and collects Challenge 1's beacon. Runs on Railway, outside
+    every cluster. Its own page is retired; the beacon answers at beacon.burritobot.co.
   tags: [external, railway]
-  links:
-    - url: https://provisioning.agenticburn.com
-      title: provisioning.agenticburn.com
 spec:
   owner: workshop-crew
   domain: watch-it-burn-workshop
@@ -74,9 +73,6 @@ metadata:
     github.com/project-slug: peopleforrester/provisioning-agenticburn
     backstage.io/source-location: url:https://github.com/peopleforrester/provisioning-agenticburn
   tags: [external, railway, flask]
-  links:
-    - url: https://provisioning.agenticburn.com
-      title: provisioning.agenticburn.com
 spec:
   type: website
   lifecycle: production
@@ -93,8 +89,8 @@ metadata:
     through it.
   tags: [external, railway]
   links:
-    - url: https://agenticburn.com
-      title: agenticburn.com
+    - url: https://burritobot.co
+      title: burritobot.co
 spec:
   owner: workshop-crew
   domain: watch-it-burn-workshop
@@ -105,7 +101,7 @@ metadata:
   name: apex-router
   title: Apex router
   description: >-
-    Caddy on Railway. Maps <name>.agenticburn.com to that cluster's console load balancer and passes the
+    Caddy on Railway. Maps <name>.burritobot.co to that cluster's console load balancer and passes the
     Host header through, which is how <service>-<cluster> hostnames such as this portal's reach the right
     service.
   annotations:

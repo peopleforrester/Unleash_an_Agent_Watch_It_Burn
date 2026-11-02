@@ -57,7 +57,7 @@ const step1 = el('div', 'step c1').append(h1, hint1, sol1, cmdT, cmdC);
 const hR = el('div', 'h').append(el('div', 'num', { textContent: '↻' }));
 const stepR = el('div', 'step').append(hR);
 stepR.attrs['data-lab'] = 'reset';
-const fb = el('a', '', { href: 'https://feedback.agenticburn.com/quick?context=Challenges&page=3&cluster=bane-agatha&user=a%40b.c' });
+const fb = el('a', '', { href: 'https://feedback.burritobot.co/quick?context=Challenges&page=3&cluster=bane-agatha&user=a%40b.c' });
 
 const intervals = [];
 const posts = [];

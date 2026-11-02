@@ -174,7 +174,9 @@ nxt = next((h for h in heads if h.start() > walk.start()), None)
 seg = ros[walk.start():nxt.start() if nxt else len(ros)]
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 shared = re.search(r'SHARED_ADMIN_HOST="([a-z0-9.-]+)"', fleet).group(1)
-url = f"https://grafana-{shared}/d/{dash['uid']}"
+# The run-of-show names the burritobot.co twin, the domain the presenters are shown (#651).
+twin = re.search(r'WIB_TWIN_DOMAIN="([a-z0-9.-]+)"', fleet).group(1)
+url = f"https://grafana-{shared.split('.', 1)[0]}.{twin}/d/{dash['uid']}"
 check(f"it names {url}, the presenters' shared cluster", url in seg)
 check("the console routes grafana-<cluster> to Grafana",
       "grafana-[a-z0-9-]+" in (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8"))

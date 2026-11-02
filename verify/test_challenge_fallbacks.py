@@ -525,7 +525,7 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, out
         p.write_text(src)
         p.chmod(0o755)
     (work / "fixture.json").write_text(json.dumps({
-        "beacon": _beacon, "view": "https://provisioning.agenticburn.com/beacon/view",
+        "beacon": _beacon, "view": "https://beacon.burritobot.co/beacon/view",
         "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED, "refused": REFUSED,
         "gateway": EVIL_URL, "fake_gateway": FAKE_URL, "c7_config": C7_CONFIG, "open": C7_OPEN,
         "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS, "fake_agent": FAKE_AGENT_URL,

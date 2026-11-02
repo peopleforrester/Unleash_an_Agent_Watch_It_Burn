@@ -28,7 +28,7 @@ import subprocess
 import sys
 from collections import Counter
 
-BEACON = "https://agenticburn.com/beacon"
+BEACON = "https://beacon.burritobot.co/beacon"
 
 # Written to span the styles a room of fifty will actually try. None is our canned prompt, and none was
 # reverse-engineered from the system prompt: that is the whole point of the measurement.

@@ -74,13 +74,14 @@ for page in ("kubecon.html", "brief.html"):
     check(f"{page} shows attackme.burritobot.co", "attackme.burritobot.co" in v)
 
 print("== the instructor console at start.burritobot.co can read each cluster ==")
-# The console polls /cost and /prompts cross-origin; the guard-proxy answers CORS only for CONSOLE_ORIGIN, which
-# defaults to start.agenticburn.com. Walked 2026-10-29: start.burritobot.co showed both clusters down and $0.
+# The console polls /cost and /prompts cross-origin; the guard-proxy answers CORS only for CONSOLE_ORIGIN.
+# Walked 2026-10-29, with start.agenticburn.com alone in it: start.burritobot.co showed both clusters down and $0.
+# Both domains serve start, so both are listed.
 docs = list(yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()))
 gp = next(d for d in docs if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
 env = {e["name"]: e.get("value") for c in gp["spec"]["template"]["spec"]["containers"] for e in c.get("env", [])}
-check("guard-proxy sets CONSOLE_ORIGIN to https://start.burritobot.co",
-      env.get("CONSOLE_ORIGIN") == "https://start.burritobot.co", str(env.get("CONSOLE_ORIGIN")))
+check("guard-proxy sets CONSOLE_ORIGIN to start on both domains, burritobot.co first",
+      env.get("CONSOLE_ORIGIN") == "https://start.burritobot.co,https://start.agenticburn.com", str(env.get("CONSOLE_ORIGIN")))
 import importlib.util, os  # noqa: E401,E402
 os.environ["CONSOLE_ORIGIN"] = str(env.get("CONSOLE_ORIGIN"))
 spec = importlib.util.spec_from_file_location("guard_proxy_twin", REPO / "gitops/ai-layer/guard-proxy/proxy.py")
@@ -94,7 +95,36 @@ class _Req:
 
 
 check("the proxy allows the console's origin", proxy._origin_allowed(_Req("https://start.burritobot.co")))
+check("and the console's agenticburn.com twin", proxy._origin_allowed(_Req("https://start.agenticburn.com")))
 check("the proxy still refuses a foreign origin", not proxy._origin_allowed(_Req("https://evil.example")))
+
+print("== no page a viewer opens shows agenticburn (#651's done line) ==")
+# Every kept host answers on burritobot.co (the prompt wall, the feedback form, the roster, and since question 877
+# the C1 beacon), so a page that still shows agenticburn is showing the room the old domain. Comments and code are
+# not shown; what is left of the markup is.
+for page in ("burritbot.html", "lab.html", "kubecon.html", "brief.html", "platform.html", "links.html"):
+    v = visible((WEB / page).read_text())
+    left = sorted(set(re.findall(r"[a-z0-9./-]*agenticburn[a-z0-9./-]*", v, re.I)))
+    check(f"{page} shows no agenticburn", not left, str(left))
+for page, host, link in (("burritbot.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("lab.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("platform.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("kubecon.html", "the prompt wall", 'href="https://prompts.burritobot.co"'),
+                         ("kubecon.html", "the C1 beacon", 'href="https://beacon.burritobot.co/beacon"'),
+                         ("brief.html", "the C1 beacon", 'href="https://beacon.burritobot.co/beacon"')):
+    check(f"{page} links {host} on burritobot.co", link in (WEB / page).read_text())
+
+print("== the Backstage catalog a viewer browses names no agenticburn host ==")
+# Repo names (guard-proxy-agenticburn and the rest) are out of #651's scope; hostnames are not.
+for f in sorted((REPO / "backstage/catalog").glob("*.yaml")):
+    hosts = sorted(set(re.findall(r"[a-z0-9<>-]*\.?agenticburn\.com[a-z0-9/]*", f.read_text())))
+    check(f"backstage/catalog/{f.name} names no agenticburn.com host", not hosts, str(hosts))
+
+print("== the terminal's catalogue prints burritobot.co addresses ==")
+for f in ("gitops/ai-layer/web-terminal/entrypoint.sh", "images/web-terminal/entrypoint.sh"):
+    src = (REPO / f).read_text()
+    check(f"{f} turns the agenticburn.com identity into its burritobot.co twin",
+          '[[ "${_h}" == *.agenticburn.com ]] && _h="${_h%.agenticburn.com}.burritobot.co"' in src)
 
 print()
 if failures:

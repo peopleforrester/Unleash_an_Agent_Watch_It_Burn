@@ -75,9 +75,9 @@ check "deletes the guard-proxy pod by its selector, in ns agent, with an explici
   'grep -q -- "kubectl --context $(ctx_of "${C}") -n agent get pods -l app.kubernetes.io/name=guard-proxy" "${CALLS}" && grep -q "kubectl --context $(ctx_of "${C}") -n agent delete pod guard-proxy-old --wait=false" "${CALLS}"'
 check "runs in the roster's account" 'grep "delete pod" "${CALLS}" | grep -q "AWS_PROFILE=accen-dev"'
 check "a pod delete, never a rollout restart or a spec edit (Argo CD owns the spec)" '! grep -qE "rollout|set env|patch|annotate|scale" "${CALLS}"'
-check "reads the counter the room sees, on attackme" 'grep -q "^curl https://attackme.agenticburn.com/cost$" "${CALLS}"'
+check "reads the counter the room sees, on attackme" 'grep -q "^curl https://attackme.burritobot.co/cost$" "${CALLS}"'
 check "the delete comes before the read" 'grep -n "delete pod\|^curl " "${CALLS}" | head -1 | grep -q "delete pod"'
-check "says the counter is at zero, with the figure" 'grep -q "counter at zero on https://attackme.agenticburn.com/cost (\$0.0000 over 0 requests)" "${T}/stderr"'
+check "says the counter is at zero, with the figure" 'grep -q "counter at zero on https://attackme.burritobot.co/cost (\$0.0000 over 0 requests)" "${T}/stderr"'
 
 echo "== the old pod answering for a moment is waited out, not taken as the reset =="
 replies "${SPENT}" "${ZERO}"
@@ -114,7 +114,7 @@ check "no name is a usage error" '[[ "${rc}" -ne 0 ]] && grep -q "usage: reset-b
 echo "== an admin cluster is read on its own host =="
 replies "${ZERO}"
 KCTX="$(ctx_of "${ADMIN}")" src "cmd_reset_bot ${ADMIN}"; rc=$?
-check "michael-admin reads burritobot-private.agenticburn.com/cost" '[[ "${rc}" -eq 0 ]] && grep -q "^curl https://burritobot-private.agenticburn.com/cost$" "${CALLS}"'
+check "michael-admin reads burritobot-private.burritobot.co/cost" '[[ "${rc}" -eq 0 ]] && grep -q "^curl https://burritobot-private.burritobot.co/cost$" "${CALLS}"'
 
 echo "== it clears what the bot deployed, and nothing Argo CD owns (2026-11-01) =="
 # The 2026-10-31 load replay left promo-mascot and two loyalty-rewards Deployments on attackme, made by the bot
@@ -153,6 +153,6 @@ check "Night Before resets the community cluster" 'grep -q "fleet.sh reset-bot w
 check "the reset comes after the probe, which spends on attackme" \
   '[[ "$(grep -n "kubecon_probe.py community" <<<"${night}" | head -1 | cut -d: -f1)" -lt "$(grep -n "reset-bot" <<<"${night}" | head -1 | cut -d: -f1)" ]]'
 check "the run-through record says to reset before each run" 'grep -q "fleet.sh reset-bot watch-it-burn-community" <<<"${record}"'
-check "the counter is read back at zero in the run-of-show" 'grep -q "https://attackme.agenticburn.com/cost" <<<"${ros}"'
+check "the counter is read back at zero in the run-of-show" 'grep -q "https://attackme.burritobot.co/cost" <<<"${ros}"'
 check "the run-of-show never restarts guard-proxy with rollout restart" '! grep -qE "rollout restart[^|]*guard-proxy" <<<"${ros}"'
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

@@ -99,6 +99,32 @@ check "it refuses" '[[ "${out}" == *rc=1* ]] && grep -q REFUSING "${T}/log"'
 check "it names the roster host it would drop" 'grep -q -- "- burritobot-private.agenticburn.com" "${T}/log"'
 check "and leaves the table as it was" 'diff -q <(printf "%s" "${old}") "${T}/apex/routes.map" >/dev/null'
 
+echo "== the service hosts #651 retired leave the table without reading as a shrink =="
+# The table live before #651 step 4: both clusters with all nine service prefixes and the two C6 hosts, on both domains.
+live=$'# old\n'
+for d in burritobot.co agenticburn.com; do
+  for h in attackme burritobot-private; do
+    live+="${h}.${d}  old:443"$'\n'
+    for s in grafana argocd kagent backstage hedgehog wombat unicorn spider mantis-shrimp maintenance-shell support; do
+      live+="${s}-${h}.${d}  old:443"$'\n'
+    done
+  done
+done
+fixture "${live}"
+out="$(routes roster)"
+check "it is not refused" '[[ "${out}" == *rc=0* ]] && ! grep -q REFUSING "${T}/log"'
+check "the table is the roster with Grafana, Argo CD and Backstage as its only service hosts" \
+  'diff <(table_hosts) <(expected) >/dev/null && ! grep -qE "^(kagent|hedgehog|wombat|unicorn|spider|mantis-shrimp)-" "${T}/apex/routes.map"'
+check "that is twenty-four hosts, down from forty-eight" '[[ "$(table_hosts | wc -l)" -eq 24 ]]'
+
+echo "== a burritobot.co host that would go missing is refused like an agenticburn.com one =="
+fixture "${live}"
+out="$(NO_LB=watch-it-burn-private routes roster)"
+check "it refuses, and names the burritobot.co host" \
+  '[[ "${out}" == *rc=1* ]] && grep -q -- "- burritobot-private.burritobot.co" "${T}/log"'
+check "it names a kept service host it would drop, not a retired one" \
+  'grep -q -- "- grafana-burritobot-private.burritobot.co" "${T}/log" && ! grep -q -- "- kagent-" "${T}/log"'
+
 echo "== an unknown scope is a usage error =="
 fixture $'# old\n'
 out="$(routes pool)"
@@ -138,7 +164,7 @@ check "the Night Before writes the roster table and checks the router before che
    (( $(line_of "./fleet.sh routes roster") < $(line_of "./fleet.sh router-check") &&
       $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls attackme") ))'
 check "the C1 beat names the beacon view by URL" \
-  'grep -A3 "^- C1 exfiltrate" "${ROS}" | grep -qF "https://agenticburn.com/beacon/view"'
+  'grep -A3 "^- C1 exfiltrate" "${ROS}" | grep -qF "https://beacon.burritobot.co/beacon/view"'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }
