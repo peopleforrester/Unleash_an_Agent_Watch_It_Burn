@@ -426,6 +426,112 @@ def _shrink_room_joker(obj: dict, name: str) -> None:
             c["resources"] = json.loads(json.dumps(JOKER_RESOURCES))
 
 
+# The public images the room can ask for by name (#773). In the breakout the room has only phones, so nobody types a
+# registry path: "deploy nginx" or "run busybox" is enough, and deploy_app puts the real image in. Each is a public
+# image off the public internet, on Amazon's public registry, public.ecr.aws, so nothing comes from Docker Hub (#714).
+# Each is pinned by its index digest (images.lock declares each one, verify/test_public_images.py holds the two
+# together).
+# restrict-image-registries does not allow public.ecr.aws, so where it is at Deny these are refused at admission, the
+# Challenge 2 "the platform says no" moment. 2048 is the game AWS's EKS tutorials deploy, from an account nobody here
+# knows: the lesson is the untrusted source (images/villains/README.md). A shell image with nothing to run gets a
+# sleep, so its pod stays up.
+PUBLIC_IMAGES = {
+    "busybox": "public.ecr.aws/docker/library/busybox:1.38.0"
+               "@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4",
+    "alpine": "public.ecr.aws/docker/library/alpine:3.23"
+              "@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63",
+    "nginx": "public.ecr.aws/docker/library/nginx:1.29-alpine"
+             "@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+    "httpd": "public.ecr.aws/docker/library/httpd:2.4-alpine"
+             "@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c",
+    "redis": "public.ecr.aws/docker/library/redis:8-alpine"
+             "@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537",
+    "2048": "public.ecr.aws/l6m2t8p7/docker-2048:latest"
+            "@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965",
+}
+# What else a person or a model calls them.
+PUBLIC_IMAGE_ALIASES = {"apache": "httpd", "docker-2048": "2048", "game-2048": "2048", "2048-game": "2048"}
+SHELL_IMAGES = ("busybox", "alpine")
+SHELL_COMMAND = ["sleep", "3600"]
+# A room deployment (an image from PUBLIC_IMAGES) runs one replica, as small as a room Joker but with room for nginx's
+# and httpd's workers, and is scaled to zero after JOKER_SCALE_DOWN_SECONDS as a room Joker is: one pod per
+# deployment, so a phone cannot fill the node (Michael, #773).
+ROOM_RESOURCES = {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "50m", "memory": "64Mi"}}
+SCALED_KINDS = ("Deployment", "StatefulSet", "ReplicaSet")
+_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")
+
+
+def _registry_and_repo(image: str) -> tuple[str, str]:
+    """An image reference's registry ("" when it names none, which is Docker Hub) and repository, tag and digest off."""
+    ref = image.strip().lower().split("@", 1)[0]
+    head, _, rest = ref.partition("/")
+    registry, repo = (head, rest) if rest and ("." in head or ":" in head or head == "localhost") else ("", ref)
+    last = repo.rsplit("/", 1)[-1]
+    if ":" in last:
+        repo = repo[: len(repo) - len(last)] + last.split(":", 1)[0]
+    return registry, repo
+
+
+def _public_image_name(image: str) -> str | None:
+    """The PUBLIC_IMAGES name an image asks for; "" for a Docker Hub image the list does not carry; None for any other.
+
+    A Docker Hub reference is read for its repository, so "nginx", "nginx:latest" and nginx under docker.io's
+    library/ all ask for nginx. The pinned image's own repository at any tag is that name too."""
+    registry, repo = _registry_and_repo(image)
+    if registry in _DOCKER_HUB:
+        repo = repo.removeprefix("library/")
+        name = PUBLIC_IMAGE_ALIASES.get(repo, repo)
+        return name if name in PUBLIC_IMAGES else ""
+    for name, pinned in PUBLIC_IMAGES.items():
+        if (registry, repo) == _registry_and_repo(pinned):
+            return name
+    return None
+
+
+def _resolve_public_images(obj: dict, what: str) -> list[str]:
+    """Put the pinned image in for every container that asks for a PUBLIC_IMAGES name, and return the names found.
+
+    Refuses a container that asks for a Docker Hub image the list does not carry, naming the list, so the model can
+    pick one. Any image with a registry of its own (ghcr.io/..., the villains included) is left exactly as written:
+    whether it may run is the cluster's call, which is the lesson."""
+    pod = _pod_spec(obj)
+    if not isinstance(pod, dict):
+        return []
+    found: list[str] = []
+    for key in ("initContainers", "containers"):
+        for c in pod.get(key) or []:
+            if not isinstance(c, dict) or not isinstance(c.get("image"), str) or not c["image"].strip():
+                continue
+            name = _public_image_name(c["image"])
+            if name is None:
+                continue
+            if not name:
+                _refuse(what, f"{c['image']} is a Docker Hub image, and the cantina does not pull from Docker Hub. "
+                              "The public images it pulls by name are " + ", ".join(PUBLIC_IMAGES) +
+                              ": put one of those names as the image")
+            c["image"] = PUBLIC_IMAGES[name]
+            if name in SHELL_IMAGES and not c.get("command") and not c.get("args"):
+                c["command"] = list(SHELL_COMMAND)
+            found.append(name)
+    return found
+
+
+def _shrink_room_deployment(obj: dict) -> None:
+    """One replica and tiny resources for a workload running a PUBLIC_IMAGES image."""
+    if obj.get("kind") in SCALED_KINDS and isinstance(obj.get("spec"), dict):
+        obj["spec"]["replicas"] = 1
+    for c in (_pod_spec(obj) or {}).get("containers") or []:
+        if isinstance(c, dict):
+            c["resources"] = json.loads(json.dumps(ROOM_RESOURCES))
+
+
+def _first_image(obj: dict) -> str:
+    for c in (_pod_spec(obj) or {}).get("containers") or []:
+        if isinstance(c, dict) and isinstance(c.get("image"), str):
+            return c["image"]
+    return ""
+
+
 def _status_message(body: str) -> str:
     """The API server's Status message, which names the policy that refused, rather than its JSON wrapper."""
     try:
@@ -435,13 +541,16 @@ def _status_message(body: str) -> str:
     return str(msg or body)
 
 
-def _report(name: str, ok: bool, detail: str) -> None:
-    """Tell the support desk what was deployed, for its wall and the visitor's /me. Best effort: a desk that does not
-    answer never changes what deploy_app returns."""
+def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> None:
+    """Tell the support desk what was deployed, for its wall, the visitor's /me and the deployments page (#773): the
+    image it runs and who asked for it. Best effort: a desk that does not answer never changes what deploy_app
+    returns."""
     def send() -> None:
         try:
+            body = {"name": name, "ok": ok, "detail": detail[:400], "image": image[:300],
+                    "requested_by": requested_by[:80]}
             req = urllib.request.Request(f"{TICKET_SITE_URL}/landed", method="POST",
-                                         data=json.dumps({"name": name, "ok": ok, "detail": detail[:400]}).encode(),
+                                         data=json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=3).read()
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -462,8 +571,11 @@ def _refuse(what: str, why: str) -> None:
 
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
-                      "Containers without CPU or memory limits get the cantina's defaults.")
-def deploy_app(manifest: str = "") -> str:
+                      "Containers without CPU or memory limits get the cantina's defaults. For a common public app, "
+                      "the image can be just its name: " + ", ".join(PUBLIC_IMAGES) + "; the cantina pulls that "
+                      "public image itself. requested_by is the name the person chatting with you gave (for example "
+                      "\"Edgar the Kelpie\"), so the cantina's deployments page credits them.")
+def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     """REAL server-side apply of a single namespaced resource — C2 (the Joker/grill-zone image)."""
     # Each refusal before the apply raises too, for the reason the refused apply below does. Returned as text, a
     # truncated manifest's parse error read as a success and the model told the room its Joker was deployed when
@@ -486,16 +598,21 @@ def deploy_app(manifest: str = "") -> str:
         _refuse(f"{kind}", "metadata.name is required")
     ns = _ns()
     obj.setdefault("metadata", {})["namespace"] = ns
+    room = _resolve_public_images(obj, f"{kind}/{name}")
     _default_limits(obj)
     _shrink_room_joker(obj, name)
+    if room:
+        _shrink_room_deployment(obj)
     _stamp_workload(obj, name)
     base, plural = _resource_for(api_version, kind)
     if not plural:
         _refuse(f"{kind}/{name}", f"unknown resource for apiVersion={api_version} kind={kind}")
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
-    _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}")
-    if code in (200, 201) and kind == "Deployment" and name.startswith(JOKER_PREFIX):
+    _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}",
+            image=_first_image(obj), requested_by=str(requested_by or "").strip())
+    if code in (200, 201) and ((room and kind in SCALED_KINDS)
+                               or (kind == "Deployment" and name.startswith(JOKER_PREFIX))):
         t = threading.Timer(JOKER_SCALE_DOWN_SECONDS, _scale_to_zero, args=(base, ns, plural, name))
         t.daemon = True
         t.start()

@@ -46,3 +46,14 @@ postgres ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd5
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.
 laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard -
+# Challenge 2's public images (#773): deploy_app's PUBLIC_IMAGES in gitops/ai-layer/workshop-mcp-server.py, the images
+# the room asks for by plain name. Each is the index digest public.ecr.aws served on 2026-11-02, read anonymously;
+# docker/library/ is Docker's official images on Amazon's public registry, whose digests equal Docker Hub's. 2048 is
+# the image AWS's EKS load-balancer tutorials deploy, in an ECR Public account nobody here knows: the repository it
+# says it is built from is named, and nothing proves that. verify/test_public_images.py holds these to PUBLIC_IMAGES.
+public.ecr.aws/docker/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 upstream:https://github.com/docker-library/busybox -
+public.ecr.aws/docker/library/alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 upstream:https://github.com/alpinelinux/docker-alpine -
+public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de upstream:https://github.com/nginx/docker-nginx -
+public.ecr.aws/docker/library/httpd:2.4-alpine@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c upstream:https://github.com/docker-library/httpd -
+public.ecr.aws/docker/library/redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 upstream:https://github.com/docker-library/redis -
+public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 upstream:https://github.com/alexwhen/docker-2048 -

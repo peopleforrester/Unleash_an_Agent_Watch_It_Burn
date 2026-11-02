@@ -84,7 +84,7 @@ def server(public_host: str):
     # deploy_app's report to the support desk runs on a daemon thread that looks up fake-ticket. Left running, it was
     # still in getaddrinfo when the interpreter finalized, and about one run in three ended in a segfault or abort
     # after every check had passed (#441). What the desk is told is test_room_jokers.py's, against a desk of its own.
-    m._report = lambda name, ok, detail: None
+    m._report = lambda *a, **kw: None
     return m
 
 
@@ -233,7 +233,7 @@ _, out = deploy(m, {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "mai
 check("a bare Pod gets the label on itself", out.get("metadata", {}).get("labels") == want_sel)
 _, out = deploy(m, {"apiVersion": "batch/v1", "kind": "CronJob", "metadata": {"name": "nightly"},
                     "spec": {"schedule": "* * * * *", "jobTemplate": {"spec": {"template": {
-                        "spec": {"containers": [{"name": "c", "image": "x"}]}}}}}})
+                        "spec": {"containers": [{"name": "c", "image": site.C6_IMAGE}]}}}}}})
 check("a CronJob's job template gets it", out.get("spec", {}).get("jobTemplate", {}).get("spec", {})
       .get("template", {}).get("metadata", {}).get("labels") == {m.WORKLOAD_LABEL: "nightly"})
 _, out = deploy(m, {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "x"}, "spec": {"ports": []}})
@@ -285,8 +285,8 @@ check("that page loads nothing from anywhere else", "<link" not in nothing and "
 
 print("== 5. fleet.sh publishes the host ==")
 hosts = re.search(r'^readonly WIB_VILLAIN_HOSTS="([^"]+)"', FLEET, re.M)
-check("WIB_VILLAIN_HOSTS names the ticket's Deployment and the ticket desk, nothing else",
-      bool(hosts) and hosts.group(1).split() == [site.C6_DEPLOYMENT, "support"])
+check("WIB_VILLAIN_HOSTS names the ticket's Deployment, the ticket desk and the deployments page (#773), nothing else",
+      bool(hosts) and hosts.group(1).split() == [site.C6_DEPLOYMENT, "support", "deployments"])
 check("emit_service_hosts writes a row for it beside the service hosts",
       "for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS}; do" in FLEET)
 emitted = subprocess.run(["bash", "-c", 'eval "$(sed -n "/^readonly WIB_SERVICE_HOSTS=/,/^}/p" "$1")"; '
