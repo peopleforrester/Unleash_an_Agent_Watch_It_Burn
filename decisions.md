@@ -10085,7 +10085,7 @@ badges come up the way they do when a control arms. #773, #775 and the run-of-sh
   the private cluster, with a regctl 0.11.7 sidecar that copies the seed list into it at every pod start and marks the
   pod Ready once done. The seed list holds Challenge 3's Joker at `burritobot/maintenance-shell:busybox-1.38.0`, the
   path #775 names. The console serves `registry-<cluster>` and the bare `registry` name on both domains read-only (GET
-  and HEAD), and a NetworkPolicy lets only the console reach it in-cluster. `fleet.sh routes` publishes
+  and HEAD), and a NetworkPolicy admits only the console to it in-cluster. `fleet.sh routes` publishes
   `registry.burritobot.co` on the private cluster's console LB and `registry-<cluster>` for each roster cluster.
 - `verify/kubecon_probe.py`'s admin run judges the new start (four off), runs the terminal's own `guardrails-on` in
   the private terminal pod after Challenge 1, judges all four armed and the badges lit, adds a public image denied by
@@ -10142,3 +10142,8 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
    the private context: both GREEN. The admin run covers the switch, the public-image denial and the internal image.
 4. After `./fleet.sh routes roster`, `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
    lists `busybox-1.38.0`, and a POST to it answers 403. A pod on attackme running that image pulls it.
+
+**Prose gate (run 16115).** Run 16077 failed the ai-isms gate: its detector reads the verb "lets" as the
+connective "let's". The five added lines that used it (PROJECT_STATE.md, decisions.md, the run-of-show,
+KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
+behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.

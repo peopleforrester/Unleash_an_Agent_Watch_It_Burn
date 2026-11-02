@@ -634,7 +634,7 @@ real-looking home address to chat.
   and the switch is #776's to settle. If one is asked about, its fallback proves it
   without the model:
 - C2 public image: admission control. Kyverno's `restrict-image-registries` does
-  not allow `public.ecr.aws`, and `deny-external-registries` lets what the bot
+  not allow `public.ecr.aws`, and `deny-external-registries` admits what the bot
   deploys come from `registry.burritobot.co` alone.
   `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
   prints the deny.

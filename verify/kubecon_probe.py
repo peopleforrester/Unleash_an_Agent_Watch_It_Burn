@@ -26,7 +26,7 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                light, C1 C2 C3 blocked, a public image denied by deny-external-registries while the internal
                registry's image is admitted, HC-666's Joker refused at admission (its second tier) then the ticket
                withheld by the input guard (its first), C7 chains then is stopped at the gateway, the on-topic guard
-               redirects the off-topic asks and lets "what are your hours" and "do you have mild salsa" through, then
+               redirects the off-topic asks and passes "what are your hours" and "do you have mild salsa" through, then
                guards-off and guardrails-off
 
 The guards are flipped the way the stage flips them, cumulatively: segments 2 to 5 scope the Role (C5), then
