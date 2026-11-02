@@ -9604,3 +9604,50 @@ health.
 **Not yet run on a cluster.** Unchanged: points 1 and 2 and the attendee half of point 4 on a new attendee cluster,
 which waits on Michael's go for about $1, and point 3 and the admin half of point 4 on watch-it-burn-private. The
 same attendee bring-up also covers the `verify/test_service_hosts_live.py` run the #668 entry owes.
+## 2026-11-02 · #775 · First dispatch: Challenge 3's internal-registry Joker waits on #774, which is being built now
+
+**No code changed.** Hecaton run 16043 is the first dispatch of #775, which Michael approved as proposed on
+2026-11-02 (issue comment 6565190035). The approval names #774 (the Kubernetes guardrails switch, Kyverno denying
+external registries, and `registry.burritobot.co`) and #773 (Challenge 2's public-image deploys and
+`deployments.burritobot.co`) as dependencies. At base `9e7070d` neither has landed: both issues are open and labeled
+agent-running, nothing in the tree names `registry.burritobot.co` or `deployments.burritobot.co`, and #773's draft
+(run 15977) sits unmerged on hecaton's `agent/773-15977`.
+
+**Why nothing of #775 is built ahead of #774.** Each approved item reads an output #774 has not produced yet:
+- Item 1, the hidden paragraph asking for `registry.burritobot.co/burritobot/maintenance-shell`: the registry does not
+  exist, `restrict-image-registries` does not trust it, and how an image gets into it is #774's open "mirror or keep
+  a platform list" question. Pointing HC-666 (`ROOM_PAYLOAD` in `gitops/ai-layer/ticket_site.py`) at it today would
+  make every Joker an ImagePullBackOff on attackme and an admission refusal on the private cluster.
+- Item 3, the two Joker-page lines in `images/villains/joker-web/www/index.html`: on staging today they are still
+  true on every cluster (the image is under the refused `festival-ops/` path), and they stop being true only where
+  #774's switch is on and the image comes from the internal registry.
+- Item 4, least privilege taking `create` on Deployments away from the bot: the `workshop-agent` Role in
+  `gitops/ai-layer/resources.yaml` is replaced wholesale by `guard-rbac-on` (c5-scoped-role.yaml) and its reset
+  (c8-broad-role.yaml), and #774 folds that toggle into its one guardrails-on command. A Deployment-less Role written
+  now would have to be redone against whatever #774 leaves, and both runs would edit the same Role copies and
+  `web-terminal/entrypoint.sh` at once.
+- Item 2's witch-name row on `deployments.burritobot.co` is #773's page and its `requested_by` on `deploy_app`.
+
+**Build map for the run after #774 lands** (re-check each path with `verify/draft-drift.sh`-style care, since #774
+and #773 will both move these):
+- `gitops/ai-layer/ticket_site.py`: a KubeCon-only image for `ROOM_PAYLOAD` (HC-666), keeping `C6_IMAGE` and HC-7731
+  as the 2-hour workshop's; the payload's last sentence names the URL the person opens.
+- `images/villains/build.sh` and `images.lock`: the Joker pushed to `registry.burritobot.co/burritobot/maintenance-shell`
+  by whatever route #774 gives the internal registry, pinned by digest.
+- `images/villains/joker-web/www/index.html` lines 21 and 23-24, on the breakout image only, so the workshop's
+  festival-ops Joker keeps the admission line that is true for it.
+- A least-privilege toggle (Role without `deployments` `create`) beside `guard-input-on` in both
+  `gitops/ai-layer/web-terminal/entrypoint.sh` and `images/web-terminal/entrypoint.sh`, with its off twin, and
+  `guard-admission-on` dropped from segment 4 of `facilitation/kubecon-na-2026-run-of-show.md` and from
+  `gitops/ai-layer/web/kubecon.html`.
+- Shared versus per-person Joker URL (item 2, left to the builder with per-person recommended): today one Service,
+  `maintenance-shell` (`resources.yaml` line 689), selects every Joker and `console.conf` publishes it as
+  `maintenance-shell-<cluster>`, while the desk already serves each person's own deployments at
+  `support.burritobot.co/me`. Per-person means a route per witch slug (a Service per Joker that `deploy_app` creates,
+  or a path route on the console), so weigh that cost once #773's wall exists.
+- Tests that pin the current image or the admission tier: `verify/test_fake_ticket.py`, `test_room_jokers.py`,
+  `test_c6_joker_public.py`, `test_c6_villain_endpoint.py`, `test_kyverno_cel_policies.py`, `test_kubecon_probe.py`,
+  `test_instructor_brief.py`, `test_guard_commands_echo.py`.
+
+**Not yet run on a cluster.** Nothing for #775 yet; its live check is the KubeCon probe's Challenge 3 beat
+(`verify/test_kubecon_probe.py` through `verify/agent_probe.py`) on both KubeCon clusters with the guardrails switch on.
