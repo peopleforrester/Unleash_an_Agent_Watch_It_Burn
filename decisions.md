@@ -9052,3 +9052,37 @@ on 11-12. The commands are the ones in the 2026-11-01 entry, once with `C=watch-
 
 **Not yet run on a cluster:** `verify/test_console_no_toggle_live.py` on watch-it-burn-private and
 watch-it-burn-community. Each run should print ten PASS lines and `All live /toggle exposure checks passed.`
+## 2026-11-02 · #704 · Re-dispatch: step 3 of the 2026-10-31 run sheet must now pass CONTEXT, and the cold build waits on Michael's go
+
+**Context.** Run 15840 is #704's first dispatch since run 13379's entry above merged. Like that run, it has no AWS
+profile and no kubeconfig, so it cannot build, time, check or tear down the local-inference cluster. The vllm entry
+in `platform-baseline.yaml` stays at `measured: false`: no number has been measured.
+
+**What moved on staging since the 2026-10-31 #704 entry.** #732 (entry above) made `infra/deploy-full-idp.sh` stop at
+once without `CONTEXT` (`: "${CONTEXT:?...}"`) and derive `CLUSTER_NAME` from it (`${CONTEXT##*cluster/}`). That
+entry's first bullet, that the script "never reads `CONTEXT`", no longer holds. Its step 3 sets `KUBECONFIG` and
+`CLUSTER_NAME` but not `CONTEXT`, so as written it now fails on the script's first line, before any clock is worth
+reading. The issue's own command, `CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference`, is now correct as
+long as `<ctx>` is the context of the isolated kubeconfig. The rest of the sheet still matches the tree:
+`fleet.sh up <name...>` provisions a named attendee cluster in `WIB_DEFAULT_ACCOUNT` (accen-dev), the attendee
+cluster module's default `instance_types` is `["t3.2xlarge"]`, `WIB_NO_BOOTSTRAP=1` still skips the bootstrap, the
+router and the ingest, and `gitops/manifests/vllm-qwen3/vllm-qwen3.yaml` still requests 4 CPU / 10Gi with limits
+6 CPU / 16Gi.
+
+**Not yet run on a cluster.** The sheet, corrected. A session with accen-dev, in us-west-2, the lab VPC applied and
+Michael's go for the spend (one t3.2xlarge node and its EKS control plane for about an hour), runs from
+`infra/terraform/fleet`:
+
+1. `WIB_NO_BOOTSTRAP=1 ./fleet.sh up watch-it-burn-attendee-099` (any attendee slot no pool row holds).
+2. `aws eks update-kubeconfig --kubeconfig /tmp/watch-it-burn-attendee-099.kubeconfig --name watch-it-burn-attendee-099 --region us-west-2 --profile accen-dev`,
+   then `CTX=$(KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig kubectl config current-context)`, which must end in
+   `cluster/watch-it-burn-attendee-099`.
+3. From the repo root, start the clock and run
+   `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig CONTEXT="$CTX" AWS_PROFILE=accen-dev REGION=us-west-2 bash infra/deploy-full-idp.sh local-inference`.
+   Stop the clock when `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig kubectl --context "$CTX" -n argocd get applications`
+   shows every Application Healthy.
+4. `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig CONTEXT="$CTX" python3 verify/local-inference-live.py`, which
+   must end with no FAIL and prints the vLLM pod's time from creation to Ready and its live footprint.
+5. Write step 3's wall-clock, step 4's time to Ready and footprint, and the requests into the vllm entry's `cost`, with
+   `measured: true`.
+6. `./fleet.sh down watch-it-burn-attendee-099`, then `./cleanup-log-groups.sh --delete`.
