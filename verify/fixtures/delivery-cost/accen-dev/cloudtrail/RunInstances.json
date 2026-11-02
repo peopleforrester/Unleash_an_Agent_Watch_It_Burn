@@ -1,0 +1,44 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:20:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"RunInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"minCount\": 1, \"maxCount\": 1}]}, \"launchTemplate\": {\"launchTemplateId\": \"lt-0fixture\", \"version\": \"1\"}}, \"responseElements\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0fixture00000001\", \"instanceType\": \"t3.2xlarge\", \"launchTime\": 0, \"instanceState\": {\"code\": 0, \"name\": \"pending\"}, \"tagSet\": {\"items\": [{\"key\": \"project\", \"value\": \"watch-it-burn\"}, {\"key\": \"event\", \"value\": \"devopsdays-portland-2026\"}, {\"key\": \"attendee\", \"value\": \"watch-it-burn-attendee-001\"}, {\"key\": \"eks:cluster-name\", \"value\": \"watch-it-burn-attendee-001\"}, {\"key\": \"eks:nodegroup-name\", \"value\": \"default-2026090715\"}]}}]}, \"ownerId\": \"111111111111\"}, \"eventID\": \"00000000-0000-0000-0000-000000000006\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000006",
+   "EventName": "RunInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-07T15:20:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:21:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"RunInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"minCount\": 1, \"maxCount\": 1}]}, \"launchTemplate\": {\"launchTemplateId\": \"lt-0fixture\", \"version\": \"1\"}}, \"responseElements\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0packt0000000001\", \"instanceType\": \"m5.large\", \"launchTime\": 0, \"instanceState\": {\"code\": 0, \"name\": \"pending\"}, \"tagSet\": {\"items\": [{\"key\": \"Workshop\", \"value\": \"packt\"}]}}]}, \"ownerId\": \"111111111111\"}, \"eventID\": \"00000000-0000-0000-0000-000000000007\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000007",
+   "EventName": "RunInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-07T15:21:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:22:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"RunInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"minCount\": 1, \"maxCount\": 1}]}, \"launchTemplate\": {\"launchTemplateId\": \"lt-0fixture\", \"version\": \"1\"}}, \"responseElements\": null, \"eventID\": \"00000000-0000-0000-0000-000000000008\", \"readOnly\": false, \"eventType\": \"AwsApiCall\", \"errorCode\": \"InsufficientInstanceCapacity\", \"errorMessage\": \"synthetic failure\"}",
+   "EventId": "00000000-0000-0000-0000-000000000008",
+   "EventName": "RunInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-07T15:22:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-10T00:20:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"RunInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"minCount\": 1, \"maxCount\": 1}]}, \"launchTemplate\": {\"launchTemplateId\": \"lt-0fixture\", \"version\": \"1\"}}, \"responseElements\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0kubecon00000001\", \"instanceType\": \"t3.2xlarge\", \"launchTime\": 0, \"instanceState\": {\"code\": 0, \"name\": \"pending\"}, \"tagSet\": {\"items\": [{\"key\": \"project\", \"value\": \"watch-it-burn\"}, {\"key\": \"event\", \"value\": \"kubecon-na-2026\"}, {\"key\": \"eks:cluster-name\", \"value\": \"watch-it-burn-attendee-001\"}]}}]}, \"ownerId\": \"111111111111\"}, \"eventID\": \"00000000-0000-0000-0000-000000000009\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000009",
+   "EventName": "RunInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-10T00:20:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

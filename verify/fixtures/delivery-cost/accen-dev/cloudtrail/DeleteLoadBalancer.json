@@ -1,0 +1,14 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-09T02:30:00Z\", \"eventSource\": \"elasticloadbalancing.amazonaws.com\", \"eventName\": \"DeleteLoadBalancer\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"loadBalancerArn\": \"arn:aws:elasticloadbalancing:us-west-2:111111111111:loadbalancer/net/k8s-agent-agentcon-0fixture/0123456789abcdef\"}, \"responseElements\": null, \"eventID\": \"00000000-0000-0000-0000-000000000017\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000017",
+   "EventName": "DeleteLoadBalancer",
+   "EventSource": "elasticloadbalancing.amazonaws.com",
+   "EventTime": "2026-09-09T02:30:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

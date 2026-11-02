@@ -1,0 +1,14 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:00:00Z\", \"eventSource\": \"eks.amazonaws.com\", \"eventName\": \"CreateCluster\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"222222222222\", \"requestParameters\": {\"name\": \"watch-it-burn-attendee-002\", \"tags\": {\"project\": \"watch-it-burn\", \"event\": \"devopsdays-portland-2026\", \"attendee\": \"watch-it-burn-attendee-002\"}}, \"responseElements\": {\"cluster\": {\"name\": \"watch-it-burn-attendee-002\"}}, \"eventID\": \"00000000-0000-0000-0000-000000000018\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000018",
+   "EventName": "CreateCluster",
+   "EventSource": "eks.amazonaws.com",
+   "EventTime": "2026-09-07T15:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

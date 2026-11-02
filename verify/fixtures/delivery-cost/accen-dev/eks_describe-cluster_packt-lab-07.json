@@ -1,0 +1,10 @@
+{
+ "cluster": {
+  "createdAt": "2026-06-01T10:00:00.000000+00:00",
+  "name": "packt-lab-07",
+  "status": "ACTIVE",
+  "tags": {
+   "Workshop": "packt"
+  }
+ }
+}

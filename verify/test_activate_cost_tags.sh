@@ -99,6 +99,7 @@ check "help never names workshop as the default key (#580)" '! grep -q "default:
 check "header comment names project, not workshop, as the default key (#580)" \
   '! grep -q "\"workshop\")" "${REPORT}" && grep -q "^# project=watch-it-burn) so all" "${REPORT}"'
 check "points at activate-cost-tags.sh" 'grep -q "activate-cost-tags.sh" <<<"${help}"'
+check "points at the member-account estimate (#392 ruling)" 'grep -q "delivery-cost-estimate.py" <<<"${help}"'
 
 echo
 echo "${pass} passed, ${fail} failed"

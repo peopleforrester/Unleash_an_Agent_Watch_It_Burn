@@ -1,0 +1,14 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:10:00Z\", \"eventSource\": \"bedrock.amazonaws.com\", \"eventName\": \"CreateInferenceProfile\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"222222222222\", \"requestParameters\": {\"inferenceProfileName\": \"watch-it-burn-attendee-002-haiku\", \"modelSource\": {\"copyFrom\": \"arn:aws:bedrock:us-west-2:222222222222:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0\"}, \"tags\": [{\"key\": \"project\", \"value\": \"watch-it-burn\"}, {\"key\": \"event\", \"value\": \"devopsdays-portland-2026\"}, {\"key\": \"attendee\", \"value\": \"watch-it-burn-attendee-002\"}, {\"key\": \"consumer\", \"value\": \"agent\"}]}, \"responseElements\": {\"inferenceProfileArn\": \"arn:aws:bedrock:us-west-2:222222222222:application-inference-profile/fx0haiku0002\", \"status\": \"ACTIVE\"}, \"eventID\": \"00000000-0000-0000-0000-000000000021\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000021",
+   "EventName": "CreateInferenceProfile",
+   "EventSource": "bedrock.amazonaws.com",
+   "EventTime": "2026-09-07T15:10:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

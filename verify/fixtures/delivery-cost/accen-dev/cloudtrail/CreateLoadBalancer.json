@@ -1,0 +1,24 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T16:00:00Z\", \"eventSource\": \"elasticloadbalancing.amazonaws.com\", \"eventName\": \"CreateLoadBalancer\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"name\": \"k8s-agent-agentcon-0fixture\", \"type\": \"network\", \"scheme\": \"internet-facing\", \"tags\": [{\"key\": \"elbv2.k8s.aws/cluster\", \"value\": \"watch-it-burn-attendee-001\"}, {\"key\": \"service.k8s.aws/stack\", \"value\": \"agent/agent-console\"}]}, \"responseElements\": {\"loadBalancers\": [{\"loadBalancerArn\": \"arn:aws:elasticloadbalancing:us-west-2:111111111111:loadbalancer/net/k8s-agent-agentcon-0fixture/0123456789abcdef\", \"type\": \"network\", \"scheme\": \"internet-facing\"}]}, \"eventID\": \"00000000-0000-0000-0000-000000000015\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000015",
+   "EventName": "CreateLoadBalancer",
+   "EventSource": "elasticloadbalancing.amazonaws.com",
+   "EventTime": "2026-09-07T16:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T16:05:00Z\", \"eventSource\": \"elasticloadbalancing.amazonaws.com\", \"eventName\": \"CreateLoadBalancer\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"name\": \"packt-alb\", \"type\": \"application\", \"tags\": [{\"key\": \"Workshop\", \"value\": \"packt\"}]}, \"responseElements\": {\"loadBalancers\": [{\"loadBalancerArn\": \"arn:aws:elasticloadbalancing:us-west-2:111111111111:loadbalancer/app/packt-alb/fedcba9876543210\", \"type\": \"application\"}]}, \"eventID\": \"00000000-0000-0000-0000-000000000016\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000016",
+   "EventName": "CreateLoadBalancer",
+   "EventSource": "elasticloadbalancing.amazonaws.com",
+   "EventTime": "2026-09-07T16:05:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

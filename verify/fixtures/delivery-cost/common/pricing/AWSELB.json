@@ -1,0 +1,389 @@
+[
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "LoadBalancer hourly usage by Application Load Balancer",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Application",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-LoadBalancerUsage"
+   },
+   "productFamily": "Load Balancer-Application",
+   "sku": "7AKU6NT3G9ZEJTB5"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "7AKU6NT3G9ZEJTB5.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "7AKU6NT3G9ZEJTB5.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0225 per Application LoadBalancer-hour (or partial hour)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0225000000"
+       },
+       "rateCode": "7AKU6NT3G9ZEJTB5.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "7AKU6NT3G9ZEJTB5",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "Reserved Network Load Balancer capacity units-hr",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Network",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-ReservedLCUUsage"
+   },
+   "productFamily": "Load Balancer-Network",
+   "sku": "MS5BX3J23SYUJBE6"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "MS5BX3J23SYUJBE6.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "MS5BX3J23SYUJBE6.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.006 per reserved Network load balancer capacity unit-hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0060000000"
+       },
+       "rateCode": "MS5BX3J23SYUJBE6.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "ReservedLCU-Hr"
+      }
+     },
+     "sku": "MS5BX3J23SYUJBE6",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "Used Network Load Balancer capacity units-hr",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Network",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-LCUUsage"
+   },
+   "productFamily": "Load Balancer-Network",
+   "sku": "95U72SGSJVUFNAXW"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "95U72SGSJVUFNAXW.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "95U72SGSJVUFNAXW.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.006 per used Network load balancer capacity unit-hour (or partial hour)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0060000000"
+       },
+       "rateCode": "95U72SGSJVUFNAXW.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "LCU-Hrs"
+      }
+     },
+     "sku": "95U72SGSJVUFNAXW",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "Used Application Load Balancer capacity On Outposts units-hr",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Outposts",
+    "operation": "LoadBalancing:Application",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-Outposts-LCUUsage"
+   },
+   "productFamily": "Load Balancer-Application",
+   "sku": "RJWJ6WBDAWQXZ6GW"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "RJWJ6WBDAWQXZ6GW.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "RJWJ6WBDAWQXZ6GW.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0 per LCU-Hrs for Outposts-LCUUsage:LoadBalancing:Application in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "RJWJ6WBDAWQXZ6GW.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "LCU-Hrs"
+      }
+     },
+     "sku": "RJWJ6WBDAWQXZ6GW",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "Used Application Load Balancer capacity units-hr",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Application",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-LCUUsage"
+   },
+   "productFamily": "Load Balancer-Application",
+   "sku": "2ETY8Y426S4237JU"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "2ETY8Y426S4237JU.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "2ETY8Y426S4237JU.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.008 per used Application load balancer capacity unit-hour (or partial hour)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0080000000"
+       },
+       "rateCode": "2ETY8Y426S4237JU.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "LCU-Hrs"
+      }
+     },
+     "sku": "2ETY8Y426S4237JU",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "TS hourly usage by Application Load Balancer",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Application",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-TS-LoadBalancerUsage"
+   },
+   "productFamily": "Load Balancer-Application",
+   "sku": "AW9ZSPDPJSJNSKUS"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "AW9ZSPDPJSJNSKUS.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "AW9ZSPDPJSJNSKUS.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0063 per associated Application load balancer Trust Store unit-hour ",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0063000000"
+       },
+       "rateCode": "AW9ZSPDPJSJNSKUS.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "AW9ZSPDPJSJNSKUS",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "Reserved Application Load Balancer capacity units-hr",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Application",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-ReservedLCUUsage"
+   },
+   "productFamily": "Load Balancer-Application",
+   "sku": "S3RD2JXCRMTWXNVN"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "S3RD2JXCRMTWXNVN.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "S3RD2JXCRMTWXNVN.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.008 per reserved Application load balancer capacity unit-hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0080000000"
+       },
+       "rateCode": "S3RD2JXCRMTWXNVN.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "ReservedLCU-Hr"
+      }
+     },
+     "sku": "S3RD2JXCRMTWXNVN",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "LoadBalancer hourly usage by Network Load Balancer",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "LoadBalancing:Network",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-LoadBalancerUsage"
+   },
+   "productFamily": "Load Balancer-Network",
+   "sku": "SCYRS8C539B49TTY"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "SCYRS8C539B49TTY.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "SCYRS8C539B49TTY.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0225 per Network LoadBalancer-hour (or partial hour)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0225000000"
+       },
+       "rateCode": "SCYRS8C539B49TTY.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "SCYRS8C539B49TTY",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "ELB:Balancing",
+    "groupDescription": "LoadBalancer hourly usage by Application Load Balancer on Outposts",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Outposts",
+    "operation": "LoadBalancing:Application",
+    "regionCode": "us-west-2",
+    "servicecode": "AWSELB",
+    "servicename": "Elastic Load Balancing",
+    "usagetype": "USW2-Outposts-LoadBalancerUsage"
+   },
+   "productFamily": "Load Balancer-Application",
+   "sku": "YFM639V2AYGXAYGQ"
+  },
+  "publicationDate": "2026-09-11T12:45:44Z",
+  "serviceCode": "AWSELB",
+  "terms": {
+   "OnDemand": {
+    "YFM639V2AYGXAYGQ.JRTCKXETXF": {
+     "effectiveDate": "2026-08-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "YFM639V2AYGXAYGQ.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0225 per Hrs for Outposts-LoadBalancerUsage:LoadBalancing:Application in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0225000000"
+       },
+       "rateCode": "YFM639V2AYGXAYGQ.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "YFM639V2AYGXAYGQ",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20260911124544"
+ }
+]

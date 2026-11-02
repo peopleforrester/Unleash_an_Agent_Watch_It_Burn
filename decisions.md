@@ -8518,3 +8518,80 @@ removed from `infra/terraform/aws/cluster/main.tf`, `test_iam_policy_structural.
 **Not yet run:** the workflow on GitHub, which runs at the first push to staging after promotion. Also not run is
 `verify/test_iam_policy_aws.py`, #207's acceptance 2 (a widened identity policy fails check 2), with
 `IAM_PIPELINE_PROFILE` and `IAM_PIPELINE_REGION` set. This run has no AWS profile.
+## 2026-11-02 · #392 · A delivery is costed from member-account data, since the payer's tag activation is off the table
+
+Michael's ruling on #392 (2026-11-01): nobody contacts Web Age or any lab-account support team, and nobody asks the
+payer account (457247706586, the provider's Organization management account, #202) to activate anything. So
+Cost Explorer's tag-filtered figure stays 0.00 and `teardown/activate-cost-tags.sh` stays unrun. The new
+`teardown/delivery-cost-estimate.py` costs one delivery's window from what each member account reads itself, and
+prints it as an estimate.
+
+- **Sources, per account and region, all read-only.** EC2 instance hours by instance type, EKS cluster hours, EBS
+  GiB-hours, NLB and ALB hours and NAT gateway hours from CloudTrail `lookup-events` (RunInstances/TerminateInstances,
+  CreateCluster/DeleteCluster, CreateVolume/DeleteVolume, CreateLoadBalancer/DeleteLoadBalancer,
+  CreateNatGateway/DeleteNatGateway). Resources made before the lookback that are still up come from describe calls.
+  NAT data processed comes from the AWS/NATGateway `BytesInFromSource` and `BytesInFromDestination` sums. Bedrock
+  input and output tokens per `ModelId` come from AWS/Bedrock in CloudWatch. guard-proxy's `/cost` counter is in
+  memory and dies with the cluster, so it cannot cost a past window. Every rate comes from `pricing get-products`.
+  Beside the estimate, each account's unfiltered `ce get-cost-and-usage` total is printed as the upper bound.
+- **Attribution.** A resource counts when its own tags match `project=watch-it-burn` (and `event=<event>` with
+  `--event`). It also counts when it carries a cluster-ownership tag (`elbv2.k8s.aws/cluster`, `eks:cluster-name`,
+  `KubernetesCluster`, `kubernetes.io/cluster/<name>`) naming a fleet cluster that was up when the resource was
+  made. That second rule reaches the LB controller's load balancers and the CSI volumes, which carry no fleet tags.
+  The lifetime check matters because names are reused: a first draft matched on name alone and counted
+  attendee-001's KubeCon rebuild into Portland. A resource whose own tag gives a different `event` never counts.
+- **Bedrock is split in two.** Tokens on a tagged application inference profile (#513, from 2026-10-25) are counted
+  in the estimate. Tokens on a system model id such as `us.amazon.nova-pro-v1:0` belong to the whole account,
+  which on accen-dev includes the Packt co-tenant. They are priced and printed beside the estimate, with a second
+  total that adds them in. Portland predates #513, so its Bedrock appears only in that second total.
+  `list-metrics` returns only metrics with data in the last two weeks, so the fleet's model ids are always queried
+  from a table in the script (`BEDROCK_MODELS`). The test fails when the cluster root's `bedrock_tiers` or
+  `tutor_model` names a model the table lacks.
+- **Pricing selection.** Each lookup must match exactly one Price List product, or the run fails and names the
+  candidates. The checks used are the usage-type regex (for example `^(USW2-)?BoxUsage:t3.2xlarge$`, which keeps
+  out `TS-LoadBalancerUsage` and `RegionalNatGateway-Hours`) and, for Bedrock, the on-demand regional rate, which is
+  what a `us.` geo profile pays (Global, batch, latency-optimized, cache and reserved variants are excluded).
+  Anthropic models are under `AmazonBedrockFoundationModels`, not `AmazonBedrock`.
+- **No partial answers.** A failed AWS call ends the run with exit 3, so a missing permission cannot print as a
+  smaller total. A window that ends before CloudTrail's 90-day history begins is refused. The World's Fair week
+  (2026-06-29) is already out of reach. Portland is readable until 2026-12-05.
+- **Left out, and said on every report:** data transfer, LCUs, T3 Unlimited credits, gp3 above baseline, public
+  IPv4, snapshots, CloudWatch, Logs, Secrets Manager, Route 53 and ECR. Partial hours are counted exactly. Node root
+  disks are counted as `--root-volume-gib` (default 100, pinned by the test to `node_disk_size`) times instance
+  hours, because RunInstances does not record the launch template's disk.
+- **Also changed.** `teardown/cost-report.sh`, `teardown/activate-cost-tags.sh` and `cost/README.md` now say the
+  payer is not asked and point at the estimator. `cost/estimates/` holds recorded runs; its README lists the owed
+  Portland run.
+
+**Tests.** `verify/test_delivery_cost_estimate.py` (offline suite) runs the script against an `aws` shim backed by
+`verify/fixtures/delivery-cost/`. The pricing fixtures are recorded: products copied from the public Price List bulk
+files for us-west-2 (`pricing.us-east-1.amazonaws.com/offers/v1.0/aws/<service>/current/us-west-2/index.json`,
+fetched 2026-11-01), in `get-products` item shape, with the Windows/RHEL, gp2, Regional NAT, Outposts and Global
+distractors left in. The shim applies the TERM_MATCH filters itself. The CloudTrail, describe, CloudWatch and Cost
+Explorer fixtures are synthetic, in the documented response shapes, for a Portland-like week across two accounts.
+They include Packt's resources, an ECS CreateCluster, a failed RunInstances, the reused attendee-001 name, a
+lab NAT made before the lookback, a cluster-tag-only CSI volume and NLB, a tagged Haiku profile, untagged Nova Pro,
+an unpriced model and a delete with no create. 46 checks: each line item against hand-computed figures, the
+totals, the upper bounds, explicit profile and region on every call, read-only calls, the refusals, and the drift
+guards against the cluster root. Run 15666 added four more for the untagged-node guard below, 50 in all.
+
+**Not yet run on a cluster, and not yet run on AWS at all.** The owed check is the Portland run in
+`cost/estimates/README.md`, from a session holding the five fleet profiles, saved as
+`cost/estimates/devopsdays-portland-2026.txt`. It is owed before 2026-12-05. Three things only that run can show.
+First, whether the member accounts allow `pricing:GetProducts`, `cloudtrail:LookupEvents` and the CloudWatch reads.
+Second, whether RunInstances events carry the launch template's tags in `responseElements.instancesSet.items[].tagSet`
+(if they do not, and the ownership tags are missing too, the node hours come out 0, and the report prints an
+`INCOMPLETE, the total is too low` line under the total for each account whose fleet clusters ran with no node
+attributed).
+Third, under which `ModelId` CloudWatch reports calls made through an application profile.
+
+**What differs from the draft.** One guard, and a duplicated test name fixed. The draft printed a cluster week whose
+node instances could not be attributed as a quietly lower total, which is the 0.00 problem in a smaller form. Now,
+when an account's fleet clusters have hours in the window and no node instance is attributed to them, the report
+prints `INCOMPLETE, the total is too low` under the estimated total, naming the account and its cluster hours; the
+test strips the tags from one account's node launches and checks the line appears for that account only. Run 15331 wrote this change (its commit b3d497b on
+`agent/392-15331`) and ended `stale-authorization`, so it never reached staging. Run 15666 checked it with
+`verify/draft-drift.sh origin/agent/392-15331 origin/staging`: the only drift is `decisions.md`, which is
+append-only, and none of the paths the draft touches (`teardown/`, `cost/`, `verify/test_activate_cost_tags.sh`,
+the new test and fixtures) was edited on staging since. The rest of the files are therefore the draft's, and this
+entry is appended again at the current end of the file with today's date.

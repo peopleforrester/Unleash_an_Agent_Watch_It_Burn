@@ -1,0 +1,10 @@
+{
+ "Datapoints": [
+  {
+   "Sum": 42000,
+   "Timestamp": "2026-09-06T00:00:00+00:00",
+   "Unit": "Count"
+  }
+ ],
+ "Label": "x"
+}

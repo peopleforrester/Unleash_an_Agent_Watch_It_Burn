@@ -1,0 +1,640 @@
+[
+ {
+  "product": {
+   "attributes": {
+    "capabilitytype": "KRO",
+    "ekscapabilityunits": "Hours:perCapability",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "KROUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSCapabilities-KRO-Hours:perCapability"
+   },
+   "productFamily": "Compute",
+   "sku": "TFZTT8F6WVYAJVHE"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "TFZTT8F6WVYAJVHE.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "TFZTT8F6WVYAJVHE.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.004757 per KRO Capability Hour in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0047570000"
+       },
+       "rateCode": "TFZTT8F6WVYAJVHE.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "TFZTT8F6WVYAJVHE",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "capabilitytype": "ArgoCD",
+    "ekscapabilityunits": "CR-Hours:perCustomResource",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ArgoCDUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSCapabilities-ArgoCD-CR-Hours:perCustomResource"
+   },
+   "productFamily": "Compute",
+   "sku": "TGUFDX2BRZ8QQJA5"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "TGUFDX2BRZ8QQJA5.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "TGUFDX2BRZ8QQJA5.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.00142 per Argo CD Application Hour in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0014200000"
+       },
+       "rateCode": "TGUFDX2BRZ8QQJA5.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "TGUFDX2BRZ8QQJA5",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "capabilitytype": "ACK",
+    "ekscapabilityunits": "Hours:perCapability",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ACKUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSCapabilities-ACK-Hours:perCapability"
+   },
+   "productFamily": "Compute",
+   "sku": "JXK8UVGBVN7JPSYB"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "JXK8UVGBVN7JPSYB.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "JXK8UVGBVN7JPSYB.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.004757 per ACK Capability Hour in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0047570000"
+       },
+       "rateCode": "JXK8UVGBVN7JPSYB.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "JXK8UVGBVN7JPSYB",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "capabilitytype": "ACK",
+    "ekscapabilityunits": "CR-Hours:perCustomResource",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ACKUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSCapabilities-ACK-CR-Hours:perCustomResource"
+   },
+   "productFamily": "Compute",
+   "sku": "RHAFJHQG2J2D83CJ"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "RHAFJHQG2J2D83CJ.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "RHAFJHQG2J2D83CJ.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.000048 per ACK resource Hour in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000480000"
+       },
+       "rateCode": "RHAFJHQG2J2D83CJ.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "RHAFJHQG2J2D83CJ",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ProvisionedControlPlaneUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAProvisioned4XL",
+    "usagetype": "USW2-AmazonEKS-Hours:4XL-ProvisionedTier"
+   },
+   "productFamily": "Compute",
+   "sku": "3JZXEZW6JFRQHYNP"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "3JZXEZW6JFRQHYNP.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "3JZXEZW6JFRQHYNP.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$6.90 per Hour for 4XL Provisioned Tier in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "6.9000000000"
+       },
+       "rateCode": "3JZXEZW6JFRQHYNP.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "3JZXEZW6JFRQHYNP",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ProvisionedControlPlaneUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAProvisioned2XL",
+    "usagetype": "USW2-AmazonEKS-Hours:2XL-ProvisionedTier"
+   },
+   "productFamily": "Compute",
+   "sku": "2G63RK9JB8BD9F9H"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "2G63RK9JB8BD9F9H.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "2G63RK9JB8BD9F9H.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$3.40 per Hour for 2XL Provisioned Tier in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "3.4000000000"
+       },
+       "rateCode": "2G63RK9JB8BD9F9H.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "2G63RK9JB8BD9F9H",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Outposts",
+    "operation": "CreateOperation",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAStandard",
+    "usagetype": "USW2-AmazonEKS-Local-Outposts-Hours:perCluster"
+   },
+   "productFamily": "Compute",
+   "sku": "DNPPFW9XJKCJA2KM"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "DNPPFW9XJKCJA2KM.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "DNPPFW9XJKCJA2KM.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Amazon EKS local cluster usage on AWS Outposts",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1000000000"
+       },
+       "rateCode": "DNPPFW9XJKCJA2KM.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "hours"
+      }
+     },
+     "sku": "DNPPFW9XJKCJA2KM",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ProvisionedControlPlaneUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAProvisioned8XL",
+    "usagetype": "USW2-AmazonEKS-Hours:8XL-ProvisionedTier"
+   },
+   "productFamily": "Compute",
+   "sku": "UZU5KF49EUZPNT69"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "UZU5KF49EUZPNT69.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "UZU5KF49EUZPNT69.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$13.90 per Hour for 8XL Provisioned Tier in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "13.9000000000"
+       },
+       "rateCode": "UZU5KF49EUZPNT69.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "UZU5KF49EUZPNT69",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "capabilitytype": "ArgoCD",
+    "ekscapabilityunits": "Hours:perCapability",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ArgoCDUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSCapabilities-ArgoCD-Hours:perCapability"
+   },
+   "productFamily": "Compute",
+   "sku": "U56U828MCM7BND6P"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "U56U828MCM7BND6P.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "U56U828MCM7BND6P.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.028838 per Argo CD Capability Hour in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0288380000"
+       },
+       "rateCode": "U56U828MCM7BND6P.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "U56U828MCM7BND6P",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CreateOperation",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAStandard",
+    "usagetype": "USW2-AmazonEKS-Hours:perCluster"
+   },
+   "productFamily": "Compute",
+   "sku": "DYQZA4NFAQKBU6H4"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "DYQZA4NFAQKBU6H4.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "DYQZA4NFAQKBU6H4.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Amazon EKS cluster usage in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1000000000"
+       },
+       "rateCode": "DYQZA4NFAQKBU6H4.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "DYQZA4NFAQKBU6H4",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ProvisionedControlPlaneUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAProvisionedXL",
+    "usagetype": "USW2-AmazonEKS-Hours:XL-ProvisionedTier"
+   },
+   "productFamily": "Compute",
+   "sku": "Y7SEAPRF9JYNYTB7"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "Y7SEAPRF9JYNYTB7.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "Y7SEAPRF9JYNYTB7.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$1.65 per Hour for XL Provisioned Tier in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.6500000000"
+       },
+       "rateCode": "Y7SEAPRF9JYNYTB7.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "Y7SEAPRF9JYNYTB7",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "ExtendedSupport",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "tiertype": "HAExtended",
+    "usagetype": "USW2-AmazonEKS-Hours:extendedSupport"
+   },
+   "productFamily": "Compute",
+   "sku": "MBEV4FFUUBVFQGEW"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "MBEV4FFUUBVFQGEW.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "MBEV4FFUUBVFQGEW.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Amazon EKS extended support usage in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.5000000000"
+       },
+       "rateCode": "MBEV4FFUUBVFQGEW.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "MBEV4FFUUBVFQGEW",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "eksproducttype": "HybridNodes",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "HybridNodesUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSHybridNodes-Hours:pervCPU"
+   },
+   "productFamily": "Compute",
+   "sku": "CD8UQ3WKRQ3WFPYS"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "CD8UQ3WKRQ3WFPYS.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.598JQR6V47": {
+       "appliesTo": [],
+       "beginRange": "1152000",
+       "description": "USD0.01 per vCPU-Hour for Amazon EKS Hybrid Nodes usage in US West (Oregon)",
+       "endRange": "5760000",
+       "pricePerUnit": {
+        "USD": "0.0100000000"
+       },
+       "rateCode": "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.598JQR6V47",
+       "unit": "vCPU-Hours"
+      },
+      "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.E6QA4N6S8T": {
+       "appliesTo": [],
+       "beginRange": "5760000",
+       "description": "USD0.008 per vCPU-Hour for Amazon EKS Hybrid Nodes usage in US West (Oregon)",
+       "endRange": "11520000",
+       "pricePerUnit": {
+        "USD": "0.0080000000"
+       },
+       "rateCode": "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.E6QA4N6S8T",
+       "unit": "vCPU-Hours"
+      },
+      "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.QJE85AF653": {
+       "appliesTo": [],
+       "beginRange": "11520000",
+       "description": "USD0.006 per vCPU-Hour for Amazon EKS Hybrid Nodes usage in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0060000000"
+       },
+       "rateCode": "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.QJE85AF653",
+       "unit": "vCPU-Hours"
+      },
+      "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.TYETGNHRPH": {
+       "appliesTo": [],
+       "beginRange": "576000",
+       "description": "USD0.014 per vCPU-Hour for Amazon EKS Hybrid Nodes usage in US West (Oregon)",
+       "endRange": "1152000",
+       "pricePerUnit": {
+        "USD": "0.0140000000"
+       },
+       "rateCode": "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.TYETGNHRPH",
+       "unit": "vCPU-Hours"
+      },
+      "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.Z7MKTGF6VF": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD0.02 per vCPU-Hour for Amazon EKS Hybrid Nodes usage in US West (Oregon)",
+       "endRange": "576000",
+       "pricePerUnit": {
+        "USD": "0.0200000000"
+       },
+       "rateCode": "CD8UQ3WKRQ3WFPYS.JRTCKXETXF.Z7MKTGF6VF",
+       "unit": "vCPU-Hours"
+      }
+     },
+     "sku": "CD8UQ3WKRQ3WFPYS",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ },
+ {
+  "product": {
+   "attributes": {
+    "capabilitytype": "KRO",
+    "ekscapabilityunits": "CR-Hours:perCustomResource",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "KROUsage",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEKS",
+    "servicename": "Amazon Elastic Container Service for Kubernetes",
+    "usagetype": "USW2-AmazonEKSCapabilities-KRO-CR-Hours:perCustomResource"
+   },
+   "productFamily": "Compute",
+   "sku": "VQV8KPBDWCK9JBRU"
+  },
+  "publicationDate": "2026-10-27T19:16:39Z",
+  "serviceCode": "AmazonEKS",
+  "terms": {
+   "OnDemand": {
+    "VQV8KPBDWCK9JBRU.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "VQV8KPBDWCK9JBRU.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.000047 per KRO RGD instance Hour in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000470000"
+       },
+       "rateCode": "VQV8KPBDWCK9JBRU.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hours"
+      }
+     },
+     "sku": "VQV8KPBDWCK9JBRU",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261027191639"
+ }
+]

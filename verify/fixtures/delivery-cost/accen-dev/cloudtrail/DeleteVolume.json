@@ -1,0 +1,14 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-09T02:00:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"DeleteVolume\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"volumeId\": \"vol-0fixturepvc0001\"}, \"responseElements\": {\"_return\": true}, \"eventID\": \"00000000-0000-0000-0000-000000000014\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000014",
+   "EventName": "DeleteVolume",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-09T02:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

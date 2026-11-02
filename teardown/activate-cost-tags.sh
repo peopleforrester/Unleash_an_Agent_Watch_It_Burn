@@ -8,6 +8,9 @@
 #   AccessDeniedException: Linked account doesn't have access to cost allocation tags
 # so cost-report.sh run from there comes back 0.00 USD. Nothing in this repo can fix that from a linked
 # account; this script is the one action, scripted, for whoever holds the payer credentials.
+# Here that is the lab-account provider (457247706586, #202), and Michael's ruling on #392 (2026-11-01) is that
+# nobody asks them: no mail, no ticket. Deliveries are costed from member-account data by
+# teardown/delivery-cost-estimate.py; this script stays for a payer we hold ourselves.
 #
 # Activation alone only counts spend from the activation date forward. Cost Explorer also takes a backfill
 # request (StartCostAllocationTagBackfill) that applies the current activation status to billing data as
