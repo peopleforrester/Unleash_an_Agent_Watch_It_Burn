@@ -33,6 +33,11 @@ for p in pages:
     # The sponsor line is contractual: these are sponsored surfaces and both sponsors are named on them.
     check(f"{p.name} names both sponsors (Datadog and Neo4j)",
           "Co-sponsored" in s and "Datadog" in s and "Neo4j" in s)
+    # Accenture no longer co-sponsors (Michael, #766). Only the footer line is checked: burritbot.html's
+    # comments and skins.js's selectable Accenture skin still name it on purpose.
+    footer = [line for line in s.splitlines() if "Co-sponsored" in line]
+    check(f"{p.name} footer does not name Accenture (#766)",
+          bool(footer) and not any("Accenture" in line for line in footer))
     check(f"{p.name} carries a Datadog colour", any(c in up for c in DATADOG))
     # links.html and diagram.html were ported from the Packt workshop; their orange must not survive.
     check(f"{p.name} has no leftover Packt palette", not any(c in up for c in PACKT))
