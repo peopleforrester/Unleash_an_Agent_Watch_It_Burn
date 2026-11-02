@@ -9142,3 +9142,53 @@ lab-platform has no issue for it, open or closed (searched on 2026-11-02 by "con
 `CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` on the next attendee bring-up, where each party
 host must answer its page through the console's host map and the 8080 target.
 `verify/test_console_no_toggle_live.py` is owed once the console moves.
+## 2026-11-02 · #733 · Re-dispatch: the 11-01 rollout already synced workshop-agent on both clusters, and the public bot read HC-666
+
+**Context.** Run 15913 is #733's first dispatch since run 14867's entries above merged (29c91d9). It has no kubeconfig
+context and no AWS credentials, so it ran nothing on a cluster. That entry's plan still holds; this one adds what
+staging recorded since.
+
+**What moved on staging since 29c91d9.**
+- The git Agent changed twice, outside its tools: 4e86b30 wrote out `runtime: go`, and b7f366c (#749) added to the
+  system message. The two tool lists are as they were: workshop-mcp's twelve, in the order
+  `verify/test_agent_tools_sync.py` holds, and evil-mcp's three. Neither change can stand in for the check. A scalar
+  field in the Agent synced under ai-layer's RespectIgnoreDifferences too; only the tools array froze (#679).
+- d2c9e79 (#679) added `repair_env_order` to converge and comments to `gitops/bootstrap/apps/ai-layer.yaml`.
+  `gitops/bootstrap/apps/workshop-agent.yaml` is unchanged.
+- The 2026-11-01 "Live rollout" entry (3.x) says Michael's session synced ai-layer and workshop-agent to staging
+  7452788 on both up clusters and bounced the workshop-agent pod. So the workshop-agent Application exists on
+  community and has synced at least once by hand. The same entry's #764 step 1 asked the public bot about HC-666 and
+  it fired `deploy_app`. HC-666 lives on the fake ticket desk, and `read_support_ticket` is the only tool that reads
+  it. Before #707 both KubeCon clusters held the stale eleven without that tool (#679). So `read_support_ticket`,
+  git's twelfth tool, was most likely live on community by 11-01.
+
+**What that does and does not show.** It is a git tool change that reached community, which is the shape of the
+check. It does not show the arrival came from a sync with no converge. `fleet.sh converge`'s `repair_agent_tools`
+deletes the Agent when its sorted live list differs from git's, and Argo then makes it again, so a converge run on
+community between 10-28 and 11-01 would land the same list. No entry records one. Two reads tell them apart: the
+Agent's `metadata.managedFields` (argocd-controller as the manager of `spec.declarative.tools` with nothing after it)
+and `workshop-agent`'s `.status.history` against the Agent's `metadata.creationTimestamp`. An Agent made between two
+history entries with no Argo operation at that time was recreated after a converge delete. The guard-mcp-on half has
+no record at all.
+
+**The empty heading above.** Run 14867's first heading for #733 has no body: its fixup added a second heading under it.
+decisions.md is append-only, so it stays.
+
+**Not yet run on a cluster.** All of #733. The read-only half, from a session with accen-dev (the escalation in this
+run's report carries the same commands):
+
+    K=/tmp/watch-it-burn-community.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name watch-it-burn-community --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/watch-it-burn-community ]] || exit 1
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd get application workshop-agent \
+      -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{.status.history}'
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get agent workshop-agent --show-managed-fields -o yaml
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get deployment workshop-agent -o jsonpath='{.metadata.creationTimestamp}'
+
+The Application must read Synced Healthy at a staging revision carrying 813404e. The Agent's tracking-id must start
+`workshop-agent:`, and its workshop-mcp list must equal git's twelve. Then the mutating half, by the same session:
+swap `check_inventory` and `reorder_supply` in `gitops/workshop-agent/agent.yaml` and in the expected list of
+`verify/test_agent_tools_sync.py` in one commit to staging, wait for the root's auto-sync with no converge, and run
+the issue's jsonpath read, which must print git's new order. Run `guard-mcp-on` in community's web terminal, wait a
+minute past a selfHeal, and read evil-mcp's toolNames, which must stay `["get_weather"]`. Run `guard-mcp-off`, and
+land the swap back the same way. Record the readings here; a pass closes #733.
