@@ -104,8 +104,20 @@ Both Bedrock grants are held to the Pod Identity session tags (`aws:PrincipalTag
 `aws:PrincipalTag/kubernetes-namespace`, and the tutor's ServiceAccount too). EKS Pod Identity sets
 those tags on every session it issues.
 
+## On every PR
+
+`.github/workflows/iam-policy.yml` runs on every PR, and every push to staging or main, that touches
+`infra/terraform/**`, `infra/org/**` or the pipeline's tests and tools. On a GitHub-hosted runner with no AWS
+credential (question 592 in `decisions.md`), it fetches conftest and terraform from `verify/e2e-tools.lock`
+and runs the offline, coverage and structural tests below. So a PR whose plan has an Allow with no Condition,
+a `"*"` outside `exceptions.md`, or a role without the boundary fails, naming the address and statement.
+Checks 1, 2 and 4 call AWS and are not in that job. They run from the command line, as above, or through
+`verify/test_iam_policy_aws.py`.
+
 ## Tests
 
+- `verify/test_iam_policy_ci.py` (offline): the workflow above watches every root in `pipeline.ROOTS` and the
+  pipeline's own files, runs the three tests with the pinned tools, and holds no credential.
 - `verify/test_iam_policy_pipeline.py` (offline): extraction, the exceptions table, the boundary, every role
   in `infra/` carrying it, the effect cases, and how each check reads AWS's answer.
 - `verify/test_iam_policy_coverage.py` (offline): nothing escapes the pipeline. Every IAM or Organizations
@@ -124,8 +136,9 @@ those tags on every session it issues.
 
 The 2026-09-03 brief asked for an org-level half too. Measured on 2026-09-04 (comment on #207): all five
 fleet accounts are member accounts of organization `o-pslkiycmqp`. Its management account is not one we
-hold credentials for, and `organizations:ListPolicies` is denied. So these wait on the provider granting
-management or delegated-admin access (#202):
+hold credentials for, and `organizations:ListPolicies` is denied. On 2026-10-31 the owner ruled on #202 that
+we have no org-level access to those accounts and will not pursue it. So the following are not being built.
+They would need management or delegated-admin access to the org:
 
 - SCPs, RCPs and the org S3 Block Public Access policy themselves, and the SCP that denies CreateRole
   without the boundary at org level (the in-account version is the boundary's own deny, above).
@@ -134,8 +147,9 @@ management or delegated-admin access (#202):
   the console and reading the explicit deny.
 - The second-reviewer CODEOWNERS label for allow-list SCP switches: there are no SCPs to switch yet.
 
-Applying through OIDC in a separate `org-policies` GitHub environment is a CI workflow, which waits for
-the owner. Until it exists, the pipeline runs from the command line as above.
+Applying through OIDC in a separate `org-policies` GitHub environment would need an AWS role trusted by
+GitHub's OIDC provider. CI holds no AWS credential (question 592), so the apply and checks 1, 2 and 4 run
+from the command line as above.
 
 Two effect tests from the brief have no subject in this repo. "CI can write state": Terraform state is
 local files, and there is no CI role. "Datadog can still assume in": the Datadog integration uses API keys

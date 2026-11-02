@@ -8483,3 +8483,38 @@ KubeCon deploys proxy.py from the submodule pin fb6e2bf (ef66c77). M5 changed on
 delivery needs no repin for it.
 
 **Not yet run on a cluster.** Nothing here runs on a cluster: the change is this record and PROJECT_STATE.md.
+## 2026-11-02 · #207 · The IAM policy pipeline's structural check runs on every PR; the org half is not pursued
+
+**What changed.** `.github/workflows/iam-policy.yml` runs on every PR, and every push to staging or main, that
+touches `infra/terraform/**`, `infra/org/**`, `verify/iam_plan_render.py`, a `verify/test_iam_policy_*.py`, the
+E2E tools lock or its fetch script, or the workflow itself. It fetches the pinned tools with
+`verify/fetch-e2e-tools.sh` (conftest v0.71.1, terraform v1.15.6, each checked against its SHA-256) and runs
+`test_iam_policy_pipeline.py`, `test_iam_policy_coverage.py` and `test_iam_policy_structural.py`. The structural
+test plans the PR's own cluster and boundary roots with `verify/iam_plan_render.py`, so a PR that adds an Allow
+with no Condition fails the job naming `Statement[N]`. Before this, check 3 ran only when someone ran the E2E tools
+tier by hand, so a PR could merge without it.
+
+**Choices made:**
+- **Same runner and credentials as plan-policy.yml (question 592):** GitHub-hosted ubuntu-latest, token
+  `contents: read`, no secret, no OIDC role, actions pinned to the same commit SHAs. A fork PR is safe to check.
+- **The tools come from `verify/e2e-tools.lock`, not a second pin list.** The job fetches the whole lock, including
+  tools it does not use, rather than adding a name filter to `fetch-e2e-tools.sh`, which `test_e2e_tools_tier.py`
+  exercises as it is. The extra downloads cost a hosted runner a few seconds.
+- **Checks 1, 2 and 4 stay out of CI.** They call Access Analyzer and IAM simulate, which need an AWS credential,
+  and question 592 keeps CI without one. They run by hand through `verify/test_iam_policy_aws.py`.
+- `verify/test_iam_policy_ci.py` (offline) holds the workflow. Its paths must cover every root in `pipeline.ROOTS`,
+  the pipeline's files and every IAM policy test. It must run the three tests and not the AWS one, hold no
+  credential and pin its actions. The lock must carry the conftest version the structural test requires.
+
+**The org half is not pursued.** On #202 on 2026-10-31, the owner wrote that we have no org-level access to those
+accounts and will not pursue it. So the SCPs, RCPs, the org S3 Block Public Access policy, the console-deny SCP
+(#207's acceptance 3), its break-glass and the instructor beat are not built. `infra/org/README.md` now says so,
+and no longer says they wait on a provider grant.
+
+**Seen working here:** with the lock's tools on PATH, all three tests pass. With the agent's Bedrock Condition
+removed from `infra/terraform/aws/cluster/main.tf`, `test_iam_policy_structural.py` exits 1 on
+`aws_iam_policy.bedrock_invoke: Statement[0] is an Allow with no Condition [allow-without-condition]`.
+
+**Not yet run:** the workflow on GitHub, which runs at the first push to staging after promotion. Also not run is
+`verify/test_iam_policy_aws.py`, #207's acceptance 2 (a widened identity policy fails check 2), with
+`IAM_PIPELINE_PROFILE` and `IAM_PIPELINE_REGION` set. This run has no AWS profile.

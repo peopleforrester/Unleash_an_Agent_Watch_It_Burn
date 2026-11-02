@@ -1,0 +1,67 @@
+# ABOUTME: CI gate for the IAM policy pipeline (#207): every PR that touches a root the pipeline runs on, or the
+# ABOUTME: pipeline itself, fails on an IAM document that breaks check 3 (conftest/Rego) or escapes the pipeline.
+#
+# Runner and credentials follow question 592 (decisions.md), as plan-policy.yml does: GitHub-hosted ubuntu-latest,
+# no AWS credential, no secret, no OIDC role, so a fork PR is checked safely. The structural check needs no
+# account: verify/iam_plan_render.py plans the cluster and boundary roots against a local endpoint that answers
+# only STS GetCallerIdentity and the boundary lookup. Checks 1, 2 and 4 call AWS (Access Analyzer, IAM simulate)
+# and stay in verify/test_iam_policy_aws.py, run by hand with IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION.
+name: iam-policy
+
+on:
+  push:
+    branches: [staging, main]
+    paths:
+      - 'infra/terraform/**'
+      - 'infra/org/**'
+      - 'verify/iam_plan_render.py'
+      - 'verify/test_iam_policy_*.py'
+      - 'verify/e2e-tools.lock'
+      - 'verify/fetch-e2e-tools.sh'
+      - '.github/workflows/iam-policy.yml'
+  pull_request:
+    paths:
+      - 'infra/terraform/**'
+      - 'infra/org/**'
+      - 'verify/iam_plan_render.py'
+      - 'verify/test_iam_policy_*.py'
+      - 'verify/e2e-tools.lock'
+      - 'verify/fetch-e2e-tools.sh'
+      - '.github/workflows/iam-policy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinned to commit SHAs, not tags, as in plan-policy.yml (#200).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.13'
+
+      # conftest v0.71.1 and terraform v1.15.6 come from verify/e2e-tools.lock, each checked against its SHA-256
+      # before use, the same binaries the E2E tools tier runs with (#572).
+      - name: Fetch the pinned tools (verify/e2e-tools.lock)
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet PyYAML==6.0.3
+          bash verify/fetch-e2e-tools.sh
+          echo "$GITHUB_WORKSPACE/verify/.tools/bin" >> "$GITHUB_PATH"
+
+      # Extraction, the exceptions table, the boundary on every role and user, and how each check reads AWS's answer.
+      - name: The pipeline's offline checks
+        run: python verify/test_iam_policy_pipeline.py
+
+      # Nothing escapes the pipeline: every IAM or Organizations resource sits in a root it runs on.
+      - name: Every IAM document goes through the pipeline
+        run: python verify/test_iam_policy_coverage.py
+
+      # The gate. The PR's own cluster and boundary plans must pass check 3, and a failure names the address and
+      # the statement index, for example
+      #   aws_iam_policy.bedrock_invoke: Statement[0] is an Allow with no Condition [allow-without-condition]
+      - name: Check 3 on the PR's own plans
+        run: python verify/test_iam_policy_structural.py
