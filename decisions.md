@@ -8905,3 +8905,64 @@ session with the accen-dev profile runs it on watch-it-burn-community:
 
 A 200 through the port-forward closes #583. Any other status prints Bedrock's reply, which names the encoding the
 path needs.
+
+## 2026-11-02 · #648 · The input guard refuses PII, `stage_traces.py pii` measures it, and `seed` adds the PII trace
+
+**Context.** The coordinator's live check on 2026-10-31 found that `stage_traces.py pii` did not exist (`invalid choice:
+'pii'`) and that the input guard had no PII scanner. Both had been in 768f368 (origin/agent/648-12515), and 7d830b3
+rebuilt only `seed` and `check`. Run 14409 rebuilt them (origin/agent/648-14409), but that run ended failed at
+validation, so none of it reached staging. This run, 15817, makes the same change on today's staging. Measured again
+from the repo and guard-proxy's pinned source (fb6e2bf): the input guard still catches no PII. Its block-list holds
+destructive verbs and recipe phrases, and LLM Guard's only input scanner was PromptInjection.
+
+**Checked against staging, not cherry-picked.** `verify/draft-drift.sh origin/agent/648-14409 origin/staging` named
+three paths staging has edited since the draft: `decisions.md`, `facilitation/kubecon-na-2026-run-of-show.md`
+(d849d67, the opening and Challenge 1 tee-up; 1732c0b removed the room's Datadog-view QR) and
+`gitops/ai-layer/resources.yaml` (ef66c77 repinned guard-proxy to fb6e2bf and bumped `checksum/proxy-py`). None of
+those edits touches the lines this change makes: the run-of-show's Challenge 3 beat and Night Before seed step, and
+llm-guard's Deployment and ConfigMap. The one that could have changed the design is the guard-proxy repin, so the
+draft's tests were run against fb6e2bf: `input_verdict` still asks `/analyze/prompt` suppressing only BanTopics, the
+refusal still names the flagged scanners, and `pii`'s in-pod script still finds `blocklisted` and `input_verdict` by
+those names. The draft's design therefore stands as it was; this entry is the one that never landed with it.
+
+**The change.**
+- `llm-guard-scanners` gains a Regex input scanner: one pattern, the burn collector's four scrub patterns (e-mail,
+  card, SSN, phone; `gitops/otel-collector/values-burn.yaml`, #647) joined as an alternation, `is_blocked`, no redact,
+  `match_type: search`. It sits under the existing `guard-input-on` and needs no guard-proxy change. The public bot's
+  input guard is never on, so attackme is unchanged.
+- llm-guard's pod template carries `checksum/scanners-yml`, sha256(scanners.yml)[:12]. The API reads scanners.yml once
+  at start and the ConfigMap's name is stable, so without it the scanner would sync green on the running private
+  cluster and never load (guard-proxy's `checksum/proxy-py` is the same fix).
+- `verify/test_input_pii_guard.py` (offline) holds the pattern equal to the scrub's and the checksum to the file. It
+  checks that every scrub case, the five samples and the stage prompt are refused and the untouched text is not, and
+  that no support-desk ticket, probe prompt, topic case, `/kubecon` page, prompt catalog or LAB-TEXT line trips it. It
+  runs `pii`'s in-pod script on the pinned proxy.py against a fake LLM Guard that applies the configured scanners (5 of
+  5 refused, the order passes), and serves the pinned proxy's `/chat` with the input classifier on, which refuses the
+  stage prompt by `Regex` with zero tokens. `verify/test_input_pii_guard_llm_guard.py` (E2E tools tier) builds the
+  scanner with llm-guard 0.3.16 itself, through `get_scanner_by_name("Regex", params)` as the API does, under the same
+  uv environment `test_injection_classifier.py` already uses, so it adds no dependency.
+- `stage_traces.py pii <host> --context ...` runs guard-proxy's own `blocklisted` and the `/analyze/prompt` call
+  `input_verdict` makes, in its pod, on a card, an SSN, an e-mail, a phone number and the stage prompt, then a plain
+  order. No model call, no toggle; it ends `PII GREEN: THE INPUT GUARD REFUSES 5 OF 5`. It refuses the room's host and
+  a missing context, and asks nothing when the identity check fails.
+- `seed` gains `c3-pii` after `c3-fixed`, while the input guard is on: the neighbor's test card, 555 number and
+  example.com address. It is sent only once guard-proxy's input stages say they refuse it, so a guard that lets PII
+  through never sends PII to the model. It is judged on the reply: guarded, `blocked by the input guardrail`, `Regex`
+  named, zero input tokens.
+- A refused prompt never gets a gen_ai span, so `c3-pii`'s view is APM's Trace Explorer on
+  `service:burritobot @session.id:<session>`, read through `/api/v2/spans/events/search`. Its trace must be stamped
+  `input_classifier`, carry no `burritobot-agent` span and hold none of the three PII values. 768f368's `retention`
+  subcommand is not rebuilt, because it needs a Datadog write key the repo does not have. Instead the Night Before step
+  has Whitney create the APM retention filter (`@session.id:wib-stage-*`, 100%) in the UI before seeding, and the
+  morning `check` goes red on `c3-pii` if the filter did not keep it.
+
+**A side effect, accepted.** guard-proxy's topic stage calls `/analyze/prompt` suppressing only PromptInjection, so
+with `guard-topic-on` a PII prompt that matches no on-topic phrase is now also refused as off-topic by the classifier
+step. The room would want that refusal anyway, and changing it would need a guard-proxy release this does not.
+
+**Not yet run on a cluster.** Owed before 2026-11-11, by a session with AWS access on the private cluster once this has
+synced (llm-guard restarts on the checksum): `python3 verify/stage_traces.py pii burritobot-private.burritobot.co
+--context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev`, which must end
+`REFUSES 5 OF 5`. Then, on the Night Before (2026-11-11), the retention filter and `seed`, whose `c3-pii` read-back is
+the first live test of whether the read-only key may search APM spans and whether `@session.id` is the facet Trace
+Explorer finds the root span by; then Whitney saves the printed links as views, and `check` runs the morning of.
