@@ -8418,3 +8418,42 @@ to anyone who knows the hostname.
 **Not yet run on a cluster:** `CONTEXT=<a cluster you own> python3 verify/test_terminal_ws_auth_live.py` (it is in
 `bash verify/run-e2e.sh`), and `./fleet.sh check-tls burritobot-private.agenticburn.com` with the new probe. This run
 has no cluster. The live test starts one shell, its positive control, and closes it at once.
+
+## 2026-11-02 · #117 · The C7 MCP rug-pull beat is designed in docs/research; the build waits for the next event
+
+**Design only.** #117 asks to add the MCP rug-pull to challenge C7 (Challenge 7, the poisoned-tool challenge): a tool
+whose description is approved once, then silently mutated, which name-based allow-listing cannot catch. Michael
+deferred the build on 2026-09-07 (`deferred-barcelona`) and kept the design work open, and on #447 he set that the
+Barcelona challenges wait until 2026-11-13, the day after the KubeCon NA 2026 breakout. The design is at
+`docs/research/2026-11-02-c7-rug-pull-beat.md`, in the shape #116 (`2026-10-31-c1-dns-exfil-beat.md`) and #130
+(`2026-11-02-workload-management-exercises.md`) used. No lab text, slide, run of show or deploy config changed.
+
+- **The core control was already spiked (#480), so this note does not rebuild it.** `images/tool-pin/tool_pin.py`,
+  the ExtMCP processor that hashes each tool's `{name, description, inputSchema}` and refuses on mismatch, and its
+  local-bed measurements against the real v1.5.0 and v1.7.0 gateway binaries, are in
+  `docs/research/2026-10-24-tool-pin-spike/`; section 3 of `2026-10-24-agentgateway-evaluation.md` argues why the
+  gateway is the only place in the stack that can see a description. The note references both and specifies the
+  student-facing beat that exercises them.
+- **Stage R, the rug-pull.** Approve `evil-mcp`'s `get_weather` and show it benign; mutate its description in place
+  (served from the `evil-mcp-src` ConfigMap, no rebuild) with the allow-list unchanged, and the same innocent
+  question now leaks the sentinel; point the `RemoteMCPServer` `spec.url` at the pinned `:3004` bind and the mutation
+  is refused (`Accepted=False` with tool-pin's reason in deny mode).
+- **Stage T, Unicode TAG-block concealment (the net-new design).** The "Also worth adding" piece (arXiv 2607.05744),
+  undesigned until now. A `get_weather` whose visible description is clean carries an instruction hidden in Unicode
+  TAG code points (U+E0000–U+E007F), invisible in the approval view, decoded by the model. The sharp distinction the
+  note draws: the hash-pin catches a *post-approval* TAG mutation because the hash covers the raw bytes, but it does
+  **not** catch TAG concealment present *at approval* — the pin faithfully trusts what was approved. The defence
+  against at-approval concealment is making the approval view honest (normalize/strip the TAG block and variation
+  selectors before the human approves and before the model reads, and hash the normalized form). Pinning answers "did
+  it change after I trusted it?", not "is what I trusted what I saw?".
+- **The talk framing.** The 2026-07-28 MCP spec revision hardened authorization (OAuth 2.1, RFC 9207, RFC 8707, RFC
+  9728, DCR deprecated for CIMD) and did almost nothing for tool trust; postmark-mcp (2025-09-25, benign through
+  v1.0.15, a one-line BCC backdoor in v1.0.16, no CVE because it was behavioural) and GTG-1002 (2025-11-14, built on
+  MCP) are the precedent slides.
+
+**Earlier draft.** `bash verify/draft-drift.sh origin/agent/117-9473 origin/staging` reported CLEAN: that run made
+no commits (its report said so), so there was nothing to reuse.
+
+**Not yet run on a cluster:** the #480 `live-check.sh` phases, Stage R and Stage T. The note's "Validation owed on a
+cluster" section names the checks a session with AWS access runs on a fresh attendee cluster in the
+`verify/run-e2e.sh` tier once the build lands, on or after 2026-11-13.
