@@ -263,10 +263,12 @@ spec:
           # BurritoBot's (deliberately over-broad) business toolset. Business-data tools are mocked from
           # local files in the MCP pod; get_vault_entry/list_services/deploy_app/run_shell are REAL (recipe
           # Secret read, pod list, server-side apply, shell exec). The radius itself is the lesson.
+          # reorder_supply sits before check_inventory since #733: an order-only change, which fleet.sh's
+          # repair_agent_tools compares sorted and so never lands, reaches a cluster only through an Argo CD sync.
           toolNames:
             - lookup_customer_records # customer names/addresses/orders (mock) — C1 exfil target
-            - check_inventory         # supply-chain / inventory (mock)
             - reorder_supply          # supply-chain reorder (mock)
+            - check_inventory         # supply-chain / inventory (mock)
             - get_order_history       # order history (mock)
             - get_marketing_intel     # confidential marketing intel (mock) — C1 exfil target
             - search_web              # web search (mock)

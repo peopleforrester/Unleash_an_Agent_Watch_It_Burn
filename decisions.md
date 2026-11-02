@@ -9518,3 +9518,54 @@ Not yet run on a cluster (so #764 stays open):
   --kubeconfig /tmp/community.kubeconfig --profile accen-dev`. Pass: `c6-lands` PASS, `joker-agatha-the-banshee`
   created and then removed by the probe. Its Challenge 3 trace should show `read_support_ticket` then `deploy_app`,
   which is criterion 3 on the probe's own question.
+## 2026-11-02 · #733 · The git half of #707's live check is this run's commit: an order swap only an Argo CD sync can land
+
+**What changed.** Hecaton run 15968 has no kubeconfig context and no AWS credentials, like runs 14867 and 15913.
+This run does not leave the tool change to the session, as those entries planned. It makes the change itself:
+`gitops/workshop-agent/agent.yaml` now lists `reorder_supply` before `check_inventory` in workshop-mcp's toolNames.
+When the dispatcher promotes it to staging, watch-it-burn-community's root, which tracks staging with automated sync
+(the 2026-11-01 entry), takes the change with no one acting. The issue's order asks for a Synced and Healthy read
+before the change. `workshop-agent`'s `.status.history` still records the revision before this one, so the read
+after the change covers that.
+
+**Why a swap is the right probe.** `fleet.sh`'s `repair_agent_tools` sorts both lists before it compares them
+(infra/terraform/fleet/fleet.sh, `repair_agent_tools`). An order-only change never differs there, so a converge never
+deletes the Agent over it. If the live list reads in git's new order, an Argo CD sync put it there, whether or not a
+converge ran in between. That is the no-converge proof the 11-02 entry said read_support_ticket's arrival could not
+give. The two tools are both read-only mocks, and they sit next to each other, so the model sees the same tools.
+KubeCon NA runs 2026-11-09 to 11-12 (conference-knowledge `kubecon-na-2026`), so the one pod roll kagent makes for
+the new config lands a week before the talk. The admin cluster watch-it-burn-private takes it too and is not harmed.
+
+**No swap back is owed.** The order has no meaning. A session that wants a second landing as more evidence reverts
+this commit, and the revert lands the same way.
+
+**Test.** `verify/test_agent_tools_sync.py` held git's list in the stale eleven's order. It now checks git's tools as
+a set against the stale eleven plus read_support_ticket, and holds the new order, `GIT_ORDER`, which differs from
+the stale order in more than the added tool. `STALE_ELEVEN` is unchanged, since it models what the clusters held on
+2026-10-29.
+
+**Tests.** `bash verify/run-tests.sh` passed (221 tests). `bash verify/run-e2e-tools.sh` passed, 40 checks. One
+earlier attempt failed `test_challenge_fallbacks.py` on its tmp/ check alone, because both suites ran at once.
+
+**Not yet run on a cluster.** The reads, from a session with accen-dev, after this commit is on staging. The report's
+escalations carry the same commands.
+
+    K=/tmp/watch-it-burn-community.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name watch-it-burn-community --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/watch-it-burn-community ]] || exit 1
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd get application workshop-agent \
+      -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{.status.history}'
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get agent workshop-agent \
+      -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get agent workshop-agent --show-managed-fields -o yaml
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get deployment workshop-agent -o jsonpath='{.metadata.creationTimestamp}'
+
+The Application must read Synced Healthy at a staging revision carrying this commit, and the toolNames read must
+start `["lookup_customer_records","reorder_supply","check_inventory",`. The managed-fields read and the two creation
+timestamps answer the first-move question in the 11-01 entry. Then the guard half:
+
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent exec deploy/web-terminal -c ttyd -- bash -c '"$HOME/guard-mcp-on"'
+
+Wait a minute past the next selfHeal, then read evil-mcp's toolNames with
+`-o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`. It must read
+`["get_weather"]`. Then run `"$HOME/guard-mcp-off"` the same way. Record the readings here; a pass closes #733.

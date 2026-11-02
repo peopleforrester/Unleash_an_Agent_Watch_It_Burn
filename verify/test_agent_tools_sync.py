@@ -299,8 +299,16 @@ def server(agent: dict, name: str) -> dict:
 GIT_TOOLS = server(AGENT, "workshop-mcp")["toolNames"]
 GIT_EVIL = server(AGENT, "evil-mcp")["toolNames"]
 GIT_MODEL = AGENT["spec"]["declarative"]["modelConfig"]
+# #733's live check swapped check_inventory and reorder_supply in git, so the up clusters had a workshop-mcp change
+# that only a sync lands: fleet.sh's repair_agent_tools compares the lists sorted.
+GIT_ORDER = ["lookup_customer_records", "reorder_supply", "check_inventory", "get_order_history",
+             "get_marketing_intel", "search_web", "read_support_ticket", "post_marketing", "get_vault_entry",
+             "list_services", "deploy_app", "run_shell"]
 check("git's workshop-mcp list is the stale eleven plus read_support_ticket (#640)",
-      [t for t in GIT_TOOLS if t != "read_support_ticket"] == STALE_ELEVEN and "read_support_ticket" in GIT_TOOLS)
+      sorted(t for t in GIT_TOOLS if t != "read_support_ticket") == sorted(STALE_ELEVEN)
+      and "read_support_ticket" in GIT_TOOLS)
+check("in #733's order, which differs from the stale eleven's in more than the added tool",
+      GIT_TOOLS == GIT_ORDER and [t for t in GIT_TOOLS if t != "read_support_ticket"] != STALE_ELEVEN, str(GIT_TOOLS))
 
 
 def rendered(app_file: str, profile: str) -> dict:
