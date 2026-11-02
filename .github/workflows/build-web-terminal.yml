@@ -1,4 +1,4 @@
-# ABOUTME: Build and push the attendee web-terminal image (ttyd + kubectl) to GHCR on GitHub's runners.
+# ABOUTME: Build and push the attendee web-terminal image (ttyd + kubectl) to GHCR on GitHub's runners, tagged with ttyd's version.
 # ABOUTME: Triggered on changes to images/web-terminal/** or manually via workflow_dispatch.
 name: build-web-terminal
 
@@ -42,9 +42,24 @@ jobs:
           registry: ghcr.io
           username: peopleforrester
           password: ${{ secrets.GHCR_TOKEN }}
-      - name: Build and push
+      # The tag names the software inside (#714), read from the image just built and never written down by hand:
+      # web-terminal-ttyd-<the version its ttyd reports>. verify/test_image_version_tags.py holds the tag
+      # gitops/ai-layer/resources.yaml pins against the same reading of the pinned digest.
+      - name: Build
         uses: docker/build-push-action@v6
         with:
           context: images/web-terminal
-          push: true
-          tags: ghcr.io/peopleforrester/watch-it-burn:web-terminal
+          load: true
+          tags: web-terminal:built
+      - name: Read ttyd's version from the built image
+        id: version
+        run: |
+          out="$(docker run --rm --entrypoint /usr/local/bin/ttyd web-terminal:built --version)"
+          v="$(printf '%s\n' "${out}" | sed -nE 's/^ttyd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
+          [ -n "${v}" ] || { echo "ttyd reported no version: ${out}" >&2; exit 1; }
+          echo "tag=ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-${v}" >> "${GITHUB_OUTPUT}"
+      - name: Push
+        run: |
+          docker tag web-terminal:built "${{ steps.version.outputs.tag }}"
+          docker push "${{ steps.version.outputs.tag }}"
+          echo "pushed ${{ steps.version.outputs.tag }}; pin its digest in gitops/ai-layer/resources.yaml and sign it"

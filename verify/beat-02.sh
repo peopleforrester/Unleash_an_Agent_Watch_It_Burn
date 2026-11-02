@@ -51,7 +51,7 @@ command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found on PATH" >
 # --pod-running-timeout=180s so a cold first image pull does not trip "timed out waiting for the
 # condition". Ephemeral pod by design; no port-forward (same contract as beat-cost.sh).
 # The workshop-mcp image carries curl: our signed ghcr.io image, not Docker Hub's curlimages/curl (#714).
-readonly CURL_IMAGE="ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e"
+readonly CURL_IMAGE="ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e"
 in_cluster_curl() {
     "${KUBECTL[@]}" run "b02curl-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
         --pod-running-timeout=180s \

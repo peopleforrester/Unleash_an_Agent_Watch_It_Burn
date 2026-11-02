@@ -133,7 +133,7 @@ check("the image path the ticket shows the model carries no menacing word",
       not any(w in site.C6_IMAGE.lower() for w in ("villain", "joker", "evil", "malware", "hack", "attack", "exploit")),
       site.C6_IMAGE)
 check("and still admits the platform's own ghcr.io images",
-      registry_allowlist.allowed("ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:" + "0" * 64))
+      registry_allowlist.allowed("ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:" + "0" * 64))
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)
 check("the Joker is no longer a plain log loop in the V roster", bool(v) and "[joker]=" not in v.group(1))
 check("build_joker_web is the last thing build.sh runs", BUILD.rstrip().endswith("build_joker_web"))
