@@ -9857,3 +9857,54 @@ session with accen-dev, for C in `watch-it-burn-community` and `watch-it-burn-pr
 `checksum/proxy-py` annotation reads `659ff019071f`. Then at the finale rehearsal, `finale-cap-on 0.01` in the public
 terminal and one chat from a phone must read "The kitchen is closed: this cluster hit its $... spend cap", then
 `finale-cap-off`. No E2E test sends a capped `/chat` to a live cluster; that phone check is the live one.
+## 2026-11-02 · #714 · Falco moves to lab-platform's copies, and the two terminal-side tags name their versions
+
+**Context.** Run 16111 is #714's next dispatch after run 15842 (`61f2615` to `0c72bad`, on staging as `a6d92c6`).
+That run left five images with no ghcr.io copy, two version tags not yet on ghcr.io, and the gate test. An anonymous
+read of ghcr.io on 2026-11-02 found that three of those are now there. Falco 0.45.1 is at
+`mirror/falcosecurity/falco:0.45.1-dc34bb8e231e`, serving `sha256:dc34bb8e…`, and falcoctl 0.14.2 is at
+`mirror/falcosecurity/falcoctl:0.14.2-d9d2591057eb`, serving `sha256:d9d25910…`. Both are lab-platform#295's digests.
+`watch-it-burn:workshop-mcp-mcp-1.29.1` and `watch-it-burn:web-terminal-ttyd-1.7.7` serve the two digests
+`gitops/ai-layer/resources.yaml` already pins (`9a26c18c…` and `68004fb5…`). The three build bases lab-platform#353
+asks for still do not answer an anonymous pull (HTTP 403 on the token): busybox 1.38.0, debian bookworm-slim and
+node 24.22.2-trixie-slim. The six later #714 branches (`agent/714-15969` to `-16097`) carry no commits.
+
+**What changed.**
+- **Falco.** `gitops/bootstrap/apps/falco.yaml` names both copies through `{{ .Values.imageRegistry }}/mirror`, as
+  falcosidekick does, so the ECR cache path works too. `verify/mirror_copies.py` moves them into `COPIES` and drops
+  `UNPULLED`, the 0.44.1 and 0.13.0 copies no chart pulls, along with the two checks that used it. The render test
+  now covers falco like any other copy app: unset and at the cache path it names the copies, and nothing names
+  `docker.io/falcosecurity/falco:0.45.1` or `falcoctl:0.14.2`. With this change, nothing a cluster pulls comes from
+  Docker Hub. The only Docker Hub images in a render are the three Helm test-hook Pods, which Argo CD skips.
+- **Version tags.** Every reference to `watch-it-burn:workshop-mcp` and `watch-it-burn:web-terminal` now names
+  `workshop-mcp-mcp-1.29.1` and `web-terminal-ttyd-1.7.7`, at the same digests. That covers resources.yaml,
+  images.lock, beat-02.sh, beat-cost.sh, two FACILITATOR.md commands, the recreation spec and three tests. The
+  web-terminal workflow is the first draft's (`origin/agent/714-12873`), unchanged because staging had not touched
+  the file since. It builds, reads ttyd's version out of the built image, and pushes `web-terminal-ttyd-<v>`.
+- **`verify/test_image_version_tags.py`** (new, tools tier) is the draft's test, made again on today's layout. It
+  reads mcp's version from the dist-info at the pinned workshop-mcp digest, and runs `ttyd --version` on the binary
+  taken out of the pinned web-terminal digest. The draft read the Joker under `watch-it-burn:joker-busybox-`; today
+  it is Michael's `festival-ops/maintenance-shell:busybox-1.38.0`, so the test reads that tag and runs its
+  busybox. busybox's layer stores `bin/busybox` as a hard link to `bin/[`, so the test follows the link. It
+  also fails when any file outside the dated records still names a `workshop-mcp` or `web-terminal` tag other than
+  the pinned one. Checked: putting `workshop-mcp@` back in beat-02.sh makes it fail by name.
+
+**Not in this change, and why.** These are unchanged from run 15842's entry, apart from the three now done. The
+Joker's `JOKER_BASE`, web-terminal's `debian:bookworm-slim` and Backstage's node base wait on lab-platform#353's
+copies. That run (15970) ended failed at validation, and its crane copy is escalated there. So does
+`verify/test_no_docker_hub.py`: the docker.io lines left that are not refused examples are those three bases and
+the two tests that read busybox from Docker Hub, `test_joker_web_busybox.py` and `test_c6_joker_public.py`. The
+villain shell banners still need a Joker re-push, because `test_c6_joker_public.py` holds the published layer to
+`joker-web/` byte for byte. Also left: `watch-it-burn:sample-app` and `:tool-pin` name no version either. Michael's
+comment named three tags, and a retag needs a ghcr.io write, so they are a follow-up.
+
+**Tests.** New: test_image_version_tags. Changed: test_image_registry and test_image_registry_render (no
+`UNPULLED`), test_fake_ticket and test_weather_feed (the workshop-mcp tag), and test_c6_villain_endpoint (the
+web-terminal tag).
+
+**Not yet run on a cluster.** Run 15842's check now expects no Docker Hub image at all. On a fresh attendee cluster,
+run `CONTEXT=<ctx> bash verify/run-e2e.sh`, then
+`kubectl --context "$CONTEXT" get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u`. No line may be a
+Docker Hub image, and the Falco DaemonSet must be Ready on `mirror/falcosecurity/falco:0.45.1-dc34bb8e231e`, its
+falcoctl init and follow containers included. The web-terminal and workshop-mcp pods must come up on the versioned
+tags, and their digests must be unchanged.
