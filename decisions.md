@@ -8941,3 +8941,27 @@ leaves it. With the burritbot.html change reverted, the offline test fails 3 che
 **Not yet run on a cluster.** Owed on the next attackme bring-up, with the phone check
 (`facilitation/kubecon-na-2026-phone-check.md`): open `https://attackme.burritobot.co/` on a phone and see no
 Datadog button in the header, then open `burritobot-private` and see it there.
+
+## 2026-11-02 · #205 · Re-dispatch after the merge: the code is on staging, and the two live acceptance cases wait on #795
+
+**Context.** Run 15816 is #205's first dispatch since its work merged to `staging` as `939cd82` and `5743323`
+(the dispatcher's `57433233471b`). It starts on staging `005f459`, which is still `origin/staging`, so nothing has
+moved under the work. It has no AWS profile and no kubeconfig, so it cannot run either acceptance case: the
+NetworkPolicy drill (`verify/test_drift_selfheal_live.py`) and the hand-made bucket shown in Config and the next
+drift report (`verify/test_drift_aws_live.py`).
+
+**Rechecked on today's tree.** The pins the self-heal window in `docs/floor.md` was read from are unchanged:
+`infra/deploy-full-idp.sh` still installs argo-cd chart 10.8.4 (Argo CD v3.5.2), and lab-platform's
+`scripts/render-bootstrap.sh` still pins 10.11.3 (v3.5.6). The drill target `agent/platform-console-egress` is still
+in `gitops/ai-layer/resources.yaml`. `bash verify/run-tests.sh` passes (220 tests), `verify/test_drift_floor.py` and
+`verify/test_drift_report.py` among them.
+
+**What is left, and where it is tracked.** Only the live runs. #795 ("Run #205's live drift checks on the KubeCon NA
+cluster build") holds the five commands from the entry above: the drill, the audit root's apply in each fleet
+account, the AWS drift test, the IAM pipeline's AWS test for the audit suite, and one hand run of `drift-report.py`
+before the cron line goes in. #205 waits on #795 rather than being dispatched again, since another dispatch can only
+repeat this check. The cron-versus-Actions question asked on 2026-10-24 still stands at its default, cron.
+
+**Not yet run on a cluster.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py` and
+`DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`, after the audit root is applied, as
+#795 lists them.
