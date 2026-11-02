@@ -9086,3 +9086,59 @@ Michael's go for the spend (one t3.2xlarge node and its EKS control plane for ab
 5. Write step 3's wall-clock, step 4's time to Ready and footprint, and the requests into the vllm entry's `cost`, with
    `measured: true`.
 6. `./fleet.sh down watch-it-burn-attendee-099`, then `./cleanup-log-groups.sh --delete`.
+## 2026-11-02 · #668 · The demo apps' half is #715's; the console still waits on `web.yaml` fields lab-platform has not added
+
+**Context.** #668 moves the console and the five demo apps from nginx onto lab-platform's `web` image
+(`ghcr.io/peopleforrester/lab-platform/web`, built by lab-platform#278). Hecaton run 15839 is the third dispatch.
+Two earlier drafts exist. Run 10510's `765bcae` (`origin/agent/668-10510`) is a decisions entry only. Run 13230's
+`cb31d55` (`origin/agent/668-13230`) moved the five demo apps and listed what `web.yaml` cannot say for the console.
+Neither reached staging. `bash verify/draft-drift.sh origin/agent/668-13230 origin/staging` found 31 drift lines:
+#715 (`4f9f5c4`, 2026-10-31) made the same demo-app move on staging, on a layout of its own. Each app's `web.yaml` is a
+file of its own that a `configMapGenerator` turns into a hashed ConfigMap, and `apps-allow-ingress` keeps port 80 for
+the villain apps. So nothing from `cb31d55` is reused. Its gap list, measured on the pinned binary, is carried
+below after a fresh read of lab-platform's source.
+
+**What staging already does from the issue's list.** All of it is #715's work, plus the signature policy in `89c3919`:
+- The five demo apps run `web@sha256:73cd15652cb8…fbd9`, set by `kustomize.images` at `{{ .Values.imageRegistry }}`
+  in each `gitops/bootstrap/apps/demo-app-*.yaml`. That answers the issue's fourth point (how an image reaches a
+  kustomize directory source under #622) the way #652 did for llm-guard.
+- Each container has `NETWORK_BOUNDARY=sandbox` and port 8080, with probes on 8080, and each Service targets 8080.
+- The package is pullable with no credential. On 2026-11-02 an anonymous ghcr.io token for
+  `peopleforrester/lab-platform/web:pull` fetched the manifest for the digest and for `v1` with 200. `v1` still
+  serves `sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`.
+
+**The console did not move, again.** lab-platform's `internal/webserve/config.go` and `server.go`, read through
+`sources` on 2026-11-02, take the same fields run 13230 measured. The top level takes `listen`, `tls`, `root`,
+`routes` and `hosts`. A host rule takes `match`, `proxy` or `fallback`. lab-platform's merged PRs about `web` are
+still #280 (the build), #336 (the umask republish) and #337. Against today's `console.conf`, the file still cannot say:
+1. **`/chat`'s keyed limit (#450).** A route has one token bucket, shared by every caller (`buckets map[int]*bucket`).
+   `/chat` needs a limit keyed on `X-BurritoBot-Session`, 10 a minute with burst 9, that holds no request without
+   the header. Today it also has a second limit keyed on `X-Forwarded-For`. #786 (Michael's 2026-11-01 ruling on #450)
+   drops that one, so after #786 one keyed limit is enough.
+2. **`/chat`'s own replies.** nginx answers a 429 as a guarded 200 in guard-proxy's JSON shape, and a 502, 503 or 504
+   as JSON with that code (BurritoBot#110). web answers a 429 with the text `too many requests` and a failed proxy
+   with a bare 502. The phone would show a status code, not a sentence.
+3. **`X-Forwarded-For`.** web calls `SetXForwarded()` on every route and host rule, which replaces the inbound value
+   with the peer's address. `console.conf` sends none on `/lab-events` (`test_lab_events.py` holds that), and
+   appends to the inbound value on `/jupyter/` and the support host.
+4. **Host rules beyond `match` and `proxy`.** Every host rule shares one fallback page and a 3600s timeout, and
+   takes any method. `maintenance-shell-<cluster>` (#664) needs GET and HEAD only, a 10s timeout and its own
+   "nothing here yet" page. `support[-<cluster>]` (#685) needs GET and POST only, `/landed` refused, a 32k body
+   cap, a 10s timeout, `X-Forwarded-For` appended and no fallback page.
+5. **Host case.** web matches the Host as sent, with the port stripped but not lowercased. The file can fix this
+   with `(?i)` in each `match`, so it needs nothing from lab-platform.
+
+Moving the console now would drop the room's `/chat` limit and its readable refusals, and Challenge 6's two hosts.
+Writing `gitops/ai-layer/web.yaml` without switching the Deployment would leave a file nothing runs. It would also
+tie ~15 tests to a shape lab-platform is about to change. So neither is done. The console's `web.yaml`, its mounts
+(`/etc/web/web.yaml`, `/srv/www`, console-tls at `/etc/web/tls`), `not-here.html` and moving the tests that parse
+`console.conf` all wait on lab-platform adding points 1 to 4.
+
+**The follow-up was never filed.** Run 13230's report said a follow-up asked lab-platform for those fields.
+lab-platform has no issue for it, open or closed (searched on 2026-11-02 by "console", "web image", "routes",
+"X-Forwarded-For" and "rate"). This run's report files it on lab-platform with the four points.
+
+**Not yet run on a cluster.** The demo-app half is owed what the #715 entry names:
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` on the next attendee bring-up, where each party
+host must answer its page through the console's host map and the 8080 target.
+`verify/test_console_no_toggle_live.py` is owed once the console moves.
