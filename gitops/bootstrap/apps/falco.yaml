@@ -17,6 +17,12 @@ spec:
     targetRevision: "9.2.1"
     helm:
       valuesObject:
+        # lab-platform's mirror/ copy of Docker Hub's falcosecurity/falco:0.45.1, the chart's tag, named by its
+        # linux/amd64 digest's first twelve characters (lab-platform#295, #714). falcoctl's is below.
+        image:
+          registry: "{{ .Values.imageRegistry }}/mirror"
+          repository: falcosecurity/falco
+          tag: "0.45.1-dc34bb8e231e"
         # Datadog Agent Autodiscovery: the `falco` named integration scrapes Falco's metrics endpoint
         # (PRD #26 M2). Key uses the real container name `falco`. Port 8765 is Falco's webserver/metrics.
         podAnnotations:
@@ -309,6 +315,11 @@ spec:
         # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
         # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
         falcoctl:
+          # lab-platform's mirror/ copy of Docker Hub's falcosecurity/falcoctl:0.14.2, the chart's tag (lab-platform#295).
+          image:
+            registry: "{{ .Values.imageRegistry }}/mirror"
+            repository: falcosecurity/falcoctl
+            tag: "0.14.2-d9d2591057eb"
           artifact:
             install:
               resources:

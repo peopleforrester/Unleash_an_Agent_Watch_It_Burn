@@ -150,7 +150,7 @@ print("== every mirror/ copy a chart pulls, rendered by its chart (#623) ==")
 # keys the chart builds it from. The five KubeArmor images the operator has compiled in appear in the render as
 # the KubeArmorConfig's fields and the snitch's RELATED_IMAGE_KUBEARMOR_SNITCH env, which is where the operator
 # reads them. The upstream charts are fetched from their repositories, so this needs the network.
-from mirror_copies import COPIES, UNPULLED, apps as copy_apps  # noqa: E402
+from mirror_copies import COPIES, apps as copy_apps  # noqa: E402
 
 WORK = pathlib.Path(tempfile.mkdtemp(prefix="mirror-copies-"))
 pulled: dict[tuple[str, str, str], pathlib.Path] = {}
@@ -235,7 +235,7 @@ def pulls(ref: str, found: list[str]) -> bool:
     return any(pat.search(s) for s in found)
 
 
-for name in copy_apps() + ["falco"]:
+for name in copy_apps():
     print(f"-- {name}")
     rendered = {}
     for label, args in (("unset", ()), ("cache", ("--set", f"imageRegistry={CACHE}"))):
@@ -253,10 +253,6 @@ for name in copy_apps() + ["falco"]:
               not pulls(c.upstream, rendered["unset"] + rendered["cache"]))
     left = [s for s in rendered["cache"] if GHCR_OWNER + "/lab-platform" in s]
     check(f"{name}: at the cache path, no {GHCR_OWNER}/lab-platform reference is left {left[:3]}", not left)
-    for c in (c for c in UNPULLED if name in c.apps):
-        # A copy of a tag the chart no longer pulls: if the chart ever pulls it again, name the copy.
-        check(f"{name}: the chart does not pull {c.upstream}, so its copy {c.tag} is rightly not named",
-              not pulls(c.upstream, rendered["unset"]))
 shutil.rmtree(WORK, ignore_errors=True)
 
 print("== a value no image can be named under fails by name ==")
