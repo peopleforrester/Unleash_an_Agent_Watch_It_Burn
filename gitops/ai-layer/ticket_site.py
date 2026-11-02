@@ -233,7 +233,14 @@ LANDINGS: list[dict] = []
 SCALE_DOWN_SECONDS = int(os.environ.get("JOKER_SCALE_DOWN_SECONDS", "300"))
 
 
-def who_deployed(name: str) -> str:
+def name_from_display(s: str) -> str | None:
+    """The vocabulary's name for what deploy_app says the person gave ("Edgar the Kelpie", any case, or its slug)."""
+    return name_from_slug(slug(" ".join(str(s or "").split())))
+
+
+def who_deployed(name: str, witch: str = "") -> str:
+    if witch:
+        return witch
     if name.startswith("joker-"):
         return name_from_slug(name.removeprefix("joker-")) or "an unnamed Joker"
     return "an unnamed Joker"
@@ -259,14 +266,81 @@ def plain_refusal(detail: str) -> str:
     return f"Refused by the cluster (HTTP {code.group(1)})." if code else "Refused by the cluster."
 
 
-def record_landing(name: str, ok: bool, detail: str) -> dict:
-    row = {"name": name[:63], "who": who_deployed(name), "ok": bool(ok),
-           "detail": "" if ok else plain_refusal(str(detail)[:400]),
+def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> dict:
+    # The witch is the name deploy_app says the person gave (#773), taken only when the vocabulary makes it, as the
+    # cookie is; a Joker's own name still says whose it is when the model passed none.
+    witch = name_from_display(requested_by) or (name_from_slug(name.removeprefix("joker-"))
+                                                if name.startswith("joker-") else None) or ""
+    row = {"name": name[:63], "who": who_deployed(name, witch), "witch": witch, "image": str(image)[:300],
+           "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
            "at": time.strftime("%H:%M:%S"), "ts": time.time()}
     with _lock:
         LANDINGS.insert(0, row)
         del LANDINGS[1000:]
     return row
+
+
+# --- deployments.burritobot.co (#773) ----------------------------------------------------------------------------
+# Every successful deployment, by its name, the image it runs and the witch name of whoever asked: what the room
+# deployed in Challenge 2, projected and on phones. A refusal is not shown: the room learns that from the bot's reply.
+# The page names no Joker and links to nothing on the desk, so it gives away no later challenge. The console serves it
+# at deployments-<cluster> and deployments.burritobot.co (console.conf), and /deployments.json on the chat page's own
+# host, so the chat page can show "see your deployments" once the visitor's first one lands.
+DEPLOYMENTS_HOST = re.compile(r"^deployments(-[a-z0-9-]+)?\.")
+
+
+def image_label(image: str) -> str:
+    """The short name of an image reference: its repository's last part, with no tag or digest."""
+    return image.split("@", 1)[0].rsplit("/", 1)[-1].split(":", 1)[0]
+
+
+def deployments(witch_slug: str = "") -> list[dict]:
+    """The landed rows, newest first, as the deployments page shows them; only one witch's when a slug is given."""
+    with _lock:
+        rows = [r for r in LANDINGS if r["ok"]]
+    if witch_slug:
+        rows = [r for r in rows if r.get("witch") and slug(r["witch"]) == witch_slug]
+    return [{"name": r["name"], "image": r.get("image", ""), "app": image_label(r.get("image", "")),
+             "witch": r.get("witch", ""), "at": r["at"]} for r in rows[:200]]
+
+
+_DEPLOY_STYLE = ("body{font:22px/1.45 system-ui,sans-serif;max-width:60rem;margin:5vh auto;padding:0 1.25rem;"
+                 "color:#1c1330;background:#ffffff}h1{font-size:1.6rem;margin:0 0 .3rem}.meta{color:#6b5f80;"
+                 "font-size:.8em}ul{list-style:none;padding:0}li{border-bottom:1px solid #e6def3;padding:.55rem 0}"
+                 "b{color:#6a2bd9}code{font-size:.85em}")
+_DEPLOY_SCRIPT = """<script>
+const WITCH=%s;
+async function tick(){try{const r=await fetch('/deployments.json'+(WITCH?'?witch='+encodeURIComponent(WITCH):''),
+{cache:'no-store'});const rows=await r.json();const ul=document.getElementById('deployments');
+if(!rows.length){const li=document.createElement('li');li.className='meta';li.textContent=%s;ul.replaceChildren(li);
+return;}
+ul.replaceChildren(...rows.map(x=>{const li=document.createElement('li');const b=document.createElement('b');
+b.textContent=x.name;li.appendChild(b);if(x.app){const c=document.createElement('code');c.textContent=' ('+x.app+')';
+c.title=x.image;li.appendChild(c);}li.appendChild(document.createTextNode(' deployed by '+(x.witch||
+'someone who gave no name')+' at '+x.at));return li;}));}catch(e){}}
+tick();setInterval(tick,3000);
+</script>"""
+
+
+def _deploy_page(title: str, lead: str, witch_slug: str | None, empty: str) -> str:
+    """The page's rows come from /deployments.json every 3 s; with no witch to show for (None), it shows no rows."""
+    script = "" if witch_slug is None else _DEPLOY_SCRIPT % (json.dumps(witch_slug), json.dumps(empty))
+    return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>{html.escape(title)}</title><style>{_DEPLOY_STYLE}</style>"
+            f'<h1>{html.escape(title)}</h1><p class="meta">{html.escape(lead)}</p><ul id="deployments"></ul>{script}')
+
+
+def deployments_page() -> str:
+    return _deploy_page("Everything BurritoBot deployed", "Every app BurritoBot put on the cluster, newest first.", "",
+                        "Nothing deployed yet.")
+
+
+def mine_page(name: str | None) -> str:
+    if not name:
+        return _deploy_page("Your deployments", "Chat with BurritoBot first: your deployments show here under the "
+                            "name the chat page gives you.", None, "")
+    return _deploy_page("Your deployments", f"Everything BurritoBot deployed for {name}, newest first.", slug(name),
+                        "Nothing deployed for you yet.")
 
 log = logging.getLogger("fake-ticket")
 
@@ -332,7 +406,7 @@ def desk() -> str:
 
 def me_page(name: str) -> str:
     mine = [t for t in TICKETS.values() if t.get("owner") == slug(name)]
-    jokers = [r for r in LANDINGS if r["name"] == f"joker-{slug(name)}"]
+    jokers = [r for r in LANDINGS if r["name"] == f"joker-{slug(name)}" or r.get("witch") == name]
     rows = "".join(f"<li>{'landed' if r['ok'] else 'refused'} at {r['at']}: <code>{html.escape(r['name'])}</code>"
                    f"{' (' + html.escape(r['detail']) + ')' if r['detail'] else ''}"
                    f"{' &middot; scaled to zero after 5 minutes' if r['ok'] and time.time() - r['ts'] > SCALE_DOWN_SECONDS else ''}"
@@ -373,13 +447,18 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _visitor(self) -> str:
-        """The visitor's name: from their cookie when it is one the vocabulary makes, else a new one."""
-        self._set_cookie = ""
+    def _cookie_witch(self) -> str | None:
         for part in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = part.strip().partition("=")
             if k == "wib_witch" and name_from_slug(v):
                 return name_from_slug(v)
+        return None
+
+    def _visitor(self) -> str:
+        """The visitor's name: from their cookie when it is one the vocabulary makes, else a new one."""
+        self._set_cookie = ""
+        if self._cookie_witch():
+            return self._cookie_witch()
         client = (self.headers.get("X-Forwarded-For") or self.client_address[0]).split(",")[0].strip()
         name = generate_name(client + "|" + (self.headers.get("User-Agent") or "") + "|" + secrets.token_hex(8))
         host = (self.headers.get("Host") or "").split(":")[0]
@@ -390,10 +469,29 @@ class Handler(BaseHTTPRequestHandler):
     def _ticket_json(self, t: dict) -> dict:
         return {k: t[k] for k in ("id", "subject", "status", "customer", "body")}
 
+    def _deployments_get(self, url) -> None:
+        """deployments-<cluster> and deployments.burritobot.co: the deployments page and nothing of the desk's."""
+        if url.path == "/":
+            self._page(deployments_page())
+        elif url.path == "/mine":
+            asked = (urllib.parse.parse_qs(url.query).get("witch") or [""])[0]
+            self._page(mine_page(name_from_slug(asked) or self._cookie_witch()))
+        elif url.path == "/deployments.json":
+            self._send(200, deployments((urllib.parse.parse_qs(url.query).get("witch") or [""])[0][:80]))
+        elif url.path == "/healthz":
+            self._send(200, {"ok": True})
+        else:
+            self._send(404, {"error": "not found"})
+
     def do_GET(self) -> None:  # noqa: N802 (http.server's name)
         url = urllib.parse.urlsplit(self.path)
-        if url.path == "/healthz":
+        if DEPLOYMENTS_HOST.match((self.headers.get("Host") or "").lower()):
+            self._deployments_get(url)
+        elif url.path == "/healthz":
             self._send(200, {"ok": True})
+        elif url.path == "/deployments.json":
+            # Also on the chat page's own host (console.conf), for its "see your deployments" link.
+            self._send(200, deployments((urllib.parse.parse_qs(url.query).get("witch") or [""])[0][:80]))
         elif url.path == "/":
             self._visitor()   # set/honor the wib_witch cookie so the desk, /me and wall share one name (#762)
             self._page(desk())
@@ -403,7 +501,8 @@ class Handler(BaseHTTPRequestHandler):
             self._page(WALL)
         elif url.path == "/wall.json":
             with _lock:
-                rows = [{k: r[k] for k in ("name", "who", "ok", "detail", "at")} for r in LANDINGS[:200]]
+                rows = [{k: r.get(k, "") for k in ("name", "who", "image", "ok", "detail", "at")}
+                        for r in LANDINGS[:200]]
             self._send(200, rows)
         elif url.path == "/ticket":
             tid = (urllib.parse.parse_qs(url.query).get("id") or [""])[0].strip().upper()[:40]
@@ -431,6 +530,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         url = urllib.parse.urlsplit(self.path)
+        if DEPLOYMENTS_HOST.match((self.headers.get("Host") or "").lower()):
+            self._send(404, {"error": "not found"})   # the deployments page takes no tickets and no reports
+            return
         raw = self._read()
         if raw is None:
             return
@@ -455,12 +557,20 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, KeyError, TypeError):
                 self._send(400, {"error": "name is required"})
                 return
-            self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or "")))
+            self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or ""),
+                                           str(d.get("image") or ""), str(d.get("requested_by") or "")))
         else:
             self._send(404, {"error": "not found"})
 
     def log_message(self, fmt: str, *args) -> None:
         log.info("%s %s", self.address_string(), fmt % args)
+
+
+class Server(ThreadingHTTPServer):
+    # http.server listens with a backlog of 5. The deployments page is polled every 3 s by every phone that has it
+    # open (#773), and deploy_app reports on its own threads, so a burst past 5 had connections wait out a SYN retry.
+    request_queue_size = 128
+    daemon_threads = True
 
 
 def main() -> None:
@@ -470,7 +580,7 @@ def main() -> None:
     host = os.environ.get("TICKET_LISTEN_HOST", "0.0.0.0")
     port = int(os.environ.get("TICKET_LISTEN_PORT", "8080"))
     log.info("listening on %s:%d", host, port)
-    ThreadingHTTPServer((host, port), Handler).serve_forever()
+    Server((host, port), Handler).serve_forever()
 
 
 if __name__ == "__main__":

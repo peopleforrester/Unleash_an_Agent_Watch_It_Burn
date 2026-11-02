@@ -1,0 +1,131 @@
+# ABOUTME: Live half of #773 on a cluster: deployments-<cluster> serves the deployments page and none of the desk, and
+# ABOUTME: a room deployment's public image is admitted or refused exactly as restrict-image-registries is set there.
+# SUITE: e2e (needs kubectl, CONTEXT naming a cluster that runs the ai-layer, and the network to reach its public host)
+"""Usage: CONTEXT=<kube-context> python3 verify/test_deployments_page_live.py
+
+1. The fake-ticket site answers /deployments.json in the agent namespace (read through the API server's service proxy).
+2. The cluster's public host, from the cluster-identity ConfigMap, has a deployments-<label> twin that serves the
+   page through the console (fleet.sh routes publishes it from WIB_VILLAIN_HOSTS), and a desk page under that name is
+   a 404.
+3. A server-side dry run, as workshop-mcp, of the Deployment deploy_app makes from "deploy nginx" (one replica, the
+   room's resources, PUBLIC_IMAGES' nginx) is admitted where restrict-image-registries is Audit or absent (the public
+   cluster, the attack) and refused by it where it is Deny (the private cluster, the fix). Nothing is created.
+
+What it leaves to a person: the model filling requested_by with the visitor's witch name, which needs a guard-proxy
+pin that forwards the name (#762) and a real chat, and the chat page's "see your deployments" link appearing.
+"""
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import types
+import urllib.error
+import urllib.request
+
+REPO = pathlib.Path(__file__).resolve().parent.parent
+CONTEXT = os.environ.get("CONTEXT", "")
+failures: list[str] = []
+
+
+def check(name: str, ok: bool, detail: str = "") -> None:
+    print(f"  {'PASS' if ok else 'FAIL'}  {name}" + (f"  ({detail})" if detail and not ok else ""))
+    if not ok:
+        failures.append(name)
+
+
+def finish() -> None:
+    print()
+    if failures:
+        print(f"FAILED: {len(failures)} check(s)")
+        for f in failures:
+            print(f"  - {f}")
+        raise SystemExit(1)
+    print("The deployments page and the room's public image hold on this cluster.")
+
+
+def kubectl(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["kubectl", "--context", CONTEXT, *args], input=stdin, capture_output=True, text=True,
+                          timeout=60)
+
+
+class _StandInMCP:
+    def __init__(self, *a, **kw):
+        pass
+
+    def tool(self, *a, **kw):
+        return lambda f: f
+
+
+check("kubectl is on PATH", shutil.which("kubectl") is not None)
+check("CONTEXT is set (the kube-context of a cluster running the ai-layer)", bool(CONTEXT))
+if failures:
+    finish()
+check(f"cluster for context {CONTEXT} is reachable", kubectl("get", "--raw", "/readyz").returncode == 0)
+if failures:
+    finish()
+
+print("== 1. the fake-ticket site answers /deployments.json ==")
+r = kubectl("get", "--raw", "/api/v1/namespaces/agent/services/fake-ticket:8080/proxy/deployments.json")
+try:
+    listed = json.loads(r.stdout) if r.returncode == 0 else None
+except ValueError:
+    listed = None
+check("it answers a JSON list", isinstance(listed, list), r.stderr.strip()[:200])
+
+print("== 2. deployments-<cluster> serves the page through the console ==")
+r = kubectl("-n", "agent", "get", "configmap", "cluster-identity", "-o", "jsonpath={.data.public-host}")
+public = r.stdout.strip()
+check("the cluster-identity ConfigMap names this cluster's public host", r.returncode == 0 and bool(public),
+      r.stderr.strip()[:200])
+if public:
+    host = f"deployments-{public}"
+    try:
+        with urllib.request.urlopen(f"https://{host}/", timeout=20) as resp:
+            page = resp.read().decode("utf-8", "replace")
+        check(f"https://{host}/ is the deployments page", "Everything BurritoBot deployed" in page)
+        check("and names no Joker", "joker" not in page.lower())
+    except (urllib.error.URLError, TimeoutError) as e:
+        check(f"https://{host}/ answers", False, f"{type(e).__name__}: {e}")
+    try:
+        urllib.request.urlopen(f"https://{host}/HC-666", timeout=20)
+        code = 200
+    except urllib.error.HTTPError as e:
+        code = e.code
+    except (urllib.error.URLError, TimeoutError) as e:
+        code = f"{type(e).__name__}: {e}"
+    check("a desk page under that name is a 404", code == 404, str(code))
+
+print("== 3. the room's nginx is admitted or refused as restrict-image-registries is set here ==")
+sys.modules["tool_audit"] = types.SimpleNamespace(AuditedFastMCP=_StandInMCP)
+spec = importlib.util.spec_from_file_location("workshop_mcp_live", REPO / "gitops/ai-layer/workshop-mcp-server.py")
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+obj = {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "tron", "namespace": "agent"},
+       "spec": {"replicas": 1, "selector": {"matchLabels": {"app": "tron"}},
+                "template": {"metadata": {"labels": {"app": "tron", m.WORKLOAD_LABEL: "tron"}},
+                             "spec": {"containers": [{"name": "tron", "image": "nginx"}]}}}}
+m._resolve_public_images(obj, "Deployment/tron")
+m._default_limits(obj)
+m._shrink_room_deployment(obj)
+check("the manifest is deploy_app's: the pinned nginx, one replica",
+      obj["spec"]["template"]["spec"]["containers"][0]["image"] == m.PUBLIC_IMAGES["nginx"]
+      and obj["spec"]["replicas"] == 1)
+r = kubectl("get", "validatingpolicies.policies.kyverno.io", "restrict-image-registries", "-o",
+            "jsonpath={.spec.validationActions}")
+actions = r.stdout.strip() if r.returncode == 0 else ""
+denies = "Deny" in actions
+print(f"  INFO  restrict-image-registries validationActions here: {actions or '(not installed)'}")
+r = kubectl("--as=system:serviceaccount:agent:workshop-mcp", "-n", "agent", "create", "-f", "-",
+            "--dry-run=server", "-o", "name", stdin=json.dumps(obj))
+out = (r.stdout + r.stderr).strip()
+if denies:
+    check("at Deny, the room's image is refused, and the refusal names restrict-image-registries",
+          r.returncode != 0 and "restrict-image-registries" in out, out[:300])
+else:
+    check("with no Deny, the room's image is admitted (the attack lands)", r.returncode == 0, out[:300])
+finish()
