@@ -9985,3 +9985,27 @@ minutes later, when that URL answered 200, both passed. Hecaton run 15909 stalle
 background, so run 15982 finished it. Run 16424, on staging `a29bb91`, passed `bash verify/run-tests.sh`. Its
 `bash verify/run-e2e-tools.sh` ran 41 checks and failed one, `test_dispatched_runs_cause_comment.py`, because GitHub
 answered its anonymous comment read with 403 rate limit exceeded. Rerun alone once the limit allowed, it passed.
+## 2026-11-02 · #783 · Re-dispatch: the fix and the check are on staging, and the live read-back is still owed
+
+**No code changed.** Hecaton run 16386 is the second dispatch of #783. Commits `67c956a` (the copy's own trace id),
+`c4c62bb` (`verify/agent_obs_flow.py`) and `878b077` (the entry above) have been on `origin/staging` since run 16035's
+merge, and the merge comment on #783 names the cause. This run was handed the `watch-it-burn-community` and
+`watch-it-burn-private` contexts, the accen-dev profile and the session env under its `clusters/` directory. It could
+read none of them: the files are owned `hecaton:hecaton` with mode 0640, and the run's user is not in group
+`hecaton`. `kubectl` refused the kubeconfig, sourcing the env failed, and `aws` had no accen-dev profile. So the
+collectors' sync revisions, the intake log and the `agent_obs_flow.py chat` read-back from the entry above did not
+run, and the cause is still an inference until they do.
+
+**Not yet run on a cluster.** The commands are the entry above's, unchanged: per cluster, read the `otel-collector`
+Application's sync revision (it must contain `67c956a`) and grep the agent DaemonSet's log for `llmobs`. Then
+`python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`, and its trace ids go
+in a comment on #783.
+
+**The E2E tools tier is red, and not from #783.** `bash verify/run-tests.sh` passed. `bash verify/run-e2e-tools.sh` failed one
+check, in `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:d6acd503bc20…`,
+not the `sha256:68004fb5ed2d…` that `gitops/ai-layer/resources.yaml` pins. The base commit 7cc4244 is on staging, and the
+`build-web-terminal` run of that commit (2026-11-02 17:51 UTC, a push run, because #714 edited the workflow file) rebuilt the
+image and pushed it over the same tag. Clusters pull by digest, so nothing running changed. The fix needs a ghcr.io
+write and the signing key (`verify/sign-images.sh`), which this run has neither of: point the tag back at the pinned
+digest, or pin the new digest and sign it. It belongs to #714, and the workflow will move the tag again on its next
+push run unless it stops overwriting a tag that already exists.
