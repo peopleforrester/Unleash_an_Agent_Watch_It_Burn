@@ -8346,3 +8346,30 @@ either. The test is split by need, as the repo's test rules ask. The opt-in and 
 `# SUITE: e2e` without the tools tier. `run-e2e.sh` runs it, and it fails, naming the path, when the checker is
 missing. `compile-design-doc.py --publish` still runs the checker before the Doc is replaced, so nothing published
 goes unchecked.
+
+## 2026-11-02 · #130 · The agent and Bedrock workload-management exercises are designed in docs/research; the build waits for the next event
+
+**Design only.** #130 asks for exercises in which a student operates BurritoBot and its Bedrock model and spend, beside
+the eight challenges that attack it. Michael deferred the build on 2026-09-07 (`deferred-barcelona`) and kept the
+design work open, and on #447 he set that the Barcelona challenges wait until 2026-11-13. The design is at
+`docs/research/2026-11-02-workload-management-exercises.md`, in the shape #723 used for #116. No lab text, slide, run
+of show or deploy config changed.
+
+- **O1, operate the agent:** read its instructions, tools and model binding from the Agent CR; remove `run_shell` and
+  see the behavior change; restart it; match an `execute_tool` span in Datadog to `workshop-mcp`'s audit line.
+- **O2, the model as an operating decision:** follow the binding from Agent to ModelConfig to the Pod Identity policy;
+  swap to `bedrock-haiku` and compare cost and refusals with Nova Pro; lower the cluster cost cap and see that it can
+  be tightened and not lifted. The reset section gains a line that puts `bedrock-nova` back.
+- **What the design found.** `modelConfig` is already in the `workshop-agent` Application's ignore list and the IAM
+  policy already allows all four Bedrock tiers, so O2's swap needs no sync or IAM change. guard-proxy prices every
+  request at the one `MODEL_TIER` it read at start, so after a swap the counter prices Haiku or Opus at Nova rates;
+  the build makes guard-proxy read the bound ModelConfig (a guard-proxy-agenticburn change). A student's edit to
+  `workshop-mcp`'s tools is reverted by selfHeal; the note lists three ways to handle that and recommends teaching
+  the revert.
+
+**Earlier draft.** `bash verify/draft-drift.sh origin/agent/130-9475 origin/staging` reported CLEAN: that run made no
+commits, so there was nothing to reuse.
+
+**Not yet run on a cluster:** every exercise. The note's "Validation owed on a cluster" section names the checks a
+session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh` tier once the build lands, on or
+after 2026-11-13.
