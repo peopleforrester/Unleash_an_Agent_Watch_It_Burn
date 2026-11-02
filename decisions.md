@@ -9819,3 +9819,41 @@ cluster, which waits on Michael's go for about $1. Point 3 and the admin half of
 `watch-it-burn-private`. For point 2, also read the collector log for an OTTL error on `transform/llmobs_apm_off`.
 #783's own live read-back (the entry above) runs on the same admin cluster, so the session that does it can do #544's
 admin half in the same sitting.
+## 2026-11-02 · #744 · The pin already says "The kitchen is closed"; the finale, /kubecon and the load replay now say it too
+
+**No repin.** guard-proxy-agenticburn#25 (closed 2026-10-31) gives the cluster-wide cap its own reply: "The kitchen is
+closed: this cluster hit its $X spend cap, so BurritoBot isn't sending anything else to the model for anyone. A
+blocked request costs nothing." Michael's ef66c77 (#742, 2026-11-01) pinned guard-proxy at fb6e2bf, which is on
+guard-proxy main and carries it: proxy.py answers `cost_cap` with that text, and the pin's `conformance/test_spend.py`
+asserts it. The issue was filed against the pin before that. checksum/proxy-py moved with ef66c77, so the pod
+restarts on that proxy.py once Argo CD syncs it. This commit changes no gitlink: hecaton's forbidden gate refuses any
+change to one (question 766, "Michael pins, a run does the rest").
+
+**What changed.**
+- The KubeCon run-of-show's "Break it" close and /kubecon's copy of it quote the new reply and say Reset does not
+  help, in place of the per-conversation "kitchen tab is frozen ... Press Reset" text they told presenters to talk
+  over.
+- `verify/test_finale_cap.py` sends a `/chat` past the lowered cap to the pinned proxy.py (every guard off, so the cap
+  is what answers) and checks the reply starts "The kitchen is closed: this cluster hit its $<cap> spend cap" with no
+  Reset in it. It also holds the run-of-show and /kubecon to that quote and to no "press Reset".
+- `verify/load_replay.py` classified a refusal as `budget` by "The kitchen tab is frozen.", so at the cluster cap (the
+  COST_CAP_USD tally a replay on attackme spends against) every refused turn fell through to `guarded`. It now has a
+  `cost_cap` outcome read by `COST_CAP_TEXT` and keeps `budget` for C4's per-conversation guard; the report line names
+  both. `verify/test_load_replay.py` serves both replies, checks both texts are in proxy.py, and checks each is
+  classified as its own outcome. The run-of-show's load-replay item lists both.
+- The C4 lab text (lab.html, LAB-TEXT.md, the challenge README, PROMPT-CATALOG.md) is about the per-conversation
+  budget guard, whose reply is still "The kitchen tab is frozen" and still offers Reset, so it is unchanged.
+
+**What differs from the draft.** Run 15656's draft (485ee26 on `agent/744-15626`, cut from staging 39c1140) repinned
+guard-proxy to main 88b9b52 and bumped checksum/proxy-py to match, which is what the gate refused. 88b9b52's addition
+over fb6e2bf is #34's witch-name forwarding for #762, not #25, so this run leaves the pin where Michael put it; that
+repin belongs to #762. `verify/draft-drift.sh` named four drifted paths (decisions.md, the run-of-show,
+resources.yaml, kubecon.html). The run-of-show, /kubecon and test_finale_cap.py edits were made again on the current
+files, with the same wording; the load_replay change is new.
+
+**Not yet run on a cluster.** Hecaton run 16114 has no AWS or kubeconfig. Once staging reaches the clusters, from a
+session with accen-dev, for C in `watch-it-burn-community` and `watch-it-burn-private`: pull the kubeconfig into
+`/tmp/$C.kubeconfig`, confirm the context, and check the guard-proxy pod's
+`checksum/proxy-py` annotation reads `659ff019071f`. Then at the finale rehearsal, `finale-cap-on 0.01` in the public
+terminal and one chat from a phone must read "The kitchen is closed: this cluster hit its $... spend cap", then
+`finale-cap-off`. No E2E test sends a capped `/chat` to a live cluster; that phone check is the live one.

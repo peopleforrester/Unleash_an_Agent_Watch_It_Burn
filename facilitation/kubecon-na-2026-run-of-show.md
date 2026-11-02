@@ -752,9 +752,10 @@ real-looking home address to chat.
   "We couldn't show everything in 30 minutes. For the rest of the session, try to drive
   BurritoBot's bill up to its cap and break the demo. You have our permission."
   - **What the room sees when it trips:** BurritoBot stops calling the model for everyone,
-    `cost-watch` reads CAP HIT, and each phone gets "The kitchen tab is frozen. This
-    conversation hit its $X spend budget... Press Reset". Reset does not help, because the
-    cap is the cluster's; say so. Its own wording is asked on guard-proxy-agenticburn#25.
+    `cost-watch` reads CAP HIT, and each phone gets "The kitchen is closed: this cluster hit
+    its $X spend cap, so BurritoBot isn't sending anything else to the model for anyone".
+    Reset does not help, because the cap is the cluster's, and the reply does not offer it
+    (guard-proxy-agenticburn#25).
   - **Measured 2026-10-30 on attackme:** 20 sessions on one address, sending as fast as
     replies came back, put 83 turns through the model at about $0.004 each and crossed a
     $0.30 cap in under 45 seconds; turns past the cap cost nothing. One venue address is
@@ -1042,7 +1043,8 @@ is merely slow rather than rebuilding:
   about $1.80 predicted, because from one machine every turn leaves through one
   address and nginx lets about 120 a minute through, which is what a venue NAT does
   too. The report gives latency percentiles, outcomes by limit (nginx per network or
-  conversation, guard-proxy per session and per cluster, the cost cap), errors by
+  conversation, guard-proxy per session and per cluster, the cluster's cost cap, a
+  conversation's budget), errors by
   HTTP status (502, 504, 429), timeouts, and the `/cost` spend before and after. It
   must end `LOAD REPLAY GREEN`: a refusal is a sentence a phone can read and passes,
   a 502, 504, timeout or empty reply fails. Record the run on #644. `--source catalog`
