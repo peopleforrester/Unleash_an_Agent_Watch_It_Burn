@@ -9253,3 +9253,65 @@ reads every `image:` line in the repo, Components included, so an unpublished ta
 
 **Not yet run on a cluster.** Nothing changed. At the cutover, `verify/sign-images.sh --check` (with cosign 2.x) and
 the Kyverno image-signature check on a fresh attendee cluster, through `bash verify/run-e2e.sh`.
+## 2026-11-02 · #746 · Re-dispatch: the one-root copy is on staging, tokens and cost moved to #784, and the live look is still owed
+
+**No code changed.** The collector change that gives Agent Observability one root per turn (241f8e6, recorded in
+7452788, both committed on 2026-11-01 at 15:51 UTC and on staging since) is the whole of #746's repo work. Since that merge,
+two comments changed what is owed. Whitney's comment on #746 moves the fifth of her checks, tokens and cost on the
+root row, to #784, which puts token counts on guard-proxy's model-call span. Michael's handoff of 2026-11-02 asks for
+the live look on watch-it-burn-community or watch-it-burn-private, the two KubeCon clusters that are up, and never
+on a new cluster. So #746 closes on four checks, read on live traces in the sandbox org's LLM Observability
+(`ml_app:burritobot`):
+- one chat is one root row;
+- that row shows the user's prompt as input and the bot's final reply as output;
+- the tool calls, `read_support_ticket` and `deploy_app` for HC-666, sit under it;
+- its duration covers the whole chat, not kagent's 14 ms.
+
+**Whether the clusters already run it.** Both clusters' roots read the `staging` branch (`infra/deploy-full-idp.sh`
+passes `revision=staging`), and `otel-collector` syncs on its own (`gitops/bootstrap/apps/otel-collector.yaml` and
+`otel-collector-burn.yaml`, automated with selfHeal). Their collectors should have rolled to the change soon after
+the commit. Nobody has read their sync revision since, and the 2026-11-01 live rollout entry found ai-layer OutOfSync
+on an older revision, so an automated sync is not proof.
+
+**What #783 adds.** #783 reports that Agent Observability got no `ml_app:burritobot` root spans in the 12 hours
+before 2026-11-01 22:15 UTC, while APM kept receiving traces. That window holds two chats made after the change was committed,
+Whitney's Tron deploy test at about 16:22 UTC and the #762 check at about 16:45 UTC. Under this change, APM's copy
+carries `dd_llmobs_enabled` false and makes no Agent Observability rows by design, so every row has to come through
+`otlp_http/llmobs`. If those chats went through a collector that had synced the change, the copy did not land, and
+#746's live look cannot pass until it does. The change cannot explain #783's start: the last rows came at about
+03:26 UTC, some twelve hours before the change was committed. It can keep the outage going after that, though, which is why the
+first command below reads the collector log for the intake's errors. #783 owns the diagnosis. This entry only names
+the overlap.
+
+**Not yet run on a cluster.** Hecaton run 15925 has no AWS credentials, no kubeconfig and no read access to the
+sandbox org (#759 is the run-side access), so it ran none of this. From a session with accen-dev, at the repo root,
+for C in `watch-it-burn-private` (it has Tempo, for step 3) and then `watch-it-burn-community`:
+
+    K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] || exit 1
+    # 1. the collector runs the change: the revision must contain 241f8e6, and the sync must have succeeded
+    REV=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n argocd get application otel-collector \
+      -o jsonpath='{.status.sync.revision}')
+    git merge-base --is-ancestor 241f8e6 "$REV" && echo "otel-collector at $REV has #746"
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n argocd get application otel-collector \
+      -o jsonpath='{.status.sync.status} {.status.operationState.phase}{"\n"}'
+    # 2. the intake takes the copy: no output is the pass; a 403 means the org's key is refused at the llmobs intake
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n monitoring logs \
+      ds/otel-collector-opentelemetry-collector-agent -c opentelemetry-collector --since=2h | grep -i llmobs
+
+3. On watch-it-burn-private only, `KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3
+   verify/one_root_probe.py` must end with one root in Tempo, guard-proxy's `POST /chat`. That shows APM's path is
+   still guard-proxy → agentgateway → kagent after the change.
+4. On each cluster's bot page (`burritobot-private.burritobot.co`, `attackme.burritobot.co`), send "What's the status
+   of my support ticket HC-666?". The 2026-11-01 live rollout entry found that it fires `deploy_app`. Within a few
+   minutes, open LLM Observability in the sandbox org under `ml_app:burritobot` and read the four checks above on
+   that chat's trace. Then open the same trace in APM and confirm that it still has one `POST /chat` root and the
+   agentgateway hop. That look also settles the overlap note on Datadog's page ("some data sent to Agent
+   Observability may also be written to the corresponding APM traces").
+
+If #760's `verify/challenge_traces.py` is on staging by then, its run judges the same frame on Challenge 3's trace
+with a link. It reads the tokens and cost that #784 owns too, so a red there on cost alone does not hold #746 open.
+A pass on both clusters closes #746; record it here with the trace ids. A pass in Tempo and APM with no Agent
+Observability row is #783, not a #746 shape failure. Offline, the shape stays pinned by
+`python3 verify/test_trace_shape_e2e.py`, which `bash verify/run-e2e-tools.sh` runs.
