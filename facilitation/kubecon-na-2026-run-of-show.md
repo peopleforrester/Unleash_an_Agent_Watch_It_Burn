@@ -275,13 +275,29 @@ the presenters' guarded cluster where the guardrails are turned on and the trace
 are shown. Both answer on burritobot.co, the domain the room is shown, and on
 agenticburn.com behind it (#651).
 
-- **Public cluster**, `attackme.burritobot.co`: no guardrails at all, and no
+- **Public cluster**, `attackme.burritobot.co`: nothing armed at the start, and no
   Terminal button (#645). This is what the room attacks from their phones for all
-  three challenges. Kyverno stays off here so C6's deployment lands.
+  three challenges. Its profile is `kubecon-community`: the burn build plus the four
+  Kubernetes guardrails present and off, so Kyverno only audits until `guardrails-on`
+  and C6's deployment lands.
 - **The private cluster**, `burritobot-private.burritobot.co`, which Michael and
-  Whitney share: the full IDP with every Kubernetes control armed, and the AI
-  guardrails present but toggled off at the start so they can be turned on live.
-  This is where each challenge's fix is shown.
+  Whitney share: the full IDP (profile `kubecon-private`), with the AI guardrails and
+  the four Kubernetes guardrails present but off at the start so they can be turned
+  on live. This is where each challenge's fix is shown.
+
+**The Kubernetes guardrails switch (#774).** `guardrails-on`, typed in either
+cluster's terminal, turns the four Kubernetes guardrails on for both clusters at
+once, one at a time, printing every `kubectl` it runs: RBAC (agent-sa's Role reads
+one Secret by name), Kyverno (`restrict-image-registries` and
+`deny-external-registries` to Deny, so anything BurritoBot deploys must come from
+the internal registry, `registry.burritobot.co`), KubeArmor (`block-recipe-snoop`)
+and egress (the agent namespace's NetworkPolicy set). Each lights its badge on both
+chat pages within a poll; `guardrails-on 12` waits 12 seconds between guardrails so
+the room sees each one arrive. `guardrails-off` turns all four off again, for
+rehearsals and resets. The two clusters are linked by `./fleet.sh guardrails-link`,
+which `instructors up` runs once it has built both. The internal registry is
+Distribution on the private cluster, seeded at start with the images the agent may
+run; both clusters' nodes pull it through `registry.burritobot.co`.
 
 Both hostnames and their service hosts are served through the apex router, whose
 table carries the roster only (`./fleet.sh routes roster`, Night Before). No
@@ -609,11 +625,17 @@ real-looking home address to chat.
     (#773);
   - reading the filesystem, the recipe file under `/tmp/burrito-data`;
   - egress, posting the customer breakdown to `https://agenticburn.com/beacon`.
-- **Fix, by voice (1 min):** each guardrail named, not deep. All three are armed on
-  the private cluster from the start, so there is no toggle. If one is asked about,
-  its fallback proves it without the model:
-- C2 public image: admission control, Kyverno's `restrict-image-registries`, which does
-  not allow `public.ecr.aws`.
+- **Fix (1 min):** `guardrails-on` on the private bot's terminal arms the four
+  Kubernetes guardrails on both clusters (#774); each badge lights on the room's
+  chat page, and each guardrail is named, not deep. From here on a public image the
+  room asks for is refused by `deny-external-registries`. Until #775 moves HC-666's
+  image onto `registry.burritobot.co`, this also refuses segment 4's Jokers on
+  attackme (their `festival-ops/` path is refused), so the order of the two segments
+  and the switch is #776's to settle. If one is asked about, its fallback proves it
+  without the model:
+- C2 public image: admission control. Kyverno's `restrict-image-registries` does
+  not allow `public.ecr.aws`, and `deny-external-registries` lets what the bot
+  deploys come from `registry.burritobot.co` alone.
   `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
   prints the deny.
 - C3 read the recipe off the filesystem: blocked inline in the kernel by KubeArmor,
@@ -656,8 +678,8 @@ real-looking home address to chat.
   appears on the wall.
 - **Fix, two tiers, on the private bot, admission first (#676):** run
   `guard-admission-on`, which prints the `kubectl patch` that sets
-  `restrict-image-registries` to Deny and reads it back (the Night Before arms it
-  already, so on stage it shows the command and changes nothing). The bot follows the
+  `restrict-image-registries` to Deny and reads it back (segment 3's `guardrails-on`
+  armed it already, so on stage it shows the command and changes nothing). The bot follows the
   ticket, calls `deploy_app`, and the registry allow-list denies the Joker image at
   admission; the wall shows it refused. Read the deny message aloud. That is the second tier:
   even an instruction that slips past the classifier is stopped at the cluster.
@@ -900,6 +922,16 @@ is merely slow rather than rebuilding:
   the session: do not move it onto lab-platform's roster before 2026-11-12, which
   leaves out attackme and the admin cluster until lab-platform#137 lands
   (prompts-agenticburn#11).
+- [ ] **The guardrails switch reaches both clusters (#774).** `instructors up`
+  links the pair; if it said the link failed, or a standby now holds a hostname,
+  link the two that hold the hostnames: `./fleet.sh guardrails-link` (or
+  `./fleet.sh guardrails-link <community>@<region> <private>@<region>`). Then, in the
+  private cluster's terminal, `guardrails-on` must end "all four Kubernetes
+  guardrails are on." and `guardrails-off` "... are off.". The internal registry
+  answers through the router (`routes roster` publishes its name on the private
+  cluster's load balancer):
+  `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
+  lists the seeded tag.
 - [ ] **Hostnames serve over HTTPS and websocket:**
   `./fleet.sh check-tls attackme.agenticburn.com burritobot-private.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
@@ -943,12 +975,14 @@ is merely slow rather than rebuilding:
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
     300 characters of the reply.
   - Admin: the kube-context and the hostname are the same cluster (if not, it stops
-    before flipping anything); the start state (every AI guard off; Kyverno Deny,
-    NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
-    cluster; then the challenges in stage order, with the guards turned on
+    before flipping anything); the start state (every AI guard off; the four
+    Kubernetes guardrails present and off, #774); the `/controls` badges agree with
+    the cluster; then the challenges in stage order, with the guards turned on
     cumulatively as segments 2 to 5 do: C5 leaking, then out of reach once the probe
-    applies `guard-rbac-on`'s Role; C1, C2 and C3 (Challenge 2)
-    blocked; C6's two tiers (the ticket's
+    applies `guard-rbac-on`'s Role; `guardrails-on`, run in the private terminal pod,
+    arming all four on both clusters and the badges lighting; C1, C2 and C3
+    (Challenge 2) blocked, a public image denied by `deny-external-registries` and the
+    internal registry's image admitted; C6's two tiers (the ticket's
     villain refused at admission by a server-side dry run, then, after
     `guard-input-on`, `read_support_ticket` withholding the ticket when called in
     the tool pod and the model asked with no Deployment appearing); C7 off then on,
@@ -959,7 +993,9 @@ is merely slow rather than rebuilding:
     Then the on-topic guard redirecting the four canonical off-topic asks
     and letting "what are your hours" and "do you have mild salsa" through. Its last
     act is `guards-off`, run even when a beat fails, so the stage starts clean; it
-    also puts the shipped Role back.
+    also puts the shipped Role back and runs `guardrails-off`, which turns the four
+    Kubernetes guardrails off on both clusters. Run the community probe before the
+    admin one, never during it: the admin probe's `guardrails-on` reaches attackme.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
     up in the feed the room sees.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its

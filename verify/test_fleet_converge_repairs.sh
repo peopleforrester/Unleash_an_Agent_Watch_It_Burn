@@ -137,19 +137,26 @@ boot() { src "provider_write_kubeconfig() { :; }; bootstrap_student_aws() { echo
     load_roster; $1
     cat \"\${FAIL_FILE}\" 2>/dev/null; rm -f \"\${FAIL_FILE}\""; }
 # The Night Before build: every roster cluster 'instructors up all' selects, with the profile it selects.
-night="$(src '_provision_spec_fleet() { :; }; require_tools() { :; }; load_roster; cmd_instructors up all >/dev/null 2>&1
+night="$(src '_provision_spec_fleet() { :; }; require_tools() { :; }; cmd_guardrails_link() { :; }; load_roster; cmd_instructors up all >/dev/null 2>&1
     for k in "${!PROVISION_SPEC[@]}"; do echo "${k} $(cut -d"|" -f2 <<<"${PROVISION_SPEC[$k]}")"; done | sort')"
-check "instructors up all selects the two roster clusters" '[[ "$(wc -l <<<"${night}")" -eq 2 ]] && grep -q "^watch-it-burn-community burn$" <<<"${night}"'
+# KubeCon (event.sh's WIB_ROSTER_PROFILES=kubecon, #774): the pair whose four Kubernetes guardrails start off.
+check "instructors up all selects the two roster clusters, on the KubeCon profiles" \
+  '[[ "$(wc -l <<<"${night}")" -eq 2 ]] && grep -q "^watch-it-burn-community kubecon-community$" <<<"${night}" && grep -q "^watch-it-burn-private kubecon-private$" <<<"${night}"'
 : >"${CALLS}"; : >"${T}/stderr"
 boot "$(while read -r n p; do printf 'bootstrap_one %s %s; ' "$n" "$p"; done <<<"${night}")" >"${T}/out"
 check "bootstrap: every roster cluster runs deploy-full-idp with empty keys and nothing is recorded failed" \
-  '[[ ! -s "${T}/out" ]] && [[ "$(grep -c "^idp watch-it-burn-[a-z-]* [a-z]* api= app=$" "${CALLS}")" -eq 2 ]]'
-check "bootstrap: each one goes on to its terminal login, and the admin cluster is armed" \
-  '[[ "$(grep -c "^terminal-auth " "${CALLS}")" -eq 2 ]] && grep -q "^arm watch-it-burn-private$" "${CALLS}" && [[ "$(grep -c "^arm " "${CALLS}")" -eq 1 ]]'
+  '[[ ! -s "${T}/out" ]] && [[ "$(grep -c "^idp watch-it-burn-[a-z-]* [a-z-]* api= app=$" "${CALLS}")" -eq 2 ]]'
+# Nothing is armed at bootstrap on the KubeCon pair: the four Kubernetes guardrails wait for guardrails-on (#774).
+check "bootstrap: each one goes on to its terminal login, and neither KubeCon cluster is armed at bootstrap" \
+  '[[ "$(grep -c "^terminal-auth " "${CALLS}")" -eq 2 ]] && [[ "$(grep -c "^arm " "${CALLS}")" -eq 0 ]]'
 check "bootstrap: each one points its Bedrock ModelConfigs at its tagged profiles (#513)" \
   '[[ "$(grep -c "^pin-bedrock " "${CALLS}")" -eq 2 ]]'
 check "bootstrap: the gap is a WARN naming the cluster" \
   '[[ "$(grep -c "WARN: watch-it-burn-[a-z-]*: no Datadog keys" "${T}/stderr")" -eq 2 ]] && ! grep -q "BOOTSTRAP FAILED" "${T}/stderr"'
+: >"${CALLS}"; : >"${T}/stderr"
+boot "bootstrap_one watch-it-burn-private admin" >"${T}/out"
+check "bootstrap: the workshop's admin profile is still armed at bootstrap" \
+  'grep -q "^arm watch-it-burn-private$" "${CALLS}" && [[ "$(grep -c "^arm " "${CALLS}")" -eq 1 ]]'
 : >"${CALLS}"; : >"${T}/stderr"
 boot "bootstrap_one watch-it-burn-attendee-099 attendee" >"${T}/out"
 check "bootstrap: an attendee whose org does not resolve is refused, never given the shared org" \

@@ -82,8 +82,12 @@ def profiles() -> list[str]:
 
 # Profiles infra/deploy-full-idp.sh builds that lab-platform.yaml does not present (#394): local-inference is full
 # plus a CPU vLLM for one instructor or demo cluster (question 657), never a roster or attendee cluster, so labctl
-# is not handed it.
-DEPLOY_ONLY_PROFILES = ("local-inference",)
+# is not handed it. kubecon-community and kubecon-private are the breakout's two roster clusters with the four
+# Kubernetes guardrails off until guardrails-on (#774); fleet.sh builds the KubeCon roster, so labctl is not handed
+# them either.
+DEPLOY_ONLY_PROFILES = ("local-inference", "kubecon-community", "kubecon-private")
+# The KubeCon breakout's profiles (#774), and the workshop profile each one stands in for on its role.
+KUBECON_PROFILES = {"kubecon-community": "burn", "kubecon-private": "admin"}
 
 
 def all_profiles() -> list[str]:

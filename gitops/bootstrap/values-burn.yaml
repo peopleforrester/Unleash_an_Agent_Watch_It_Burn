@@ -37,6 +37,9 @@
 # otel-collector: Datadog is its only sink, because this profile installs neither Prometheus
 # nor Tempo and the shared values export to both (#476).
 #
+# The KubeCon breakout's community cluster takes values-kubecon-community.yaml instead (#774): this profile plus the
+# four Kubernetes guardrails present and off, for guardrails-on to arm. This file is the 2-hour workshop's.
+#
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
 apps:

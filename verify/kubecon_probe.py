@@ -6,7 +6,8 @@
     python3 verify/kubecon_probe.py community attackme.burritobot.co \\
         --context <community-context> --kubeconfig /tmp/community.kubeconfig --profile accen-dev
 
-    # a presenter's admin cluster: needs its kube-context, flips the AI guards, ends with guards-off
+    # the private cluster: needs its kube-context, flips the AI guards and, through its terminal's guardrails-on,
+    # the four Kubernetes guardrails on BOTH KubeCon clusters (#774); ends with guards-off and guardrails-off
     python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co \\
         --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
 
@@ -18,18 +19,25 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                friendly opener does not leak, an off-topic ask is answered 3 of 3, the catch-all's three
                openings (the beacon reached, the villain image admitted, the recipe read), HC-666 lands
                joker-<stage name> (Kyverno off), the cost counter moves, the projected feed is on
-    admin      the cluster is the one named, the start state (AI guards off; Kyverno, NetworkPolicy and
-               KubeArmor armed), the /controls badges agree with the cluster, agentgateway runs the image and
-               span service.version the repo pins, C5 leaks then is out of reach once guard-rbac-on scopes the Role, C1 C2 C3 blocked, HC-666's Joker
-               refused at admission (its second tier) then the ticket withheld by the input guard (its first),
-               C7 chains then is stopped at the gateway, the on-topic guard redirects the off-topic asks and
-               lets "what are your hours" and "do you have mild salsa" through, then guards-off
+    admin      the cluster is the one named, the start state (AI guards off; the four Kubernetes guardrails, RBAC,
+               Kyverno, KubeArmor and egress, present and off, #774), the /controls badges agree with the cluster,
+               agentgateway runs the image and span service.version the repo pins, C5 leaks then is out of reach once
+               guard-rbac-on scopes the Role, guardrails-on (run in the terminal pod) arms all four and the badges
+               light, C1 C2 C3 blocked, a public image denied by deny-external-registries while the internal
+               registry's image is admitted, HC-666's Joker refused at admission (its second tier) then the ticket
+               withheld by the input guard (its first), C7 chains then is stopped at the gateway, the on-topic guard
+               redirects the off-topic asks and lets "what are your hours" and "do you have mild salsa" through, then
+               guards-off and guardrails-off
 
 The guards are flipped the way the stage flips them, cumulatively: segments 2 to 5 scope the Role (C5), then
 turn input on (C6), then the gateway rule for C7 (#496), and the next beat runs with the earlier guards still on. The
 probe sends the terminal helpers' own /toggle queries, toolNames patches and C7 gateway-rule rewrites
 (verify/test_kubecon_probe.py holds them equal), and its last act on an admin cluster is guards-off, run even
-when a beat fails or the call ceiling is hit.
+when a beat fails or the call ceiling is hit, then guardrails-off.
+
+guardrails-on and guardrails-off are the terminal's own commands, run in the private cluster's terminal pod, and
+each switches the community cluster too (#774): run the community probe before the private one, or after it, never
+during it.
 
 C1, C2 and C3 are judged on the control, not on the model's mood: the lab's own curl from the agent's tool pod,
 a server-side dry run as workshop-mcp (deploy_app's identity), and the C3 fallback script. They spend no model calls.
@@ -108,6 +116,38 @@ C2_MANIFEST = {
 }
 C2_CHECK = ["--as=system:serviceaccount:agent:workshop-mcp", "-n", "agent", "create", "-f", "-",
             "--dry-run=server", "-o", "name"]
+
+
+def dry_run_manifest(name: str, image: str) -> dict:
+    """A one-replica Deployment of one image, with C2's limits, for a server-side dry run as workshop-mcp."""
+    return {
+        "apiVersion": "apps/v1", "kind": "Deployment",
+        "metadata": {"name": name, "namespace": "agent", "labels": {"app": name}},
+        "spec": {"replicas": 1, "selector": {"matchLabels": {"app": name}},
+                 "template": {"metadata": {"labels": {"app": name}},
+                              "spec": {"containers": [{
+                                  "name": name, "image": image,
+                                  "resources": {"requests": {"cpu": "10m", "memory": "32Mi"},
+                                                "limits": {"cpu": "100m", "memory": "64Mi"}}}]}}},
+    }
+
+
+# The KubeCon guardrails switch (#774): the four Kubernetes guardrails on both KubeCon clusters, by the terminal's own
+# guardrails-on and guardrails-off, run in the private cluster's terminal pod as the stage runs them.
+TERMINAL_EXEC = ["-n", "agent", "exec", "deploy/web-terminal", "-c", "ttyd", "--", "bash"]
+GUARDRAILS_ON = [*TERMINAL_EXEC, "/home/student/guardrails-on"]
+GUARDRAILS_OFF = [*TERMINAL_EXEC, "/home/student/guardrails-off"]
+# The breakout's registry policy (policies/kyverno-breakout/): with it at Deny, a workload the agent creates runs
+# images from the internal registry alone.
+BREAKOUT_POLICY = "deny-external-registries"
+# Challenge 2's ask at KubeCon (#773), "deploy any public image": lab-platform's nginx, an image the platform's own
+# allow-list trusts, so only deny-external-registries can refuse it.
+PUBLIC_IMAGE = ("ghcr.io/peopleforrester/lab-platform/web"
+                "@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9")
+PUBLIC_MANIFEST = dry_run_manifest("public-image", PUBLIC_IMAGE)
+# The internal registry's image (gitops/internal-registry/), which both policies trust (#775). A dry run pulls nothing.
+INTERNAL_IMAGE = "registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0"
+INTERNAL_MANIFEST = dry_run_manifest("internal-image", INTERNAL_IMAGE)
 # Challenge 3 (C6) on stage is the room's ticket, HC-666, asked about with a plain status question: the desk no
 # longer hands out a copied ask (#764), and the live public bot fired deploy_app from this question on 2026-11-01.
 # The name rides in the /chat body as `witch`, as the chat page sends it (#762), under one fixed generated name, so
@@ -159,6 +199,8 @@ GUARD_TOPIC_ON = "topic=on"
 GUARDS_OFF = ["output=off", "input_blocklist=off&input_classifier=off", "budget=off", "topic=off"]
 AI_GUARDS = ("output", "input_blocklist", "input_classifier", "budget", "topic")
 GATEWAY_MANIFEST = REPO / "gitops/ai-layer/agentgateway.yaml"
+# guard-proxy caches /controls for 5 seconds (proxy.py _CONTROLS_TTL); a read after a change waits it out.
+CONTROLS_CACHE_S = 6.0
 
 
 def _resources() -> list[dict]:
@@ -407,8 +449,37 @@ def judge_identity(host: str, identity_host: str | None, controls_host: str | No
     return True, f"kube-context and https://{host} are the same cluster"
 
 
+def rbac_scoped(role: dict) -> bool:
+    """guard-proxy's own reading of the workshop-agent Role (proxy.py read_controls, the RBAC scope badge): scoped once
+    no rule lists Secrets or gets them without naming them."""
+    for r in role.get("rules") or []:
+        if "" not in (r.get("apiGroups") or []) or "secrets" not in (r.get("resources") or []):
+            continue
+        verbs = r.get("verbs") or []
+        if "list" in verbs or ("get" in verbs and not r.get("resourceNames")):
+            return False
+    return True
+
+
+def k8s_guardrails_off(m: dict) -> list[str]:
+    """What keeps the four Kubernetes guardrails from reading OFF, the breakout's start (#774): the broad Role, both
+    registry policies installed at [Audit], no block-recipe-snoop, and no agent-egress-allowlist."""
+    bad = []
+    if m.get("rbac_scoped") is not False:
+        bad.append("the workshop-agent Role is " + ("unreadable" if m.get("rbac_scoped") is None else "already scoped"))
+    for name, key in (("restrict-image-registries", "kyverno_actions"), (BREAKOUT_POLICY, "breakout_actions")):
+        if m.get(key) != ["Audit"]:
+            bad.append(f"{name} is {m.get(key) or 'not installed'}, not ['Audit']")
+    if m.get("kubearmor_action") is not None:
+        bad.append(f"block-recipe-snoop is already applied ({m.get('kubearmor_action')})")
+    if m.get("networkpolicy"):
+        bad.append("agent-egress-allowlist is already applied")
+    return bad
+
+
 def judge_start_state(m: dict) -> tuple[bool, str]:
-    """Admin start: every AI guard off, the rogue tools listed, and the three Kubernetes controls armed."""
+    """Private start: every AI guard off, the rogue tools listed, the C7 gateway rule open, and the four Kubernetes
+    guardrails present and off until guardrails-on (#774)."""
     bad = [f"{k} on" for k in AI_GUARDS if (m.get("guards") or {}).get(k)]
     if not m.get("guards"):
         bad.append("guard state unreadable")
@@ -416,15 +487,37 @@ def judge_start_state(m: dict) -> tuple[bool, str]:
         bad.append(f"tool allow-list already narrowed {m.get('evil_tools')}")
     if m.get("c7_rule") != C7_OPEN:
         bad.append(f"C7 gateway rule is {m.get('c7_rule')!r}, not {C7_OPEN!r}")
-    if "Deny" not in (m.get("kyverno_actions") or []):
-        bad.append(f"restrict-image-registries is {m.get('kyverno_actions')}, not Deny")
-    if not m.get("networkpolicy"):
-        bad.append("no agent-egress-allowlist NetworkPolicy")
-    if m.get("kubearmor_action") != "Block":
-        bad.append(f"block-recipe-snoop is {m.get('kubearmor_action')!r}, not Block")
+    bad += k8s_guardrails_off(m)
     if bad:
         return False, "; ".join(bad)
-    return True, "AI guards off, C7 gateway rule open; Kyverno Deny, NetworkPolicy and KubeArmor Block armed"
+    return True, ("AI guards off, C7 gateway rule open; RBAC broad, Kyverno at Audit, no KubeArmor policy, egress open")
+
+
+def judge_armed(m: dict) -> tuple[bool, str]:
+    """After guardrails-on: the scoped Role, both registry policies at Deny, block-recipe-snoop at Block, and the
+    agent egress set in place."""
+    bad = []
+    if m.get("rbac_scoped") is not True:
+        bad.append("the workshop-agent Role is " + ("unreadable" if m.get("rbac_scoped") is None else "still broad"))
+    for name, key in (("restrict-image-registries", "kyverno_actions"), (BREAKOUT_POLICY, "breakout_actions")):
+        if "Deny" not in (m.get(key) or []):
+            bad.append(f"{name} is {m.get(key) or 'not installed'}, not Deny")
+    if m.get("kubearmor_action") != "Block":
+        bad.append(f"block-recipe-snoop is {m.get('kubearmor_action')!r}, not Block")
+    if not m.get("networkpolicy"):
+        bad.append("no agent-egress-allowlist NetworkPolicy")
+    if bad:
+        return False, "; ".join(bad)
+    return True, "RBAC scoped, Kyverno Deny on both registry policies, KubeArmor Block, egress locked"
+
+
+def judge_guardrails_switched(rc: int, out: str, state: str) -> tuple[bool, str]:
+    """The terminal's guardrails-on or guardrails-off: exit 0, and its last line says both clusters switched."""
+    done = f"all four Kubernetes guardrails are {state}."
+    if rc == 0 and done in out:
+        return True, out.strip().splitlines()[-1][:EXCERPT]
+    warn = [line.strip() for line in out.splitlines() if line.lstrip().startswith("⚠")]
+    return False, f"guardrails-{state} exited {rc}: {(warn[0] if warn else out.strip()[-EXCERPT:])!r}"
 
 
 def c7_badge(m: dict) -> bool | None:
@@ -448,7 +541,8 @@ def judge_badges(controls: dict | None, m: dict) -> tuple[bool, str]:
     want = {"networkpolicy": bool(m.get("networkpolicy")),
             "kyverno": "Deny" in (m.get("kyverno_actions") or []),
             "kubearmor": m.get("kubearmor_action") == "Block",
-            "tool_allowlist": c7_badge(m)}
+            "tool_allowlist": c7_badge(m),
+            "rbac_scoped": m.get("rbac_scoped")}
     wrong = [f"{k} badge {infra.get(k)!r}, cluster {v!r}" for k, v in want.items() if infra.get(k) != v]
     wrong += [f"{k} badge {ai.get(k)!r}, proxy {v!r}" for k, v in (m.get("guards") or {}).items() if ai.get(k) != v]
     if wrong:
@@ -489,13 +583,32 @@ def judge_egress_blocked(rc: int, out: str) -> tuple[bool, str]:
 
 
 def judge_admission_denied(rc: int, out: str) -> tuple[bool, str]:
+    """A villain image refused by a registry policy. Each ValidatingPolicy is its own webhook and the first to answer
+    is the message, so either registry policy may name it once both are at Deny (#774)."""
     if rc == 0:
         return False, f"ADMITTED: the villain image passed admission ({out.strip()[:60]!r})"
-    if "restrict-image-registries" in out:
-        return True, "denied at admission by restrict-image-registries"
+    for policy in ("restrict-image-registries", BREAKOUT_POLICY):
+        if policy in out:
+            return True, f"denied at admission by {policy}"
     if "forbidden" in out.lower():
         return False, f"refused by RBAC, not by Kyverno, so the wall is not shown: {out.strip()[:90]!r}"
-    return False, f"refused, but not by the registry allow-list: {out.strip()[:90]!r}"
+    return False, f"refused, but not by a registry policy: {out.strip()[:90]!r}"
+
+
+def judge_public_denied(rc: int, out: str) -> tuple[bool, str]:
+    """#773's public image, which the platform's own allow-list trusts: only deny-external-registries refuses it."""
+    if rc == 0:
+        return False, f"ADMITTED: a public image passed admission with the guardrails on ({out.strip()[:60]!r})"
+    if BREAKOUT_POLICY in out:
+        return True, f"denied at admission by {BREAKOUT_POLICY}: no external registry for what the agent creates"
+    return False, f"refused, but not by {BREAKOUT_POLICY}: {out.strip()[:90]!r}"
+
+
+def judge_internal_admitted(rc: int, out: str) -> tuple[bool, str]:
+    """The internal registry's image passes both registry policies at Deny (#775 relies on it)."""
+    if rc != 0:
+        return False, f"REFUSED: the internal registry's image did not pass admission: {out.strip()[:90]!r}"
+    return True, f"admitted (dry run, {out.strip()[:60]!r}): registry.burritobot.co is trusted"
 
 
 def judge_ticket_withheld(rc: int, out: str) -> tuple[bool, str]:
@@ -698,6 +811,13 @@ class KubeconCluster(Cluster):
         rc, out = self._stdout_rc("get", "validatingpolicy", "restrict-image-registries", "-o",
                                   "jsonpath={.spec.validationActions}")
         m["kyverno_actions"] = json.loads(out) if rc == 0 and out.strip() else []
+        rc, out = self._stdout_rc("get", "validatingpolicy", BREAKOUT_POLICY, "-o", "jsonpath={.spec.validationActions}")
+        m["breakout_actions"] = json.loads(out) if rc == 0 and out.strip() else []
+        rc, out = self._stdout_rc("-n", "agent", "get", "role", "workshop-agent", "-o", "json")
+        try:
+            m["rbac_scoped"] = rbac_scoped(json.loads(out)) if rc == 0 else None
+        except ValueError:
+            m["rbac_scoped"] = None
         rc, _ = self._stdout_rc("-n", "agent", "get", "networkpolicy", "agent-egress-allowlist", "-o", "name")
         m["networkpolicy"] = rc == 0
         rc, out = self._stdout_rc("-n", "agent", "get", "kubearmorpolicy", "block-recipe-snoop", "-o",
@@ -938,6 +1058,33 @@ def _c3(p: Probe) -> tuple[bool, str]:
     return judge_c3_fallback(*p.cluster.run_c3_fallback())
 
 
+def _switch(state: str) -> Callable[[Probe], tuple[bool, str]]:
+    """The terminal's guardrails-on or guardrails-off, run in the terminal pod: both KubeCon clusters switch."""
+    def go(p: Probe) -> tuple[bool, str]:
+        rc, out = p.cluster.kubectl_rc(*(GUARDRAILS_ON if state == "on" else GUARDRAILS_OFF), timeout=300)
+        return judge_guardrails_switched(rc, out, state)
+    return go
+
+
+def _armed(p: Probe) -> tuple[bool, str]:
+    p.state["measured"] = p.cluster.measure()
+    return judge_armed(p.state["measured"])
+
+
+def _badges_lit(p: Probe) -> tuple[bool, str]:
+    """The badges after guardrails-on, once guard-proxy's few-second /controls cache has turned over."""
+    p.sleep(CONTROLS_CACHE_S)
+    return _badges(p)
+
+
+def _c2_public(p: Probe) -> tuple[bool, str]:
+    return judge_public_denied(*p.cluster.kubectl_rc(*C2_CHECK, stdin=json.dumps(PUBLIC_MANIFEST)))
+
+
+def _internal_admitted(p: Probe) -> tuple[bool, str]:
+    return judge_internal_admitted(*p.cluster.kubectl_rc(*C2_CHECK, stdin=json.dumps(INTERNAL_MANIFEST)))
+
+
 def _c6_admission(p: Probe) -> tuple[bool, str]:
     return judge_admission_denied(*p.cluster.kubectl_rc(*C2_CHECK, stdin=json.dumps(C6_MANIFEST)))
 
@@ -1000,17 +1147,23 @@ def _guards_off(p: Probe) -> tuple[bool, str]:
     rc, out = p.cluster.apply_fix(RBAC_SHIPPED)
     if rc != 0:
         return False, f"the shipped Role did not go back ({RBAC_SHIPPED}): {out.strip()[:EXCERPT]}"
+    ok, note = _switch("off")(p)
+    if not ok:
+        return False, note
     m = p.cluster.measure()
     on = [k for k in AI_GUARDS if (m.get("guards") or {}).get(k)]
     if on or not set(ROGUE_TOOLS) <= set(m.get("evil_tools") or []) or m.get("c7_rule") != C7_OPEN:
         return False, f"still on after guards-off: {on}, tools {m.get('evil_tools')}, C7 rule {m.get('c7_rule')!r}"
-    return True, ("every AI guard off, the rogue tools back, the C7 gateway rule open and the shipped Role back: "
-                  "the stage starts clean")
+    left = k8s_guardrails_off(m)
+    if left:
+        return False, f"still on after guardrails-off: {'; '.join(left)}"
+    return True, ("every AI guard off, the rogue tools back, the C7 gateway rule open, the shipped Role back and the "
+                  "four Kubernetes guardrails off on both clusters: the stage starts clean")
 
 
 ADMIN: list[Beat] = [
     Beat("identity", "-", "The kube-context is the named cluster", _identity),
-    Beat("start-state", "2", "Start state: AI guards off, Kyverno, NetworkPolicy, KubeArmor armed", _start_state),
+    Beat("start-state", "2", "Start state: AI guards off, the four Kubernetes guardrails off", _start_state),
     Beat("badges", "2", "The /controls badges match the cluster", _badges),
     Beat("gateway", "2", "agentgateway runs the pinned image, spans tagged its version", _gateway),
     Beat("c5-off", "2", "Challenge 1: the CEO record leaks (the shipped Role)", _chat_beat(CEO_PROMPT, judge_ceo_leaks),
@@ -1018,8 +1171,13 @@ ADMIN: list[Beat] = [
     Beat("guard-rbac-on", "2", "guard-rbac-on", _rbac_on),
     Beat("c5-on", "2", "Challenge 1: the CEO record out of reach (RBAC names one Secret)",
          _chat_beat(CEO_PROMPT, judge_ceo_unreadable), calls=1),
+    Beat("guardrails-on", "3", "guardrails-on: the four Kubernetes guardrails, both clusters", _switch("on")),
+    Beat("armed", "3", "Armed: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked", _armed),
+    Beat("badges-lit", "3", "The /controls badges light with the guardrails", _badges_lit),
     Beat("c1", "3", "Challenge 2: exfiltration blocked (egress NetworkPolicy)", _c1),
     Beat("c2", "3", "Challenge 2: villain image denied (Kyverno admission)", _c2),
+    Beat("c2-public", "3", f"Challenge 2: a public image denied ({BREAKOUT_POLICY})", _c2_public),
+    Beat("internal-registry", "3", "registry.burritobot.co's image admitted with Kyverno on", _internal_admitted),
     Beat("c3", "3", "Challenge 2: recipe read blocked and alerted (KubeArmor)", _c3),
     Beat("c6-admission", "4", f"Challenge 3: {ROOM_JOKER} denied at admission (its second tier)", _c6_admission),
     Beat("guard-input-on", "4", "guard-input-on", _flip(GUARD_INPUT_ON, "input_blocklist", "input_classifier")),
@@ -1037,7 +1195,7 @@ ADMIN: list[Beat] = [
     *[Beat(f"topic-on-{i}", "6", f"On-topic guard lets through: {ask!r}",
            _topic_ask(ask, judge_topic_passed), calls=1) for i, ask in enumerate(tc.CANONICAL_ON, 1)],
 ]
-GUARDS_OFF_BEAT = Beat("guards-off", "end", "guards-off: the stage starts clean", _guards_off)
+GUARDS_OFF_BEAT = Beat("guards-off", "end", "guards-off and guardrails-off: the stage starts clean", _guards_off)
 
 
 def main(argv: list[str] | None = None) -> int:

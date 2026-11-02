@@ -62,16 +62,23 @@ check "an attendee still gets its memorable name" \
 check "no hostname anywhere is a roundN name" \
   '[[ "$(q "public_host_for watch-it-burn-community; echo; public_host_for watch-it-burn-private")" != *round* ]]'
 
-echo "== the profile follows the role =="
+echo "== the profile follows the role, and the event picks the pair (#774) =="
 spec() { q "_provision_spec_fleet() { :; }; print_bootstrap_hints() { :; }; require_tools() { :; }
+            cmd_guardrails_link() { :; }
             cmd_instructors up $1 >/dev/null 2>&1
             for k in \"\${!PROVISION_SPEC[@]}\"; do echo \"\${k}=\$(cut -d'|' -f2 <<<\"\${PROVISION_SPEC[\$k]}\")\"; done | sort"; }
-check "community bootstraps the unguarded profile" '[[ "$(spec community)" == "watch-it-burn-community=burn" ]]'
-check "admin bootstraps the armed profile" '[[ "$(spec admin)" == "watch-it-burn-private=admin" ]]'
+check "workshop: community bootstraps the unguarded profile" \
+  '[[ "$(WIB_ROSTER_PROFILES=workshop spec community)" == "watch-it-burn-community=burn" ]]'
+check "workshop: admin bootstraps the armed profile" \
+  '[[ "$(WIB_ROSTER_PROFILES=workshop spec admin)" == "watch-it-burn-private=admin" ]]'
+check "kubecon (event.sh's setting): community bootstraps kubecon-community, guardrails present and off" \
+  '[[ "$(spec community)" == "watch-it-burn-community=kubecon-community" ]]'
+check "kubecon: admin bootstraps kubecon-private, guardrails present and off" \
+  '[[ "$(spec admin)" == "watch-it-burn-private=kubecon-private" ]]'
 check "both selects the whole roster" '[[ "$(spec both | wc -l)" == "2" ]]'
 check "an owner selects nothing in the real roster, which has no owned cluster" '[[ -z "$(spec alpha)" ]]'
 check "an owner selects only that presenter's cluster" \
-  '[[ "$(QROSTER="${FIX}" spec beta)" == "watch-it-burn-beta-admin=admin" ]]'
+  '[[ "$(WIB_ROSTER_PROFILES=workshop QROSTER="${FIX}" spec beta)" == "watch-it-burn-beta-admin=admin" ]]'
 check "both selects every fixture cluster" '[[ "$(QROSTER="${FIX}" spec both | wc -l)" == "3" ]]'
 
 echo "== the node IMDS hop limit follows the role (#113) =="

@@ -38,6 +38,9 @@
 # profiles the ignore stays, without RespectIgnoreDifferences since #707, so their git tool changes land as well.
 c7Control: gateway
 #
+# The KubeCon breakout's private cluster takes values-kubecon-private.yaml instead (#774): this profile with the four
+# Kubernetes guardrails off at the start, for guardrails-on to arm. This file is the 2-hour workshop's.
+#
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
 apps:

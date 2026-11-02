@@ -1,0 +1,48 @@
+# ABOUTME: The KUBECON-COMMUNITY profile (#774): the breakout's public cluster, attackme. The burn profile plus the four
+# ABOUTME: Kubernetes guardrails present and OFF, so guardrails-on can arm them here and on the private cluster at once.
+#
+# Michael's spec on #774 (2026-11-01): both KubeCon clusters start with the four Kubernetes guardrails off, and one
+# guardrails-on, run from either cluster's terminal, arms all four on both. The burn profile (values-burn.yaml) has
+# nothing to arm, no Kyverno engine at all, so the breakout's community cluster takes this profile instead, and the
+# 2-hour workshop keeps burn as it was. fleet.sh picks it from the event (WIB_ROSTER_PROFILES in
+# infra/terraform/fleet/event.sh, bootstrap_profile_for_role).
+#
+# The four, and where each one's OFF state comes from:
+#   RBAC      the broad workshop-agent Role the ai-layer bundle ships (every Secret in `agent`). On: the scoped Role.
+#   Kyverno   kyverno (the engine) with restrict-image-registries alone (kyverno-registry-policy) and
+#             deny-external-registries (kyverno-breakout), both at Audit. On: both at Deny, so a workload BurritoBot
+#             creates may run images from registry.burritobot.co only. No other Kyverno policy is installed here: the
+#             room meets no admission control the switch does not turn on.
+#   KubeArmor the engine (kubearmor) and no policy. On: block-recipe-snoop.
+#   Egress    no NetworkPolicy on `agent` beyond the ai-layer's own ingress rules. On: the agent egress set.
+# guardrails-switch is the identity the private cluster's guardrails-on uses here.
+#
+# Everything else is burn's, for burn's reasons (values-burn.yaml): no floor, no Falco, no cluster-network-policies,
+# the Datadog-only collector, the IMDS hop limit of 2 the community role gets from fleet.sh.
+#
+# Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
+# profile until a line here names it, and a name with no file fails the render.
+apps:
+  - ai-layer-otel
+  - ai-layer
+  - cert-manager
+  - datadog-agent-cr
+  - datadog-operator
+  - demo-app-hedgehog
+  - demo-app-mantis-shrimp
+  - demo-app-spider
+  - demo-app-unicorn
+  - demo-app-wombat
+  - eso-resources
+  - external-secrets
+  - guardrails-switch
+  - kagent-crds
+  - kagent
+  - kubearmor
+  - kyverno-breakout
+  - kyverno-registry-policy
+  - kyverno
+  - namespaces
+  - otel-collector-burn
+  - otel-operator
+  - workshop-agent

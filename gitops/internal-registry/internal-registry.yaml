@@ -1,0 +1,137 @@
+# ABOUTME: The internal registry, registry.burritobot.co (#774): Distribution, the CNCF registry, on the KubeCon private
+# ABOUTME: cluster, seeded at start from the list below and served read-only through the console to both clusters' nodes.
+#
+# Why it exists. Once guardrails-on arms deny-external-registries (policies/kyverno-breakout/), a workload BurritoBot
+# creates may run only images from here, and restrict-image-registries trusts it too. Challenge 3 (#775) asks for an
+# image on it, registry.burritobot.co/burritobot/maintenance-shell, so the injection still lands with Kyverno on: the
+# attacker used a registry the platform trusts. The name is meant to be guessable.
+#
+# How a node reaches it. A node's containerd pulls https://registry.burritobot.co like any registry. That name is
+# served by the apex router (Railway's edge holds the certificate), which sends it to this cluster's console, whose
+# registry server (gitops/ai-layer/console.conf) proxies GET and HEAD to the Service below and refuses every other
+# method, so nobody pushes from outside. fleet.sh routes publishes registry.burritobot.co as a row of its own on the
+# console LB of the cluster holding burritobot-private (bare_rows), and registry-<cluster> for every roster cluster.
+# Both clusters' nodes pull through the same public name, so a standby promoted to burritobot-private takes the row
+# with the rest and serves the same images at the same name.
+#
+# Why seeded, not persistent. The cluster is rebuilt for every event, and an image here is a copy of one we already
+# publish on ghcr.io, pinned by digest. So storage is an emptyDir and the seed container copies the list in each time
+# the pod starts; the pod reads Ready only once every copy has landed, so the console never serves a half-filled
+# registry. Pushing happens inside the pod, over localhost.
+#
+# Inside the cluster, only the console may reach the registry (the NetworkPolicy at the bottom): the agent's own pods
+# cannot push into the registry the guardrail trusts.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+---
+# One copy per line: <source reference, by digest> <path on registry.burritobot.co>. The path names the image the
+# platform's requests ask for; the source is where we already publish it (images.lock holds every source).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-seed
+  namespace: registry
+data:
+  images.txt: |
+    ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff burritobot/maintenance-shell:busybox-1.38.0
+  seed.sh: |
+    #!/bin/sh
+    # Waits for the registry, copies every line of images.txt into it, marks the pod ready, then stays up.
+    set -eu
+    regctl registry set --tls disabled localhost:5000
+    i=0
+    until wget -q -O /dev/null http://localhost:5000/v2/; do
+      i=$((i + 1)); [ "$i" -lt 60 ] || { echo "the registry never answered on localhost:5000"; exit 1; }
+      sleep 2
+    done
+    grep -v '^[[:space:]]*\(#\|$\)' /seed/images.txt | while read -r src dst; do
+      echo "copying ${src} -> localhost:5000/${dst}"
+      regctl image copy "${src}" "localhost:5000/${dst}"
+    done
+    touch /tmp/seeded
+    echo "seeded; serving"
+    exec sleep 2147483647
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+  labels: { app.kubernetes.io/name: registry }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: registry } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: registry } }
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: registry
+          # Distribution v3.1.2 (2026-09-24), the CNCF registry, from its own ghcr.io publication: Docker Hub is not
+          # pulled from (#714). Its default config serves the filesystem store at /var/lib/registry on :5000.
+          image: ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9
+          ports: [{ name: http, containerPort: 5000 }]
+          env:
+            # Location headers name the public host, not the pod, for a client that follows one.
+            - { name: REGISTRY_HTTP_HOST, value: "https://registry.burritobot.co" }
+          readinessProbe:
+            httpGet: { path: /v2/, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /v2/, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          volumeMounts:
+            - { name: store, mountPath: /var/lib/registry }
+        - name: seed
+          # regctl v0.11.7 (2026-10-21), regclient's copy tool, the alpine build for its shell.
+          image: ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5
+          command: ["/bin/sh", "/seed/seed.sh"]
+          env:
+            - { name: HOME, value: /tmp }
+          readinessProbe:
+            exec: { command: ["test", "-f", "/tmp/seeded"] }
+            periodSeconds: 5
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 500m, memory: 256Mi } }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          volumeMounts:
+            - { name: seed, mountPath: /seed, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: store
+          emptyDir: { sizeLimit: 2Gi }
+        - name: tmp
+          emptyDir: {}
+        - name: seed
+          configMap: { name: registry-seed }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  selector: { app.kubernetes.io/name: registry }
+  ports:
+    - { name: http, port: 5000, targetPort: http }
+---
+# Only the console reaches the registry from inside the cluster: it is the read-only door the nodes pull through.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: registry-ingress-from-console
+  namespace: registry
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: registry } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: agent } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: console } }
+      ports: [{ protocol: TCP, port: 5000 }]

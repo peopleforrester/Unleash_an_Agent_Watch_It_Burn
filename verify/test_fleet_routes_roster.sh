@@ -12,18 +12,23 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 TMPDIR="${T}"
 
 # The breakout's two clusters, and every service host each one carries (console.conf, #233). The service
-# list is read from fleet.sh's WIB_SERVICE_HOSTS and WIB_VILLAIN_HOSTS (#664) so a new host needs no second edit here.
-SERVICES="$(sed -n 's/^readonly WIB_\(SERVICE\|VILLAIN\)_HOSTS="\(.*\)"$/\2/p' "${FLEET}" | tr '\n' ' ')"
+# list is read from fleet.sh's WIB_SERVICE_HOSTS, WIB_VILLAIN_HOSTS (#664) and WIB_REGISTRY_HOSTS (#774) so a new host
+# needs no second edit here.
+SERVICES="$(sed -n 's/^readonly WIB_\(SERVICE\|VILLAIN\|REGISTRY\)_HOSTS="\(.*\)"$/\2/p' "${FLEET}" | tr '\n' ' ')"
 NSVC="$(wc -w <<<"${SERVICES}")"
-# Both domains serve the roster (#651): every row has a burritobot.co twin on the same upstream.
+# Both domains serve the roster (#651): every row has a burritobot.co twin on the same upstream. The internal
+# registry's bare name (#774) is one more row, on the private cluster.
 expected() {
     local h d
-    for d in agenticburn.com burritobot.co; do
-        for h in attackme burritobot-private; do
-            echo "${h}.${d}"
-            for s in ${SERVICES}; do echo "${s}-${h}.${d}"; done
+    {
+        for d in agenticburn.com burritobot.co; do
+            for h in attackme burritobot-private; do
+                echo "${h}.${d}"
+                for s in ${SERVICES}; do echo "${s}-${h}.${d}"; done
+            done
         done
-    done | sort
+        echo "registry.burritobot.co"
+    } | sort
 }
 
 # An apex checkout whose HEAD carries $1 as routes.map, and a state dir holding a leftover attendee cluster.
@@ -61,7 +66,10 @@ out="$(routes roster)"
 check "it succeeds" '[[ "${out}" == *rc=0* ]]'
 check "the table is exactly the two roster hosts and their service hosts" \
   'diff <(table_hosts) <(expected) >/dev/null'
-check "that is two consoles and ${NSVC} services each, on both domains" '[[ "$(table_hosts | wc -l)" -eq $(( 4 * (NSVC + 1) )) ]]'
+check "that is two consoles and ${NSVC} services each, on both domains, and the registry's bare name" \
+  '[[ "$(table_hosts | wc -l)" -eq $(( 4 * (NSVC + 1) + 1 )) ]]'
+check "registry.burritobot.co rides the private cluster's console LB, where the registry runs" \
+  'grep -qx "registry.burritobot.co  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map"'
 check "each burritobot.co twin points at the same cluster as its agenticburn.com row" \
   'grep -qx "attackme.burritobot.co  lb-watch-it-burn-community.elb.test:443" "${T}/apex/routes.map" &&
    grep -qx "grafana-burritobot-private.burritobot.co  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map"'

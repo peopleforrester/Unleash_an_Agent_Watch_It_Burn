@@ -19,7 +19,8 @@ the attack as it lands, and the same ask after the fix. Six model calls, in pres
     c4-fixed   the same ask after guard-mcp-on: stopped at the gateway
 
 The guards are flipped by the KubeCon probe's own beats (verify/kubecon_probe.py), so a seed is exactly what the
-stage does, and its last act is the probe's guards-off, run even when a seed fails. The prompts carry no probe
+stage does, guardrails-on before Challenge 3 included (#774), and its last act is the probe's guards-off and
+guardrails-off, run even when a seed fails. The prompts carry no probe
 marker, so a seeded trace reads as the prompt Whitney shows; they do appear in the private bot's feed on the prompt
 wall, as the presenters' own stage prompts will.
 
@@ -134,6 +135,9 @@ def seed_beats(stamp: str) -> list[kp.Beat]:
         beat["guard-rbac-on"],
         kp.Beat("c1-fixed", "2", "Challenge 1 fixed: the record out of reach",
                 _seed("c1-fixed", stamp, kp.CEO_PROMPT, kp.judge_ceo_unreadable), calls=1),
+        # The four Kubernetes guardrails start off on the private cluster (#774); the stage arms them before
+        # Challenge 2, so Challenge 3's Joker meets Kyverno at Deny, as it does on stage.
+        beat["guardrails-on"],
         kp.Beat("c3-attack", "4", "Challenge 3 attack: the Joker refused at admission",
                 _c3(stamp, "c3-attack", kp.judge_joker_blocked), calls=1),
         beat["guard-input-on"],

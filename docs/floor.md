@@ -99,6 +99,8 @@ in `gitops/bootstrap/apps/` or on the root without a row here.
 | `ai-layer` | Role `workshop-agent` | `rules` | C8: the student applies a scoped Role. The committed Role stays broad so that a fresh cluster starts vulnerable. |
 | `kyverno-policies` | ValidatingPolicy `require-resource-limits` | `/spec/validationActions` | The Audit-to-Deny toggle (`toggle-kyverno-enforce.sh`). Not rendered on a root lab-platform arms, which holds Deny from git (#638). |
 | `kyverno-policies` | ValidatingPolicy `restrict-image-registries` | `/spec/validationActions` | The same toggle, for Challenge 2's villain image. |
+| `kyverno-breakout` | ValidatingPolicy `deny-external-registries` | `/spec/validationActions` | The KubeCon guardrails switch (#774): `guardrails-on` sets Deny on both KubeCon clusters, `guardrails-off` Audit. |
+| `kyverno-registry-policy` | ValidatingPolicy `restrict-image-registries` | `/spec/validationActions` | The same switch, on the KubeCon community cluster, which takes this one policy alone (#774). |
 | `kyverno` | every CustomResourceDefinition | `/metadata/labels` | The chart renders labels that the API server never stores, which caused permanent OutOfSync (#254). |
 | `lab-bootstrap` | every child Application | `/metadata/finalizers` | Kyverno's chart adds finalizers at runtime that git can never match (#265). `infra/deploy-full-idp.sh` and lab-platform write the same ignore on the root. |
 

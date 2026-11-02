@@ -15,6 +15,8 @@
 # 022 republish, #730), and each equals its row in lab-platform's deploy/watch-it-burn/images.tsv. postgres, the
 # kustomize name gitops/bootstrap/apps/backstage.yaml sets, is lab-platform's mirror/ copy at its copies.tsv digest,
 # and C6's Joker is the digest ghcr.io served on 2026-11-02 (#714: nothing here names a Docker Hub image any more).
+# The internal registry's two (#774), Distribution 3.1.2 and regctl 0.11.7-alpine, are the digests their own ghcr.io
+# publications served anonymously on 2026-11-02.
 # saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
 # verify/test_images_lock.py holds every reference to a row here.
 node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
@@ -42,6 +44,8 @@ web ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877
 ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 -
 ghcr.io/peopleforrester/watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/watch-it-burn-backstage -
 postgres ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres -
+ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 upstream:https://github.com/distribution/distribution -
+ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 upstream:https://github.com/regclient/regclient -
 # Declared: images no tracked file names as an image: key or FROM line.
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.

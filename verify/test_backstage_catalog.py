@@ -185,7 +185,7 @@ check(f"no selector matches nothing, which would show an empty Kubernetes tab ({
 
 print("== the application ships on attendee, full and admin, and not on burn ==")
 sys.path.insert(0, str(REPO / "verify"))
-from bootstrap_chart import all_profiles, app_names, profiles  # noqa: E402
+from bootstrap_chart import KUBECON_PROFILES, all_profiles, app_names, profiles  # noqa: E402
 
 app = docs(REPO / "gitops/bootstrap/apps/backstage.yaml")[0]
 check("the Application deploys backstage/ at the root's revision",
@@ -196,10 +196,13 @@ check("which the namespaces app creates", any(o.get("kind") == "Namespace" and o
 want_on = {"attendee", "full", "admin"}
 on = {p for p in profiles() if "backstage" in app_names(p)}
 check(f"of the profiles lab-platform presents, exactly {sorted(want_on)} list it ({sorted(on)})", on == want_on)
-# local-inference (#394) is deploy-only and is the full build plus vllm-qwen3, so it takes what full takes.
-deploy_only = sorted(set(all_profiles()) - set(profiles()))
+# local-inference (#394) is deploy-only and is the full build plus vllm-qwen3, so it takes what full takes. The two
+# KubeCon profiles (#774) stand in for burn and admin on their roles, so each takes what the profile it replaces takes.
+deploy_only = sorted(set(all_profiles()) - set(profiles()) - set(KUBECON_PROFILES))
 check(f"each deploy-only profile {deploy_only} lists it as full does",
       all(("backstage" in app_names(p)) == ("backstage" in app_names("full")) for p in deploy_only))
+check("each KubeCon profile lists it as the workshop profile it stands in for does",
+      all(("backstage" in app_names(k)) == ("backstage" in app_names(w)) for k, w in KUBECON_PROFILES.items()))
 check("templates and the test service are not deployed", all("templat" not in r for r in kust["resources"]))
 
 print("== backstage-<cluster> reaches the Service, and the fleet publishes the same hosts the console serves ==")

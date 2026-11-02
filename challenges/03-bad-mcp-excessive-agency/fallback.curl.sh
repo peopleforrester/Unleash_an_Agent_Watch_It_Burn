@@ -469,7 +469,8 @@ finish() {
 }
 
 # One control per cluster (#496): an admin cluster's terminal flips the gateway rule (its root, lab-bootstrap, is
-# labelled lab-platform/profile=admin), anywhere else C7 is the toolNames list. Asked the way the terminal asks.
+# labelled lab-platform/profile=admin, or kubecon-private on the KubeCon private cluster, #774), anywhere else C7 is
+# the toolNames list. Asked the way the terminal asks.
 admin="" rc=0
 admin="$(kc -n argocd get application lab-bootstrap --ignore-not-found \
     -o jsonpath='{.metadata.labels.lab-platform/profile}' 2>/dev/null)" || rc=$?
@@ -477,7 +478,7 @@ if [[ "${rc}" -ne 0 ]]; then
     check "Argo CD answers whether this is an admin cluster" fail "kubectl exit ${rc}; nothing was touched"
     finish
 fi
-[[ "${admin}" == "admin" ]] || workshop
+[[ "${admin}" == "admin" || "${admin}" == "kubecon-private" ]] || workshop
 
 KIND="admin"
 echo "==> C7 gateway rule: read_internal_config through ${GATEWAY}, from ${POD} (container ${CONTAINER}) in ${NS} on ${CONTEXT}"
