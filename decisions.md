@@ -9973,3 +9973,9 @@ successor. lab-platform's `deploy/mirror/pulled.tsv` rows 105 to 109 and the "un
 
 **Not yet run on a cluster.** Unchanged from the 2026-10-31 #715 entry: five Ready demo-app pods on `web@sha256:73cd…`
 and a 200 from each party hostname, on an attendee or full cluster in a session with AWS access.
+
+**Tests at this entry.** `bash verify/run-tests.sh` passed. `bash verify/run-e2e-tools.sh` ran 40 checks and failed two,
+`test_datadog_log_services_render.py` and `test_enforce_floor.py`, both on one cause: GitHub answered 500 Internal
+Server Error for `falcosidekick-0.14.0.tgz` from falcosecurity/charts. Rerun alone with the tier's environment a few
+minutes later, when that URL answered 200, both passed. Hecaton run 15909 stalled waiting on the tier in the
+background, so run 15982 finished it.
