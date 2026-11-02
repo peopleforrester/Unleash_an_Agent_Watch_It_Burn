@@ -268,12 +268,14 @@ _cn="$(kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null | sed '
 # (infra/datadog-cluster-identity.sh) and mounted into WIB_PUBLIC_HOST. Every address below is printed
 # complete: Whitney (2026-09-06) had no way to know what "<host>" was.
 _h="${WIB_PUBLIC_HOST:-<the host in your address bar>}"
+# The identity names agenticburn.com; both domains serve every host, and burritobot.co is the one shown (#651).
+[[ "${_h}" == *.agenticburn.com ]] && _h="${_h%.agenticburn.com}.burritobot.co"
 echo "Everything installed on ${_cn:-your cluster}."
 
 b "OTHER PARTS OF YOUR CLUSTER WITH A WEB PAGE"
 row "Backstage" "https://backstage-${_h}   (every app, its owner and its pods)"
-row "kagent UI" "https://kagent-${_h}   (BurritoBot as its developer sees it)"
-row "Party apps" "https://unicorn-${_h}  (also hedgehog-, wombat-, spider-, mantis-shrimp-)"
+row "kagent UI" "in-cluster: kagent-ui.kagent:8080   (BurritoBot as its developer sees it)"
+row "Party apps" "in-cluster: kubectl -n apps get svc   (hedgehog, wombat, unicorn, spider, mantis-shrimp)"
 row "Grafana" "https://grafana-${_h}   (login: admin / $(sec monitoring prometheus-grafana admin-password 2>/dev/null || echo '<could not read secret>'))"
 
 b "DELIVERY"

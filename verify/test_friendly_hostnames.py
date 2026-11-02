@@ -36,8 +36,9 @@ check("the a-NNN alias is no longer emitted",
 # Retiring a hostname must not read to the shrink guard as losing one, or it refuses every publish and
 # the only way past it is the flag that also switches the protection off.
 # The roundN rows are retired the same way (#502); test_fleet_routes_roster.sh runs the guard itself.
-check("the shrink guard discounts the retired a-NNN and roundN rows",
-      "grep -vE '^(a-[0-9]+|round[^.]*)\\.'" in src)
+# #651 retired the kagent and party-app service hosts, which the guard discounts by WIB_RETIRED_SERVICE_HOSTS.
+check("the shrink guard discounts the retired a-NNN, roundN and service-host rows",
+      'grep -vE "^(a-[0-9]+|round[^.]*|(${retired})-[a-z0-9-]+)\\."' in src)
 # A comment that still maps a slot to a-NNN is how four sources came to disagree (#359): the next reader
 # takes it as the name. The spec has to say the alias is retired, not leave it to a live curl sweep.
 check("no fleet.sh comment still maps a cluster to an a-NNN host",

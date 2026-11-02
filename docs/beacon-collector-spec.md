@@ -48,3 +48,10 @@ are live on the provisioning service, **tell Michael** and he will repoint apex 
 `agenticburn.com/beacon` and `/beacon/view` `reverse_proxy` into the provisioning app (same pattern apex
 already uses for `provisioning` / `rounds` / `feedback`). The provisioning agent does NOT need to touch
 apex — just build the two routes and report the path.
+
+## Both domains (#651, question 877)
+The room is shown burritobot.co, so the address on every page, prompt and script is
+`https://beacon.burritobot.co/beacon`, with the view at `https://beacon.burritobot.co/beacon/view`. Both domains keep
+serving: `agenticburn.com/beacon` and `/beacon/view` stay as they are. apex-agenticburn#44 sends the same two paths on
+the `beacon.burritobot.co` host to the same collector (live 2026-10-29), so the collector's routes and its one shared
+count do not change. Its reply text still names agenticburn; that is the provisioning service's, on #692.

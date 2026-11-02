@@ -27,7 +27,7 @@ WEB = REPO / "gitops/ai-layer/web"
 PAGE = (WEB / "burritbot.html").read_text(encoding="utf-8")
 EVENT_JS = (WEB / "event.js").read_text(encoding="utf-8")
 SURVEY = "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553"
-QUICK = "https://feedback.agenticburn.com/quick?context=Challenges&source=burritobot"
+QUICK = "https://feedback.burritobot.co/quick?context=Challenges&source=burritobot"
 
 failures: list[str] = []
 

@@ -72,7 +72,7 @@ delivered session, from `infra/terraform/fleet/`:
 
 ```bash
 ./fleet.sh reset-bot watch-it-burn-community
-curl -fsS https://attackme.agenticburn.com/cost
+curl -fsS https://attackme.burritobot.co/cost
 ```
 
 `reset-bot` writes its own kubeconfig for the cluster and refuses unless its
@@ -485,7 +485,7 @@ beats give way first.
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
-| 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; the prompt wall `prompts.agenticburn.com` on the projector from here on | Gets on the bot and plays, including off-topic asks | framing, 1 |
+| 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; the prompt wall `prompts.burritobot.co` on the projector from here on | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
 | 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6 |
@@ -504,7 +504,7 @@ view per challenge in presentation order, so nobody waits for a span to arrive.
 Datadog comes up when it explains the attack (the tool call, the Secret read, the
 policy block), not as a product tour. If the Datadog side is not ready, the Grafana
 view on the private cluster carries the same beats
-(`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`, login `admin`,
+(`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`, login `admin`,
 the private terminal prints the password in its catalogue).
 On the `burritobot-public` tab, e-mails, card numbers, SSNs and phone numbers in the
 room's prompts read `[EMAIL]`, `[CARD]`, `[SSN]` and `[PHONE]`: attackme's collector
@@ -528,7 +528,7 @@ more (#687), so this is where the surface is decided.
   sandbox org (#629), and the `burritobot-public` tab for the room's own prompts.
 - **Datadog unreachable:** the Grafana view on the private cluster, which reads Tempo and
   needs no Datadog key (#500):
-  `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. Login
+  `https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`. Login
   `admin`; the private cluster terminal prints the password in its catalogue. Say
   "this is Grafana reading the traces from Tempo, on the cluster itself".
 
@@ -571,9 +571,9 @@ The opening order:
    and try to get it to answer questions that have nothing to do with burritos.
 
 - The room's prompts go on the projector through the prompt wall,
-  `https://prompts.agenticburn.com`: open it full screen before the session
+  `https://prompts.burritobot.co`: open it full screen before the session
   starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
-  seconds, and lists the clusters named in `start.agenticburn.com/roster.json`, so
+  seconds, and lists the clusters named in `start.burritobot.co/roster.json`, so
   the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
@@ -627,7 +627,7 @@ real-looking home address to chat.
     lands shows on `deployments.burritobot.co` with its image and the sender's witch name
     (#773);
   - reading the filesystem, the recipe file under `/tmp/burrito-data`;
-  - egress, posting the customer breakdown to `https://agenticburn.com/beacon`.
+  - egress, posting the customer breakdown to `https://beacon.burritobot.co/beacon`.
 - **Fix (1 min):** `guardrails-on` on the private bot's terminal arms the four
   Kubernetes guardrails on both clusters (#774); each badge lights on the room's
   chat page, and each guardrail is named, not deep. From here on a public image the
@@ -648,7 +648,7 @@ real-looking home address to chat.
   alert here: Falco's recipe-snoop rule fires on a successful read, and on the
   private cluster there is none.
 - C1 exfiltrate the customer data: the egress NetworkPolicy. Keep the beacon view,
-  `https://agenticburn.com/beacon/view`, open in its own tab: the count moves while
+  `https://beacon.burritobot.co/beacon/view`, open in its own tab: the count moves while
   the room plays on the public bot, and does not move for the private one.
 - **Delivers:** point 3 (a full IDP, by voice), point 4, and point 5 (the layers
   named).
@@ -900,33 +900,33 @@ is merely slow rather than rebuilding:
   `routes roster` publishes attackme, both admin hosts and their service hosts, and
   lists any pool row it takes out of the table. It refuses if a roster console has no
   load balancer yet; wait for it and run it again. `router-check` reads
-  `https://start.agenticburn.com/roster.json`, which the router builds from the table
+  `https://start.burritobot.co/roster.json`, which the router builds from the table
   it is actually serving, and must end "the router serves exactly the roster". A
   table pushed but not reloaded fails here, not on stage. Then confirm the C1 beacon
   view answers through the router:
-  `curl -fsS -o /dev/null -w '%{http_code}\n' https://agenticburn.com/beacon/view`
+  `curl -fsS -o /dev/null -w '%{http_code}\n' https://beacon.burritobot.co/beacon/view`
   must print `200`. Anything else means the provisioning service, which stays up
   for this session as the beacon collector (open question 9), is down; bring it back
   before the day. The router 404s `/kubecon` on any host outside the roster (#511),
   so confirm the gate lets the stage through: for each of attackme and
   burritobot-private,
-  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.agenticburn.com/kubecon`
+  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.burritobot.co/kubecon`
   must print `200`. A `404` means the router's roster matcher does not know that
   host, and the presenters have nothing to drive from.
 - [ ] **The prompt wall shows both clusters (#637).** Segment 1 projects
-  `https://prompts.agenticburn.com`, and the wall builds its cluster list from the same
+  `https://prompts.burritobot.co`, and the wall builds its cluster list from the same
   `roster.json` that `router-check` just read, so run it once the routes are right:
 
   ```bash
   ./fleet.sh wall-check
   ```
 
-  It reads `https://prompts.agenticburn.com/healthz` and must end "the wall shows
+  It reads `https://prompts.burritobot.co/healthz` and must end "the wall shows
   every roster cluster": a `200`, and `attackme` and `burritobot-private` each in its
   `clusters` list with `ok` true. A missing cluster means the router's roster lacks it;
   run `router-check` again. A cluster listed with `ok` false means the wall cannot read
   that cluster's feed, and the log prints the wall's error. The same read by eye:
-  `curl -s https://prompts.agenticburn.com/healthz | python3 -c "import json,sys; print([c['name'] for c in json.load(sys.stdin)['clusters']])"`
+  `curl -s https://prompts.burritobot.co/healthz | python3 -c "import json,sys; print([c['name'] for c in json.load(sys.stdin)['clusters']])"`
   prints `['attackme', 'burritobot-private']`. Keep the wall on this roster through
   the session: do not move it onto lab-platform's roster before 2026-11-12, which
   leaves out attackme and the admin cluster until lab-platform#137 lands
@@ -942,7 +942,8 @@ is merely slow rather than rebuilding:
   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
   lists the seeded tag.
 - [ ] **Hostnames serve over HTTPS and websocket:**
-  `./fleet.sh check-tls attackme.agenticburn.com burritobot-private.agenticburn.com`.
+  `./fleet.sh check-tls attackme.burritobot.co burritobot-private.burritobot.co attackme.agenticburn.com burritobot-private.agenticburn.com`.
+  The last two are the agenticburn.com twins, kept for redundancy (#651): neither is shown, and both must pass.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
 - [ ] **The pinned model answers in the delivery region.** From the repo root:
   `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`. It
@@ -965,9 +966,9 @@ is merely slow rather than rebuilding:
   judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the reply.
 
   ```bash
-  python3 verify/kubecon_probe.py community attackme.agenticburn.com \
+  python3 verify/kubecon_probe.py community attackme.burritobot.co \
       --context <community-context> --kubeconfig /tmp/community.kubeconfig --profile accen-dev
-  python3 verify/kubecon_probe.py admin burritobot-private.agenticburn.com \
+  python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co \
       --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
   ```
 
@@ -1064,7 +1065,7 @@ is merely slow rather than rebuilding:
   (conference-knowledge `kubecon-na-2026`). Without `--session` the no-traces monitor
   stays muted for good, so it never fires in the room. If no
   pool is live, each challenge's trace is shown on the admin cluster's Grafana view
-  (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
+  (`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`): open it, run
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
   "Traces" row shows a row. Say on the day which surface is shown.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
@@ -1127,7 +1128,7 @@ is merely slow rather than rebuilding:
   nothing else will touch attackme before the session, from `infra/terraform/fleet/`:
   `./fleet.sh reset-bot watch-it-burn-community`. It restarts guard-proxy by a pod
   delete, which Argo CD does not revert, and must end `counter at zero` on
-  `https://attackme.agenticburn.com/cost`, so the room's counter opens at `$0.0000`
+  `https://attackme.burritobot.co/cost`, so the room's counter opens at `$0.0000`
   with the whole $25 `COST_CAP_USD` window ahead of it. Anything else, run it again;
   if it still does not read zero, read the guard-proxy pod's logs before the day.
   The same reset runs before each run-through ("Run-through record" above).
@@ -1161,7 +1162,7 @@ and none writes a scratch file. The C5 and C6 scripts turn their guard on the wa
 | C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `ghcr.io/peopleforrester/lab-platform/promo/joker:v1` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
 | C6 (least privilege, #775) | `kubectl --context <admin-ctx> -n agent auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp` | After `guard-agency-on` it prints `no`: the bot's Role creates no Deployment, from any registry. `yes` means the Role did not change. No model call |
 | C7 | `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` | From the web terminal pod, `read_internal_config` called through agentgateway `:3003` returns `FAKE-MCP-EXFIL-sentinel-4c1d` after `guard-mcp-off`, and the gateway refuses it after `guard-mcp-on` while `get_weather` still answers. It prints how many seconds the narrowed rule took to take effect, and puts the rule back as it found it. It refuses a workshop cluster |
-| C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
+| C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://beacon.burritobot.co/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
 | C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
 
 ## Teardown

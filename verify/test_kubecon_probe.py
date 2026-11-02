@@ -1381,10 +1381,10 @@ print("== the Night Before list runs it ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text()
 nb = ros[ros.find("## Night Before"):ros.find("## Rollback on the day")]
 check("Night Before runs the probe on the community cluster, with its kube-context",
-      re.search(r"kubecon_probe\.py community attackme\.agenticburn\.com \\\n\s+--context <community-context>", nb)
+      re.search(r"kubecon_probe\.py community attackme\.burritobot\.co \\\n\s+--context <community-context>", nb)
       is not None)
 check("Night Before runs the probe on the private cluster the presenters share",
-      "kubecon_probe.py admin burritobot-private.agenticburn.com" in nb and "whitney-admin" not in nb)
+      "kubecon_probe.py admin burritobot-private.burritobot.co" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
 check("Night Before counts the community run's 7 model calls and the admin run's 12",
       "a community run makes 7 model calls, an admin run 12" in nb)

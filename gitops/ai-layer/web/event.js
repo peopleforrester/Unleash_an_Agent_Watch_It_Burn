@@ -3,7 +3,7 @@
 //
 // Read by burritbot.html, the storefront the room uses from their phones. Set every field to "" for
 // the 2-hour workshop: the storefront's Feedback button then keeps its built-in /quick form on
-// feedback.agenticburn.com and carries the student's cluster and user, as #364 and #383 require.
+// feedback.burritobot.co and carries the student's cluster and user, as #364 and #383 require.
 //
 // When feedbackUrl is set, the button goes there VERBATIM. No cluster or user is appended, because the
 // destination is a third party (the conference's session survey), not our feedback app, and an
