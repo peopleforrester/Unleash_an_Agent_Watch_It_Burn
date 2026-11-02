@@ -16,7 +16,7 @@ aws_iam_user_policy.attendee_eks, eks:DescribeCluster on its own cluster and eks
 test "the attendee user cannot make a bucket" holds that), so the issue's "hand-made bucket via attendee keys" is a
 refused call, and the record of it is CloudTrail's. The bucket that does exist out of band has to come from a principal that can make one, the
 operator, and that is the one Config and the drift report must show. Both buckets are deleted at the end,
-pass or fail. A missing tool, credential or recorder is a failure, never a skip.
+pass or fail. A missing tool, credential or recorder fails the test by name.
 """
 from __future__ import annotations
 
@@ -158,7 +158,8 @@ def main() -> int:
                                 "--out", str(out)], capture_output=True, text=True)
             text = out.read_text() if out.is_file() else r.stdout
         unmanaged = text.split("## Unmanaged", 1)[-1].split("\n## ", 1)[0]
-        check(f"the report completed (exit 2 for findings, got {r.returncode})", r.returncode == 2)
+        # drift-report.py returns 0 clean, 1 incomplete, 2 findings; the out-of-band bucket is a finding.
+        check(f"the report completed with findings, code 2 (got {r.returncode})", r.returncode == 2)
         row = next((ln for ln in unmanaged.splitlines() if f"`{oob}`" in ln), "")
         check(f"{oob} is in the report's Unmanaged table", bool(row))
         # By now CloudTrail has the attendee's call, made seconds before the operator's, so this one is there too.

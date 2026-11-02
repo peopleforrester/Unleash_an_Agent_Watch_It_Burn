@@ -252,7 +252,7 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
 
     print("== the full fleet: drift, unmanaged resources and a missing Config record are all findings ==")
     rc, out = env.run()
-    check(f"exits 2 for findings (got {rc})", rc == 2)
+    check(f"returns code 2, findings (got {rc})", rc == 2)
     check("does not call itself incomplete", "INCOMPLETE" not in out)
     unmanaged = section(out, "## Unmanaged")
     check("the hand-made bucket is reported unmanaged", "`hand-made-by-hand`" in unmanaged)
