@@ -1,5 +1,5 @@
 # ABOUTME: Render-gate check for attack-2 (villain app): the registry allowlist (apps + agent) permits
-# ABOUTME: only trusted registries, and the villain image lives on a public user namespace it refuses.
+# ABOUTME: only trusted registries, and the villain image is C6's Joker, on a festival-ops/ path it refuses.
 import pathlib, sys, yaml
 from registry_allowlist import allowed, prefixes
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -36,10 +36,11 @@ check("it judges Pods, so autogen extends it to the villain Deployment",
       spec["matchConstraints"]["resourceRules"] == [{"apiGroups": [""], "apiVersions": ["v1"],
                                                      "operations": ["CREATE", "UPDATE"], "resources": ["pods"]}])
 check("autogen is not switched off", "autogen" not in spec)
-check("allowlist permits docker.io/library only (not arbitrary docker.io users)",
-      "docker.io/library/" in allow and "docker.io/" not in allow)
-check("villain image is on a public docker.io user namespace (not library)",
-      img.startswith("docker.io/") and not img.startswith("docker.io/library/"))
+check(f"allowlist permits nothing on Docker Hub (#714): {allow}", not any("docker" in p for p in allow))
+sys.path.insert(0, str(REPO / "gitops/ai-layer"))
+import ticket_site  # noqa: E402
+check(f"villain image is C6's Joker, the image images/villains/build.sh pushes, by digest ({img})",
+      img.startswith(ticket_site.C6_IMAGE + "@sha256:"))
 check("villain image is NOT in the allowlist (nor ECR) -> C2 refuses it", not allowed(img))
 check("villain deploys to the apps namespace", dep["metadata"]["namespace"] == "apps")
 # The run-of-show reads the refusal aloud and the lab quotes it; Kyverno prefixes it with the policy name.

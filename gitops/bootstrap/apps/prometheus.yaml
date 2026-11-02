@@ -53,7 +53,7 @@ spec:
           # a static value removes that external dependency). verify-at-build: rotate or wire a real store.
           adminPassword: "watchitburn-admin"
           podLabels: { tags.datadoghq.com/service: burritobot-grafana, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
-          # lab-platform's mirror/ copy of docker.io/grafana/grafana:13.2.2-distroless, the chart's tag, named by
+          # lab-platform's mirror/ copy of Docker Hub's grafana/grafana:13.2.2-distroless, the chart's tag, named by
           # its linux/amd64 digest's first twelve characters (#623). The k8s-sidecar image stays on quay.io: the
           # mirror holds only Docker Hub images.
           image:

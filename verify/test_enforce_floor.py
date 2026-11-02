@@ -122,8 +122,10 @@ from registry_allowlist import allowed
 
 
 def image_ok(img):
-    ref = img if "/" in img.split(":")[0] else f"docker.io/library/{img}"
-    return allowed(ref)
+    # A bare name is a Docker Hub pull, and Docker Hub is on no allowed registry (#714), so it fails as named.
+    # A Backstage scaffolder value (${{ values.image }} in backstage/templates/) is the image someone types in when
+    # they scaffold a service, not one the app deploys; images.lock lists it as not-an-image.
+    return img.startswith("${{") or allowed(img)
 
 
 def images(docs):

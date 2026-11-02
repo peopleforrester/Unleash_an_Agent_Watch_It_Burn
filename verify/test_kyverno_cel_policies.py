@@ -71,6 +71,10 @@ USERS = {
 TRACKED = {"argocd.argoproj.io/tracking-id": "ai-layer:apps/Deployment:agent/guard-proxy"}
 LIMITS = {"limits": {"cpu": "100m", "memory": "64Mi"}}
 VILLAIN = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
+# The nginx the demo apps and Beat 1 run (#715, #714): lab-platform's web image on ghcr.io, by digest.
+WEB = "ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9"
+# Challenge 6's Joker (#671), which images/villains/build.sh pushes under the refused festival-ops/ path.
+JOKER = "ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0"
 SIGNED = ("ghcr.io/peopleforrester/watch-it-burn:busybox-1.36"
           "@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662")
 # lab-platform's llm-guard as the ai-layer Application pins it (#652), signed by lab-platform with the workshop
@@ -164,31 +168,38 @@ g = run(REG, [pod("villain", "agent", [c(VILLAIN)]),
               deploy("promo-mascot", "agent", [c(VILLAIN)]),
               pod("ai-layer", "agent", [c(), c("cr.agentgateway.dev/agentgateway:v1.5.0", name="d"),
                                         c("cr.kagent.dev/kagent-dev/kagent/app:0.10.1", name="e")]),
-              pod("apps-ok", "apps", [c("docker.io/library/nginx:1.27-alpine"),
+              pod("apps-ok", "apps", [c(WEB),
                                       c("123456789012.dkr.ecr.us-west-2.amazonaws.com/shop:1", name="d"),
                                       c("registry.k8s.io/pause:3.9", name="e")]),
               pod("spoofed-ecr", "apps", [c("evil.example/x.dkr.ecr.y.amazonaws.com/z:1")]),
-              pod("docker-user", "apps", [c("docker.io/someone/nginx:1")]),
+              pod("docker-user", "apps", [c("docker.io/someone/nginx:1")]),  # refused example (#714): an untrusted registry
+              pod("docker-library", "apps", [c("docker.io/library/nginx:1.27-alpine")]),  # refused example (#714): Docker Hub
               pod("lab-platform", "apps", [c("ghcr.io/peopleforrester/lab-platform/web:v1"),
                                           c("ghcr.io/peopleforrester/lab-platform/mirror/mcp/grafana:latest-208f8ea16064",
                                             name="d")]),
               pod("promo-via-ecr", "agent",
                   [c("123456789012.dkr.ecr.us-west-2.amazonaws.com/ghcr/peopleforrester/lab-platform/promo/joker:v1")]),
               pod("promo-beside-ok", "agent", [c(), c("ghcr.io/peopleforrester/lab-platform/promo/joker:v1", name="d")]),
-              pod("old-villain", "agent", [c("docker.io/peopleforrester/promo-mascot:latest")]),
+              pod("c6-joker", "agent", [c(JOKER)]),
+              pod("c6-joker-via-ecr", "agent",
+                  [c("123456789012.dkr.ecr.us-west-2.amazonaws.com/ghcr/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0")]),
               pod("elsewhere", "default", [c(VILLAIN)])])
 expect("the villain Pod in agent fails with the named message", g, "villain", "fail", REG_MSG)
 expect("the villain DEPLOYMENT fails too (autogen), so deploy_app is refused at the Deployment",
        g, "promo-mascot", "fail", REG_MSG)
 expect("every ai-layer registry passes", g, "ai-layer", "pass")
-expect("docker.io/library, ECR and registry.k8s.io pass in apps", g, "apps-ok", "pass")
+expect("lab-platform's web image, ECR and registry.k8s.io pass in apps", g, "apps-ok", "pass")
 expect("an ECR-looking path on another host does not pass as ECR", g, "spoofed-ecr", "fail", REG_MSG)
-expect("a docker.io user namespace is not docker.io/library", g, "docker-user", "fail", REG_MSG)
+expect("a Docker Hub user namespace is refused", g, "docker-user", "fail", REG_MSG)
+expect("Docker Hub's library is refused too: nothing here pulls from Docker Hub (#714)", g, "docker-library", "fail",
+       REG_MSG)
 # #653: the villain is on ghcr.io, which stays allowed, so the refusal is the promo/ path and only that path.
 expect("lab-platform's other ghcr.io paths (web, mirror/) still pass", g, "lab-platform", "pass")
 expect("the promo/ path is refused through an ECR pull-through cache too", g, "promo-via-ecr", "fail", REG_MSG)
 expect("one promo/ container fails a Pod whose other containers pass", g, "promo-beside-ok", "fail", REG_MSG)
-expect("the old Docker Hub villain is still refused", g, "old-villain", "fail", REG_MSG)
+# #671: C6's Joker is on ghcr.io too, under festival-ops/, which is refused there and through an ECR cache.
+expect("C6's Joker, under festival-ops/, is refused", g, "c6-joker", "fail", REG_MSG)
+expect("and through an ECR pull-through cache", g, "c6-joker-via-ecr", "fail", REG_MSG)
 expect("namespaces other than apps and agent are out of scope", g, "elsewhere", "ignored")
 g = run(REG, [pod("villain", "agent", [c(VILLAIN)])], operation="UPDATE")
 expect("an UPDATE to a Pod that already violated passes (the old allowExistingViolations)", g, "villain", "pass")
@@ -196,11 +207,11 @@ expect("an UPDATE to a Pod that already violated passes (the old allowExistingVi
 LIM = POL / "require-resource-limits.yaml"
 LIM_MSG = "CPU and memory resource limits are required on every container."
 print("== require-resource-limits: the Beat 1 wall ==")
-g = run(LIM, [deploy("sample-web", "attendee-001", [c("nginx:latest")]),
+g = run(LIM, [deploy("sample-web", "attendee-001", [c(WEB)]),
               pod("no-limits", "kube-system", [c("x")]),
               pod("cpu-only", "agent", [c("x", resources={"limits": {"cpu": "1"}})]),
               pod("limited", "agent", [c("x", resources=LIMITS)])], user="agent-sa")
-expect("Beat 1's `kubectl create deployment sample-web --image=nginx:latest` fails at the Deployment",
+expect("Beat 1's `kubectl create deployment sample-web --image=<lab-platform's web image>` fails at the Deployment",
        g, "sample-web", "fail", LIM_MSG)
 expect("a limit-less Pod fails in any namespace", g, "no-limits", "fail", LIM_MSG)
 expect("cpu without memory fails", g, "cpu-only", "fail", LIM_MSG)
@@ -420,7 +431,7 @@ for who, obj, label in (
 print("== verify-image-signatures: a real signed image, verified offline-capable with the workshop key ==")
 SIG = POL / "verify-image-signatures.yaml"
 g = run(SIG, [pod("ours-signed", "agent", [c(SIGNED)]),
-              pod("third-party", "agent", [c("docker.io/library/nginx:1.27-alpine")])])
+              pod("third-party", "agent", [c("cr.agentgateway.dev/agentgateway:v1.5.0")])])
 expect("our signed image passes against policies/cosign/watch-it-burn.pub", g, "ours-signed", "pass")
 expect("a third-party image is not asked for our signature", g, "third-party", "pass")
 g = run(SIG, [pod("llm-guard", "agent", [c(GUARD)]), pod("llm-guard-cache", "agent", [c(GUARD_CACHE)])])

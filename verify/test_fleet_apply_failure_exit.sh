@@ -53,7 +53,7 @@ export T PATH="${SHIM}:${PATH}"
 
 # Fresh state and log dirs per run, so one run's state files never make the next one skip its apply.
 fresh() { rm -rf "${T}/states" "${T}/logs" "${T}/applies"; mkdir -p "${T}/states" "${T}/logs"; }
-env_common=(WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" WIB_DOCKERHUB_ENV=/nonexistent
+env_common=(WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs"
             WIB_PER_ROLE=1 WIB_NO_INGEST=1)
 
 # The real process, exactly as the bring-up ran it. WIB_NO_BOOTSTRAP turns off the routes and verify tail,

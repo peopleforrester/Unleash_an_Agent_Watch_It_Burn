@@ -21,6 +21,12 @@ spec:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: "{{ .Values.revision }}"
     path: backstage
+    kustomize:
+      # lab-platform's mirror/ copy of Postgres 18.6 (#714), by digest, at the registry the root passes down (#622):
+      # k8s/postgres.yaml names the kustomize image postgres and Argo CD sets it here. It replaces Docker Hub's
+      # postgres:18.6-alpine. The copy is the one kagent's Postgres runs (verify/mirror_copies.py).
+      images:
+        - "postgres={{ .Values.imageRegistry }}/mirror/library/postgres:18.6-alpine3.23-dd504ba15d33@sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373"
   destination:
     server: https://kubernetes.default.svc
     namespace: backstage

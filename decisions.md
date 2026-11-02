@@ -9052,6 +9052,368 @@ on 11-12. The commands are the ones in the 2026-11-01 entry, once with `C=watch-
 
 **Not yet run on a cluster:** `verify/test_console_no_toggle_live.py` on watch-it-burn-private and
 watch-it-burn-community. Each run should print ten PASS lines and `All live /toggle exposure checks passed.`
+## 2026-11-02 · #704 · Re-dispatch: step 3 of the 2026-10-31 run sheet must now pass CONTEXT, and the cold build waits on Michael's go
+
+**Context.** Run 15840 is #704's first dispatch since run 13379's entry above merged. Like that run, it has no AWS
+profile and no kubeconfig, so it cannot build, time, check or tear down the local-inference cluster. The vllm entry
+in `platform-baseline.yaml` stays at `measured: false`: no number has been measured.
+
+**What moved on staging since the 2026-10-31 #704 entry.** #732 (entry above) made `infra/deploy-full-idp.sh` stop at
+once without `CONTEXT` (`: "${CONTEXT:?...}"`) and derive `CLUSTER_NAME` from it (`${CONTEXT##*cluster/}`). That
+entry's first bullet, that the script "never reads `CONTEXT`", no longer holds. Its step 3 sets `KUBECONFIG` and
+`CLUSTER_NAME` but not `CONTEXT`, so as written it now fails on the script's first line, before any clock is worth
+reading. The issue's own command, `CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference`, is now correct as
+long as `<ctx>` is the context of the isolated kubeconfig. The rest of the sheet still matches the tree:
+`fleet.sh up <name...>` provisions a named attendee cluster in `WIB_DEFAULT_ACCOUNT` (accen-dev), the attendee
+cluster module's default `instance_types` is `["t3.2xlarge"]`, `WIB_NO_BOOTSTRAP=1` still skips the bootstrap, the
+router and the ingest, and `gitops/manifests/vllm-qwen3/vllm-qwen3.yaml` still requests 4 CPU / 10Gi with limits
+6 CPU / 16Gi.
+
+**Not yet run on a cluster.** The sheet, corrected. A session with accen-dev, in us-west-2, the lab VPC applied and
+Michael's go for the spend (one t3.2xlarge node and its EKS control plane for about an hour), runs from
+`infra/terraform/fleet`:
+
+1. `WIB_NO_BOOTSTRAP=1 ./fleet.sh up watch-it-burn-attendee-099` (any attendee slot no pool row holds).
+2. `aws eks update-kubeconfig --kubeconfig /tmp/watch-it-burn-attendee-099.kubeconfig --name watch-it-burn-attendee-099 --region us-west-2 --profile accen-dev`,
+   then `CTX=$(KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig kubectl config current-context)`, which must end in
+   `cluster/watch-it-burn-attendee-099`.
+3. From the repo root, start the clock and run
+   `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig CONTEXT="$CTX" AWS_PROFILE=accen-dev REGION=us-west-2 bash infra/deploy-full-idp.sh local-inference`.
+   Stop the clock when `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig kubectl --context "$CTX" -n argocd get applications`
+   shows every Application Healthy.
+4. `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig CONTEXT="$CTX" python3 verify/local-inference-live.py`, which
+   must end with no FAIL and prints the vLLM pod's time from creation to Ready and its live footprint.
+5. Write step 3's wall-clock, step 4's time to Ready and footprint, and the requests into the vllm entry's `cost`, with
+   `measured: true`.
+6. `./fleet.sh down watch-it-burn-attendee-099`, then `./cleanup-log-groups.sh --delete`.
+## 2026-11-02 · #668 · The demo apps' half is #715's; the console still waits on `web.yaml` fields lab-platform has not added
+
+**Context.** #668 moves the console and the five demo apps from nginx onto lab-platform's `web` image
+(`ghcr.io/peopleforrester/lab-platform/web`, built by lab-platform#278). Hecaton run 15839 is the third dispatch.
+Two earlier drafts exist. Run 10510's `765bcae` (`origin/agent/668-10510`) is a decisions entry only. Run 13230's
+`cb31d55` (`origin/agent/668-13230`) moved the five demo apps and listed what `web.yaml` cannot say for the console.
+Neither reached staging. `bash verify/draft-drift.sh origin/agent/668-13230 origin/staging` found 31 drift lines:
+#715 (`4f9f5c4`, 2026-10-31) made the same demo-app move on staging, on a layout of its own. Each app's `web.yaml` is a
+file of its own that a `configMapGenerator` turns into a hashed ConfigMap, and `apps-allow-ingress` keeps port 80 for
+the villain apps. So nothing from `cb31d55` is reused. Its gap list, measured on the pinned binary, is carried
+below after a fresh read of lab-platform's source.
+
+**What staging already does from the issue's list.** All of it is #715's work, plus the signature policy in `89c3919`:
+- The five demo apps run `web@sha256:73cd15652cb8…fbd9`, set by `kustomize.images` at `{{ .Values.imageRegistry }}`
+  in each `gitops/bootstrap/apps/demo-app-*.yaml`. That answers the issue's fourth point (how an image reaches a
+  kustomize directory source under #622) the way #652 did for llm-guard.
+- Each container has `NETWORK_BOUNDARY=sandbox` and port 8080, with probes on 8080, and each Service targets 8080.
+- The package is pullable with no credential. On 2026-11-02 an anonymous ghcr.io token for
+  `peopleforrester/lab-platform/web:pull` fetched the manifest for the digest and for `v1` with 200. `v1` still
+  serves `sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`.
+
+**The console did not move, again.** lab-platform's `internal/webserve/config.go` and `server.go`, read through
+`sources` on 2026-11-02, take the same fields run 13230 measured. The top level takes `listen`, `tls`, `root`,
+`routes` and `hosts`. A host rule takes `match`, `proxy` or `fallback`. lab-platform's merged PRs about `web` are
+still #280 (the build), #336 (the umask republish) and #337. Against today's `console.conf`, the file still cannot say:
+1. **`/chat`'s keyed limit (#450).** A route has one token bucket, shared by every caller (`buckets map[int]*bucket`).
+   `/chat` needs a limit keyed on `X-BurritoBot-Session`, 10 a minute with burst 9, that holds no request without
+   the header. Today it also has a second limit keyed on `X-Forwarded-For`. #786 (Michael's 2026-11-01 ruling on #450)
+   drops that one, so after #786 one keyed limit is enough.
+2. **`/chat`'s own replies.** nginx answers a 429 as a guarded 200 in guard-proxy's JSON shape, and a 502, 503 or 504
+   as JSON with that code (BurritoBot#110). web answers a 429 with the text `too many requests` and a failed proxy
+   with a bare 502. The phone would show a status code, not a sentence.
+3. **`X-Forwarded-For`.** web calls `SetXForwarded()` on every route and host rule, which replaces the inbound value
+   with the peer's address. `console.conf` sends none on `/lab-events` (`test_lab_events.py` holds that), and
+   appends to the inbound value on `/jupyter/` and the support host.
+4. **Host rules beyond `match` and `proxy`.** Every host rule shares one fallback page and a 3600s timeout, and
+   takes any method. `maintenance-shell-<cluster>` (#664) needs GET and HEAD only, a 10s timeout and its own
+   "nothing here yet" page. `support[-<cluster>]` (#685) needs GET and POST only, `/landed` refused, a 32k body
+   cap, a 10s timeout, `X-Forwarded-For` appended and no fallback page.
+5. **Host case.** web matches the Host as sent, with the port stripped but not lowercased. The file can fix this
+   with `(?i)` in each `match`, so it needs nothing from lab-platform.
+
+Moving the console now would drop the room's `/chat` limit and its readable refusals, and Challenge 6's two hosts.
+Writing `gitops/ai-layer/web.yaml` without switching the Deployment would leave a file nothing runs. It would also
+tie ~15 tests to a shape lab-platform is about to change. So neither is done. The console's `web.yaml`, its mounts
+(`/etc/web/web.yaml`, `/srv/www`, console-tls at `/etc/web/tls`), `not-here.html` and moving the tests that parse
+`console.conf` all wait on lab-platform adding points 1 to 4.
+
+**The follow-up was never filed.** Run 13230's report said a follow-up asked lab-platform for those fields.
+lab-platform has no issue for it, open or closed (searched on 2026-11-02 by "console", "web image", "routes",
+"X-Forwarded-For" and "rate"). This run's report files it on lab-platform with the four points.
+
+**Not yet run on a cluster.** The demo-app half is owed what the #715 entry names:
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` on the next attendee bring-up, where each party
+host must answer its page through the console's host map and the 8080 target.
+`verify/test_console_no_toggle_live.py` is owed once the console moves.
+## 2026-11-02 · #733 · Re-dispatch: the 11-01 rollout already synced workshop-agent on both clusters, and the public bot read HC-666
+
+**Context.** Run 15913 is #733's first dispatch since run 14867's entries above merged (29c91d9). It has no kubeconfig
+context and no AWS credentials, so it ran nothing on a cluster. That entry's plan still holds; this one adds what
+staging recorded since.
+
+**What moved on staging since 29c91d9.**
+- The git Agent changed twice, outside its tools: 4e86b30 wrote out `runtime: go`, and b7f366c (#749) added to the
+  system message. The two tool lists are as they were: workshop-mcp's twelve, in the order
+  `verify/test_agent_tools_sync.py` holds, and evil-mcp's three. Neither change can stand in for the check. A scalar
+  field in the Agent synced under ai-layer's RespectIgnoreDifferences too; only the tools array froze (#679).
+- d2c9e79 (#679) added `repair_env_order` to converge and comments to `gitops/bootstrap/apps/ai-layer.yaml`.
+  `gitops/bootstrap/apps/workshop-agent.yaml` is unchanged.
+- The 2026-11-01 "Live rollout" entry (3.x) says Michael's session synced ai-layer and workshop-agent to staging
+  7452788 on both up clusters and bounced the workshop-agent pod. So the workshop-agent Application exists on
+  community and has synced at least once by hand. The same entry's #764 step 1 asked the public bot about HC-666 and
+  it fired `deploy_app`. HC-666 lives on the fake ticket desk, and `read_support_ticket` is the only tool that reads
+  it. Before #707 both KubeCon clusters held the stale eleven without that tool (#679). So `read_support_ticket`,
+  git's twelfth tool, was most likely live on community by 11-01.
+
+**What that does and does not show.** It is a git tool change that reached community, which is the shape of the
+check. It does not show the arrival came from a sync with no converge. `fleet.sh converge`'s `repair_agent_tools`
+deletes the Agent when its sorted live list differs from git's, and Argo then makes it again, so a converge run on
+community between 10-28 and 11-01 would land the same list. No entry records one. Two reads tell them apart: the
+Agent's `metadata.managedFields` (argocd-controller as the manager of `spec.declarative.tools` with nothing after it)
+and `workshop-agent`'s `.status.history` against the Agent's `metadata.creationTimestamp`. An Agent made between two
+history entries with no Argo operation at that time was recreated after a converge delete. The guard-mcp-on half has
+no record at all.
+
+**The empty heading above.** Run 14867's first heading for #733 has no body: its fixup added a second heading under it.
+decisions.md is append-only, so it stays.
+
+**Not yet run on a cluster.** All of #733. The read-only half, from a session with accen-dev (the escalation in this
+run's report carries the same commands):
+
+    K=/tmp/watch-it-burn-community.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name watch-it-burn-community --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/watch-it-burn-community ]] || exit 1
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd get application workshop-agent \
+      -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}{.status.history}'
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get agent workshop-agent --show-managed-fields -o yaml
+    KUBECONFIG=$K kubectl --context "$CTX" -n agent get deployment workshop-agent -o jsonpath='{.metadata.creationTimestamp}'
+
+The Application must read Synced Healthy at a staging revision carrying 813404e. The Agent's tracking-id must start
+`workshop-agent:`, and its workshop-mcp list must equal git's twelve. Then the mutating half, by the same session:
+swap `check_inventory` and `reorder_supply` in `gitops/workshop-agent/agent.yaml` and in the expected list of
+`verify/test_agent_tools_sync.py` in one commit to staging, wait for the root's auto-sync with no converge, and run
+the issue's jsonpath read, which must print git's new order. Run `guard-mcp-on` in community's web terminal, wait a
+minute past a selfHeal, and read evil-mcp's toolNames, which must stay `["get_weather"]`. Run `guard-mcp-off`, and
+land the swap back the same way. Record the readings here; a pass closes #733.
+## 2026-11-02 · #544 · Sixth dispatch: nothing it checks has changed since `80123c0`, and one attendee bring-up also serves #668
+
+**No code changed.** Hecaton run 15940 is the sixth dispatch of #544, about an hour after run 15831 set a spend
+wait. Like the earlier runs it has no AWS credentials (`aws sts get-caller-identity`: NoCredentials) and no
+kubeconfig, so nothing ran on a cluster.
+
+**Staging since `80123c0`, the fifth dispatch's record.** The four commits since then (`bf5a492`, `948f628`,
+`3db0553` and `6ce4faa`, the base) touch only decisions.md. `git diff --stat 80123c0 6ce4faa` over `gitops/`,
+`observability-idp/`, `infra/terraform/fleet/`, `verify/test_service_hosts_live.py`, `verify/test_fleet_contract.py`
+and `verify/test_bootstrap_chart.py` is empty. So the counts are still 34 Argo CD Applications on attendee and 38 on
+admin, and the morning's entry still says what the live run should expect and which Tempo leftovers remain. No reply to
+the spend question in issue comment 6562456139 has appeared on the issue.
+
+**One attendee bring-up serves two issues.** The #668 entry above owes
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` on the next attendee bring-up. That is the same
+command as the attendee half of #544's point 4, so the one cluster the go would pay for, about $1 for two hours, closes
+the attendee side of both. watch-it-burn-community is not a stand-in: fleet.sh gives the community role the burn
+profile, not attendee (`infra/terraform/fleet/fleet.sh` line 196).
+
+**Not yet run on a cluster.** Unchanged from the morning's entry: points 1 and 2 and the attendee half of point 4 on
+a new attendee cluster, and point 3 and the admin half of point 4 on watch-it-burn-private.
+## 2026-11-02 · #738 · M6 re-dispatched: still no Go image, #751's component is not on staging, cutover after KubeCon
+
+**Context.** #738 is PRD #412's M6: guard-proxy runs as a signed, digest-pinned Go image, and the `proxy.py`
+`configMapGenerator` leaves `gitops/ai-layer/kustomization.yaml`. Run 15027 (2026-11-01) made no commits and set a
+wait to 2026-11-13. Hecaton run 15924 is the re-dispatch, after Michael's 2026-11-01 comment on #738 about #751. No
+earlier draft of #738 exists to reuse: `origin/agent/738-15027` carries no commit of its own.
+
+**What run 15924 read on 2026-11-02.**
+- **No guard-proxy image exists.** With an anonymous ghcr.io token for `peopleforrester/watch-it-burn:pull`, the
+  tag list names no `guard-proxy` tag; the only tags with `guard` in them are the ten `llm-guard-*`. guard-proxy-agenticburn's main has no Dockerfile and only `conformance.yml` (read through
+  `sources`). The Dockerfile and `scripts/release-image.sh` are run 15037's draft `b76fb22` on
+  guard-proxy-agenticburn#30, which waits on the hecaton App's workflows permission. The publish and the cosign 2.x
+  signature then run on netcup, where the key lives. So `verify/sign-images.sh --check` has no guard-proxy tag to
+  check, and this repo cannot name a digest.
+- **#751's Component is not on staging.** Michael's comment says #751 staged `gitops/ai-layer/go-spend-store/` and
+  `verify/test_guard_proxy_spend_store.py`. Both are only on draft branches: `38e8892` on `agent/751-15566` and
+  `c27f23d` on `agent/751-15265`. Runs 15456 and 15566 ended failed (validation), so neither merged, and #751 is open.
+  The cutover cannot list the Component under `components:` until one of them lands, or the cutover carries it.
+- **The ruling stands.** KubeCon (2026-11-12, `kubecon-na-2026` in conference-knowledge) runs `proxy.py` from the
+  submodule pin `fb6e2bf`. Michael placed the Go cutover after it in his #412 comments of 2026-10-24 and 2026-10-31,
+  and nothing since moves it. The KubeCon clusters sync from staging, so the Deployment stays on `proxy.py`.
+
+**Nothing is staged here.** A staged Component naming the Go image was considered and not written: `sign-images.sh`
+reads every `image:` line in the repo, Components included, so an unpublished tag fails `--check` with
+`NOT IN THE REGISTRY`, the opposite of this issue's first criterion.
+
+**The cutover commit, once the image is published and signed and 2026-11-12 has passed.**
+1. `resources.yaml`: guard-proxy's `image:` becomes `ghcr.io/peopleforrester/watch-it-burn@sha256:<digest>` (tag
+   `guard-proxy-<commit>`) in place of `watch-it-burn:python-3.12-slim`; the `python /app/proxy.py` command and the
+   `/app` ConfigMap mount go, and so do the
+   `inject-python` annotation and `checksum/proxy-py`.
+2. `kustomization.yaml`: the `guard-proxy-src` generator goes, and `go-spend-store` (#751) is listed under
+   `components:`. #751's decisions entry has the one patch for a cluster whose Deployment already has a defaulted
+   `rollingUpdate` block.
+3. #782: the `OTEL_*` env (or `inject-sdk`) with the endpoint on the collector's HTTP port 4318, and the three
+   attributes in `weaver/registry`.
+4. `verify/test_proxy_checksum.py` retires; the `images.lock` row and the ai-layer `ignoreDifferences` env list change.
+
+**Not yet run on a cluster.** Nothing changed. At the cutover, `verify/sign-images.sh --check` (with cosign 2.x) and
+the Kyverno image-signature check on a fresh attendee cluster, through `bash verify/run-e2e.sh`.
+## 2026-11-02 · #746 · Re-dispatch: the one-root copy is on staging, tokens and cost moved to #784, and the live look is still owed
+
+**No code changed.** The collector change that gives Agent Observability one root per turn (241f8e6, recorded in
+7452788, both committed on 2026-11-01 at 15:51 UTC and on staging since) is the whole of #746's repo work. Since that merge,
+two comments changed what is owed. Whitney's comment on #746 moves the fifth of her checks, tokens and cost on the
+root row, to #784, which puts token counts on guard-proxy's model-call span. Michael's handoff of 2026-11-02 asks for
+the live look on watch-it-burn-community or watch-it-burn-private, the two KubeCon clusters that are up, and never
+on a new cluster. So #746 closes on four checks, read on live traces in the sandbox org's LLM Observability
+(`ml_app:burritobot`):
+- one chat is one root row;
+- that row shows the user's prompt as input and the bot's final reply as output;
+- the tool calls, `read_support_ticket` and `deploy_app` for HC-666, sit under it;
+- its duration covers the whole chat, not kagent's 14 ms.
+
+**Whether the clusters already run it.** Both clusters' roots read the `staging` branch (`infra/deploy-full-idp.sh`
+passes `revision=staging`), and `otel-collector` syncs on its own (`gitops/bootstrap/apps/otel-collector.yaml` and
+`otel-collector-burn.yaml`, automated with selfHeal). Their collectors should have rolled to the change soon after
+the commit. Nobody has read their sync revision since, and the 2026-11-01 live rollout entry found ai-layer OutOfSync
+on an older revision, so an automated sync is not proof.
+
+**What #783 adds.** #783 reports that Agent Observability got no `ml_app:burritobot` root spans in the 12 hours
+before 2026-11-01 22:15 UTC, while APM kept receiving traces. That window holds two chats made after the change was committed,
+Whitney's Tron deploy test at about 16:22 UTC and the #762 check at about 16:45 UTC. Under this change, APM's copy
+carries `dd_llmobs_enabled` false and makes no Agent Observability rows by design, so every row has to come through
+`otlp_http/llmobs`. If those chats went through a collector that had synced the change, the copy did not land, and
+#746's live look cannot pass until it does. The change cannot explain #783's start: the last rows came at about
+03:26 UTC, some twelve hours before the change was committed. It can keep the outage going after that, though, which is why the
+first command below reads the collector log for the intake's errors. #783 owns the diagnosis. This entry only names
+the overlap.
+
+**Not yet run on a cluster.** Hecaton run 15925 has no AWS credentials, no kubeconfig and no read access to the
+sandbox org (#759 is the run-side access), so it ran none of this. From a session with accen-dev, at the repo root,
+for C in `watch-it-burn-private` (it has Tempo, for step 3) and then `watch-it-burn-community`:
+
+    K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] || exit 1
+    # 1. the collector runs the change: the revision must contain 241f8e6, and the sync must have succeeded
+    REV=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n argocd get application otel-collector \
+      -o jsonpath='{.status.sync.revision}')
+    git merge-base --is-ancestor 241f8e6 "$REV" && echo "otel-collector at $REV has #746"
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n argocd get application otel-collector \
+      -o jsonpath='{.status.sync.status} {.status.operationState.phase}{"\n"}'
+    # 2. the intake takes the copy: no output is the pass; a 403 means the org's key is refused at the llmobs intake
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n monitoring logs \
+      ds/otel-collector-opentelemetry-collector-agent -c opentelemetry-collector --since=2h | grep -i llmobs
+
+3. On watch-it-burn-private only, `KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3
+   verify/one_root_probe.py` must end with one root in Tempo, guard-proxy's `POST /chat`. That shows APM's path is
+   still guard-proxy → agentgateway → kagent after the change.
+4. On each cluster's bot page (`burritobot-private.burritobot.co`, `attackme.burritobot.co`), send "What's the status
+   of my support ticket HC-666?". The 2026-11-01 live rollout entry found that it fires `deploy_app`. Within a few
+   minutes, open LLM Observability in the sandbox org under `ml_app:burritobot` and read the four checks above on
+   that chat's trace. Then open the same trace in APM and confirm that it still has one `POST /chat` root and the
+   agentgateway hop. That look also settles the overlap note on Datadog's page ("some data sent to Agent
+   Observability may also be written to the corresponding APM traces").
+
+If #760's `verify/challenge_traces.py` is on staging by then, its run judges the same frame on Challenge 3's trace
+with a link. It reads the tokens and cost that #784 owns too, so a red there on cost alone does not hold #746 open.
+A pass on both clusters closes #746; record it here with the trace ids. A pass in Tempo and APM with no Agent
+Observability row is #783, not a #746 shape failure. Offline, the shape stays pinned by
+`python3 verify/test_trace_shape_e2e.py`, which `bash verify/run-e2e-tools.sh` runs.
+## 2026-11-02 · #750 · Re-dispatch: #644's re-run has not happened, and the run-of-show's two greps match the logs
+
+**No code changed.** Hecaton run 15926 is the second dispatch of #750. It has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig, so nothing ran on a cluster.
+
+**#644's re-run is still ahead.** The 2026-11-01 #750 entry above put the check in the Night Before #644 step of
+`facilitation/kubecon-na-2026-run-of-show.md`, and that step is unchanged on staging `6ce4faa`. #644 is open, and
+its last comment is still Michael's 2026-11-01 go to re-run after #450 drops the per-network limit. #450 and #786
+(the ruling that drops console nginx's per-network zone) are both open on 2026-11-02. So no load replay has made a
+turn past `PROXY_TIMEOUT` since the fix, and #750 stays held on #644.
+
+**The two greps match what each container writes.** KubeCon runs `proxy.py` from the submodule pin `fb6e2bf`
+(the M5 entry above), not the Go build. Its `_TraceJsonFormatter` writes `json.dumps(payload)` with the default
+separators, so its lines read `"event": "task_cancel"`, with the space the run-of-show's `grep -E` expects. The
+`forward_error` that sends the cancel logs `chat forward failed: %s`, as the step says. workshop-mcp's `shim`
+container writes through `tool_audit.py`, whose `separators=(",", ":")` give `"event":"tool_invocation"` with no
+space, as the step's second grep has it. The Go build's slog lines would read `"event":"task_cancel"`, so if
+KubeCon ever moves to it, the first grep has to drop its spaces.
+
+**Not yet run on a cluster.** Unchanged from the 2026-11-01 #750 entry: the two log reads and the Datadog search,
+on attackme during #644's re-run.
+
+## 2026-11-02 · #714 · Redo on staging: everything with a ghcr.io copy moves off Docker Hub now; five images wait on lab-platform
+
+**Context.** Run 15842 is #714's second dispatch. The first draft (`origin/agent/714-12873`, cut from `662e199`) was
+never promoted: its E2E tools tier failed on five registry checks, which were copies and tags that did not exist yet.
+`verify/draft-drift.sh` against `origin/staging` (`80123c0`) found 38 drifted paths. Michael's `8560d41` and
+`0be1738` had moved C6's Joker to `ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0`, and #715
+had moved the demo apps to lab-platform's web image. So the change was made again on today's layout, not
+cherry-picked. It is split by what can pass today. Everything whose ghcr.io copy exists moves now, so the branch
+passes both tiers and lands. The five images lab-platform has not copied yet stay as they are, each named below,
+and the gate test the issue asks for comes with them.
+
+**What moved, and how it differs from the draft.**
+- **The registry rule no longer allows `docker.io/library/`.** If Docker Hub stayed on the trusted list, the agent
+  could still pull from it. The Kyverno CLI cases refuse `docker.io/someone/nginx:1` and
+  `docker.io/library/nginx:1.27-alpine`, and each line says it is a refused example (#714). The cases also refuse C6's
+  Joker under `festival-ops/`, on ghcr.io and through an ECR cache. The draft added a `watch-it-burn:joker-` refused
+  entry for its own Joker path; Michael's `festival-ops/` entry already does that job, so `refusedPaths` is unchanged.
+  The policy message, /lab's quoted copy and LAB-TEXT.md drop `docker.io/library`.
+- **Upstream pulls by digest from ghcr.io.** Backstage's Postgres is now the kustomize name `postgres`.
+  `gitops/bootstrap/apps/backstage.yaml` sets it to lab-platform's `mirror/library/postgres:18.6-alpine3.23-dd504ba15d33`
+  at the root's registry, as #715 did for `web` (kagent's Postgres runs the same copy). It replaces Docker Hub's
+  `postgres:18.6-alpine`, whose pinned index served linux/amd64 `3b0ef735…`. The copy is another build of the same
+  Postgres 18.6 (`dd504ba1…`, resolved 2026-10-26), and the database is rebuilt from git on every start, so no data
+  carries over between the two. The python:3.12-slim and
+  nginx:1.27-alpine Dockerfile bases, the legacy guard-proxy manifest and Beat 1's `nginx:latest` now name our
+  copies in the public, signed watch-it-burn package, by digest.
+- **Implicit Docker Hub pulls.** The `curlimages/curl` helper pods in beat-02.sh, beat-cost.sh and two
+  FACILITATOR.md commands now run the workshop-mcp image. It carries curl and is signed (verify/probe_pod.py's
+  reasoning). The clown file's bare `busybox` is lab-platform's `promo/joker` by digest, on the path the registry
+  rule refuses (`verify/test_image_pins.py` holds our images to a digest, so it cannot be left untagged). A render of every app
+  in `gitops/bootstrap/apps` with the pinned Helm found three more Docker Hub images besides Falco's two:
+  falcosidekick's `curlimages/curl` and otel-operator's `busybox:latest`. All three are Pods annotated
+  `helm.sh/hook: test` or `test-success`. Argo CD skips Helm test hooks, so no node pulls them; the live check below
+  confirms it.
+- **build.sh pushes only the Joker.** The ten promo/ villains are lab-platform's build (#653), and lab-platform reads
+  their catchphrases from build.sh at `45e62f0`. So the M and V lines stay, and the Docker Hub roster push, its PAT
+  login, `ORG` and `BASE` go. A roster name is now refused before anything is pushed.
+- **games/villain-apps** built three nginx villains for a Docker Hub user namespace. That build is removed, and the
+  beat deploys C6's Joker by its digest, on 8080, on a path the registry rule refuses.
+- **Terraform and fleet.sh.** The cluster module's `dockerhub_auth_b64` variable is gone, and so is the cloud-config
+  part that wrote the node's Docker Hub `hosts.toml`. fleet.sh's loading of the PAT goes with them, along with
+  `WIB_DOCKERHUB_ENV` in three fleet tests. infra/harbor had only README text. #664 needs no Docker Hub token (the
+  coordinator's 2026-11-01 correction on #664 says the same).
+- **Provenance comments** in the app files now say "Docker Hub's <repo>". `verify/mirror_copies.py` names the host
+  once, as `HUB`, because the render test matches each upstream reference against what a chart renders.
+
+**Not in this change, and why.** Five images have no ghcr.io copy, and a reference to a copy that does not exist yet
+fails the tools tier or a build:
+1. C6's Joker base, `JOKER_BASE` in build.sh: Docker Hub's busybox 1.38.0 (index `a46257e0…`, linux/amd64
+   `f97baa533a26…`). `test_joker_web_busybox.py` and `test_c6_joker_public.py` read it. Once lab-platform copies it
+   to `mirror/library/busybox:1.38.0-f97baa533a26`, the published Joker needs no re-push, because its lower layers
+   are that manifest's.
+2. web-terminal's `debian:bookworm-slim` (linux/amd64 `a3bba7dc7dbc…` today). Its CI build runs on every change to
+   `images/web-terminal/`.
+3. Backstage's `node:24.22.2-trixie-slim` (linux/amd64 `e053394f1551…`), and the README's buildah line.
+4. and 5. Falco 0.45.1 and falcoctl 0.14.2, through the chart's default registry. lab-platform#295 resolved those
+   copies, but its copy has not run.
+The follow-up asks lab-platform for the first three copies. The rest of #714 waits on those copies: these five
+references, `verify/test_no_docker_hub.py` (the draft's three checks, which need the remaining docker.io lines to be
+refused examples only), and the two items Michael added on the issue. Those two are the version tags
+(`workshop-mcp-mcp-1.29.1`, `web-terminal-ttyd-1.7.7` at today's digests, the draft's reading, which matches the
+Dockerfiles' `mcp==1.29.1` and ttyd `1.7.7`) and the villain shell banners. Both need a ghcr.io write: a `crane tag`,
+and a re-push of the Joker. The promo villains' banners are lab-platform's build. This run cannot do any of that,
+and adding the gate test now would fail the offline suite on exactly those lines.
+
+**Tests.** No test was added. Tests changed to match: test_kyverno_cel_policies (Docker Hub's library refused, the
+Joker refused directly and through a cache, Beat 1 and the signature case on ghcr.io images), test_villain_app,
+test_image_signing, test_c6_villain_endpoint (build.sh pushes the Joker alone and refuses a roster name),
+test_promo_villains, test_c8_pod_secret_mount, test_deploy_app_limits, test_enforce_floor (a bare name now fails as
+named, and Backstage's `${{ values.image }}` scaffolder value is judged not-an-image, as images.lock lists it), test_tool_audit (it reads Python's version from the ghcr.io base), test_backstage_catalog (Postgres is the
+mirror copy, by digest, set by the Application), and the three fleet tests.
+
+**Not yet run on a cluster.** On a fresh attendee cluster, run `CONTEXT=<ctx> bash verify/run-e2e.sh`, then
+`kubectl --context "$CONTEXT" get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u`. Only Falco's two images
+should be on Docker Hub until lab-platform#295's copy runs, and no Helm test Pod should exist. Backstage's Postgres
+must come up Ready on the mirror copy. Beat 1 (`verify/beat-01.sh`) must admit and then refuse the nginx copy, and
+beat-02.sh and beat-cost.sh must get their curl answers from the workshop-mcp image.
 
 ## 2026-11-02 · #719 · images/llm-guard moves to llm-guard-cpu-offline 31962f2; which image BanTopics runs in is asked
 

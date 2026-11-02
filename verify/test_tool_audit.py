@@ -225,7 +225,7 @@ check("it no longer uses kubectl run or curlimages/curl, which Deny refuses on t
       re.search(r'kubectl\(\s*"run"', LIVE) is None and "curlimages" not in LIVE)
 
 print("== the live check runs on the image's mcp pin through uv, never a global install (#441) ==")
-py = re.search(r"^FROM python:(\d+\.\d+)", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"), re.M)
+py = re.search(r"^FROM \S*python[:-](\d+\.\d+)", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"), re.M)
 check("it re-runs itself under uv run --with mcp==<the Dockerfile pin>",
       'os.execvpe("uv", ["uv", "run", "--no-project"' in LIVE and '"--with", f"mcp=={want}"' in LIVE)
 check(f"on the workshop-mcp image's Python ({py.group(1) if py else '?'})",

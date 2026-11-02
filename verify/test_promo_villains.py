@@ -2,7 +2,7 @@
 # ABOUTME: verify/promo_villains.py, the roster matches, and restrict-image-registries refuses the path.
 """Offline. The anonymous pull of each image is verify/test_promo_villains_public.py (tools tier).
 
-The villains moved from docker.io/peopleforrester/<name>:latest to ghcr.io/peopleforrester/lab-platform/promo/<name>:v1.
+The villains moved from Docker Hub's peopleforrester/<name>:latest to ghcr.io/peopleforrester/lab-platform/promo/<name>:v1.
 ghcr.io is on the allow-list, so the refusal Challenge 2 teaches rests on the policy's refusedPaths variable; if
 that went, the student's flip to Deny would admit the villain and the challenge would have no fix.
 """
@@ -57,8 +57,8 @@ COPIES = ("gitops/ai-layer/web/lab.html", "challenges/LAB-TEXT.md", "challenges/
           "challenges/01-cncf-wall/toggle-kyverno-enforce.sh", "verify/kubecon_probe.py")
 for path in COPIES:
     text = (REPO / path).read_text(encoding="utf-8")
-    old = [n for n in DIGESTS if f"docker.io/peopleforrester/{n}:latest" in text and n != "joker"]
-    check(f"{path} names no Docker Hub villain other than C6's Joker", not old, str(old))
+    old = [n for n in DIGESTS if f"peopleforrester/{n}:latest" in text]
+    check(f"{path} names none of the retired Docker Hub villains, C6's Joker included (#714)", not old, str(old))
     check(f"{path} names the promo/ path", f"{PROMO}/" in text)
 check("the probe's C2 Deployment is promo-mascot's reference", kp.VILLAIN_IMAGE == ref("promo-mascot"), kp.VILLAIN_IMAGE)
 fallback = (REPO / "challenges/c2-villain-image/fallback.kubectl.sh").read_text(encoding="utf-8")
