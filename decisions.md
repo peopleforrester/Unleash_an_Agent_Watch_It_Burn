@@ -8615,3 +8615,43 @@ commands. Two things have changed since then:
 
 **Not yet run on a cluster:** as the 2026-10-31 entry says, with `infra/terraform/fleet/fleet.sh reset-bot
 watch-it-burn-community` afterwards to clear the ten calls from attackme's `/cost`.
+
+## 2026-11-02 · #544 · The live check of the attendee profile without Tempo and Talon is still owed; what it expects on today's staging
+
+#544 asks for a live run on one attendee cluster and one admin cluster to check the #475 shape. On attendee, there is
+no tempo or falco-talon Application, and the collector defines `otlp_grpc/tempo` but no pipeline uses it. On admin,
+the multi-source tempo Application's `tempo-grafana-datasource` ConfigMap is loaded by Grafana.
+`verify/test_service_hosts_live.py` runs on both. Hecaton runs 8119, 15438, 15453 and 15778 have no cluster and no AWS
+profile, and they may not deploy (CLAUDE.md, "Dispatched runs (hecaton)" rule 1), so the issue has no code to write.
+Run 15438 wrote this record, but its branch lost a rebase conflict on the witch-name test, which 42954c9 had already
+fixed on staging. So this entry was rewritten on staging `6f0866b`, not cherry-picked, and it drops the draft's test
+change.
+
+**What the live run should expect, from the current tree:**
+- An attendee cluster shows **34** Argo CD Applications and an admin cluster **38**, not the 36 the issue states.
+  `verify/test_fleet_contract.py` holds both counts. The admin-only apps are listed in
+  `gitops/bootstrap/values-admin.yaml`: `falco-talon` and `tempo`. `values-attendee.yaml` omits both.
+- The attendee collector is `gitops/bootstrap/apps/otel-collector-attendee.yaml`, which uses
+  `gitops/otel-collector/values-dual.yaml`. That file keeps `otlp_grpc/tempo` under exporters and removes it from
+  every trace exporter list.
+- `verify/test_service_hosts_live.py` reads the profile from the `lab-platform/profile` label on the `lab-bootstrap`
+  root. On attendee it expects HTTP 404 from `/api/datasources/uid/tempo/health`; on admin it expects OK.
+- Loki's TraceID derived field no longer applies, because #474 removed loki from every profile. Two things still
+  name Tempo on an attendee cluster:
+  - In `observability-idp/grafana/dashboards/agent-observability.yaml`, the `session` variable and five panels
+    (one traces panel and the four C5 to C7 tables, lines 64 to 155) read data source uid `tempo`, which is missing
+    on attendee.
+  - Falcosidekick's Talon output, which `gitops/bootstrap/apps/falcosidekick.yaml` keeps on every profile, logs a
+  failed post for each CRITICAL event, because attendee clusters have no Talon. The Datadog output is not affected.
+
+**What the live run needs.** The admin half needs no new spend: `watch-it-burn-private` (admin profile,
+burritobot-private.agenticburn.com, accen-dev, us-west-2) is up, according to PROJECT_STATE.md "KubeCon platform up"
+and the 2026-11-01 rollout entry above. The attendee half is a bring-up of about $1 for two hours of one cluster, and
+it needs Michael's go. First, `watch-it-burn/datadog-pool` needs one non-admin row. `fleet.sh`'s bootstrap refuses an
+attendee cluster whose Datadog org does not resolve (`infra/terraform/fleet/fleet.sh` line 1525), and KubeCon has no
+pool (#629). Then run `WIB_NO_INGEST=1 fleet.sh up 1`, the checks, `WIB_APPLY=1 fleet.sh down
+watch-it-burn-attendee-001`, and `fleet.sh audit-zero`. The run report on #544 has the exact commands, each with its
+own KUBECONFIG and `--context`.
+
+**Not yet run on a cluster.** All of #544: points 1 and 2 and the attendee half of point 4 on a fresh attendee
+cluster, and point 3 and the admin half of point 4 (`verify/test_service_hosts_live.py`) on `watch-it-burn-private`.
