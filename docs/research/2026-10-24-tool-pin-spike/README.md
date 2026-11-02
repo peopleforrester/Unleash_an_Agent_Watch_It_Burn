@@ -17,20 +17,27 @@ proto is byte-identical at both tags, and the same bed on the v1.7.0 binary gave
 differences: a refused `tools/call` now comes back as an `isError` tool result, and the failClosed error no
 longer says why the processor failed. See "Re-measured on v1.7.0" below.
 
+**Made one command for an existing cluster on 2026-11-02.** The coordinator's go on #480 (2026-11-02) is to run the
+cluster check on `watch-it-burn-community`, the public cluster, never a new one, and to leave it as found, with
+attackme answering 200 after. `live-check.sh run` now does the whole check, snapshots what it changes first and
+restores it on any exit, and tool-pin no longer needs an image of its own. It has still not run on a cluster: the run
+that made these changes had no cluster credentials. See "Still open: the cluster check".
+
 ## What is here
 
 | File | What it is |
 |---|---|
 | `images/tool-pin/tool_pin.py` | The processor. It is a gRPC `agentgateway.dev.ext_mcp.ExtMcp` server that hashes each tool and strips or denies the ones not in the baseline. It also refuses a `tools/call` for any tool the last list did not approve |
-| `images/tool-pin/Dockerfile` | Its image: python:3.12-slim plus grpcio 1.84.1. Not built yet; no Docker access on the run host |
+| `images/tool-pin/Dockerfile` | Its image for a product version: python:3.12-slim plus grpcio 1.84.1. Never pushed, and the live check does not need it |
 | `baseline.json` | The pin: evil-mcp's three tools as it serves them today. Each entry is the hash plus the description and input schema it covers |
-| `gateway_bind.py` | Renders the bind: the committed `agentgateway-config` plus bind 3004 (3003 on the local bed; on the cluster 3003 is the `agentgateway-c7` container's since #514), with evil-mcp as its only target and tool-pin on its `tools/list` and `tools/call` |
-| `tool-pin.yaml`, `kustomization.yaml` | The processor's Deployment, Service and baseline ConfigMap, for `live-check.sh`. No Argo CD Application points here |
+| `gateway_bind.py` | Renders the bind: bind 3004 (3003 on the local bed; on the cluster 3003 is the `agentgateway-c7` container's since #514), with evil-mcp as its only target and tool-pin on its `tools/list` and `tools/call`. `cluster` adds it to the committed `agentgateway-config`; `extend`, which `live-check.sh` uses, adds it to the live one read on stdin |
+| `tool-pin.yaml`, `kustomization.yaml` | The processor's Deployment, Service and baseline ConfigMap, for `live-check.sh`. It runs `tool_pin.py` from a `tool-pin-src` ConfigMap on the python:3.12-slim mirror guard-proxy runs, with grpcio installed by an init container. No Argo CD Application points here |
+| `requirements.txt` | grpcio 1.84.1 and typing-extensions 4.16.0, hash-pinned, for that init container |
 | `probe.py` | An MCP client (mcp 1.29.1, the workshop-mcp image's pin) that lists tools, or calls one, and prints the outcome as JSON |
 | `local-bed.sh` | The local bed (see "Reproduce") |
 | `local-bed-2026-10-24.txt` | The bed's output on v1.5.0, from the run these findings come from |
 | `local-bed-2026-11-01-v1.7.0.txt` | The same bed's output on v1.7.0, the version the cluster runs since #698 |
-| `live-check.sh` | The cluster check, in phases: `setup`, `observe`, `rugpull`, `deny`, `restore` |
+| `live-check.sh` | The cluster check: `run` does it all in one command; the phases are `setup`, `ask`, `observe`, `call`, `rugpull`, `deny`, `restore` |
 
 `verify/test_tool_pin.py` holds the parts that need no binary offline: the hash, the verdicts, the
 protobuf bytes, the baseline against `server.py`, and the rendered bind against the vendored schema (v1.7.0
@@ -149,7 +156,11 @@ A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in 
   GitOps. The student's action would be repointing evil-mcp's RemoteMCPServer `spec.url` at the pinned
   bind, which is the same shape as C7's `toolNames` patch. `ignoreDifferences` then covers that one
   field, not the whole `config.yaml` string that section 2 of the evaluation worried about. A typo in it
-  breaks only evil-mcp.
+  breaks only evil-mcp. Two more things have to ship with the bind for that to hold, both found reading staging on
+  2026-11-02: the `agentgateway` Service port, and port 3004 in the "from anywhere" rule of #552's
+  `agentgateway-ingress` NetworkPolicy (`gitops/ai-layer/chat-path-ingress.yaml`). That policy opens only the
+  gateway's named ports on every profile, so without it kagent's controller and the agent cannot reach the bind at
+  all, and `verify/test_chat_path_ingress.py` would have to learn the new caller list.
 - **Blast radius.** The separate bind contains a processor outage, as measured. It does not contain a
   config typo: all binds are one file. A bad edit is survivable while the pod runs, but crash-loops it on
   the next restart. That argues for the student not editing the gateway config at all, which the
@@ -180,29 +191,67 @@ confirmed kagent's behaviour.
 
 ## Still open: the cluster check
 
-Run `live-check.sh` on a scratch attendee cluster, with `CONTEXT` set and an `IMAGE` built, pushed and
-signed from `images/tool-pin/` (the Dockerfile has the steps). Run `observe` after each phase. It needs
-to show:
+The coordinator's go on #480 (2026-11-02) is to run it on `watch-it-burn-community`, the public cluster (attackme), and
+leave that cluster as found. Michael's correction the same day allows `watch-it-burn-private` too, and never a third
+cluster. The check is one command on a host with the accen-dev AWS profile, from a checkout of staging that has this
+directory, with a kubeconfig of its own:
+
+```bash
+AWS_PROFILE=accen-dev aws eks update-kubeconfig --region us-west-2 --name watch-it-burn-community \
+  --kubeconfig /tmp/watch-it-burn-community.kubeconfig --alias watch-it-burn-community
+KUBECONFIG=/tmp/watch-it-burn-community.kubeconfig AWS_PROFILE=accen-dev CONTEXT=watch-it-burn-community \
+  bash docs/research/2026-10-24-tool-pin-spike/live-check.sh run
+```
+
+It takes about ten minutes and writes everything it prints to `/tmp/tool-pin-live.watch-it-burn-community.record.txt`.
+Commit that record here, as `live-2026-MM-DD-community.txt`, with the findings below.
+
+**What `run` does to the cluster, and how it puts it back.** `setup` first records every object it will change in
+`$STATE` (by default `/tmp/tool-pin-live.<context>`): `lab-bootstrap`'s and `ai-layer`'s auto-sync and their sync and
+health, `agentgateway-config`'s `config.yaml`, the `agentgateway` Service's ports, `agentgateway-ingress`'s rules,
+evil-mcp's url and `server.py`,
+the agent's pods, and the public host from `cluster-identity`. It will not start unless that host answers 200, and
+it will not snapshot over an earlier snapshot. It then pauses both Applications, deploys tool-pin, adds bind 3004
+to the gateway config the cluster runs (`gateway_bind.py extend`, not this checkout's), opens 3004 next to 3001 and
+3003 in `agentgateway-ingress`, checks the bind lists evil-mcp's three tools, and only then repoints evil-mcp's
+RemoteMCPServer at it. It asks the agent through kagent's A2A proxy
+(`kagent-controller.kagent:8083/api/a2a/agent/workshop-agent/`, kagent v0.9.9 `go/core/internal/httpserver/server.go`
+line 336), not guard-proxy, so the public bot's `/cost` counter does not move. The gateway's `:3000` would not do:
+#552's policy admits only guard-proxy there. On any exit, a failure
+included, `restore` writes each recorded value back, deletes tool-pin, restarts evil-mcp-shim if the rug pull ran
+(the running server loaded the edited source), and turns auto-sync back on as it was. It then compares every one of
+those against the snapshot, waits for both Applications and evil-mcp's `Accepted` condition (False in deny mode) to be
+as they were, and checks the public host answers 200.
+On any difference it exits 1 and keeps the snapshot, so `live-check.sh restore` can be run again.
+`verify/test_tool_pin_live_check.py` runs all of this against a stateful kubectl stand-in, including a failure in
+the middle of the run and a gateway that refuses the config.
+
+**tool-pin without its own image.** `watch-it-burn:tool-pin` was never pushed. The pod runs `tool_pin.py` from a
+`tool-pin-src` ConfigMap that `setup` makes from `images/tool-pin/tool_pin.py` and `requirements.txt`, on the
+python:3.12-slim mirror guard-proxy already runs. An init container installs grpcio by hash, which needs egress to
+PyPI once (the community cluster has no NetworkPolicy; on the private cluster the agent namespace's default-deny would
+need an allow first). On 2026-11-02 this shape ran in Docker with the same image, commands, read-only root and uid
+1000: the install took about 5 seconds, tool-pin started, passed evil-mcp's untouched list over gRPC and stripped a
+rug-pulled `get_weather`.
+
+What the record needs to show:
 
 1. **Discovery goes through the processor.** tool-pin logs a verdict about every 60 s, and the
    gateway's `route=default/evil-mcp-pinned` lines carry the kagent controller's pod IP.
-2. **The agent's `list_tools` goes through it.** A chat message produces a line from the workshop-agent
-   pod's IP.
+2. **The agent's `list_tools` goes through it.** A question produces a line from the workshop-agent pod's IP.
+   `run` also says whether kagent rolled the agent after the url change. If it did not, `run` restarts it (and
+   `restore` restarts it again), and that is a finding: a student's url patch would need an agent restart too.
 3. **After `rugpull`, in strip mode.** `get_weather` leaves `discoveredTools`, and the agent does not
    call it.
 4. **After `deny`.** The RemoteMCPServer shows `Accepted=False` with tool-pin's reason, and
    `discoveredTools` is stale. The agent log has "Failed to get tools from toolset", and the chat still
    answers.
-5. **The `tools/call` phase.** On v1.7.0 a refused call is an `isError` tool result carrying tool-pin's
-   reason, not a `-32001` (local bed, 2026-11-01). See what the agent does with it: whether the model
-   repeats the reason to the student, retries, or goes on without the tool. The source reading did not
-   cover this.
+5. **The `tools/call` phase.** `call` calls `get_weather` by name through the pinned bind after the rug pull. On
+   v1.7.0 the local bed gave an `isError` tool result carrying tool-pin's reason. The agent itself never sees a
+   stripped tool, so it cannot call one; what a model does with that refusal only matters when a list and a call
+   disagree, which this check does not stage.
 
-`restore` deletes tool-pin and turns Argo CD auto-sync back on, and selfHeal reverts the rest.
-
-`setup` pauses the root, `lab-bootstrap` since #609, as well as ai-layer, and refuses to go on without it:
-the root's selfHeal would otherwise turn ai-layer's auto-sync back on mid-check. The names the script acts on
-are rechecked against staging by `verify/test_tool_pin.py` (last changed 2026-10-29).
+Then decide the badge (the section above) from the record, and write it in decisions.md.
 
 ## Reproduce the local bed
 

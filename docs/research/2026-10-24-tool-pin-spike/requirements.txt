@@ -1,0 +1,8 @@
+# tool-pin's runtime for the live check (#480): grpcio, the version images/tool-pin/Dockerfile pins, and its one
+# dependency. Hash-pinned (PyPI, read 2026-11-02): cp312 manylinux wheels for x86_64 and aarch64, so tool-pin.yaml's
+# init container installs exactly these on the pinned python:3.12-slim mirror, on either node architecture.
+grpcio==1.84.1 \
+    --hash=sha256:474408c92b27c823ea6aab2315e2ea52d5a4e0040b37ce1e65e89d9149c48205 \
+    --hash=sha256:e0dcc7b588e7b7dd3363317296983db23a26af8baa5884db15a10fc0c8534186
+typing-extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

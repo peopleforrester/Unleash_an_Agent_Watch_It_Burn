@@ -3,7 +3,11 @@
 """The pinned bind, kept in one place so the local bed and the cluster check run the same shape.
 
     python gateway_bind.py cluster  > agentgateway-config.yaml   # the committed ConfigMap plus bind 3004
+    kubectl get cm agentgateway-config -o json | python gateway_bind.py extend   # the LIVE ConfigMap plus bind 3004
     python gateway_bind.py local    > local.yaml                 # the local bed's gateway config
+
+live-check.sh uses `extend`: a live cluster syncs from its own branch, so its gateway config can differ from this
+checkout's, and the check must add one bind to what is running rather than replace it with what is committed.
 
 The bind is its own port with one MCP target, so:
   - the target is the only backend, and the tool names reach kagent unprefixed (measured on the local
@@ -13,6 +17,7 @@ The bind is its own port with one MCP target, so:
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
 
@@ -63,8 +68,11 @@ def committed_config() -> tuple[dict, dict]:
     raise SystemExit(f"no agentgateway-config ConfigMap in {GATEWAY}")
 
 
-def cluster_config() -> dict:
-    cfg = committed_config()[1]
+def cluster_config(cfg: dict | None = None) -> dict:
+    """The committed config, or the given one, plus the pinned bind."""
+    cfg = committed_config()[1] if cfg is None else cfg
+    if PINNED_PORT in [b.get("port") for b in cfg.get("binds", [])]:
+        raise SystemExit(f"the gateway config already has a bind on {PINNED_PORT}; restore it before adding the pin")
     cfg["binds"].append(pinned_bind(
         PINNED_PORT,
         "http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp",
@@ -90,12 +98,23 @@ def as_configmap(cfg: dict) -> dict:
     return cm
 
 
+def extend_live(cm: dict) -> dict:
+    """A merge patch for a live agentgateway-config ConfigMap (kubectl's JSON): its config.yaml plus the pinned
+    bind. Only data["config.yaml"] is written, so nothing else on the live object changes."""
+    if cm.get("kind") != "ConfigMap" or cm.get("metadata", {}).get("name") != "agentgateway-config":
+        raise SystemExit("extend reads the live agentgateway-config ConfigMap as JSON on stdin")
+    cfg = cluster_config(yaml.safe_load(cm["data"]["config.yaml"]))
+    return {"data": {"config.yaml": yaml.safe_dump(cfg, sort_keys=False)}}
+
+
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else ""
     if which == "cluster":
         sys.stdout.write(yaml.safe_dump(as_configmap(cluster_config()), sort_keys=False))
+    elif which == "extend":
+        sys.stdout.write(json.dumps(extend_live(json.load(sys.stdin))))
     elif which == "local":
         sys.stdout.write(yaml.safe_dump(local_config(
             "http://127.0.0.1:8000/mcp", "http://127.0.0.1:8010/mcp", "127.0.0.1:9001"), sort_keys=False))
     else:
-        raise SystemExit("usage: gateway_bind.py cluster|local")
+        raise SystemExit("usage: gateway_bind.py cluster|extend|local")

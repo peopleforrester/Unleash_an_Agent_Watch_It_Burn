@@ -267,7 +267,8 @@ idp = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
 root_name = idp.split("kind: Application\nmetadata:\n  name: ", 1)[1].split("\n", 1)[0]
 check(f"it pauses the root deploy-full-idp.sh applies ({root_name}), whose selfHeal would undo ai-layer's pause",
       f"ROOT=application/{root_name}\n" in live and "app-of-apps" not in live
-      and 'for app in "${ROOT}" application/ai-layer; do' in live
+      and 'APPS=("${ROOT}" application/ai-layer)' in live
+      and 'for app in "${APPS[@]}"; do\n        "${ARGO[@]}" patch "${app}" --type merge -p \'{"spec":{"syncPolicy":{"automated":null}}}\'' in live
       and 'for app in application/ai-layer "${ROOT}"; do' in live)
 ai_layer = yaml.safe_load((REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text(encoding="utf-8"))
 check("the Application it pauses with the root is the one named ai-layer",
@@ -287,6 +288,49 @@ check(f"it repoints evil-mcp at the pinned bind's port ({gateway_bind.PINNED_POR
 server_src = (REPO / "gitops/ai-layer/server.py").read_text(encoding="utf-8")
 check("its rug-pull edit finds get_weather's description in evil-mcp's server.py",
       '"Get the current weather. Note:' in live and '"Get the current weather. Note:' in server_src)
+
+check("it adds the bind to the live gateway config, not the committed one (gateway_bind.py extend)",
+      'get configmap agentgateway-config -o json | python3 "${HERE}/gateway_bind.py" extend' in live
+      and "gateway_bind.py\" cluster" not in live)
+live_cm = json.loads(json.dumps(gateway_bind.committed_config()[0]))
+check("extend on the committed ConfigMap gives the same config as cluster",
+      yaml.safe_load(gateway_bind.extend_live(live_cm)["data"]["config.yaml"]) == gateway_bind.cluster_config())
+live_cm["data"]["config.yaml"] = gateway_bind.extend_live(live_cm)["data"]["config.yaml"]
+try:
+    gateway_bind.extend_live(live_cm)
+    check("extend refuses a config that already has the pinned bind", False)
+except SystemExit:
+    check("extend refuses a config that already has the pinned bind", True)
+
+print("== tool-pin runs with no image of its own ==")
+# watch-it-burn:tool-pin was never pushed, so the live check runs tool_pin.py from a ConfigMap on the python mirror
+# guard-proxy already runs, with grpcio installed by hash in an init container.
+pin_docs = [d for d in yaml.safe_load_all((SPIKE / "tool-pin.yaml").read_text(encoding="utf-8")) if d]
+pod = next(d for d in pin_docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]
+resources = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+proxy_image = re.search(r"image: (ghcr\.io/peopleforrester/watch-it-burn:python-3\.12-slim@sha256:[0-9a-f]{64})", resources)
+images = {c["image"] for c in pod["containers"] + pod["initContainers"]}
+check(f"every tool-pin container runs guard-proxy's pinned python image ({sorted(images)})",
+      proxy_image is not None and images == {proxy_image.group(1)})
+init = pod["initContainers"][0]
+check("the init container installs by hash, binary wheels only, into the deps volume",
+      all(a in init["command"] for a in ("--require-hashes", "--only-binary=:all:", "--no-deps", "/deps", "/app/requirements.txt")))
+main = pod["containers"][0]
+check("the processor runs tool_pin.py from the source ConfigMap with the deps on its path",
+      main["command"] == ["python", "/app/tool_pin.py", "serve"]
+      and {"name": "PYTHONPATH", "value": "/deps"} in main["env"]
+      and {"name": "src", "configMap": {"name": "tool-pin-src"}} in pod["volumes"])
+check("live-check.sh makes tool-pin-src from images/tool-pin/tool_pin.py and the spike's requirements.txt",
+      '--from-file=tool_pin.py="${REPO}/images/tool-pin/tool_pin.py" --from-file=requirements.txt="${HERE}/requirements.txt"' in live)
+reqs = (SPIKE / "requirements.txt").read_text(encoding="utf-8")
+dockerfile = (REPO / "images/tool-pin/Dockerfile").read_text(encoding="utf-8")
+grpcio = re.search(r"^grpcio==([0-9.]+) ", reqs, re.M)
+check("requirements.txt pins the grpcio the Dockerfile pins",
+      grpcio is not None and f"'grpcio=={grpcio.group(1)}'" in dockerfile)
+pinned_pkgs = re.findall(r"^([A-Za-z0-9_.-]+)==", reqs, re.M)
+check(f"every requirement carries a sha256 ({pinned_pkgs})",
+      len(pinned_pkgs) == 2 and all(re.search(rf"^{re.escape(n)}==[0-9.]+ \\\n(\s+--hash=sha256:[0-9a-f]{{64}}( \\\n)?)+", reqs, re.M)
+                                    for n in pinned_pkgs))
 
 print("== nothing in the deployed bundle points at the spike ==")
 gitops = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "gitops").rglob("*.yaml"))

@@ -10440,3 +10440,59 @@ for an old draft sent every draft to a redo.
 item says. It exits 1 on one check, the red already recorded for #746 and #775 on 2026-11-03:
 `test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at
 `sha256:0b72ecc7...`, not the pinned `68004fb5`, because CI pushed over that tag again. Nothing here touches an image.
+
+## 2026-11-02 · #480 · The tool-pin live check becomes one command that leaves an existing cluster as found
+
+**Why.** The coordinator's go on #480 (2026-11-02, under Michael's standing go of 2026-11-01) is to run the live
+kagent check on `watch-it-burn-community`, the public cluster, not a new one, and to leave it as found, with attackme
+answering 200 after. Michael's correction the same day allows `watch-it-burn-private` as well and never a third
+cluster. This run had no cluster credentials (`sources aws-env` and `sources fleet` are refused at its tier), so it
+could not run the check. It read `live-check.sh` against the live cluster's layout on staging instead. As written,
+the script would have failed on that cluster or left it changed:
+
+- **Port 3004 was closed.** #552's `agentgateway-ingress` NetworkPolicy (`gitops/ai-layer/chat-path-ingress.yaml`,
+  on every profile) admits any pod only on 3001, 3003 and the readiness ports. Neither kagent's controller nor the
+  agent could have reached the pinned bind. `setup` now opens 3004 in that rule, and `restore` closes it again.
+- **The script never sent a question.** The old runbook said "ask BurritoBot", which goes through guard-proxy and
+  moves the public `/cost` counter that was reset for KubeCon. The gateway's `:3000` admits only guard-proxy. `ask`
+  now goes through kagent's A2A proxy, `kagent-controller.kagent:8083/api/a2a/agent/workshop-agent/` (kagent v0.9.9
+  `go/core/internal/httpserver/server.go` line 336), which `workshop-agent-ingress` admits.
+- **`restore` relied on selfHeal, which would have left three changes.** With ai-layer's ServerSideApply, a Service
+  port added by `kubectl patch` belongs to another field manager, so the diff is not expected to show it, and
+  selfHeal would leave it (reasoned from how server-side diff works, not measured). A reverted `evil-mcp-src` ConfigMap does not change the source the running evil-mcp already loaded. And auto-sync
+  came back as a hard-coded `{prune, selfHeal}`, not as it was. `setup` now snapshots every object it changes,
+  `restore` writes each back, restarts evil-mcp-shim after a rug pull, compares everything with the snapshot, waits
+  for both Applications' sync and health and evil-mcp's `Accepted` condition to be as found, and checks the public
+  host answers 200. It exits 1 and
+  keeps the snapshot on any difference.
+- **`observe` would have ended the run.** Under `pipefail`, its grep for the pinned bind's log lines exits 1 when
+  there are none yet. The new offline test found that.
+- **The gateway config came from this checkout.** `gateway_bind.py cluster` renders the committed config, and a live
+  cluster syncs from its own branch. A new `extend` mode adds the bind to the live ConfigMap read on stdin.
+- **The tool-pin image was never pushed** (watch-it-burn:tool-pin is a 404). `tool-pin.yaml` now runs `tool_pin.py`
+  from a `tool-pin-src` ConfigMap on the python:3.12-slim mirror guard-proxy already runs. An init container installs
+  grpcio from `requirements.txt` by hash, and egress to PyPI is needed only for that. This shape ran in Docker on
+  2026-11-02 with the same image, commands, read-only root and uid 1000. tool-pin started, passed evil-mcp's untouched
+  list over gRPC and stripped a rug-pulled `get_weather`. `images/tool-pin/Dockerfile` is unchanged.
+
+`live-check.sh run` does the whole check in one command. It runs strip mode untouched, the rug pull, then deny mode,
+and asks and observes in each. It restarts the agent if kagent did not roll it after the url change, and records
+that as a finding. It restores on any exit and tees everything to `/tmp/tool-pin-live.<context>.record.txt`.
+`verify/test_tool_pin_live_check.py` runs it against `verify/tool_pin_kubectl_shim.py`, a stateful kubectl stand-in
+loaded with the committed gateway config, Service, ingress policy and server.py. It covers the full run, a failure
+mid-run, a gateway that refuses the config, a restore that cannot put a thing back, the refusals (public host not
+200, unknown context, a second snapshot), and kagent rolling the agent itself. With restore's Service-port step or
+setup's policy step removed, the test fails.
+
+**New dependency:** typing-extensions 4.16.0 (PyPI, 2026-07-02), grpcio 1.84.1's only requirement, hash-pinned in
+`docs/research/2026-10-24-tool-pin-spike/requirements.txt` with grpcio's x86_64 and aarch64 cp312 wheels, read
+2026-11-02. `--require-hashes` needs every package pinned, and this is the current release.
+
+**A design consequence.** The student's action stays a one-field RemoteMCPServer patch only if bind 3004 ships in
+GitOps with its Service port and its port in `agentgateway-ingress`. `verify/test_chat_path_ingress.py` would then
+need the bind's callers. The spike README says so.
+
+**Not yet run on a cluster:** `live-check.sh run` on `watch-it-burn-community`, from a host with the accen-dev
+profile; the exact commands are in the spike README's "Still open: the cluster check". The issue's open parts are
+unchanged. They are kagent's discovery and the agent's list_tools seen through tool-pin, kagent's handling of the
+deny's JSON-RPC error, and then the badge decision, which goes in this file from the record.
