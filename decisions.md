@@ -9604,3 +9604,30 @@ health.
 **Not yet run on a cluster.** Unchanged: points 1 and 2 and the attendee half of point 4 on a new attendee cluster,
 which waits on Michael's go for about $1, and point 3 and the admin half of point 4 on watch-it-burn-private. The
 same attendee bring-up also covers the `verify/test_service_hosts_live.py` run the #668 entry owes.
+
+## 2026-11-02 · #544 · Admin half run on watch-it-burn-private: the tempo Application, its data source and the service-hosts test all pass
+
+**No code changed.** Escalation 716 (hecaton run 16036, elevated tier) ran the read-only admin checks on
+`watch-it-burn-private` (`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private`, ACTIVE, accen-dev,
+us-west-2). The credentials were written to the isolated `/tmp/watch-it-burn-private.kubeconfig`, and every kubectl call
+carried that file and the context `...:cluster/watch-it-burn-private`. The escalation planned to run the test on
+tanjiro-wsl2 with `AWS_PROFILE=accen-dev`, but that host has only a `default` profile. So the test ran from a checkout of
+staging `9e7070d`, with accen-dev credentials passed to each command.
+
+**Point 3.**
+- `kubectl -n argocd get application tempo`: `Synced/Healthy`. Its two sources are the chart
+  `grafana-community.github.io/helm-charts` `tempo` 3.0.0 and this repo's `gitops/tempo` at `staging`.
+- `kubectl get configmap -A -l grafana_datasource --field-selector metadata.name=tempo-grafana-datasource`: one
+  ConfigMap, `monitoring/tempo-grafana-datasource`, 1 key, 5 days old.
+- The `lab-bootstrap` root's `lab-platform/profile` label reads `admin`.
+
+**Admin half of point 4.** `CONTEXT=<that context> python3 verify/test_service_hosts_live.py` exits 0 with "All live
+service-host checks passed.", 38 PASS and no FAIL. Among them: "the tempo Application is present on admin and full,
+absent on attendee", "Grafana's tempo data source is healthy, so its Explore link has something behind it" (that is,
+`/api/datasources/uid/tempo/health` returns OK), and "Grafana's prometheus data source is healthy". Every service host
+(grafana, argocd, kagent, backstage, and the five demo apps) reaches its Service through the apex router. Loki gets the
+router's 404, and Argo CD hands out a session.
+
+**Not yet run on a cluster.** Points 1 and 2 and the attendee half of point 4 still need a new attendee cluster, which
+waits on Michael's go for about $1 (issue comment 6562456139). The #668 entry's service-hosts run is still owed on
+that same cluster.
