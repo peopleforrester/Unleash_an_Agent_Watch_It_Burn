@@ -8987,3 +8987,55 @@ point 4, which are the three read-only commands in the morning's run report. The
 Michael's go for about $1 of bring-up, which run 15438 asked for in issue comment 6562456139.
 
 **Not yet run on a cluster.** Unchanged from the morning's entry.
+
+## 2026-11-02 · #629 · Escalation 699 on both KubeCon clusters: public passes the log check, private is held by Kyverno
+
+**What ran.** Hecaton run 15906 did escalation 699's acts as the elevated tier, with the accen-dev profile (account
+515966504359), against watch-it-burn-private and watch-it-burn-community. Each command ran with its own kubeconfig
+file and an explicit `--context`, after a check that the context named the cluster. Somebody had already run the
+two helm upgrades and the community kubearmor sync at 06:27 to 06:31Z the same morning. Helm history shows those
+revisions.
+
+- **Argo CD upgrade (act 1).**
+  - On community it was already done. Release revision 3 (06:30Z) is deployed, its values equal
+    `infra/argocd-values.yaml`, and every argocd pod carries its `burritobot-argocd*` service.
+  - On private it fails. Revision 2 (06:27Z) failed, and this run's retry, revision 3, failed the same way. The chart's
+    pre-upgrade hook Job `argocd-redis-secret-init` has no resource limits, and the admin profile's Kyverno
+    `require-resource-limits` (Deny) refuses its pod. A failed pre-upgrade hook applies nothing, so the argocd pods
+    are still the unlabelled ones from 10-28. Community has no Kyverno, which is why the same command passed there.
+- **Load balancer controller upgrade (act 2).** It was already done on both. Private revision 2 (06:29Z) and
+  community revision 3 (06:31Z) are deployed with the act's exact flags, vpcId `vpc-0607c27ee51fb233c`. Both
+  controller pods on each cluster carry `burritobot-aws-load-balancer-controller`.
+- **KubeArmor sync (act 3).**
+  - On community it was already done. The 06:31Z sync left `kubearmor-default` with no `helm.sh/hook`, and the
+    DaemonSet has `DD_SERVICE=burritobot-kubearmor`.
+  - On private this run ran it at 07:07Z, and it succeeded. `kubearmor-default` no longer has `helm.sh/hook`. It
+    did not move the env into the pods. The config has carried the env since it was created on 10-29
+    (generation 1), so dropping the annotation changed no spec. The operator therefore made no in-place update,
+    and the DaemonSet still has no DD_SERVICE. The operator's earlier tries are also refused by the same Kyverno
+    policy: snitch on the node, and controller ReplicaSet `67b8555475`, whose FailedCreate events are visible. The
+    config's status stays `Pending`, and the KubeArmor DaemonSet's container has no limits either.
+- **The live check (act 4).** One `/chat` ran on each cluster at 07:11Z, through `kubecon_probe.Probe.ask`: one
+  call marked as a probe, with no beats and no guard flips. At 07:39Z, `WIB_DD_LOOKBACK_MIN=30
+  WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3 verify/test_datadog_sandbox_live.py` exited 1 with 2
+  checks failing. Passing were the Agents (both clusters report, env on every group), the logs' presence and env on
+  both clusters, every span check, and "no other ml_app". Failing:
+  - `logs: every group's service is burritobot or burritobot-<name>`, on burritobot-private only. The services
+    were argocd, backstage, kubearmor-controller, kubearmor-relay-server and rootHttpRouter. burritobot-public
+    now passes; on 10-31 it did not.
+  - `ml_obs.trace reports under env:burritobot-kubecon-na-26 as ml_app burritobot`. Nothing reported in the
+    window.
+
+**What is left, and whose it is.**
+- Private's argocd and KubeArmor are held by its own Kyverno. Change cadence rule 2 says to set
+  `require-resource-limits` to Audit for the change and back again. Doing that was not one of 699's acts, so it goes
+  to a session or tier that may. With the policy in Audit, rerun act 1. For KubeArmor, the operator still needs an
+  in-place update: any change to `kubearmor-default`'s spec makes one. The alternative fix is to give the argo-cd
+  chart's `redisSecretInit` resource limits in `infra/argocd-values.yaml`, and that is a run's code change.
+- Backstage's logs report as `backstage` and `rootHttpRouter` even though its pod is labelled
+  `burritobot-backstage`. Backstage's JSON logger writes its own `service` field, and Datadog takes that over the
+  pod tag. That is new code work for #629.
+- Nothing has explained the ml_obs.trace miss yet.
+
+**Not yet run on a cluster.** Once the above is done, rerun `verify/test_datadog_sandbox_live.py` with a fresh
+`/chat` on each cluster.
