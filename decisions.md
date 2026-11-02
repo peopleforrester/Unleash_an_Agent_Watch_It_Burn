@@ -9956,3 +9956,20 @@ conflict with that branch. Once #450 lands, the run-of-show step should give the
 **Not yet run on a cluster.** Both runs, by the commands in the record file. They need #450 synced to
 watch-it-burn-community and a machine holding `.harvest/devopsdays-portland/prompts`. Each must end
 `LOAD REPLAY GREEN`, and its figures go in the record file's Results section and on #644.
+
+## 2026-11-02 · #715 · Re-dispatch after the merge: the change is on main, and the merge comment names its commit
+
+**No code changed.** Hecaton run 15909 is the second dispatch of #715. The first run's commit, `4f9f5c4`, is on
+both staging and main. At staging `80123c0` no tracked file under `gitops/` names `docker.io/library/nginx` outside a
+comment, and the five `gitops/bootstrap/apps/demo-app-*.yaml` still set
+`web={{ .Values.imageRegistry }}/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`.
+lab-platform's `deploy/watch-it-burn/images.tsv` row 15 still pins `web` at that digest, so nothing is repinned.
+
+**Criterion 3 is met by the dispatcher's merge comment.** The first run ended partial because it could not post the
+comment naming the commit. The dispatcher's merge comment on #715 (issuecomment 6542323206) reads "Merged
+`4f9f5c4875dc` into staging", and the SHA was not rewritten on promotion. lab-platform#335 is closed with no
+successor. lab-platform's `deploy/mirror/pulled.tsv` rows 105 to 109 and the "until Unleashed #715" note on
+`images.tsv` row 15 can now be dropped; that is lab-platform's change, filed as a follow-up.
+
+**Not yet run on a cluster.** Unchanged from the 2026-10-31 #715 entry: five Ready demo-app pods on `web@sha256:73cd…`
+and a 200 from each party hostname, on an attendee or full cluster in a session with AWS access.
