@@ -9930,3 +9930,29 @@ The Tempo leftovers on attendee are the same as in the ninth dispatch's entry.
 **Not yet run on a cluster.** The same as the ninth dispatch's entry. Point 1 also needs the Falco DaemonSet Ready on
 the mirror copy, with its falcoctl containers, which #714's own live check also reads. The admin half (point 3 and
 the admin half of point 4) needs a run whose user can read the kubeconfig.
+
+## 2026-11-02 · #644 · The load test's record file, and why the re-run waits on #450
+
+Michael's go of 2026-11-01 on #644 asks for the load replay again once #450 drops nginx's per-network limit. He
+wants two runs from one address through the public hostname: 500 sessions, and 150, the room he expects. Hecaton
+run 16392 found the re-run cannot happen yet. #450's per-person change is `74c9c2d`, on branch `agent/450-15018`.
+That run failed validation and has not landed. `gitops/ai-layer/console.conf` on both `origin/staging` and
+`origin/main` still carries `wib_chat_address` (120 a minute, burst 60). So no revision the public cluster can track
+has dropped it. A replay now would measure the per-network limit again, as the 2026-10-31 run did. That would spend
+about $1.50 to repeat a known result. The run also has no copy of the gitignored Portland harvest, and the cluster
+kubeconfig hecaton staged for it is not readable by the run's user.
+
+**What changed.** `facilitation/kubecon-na-2026-load-test.md` is new. Michael's criteria name its Results section.
+It holds the method, the limits before and after #450, the exact command and prediction for each run still owed,
+and the 2026-10-31 run's results with the causes known so far: 4 of the 15 HTTP 502s are guard-proxy's 120 s
+forward timeout (#750), and 11 have no known source. The predictions use `load_replay.py`'s own run-length model
+with the per-network term gone. Run A, 500 sessions: about 375 served for about $2.03. The 150-session run: at most
+450 served for about $2.43. Together that is inside the $10 budget.
+
+**Kept out on purpose.** `verify/load_replay.py`, its test and the run-of-show's Night Before step are unchanged.
+`74c9c2d` edits all three, and `deployed_limits()` reads `wib_chat_address` until it lands. Editing them here would
+conflict with that branch. Once #450 lands, the run-of-show step should give the 150-session command too.
+
+**Not yet run on a cluster.** Both runs, by the commands in the record file. They need #450 synced to
+watch-it-burn-community and a machine holding `.harvest/devopsdays-portland/prompts`. Each must end
+`LOAD REPLAY GREEN`, and its figures go in the record file's Results section and on #644.
