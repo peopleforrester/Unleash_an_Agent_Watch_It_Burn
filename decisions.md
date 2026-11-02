@@ -9213,3 +9213,43 @@ profile, not attendee (`infra/terraform/fleet/fleet.sh` line 196).
 
 **Not yet run on a cluster.** Unchanged from the morning's entry: points 1 and 2 and the attendee half of point 4 on
 a new attendee cluster, and point 3 and the admin half of point 4 on watch-it-burn-private.
+## 2026-11-02 · #738 · M6 re-dispatched: still no Go image, #751's component is not on staging, cutover after KubeCon
+
+**Context.** #738 is PRD #412's M6: guard-proxy runs as a signed, digest-pinned Go image, and the `proxy.py`
+`configMapGenerator` leaves `gitops/ai-layer/kustomization.yaml`. Run 15027 (2026-11-01) made no commits and set a
+wait to 2026-11-13. Hecaton run 15924 is the re-dispatch, after Michael's 2026-11-01 comment on #738 about #751. No
+earlier draft of #738 exists to reuse: `origin/agent/738-15027` carries no commit of its own.
+
+**What run 15924 read on 2026-11-02.**
+- **No guard-proxy image exists.** With an anonymous ghcr.io token for `peopleforrester/watch-it-burn:pull`, the
+  tag list names no `guard-proxy` tag; the only tags with `guard` in them are the ten `llm-guard-*`. guard-proxy-agenticburn's main has no Dockerfile and only `conformance.yml` (read through
+  `sources`). The Dockerfile and `scripts/release-image.sh` are run 15037's draft `b76fb22` on
+  guard-proxy-agenticburn#30, which waits on the hecaton App's workflows permission. The publish and the cosign 2.x
+  signature then run on netcup, where the key lives. So `verify/sign-images.sh --check` has no guard-proxy tag to
+  check, and this repo cannot name a digest.
+- **#751's Component is not on staging.** Michael's comment says #751 staged `gitops/ai-layer/go-spend-store/` and
+  `verify/test_guard_proxy_spend_store.py`. Both are only on draft branches: `38e8892` on `agent/751-15566` and
+  `c27f23d` on `agent/751-15265`. Runs 15456 and 15566 ended failed (validation), so neither merged, and #751 is open.
+  The cutover cannot list the Component under `components:` until one of them lands, or the cutover carries it.
+- **The ruling stands.** KubeCon (2026-11-12, `kubecon-na-2026` in conference-knowledge) runs `proxy.py` from the
+  submodule pin `fb6e2bf`. Michael placed the Go cutover after it in his #412 comments of 2026-10-24 and 2026-10-31,
+  and nothing since moves it. The KubeCon clusters sync from staging, so the Deployment stays on `proxy.py`.
+
+**Nothing is staged here.** A staged Component naming the Go image was considered and not written: `sign-images.sh`
+reads every `image:` line in the repo, Components included, so an unpublished tag fails `--check` with
+`NOT IN THE REGISTRY`, the opposite of this issue's first criterion.
+
+**The cutover commit, once the image is published and signed and 2026-11-12 has passed.**
+1. `resources.yaml`: guard-proxy's `image:` becomes `ghcr.io/peopleforrester/watch-it-burn@sha256:<digest>` (tag
+   `guard-proxy-<commit>`) in place of `watch-it-burn:python-3.12-slim`; the `python /app/proxy.py` command and the
+   `/app` ConfigMap mount go, and so do the
+   `inject-python` annotation and `checksum/proxy-py`.
+2. `kustomization.yaml`: the `guard-proxy-src` generator goes, and `go-spend-store` (#751) is listed under
+   `components:`. #751's decisions entry has the one patch for a cluster whose Deployment already has a defaulted
+   `rollingUpdate` block.
+3. #782: the `OTEL_*` env (or `inject-sdk`) with the endpoint on the collector's HTTP port 4318, and the three
+   attributes in `weaver/registry`.
+4. `verify/test_proxy_checksum.py` retires; the `images.lock` row and the ai-layer `ignoreDifferences` env list change.
+
+**Not yet run on a cluster.** Nothing changed. At the cutover, `verify/sign-images.sh --check` (with cosign 2.x) and
+the Kyverno image-signature check on a fresh attendee cluster, through `bash verify/run-e2e.sh`.
