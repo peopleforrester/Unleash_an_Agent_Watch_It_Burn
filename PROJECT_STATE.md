@@ -1,6 +1,6 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2 and M4 done, M3 blocked on a model-path design, M5 next)
+Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2, M4 and M5 done; M3 decided 2026-11-02, a separate hop after KubeCon; M6 and M7 after 2026-11-12)
 Approved: pending re-approval. The 2026-10-10T23:36:09Z seal (sha256:3a5aa82f1a71) is superseded by the amendment · PRD #412 guard-proxy Go rewrite
 
 ## Bootstrap handed to lab-platform (#609)
@@ -116,10 +116,14 @@ Next, in order:
   **M4 done 2026-10-31** in guard-proxy-agenticburn (port a00beae, docs d0793a7), at proxy.py parity
   as Michael approved ("port /chat as-is"): /chat, /cost, /prompts, /controls and /toggle, spend
   metered after each reply, 305 of 323 conformance tests; the 18 `spans` tests are M5's. No TPM limit
-  or routing beyond `MODEL_TIER`. **M3 is blocked** on where the model-path hop goes (guard-proxy, or
-  a second hop, between kagent and Bedrock), a question put to Michael; the embedded store does not
-  depend on it. **M5 is next.** The PRD was amended for all three on 2026-11-01 (#736) and awaits
-  re-approval (decisions.md, 2026-11-01T05:00:33Z).
+  or routing beyond `MODEL_TIER`. The PRD was amended for these on 2026-11-01 (#736) and awaits
+  re-approval (decisions.md, 2026-11-01T05:00:33Z). **M5 done 2026-11-01** in guard-proxy-agenticburn
+  (3407cef, guard-proxy-agenticburn#36): proxy.py's spans, cost gauge and log trace ids, full
+  conformance suite (375 tests) green against Go. **M3 decided 2026-11-02** (Michael, on #722): no
+  pre-call reservation until KubeCon; after it, a separate hop between kagent and Bedrock does
+  `CountTokens`, the capped `max_tokens` and the refusal, and guard-proxy stays unchanged. The PRD
+  amendment for M3 and M5 is post-talk work. M6 (#738, #782) and M7 follow the cutover after
+  2026-11-12 (decisions.md, 2026-11-02 · #412).
 - Closed this cycle: #331, #415, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
