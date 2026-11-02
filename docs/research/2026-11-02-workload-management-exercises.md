@@ -182,7 +182,7 @@ kubectl -n agent patch agent workshop-agent --type=merge -p '{"spec":{"declarati
 - **B. Ignore `workshop-mcp`'s `toolNames` as well.** The change holds until reset and the student sees the behavior
   change at leisure. Cost: a Git change to that list no longer makes the Application OutOfSync, so it reaches a
   cluster only with some other Agent change. That is the silent failure #349 recorded when the whole tools array
-  was ignored and the `get_recipe` rename never reached the clusters.
+  was ignored and the rename to `get_vault_entry` never reached the clusters.
 - **C. A student-owned second Agent.** The student applies a narrow Agent of their own, outside Git, and operates it
   freely. Cost: the chat page and guard-proxy front only `workshop-agent`, so the second agent has no cost counter
   and needs another way to reach it (the kagent UI or an A2A call), which is new surface to build and secure.
