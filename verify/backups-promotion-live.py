@@ -1,13 +1,18 @@
 # ABOUTME: The live rehearsal of #643: every standby passes its self-check, then a drill fails each roster cluster and
 # ABOUTME: the watcher moves its hostname to a standby through the live router with nobody acting, and it is failed back.
-# SUITE: e2e (needs both standby waves up, the fleet's AWS profile, kubectl, and an apex checkout that can reload the router)
+# Needs both standby waves up, the fleet's AWS profile, kubectl, and an apex checkout that can reload the router.
 #
 # The offline half (test_backups.py) proves the watcher's choices against fakes. This proves them on the real
 # platform: the console LBs read from EKS in three regions, the self-check against each console, a table the live
 # router takes, and a public hostname that answers from the standby afterwards. It changes what the room's hostname
 # points at for a few minutes, so it runs during a bring-up, never during a session.
 #
-# Usage: python3 verify/test_backups_promotion_live.py     (after `backups.py up night-before` and `up six-hours`)
+# Not a test_*.py on purpose (#441): run-e2e.sh runs every `# SUITE: e2e` test against the one cluster CONTEXT names,
+# and this needs the 15 standbys of both waves, which are clusters only `backups.py up` creates. In the suite it would
+# be red on every run made without them, and it moves attackme and burritobot-private, which a suite run must not do.
+# It is run by hand in the rehearsal of the run of show, like local-inference-live.py.
+#
+# Usage: python3 verify/backups-promotion-live.py     (after `backups.py up night-before` and `up six-hours`)
 import datetime as dt
 import os
 import pathlib

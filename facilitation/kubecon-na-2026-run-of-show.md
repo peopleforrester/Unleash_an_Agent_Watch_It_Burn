@@ -375,7 +375,7 @@ which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
    ```
    infra/terraform/fleet/backups.py up night-before
    infra/terraform/fleet/backups.py up six-hours
-   python3 verify/test_backups_promotion_live.py
+   python3 verify/backups-promotion-live.py
    infra/terraform/fleet/backups.py down all --apply
    ```
 

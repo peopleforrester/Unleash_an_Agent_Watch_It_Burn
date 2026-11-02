@@ -5,6 +5,11 @@
 # Usage: CONTEXT=<kube-context> IAM_PIPELINE_PROFILE=<aws-profile> IAM_PIPELINE_REGION=<region> \
 #            [NAMESPACE=agent] bash verify/run-e2e.sh
 #
+# CONTEXT names an attendee or admin cluster. Since 2026-11-02 the suite runs on the running watch-it-burn-private,
+# whose admin profile deploys every app the attendee profile does (its own collector app in place of the attendee
+# one), and no cluster is created for it (#441). The failover drill, which needs both standby waves, is
+# backups-promotion-live.py, run by hand and not globbed here.
+#
 # The target cluster is never guessed. CONTEXT is required and is passed explicitly to every kubectl call;
 # the current-context is never read (see AGENTS.md, Kube-context safety). KUBECONFIG may be set for this
 # one command to point at an isolated kubeconfig.
@@ -63,7 +68,7 @@ command -v aws >/dev/null 2>&1 || missing+=("the aws CLI is not on PATH")
 [[ -n "${IAM_PIPELINE_PROFILE:-}" && -n "${IAM_PIPELINE_REGION:-}" ]] \
     || missing+=("IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION must name the AWS profile and region the policy pipeline's AWS checks run as")
 if [[ -z "${CONTEXT:-}" ]]; then
-    missing+=("CONTEXT is not set: name the kube-context of the test attendee cluster to run against")
+    missing+=("CONTEXT is not set: name the kube-context of watch-it-burn-private (admin profile) or an attendee cluster to run against")
 elif [[ "${tools_ready}" -eq 1 ]] \
     && ! kubectl --context "${CONTEXT}" --request-timeout=15s get --raw /readyz >/dev/null 2>&1; then
     missing+=("cluster for context '${CONTEXT}' is not reachable (kubectl --context ${CONTEXT} get --raw /readyz failed)")

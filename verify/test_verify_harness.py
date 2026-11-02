@@ -1,5 +1,6 @@
 # ABOUTME: Render-gate check for P6: beat-cost is wired into run-all.sh and every verify script is
 # ABOUTME: syntactically valid (bash -n). Live assertions run on a cluster; this is the offline gate.
+import re
 import pathlib
 import subprocess
 import sys
@@ -57,6 +58,19 @@ check("playwright.config.ts launches the Chromium run-e2e.sh installs",
 # sample so the suite stays fast, and the command names the cluster itself.
 attendee = (REPO / "gitops/bootstrap/values-attendee.yaml").read_text()
 check("the attendee profile deploys backstage", "\n  - backstage\n" in attendee)
+# The suite runs on watch-it-burn-private, an admin cluster, in place of a new attendee one (#441, 2026-11-02). That
+# holds only while the admin profile deploys every app the attendee profile does, its collector app named otel-collector
+# where the attendee one is otel-collector-attendee.
+
+
+def profile_apps(text: str) -> set[str]:
+    return set(re.findall(r"^  - (\S+)$", text.split("\napps:\n", 1)[1], re.M))
+
+
+admin_apps = profile_apps((REPO / "gitops/bootstrap/values-admin.yaml").read_text())
+attendee_only = profile_apps(attendee) - admin_apps - {"otel-collector-attendee"}
+check(f"the admin profile deploys every attendee app but the collector ({', '.join(sorted(attendee_only)) or 'none missing'})",
+      not attendee_only and "otel-collector" in admin_apps)
 check("run-e2e.sh runs backstage-footprint.sh as a run_one step with SAMPLES=1 and CONTEXT",
       'run_one "backstage-footprint.sh' in rune2e
       and 'env CONTEXT="${CONTEXT}" SAMPLES=1 bash "${SCRIPT_DIR}/backstage-footprint.sh"' in rune2e)
@@ -68,6 +82,10 @@ check(f"the render and live checks are in the E2E suite ({', '.join(e2e)})",
 renderers = [p.name for p in VERIFY.glob("test_*.py") if p.name not in e2e
              and any(f'["{t}",' in p.read_text() for t in ("kubectl", "helm", "node"))]
 check(f"no light-suite test runs kubectl, helm or node ({', '.join(renderers) or 'none'})", not renderers)
+# The failover drill needs the 15 standbys only `backups.py up` creates and moves the room's hostnames, so it is run
+# by hand and kept out of the glob, or run-e2e.sh could never be green on the one cluster CONTEXT names (#441).
+check("the failover drill is backups-promotion-live.py, outside run-e2e.sh's test_* glob",
+      (VERIFY / "backups-promotion-live.py").is_file() and not list(VERIFY.glob("test_backups_promotion_live*")))
 for sh in sorted(VERIFY.glob("*.sh")):
     ok = subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode == 0
     check(f"bash -n clean: {sh.name}", ok)

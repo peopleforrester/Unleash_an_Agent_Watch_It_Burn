@@ -8595,3 +8595,46 @@ test strips the tags from one account's node launches and checks the line appear
 append-only, and none of the paths the draft touches (`teardown/`, `cost/`, `verify/test_activate_cost_tags.sh`,
 the new test and fixtures) was edited on staging since. The rest of the files are therefore the draft's, and this
 entry is appended again at the current end of the file with today's date.
+## 2026-11-02 · #441 · The E2E suite runs on watch-it-burn-private, not a new attendee cluster, and the failover drill leaves its glob
+
+**Context.** #441 asks for `bash verify/run-e2e.sh` to be run green on a provisioned cluster. The attempt on
+watch-it-burn-attendee-441 (2026-10-31) built EKS but stopped in bootstrap on the Datadog org of a new attendee seat,
+so nothing was tested, and the cluster was torn down. Michael's handoff on the issue (2026-11-02) changes the target:
+use watch-it-burn-community or watch-it-burn-private for live checks and never create a cluster; attendee-001 was torn
+down too and its pool row may remain.
+
+**Which cluster.** watch-it-burn-private. Its admin profile (`gitops/bootstrap/values-admin.yaml`) deploys every app
+the attendee profile does, with `otel-collector` in place of `otel-collector-attendee`, and adds falco-talon,
+kubearmor-policies, network-policies and tempo. Backstage is among them, so `backstage-footprint.sh` and the
+Playwright step have what they need. watch-it-burn-community runs the burn profile, which has no Backstage, Kyverno
+or Falco, so the suite cannot be green there. `test_verify_harness.py` now fails if the admin profile stops deploying
+an attendee app, since the redirect rests on that.
+
+**What changed.**
+- `verify/test_backups_promotion_live.py` is now `verify/backups-promotion-live.py`. run-e2e.sh globs every
+  `# SUITE: e2e` test_* file, and this one needs the 15 standbys of both waves, clusters only `backups.py up`
+  creates. Under the never-create rule it would be red on every suite run, and it moves attackme and
+  burritobot-private for minutes, which a suite run must not do. It follows the precedent of
+  `local-inference-live.py`: named outside the glob, run by hand in the run of show's rehearsal step, whose command,
+  like PROJECT_STATE.md's, now names the new file. `test_verify_harness.py` holds the rename.
+- run-e2e.sh's header and its missing-CONTEXT message name watch-it-burn-private (admin profile) or an attendee
+  cluster, not only a "test attendee cluster".
+
+**Known red before the run.** `test_room_view_live.py` fails until Whitney runs `room_view.py --apply` and
+`infra/datadog-room/share.json` is committed (the #665 entry of 2026-10-29 owes it); it is not in this repo yet.
+`test_ops_view_live.py` needs the provisioning admin token and `test_american_english_published.py` needs
+~/repos/workflow/llm-coding-workflow, so the run is made on Michael's machine.
+
+**Not yet run on a cluster.** This run has no AWS profile and no kube context. Owed, by a session with accen-dev:
+
+    C=watch-it-burn-private; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" IAM_PIPELINE_PROFILE=accen-dev \
+      IAM_PIPELINE_REGION=us-west-2 bash verify/run-e2e.sh
+
+run-all.sh says it wants a fresh attendee spoke, and its beats change the live cluster while they run: Beat 1 flips
+Kyverno between Audit and Enforce, and Beat 2 drives the live guard-proxy. Run it on a day with no session, and if a
+beat fails on a "before" state the private cluster no longer has (a guard left on, Kyverno left in Enforce), that is
+the first thing to fix. And, from the handoff, with labctl, DATABASE_URL and USER set:
+`bash infra/terraform/fleet/fleet.sh deregister watch-it-burn-attendee-001`.

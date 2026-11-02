@@ -44,7 +44,7 @@ comment on #454), about $2.30 at list prices.
 `infra/terraform/fleet/backups.tsv` lists 12 standbys for attackme and 3 for burritobot-private, across us-east-2,
 us-east-1 and us-west-2. `backups.py` builds them in two waves, self-checks them, and its watcher hands a hostname
 to the next healthy standby with nobody acting. Not yet built or rehearsed: the lab VPCs in two new regions and both
-waves are spend waiting on Michael's go, and `verify/test_backups_promotion_live.py` is the owed rehearsal.
+waves are spend waiting on Michael's go, and `verify/backups-promotion-live.py` is the owed rehearsal.
 Each region's standbys are pinned across both lab zones, the watcher is restarted by cron every 5 minutes in its
 window, and every wave runs preflight per region first. The exact bring-up, rehearsal, schedule and teardown
 commands and the cost (about $0.48 a standby-hour, roughly $95 for KubeCon) are in the run of show,
