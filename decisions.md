@@ -8373,3 +8373,42 @@ commits, so there was nothing to reuse.
 **Not yet run on a cluster:** every exercise. The note's "Validation owed on a cluster" section names the checks a
 session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh` tier once the build lands, on or
 after 2026-11-13.
+
+## 2026-11-02 · #204 · The cloud-boundary challenge is designed in docs/research; the build waits for the next event
+
+**Design only.** #204 asks for one cloud-provisioning tool for the agent and one public-bucket request stopped at three
+independent layers, each behind its own toggle. Michael deferred it on 2026-09-07 (`deferred-barcelona`) and kept the
+design work open, and on #447 he set that the Barcelona challenges wait until 2026-11-13. The design is at
+`docs/research/2026-11-02-cloud-boundary-challenge.md`, in the shape #723 and #130 used. No lab text, slide, run of
+show or deploy config changed.
+
+- **Named C9, not C8.** The shipped lab's Challenge 8 is the overscoped-permissions beat, so no new file or toggle
+  takes a `c8-` name. Whether it is numbered Challenge 9 (moving the feedback step to 10 and the eight-challenge
+  counts with it) is left to the lab-text change; the note recommends numbering it, since it is a student challenge.
+- **ACK S3 controller, not Crossplane.** One controller and one CRD, scoped to namespace `agent`, on a Pod Identity
+  role that may create and delete buckets only under the cluster's own name prefix. Crossplane was tried and removed
+  before. The issue's 1.8.1 pin is stale; v1.15.0 is current (2026-10-28).
+- **Layer 1 sits on its own gateway bind.** `create_bucket` lives in `workshop-mcp` but is reached through a new
+  `:3005` bind with an argument-aware ExtMCP processor built on tool-pin's wire code, so a failClosed processor that
+  is down refuses only `create_bucket`, not Challenges 1 to 8. The `:3001` rule denies `create_bucket` by name so the
+  guard cannot be walked around.
+- **Layer 2 does not require `publicAccessBlock`, where the issue says it should.** #207's boundary denies
+  `s3:PutBucketPublicAccessBlock` outright, so a Bucket that sets the safe value would fail with AccessDenied. The
+  policy refuses public ACLs, grants, ACL-enabling ownership, any false Block Public Access setting and a public
+  policy instead; an omitted field gets AWS's all-on default.
+- **Layer 3 is #207's in-account boundary, always on.** #202's org policies are not built (no org access). Nothing in
+  a session can detach the boundary, so the issue's "all off creates a public bucket" needs a per-account carve-out.
+  Whether to build one or end the open stage at the cloud's AccessDenied is asked of Michael in the #204 run report;
+  the note recommends the AccessDenied.
+- **Human approval stays out.** `requireApproval` broke the next Bedrock request when it was last on
+  (`gitops/workshop-agent/agent.yaml`), and the chat path cannot answer an approval.
+- **The tool waits for AWS.** A `201` from the API server is not a bucket, so `create_bucket` polls the Bucket's ACK
+  conditions and raises with the refusing layer's message, which a collector transform turns into a `wib.denied_by`
+  facet in Datadog.
+
+**Earlier draft.** `bash verify/draft-drift.sh origin/agent/204-9480 origin/staging` reported CLEAN: that run made no
+commits, so there was nothing to reuse.
+
+**Not yet run on a cluster:** every layer. The note's "Validation owed on a cluster" section names the checks a
+session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh` tier once the build lands, on or
+after 2026-11-13.
