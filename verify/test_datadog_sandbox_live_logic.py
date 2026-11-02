@@ -34,7 +34,12 @@ GOOD = {
     "ml_obs.trace": [series(ml_app="burritobot")],
     "logs": [{"kube_cluster_name": c, "service": s, "env": ENV}
              for c in (PUB, PRIV) for s in ("burritobot", "burritobot-agent", "burritobot-coredns")],
+    # Datadog's filter matches by substring, so a key whose name only contains burritobot comes back too.
+    "api_keys": [{"name": "BurritoBot", "last4": "abcd", "date_last_used": "2027-01-15T07:00:00.000Z"},
+                 {"name": "burritobot-old-demo", "last4": "wxyz", "date_last_used": None}],
 }
+NOW = 1_800_000_000  # 2027-01-15T08:00:00Z
+API_KEY = "0123456789abcdef0123456789ababcd"  # a 32-character key ending abcd
 
 
 class FakeOrg:
@@ -49,6 +54,10 @@ class FakeOrg:
             q = urllib.parse.parse_qs(qs)["query"][0]
             metric = q.split(":", 1)[1].split("{", 1)[0]
             return 200, {"series": self.data.get(metric, [])}
+        if path.endswith("/api/v2/api_keys"):
+            params = urllib.parse.parse_qs(qs)
+            assert params["filter"] == ["burritobot"], params
+            return 200, {"data": [{"type": "api_keys", "attributes": k} for k in self.data["api_keys"]]}
         if path.endswith("/api/v2/logs/analytics/aggregate"):
             req = json.loads(body)
             assert req["filter"]["query"] == "kube_cluster_name:burritobot-*", req
@@ -68,14 +77,16 @@ def check(name: str, cond: bool) -> None:
 def judge(data: dict) -> tuple[list[str], list[str]]:
     org = FakeOrg(data)
     out: list[str] = []
-    failed = live.run(fm.Datadog("datadoghq.com", "api", "app", http=org), minutes=60, now=1_800_000_000, say=out.append)
+    failed = live.run(fm.Datadog("datadoghq.com", "api", "app", http=org), minutes=60, now=NOW, say=out.append,
+                      api_key=API_KEY)
     return failed, out
 
 
 print("== a sandbox org that meets every rule ==")
 failed, out = judge(GOOD)
 check("passes every check", failed == [])
-check("checks the Agents, the logs, the spans and ml_app", sum(line.startswith("==") for line in out) == 4)
+check("checks the Agents, the logs, the spans, ml_app and the key", sum(line.startswith("==") for line in out) == 5)
+check("never prints the key", not any(API_KEY[:-4] in line for line in out))
 
 
 def broken(name: str, mutate, expect: str) -> None:
@@ -112,6 +123,27 @@ broken("the root service renamed burritobot-guard-proxy", lambda d: d.update({"m
        "as ml_app burritobot")
 broken("a second ml_app beside burritobot", lambda d: d["ml_obs.trace"].append(series(ml_app="workshop_agent")),
        "no other ml_app")
+
+broken("no key named burritobot", lambda d: d.update({"api_keys": d["api_keys"][1:]}), "exactly one API key")
+broken("two keys named burritobot", lambda d: d["api_keys"].append({"name": "burritobot", "last4": "abcd"}),
+       "exactly one API key")
+broken("the secret holds another key", lambda d: d["api_keys"][0].update({"last4": "9999"}),
+       "watch-it-burn/datadog's api-key is that key")
+broken("the burritobot key never used", lambda d: d["api_keys"][0].update({"date_last_used": None}),
+       "used in the last 24 hours")
+broken("the burritobot key last used two days ago", lambda d: d["api_keys"][0].update(
+    {"date_last_used": "2027-01-13T07:00:00.000Z"}), "used in the last 24 hours")
+org = FakeOrg(GOOD)
+check("no key to compare is a failure, not a pass",
+      any("watch-it-burn/datadog's api-key" in f for f in live.run(
+          fm.Datadog("datadoghq.com", "api", "app", http=org), now=NOW, say=lambda _: None, api_key="")))
+denied = FakeOrg(GOOD)
+keys_org = FakeOrg(GOOD)
+live.run(fm.Datadog("datadoghq.com", "api", "app", http=denied), now=NOW, say=lambda _: None, api_key=API_KEY,
+         keys_dd=fm.Datadog("datadoghq.com", "api", "owner-app", http=keys_org))
+check("the key list is read with keys_dd when given, and nothing else is",
+      keys_org.calls == [("GET", "https://api.datadoghq.com/api/v2/api_keys")]
+      and all(not p.endswith("/api/v2/api_keys") for _, p in denied.calls))
 
 print("== a refused query is a failure, not a pass ==")
 try:
