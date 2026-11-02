@@ -8954,7 +8954,9 @@ drift report (`verify/test_drift_aws_live.py`).
 `infra/deploy-full-idp.sh` still installs argo-cd chart 10.8.4 (Argo CD v3.5.2), and lab-platform's
 `scripts/render-bootstrap.sh` still pins 10.11.3 (v3.5.6). The drill target `agent/platform-console-egress` is still
 in `gitops/ai-layer/resources.yaml`. `bash verify/run-tests.sh` passes (220 tests), `verify/test_drift_floor.py` and
-`verify/test_drift_report.py` among them.
+`verify/test_drift_report.py` among them, and `bash verify/run-e2e-tools.sh` passes (39 checks, the audit root's
+structural render among them). The tier takes over 20 minutes on a shared host, so a run that waits on it in the
+background needs a time limit longer than the default.
 
 **What is left, and where it is tracked.** Only the live runs. #795 ("Run #205's live drift checks on the KubeCon NA
 cluster build") holds the five commands from the entry above: the drill, the audit root's apply in each fleet
