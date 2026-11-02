@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# ABOUTME: Build the C2 "malicious image" villain roster and push to docker.io/peopleforrester/<name>.
-# ABOUTME: Daemon-less via crane (the box's docker.sock is permission-denied): mutate busybox's CMD to a
-# ABOUTME: villain catchphrase loop. The image is harmless (echo loop); the LESSON is the untrusted source.
+# ABOUTME: Holds the villain catchphrases and builds Challenge 6's page-serving Joker, pushed to GHCR only.
+# ABOUTME: Daemon-less via crane (the box's docker.sock is permission-denied). The image is harmless (echo loop
+# ABOUTME: and a static page); the LESSON is the untrusted source.
 set -euo pipefail
 
-# Auth: crane login with the Team PAT from ~/secrets (see ~/.claude/rules: secrets live in mrf-secrets).
-#   set -a; . ~/secrets/dockerhub/agenticburn.env; set +a
-#   echo "$DOCKERHUB_PAT" | crane auth login docker.io -u "$DOCKERHUB_USER" --password-stdin
-# Usage: build.sh [name...]   no names pushes the whole roster; `build.sh joker` pushes only the C6 Joker.
+# The ten C2 villains (M and V below) are lab-platform's build, promo/<name>:v1 on ghcr.io (#653): lab-platform's
+# deploy/images/build-promo.sh reads these lines from this file at 45e62f0. Nothing here pushes them, and nothing
+# here pushes to Docker Hub (#714).
+# Usage: build.sh [joker]   pushes the C6 Joker; any other name is refused before anything is pushed.
 CR="${CRANE:-crane}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE="docker.io/library/busybox:latest"
 # The C6 Joker's base, pinned (#664): busybox:latest on 2026-10-29. verify/test_joker_web_busybox.py runs
 # joker-web/start.sh on this digest's own busybox, so the build and the test cannot drift apart.
 JOKER_BASE="docker.io/library/busybox@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4"
-ORG="docker.io/peopleforrester"
 
 # Marketing-NAMED covers (innocent name, villain reveal payload) — for the C2 "ops-approved promo app"
 # social-engineering story: the friendly name makes the deploy land, the pod logs reveal the villain.
@@ -35,11 +33,6 @@ declare -A V=(
   [megatron]="Megatron has transformed your cluster into a Decepticon base. Decepticons, DEPLOY!"
 )
 
-build_one() { # name catchphrase
-  local loop="while true; do echo '$2'; sleep 10; done"
-  "$CR" mutate "$BASE" --entrypoint sh --cmd "-c,$loop" -t "$ORG/$1:latest"
-  echo "pushed $ORG/$1:latest"
-}
 # The C6 Joker goes to GHCR, never Docker Hub (#671), under festival-ops/, a path restrict-image-registries refuses, with an innocent name (the model reads it),
 # so the private cluster still refuses it at admission. Its tag is the busybox release in JOKER_BASE (1.38.0,
 # read from the binary on 2026-10-31). Auth: echo "$(gh auth token)" | crane auth login ghcr.io -u peopleforrester
@@ -58,23 +51,14 @@ build_joker_web() {
   "$CR" mutate "$JOKER_REF" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "$JOKER_REF"
   echo "pushed $JOKER_REF (serves :8080)"
 }
-# With no arguments it pushes the whole roster, the Joker last. With names (joker, or a key of M or V) it pushes
-# only those, so the C6 Joker can go up alone without re-pushing the rest (#664). Every name is checked before
-# anything is pushed.
-known() { [[ "$1" == joker || -v "M[$1]" || -v "V[$1]" ]]; }
-build_named() {
-  if [[ "$1" == joker ]]; then build_joker_web
-  elif [[ -v "M[$1]" ]]; then build_one "$1" "${M[$1]}"
-  else build_one "$1" "${V[$1]}"
+# Every name is checked before anything is pushed: joker is built here, and a roster name is lab-platform's.
+for name in "$@"; do
+  if [[ "$name" == joker ]]; then continue; fi
+  if [[ -v "M[$name]" || -v "V[$name]" ]]; then
+    echo "build.sh: '$name' is lab-platform's promo/ build (#653), not this script's; only joker is pushed here" >&2
+  else
+    echo "build.sh: no villain named '$name' (joker)" >&2
   fi
-}
-if (($#)); then
-  for name in "$@"; do
-    known "$name" || { echo "build.sh: no villain named '$name' (joker, ${!M[*]}, ${!V[*]})" >&2; exit 2; }
-  done
-  for name in "$@"; do build_named "$name"; done
-  exit 0
-fi
-for name in "${!M[@]}"; do build_one "$name" "${M[$name]}"; done
-for name in "${!V[@]}"; do build_one "$name" "${V[$name]}"; done
+  exit 2
+done
 build_joker_web

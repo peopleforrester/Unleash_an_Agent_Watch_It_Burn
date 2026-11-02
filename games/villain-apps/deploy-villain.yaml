@@ -1,6 +1,5 @@
 # ABOUTME: The villain Deployment the agent is induced to apply (Beat 2). On Cluster 1 it comes up; on
-# ABOUTME: Cluster 2 the Kyverno registry allowlist refuses the image (docker.io/<user>/* is not allowed).
-# verify-at-build: replace DOCKERHUB_USER with the public account the villain images were pushed to.
+# ABOUTME: Cluster 2 the Kyverno registry allowlist refuses the image (festival-ops/ is a refused path).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,8 +14,8 @@ spec:
     spec:
       containers:
         - name: villain
-          image: docker.io/DOCKERHUB_USER/villain-joker:latest # public user namespace -> C2 refuses
-          ports: [{ containerPort: 80 }]
+          image: ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0 # C6's Joker, under festival-ops/ -> C2 refuses
+          ports: [{ containerPort: 8080 }]
           resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
 ---
 apiVersion: v1
@@ -26,4 +25,4 @@ metadata:
   namespace: apps
 spec:
   selector: { app: villain-app }
-  ports: [{ port: 80, targetPort: 80 }]
+  ports: [{ port: 80, targetPort: 8080 }]

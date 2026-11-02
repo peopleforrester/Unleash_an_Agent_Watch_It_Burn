@@ -35,7 +35,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: proxy
-          image: python:3.12-slim # verify-at-build: pin @sha256; for prod bake proxy.py into an image
+          # Our ghcr.io copy of python:3.12-slim, by digest, as gitops/ai-layer's guard-proxy runs it (#714).
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
           command: ["python", "/app/proxy.py"]
           ports:
             - name: http

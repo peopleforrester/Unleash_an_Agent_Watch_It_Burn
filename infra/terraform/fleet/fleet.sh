@@ -3,8 +3,8 @@
 # ABOUTME: shared lab VPC, each with its own state, concurrency-capped, parallel. (Packt-modeled.)
 set -euo pipefail
 
-# Defined first: the Docker Hub auth probe below logs at source-time, before dispatch, so log() must
-# exist by then (a later definition aborted up-fleet with "log: command not found" under set -e).
+# Defined first: anything that logs at source-time, before dispatch, needs log() to exist by then (a later
+# definition once aborted up-fleet with "log: command not found" under set -e).
 log() { printf '%s\n' "$*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -239,23 +239,6 @@ TF_PIDS_LIMIT=""
 # (a cluster that tracks its own branch, e.g. an experiment branch) are a manual case: bootstrap from
 # that branch's checkout, since this default path points lab-bootstrap at staging.
 BOOTSTRAP_PROFILE=""
-
-# Docker Hub Team auth for node-level containerd, sourced from ~/secrets (mrf-secrets), NEVER committed.
-# up_one passes it to the cluster module as -var dockerhub_auth_b64 so every node authenticates docker.io
-# pulls (no anonymous 429 at fleet scale) with GHCR as the fallback mirror. Empty => the module omits the
-# registry config and a bare apply still works. Override the path with WIB_DOCKERHUB_ENV.
-WIB_DOCKERHUB_AUTH_B64=""
-_dh_env="${WIB_DOCKERHUB_ENV:-${HOME}/secrets/dockerhub/agenticburn.env}"
-if [[ -r "${_dh_env}" ]]; then
-    WIB_DOCKERHUB_AUTH_B64="$(
-        set -a; . "${_dh_env}"; set +a
-        [[ -n "${DOCKERHUB_USER:-}" && -n "${DOCKERHUB_PAT:-}" ]] \
-            && printf '%s:%s' "${DOCKERHUB_USER}" "${DOCKERHUB_PAT}" | base64 -w0
-    )"
-fi
-[[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] \
-    && log "Docker Hub Team auth loaded for node bootstrap (containerd docker.io auth + GHCR fallback)" \
-    || log "no Docker Hub auth (${_dh_env} missing/unreadable) — nodes will pull docker.io anonymously"
 
 # --- §4.6 cluster-shape parameterization (PRD 35): shape / roster / concurrency as config, not edits ---
 # Fleet-wide overrides. Empty = the cluster module default, so UNSET means no behavior change vs today.
@@ -1880,7 +1863,6 @@ up_one() {
     fi
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     local pids=(); [[ -n "${TF_PIDS_LIMIT}" ]] && pids=(-var "pod_pids_limit=${TF_PIDS_LIMIT}")
-    local dh=(); [[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] && dh=(-var "dockerhub_auth_b64=${WIB_DOCKERHUB_AUTH_B64}")
     # §4.6 shape passthrough. Per-cluster TF_INSTANCE_TYPES (roster) wins over fleet-wide WIB_INSTANCE_TYPES.
     local it=(); local _itypes="${TF_INSTANCE_TYPES:-${WIB_INSTANCE_TYPES}}"
     if [[ -n "${_itypes}" ]]; then
@@ -1903,7 +1885,7 @@ up_one() {
     local zn=() zone; zone="$(standby_zone "${name}")"; [[ -n "${zone}" ]] || zone="$(roster_zone "${name}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
         [[ -n "${zone}" ]] && zn=(-var "node_subnet_ids=[<lab subnet ${zone}>]")
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]} ${zn[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]} ${zn[*]} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
     if [[ -n "${zone}" ]]; then
@@ -1914,7 +1896,7 @@ up_one() {
         zn=(-var "node_subnet_ids=${nsub}")
     fi
     local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "imds_hop_limit=${hop}" -var "max_pods=${maxpods}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
-                  "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" "${zn[@]}")
+                  "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${zn[@]}")
     # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
         log "  FAILED: ${name} (its attendee IAM user is in the way of the apply)"; record_fail "${name}"; return 0

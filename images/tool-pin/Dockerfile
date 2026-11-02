@@ -5,7 +5,8 @@
 #   docker build -t ghcr.io/peopleforrester/watch-it-burn:tool-pin images/tool-pin
 #   docker push ghcr.io/peopleforrester/watch-it-burn:tool-pin
 # then sign it (policies/cosign/README.md) or verify-image-signatures denies the pod.
-FROM python:3.12-slim
+# Our ghcr.io copy, by digest, not Docker Hub's python:3.12-slim (#714).
+FROM ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
 
 # grpcio only: the protobuf messages are encoded by hand in tool_pin.py, so neither protobuf nor generated
 # stubs are needed. Version resolved and checked against the local bed on 2026-10-24 (decisions.md, #480).

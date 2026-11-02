@@ -254,6 +254,18 @@ check("its only peer is the Backstage pod, by label",
 check("the Backstage config points at that Service", config["backend"]["database"]["connection"]["host"]
       == next(o for o in pg if o["kind"] == "Service")["metadata"]["name"])
 
+print("== Postgres runs lab-platform's mirror/ copy, not Docker Hub's (#714) ==")
+from bootstrap_chart import APPS, IMAGE_REGISTRY, kustomize_images  # noqa: E402
+from mirror_copies import COPIES  # noqa: E402
+
+pg_image = pg_dep["spec"]["template"]["spec"]["containers"][0]["image"]
+check(f"postgres.yaml names the kustomize image postgres, which the Application sets ({pg_image})", pg_image == "postgres")
+entries = kustomize_images(yaml.safe_load((APPS / "backstage.yaml").read_text(encoding="utf-8")))
+copy = next(c for c in COPIES if "/library/postgres:" in c.upstream)
+check(f"the backstage Application sets it, alone, to {copy.path} by its digest, at the root's registry",
+      entries == [{"name": "postgres", "newName": f"{IMAGE_REGISTRY}/{copy.path.rsplit(':', 1)[0]}",
+                   "newTag": copy.tag, "digest": copy.digest}])
+
 print("== the image is built on a Node whose node-fetch can read the API server ==")
 df = (REPO / "images/watch-it-burn-backstage/packages/backend/Dockerfile").read_text(encoding="utf-8")
 m = re.search(r"^FROM node:(\d+)\.(\d+)\.(\d+)-", df, re.M)

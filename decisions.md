@@ -9336,3 +9336,81 @@ KubeCon ever moves to it, the first grep has to drop its spaces.
 
 **Not yet run on a cluster.** Unchanged from the 2026-11-01 #750 entry: the two log reads and the Datadog search,
 on attackme during #644's re-run.
+
+## 2026-11-02 · #714 · Redo on staging: everything with a ghcr.io copy moves off Docker Hub now; five images wait on lab-platform
+
+**Context.** Run 15842 is #714's second dispatch. The first draft (`origin/agent/714-12873`, cut from `662e199`) was
+never promoted: its E2E tools tier failed on five registry checks, which were copies and tags that did not exist yet.
+`verify/draft-drift.sh` against `origin/staging` (`80123c0`) found 38 drifted paths. Michael's `8560d41` and
+`0be1738` had moved C6's Joker to `ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0`, and #715
+had moved the demo apps to lab-platform's web image. So the change was made again on today's layout, not
+cherry-picked. It is split by what can pass today. Everything whose ghcr.io copy exists moves now, so the branch
+passes both tiers and lands. The five images lab-platform has not copied yet stay as they are, each named below,
+and the gate test the issue asks for comes with them.
+
+**What moved, and how it differs from the draft.**
+- **The registry rule no longer allows `docker.io/library/`.** If Docker Hub stayed on the trusted list, the agent
+  could still pull from it. The Kyverno CLI cases refuse `docker.io/someone/nginx:1` and
+  `docker.io/library/nginx:1.27-alpine`, and each line says it is a refused example (#714). The cases also refuse C6's
+  Joker under `festival-ops/`, on ghcr.io and through an ECR cache. The draft added a `watch-it-burn:joker-` refused
+  entry for its own Joker path; Michael's `festival-ops/` entry already does that job, so `refusedPaths` is unchanged.
+  The policy message, /lab's quoted copy and LAB-TEXT.md drop `docker.io/library`.
+- **Upstream pulls by digest from ghcr.io.** Backstage's Postgres is now the kustomize name `postgres`.
+  `gitops/bootstrap/apps/backstage.yaml` sets it to lab-platform's `mirror/library/postgres:18.6-alpine3.23-dd504ba15d33`
+  at the root's registry, as #715 did for `web` (kagent's Postgres runs the same copy). It replaces Docker Hub's
+  `postgres:18.6-alpine`, whose pinned index served linux/amd64 `3b0ef735…`. The copy is another build of the same
+  Postgres 18.6 (`dd504ba1…`, resolved 2026-10-26), and the database is rebuilt from git on every start, so no data
+  carries over between the two. The python:3.12-slim and
+  nginx:1.27-alpine Dockerfile bases, the legacy guard-proxy manifest and Beat 1's `nginx:latest` now name our
+  copies in the public, signed watch-it-burn package, by digest.
+- **Implicit Docker Hub pulls.** The `curlimages/curl` helper pods in beat-02.sh, beat-cost.sh and two
+  FACILITATOR.md commands now run the workshop-mcp image. It carries curl and is signed (verify/probe_pod.py's
+  reasoning). The clown file's bare `busybox` is an untagged `lab-platform/promo/joker`, which the registry rule
+  refuses and which has no `:latest` to pull, so even a cluster with no Kyverno pulls nothing. A render of every app
+  in `gitops/bootstrap/apps` with the pinned Helm found three more Docker Hub images besides Falco's two:
+  falcosidekick's `curlimages/curl` and otel-operator's `busybox:latest`. All three are Pods annotated
+  `helm.sh/hook: test` or `test-success`. Argo CD skips Helm test hooks, so no node pulls them; the live check below
+  confirms it.
+- **build.sh pushes only the Joker.** The ten promo/ villains are lab-platform's build (#653), and lab-platform reads
+  their catchphrases from build.sh at `45e62f0`. So the M and V lines stay, and the Docker Hub roster push, its PAT
+  login, `ORG` and `BASE` go. A roster name is now refused before anything is pushed.
+- **games/villain-apps** built three nginx villains for a Docker Hub user namespace. That build is removed, and the
+  beat deploys C6's Joker on 8080, on a path the registry rule refuses.
+- **Terraform and fleet.sh.** The cluster module's `dockerhub_auth_b64` variable is gone, and so is the cloud-config
+  part that wrote the node's Docker Hub `hosts.toml`. fleet.sh's loading of the PAT goes with them, along with
+  `WIB_DOCKERHUB_ENV` in three fleet tests. infra/harbor had only README text. #664 needs no Docker Hub token (the
+  coordinator's 2026-11-01 correction on #664 says the same).
+- **Provenance comments** in the app files now say "Docker Hub's <repo>". `verify/mirror_copies.py` names the host
+  once, as `HUB`, because the render test matches each upstream reference against what a chart renders.
+
+**Not in this change, and why.** Five images have no ghcr.io copy, and a reference to a copy that does not exist yet
+fails the tools tier or a build:
+1. C6's Joker base, `JOKER_BASE` in build.sh: Docker Hub's busybox 1.38.0 (index `a46257e0…`, linux/amd64
+   `f97baa533a26…`). `test_joker_web_busybox.py` and `test_c6_joker_public.py` read it. Once lab-platform copies it
+   to `mirror/library/busybox:1.38.0-f97baa533a26`, the published Joker needs no re-push, because its lower layers
+   are that manifest's.
+2. web-terminal's `debian:bookworm-slim` (linux/amd64 `a3bba7dc7dbc…` today). Its CI build runs on every change to
+   `images/web-terminal/`.
+3. Backstage's `node:24.22.2-trixie-slim` (linux/amd64 `e053394f1551…`), and the README's buildah line.
+4. and 5. Falco 0.45.1 and falcoctl 0.14.2, through the chart's default registry. lab-platform#295 resolved those
+   copies, but its copy has not run.
+The follow-up asks lab-platform for the first three copies. The rest of #714 waits on those copies: these five
+references, `verify/test_no_docker_hub.py` (the draft's three checks, which need the remaining docker.io lines to be
+refused examples only), and the two items Michael added on the issue. Those two are the version tags
+(`workshop-mcp-mcp-1.29.1`, `web-terminal-ttyd-1.7.7` at today's digests, the draft's reading, which matches the
+Dockerfiles' `mcp==1.29.1` and ttyd `1.7.7`) and the villain shell banners. Both need a ghcr.io write: a `crane tag`,
+and a re-push of the Joker. The promo villains' banners are lab-platform's build. This run cannot do any of that,
+and adding the gate test now would fail the offline suite on exactly those lines.
+
+**Tests.** No test was added. Tests changed to match: test_kyverno_cel_policies (Docker Hub's library refused, the
+Joker refused directly and through a cache, Beat 1 and the signature case on ghcr.io images), test_villain_app,
+test_image_signing, test_c6_villain_endpoint (build.sh pushes the Joker alone and refuses a roster name),
+test_promo_villains, test_c8_pod_secret_mount, test_deploy_app_limits, test_enforce_floor (a bare name now fails as
+named), test_tool_audit (it reads Python's version from the ghcr.io base), test_backstage_catalog (Postgres is the
+mirror copy, by digest, set by the Application), and the three fleet tests.
+
+**Not yet run on a cluster.** On a fresh attendee cluster, run `CONTEXT=<ctx> bash verify/run-e2e.sh`, then
+`kubectl --context "$CONTEXT" get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u`. Only Falco's two images
+should be on Docker Hub until lab-platform#295's copy runs, and no Helm test Pod should exist. Backstage's Postgres
+must come up Ready on the mirror copy. Beat 1 (`verify/beat-01.sh`) must admit and then refuse the nginx copy, and
+beat-02.sh and beat-cost.sh must get their curl answers from the workshop-mcp image.

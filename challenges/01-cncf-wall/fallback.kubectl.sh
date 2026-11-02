@@ -10,9 +10,11 @@ KCTL=(kubectl --context "${CONTEXT}")
 NS="${1:?usage: fallback.kubectl.sh <attendee-namespace>}"
 SA="system:serviceaccount:${NS}:agent-sa"
 AS=(--as="${SA}")
+# Our ghcr.io copy of nginx, by digest (#714): a bare nginx:latest is a Docker Hub pull.
+readonly IMAGE="ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0"
 
 echo "==> Beat 1, Step 1a: deploy a non-compliant workload (policy in Audit) — expect ADMIT"
-"${KCTL[@]}" "${AS[@]}" -n "${NS}" create deployment sample-web --image=nginx:latest
+"${KCTL[@]}" "${AS[@]}" -n "${NS}" create deployment sample-web --image="${IMAGE}"
 
 echo "==> Toggle: switch the resource-limits policy to Deny"
 "${KCTL[@]}" patch validatingpolicy require-resource-limits --type=json \
@@ -22,7 +24,7 @@ sleep 5
 
 echo "==> Beat 1, Step 1b: redeploy the same non-compliant workload — expect REJECT (Kyverno)"
 "${KCTL[@]}" "${AS[@]}" -n "${NS}" delete deployment sample-web --ignore-not-found
-if "${KCTL[@]}" "${AS[@]}" -n "${NS}" create deployment sample-web --image=nginx:latest; then
+if "${KCTL[@]}" "${AS[@]}" -n "${NS}" create deployment sample-web --image="${IMAGE}"; then
   echo "!! UNEXPECTED: workload admitted while policy is in Deny" >&2
   exit 1
 fi

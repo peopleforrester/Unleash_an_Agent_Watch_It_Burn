@@ -1,6 +1,7 @@
 # Dockerfile for the SYNTHETIC Beat-3 "bad" MCP server. Teaching prop only — see server.py.
 # Pin the base image digest at build time and record it in VERSIONS.lock (verify-at-build rule).
-FROM python:3.12-slim
+# Our ghcr.io copy, by digest, not Docker Hub's python:3.12-slim (#714).
+FROM ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
 
 # verify-at-build: confirm the current MCP Python SDK version and pin it here at build time.
 # The `mcp` package provides FastMCP and the streamable-http transport used by server.py.

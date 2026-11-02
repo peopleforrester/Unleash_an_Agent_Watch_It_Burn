@@ -122,8 +122,8 @@ from registry_allowlist import allowed
 
 
 def image_ok(img):
-    ref = img if "/" in img.split(":")[0] else f"docker.io/library/{img}"
-    return allowed(ref)
+    # A bare name is a Docker Hub pull, and Docker Hub is on no allowed registry (#714), so it fails as named.
+    return allowed(img)
 
 
 def images(docs):

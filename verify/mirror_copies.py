@@ -30,38 +30,42 @@ class Copy:
         return self.path.rsplit(":", 1)[1]
 
 
+# Docker Hub, where each copy came from: named once, as the charts name it, so a render can be checked for the
+# upstream reference the copy replaces. Nothing here pulls from it (#714).
+HUB = "docker.io"
+
 COLLECTORS = ("otel-collector", "otel-collector-attendee", "otel-collector-burn")
 
 COPIES = (
     Copy(("falco-talon",), "falco.docker.scarf.sh/falcosecurity/falco-talon:0.3.0",
          "sha256:0a06b6a5e9f0e45d4ccdcf4c7a8c5ac4156e728f81ffd0122cb6675e3b525b40",
          "mirror/falcosecurity/falco-talon:0.3.0-0a06b6a5e9f0"),
-    Copy(("falcosidekick",), "docker.io/falcosecurity/falcosidekick:2.32.0",
+    Copy(("falcosidekick",), f"{HUB}/falcosecurity/falcosidekick:2.32.0",
          "sha256:399d95934a67b1c6b57d3e1f678694b3407f89f878e8fd072dba51968fa9745f",
          "mirror/falcosecurity/falcosidekick:2.32.0-399d95934a67"),
-    Copy(("kagent",), "docker.io/library/postgres:18.6-alpine3.23",
+    Copy(("kagent",), f"{HUB}/library/postgres:18.6-alpine3.23",
          "sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373",
          "mirror/library/postgres:18.6-alpine3.23-dd504ba15d33"),
     Copy(("kagent",), "mcp/grafana:latest",
          "sha256:208f8ea16064060f92e9960b2f060f5e37af5abda3ec14c1a8ebbc4d5cc8c718",
          "mirror/mcp/grafana:latest-208f8ea16064"),
     # The operator's own image, the chart's; the other five are compiled into the operator.
-    Copy(("kubearmor",), "docker.io/kubearmor/kubearmor-operator:v1.7.4",
+    Copy(("kubearmor",), f"{HUB}/kubearmor/kubearmor-operator:v1.7.4",
          "sha256:84626528c4d6e6a11ba7082f0b87eb15bb73bb9b14b3b600a79f3c7dffe6e67a",
          "mirror/kubearmor/kubearmor-operator:v1.7.4-84626528c4d6"),
-    Copy(("kubearmor",), "docker.io/kubearmor/kubearmor:stable",
+    Copy(("kubearmor",), f"{HUB}/kubearmor/kubearmor:stable",
          "sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388",
          "mirror/kubearmor/kubearmor:stable-bf867783eb30"),
-    Copy(("kubearmor",), "docker.io/kubearmor/kubearmor-init:stable",
+    Copy(("kubearmor",), f"{HUB}/kubearmor/kubearmor-init:stable",
          "sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d",
          "mirror/kubearmor/kubearmor-init:stable-cdc3763f302d"),
-    Copy(("kubearmor",), "docker.io/kubearmor/kubearmor-relay-server:latest",
+    Copy(("kubearmor",), f"{HUB}/kubearmor/kubearmor-relay-server:latest",
          "sha256:e4fd875cc1e4f6f6a2a90c57655d3bda09fc7846eb82ea24e0296e578ee29f29",
          "mirror/kubearmor/kubearmor-relay-server:latest-e4fd875cc1e4"),
-    Copy(("kubearmor",), "docker.io/kubearmor/kubearmor-controller:latest",
+    Copy(("kubearmor",), f"{HUB}/kubearmor/kubearmor-controller:latest",
          "sha256:89f52a3e9fc07af532c68019c028451a5986a63d128dccb560bf3aa3004c8922",
          "mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0"),
-    Copy(("kubearmor",), "docker.io/kubearmor/kubearmor-snitch:latest",
+    Copy(("kubearmor",), f"{HUB}/kubearmor/kubearmor-snitch:latest",
          "sha256:ec11d33057b18aaec179aa32b8d689b8f732e422777df9c78d7ed5287cbf6e1a",
          "mirror/kubearmor/kubearmor-snitch:latest-ec11d33057b1"),
     Copy(COLLECTORS, "otel/opentelemetry-collector-contrib:0.160.0",
@@ -70,19 +74,19 @@ COPIES = (
     Copy(("otel-operator",), "otel/opentelemetry-collector-k8s:0.158.0",
          "sha256:158b837a5e9828c8a6ca00e657e6fffd9b9b24e4a5f7862d0713505cd99c7b42",
          "mirror/otel/opentelemetry-collector-k8s:0.158.0-158b837a5e98"),
-    Copy(("prometheus",), "docker.io/grafana/grafana:13.2.2-distroless",
+    Copy(("prometheus",), f"{HUB}/grafana/grafana:13.2.2-distroless",
          "sha256:ada1141b386c443192521bfed414c62209428361111f1505988930adf9dee751",
          "mirror/grafana/grafana:13.2.2-distroless-ada1141b386c"),
-    Copy(("tempo",), "docker.io/grafana/tempo:3.0.3",
+    Copy(("tempo",), f"{HUB}/grafana/tempo:3.0.3",
          "sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c",
          "mirror/grafana/tempo:3.0.3-05321ebf1f19"),
 )
 
 UNPULLED = (
-    Copy(("falco",), "docker.io/falcosecurity/falco:0.44.1",
+    Copy(("falco",), f"{HUB}/falcosecurity/falco:0.44.1",
          "sha256:9f02feb5544a54a4ca2974bd8ab3a0cca287f3fe7c697d612814357af0cc55e5",
          "mirror/falcosecurity/falco:0.44.1-9f02feb5544a"),
-    Copy(("falco",), "docker.io/falcosecurity/falcoctl:0.13.0",
+    Copy(("falco",), f"{HUB}/falcosecurity/falcoctl:0.13.0",
          "sha256:ffe71491ff79e5255d25ed627fffce0c7ce7beb7355dc2e507abefc791e13603",
          "mirror/falcosecurity/falcoctl:0.13.0-ffe71491ff79"),
 )

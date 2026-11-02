@@ -21,7 +21,8 @@
 #
 # Baking the deps fixes both. The image is pinned, reproducible, and the pods need no egress at all,
 # which lets the NetworkPolicy cover them without breaking startup.
-FROM python:3.12-slim
+# Our ghcr.io copy, by digest, not Docker Hub's python:3.12-slim (#714).
+FROM ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
 
 # curl is needed by the run_shell tool: Challenge 1's exfil POSTs through it, and the beat is that the
 # egress POLICY stops it, not a missing binary. A tool that fails because curl is absent teaches the

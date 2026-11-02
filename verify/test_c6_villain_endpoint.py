@@ -136,7 +136,9 @@ check("and still admits the platform's own ghcr.io images",
       registry_allowlist.allowed("ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:" + "0" * 64))
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)
 check("the Joker is no longer a plain log loop in the V roster", bool(v) and "[joker]=" not in v.group(1))
-check("build_joker_web runs, after the loops", BUILD.rstrip().endswith("build_joker_web"))
+check("build_joker_web is the last thing build.sh runs", BUILD.rstrip().endswith("build_joker_web"))
+check("build.sh pushes nothing to Docker Hub, and no roster loop: the ten C2 villains are lab-platform's (#653, #714)",
+      "crane auth login docker" not in BUILD and "build_one" not in BUILD and 'ORG="' not in BUILD)
 
 
 def run_build(*names: str) -> tuple[subprocess.CompletedProcess, list[list[str]], list[str]]:
@@ -161,16 +163,18 @@ def tags(calls: list[list[str]]) -> list[str]:
 
 
 proc, calls, members = run_build("joker")
-check("`build.sh joker` pushes only the Joker: crane append then mutate, both to $ORG/joker:latest",
+check("`build.sh joker` pushes only the Joker: crane append then mutate, both to $JOKER_REF",
       proc.returncode == 0 and [c[0] for c in calls] == ["append", "mutate"]
       and set(tags(calls)) == {ref.group(1)}, f"rc={proc.returncode} {calls} {proc.stderr}")
 check("the Joker's layer holds start.sh and the page under villain/",
       {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
 proc, calls, _ = run_build()
-roster = sorted(re.findall(r"^\s+\[([a-z-]+)\]=", BUILD, re.M))
-check("with no names build.sh still pushes the whole roster, the Joker last",
-      proc.returncode == 0 and sorted(t.split("/")[-1].split(":")[0] for t in tags(calls)[:-2]) == roster
-      and tags(calls)[-2:] == [ref.group(1)] * 2, f"rc={proc.returncode} {tags(calls)}")
+check("with no names build.sh pushes the Joker and nothing else",
+      proc.returncode == 0 and tags(calls) == [ref.group(1)] * 2, f"rc={proc.returncode} {tags(calls)}")
+proc, calls, _ = run_build("joker", "gargamel")
+check("a roster name is refused before anything is pushed, as lab-platform's build",
+      proc.returncode != 0 and calls == [] and "lab-platform's promo/ build" in proc.stderr,
+      f"rc={proc.returncode} {calls} {proc.stderr}")
 proc, calls, _ = run_build("joker", "jokr")
 check("a name build.sh does not know fails before anything is pushed",
       proc.returncode != 0 and calls == [] and "no villain named 'jokr'" in proc.stderr,

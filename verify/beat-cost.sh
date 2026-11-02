@@ -34,10 +34,12 @@ command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found on PATH" >
 # Run a curl inside the cluster (the proxy is a ClusterIP service). Prints the response to stdout.
 # --pod-running-timeout=180s so a cold first image pull does not trip "timed out waiting for the
 # condition" (the live gate run hit the 1m default). Ephemeral pod by design; no port-forward.
+# The workshop-mcp image carries curl: our signed ghcr.io image, not Docker Hub's curlimages/curl (#714).
+readonly CURL_IMAGE="ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e"
 in_cluster_curl() {
     "${KUBECTL[@]}" run "costcurl-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
         --pod-running-timeout=180s \
-        --image=curlimages/curl:8.10.1 --command -- "$@" 2>/dev/null
+        --image="${CURL_IMAGE}" --command -- "$@" 2>/dev/null
 }
 
 cost_usd() {

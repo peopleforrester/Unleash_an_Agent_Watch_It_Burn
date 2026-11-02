@@ -20,10 +20,10 @@ prompt uses `promo-mascot`.
 lab-platform builds, reads back and signs them (lab-platform#92), the same catchphrase loop on its shell
 base with the lines read from `build.sh` at 45e62f0 by sha256, and the lab hands them out by the `:v1` tag
 (#653). `verify/promo_villains.py` holds each one's digest. A cluster pulls them from ghcr.io with no
-credential, so the packages must be public. `build.sh` still pushes the older crane builds to
-`docker.io/peopleforrester/<name>:latest` (Team PAT from `~/secrets/dockerhub/agenticburn.env`), which only
-Challenge 6's ticket still names; that build's `--cmd` split three catchphrases on their commas, Skeletor's
-among them, so those pods never said their lines. lab-platform's images say them whole.
+credential, so the packages must be public. `build.sh` keeps the catchphrases and builds only Challenge 6's Joker;
+the older crane builds it pushed to Docker Hub are retired, and nothing here pushes there (#714). That build's
+`--cmd` split three catchphrases on their commas, Skeletor's among them, so those pods never said their lines.
+lab-platform's images say them whole.
 
 ## How each kind of cluster treats them
 
@@ -39,8 +39,9 @@ What a student sees is in `challenges/LAB-TEXT.md`, Challenge 2.
   (`fleet.sh` arms the `admin` profile), so the deploy is refused at admission and the villain never
   starts. The policy matches Pods in the `apps` and `agent` namespaces, and the Deployments that create
   them, against an allow-list of the cantina's real registries:
-  `ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | harbor.agenticburn.com/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/* | docker.io/library/*`
-  less one refused path, `*/peopleforrester/lab-platform/promo/*`, on any of them. The villain is on an
+  `ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | harbor.agenticburn.com/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*`
+  (nothing on Docker Hub, #714) less two refused paths, `*/peopleforrester/lab-platform/promo/*` and
+  `*/peopleforrester/festival-ops/*`, on any of them. The villain is on an
   allowed host and in our own org, but on that path, so the deploy is denied
   (`policies/kyverno/restrict-image-registries.yaml`).
 
@@ -57,5 +58,5 @@ burritobot.co twin), `fleet.sh` publishes the host, and `deploy_app`'s reply nam
 hand it to the attendee. `verify/test_joker_web_busybox.py` runs `start.sh` on the pinned busybox's own binary.
 The image is amd64 only, as the cluster nodes are.
 
-`build.sh joker` pushes the Joker alone, and leaves the rest of the Docker Hub roster as it is. Run with no
-names, build.sh pushes all of them, the Joker last.
+`build.sh` (or `build.sh joker`) pushes the Joker and nothing else. A roster name is refused before anything is
+pushed: those ten are lab-platform's build.

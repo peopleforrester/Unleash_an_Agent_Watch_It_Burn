@@ -466,7 +466,7 @@
             <p>The entry that matters here:</p>
             <pre class="yaml">restrict-image-registries: Images must come from allowed
 registries: the internal Harbor, ghcr.io, cr.<a href="https://agentgateway.dev/docs/" target="_blank" rel="noopener">agentgateway</a>.dev, cr.kagent.dev,
-docker.io/library, registry.k8s.io, or ECR, and not from the
+registry.k8s.io, or ECR, and not from the
 lab-platform/promo/ or festival-ops/ paths.</pre>
             <p>That is this challenge in one line. The platform recognized the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.</p>
               <p><b>First, look at the policy that is already on your cluster:</b></p>

@@ -47,7 +47,7 @@ spec:
           # chart's; the other five are compiled into the operator (pkg/KubeArmorOperator/common/defaults.go at
           # v1.7.4), so the chart never renders them. Four are KubeArmorConfig fields, under kubearmorConfig below.
           # The snitch has no field: the operator takes it from RELATED_IMAGE_KUBEARMOR_SNITCH, and without that
-          # it names docker.io/kubearmor/kubearmor-snitch with the operator image's own tag, which on the copy's
+          # it names Docker Hub's kubearmor/kubearmor-snitch with the operator image's own tag, which on the copy's
           # digest-suffixed tag is a tag Docker Hub does not have. So the env is set, to the copy of :latest.
           #
           # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,

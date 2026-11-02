@@ -140,12 +140,15 @@ check("restrict-agent-spawned-workloads allows exactly the Secrets the scoped Ro
 
 # --- Part 2: #604's pod, through every workshop policy ------------------------------------------------------
 LIMITS = {"limits": {"cpu": "100m", "memory": "64Mi"}}
+# Our ghcr.io busybox copy, by digest (#714), the one argocd-managed-app runs.
+BUSYBOX = ("ghcr.io/peopleforrester/watch-it-burn:busybox-1.36"
+           "@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662")
 AS_VOLUME = "may not mount a Secret other than ceo-personal-record"
 AS_ENV = "may not take an env var from a Secret other than ceo-personal-record"
 
 
 def container(name="c", env=None, env_from=None, mounts=None):
-    return {"name": name, "image": "docker.io/library/busybox:1.36", "resources": LIMITS,
+    return {"name": name, "image": BUSYBOX, "resources": LIMITS,
             "command": ["sh", "-c", "cat /stolen/*; env"],
             **({"env": env} if env else {}), **({"envFrom": env_from} if env_from else {}),
             **({"volumeMounts": mounts} if mounts else {})}

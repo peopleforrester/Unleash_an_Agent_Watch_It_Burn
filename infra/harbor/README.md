@@ -4,8 +4,9 @@
 
 The villain-app block has two layers:
 1. **Registry allowlist** (`policies/kyverno/restrict-image-registries.yaml`, Enforce, apps): permits the
-   internal Harbor, ghcr.io, docker.io/library, registry.k8s.io, ECR. Public villain images
-   (`docker.io/<user>/*`) match none, so Cluster 2 refuses them. This is the reliable demo.
+   internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, registry.k8s.io, ECR, and refuses the villains'
+   own paths on any of them (lab-platform's `promo/`, our `festival-ops/`), so Cluster 2 refuses them. Docker Hub is
+   not on the list (#714). This is the reliable demo.
 2. **Signature verification** (`policies/kyverno/verify-image-signatures.yaml`, Enforce, scoped to
    `harbor.agenticburn.com/*`): images pulled FROM Harbor must carry a valid cosign signature. An
    unsigned or tampered Harbor image is refused. Allowlisted public images are NOT signature-checked,

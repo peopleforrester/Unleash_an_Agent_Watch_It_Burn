@@ -8,24 +8,24 @@
 # Written by scripts/mirror-images.sh in llm-coding-workflow; the rule is
 # claude-config/rules/infra/image-retention.md there.
 #
-# This repo (#603): the rows below are the 25 references `mirror-images.sh refs .` finds, in its order, then the
+# This repo (#603): the rows below are the references `mirror-images.sh refs .` finds, in its order, then the
 # declared rows. Each digest was read from its registry on 2026-10-30, except llm-guard's and web's, the kustomize
 # image names gitops/bootstrap/apps sets at the root's registry. Both were read anonymously from lab-platform's v1 tags
-# on 2026-10-31 (web in place of docker.io/library/nginx:1.27-alpine, #715; llm-guard after lab-platform#55's umask
-# 022 republish, #730), and each equals its row in lab-platform's deploy/watch-it-burn/images.tsv. A third-party
-# tag (python:3.12-slim) is the digest it pointed at that day. saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
+# on 2026-10-31 (web in place of Docker Hub's nginx:1.27-alpine, #715; llm-guard after lab-platform#55's umask
+# 022 republish, #730), and each equals its row in lab-platform's deploy/watch-it-burn/images.tsv. postgres, the
+# kustomize name gitops/bootstrap/apps/backstage.yaml sets, is lab-platform's mirror/ copy at its copies.tsv digest,
+# and C6's Joker is the digest ghcr.io served on 2026-11-02 (#714: nothing here names a Docker Hub image any more).
+# saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
 # verify/test_images_lock.py holds every reference to a row here.
-python:3.12-slim sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 upstream:https://github.com/docker-library/python -
-nginx:1.27-alpine sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 upstream:https://github.com/nginx/docker-nginx -
 node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
 debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
 ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
 ghcr.io/peopleforrester/watch-it-burn:sample-app@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app -
 ${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -
-busybox - not-an-image:challenge-03-deliberate-bad-example-untagged-and-privileged-for-the-policies-to-deny -
+ghcr.io/peopleforrester/lab-platform/promo/joker - not-an-image:challenge-03-deliberate-bad-example-untagged-and-privileged-for-the-policies-to-deny -
 REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-the-facilitator-fills-in-at-build -
 ghcr.io/peopleforrester/watch-it-burn:tool-pin - build:images/tool-pin -
-docker.io/DOCKERHUB_USER/villain-joker:latest - not-an-image:beat-02-placeholder-account-set-at-build -
+ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0 sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
 ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator -
 cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway -
 ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -
@@ -41,7 +41,7 @@ ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba24
 web ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9 repo:peopleforrester/lab-platform/cmd/web -
 ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 -
 ghcr.io/peopleforrester/watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/watch-it-burn-backstage -
-docker.io/library/postgres:18.6-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5 sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5 upstream:https://github.com/docker-library/postgres -
+postgres ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres -
 # Declared: images no tracked file names as an image: key or FROM line.
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.

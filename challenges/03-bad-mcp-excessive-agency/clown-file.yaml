@@ -5,7 +5,8 @@
 # an untrusted MCP server induces the agent to apply infra outside Git; the MCP-layer control (tool
 # allowlist / agentgateway authz) denies the rogue tool, and if the payload slips through an allowed
 # apply, the CNCF wall catches it: it is privileged (disallow-privileged), has no resource limits
-# (require-resource-limits), no probes (require-probes), and an untagged image (restrict-image / latest).
+# (require-resource-limits), no probes (require-probes), and an untagged villain image
+# (restrict-image-registries).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +25,9 @@ spec:
     spec:
       containers:
         - name: optimizer
-          image: busybox            # untagged (:latest) — restrict-image-registries / tag policy
+          # Untagged (:latest) and on lab-platform's promo/ path, which restrict-image-registries refuses. No :latest
+          # exists there, so even a cluster with no Kyverno pulls nothing, and nothing from Docker Hub (#714).
+          image: ghcr.io/peopleforrester/lab-platform/promo/joker
           securityContext:
             privileged: true        # disallow-privileged denies this
           command: ["sh", "-c", "sleep 3600"]
