@@ -9569,3 +9569,38 @@ timestamps answer the first-move question in the 11-01 entry. Then the guard hal
 Wait a minute past the next selfHeal, then read evil-mcp's toolNames with
 `-o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`. It must read
 `["get_weather"]`. Then run `"$HOME/guard-mcp-off"` the same way. Record the readings here; a pass closes #733.
+## 2026-11-02 · #544 · Seventh dispatch: #714 and #751 landed since `f1ffa0e`, and neither changes what #544 checks
+
+**No code changed.** Hecaton run 15998 is the seventh dispatch of #544. Like the earlier runs it has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig (`kubectl config get-contexts` lists none), so nothing
+ran on a cluster. No reply to the spend question in issue comment 6562456139 has appeared on the issue.
+
+**Staging since `f1ffa0e`, the sixth dispatch's record.** Up to the base `4939041`, three issues changed files #544's
+checks depend on:
+- #714 (`e9a97dc` to `a6d92c6`) moves every image that has a ghcr.io copy to ghcr.io and refuses Docker Hub. In
+  `gitops/bootstrap/apps/`, `tempo.yaml`, `falcosidekick.yaml`, `prometheus.yaml`, `kubearmor.yaml` and the five
+  demo-app files change only comment wording ("docker.io/..." becomes "Docker Hub's ..."). `backstage.yaml` gains a
+  kustomize image override for Postgres, and it still renders the same one Application. `fleet.sh` drops the Docker
+  Hub node auth (`dockerhub_auth_b64`), and `infra/terraform/aws/cluster/main.tf` says no image a cluster runs comes
+  from Docker Hub any more.
+- #751 (`127ed5b`) adds `gitops/ai-layer/go-spend-store/`, a Component inside the existing ai-layer Application,
+  not a new Application.
+- #764 (`4939041`) changes only the KubeCon probe's question.
+
+`git diff --stat f1ffa0e 4939041` over `gitops/otel-collector/`, `gitops/tempo/`, `observability-idp/`, the two
+profile lists (`values-attendee.yaml` and `values-admin.yaml`), `verify/test_service_hosts_live.py`,
+`verify/test_fleet_contract.py` and `verify/test_bootstrap_chart.py` is empty. So the counts are still 34 Argo CD
+Applications on attendee and 38 on admin, `values-admin.yaml` still lists `falco-talon` and `tempo` and
+`values-attendee.yaml` omits both, and the two Tempo leftovers the morning's entry names are unchanged.
+`bash verify/run-tests.sh` passes (221 tests) and prints "the attendee profile renders 34 Applications, the root
+included (34 found)".
+
+**One thing the bring-up now also tests.** Without Docker Hub node auth, a new attendee cluster pulls every image from
+ghcr.io or quay.io. Point 1 (the root reaching Synced/Healthy) is the first fresh attendee bring-up since #714, so a
+pull failure there would point at a missing ghcr.io copy, not at #475's shape. Read
+`kubectl get pods -A --field-selector=status.phase=Pending` for ImagePullBackOff before reading the Applications'
+health.
+
+**Not yet run on a cluster.** Unchanged: points 1 and 2 and the attendee half of point 4 on a new attendee cluster,
+which waits on Michael's go for about $1, and point 3 and the admin half of point 4 on watch-it-burn-private. The
+same attendee bring-up also covers the `verify/test_service_hosts_live.py` run the #668 entry owes.
