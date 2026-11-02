@@ -8967,3 +8967,23 @@ repeat this check. The cron-versus-Actions question asked on 2026-10-24 still st
 **Not yet run on a cluster.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py` and
 `DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`, after the audit root is applied, as
 #795 lists them.
+
+## 2026-11-02 · #544 · Re-dispatch: the live check is still owed, and staging `57e4e90` expects what the morning's entry says
+
+**No code changed.** Hecaton run 15831 is the fifth dispatch of #544. Like the earlier ones it has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig, so nothing ran on a cluster.
+
+**Staging since `aca67c9`, the morning's #544 entry.** The only change under `gitops/bootstrap/` is #629's
+`kubearmor.yaml`. It gives the existing kubearmor Application a second source (`gitops/kubearmor-config`), so it
+adds no Application, and the counts stay 34 on attendee and 38 on admin. At `57e4e90`, `verify/test_fleet_contract.py`
+passes "the attendee profile renders 34 Applications, the root included (34 found)". Nothing under
+`gitops/otel-collector/`, `gitops/tempo/`, `observability-idp/`, `verify/test_service_hosts_live.py` or
+`infra/terraform/fleet/fleet.sh` has changed. The leftovers are the same: the dashboard's uid `tempo` panels at
+lines 64 to 140 of `agent-observability.yaml`, and falcosidekick's Talon output.
+
+**One session can do both halves on the admin cluster.** #629's entry above already asks a session with accen-dev
+to run on watch-it-burn-private. That same session can then run #544's admin checks: point 3 and the admin half of
+point 4, which are the three read-only commands in the morning's run report. The attendee half still waits on
+Michael's go for about $1 of bring-up, which run 15438 asked for in issue comment 6562456139.
+
+**Not yet run on a cluster.** Unchanged from the morning's entry.
