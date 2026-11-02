@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-11-02 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `61f261534254427f6f41de84372415264dfe5b39` (the last commit to change lab.html, on 2026-11-02) |
-| Source blob | `3731dae797dd8e8066b934a6607a4f06f4ccc150` |
+| Source commit | `f4a4e03baedc53d0f0405c1ec34723673b62c633` (the last commit to change lab.html, on 2026-11-02) |
+| Source blob | `ef62a500217d3ecf316a3d08f4aff26f8cb48acb` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -322,9 +322,9 @@ The other two announce themselves in their own logs as well, and they are not th
 >
 > ```
 > restrict-image-registries: Images must come from allowed
-> registries: the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
-> registry.k8s.io, or ECR, and not from the
-> lab-platform/promo/ or festival-ops/ paths.
+> registries: the internal Harbor, registry.burritobot.co, ghcr.io,
+> cr.agentgateway.dev, cr.kagent.dev, registry.k8s.io, or ECR, and not
+> from the lab-platform/promo/ or festival-ops/ paths.
 > ```
 >
 > That is this challenge in one line. The platform recognized the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.
