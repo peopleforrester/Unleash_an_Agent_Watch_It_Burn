@@ -1,5 +1,6 @@
 # ABOUTME: Kyverno policy restricting container images to trusted registries.
-# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, ghcr.io, the agentgateway/kagent registries, registry.k8s.io, ECR,
+# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, the internal registry, ghcr.io, the agentgateway/kagent
+# ABOUTME: registries, registry.k8s.io, ECR,
 # ABOUTME: and refuses lab-platform's promo/ path, where the C2 villains live, on whichever registry serves it.
 #
 # Kyverno's CEL ValidatingPolicy (policies.kyverno.io/v1), which replaced the deprecated kyverno.io/v1
@@ -48,9 +49,12 @@ spec:
     # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries.
     # Harbor images are additionally signature-checked by verify-image-signatures.
     # Docker Hub is not on it (#714): nothing this lab runs is pulled from there, so neither may the agent pull.
+    # registry.burritobot.co is the internal registry (#774), Distribution on the KubeCon private cluster
+    # (gitops/internal-registry/). It is trusted here as it is in deny-external-registries, so Challenge 3's image
+    # there is admitted with this policy at Deny too (#775). Nothing in the 2-hour workshop pulls from it.
     - name: allowedRegistries
       expression: >-
-        ['harbor.agenticburn.com/', 'ghcr.io/', 'cr.agentgateway.dev/', 'cr.kagent.dev/',
+        ['harbor.agenticburn.com/', 'registry.burritobot.co/', 'ghcr.io/', 'cr.agentgateway.dev/', 'cr.kagent.dev/',
         'registry.k8s.io/']
     # ECR is any account in any region: <account>.dkr.ecr.<region>.amazonaws.com/<repo>.
     - name: ecr
@@ -79,5 +83,5 @@ spec:
     - expression: "variables.imageAllowed || variables.alreadyViolating"
       message: >-
         Images must come from allowed registries:
-        the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
+        the internal Harbor, registry.burritobot.co, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
         registry.k8s.io, or ECR, and not from the lab-platform/promo/ or festival-ops/ paths.
