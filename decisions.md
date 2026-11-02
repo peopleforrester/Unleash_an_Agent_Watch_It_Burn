@@ -13723,3 +13723,60 @@ its user (`hecaton-s7-claude-certkraken`) cannot read them (hecaton#508). So the
 `checksum/proxy-py` failed with `permission denied` and changed nothing. Once Argo CD syncs `a65f748d`, #784's step 3
 is the live check: the APM `chat` span on each KubeCon cluster carries both counts, and the Agent Observability total
 equals the sum of the `generate_content` rows.
+## 2026-11-03 · #704 · Third dispatch: the live run moves to watch-it-burn-private, and this run could not read the cluster session
+
+**Context.** Run 16409 is #704's third dispatch. Question 1049 asked for the go to build a t3.2xlarge cluster. The
+coordinator answered it under Michael's standing rule (2026-11-02: "two clusters up that you can use for any and all
+tests"): run the live check on watch-it-burn-community or watch-it-burn-private, with no one's go, and never create or
+tear down a cluster. A step that would build an attendee cluster runs on one of the two instead. That replaces steps
+1, 2 and 6 of the 2026-11-02 sheet above, which build and destroy watch-it-burn-attendee-099.
+
+**This run reached neither cluster.** The session hecaton set up for it is unreadable by the run's own user. The
+files `env`, `kubeconfig`, `aws-config` and `aws-credentials`, and the `bin/` directory under
+`/var/lib/hecaton/runs/16409/clusters/` are owner `hecaton`, group `hecaton`, mode 0640 (0750 for `bin/`). The run
+runs as uid 146, `hecaton-s5-claude-certkraken`, in groups 150, 1001 and 1002, not in `hecaton`. The directory itself
+is group `hecaton-s5-claude-certkraken`, so the files look meant for that group too. As a result,
+`. "$HECATON_CLUSTER_ENV"` fails with `Permission denied`, `kubectl config get-contexts` fails with `open
+.../clusters/kubeconfig: permission denied`, and `aws sts get-caller-identity --profile accen-dev` says the profile
+cannot be found. Nothing was run against a cluster, and the vllm entry stays at `measured: false`. The report
+escalates the permission fix.
+
+**Which of the two, and why watch-it-burn-private.** Both are one t3.2xlarge node each: roster.tsv leaves their
+instance_type column empty, so they get the cluster module's `["t3.2xlarge"]` with min, max and desired size 1. That
+is the node the issue names. watch-it-burn-community is the burn cluster behind attackme.agenticburn.com, which must
+have no guardrails. local-inference is full's list, so re-profiling community would put every guardrail on the
+attack target. watch-it-burn-private runs admin, which is full's list plus `kubearmor-policies` and
+`network-policies`. local-inference is full's list plus `vllm-qwen3`. So on private, the re-profile adds vLLM and
+removes those two Applications. Their resources are removed too: the root prunes, and each child carries Argo CD's
+resources-finalizer. Running the script again with `admin` puts both back and prunes vLLM.
+
+**What it measures there, and what it does not.** Argo CD, the load balancer controller and the full platform
+already run on private, so the script's wall-clock there is a re-profile, not a cold platform build. That number must
+not go in as one. What stays cold is vLLM itself, and vLLM's cost is what the entry records. The 4.95 GB image is
+pulled onto a node that has not pulled it (step 2 checks this). The pod goes from creation to Ready beside a running
+full platform on one t3.2xlarge, which is the open question in `values-local-inference.yaml`'s header. The header of
+`platform-baseline.yaml` defines measuring as a build with and without the component. On a cluster that is already
+up, the without half is the cluster as it stands, and the with half is vllm-qwen3's time from creation to Healthy.
+So `build_seconds` is that time, read from `verify/local-inference-live.py`'s "from creation to Ready" line. The
+re-profile's wall-clock goes into `known`, named as a re-profile. A cold build of the whole local-inference profile
+stays unmeasured until a cluster is built for something else and the profile can ride on it.
+
+**Not yet run on a cluster.** The sheet, re-cut for watch-it-burn-private. Run it from the repo root, with the
+session sourced, every command naming its context, and nothing built or torn down:
+
+1. `CTX=watch-it-burn-private; kubectl --context "$CTX" -n argocd get application lab-bootstrap -o jsonpath='{.metadata.labels.lab-platform/profile}'`
+   must print `admin`. That is the profile step 6 restores. Then `kubectl --context "$CTX" get nodes -o wide` must
+   show one t3.2xlarge.
+2. `kubectl --context "$CTX" get nodes -o jsonpath='{range .items[*].status.images[*]}{.names}{"\n"}{end}' | grep -c vllm-qwen3`
+   must print `0`, which shows the pull is cold. If it does not, record that the image was already on the node.
+3. Start the clock and run `CONTEXT="$CTX" AWS_PROFILE=accen-dev REGION=us-west-2 bash infra/deploy-full-idp.sh local-inference`.
+   Stop it when `kubectl --context "$CTX" -n argocd get applications` shows every Application Synced and Healthy.
+4. `CONTEXT="$CTX" python3 verify/local-inference-live.py`. It must end in PASS with no FAIL. It prints the vLLM
+   pod's creation and Ready times and its `kubectl top` footprint.
+5. In the vllm entry's `cost`, set `measured: true`. Set `build_seconds` to step 4's creation-to-Ready seconds and
+   `requests` to the manifest's 4 CPU / 10Gi (limits 6 CPU / 16Gi). Write step 4's footprint, step 2's answer and
+   step 3's re-profile wall-clock into `known`, each named for what it is. Then run `bash verify/run-tests.sh`.
+6. Put private back: `CONTEXT="$CTX" AWS_PROFILE=accen-dev REGION=us-west-2 bash infra/deploy-full-idp.sh admin`. Then
+   check `kubectl --context "$CTX" -n argocd get applications`. Every Application must be Synced and Healthy,
+   `kubearmor-policies` and `network-policies` among them, and `vllm-qwen3` must be gone. Step 1 must now print
+   `admin`.
