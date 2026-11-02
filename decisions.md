@@ -9406,7 +9406,7 @@ and adding the gate test now would fail the offline suite on exactly those lines
 Joker refused directly and through a cache, Beat 1 and the signature case on ghcr.io images), test_villain_app,
 test_image_signing, test_c6_villain_endpoint (build.sh pushes the Joker alone and refuses a roster name),
 test_promo_villains, test_c8_pod_secret_mount, test_deploy_app_limits, test_enforce_floor (a bare name now fails as
-named), test_tool_audit (it reads Python's version from the ghcr.io base), test_backstage_catalog (Postgres is the
+named, and Backstage's `${{ values.image }}` scaffolder value is judged not-an-image, as images.lock lists it), test_tool_audit (it reads Python's version from the ghcr.io base), test_backstage_catalog (Postgres is the
 mirror copy, by digest, set by the Application), and the three fleet tests.
 
 **Not yet run on a cluster.** On a fresh attendee cluster, run `CONTEXT=<ctx> bash verify/run-e2e.sh`, then
