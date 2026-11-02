@@ -8657,10 +8657,13 @@ own KUBECONFIG and `--context`.
 cluster, and point 3 and the admin half of point 4 (`verify/test_service_hosts_live.py`) on `watch-it-burn-private`.
 ## 2026-11-01 · #520 · Re-probed from outside eight days before KubeCon: the public half still passes, the in-cluster half is still owed
 
-**No code changed.** Run 15599 took #520 up again. Its first attempt stalled (no output for 15 minutes); this
-attempt found no command in the run that hangs: `aws` with no profile fails in about 3 seconds, `kubectl` with an
-unknown context in well under a second, and each public probe answers in about 0.3 seconds. Long commands in this
-run were given hard caps and run in the background, which is how a run avoids the stall whatever its cause.
+**No code changed.** Runs 15599 and 15794 took #520 up again. Two attempts stalled (no output for 15 minutes),
+and no command in the run hangs: `aws` with no profile fails in about 3 seconds, `kubectl` with an unknown context
+in well under a second, and each public probe answers in about 0.3 seconds. The stall was the wait itself: an
+attempt that starts `bash verify/run-e2e-tools.sh` in the background (a cold run fetches the pinned tools and
+takes well over 15 minutes) and then ends its turn to wait for the completion notice produces no output, and
+hecaton reads 15 silent minutes as a stall. A run that waits on a long command keeps polling it in the foreground
+in capped steps instead of ending its turn, which is what the attempt that wrote this did.
 
 **The public half, probed again on 2026-11-01 at about 20:30Z** with the test's own requests (GET, no query, so
 nothing flips) on `attackme` and `burritobot-private` under agenticburn.com and burritobot.co, 20 requests in
