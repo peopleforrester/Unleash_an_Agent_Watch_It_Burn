@@ -87,8 +87,8 @@ for profile in collector_render.PROFILE_APP:
     check(f"the {profile} collector's k8s.cluster.name reads cluster-identity/{KEY}", cref.get("key") == KEY, str(cref))
 
 monitors = yaml.safe_load((REPO / "infra/datadog-fleet/monitors.yaml").read_text())
-check("the fleet monitors filter on kube_cluster_name:burritobot-*",
-      monitors.get("cluster_filter") == "kube_cluster_name:burritobot-*")
+check("the fleet monitors and dashboards scope to env:burritobot-kubecon-na-26, not a cluster name",
+      monitors.get("env_filter") == "env:burritobot-kubecon-na-26")
 check("datadog-orgs.sh expects the sandbox org by default (its name is Datadog)",
       'PREFIX="${WIB_DD_POOL_PREFIX:-Datadog}"' in (REPO / "verify/datadog-orgs.sh").read_text())
 check("last_trace.py queries kube_cluster_name:burritobot-*",
@@ -156,6 +156,26 @@ for comp, want in (("nodeAgent", "burritobot-datadog-agent"), ("clusterAgent", "
     labels = (override.get(comp) or {}).get("labels") or {}
     check(f"the DatadogAgent's {comp} pods carry service={want} env={DD_ENV}",
           labels.get("tags.datadoghq.com/service") == want and labels.get("tags.datadoghq.com/env") == DD_ENV)
+
+print("== Backstage's own service field does not replace its burritobot- service ==")
+# Backstage logs JSON with a service field (backstage, rootHttpRouter), which Datadog took over the pod's tag on
+# 2026-11-02 (#629). The pod's log config renames that key before the Agent ships the line.
+import json  # noqa: E402
+import re  # noqa: E402
+
+bs = next(d for d in yaml.safe_load_all((REPO / "backstage/k8s/backstage.yaml").read_text()) if d and d.get("kind") == "Deployment")
+bs_meta = bs["spec"]["template"]["metadata"]
+try:
+    bs_logs = json.loads((bs_meta.get("annotations") or {}).get("ad.datadoghq.com/backstage.logs", ""))
+except ValueError:
+    bs_logs = []
+bs_rule = next((r for c in bs_logs for r in c.get("log_processing_rules") or [] if r.get("type") == "mask_sequences"), {})
+line = '{"level":"info","message":"listening","service":"rootHttpRouter","timestamp":"2026-11-02T07:00:00Z"}'
+renamed = re.sub(bs_rule.get("pattern", "^$"), bs_rule.get("replace_placeholder", ""), line) if bs_rule else line
+check("the backstage container's log config names service burritobot-backstage",
+      [c.get("service") for c in bs_logs] == ["burritobot-backstage"])
+check("its rule renames Backstage's service key to backstage_service, and keeps the value",
+      json.loads(renamed).get("backstage_service") == "rootHttpRouter" and "service" not in json.loads(renamed))
 
 print()
 if failures:

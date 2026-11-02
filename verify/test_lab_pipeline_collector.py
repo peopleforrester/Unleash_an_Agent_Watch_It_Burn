@@ -181,8 +181,11 @@ with tempfile.TemporaryDirectory() as tmp:
            "lab.control.installed", "lab.heartbeat"} <= set(names))
     check("a forged non-lab span (chat, with a prompt) is dropped", "chat" not in names and "FORGED-PROMPT" not in wire)
     check("a name outside lab.<a>[.<b>] is dropped", "lab.not.a.marker.name" not in names)
-    check("the resource is burritobot-lab with the cluster's REAL name, whatever the sender claimed",
+    # The env is Whitney's sandbox rule (#629): the contract strips the resource to service.name, and the resource
+    # processor puts the env back, so the markers file under BurritoBot's env in the shared org.
+    check("the resource is burritobot-lab with the cluster's REAL name and the env, whatever the sender claimed",
           resources == {json.dumps({"cluster.name": "watch-it-burn", "k8s.cluster.name": "burritobot-attendee-001",
+                                    "deployment.environment.name": "burritobot-kubecon-na-26",
                                     "service.name": "burritobot-lab"}, sort_keys=True)})
     forged_lab = [s for s in spans if s["name"] == "lab.step.open"
                   and {a["key"]: a["value"]["stringValue"] for a in s["attributes"]}.get("witb.lab.challenge") == "3"]
@@ -192,9 +195,11 @@ with tempfile.TemporaryDirectory() as tmp:
     check("values are truncated to 64", len(fa.get("witb.lab.alias", "")) == 64)
 
     mt = out_m.read_text() if out_m.exists() else ""
-    series = set()
+    series, metric_envs = set(), set()
     for line in mt.splitlines():
         for rm in json.loads(line)["resourceMetrics"]:
+            metric_envs.add({a["key"]: a["value"]["stringValue"] for a in rm["resource"]["attributes"]}
+                            .get("deployment.environment.name"))
             for sm in rm["scopeMetrics"]:
                 for m in sm["metrics"]:
                     for dp in (m.get("sum") or {}).get("dataPoints", []):
@@ -204,6 +209,7 @@ with tempfile.TemporaryDirectory() as tmp:
           ("witb.lab.calls", "lab.control.installed", "1", None) in series
           and ("witb.lab.calls", "lab.hint.open", "1", "solution") in series)
     check("session.id never becomes a metric tag", "session.id" not in mt)
+    check("witb.lab.calls carries the env burritobot-kubecon-na-26 (#629)", metric_envs == {"burritobot-kubecon-na-26"})
 
 print()
 if failures:

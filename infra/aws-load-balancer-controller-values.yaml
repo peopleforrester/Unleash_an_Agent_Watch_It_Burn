@@ -7,3 +7,10 @@
 podLabels:
   tags.datadoghq.com/service: burritobot-aws-load-balancer-controller
   tags.datadoghq.com/env: burritobot-kubecon-na-26
+# Limits, as on every other platform container (verify/test_enforce_floor.py renders this file). The chart's pod has
+# none, and on 2026-11-02 its upgrade still went through on watch-it-burn-private, where the policy is Deny, most likely
+# because Kyverno's default resourceFilters skip kube-system. A limit keeps it off that exemption and keeps the floor
+# one rule for both releases deploy-full-idp.sh installs (#629).
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { cpu: 500m, memory: 512Mi }

@@ -117,6 +117,34 @@ for fname, app in apps:
     miss = missing_limits(docs)
     check(f"{fname}: every container has cpu+memory limits" + (f" MISSING {miss}" if miss else ""), not miss)
 
+print("== Helm releases deploy-full-idp.sh installs outside Argo CD ==")
+# Argo CD and the AWS Load Balancer Controller are installed by infra/deploy-full-idp.sh, not by an Application, so
+# the sweep above never renders them. A helm upgrade that changes their pod templates rolls every pod, and on the
+# admin profile, where the policy is Deny, a container without limits fails the upgrade: argo-cd's pre-upgrade
+# redis-secret-init Job did that twice on watch-it-burn-private on 2026-11-02 (#629).
+import re  # noqa: E402
+
+DEPLOY = (REPO / "infra/deploy-full-idp.sh").read_text()
+for release, chart, repo, values, extra in (
+        ("argocd", "argo-cd", "https://argoproj.github.io/argo-helm", "argocd-values.yaml", []),
+        ("aws-load-balancer-controller", "aws-load-balancer-controller", "https://aws.github.io/eks-charts",
+         "aws-load-balancer-controller-values.yaml",
+         ["--set", "clusterName=watch-it-burn-x", "--set", "region=us-west-2", "--set", "vpcId=vpc-0"])):
+    m = re.search(rf"helm --kube-context \S+ upgrade --install {release} \S+/{chart} --version (\S+)((?:.*\\\n)*.*)", DEPLOY)
+    check(f"deploy-full-idp.sh installs {chart} with infra/{values}", bool(m) and f'"${{SCRIPT_DIR}}/{values}"' in m.group(2))
+    if not m:
+        continue
+    ns = re.search(r"-n (\S+)", m.group(2)).group(1)
+    r = subprocess.run(["helm", "template", release, chart, "--repo", repo, "--version", m.group(1), "-n", ns,
+                        "-f", str(REPO / "infra" / values)] + extra, capture_output=True, text=True)
+    if r.returncode != 0:
+        check(f"{chart} {m.group(1)} renders ({(r.stderr.strip().splitlines() or ['helm failed'])[-1][:160]})", False)
+        continue
+    docs = load_all(r.stdout)
+    miss = missing_limits(docs)
+    check(f"{chart} {m.group(1)}: every container, hook Jobs included, has cpu+memory limits"
+          + (f" MISSING {miss}" if miss else ""), not miss and any(d.get("kind") in WORKLOADS for d in docs))
+
 print("== every image comes from a registry restrict-image-registries allows ==")
 from registry_allowlist import allowed
 

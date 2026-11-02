@@ -24,7 +24,7 @@
     {
       "definition": {
         "type": "note",
-        "content": "**What the room actually did, across every cluster (#150).** Read it live during the session or afterwards.\n\n**Attendees are told.** The lab's privacy warning says which steps, hints and commands are recorded (never what anyone types) and that the instructors keep prompts after the workshop (question 753, `decisions.md`).\n\nLab markers come from the lab page (`gitops/ai-layer/web/lab-events.js`) as `witb.lab.calls`, tagged `span.name`, `kube_cluster_name` and `witb.lab.alias` (the friendly name a student was given, which is also the `cluster` the feedback app records). A fix counts as installed when BurritoBot's `/controls` measured it ON, not when someone said so.\n\nNo typed text is in any of these widgets. The markers carry which guide step, hint or command block was opened, by number, and nothing a student wrote.\n\n**cluster** defaults to `burritobot-attendee-*`, the attendees (Datadog names each cluster `burritobot-<role>`, #629). Set it to `*` to include the Community and admin clusters (a presenter's student cluster is a claimed attendee slot, #295, so it is already in); scope by cluster rather than **role**, because an admin cluster's lab opened without `?role=` reports itself as a student. Full field list and the post-event pass: `docs/fleet-analytics.md`.",
+        "content": "**What the room actually did, across every cluster (#150).** Read it live during the session or afterwards.\n\n**Attendees are told.** The lab's privacy warning says which steps, hints and commands are recorded (never what anyone types) and that the instructors keep prompts after the workshop (question 753, `decisions.md`).\n\nLab markers come from the lab page (`gitops/ai-layer/web/lab-events.js`) as `witb.lab.calls`, tagged `span.name`, `kube_cluster_name` and `witb.lab.alias` (the friendly name a student was given, which is also the `cluster` the feedback app records). A fix counts as installed when BurritoBot's `/controls` measured it ON, not when someone said so.\n\nNo typed text is in any of these widgets. The markers carry which guide step, hint or command block was opened, by number, and nothing a student wrote.\n\n**cluster** defaults to `burritobot-attendee-*`, the attendees (Datadog names each cluster `burritobot-<role>`, #629). Set it to `*` to include the Community and admin clusters (a presenter's student cluster is a claimed attendee slot, #295, so it is already in); scope by cluster rather than **role**, because an admin cluster's lab opened without `?role=` reports itself as a student. Every query is scoped to `env:burritobot-kubecon-na-26`, BurritoBot's env in Whitney's shared sandbox org (#629). Full field list and the post-event pass: `docs/fleet-analytics.md`.",
         "background_color": "vivid_purple",
         "font_size": "14",
         "text_align": "left",
@@ -53,7 +53,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "count_nonzero(sum:witb.lab.calls{span.name:lab.heartbeat,$cluster,$role} by {kube_cluster_name}.as_count())",
+                      "query": "count_nonzero(sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.heartbeat,$cluster,$role} by {kube_cluster_name}.as_count())",
                       "aggregator": "sum"
                     }
                   ],
@@ -82,7 +82,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "count_nonzero(sum:witb.lab.calls{span.name:lab.session.start,$cluster,$role} by {kube_cluster_name}.as_count())",
+                      "query": "count_nonzero(sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.session.start,$cluster,$role} by {kube_cluster_name}.as_count())",
                       "aggregator": "sum"
                     }
                   ],
@@ -108,7 +108,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "count_nonzero(avg:datadog.agent.running{$cluster} by {kube_cluster_name})",
+                      "query": "count_nonzero(avg:datadog.agent.running{env:burritobot-kubecon-na-26,$cluster} by {kube_cluster_name})",
                       "aggregator": "sum"
                     }
                   ],
@@ -134,7 +134,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "count_nonzero(sum:witb.lab.calls{span.name:lab.heartbeat,$cluster,$role} by {kube_cluster_name}.as_count().rollup(sum, 60))",
+                      "query": "count_nonzero(sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.heartbeat,$cluster,$role} by {kube_cluster_name}.as_count().rollup(sum, 60))",
                       "aggregator": "sum"
                     }
                   ],
@@ -171,49 +171,49 @@
                     {
                       "data_source": "metrics",
                       "name": "c1",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c2",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c3",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c4",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c5",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c6",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c7",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c8",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -271,49 +271,49 @@
                     {
                       "data_source": "metrics",
                       "name": "c1",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c2",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c3",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c4",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c5",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c6",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c7",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c8",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -372,7 +372,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.step.open,$cluster,$role} by {witb.lab.challenge}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.step.open,$cluster,$role} by {witb.lab.challenge}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -399,7 +399,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,$cluster,$role} by {witb.lab.challenge}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.installed,$cluster,$role} by {witb.lab.challenge}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -437,7 +437,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,$cluster,$role} by {witb.lab.challenge,witb.lab.kind}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,$cluster,$role} by {witb.lab.challenge,witb.lab.kind}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -463,49 +463,49 @@
                     {
                       "data_source": "metrics",
                       "name": "c1",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c2",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c3",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c4",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c5",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c6",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c7",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "c8",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -562,7 +562,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.hint.open,$cluster,$role} by {witb.lab.alias}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -590,7 +590,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.control.removed,$cluster,$role} by {witb.lab.alias,witb.lab.challenge}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.control.removed,$cluster,$role} by {witb.lab.alias,witb.lab.challenge}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -618,7 +618,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.feedback.open,$cluster,$role} by {witb.lab.challenge}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.feedback.open,$cluster,$role} by {witb.lab.challenge}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -657,7 +657,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:traces.span.metrics.calls{service:burritobot,span.name:chat,$cluster} by {kube_cluster_name}.as_count()",
+                      "query": "sum:traces.span.metrics.calls{env:burritobot-kubecon-na-26,service:burritobot,span.name:chat,$cluster} by {kube_cluster_name}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -685,7 +685,7 @@
                     {
                       "data_source": "metrics",
                       "name": "q",
-                      "query": "sum:witb.lab.calls{span.name:lab.command.send,$cluster,$role} by {witb.lab.challenge,witb.lab.kind}.as_count()",
+                      "query": "sum:witb.lab.calls{env:burritobot-kubecon-na-26,span.name:lab.command.send,$cluster,$role} by {witb.lab.challenge,witb.lab.kind}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -717,7 +717,7 @@
                         "*"
                       ],
                       "search": {
-                        "query": "kube_namespace:agent @event:(input_blocklist_hit OR input_classifier_block OR output_scrub) $cluster"
+                        "query": "env:burritobot-kubecon-na-26 kube_namespace:agent @event:(input_blocklist_hit OR input_classifier_block OR output_scrub) $cluster"
                       },
                       "compute": {
                         "aggregation": "count"
@@ -770,7 +770,7 @@
                         "*"
                       ],
                       "search": {
-                        "query": "kube_namespace:security @rule:\"Fork Bomb In Workload Container\" $cluster"
+                        "query": "env:burritobot-kubecon-na-26 kube_namespace:security @rule:\"Fork Bomb In Workload Container\" $cluster"
                       },
                       "compute": {
                         "aggregation": "count"
@@ -815,7 +815,7 @@
                         "*"
                       ],
                       "search": {
-                        "query": "kube_namespace:security @rule:* $cluster"
+                        "query": "env:burritobot-kubecon-na-26 kube_namespace:security @rule:* $cluster"
                       },
                       "compute": {
                         "aggregation": "count"

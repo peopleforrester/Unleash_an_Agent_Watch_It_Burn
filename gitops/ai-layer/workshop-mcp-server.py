@@ -419,10 +419,23 @@ WORKLOAD_LABEL = "burritobot.co/workload"
 PUBLISHED_WORKLOADS = ("maintenance-shell",)
 # This cluster's public hostname, from the cluster-identity ConfigMap (infra/datadog-cluster-identity.sh).
 PUBLIC_HOST = os.environ.get("WIB_PUBLIC_HOST", "").strip()
+# Whitney's sandbox org files every log from these clusters under env:burritobot-kubecon-na-26 and a burritobot-
+# service (#629). The Datadog Agent names a pod's logs from its tags.datadoghq.com/* labels; without them a room
+# Joker's logs would go out under the image's short name with no env. The service keeps a deployed- infix, so a
+# workload the model names guard-proxy cannot log as burritobot-guard-proxy.
+DD_ENV = "burritobot-kubecon-na-26"
+DD_SERVICE_PREFIX = "burritobot-deployed-"
+
+
+def stamp_labels(name: str) -> dict:
+    """The labels deploy_app puts on every pod it creates, over whatever the model wrote under the same keys."""
+    # A label value is at most 63 characters and ends alphanumeric; a Deployment name may be longer.
+    service = (DD_SERVICE_PREFIX + name)[:63].rstrip("-.")
+    return {WORKLOAD_LABEL: name, "tags.datadoghq.com/service": service, "tags.datadoghq.com/env": DD_ENV}
 
 
 def _stamp_workload(obj: dict, name: str) -> None:
-    """Put WORKLOAD_LABEL=<name> on the pods the object creates: a Pod's own labels, else its pod template's."""
+    """Put stamp_labels(name) on the pods the object creates: a Pod's own labels, else its pod template's."""
     if obj.get("kind") == "Pod":
         meta = obj.setdefault("metadata", {})
     else:
@@ -438,7 +451,7 @@ def _stamp_workload(obj: dict, name: str) -> None:
     if not isinstance(meta, dict):
         return
     labels = meta.get("labels") if isinstance(meta.get("labels"), dict) else {}
-    meta["labels"] = {**labels, WORKLOAD_LABEL: name}
+    meta["labels"] = {**labels, **stamp_labels(name)}
 
 
 def published_address(kind: str, name: str) -> str:

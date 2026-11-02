@@ -33,6 +33,15 @@ spec:
         # Its logs under a burritobot- service in the sandbox env, as every pod's (#629, #662).
         tags.datadoghq.com/service: burritobot-backstage
         tags.datadoghq.com/env: burritobot-kubecon-na-26
+      annotations:
+        # The labels alone did not hold: Backstage logs JSON with a service field of its own (backstage, and
+        # rootHttpRouter from its HTTP router's child logger), and Datadog took that over the pod's tag, so on
+        # 2026-11-02 its logs reached Whitney's sandbox org as service backstage and rootHttpRouter (hecaton run 15906).
+        # The Agent renames the key to backstage_service before it ships each line, so the service is the one named
+        # here and the component Backstage wrote stays searchable (mask_sequences, Datadog's advanced log collection).
+        ad.datadoghq.com/backstage.logs: >-
+          [{"source": "backstage", "service": "burritobot-backstage", "log_processing_rules": [{"type": "mask_sequences",
+          "name": "backstage_service_key", "pattern": "\"service\":", "replace_placeholder": "\"backstage_service\":"}]}]
     spec:
       serviceAccountName: backstage
       securityContext:

@@ -40,13 +40,13 @@ def check(name: str, cond: bool) -> None:
 defs = fm.load_monitors()
 dash = fm.load_dashboard()
 mons = {m["key"]: m for m in defs["monitors"]}
-FILTER = defs["cluster_filter"]
+FILTER = defs["env_filter"]
 
 print("== the definitions are well-formed ==")
 check("monitors.yaml validates clean", fm.validate_monitors(defs) == [])
 check("dashboard.yaml validates clean", fm.validate_dashboard(dash, FILTER) == [])
-check("the cluster filter is the fleet's own name prefix",
-      FILTER == "kube_cluster_name:burritobot-*")
+# Whitney, 2026-11-01: scope BurritoBot's views to its env, not to a cluster name (#629).
+check("the scope is BurritoBot's env in the sandbox org", FILTER == "env:burritobot-kubecon-na-26")
 fleet_src = (REPO / "infra/terraform/fleet/fleet.sh").read_text()
 check("fleet.sh names every cluster watch-it-burn-<something>",
       re.search(r'NAME_PREFIX="?\$\{NAME_PREFIX:-watch-it-burn-|NAME_PREFIX="watch-it-burn-', fleet_src) is not None)
@@ -78,8 +78,8 @@ for k in ("node-not-ready", "guard-proxy-erroring"):
 check("only the two trace monitors are session-scoped",
       sorted(k for k, m in mons.items() if m.get("session")) == ["agent-obs-silent", "no-traces"])
 ao = mons.get("agent-obs-silent", {})
-check("Agent Observability silent (#810): ml_obs.trace under ml_app:burritobot, no data for 10 minutes",
-      ao.get("query", "").startswith("sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count()")
+check("Agent Observability silent (#810): ml_obs.trace under ml_app:burritobot and the sandbox env, no data for 10 minutes",
+      ao.get("query", "").startswith("sum(last_10m):sum:ml_obs.trace{ml_app:burritobot,env:burritobot-kubecon-na-26}.as_count()")
       and ao.get("options", {}).get("notify_no_data") is True and ao["options"].get("no_data_timeframe") == 10)
 check("agent-obs-silent fires when the count drops below 1", ao.get("query", "").rstrip().endswith("< 1"))
 check("agent-obs-silent is the only org-wide monitor, and the only one on an ml_obs metric",
@@ -151,8 +151,21 @@ def broken(**over):
     d = json.loads(json.dumps(defs))
     d["monitors"][1].update(over)
     return fm.validate_monitors(d)
-check("an unfiltered query", any("not filtered" in p for p in broken(query="max(last_5m):max:x{*} by {kube_cluster_name} < 1")))
-check("an ungrouped query", any("not grouped" in p for p in broken(query="max(last_5m):max:x{kube_cluster_name:burritobot-*} < 1")))
+check("an unscoped query", any("not scoped" in p for p in broken(query="max(last_5m):max:x{*} by {kube_cluster_name} < 1")))
+check("an ungrouped query", any("not grouped" in p for p in broken(query="max(last_5m):max:x{env:burritobot-kubecon-na-26} < 1")))
+check("a query fenced to a cluster name as well as the env",
+      any("filters on a cluster name" in p for p in broken(
+          query="max(last_5m):max:x{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public} by {kube_cluster_name} < 1")))
+for bad_scope in ("kube_cluster_name:burritobot-*", "env:burritobot-*", "", "env:a,kube_cluster_name:b"):
+    d = json.loads(json.dumps(defs))
+    d["env_filter"] = bad_scope
+    check(f"a scope that is not one env is refused ({bad_scope!r})", any("is not one env" in p for p in fm.validate_monitors(d)))
+fenced = json.loads(json.dumps(dash))
+q0 = next(q for w in fenced["widgets"] for r in w["definition"].get("requests") or [] for q in r.get("queries") or []
+          if q.get("data_source", "metrics") == "metrics")
+q0["query"] = q0["query"].replace("{env:burritobot-kubecon-na-26", "{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public")
+check("a dashboard query fenced to a cluster name is refused",
+      any("filters on a cluster name" in p for p in fm.validate_dashboard(fenced, FILTER)))
 check("a threshold that disagrees with the query", any("!=" in p for p in broken(options={"thresholds": {"critical": 3}})))
 check("a message that does not name the cluster", any("name the cluster" in p for p in broken(message="down")))
 check("a duplicate key", any("duplicate" in p for p in broken(key="cluster-silent")))
@@ -476,10 +489,10 @@ check("the monitors that fire on a rising count are the ones with a signal",
       and sorted(signals) == ["guard-proxy-erroring", "node-not-ready"])
 check("node-not-ready's signal is its metric without the status filter",
       fm.query_text(signals.get("node-not-ready", {"query": ""})) ==
-      "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready} by {kube_cluster_name}")
+      "max:kubernetes_state.node.by_condition{env:burritobot-kubecon-na-26,condition:ready} by {kube_cluster_name}")
 check("guard-proxy-erroring's signal is its log search without status:error",
       fm.query_text(signals.get("guard-proxy-erroring", {})) ==
-      "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy")
+      "env:burritobot-kubecon-na-26 kube_namespace:agent kube_deployment:guard-proxy")
 check("no repo-only signal leaks into the API body",
       all("signal" not in fm.render_monitor(m, []) for m in mons.values()))
 
@@ -586,7 +599,7 @@ org = FakeOrg()
 rc, text = run(["--data"], org, env={}, keys=keys_unread)
 check("--data without a --cluster exits 1 and calls nothing", rc == 1 and "--cluster" in text and org.calls == [])
 rc, text = run(["--data", "--cluster", "watch-it-burn-community"], org, env={}, keys=keys_unread)
-check("a --cluster outside the queries' filter is refused", rc == 1 and "could never fill" in text and org.calls == [])
+check("a --cluster that is not a burritobot- name is refused", rc == 1 and "could never fill" in text and org.calls == [])
 rc, text = run(["--check", "--cluster", CLUSTERS[0]], org, env={})
 check("--cluster without --data is refused", rc == 1 and "only means something with --data" in text)
 
@@ -744,13 +757,13 @@ def broken_signal(key, **over):
 check("a monitor that fires on a rising count without a signal is refused",
       any("give it a signal" in p for p in broken_signal("node-not-ready", signal=None)))
 check("a signal on another metric is refused", any("not the monitor's metric" in p for p in broken_signal(
-      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.count{kube_cluster_name:burritobot-*} by {kube_cluster_name}"})))
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.count{env:burritobot-kubecon-na-26} by {kube_cluster_name}"})))
 check("a signal filtering on a tag the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
-      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:memorypressure} by {kube_cluster_name}"})))
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{env:burritobot-kubecon-na-26,condition:memorypressure} by {kube_cluster_name}"})))
 check("an ungrouped signal is refused", any("signal is not grouped" in p for p in broken_signal(
-      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready}"})))
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{env:burritobot-kubecon-na-26,condition:ready}"})))
 check("a logs signal searching a term the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
-      "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "search": {"query": "kube_cluster_name:burritobot-* kube_deployment:console"}})))
+      "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "search": {"query": "env:burritobot-kubecon-na-26 kube_deployment:console"}})))
 check("a signal window that is not <n>m, <n>h or <n>d is refused", any("signal window '7 days'" in p for p in broken_signal(
       "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "window": "7 days"})))
 check("a signal on a monitor that fires on absence is refused",

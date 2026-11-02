@@ -228,6 +228,8 @@ svc = next((d for d in DOCS if d and d.get("kind") == "Service"
 check("resources.yaml ships a Service named for the ticket's Deployment", svc is not None)
 m = server("")
 want_sel = {m.WORKLOAD_LABEL: site.C6_DEPLOYMENT}
+# Whitney's sandbox rule (#629): the pod's logs carry a burritobot- service and the env, from these labels.
+stamp = m.stamp_labels(site.C6_DEPLOYMENT)
 check("it selects burritobot.co/workload=maintenance-shell", bool(svc) and svc["spec"].get("selector") == want_sel,
       f"{svc and svc['spec'].get('selector')}")
 ports = svc["spec"]["ports"] if svc else []
@@ -241,25 +243,38 @@ for labels in ({"app": "maintenance-shell"}, {"run": "shell", "tier": "ops"}):
     reply, out = deploy(m, c6_deployment(labels))
     tmpl = out.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
     check(f"the pod gets the workload label beside the model's own ({sorted(labels)})",
-          tmpl == {**labels, m.WORKLOAD_LABEL: site.C6_DEPLOYMENT}, f"{tmpl}")
+          tmpl == {**labels, **stamp}, f"{tmpl}")
     check("the model's selector is left as written", out.get("spec", {}).get("selector") == {"matchLabels": labels})
 c6 = c6_deployment()
 del c6["spec"]["template"]["metadata"]
+check("the stamp names a burritobot-deployed- service and the sandbox env",
+      stamp == {m.WORKLOAD_LABEL: site.C6_DEPLOYMENT,
+                "tags.datadoghq.com/service": f"burritobot-deployed-{site.C6_DEPLOYMENT}",
+                "tags.datadoghq.com/env": "burritobot-kubecon-na-26"}, f"{stamp}")
+long_svc = m.stamp_labels("joker-" + "a" * 37 + "-" + "b" * 40)["tags.datadoghq.com/service"]
+check("a long name's service is cut to a valid label value (63 characters, ending alphanumeric)",
+      long_svc == "burritobot-deployed-joker-" + "a" * 37, long_svc)
+_, out = deploy(m, c6_deployment({"app": "maintenance-shell", "tags.datadoghq.com/service": "guard-proxy",
+                                  "tags.datadoghq.com/env": "production"}))
+tmpl = out.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
+check("a service or env label the model wrote is replaced",
+      tmpl.get("tags.datadoghq.com/service") == f"burritobot-deployed-{site.C6_DEPLOYMENT}"
+      and tmpl.get("tags.datadoghq.com/env") == "burritobot-kubecon-na-26", f"{tmpl}")
 _, out = deploy(m, c6)
 # Beside the selector's own labels, which deploy_app puts on a template that has none, or the API server refuses the
 # Deployment with a 422 for a selector that matches no template labels (#856).
 check("a template with no metadata still gets the label",
       out.get("spec", {}).get("template", {}).get("metadata", {}).get("labels")
-      == {"app": "maintenance-shell", **want_sel},
+      == {"app": "maintenance-shell", **stamp},
       f"{out.get('spec', {}).get('template', {}).get('metadata')}")
 _, out = deploy(m, {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "maintenance-shell"},
                     "spec": {"containers": [{"name": "c", "image": site.C6_IMAGE}]}})
-check("a bare Pod gets the label on itself", out.get("metadata", {}).get("labels") == want_sel)
+check("a bare Pod gets the label on itself", out.get("metadata", {}).get("labels") == stamp)
 _, out = deploy(m, {"apiVersion": "batch/v1", "kind": "CronJob", "metadata": {"name": "nightly"},
                     "spec": {"schedule": "* * * * *", "jobTemplate": {"spec": {"template": {
                         "spec": {"containers": [{"name": "c", "image": site.C6_IMAGE}]}}}}}})
 check("a CronJob's job template gets it", out.get("spec", {}).get("jobTemplate", {}).get("spec", {})
-      .get("template", {}).get("metadata", {}).get("labels") == {m.WORKLOAD_LABEL: "nightly"})
+      .get("template", {}).get("metadata", {}).get("labels") == m.stamp_labels("nightly"))
 _, out = deploy(m, {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "x"}, "spec": {"ports": []}})
 check("an object that creates no pod is applied without one", "template" not in out.get("spec", {})
       and "labels" not in out.get("metadata", {}))
