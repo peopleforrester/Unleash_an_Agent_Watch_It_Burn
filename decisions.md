@@ -8373,3 +8373,61 @@ commits, so there was nothing to reuse.
 **Not yet run on a cluster:** every exercise. The note's "Validation owed on a cluster" section names the checks a
 session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh` tier once the build lands, on or
 after 2026-11-13.
+## 2026-11-02 · #760 · Each challenge's expected Datadog trace shape, and a check of the latest traces against it
+
+**The expected shape is `verify/challenge-trace-shapes.yaml`.** It writes down the frame every challenge's trace in
+LLM Observability (`ml_app:burritobot`, Whitney's sandbox org, #629) must have, and each challenge's key calls under
+the root, as #760's table gives them: Challenge 1 `get_vault_entry` reading `ceo-personal-record`; Challenge 2
+`deploy_app` and `run_shell`; Challenge 3 `read_support_ticket`, then `deploy_app`; Challenge 4 `get_weather`, then
+`read_internal_config`. The frame: one root row per chat, the prompt as its input and the reply as its output, tokens
+and cost on every llm row with no `cost_estimate_status:skipped_*` tag, and the root's duration covering every row.
+The duration item is not in #760's table. It is one of Whitney's five #746 checks (the 14 ms kagent root), and it is
+what still catches the split if Datadog files the two roots as separate traces (below). It allows one second for
+clock skew between pods.
+
+**The check is `verify/challenge_traces.py`.** It reads Datadog's span list (`GET /api/v2/llm-obs/v1/spans/events`,
+whose response fields were read from Datadog's API reference on 2026-11-02) with the repo's read-only key, the
+Secrets Manager entry `watch-it-burn/datadog` that `stage_traces.py` (#648) already reads spans with. First every tool
+row in the window (`--hours`, default 24), following the cursor. A challenge's latest trace is the newest one whose
+tool rows include all its key calls, so a newer fixed-side trace (#648's c4-fixed has no `read_internal_config`) does
+not hide the attack's. Then that whole trace is read, without an ml_app filter, so a second root in another app still
+counts, and judged. It prints PASS or FAIL per challenge, each with its reasons and the trace's link
+(`app.<site>/llm/traces?query=ml_app:burritobot trace_id:<id>`), and ends `CHALLENGE TRACES GREEN` (exit 0) or `RED`
+(exit 1). When no trace has every key call, the newest trace holding any of them is linked as the evidence. Exit 2
+when Datadog cannot be read, or when the window holds more tool rows than `--max-pages` reads, because judging only
+part of the window could pass an old trace. `--tag k8s.cluster.name:burritobot-private` narrows it to one cluster,
+and `--out` writes the results as JSON for filing each failure. A tool row counts by its bare tool name, as #648's
+live run read them, or by OpenTelemetry's `execute_tool <tool>`. A root is a row with no parent or a parent that is
+not in the trace, which is how #746's kagent row, child of the dropped gateway span, became a root.
+
+**It fails until #746 is fixed on the cluster, as #760 asks.** The test feeds it today's split, guard-proxy's llm
+row with the content and `skipped_tokens_missing`, and kagent's 14 ms `POST /` holding the tool calls. Every
+challenge fails, naming the two roots, the skipped cost and each key call outside the root.
+
+**The run-of-show runs it** before each timed run-through, as a new row in the run-through record, and the Night
+Before, after #648's seed (`facilitation/kubecon-na-2026-run-of-show.md`).
+
+**Readings the first live run settles.**
+- Whether the span list returns both of today's roots under one `trace_id`. Datadog's OTel page says it makes "a
+  separate Agent Observability trace for each top-level gen_ai span". If that means a separate trace id, the check
+  reads kagent's row as the only root and fails it on the missing prompt, reply and duration, not on the root count.
+- Whether `trace_id:<id>` is the query the LLM Observability UI takes in a link, whether tool rows carry the
+  `k8s.cluster.name` tag `--tag` filters on, and whether the read-only key's scopes cover the span list (it read
+  spans for #648 on 2026-10-31).
+- Challenge 2. #760 puts `deploy_app` and `run_shell` in one chat, but the stage's Challenge 2 is three asks on
+  `/kubecon` (the villain image, the recipe read, the beacon post). If each chat makes one call, no trace has both,
+  and Challenge 2 reads "no trace in the last 24 h has all of deploy_app, run_shell". That would be a finding to
+  file against the shape, not something this run changes against the issue's table.
+
+**Tests.** `verify/test_challenge_traces.py` (offline) runs the command against a fake span list served three rows a
+page, with sample rows on the documented response fields; no recorded live data exists yet, because no run can read
+the org (#759). It checks the shape file against #760's table and against #648's attack seeds, the one-root shape
+passing all four, today's two roots failing all four, each part of the frame failing on its own, which trace counts
+as the latest, `--tag` and `--hours`, the exit 2 cases, and the run-of-show steps. Breaking the orphan-root rule, the
+order check, the duration check or the cost check each turns it red, which I confirmed on temporary edits that were
+then restored.
+
+**Not yet run on a cluster.** Needs read access to Whitney's sandbox org, which #759 gives dispatched runs; a session
+with AWS access can run it now. Before each timed run-through (by 2026-11-08) and the night before the talk:
+`python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json`, then file each FAIL as its own
+issue in this repo with the trace link it prints, and record the date and verdicts in the run-through record.

@@ -87,6 +87,23 @@ touched, so the app stays Synced and self-heal has nothing to revert. It then re
 to the repo's values (all off), but the C7 tool allow-list and gateway rule live
 outside guard-proxy, and only `guards-off` puts them back.
 
+**Check the challenge traces before each run (#760).** The presenters open each
+challenge's trace in front of the room, so before run 1, before run 2 and the Night
+Before, from the repo root:
+
+```bash
+python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json
+```
+
+It reads the newest `ml_app:burritobot` trace for each challenge in Whitney's sandbox
+org and judges it against `verify/challenge-trace-shapes.yaml`: one root row, the
+prompt and the reply on it, tokens and cost, the root's duration covering the chat,
+and the challenge's key calls under the root. It prints PASS or FAIL per challenge,
+with the trace's link, and must end `CHALLENGE TRACES GREEN`. Each FAIL is filed as
+its own issue here, with the link as evidence. `--tag
+k8s.cluster.name:burritobot-private` reads only the presenters' cluster. It fails
+until #746 is fixed on the cluster, by design.
+
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
 | Date | not yet run | not yet run | not yet run |
@@ -94,6 +111,7 @@ outside guard-proxy, and only `guards-off` puts them back.
 | Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
+| Challenge traces checked first (`challenge_traces.py` GREEN? FAILs filed as) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
@@ -983,6 +1001,18 @@ is merely slow rather than rebuilding:
   must end `SEEDED GREEN`. Whitney opens each link in her org and saves it as a
   view, in that order. The morning of: `python3 verify/stage_traces.py check
   --profile accen-dev` must end `STAGE TRACES GREEN`.
+- [ ] **Check each challenge's trace shape (#760), after the seed.** The seeded
+  attacks are the newest traces for Challenges 1, 3 and 4, and the probe's or the
+  room's for Challenge 2:
+
+  ```bash
+  python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json
+  ```
+
+  It must end `CHALLENGE TRACES GREEN`: one root row per chat with the prompt and the
+  reply on it, tokens and cost, and each challenge's key calls under the root, as
+  `verify/challenge-trace-shapes.yaml` writes them down. Each FAIL is filed as its
+  own issue with the trace link it prints, the night before, not on the day.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
