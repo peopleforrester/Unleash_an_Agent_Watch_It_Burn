@@ -48,6 +48,8 @@ llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `
                        images/llm-guard at f2fcb8f (digest sha256:6cdbf3a2..., set by kustomize.images in gitops/bootstrap/apps/ai-layer.yaml, #652);
                        both have images.lock rows by digest (2026-10-30, #603); their saved tarballs wait on
                        mirror-images.sh save on netcup, which writes each row's saved date
+                       images/llm-guard pins llm-guard-cpu-offline 31962f2 since #719 (src/ the same tree as f2fcb8f, so v1's
+                       source is unchanged); BanTopics needs an image that bakes the zero-shot model, cpu.5 or lab-platform#341's (#719)
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.
