@@ -13678,3 +13678,32 @@ No dependency was added.
 **The suites (run 16834, on `ded328a4`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 24m21s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests,
 all green, `verify/test_ghcr_version_tag.py` among them, and `test_image_version_tags.py` passes in the tier.
+## 2026-11-02 · #555 · The live audit-trail check passes on both KubeCon clusters; nothing to fix, no Loki PVC left
+
+**Context.** #555 asked for `verify/test_tool_audit_live.py` to be run against a live Datadog org, to confirm the
+Datadog Logs search #474 moved it to. Hecaton run 16390 is the fifth dispatch. It cannot read its own cluster
+credentials (the run's `clusters/` files are not readable by its user), so the evidence is escalation 698's seventh
+elevated attempt, posted on #555 on 2026-11-02 at staging `7cc4244`, from tanjiro-wsl2 once its `accen-dev` profile
+existed.
+
+**Result.** The check ran under `uv` on mcp 1.29.1 against watch-it-burn-private (admin profile, armed Kyverno) and
+watch-it-burn-community (burn profile). Both exited 0 and ended `All live tool-audit checks passed.` Every section
+passed: the library prerequisites, the real workshop-mcp writing the trail, slow run_shell isolation, the cluster
+prerequisites, the Agent CR's X-Agent-Identity, the kagent-rendered config, and the Datadog Logs section. That
+settles the four assumptions the 2026-11-02 entry above still listed as unproven:
+- The Agent tags workshop-mcp's lines with `kube_deployment:workshop-mcp`, `pod_name:workshop-mcp-*` and
+  `kube_container_name:shim` ("both are tagged with the pod and container that wrote them").
+- The v2 events-search endpoint, with datadog-secret's app key, returns the lines ("Datadog Logs has the call's pre
+  and post lines, once each"). The 2026-10-31 #665 evidence had already shown attribute parsing and
+  `logs_read_data`.
+- The lines are searchable inside the 300-second window.
+- The identity the caller declared comes through agentgateway on both lines.
+
+No assumption failed, so the check and the platform are unchanged.
+
+**Loki's leftover PVC.** On watch-it-burn-private, `kubectl -n monitoring get pvc` lists only `storage-tempo-0`; on
+watch-it-burn-community the namespace has no claim. `storage-loki-0` is on neither, so the `--ignore-not-found`
+delete did nothing. Both clusters were built after Loki was removed, as expected.
+
+**Not yet run on a cluster.** Nothing for #555. Attendee clusters run the same check through
+`bash verify/run-e2e.sh` at their own build.
