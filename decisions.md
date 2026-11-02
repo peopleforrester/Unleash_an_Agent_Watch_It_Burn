@@ -9908,3 +9908,25 @@ run `CONTEXT=<ctx> bash verify/run-e2e.sh`, then
 Docker Hub image, and the Falco DaemonSet must be Ready on `mirror/falcosecurity/falco:0.45.1-dc34bb8e231e`, its
 falcoctl init and follow containers included. The web-terminal and workshop-mcp pods must come up on the versioned
 tags, and their digests must be unchanged.
+## 2026-11-02 · #544 · Eleventh dispatch: the cluster credentials were handed over but could not be read, and #714's Falco move is now part of point 1
+
+**No code changed.** Hecaton run 16389 is the eleventh dispatch of #544, and the first one handed cluster access: a
+kubeconfig naming `watch-it-burn-community` and `watch-it-burn-private`, plus an accen-dev AWS profile, under the
+run's `clusters/` directory. The run's user could not read any of it. The files are mode 0640, group `hecaton`, and
+the run's user is not in that group, so `kubectl config get-contexts` fails with "permission denied" on the
+kubeconfig, and `aws sts get-caller-identity --profile accen-dev` fails with "config profile (accen-dev) could not
+be found". Nothing ran on a cluster. Even with access, only the admin half could have run: watch-it-burn-community
+runs the burn profile and watch-it-burn-private runs admin, so neither is an attendee cluster. The run may not create one.
+
+**Staging since `5bfd2f1`, the tenth dispatch's base.** #714 (`fecfc56`) points `gitops/bootstrap/apps/falco.yaml` at
+lab-platform's mirror copies of Falco 0.45.1 and falcoctl 0.14.2. falco is on the attendee list, so the attendee
+root in point 1 now reaches Healthy only if the Falco DaemonSet pulls those copies. An anonymous pull of
+`ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco:0.45.1-dc34bb8e231e` and `.../falcoctl:0.14.2-d9d2591057eb`
+returned HTTP 200 on 2026-11-02, serving `sha256:dc34bb8e…` and `sha256:d9d25910…`, the digests #714 names. The change
+adds no Application, so the counts are still 34 on attendee and 38 on admin. Nothing under `gitops/otel-collector/`,
+`gitops/tempo/` or `observability-idp/` changed, and neither did `verify/test_service_hosts_live.py` or `fleet.sh`.
+The Tempo leftovers on attendee are the same as in the ninth dispatch's entry.
+
+**Not yet run on a cluster.** The same as the ninth dispatch's entry. Point 1 also needs the Falco DaemonSet Ready on
+the mirror copy, with its falcoctl containers, which #714's own live check also reads. The admin half (point 3 and
+the admin half of point 4) needs a run whose user can read the kubeconfig.
