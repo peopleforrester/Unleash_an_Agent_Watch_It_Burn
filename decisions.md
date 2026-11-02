@@ -9784,3 +9784,38 @@ root, for C in `watch-it-burn-community` and `watch-it-burn-private`:
 
 Then `python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`, and its trace
 ids go in a comment on #783. Whitney's #746 look (one root row per chat) can be read on the same chats.
+
+## 2026-11-02 · #544 · Ninth dispatch: #783's new trace-id statement is in the collector #544's point 2 loads, and it validates offline
+
+**No code changed.** Hecaton run 16110 is the ninth dispatch of #544. Like the earlier runs it has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig (`kubectl config get-contexts` lists none), so nothing
+ran on a cluster. The eighth dispatch (run 16042) made no commit. No reply to the spend question in issue comment
+6562456139 has appeared on the issue.
+
+**Staging since `9e7070d`, the seventh dispatch's record.** Up to the base `878b077`, two issues changed files #544's
+checks depend on:
+- #783 (`67c956a`) adds a first statement to `transform/llmobs_apm_off` in `gitops/otel-collector/values.yaml`:
+  `set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))`. This is the statement the attendee collector
+  runs in point 2, so point 2 now also checks that the pinned collector (otelcol-contrib 0.160.0) accepts `SHA256`
+  in that position. Offline it does: `verify/test_lab_pipeline_collector.py`, in the tools tier, runs
+  `otelcol-contrib validate` on the rendered config. It passes "attendee, datadog-secret present,
+  datadog-admin-secret present validates", "... absent validates" and "attendee, datadog-secret absent validates".
+  The change touches only the Agent Observability copy (`traces/llmobs`), so the exporters in the traces pipeline are
+  the same. `verify/test_collector_backends.py` still passes "attendee drops Tempo from the traces it runs with
+  both secrets" and "attendee drops Tempo from relay.yaml's traces list too". So `otlp_grpc/tempo` is still defined
+  but in no attendee pipeline.
+- #773 (`bda5012`) adds `deployments` to `WIB_VILLAIN_HOSTS` in `fleet.sh`. That list holds the villain hosts, not
+  `WIB_SERVICE_HOSTS`, so the hosts `verify/test_service_hosts_live.py` reads are unchanged.
+
+Nothing under `gitops/bootstrap/`, `gitops/tempo/` or `observability-idp/` changed, and neither did the three relevant
+verify tests. The counts are still 34 Argo CD Applications on attendee and 38 on admin. The two leftovers that still
+name Tempo are unchanged: the agent-observability dashboard's uid tempo panels, and falcosidekick's failed Talon post
+on each CRITICAL event. `bash verify/run-e2e-tools.sh` exits 0: 223 offline tests ("ALL OFFLINE RENDER-GATE TESTS
+GREEN", including "the attendee profile renders 34 Applications, the root included (34 found)" and "the attendee
+profile leaves out tempo and falco-talon") and 42 checks ("ALL E2E TOOLS TIER CHECKS GREEN").
+
+**Not yet run on a cluster.** Same as before. Points 1 and 2 and the attendee half of point 4 need a new attendee
+cluster, which waits on Michael's go for about $1. Point 3 and the admin half of point 4 run on
+`watch-it-burn-private`. For point 2, also read the collector log for an OTTL error on `transform/llmobs_apm_off`.
+#783's own live read-back (the entry above) runs on the same admin cluster, so the session that does it can do #544's
+admin half in the same sitting.
