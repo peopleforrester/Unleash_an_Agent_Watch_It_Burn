@@ -28,7 +28,7 @@ def check(name: str, cond: bool) -> None:
 
 
 defs = fm.load_monitors()
-FILTER = defs["cluster_filter"]
+FILTER = defs["env_filter"]
 board = fm.load_dashboard(fm.LEADERBOARD_FILE)
 fleet = fm.load_dashboard(fm.DASHBOARD_FILE)
 tables = [w["definition"] for w in board["widgets"] if w["definition"]["type"] == "query_table"]
@@ -178,13 +178,13 @@ def broken(name, **over):
     q = next(q for w in b["widgets"] for r in w["definition"].get("requests", []) for q in r["queries"] if q["name"] == name)
     q.update(over)
     return fm.validate_dashboard(b, FILTER)
-check("a logs query not filtered to the fleet", any("not filtered" in p for p in broken("c1", search={"query": "@event:x"})))
+check("a logs query not scoped to the env", any("not scoped" in p for p in broken("c1", search={"query": "@event:x"})))
 check("a logs query not grouped by cluster",
       any("not grouped" in p for p in broken("c6", group_by=[{"facet": "host", "limit": 500}])))
 check("a spans query not grouped by cluster",
       any("spans query is not grouped" in p for p in broken("c5", group_by=[{"facet": "host", "limit": 500}])))
-check("a metric query not filtered to the fleet",
-      any("not filtered" in p for p in broken("c3", query="sum:falco.rules.matches.count{*} by {kube_cluster_name}.as_count()")))
+check("a metric query not scoped to the env",
+      any("not scoped" in p for p in broken("c3", query="sum:falco.rules.matches.count{*} by {kube_cluster_name}.as_count()")))
 
 print()
 if failures:

@@ -44,6 +44,13 @@ config:
         - key: k8s.cluster.name
           value: ${env:WIB_CLUSTER_NAME}
           action: upsert
+        # Whitney's sandbox org takes env:burritobot-kubecon-na-26 on everything BurritoBot sends (#629). Every
+        # app sets it in OTEL_RESOURCE_ATTRIBUTES, but transform/lab_contract resets the lab markers' resource
+        # to service.name alone, so witb.lab.calls and the lab spans went out with no env. insert, not upsert:
+        # an app's own value stands, and anything that arrives without one gets the env.
+        - key: deployment.environment.name
+          value: burritobot-kubecon-na-26
+          action: insert
     # kagent names the agent's service after the Agent, whatever its env pins (#634). kagent 0.10.1's
     # configure_tracing (kagent-core, kagent/core/tracing/_utils.py) builds its resource with
     # Resource.create({"service.name": name, ...}), where name is KAGENT_NAME with "-" turned into "_"

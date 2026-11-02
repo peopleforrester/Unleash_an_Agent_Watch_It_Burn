@@ -85,6 +85,10 @@ KEY_TAG_PREFIX = "wib-monitor:"
 SESSION_TAG = "window:session"
 DOWNTIME_MARK = "[wib-fleet-monitors]"
 GROUP_BY = "kube_cluster_name"
+# Whitney's sandbox org filters BurritoBot by this prefix, and every BurritoBot cluster reports under it (#629).
+CLUSTER_PREFIX = "burritobot-"
+# BurritoBot's views scope to its env, not a cluster name (Whitney, 2026-11-01; #629).
+ENV_FILTER_RE = re.compile(r"^env:[a-z0-9][a-z0-9-]*$")
 TYPES = ("metric alert", "query alert", "log alert")
 # The metrics that carry no cluster tag, so a monitor on them is one alert for the whole org (`scope: org`, #810).
 # Agent Observability's ml_obs.* carry env, ml_app, service, version and a few more, never a span's k8s.cluster.name
@@ -119,9 +123,9 @@ def load_dashboards() -> list[tuple[str, dict]]:
 def validate_monitors(defs: dict) -> list[str]:
     """Problems with the monitor file that Datadog would accept and the room would regret. Empty is good."""
     problems: list[str] = []
-    flt = str(defs.get("cluster_filter") or "")
-    if not flt.startswith(f"{GROUP_BY}:"):
-        problems.append(f"cluster_filter '{flt}' does not filter on {GROUP_BY}")
+    flt = str(defs.get("env_filter") or "")
+    if not ENV_FILTER_RE.match(flt):
+        problems.append(f"env_filter '{flt}' is not one env:<name>, with no wildcard")
     mons = defs.get("monitors") or []
     if not mons:
         problems.append("no monitors defined")
@@ -147,9 +151,13 @@ def validate_monitors(defs: dict) -> list[str]:
             continue
         if m.get("scope") == ORG_SCOPE or org_metric:
             problems += validate_org_scope(where, m, org_metric)
+            if flt and flt not in q:
+                problems.append(f"{where}: org-wide query is not scoped to {flt}")
         else:
             if flt and flt not in q:
-                problems.append(f"{where}: query is not filtered to {flt}")
+                problems.append(f"{where}: query is not scoped to {flt}")
+            if f"{GROUP_BY}:" in q:
+                problems.append(f"{where}: query filters on a cluster name; scope by the env and group by {GROUP_BY}")
             if m["type"] == "log alert":
                 if f'.by("{GROUP_BY}")' not in q:
                     problems.append(f'{where}: log query is not grouped .by("{GROUP_BY}")')
@@ -227,7 +235,9 @@ def validate_signal(where: str, m: dict, flt: str) -> list[str]:
     problems = []
     text = query_text(sig)
     if flt not in text:
-        problems.append(f"{where}: signal is not filtered to {flt}")
+        problems.append(f"{where}: signal is not scoped to {flt}")
+    if f"{GROUP_BY}:" in text:
+        problems.append(f"{where}: signal filters on a cluster name; scope by the env")
     if sig.get("data_source", "metrics") == "metrics":
         name, tags = metric_source(text)
         want, have = metric_source(m["query"])
@@ -263,7 +273,7 @@ def query_text(q: dict) -> str:
     return (q.get("search") or {}).get("query", "")
 
 
-def validate_dashboard(dash: dict, cluster_filter: str) -> list[str]:
+def validate_dashboard(dash: dict, scope: str) -> list[str]:
     problems: list[str] = []
     for k in ("title", "layout_type", "widgets"):
         if not dash.get(k):
@@ -275,8 +285,11 @@ def validate_dashboard(dash: dict, cluster_filter: str) -> list[str]:
         for r in d.get("requests") or []:
             names = {q.get("name") for q in r.get("queries") or []}
             for q in r.get("queries") or []:
-                if cluster_filter and cluster_filter not in query_text(q):
-                    problems.append(f"dashboard widget {i} query {q.get('name')}: not filtered to {cluster_filter}")
+                if scope and scope not in query_text(q):
+                    problems.append(f"dashboard widget {i} query {q.get('name')}: not scoped to {scope}")
+                if f"{GROUP_BY}:" in query_text(q):
+                    problems.append(f"dashboard widget {i} query {q.get('name')}: filters on a cluster name; "
+                                    "scope by the env")
                 if q.get("data_source") in EVENT_SOURCES and GROUP_BY not in {g.get("facet") for g in q.get("group_by") or []}:
                     problems.append(f"dashboard widget {i} query {q.get('name')}: {q.get('data_source')} query is not grouped by {GROUP_BY}")
             for f in r.get("formulas") or []:
@@ -805,7 +818,7 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     defs, dashes = load_monitors(), load_dashboards()
     problems = validate_monitors(defs)
     for _, dash in dashes:
-        problems += validate_dashboard(dash, defs.get("cluster_filter", ""))
+        problems += validate_dashboard(dash, defs.get("env_filter", ""))
     try:
         session = parse_session(a.session)
     except ValueError as e:
@@ -813,16 +826,15 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     bad_handles = [h for h in a.notify if not h.startswith("@")]
     if bad_handles:
         problems.append(f"--notify handles must start with @: {bad_handles}")
-    flt_prefix = str(defs.get("cluster_filter", "")).split(":", 1)[-1].rstrip("*")
     if a.data and not a.cluster:
         problems.append("--data needs every cluster that should be shipping, one --cluster each")
     if a.board and not a.cluster:
         problems.append("--board needs every cluster that has walked challenges 1 to 6, one --cluster each")
     if a.cluster and not (a.data or a.board):
         problems.append("--cluster only means something with --data or --board")
-    outside = [c for c in a.cluster if not c.startswith(flt_prefix)]
+    outside = [c for c in a.cluster if not c.startswith(CLUSTER_PREFIX)]
     if outside:
-        problems.append(f"--cluster {outside} is outside the queries' filter {defs.get('cluster_filter')}, "
+        problems.append(f"--cluster {outside} is not a {CLUSTER_PREFIX}* name, which every cluster in the org "
                         "so it could never fill")
     if problems:
         print(f"REFUSING: {len(problems)} problem(s) in the definitions", file=sys.stderr)

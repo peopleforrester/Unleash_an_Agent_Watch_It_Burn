@@ -58,7 +58,8 @@ print("== gitops/kubearmor-config ==")
 chart = yaml.safe_load((CHART / "Chart.yaml").read_text(encoding="utf-8"))
 check("Chart.yaml is a v2 application chart", chart.get("apiVersion") == "v2" and chart.get("type") == "application")
 templates = sorted((CHART / "templates").iterdir())
-check("its one template is kubearmorconfig.yaml", [p.name for p in templates] == ["kubearmorconfig.yaml"])
+check("its templates are the config and the namespace's default limits",
+      [p.name for p in templates] == ["kubearmorconfig.yaml", "limitrange.yaml"])
 tpl = yaml.safe_load((CHART / "templates/kubearmorconfig.yaml").read_text(encoding="utf-8"))
 meta = tpl.get("metadata") or {}
 ann = meta.get("annotations") or {}
@@ -71,6 +72,18 @@ check("its dry run waits for the CRD the same sync applies",
       "SkipDryRunOnMissingResource=true" in ann.get("argocd.argoproj.io/sync-options", ""))
 text = (CHART / "templates/kubearmorconfig.yaml").read_text(encoding="utf-8")
 check("its spec is .Values.kubearmorConfig", "toYaml .Values.kubearmorConfig" in text)
+# The operator sets no limits on what it builds, and KubeArmorConfig has no field for them, so with
+# require-resource-limits armed (Deny on the admin profile) Kyverno refused its controller and snitch pods (#629).
+lr = yaml.safe_load((CHART / "templates/limitrange.yaml").read_text(encoding="utf-8"))
+lim = next((x for x in (lr.get("spec") or {}).get("limits") or [] if x.get("type") == "Container"), {})
+check("a LimitRange gives every container in the namespace default cpu and memory limits and small requests",
+      lr.get("kind") == "LimitRange" and {"cpu", "memory"} <= set(lim.get("default") or {})
+      and {"cpu", "memory"} <= set(lim.get("defaultRequest") or {}))
+check("it syncs before the operator's Deployment (a wave below 0)",
+      int(((lr.get("metadata") or {}).get("annotations") or {}).get("argocd.argoproj.io/sync-wave", "0")) < 0)
+ka = next((s.get("helm") or {}).get("valuesObject", {}).get("kubearmorConfig") or {} for s in config) if config else {}
+check("the config sets DD_ENV on every component through globalEnv, the change that pushes env into running pods",
+      {"name": "DD_ENV", "value": "burritobot-kubecon-na-26"} in (ka.get("globalEnv") or []))
 defaults = (yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) or {}).get("kubearmorConfig") or {}
 check("values.yaml holds the operator chart's kubearmorConfig defaults, with stdout process logs off",
       defaults.get("enableStdOutLogs") is False and defaults.get("defaultFilePosture") == "audit")
