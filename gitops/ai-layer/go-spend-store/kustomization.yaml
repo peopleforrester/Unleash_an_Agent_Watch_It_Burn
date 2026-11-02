@@ -1,0 +1,49 @@
+# ABOUTME: The Go guard-proxy's spend store (#751): a PVC at /var/lib/guard-proxy, SPEND_STORE_PATH on it, Recreate.
+# ABOUTME: A kustomize Component, OFF until the Go cutover (#738) lists it under components: in ../kustomization.yaml.
+#
+# guard-proxy-agenticburn#32 put the Go build's spend tally, each session's spend and the /toggle cost cap in a
+# bbolt file at SPEND_STORE_PATH. The Go binary will not start without that variable, and it fails startup when
+# another process holds the file: bbolt takes an exclusive flock and waits 2 s for it. So the cutover needs all
+# three of these together:
+#   - the PVC, or the file lives in the container's filesystem and a pod replacement still resets spend;
+#   - SPEND_STORE_PATH on the proxy container, pointing into the mount;
+#   - strategy Recreate, because a RollingUpdate starts the new pod while the old one still holds the flock (and,
+#     the volume being ReadWriteOnce, can leave the new pod in ContainerCreating on a multi-attach error, the
+#     same reason web-terminal is Recreate). Recreate costs a few seconds of chat downtime per rollout.
+#
+# Why it is a Component: KubeCon (2026-11-12) runs proxy.py, which ignores the variable
+# and keeps its spend in memory, and the KubeCon clusters sync from staging. Folding the PVC and Recreate into
+# resources.yaml now would give KubeCon's chat path an EBS volume to wait on and a Recreate outage on every
+# proxy.py rollout, for nothing proxy.py uses. The cutover adds `components: [go-spend-store]` to
+# ../kustomization.yaml in the same commit that swaps the image and command. verify/test_guard_proxy_spend_store.py
+# renders the bundle with this Component and fails if a guard-proxy that no longer runs proxy.py is without it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - pvc.yaml
+
+# JSON 6902 ops: a strategic merge patch PREPENDS a new env entry and shifts every other one.
+# ai-layer's proxy env is order-sensitive (RespectIgnoreDifferences applies the live order, #679), so SPEND_STORE_PATH
+# goes on the end with `env/-` and each existing entry keeps its place. Container 0 is proxy, the Deployment's only
+# container; the test holds that.
+patches:
+  - target: { group: apps, version: v1, kind: Deployment, name: guard-proxy }
+    patch: |-
+      - op: add
+        path: /spec/strategy
+        value: { type: Recreate }
+      # fsGroup so the EBS volume's root is group-writable by uid 1000; without it bbolt cannot create spend.db
+      # and the Go build fails startup (web-terminal needs the same for its working tree).
+      - op: add
+        path: /spec/template/spec/securityContext/fsGroup
+        value: 1000
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: SPEND_STORE_PATH, value: /var/lib/guard-proxy/spend.db }
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value: { name: spend-store, mountPath: /var/lib/guard-proxy }
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value: { name: spend-store, persistentVolumeClaim: { claimName: guard-proxy-spend } }

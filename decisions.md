@@ -9414,3 +9414,61 @@ mirror copy, by digest, set by the Application), and the three fleet tests.
 should be on Docker Hub until lab-platform#295's copy runs, and no Helm test Pod should exist. Backstage's Postgres
 must come up Ready on the mirror copy. Beat 1 (`verify/beat-01.sh`) must admit and then refuse the nginx copy, and
 beat-02.sh and beat-cost.sh must get their curl answers from the workshop-mcp image.
+
+## 2026-11-02 · #751 · The Go guard-proxy's spend store is a kustomize Component that the #738 cutover lists
+
+guard-proxy-agenticburn#32 (merged to its staging as eb40e28) keeps the Go build's spend tally, each session's
+spend and the /toggle cost cap in a bbolt file at `SPEND_STORE_PATH`. The Go binary will not start without the
+variable, and it fails startup when another process holds the file, because bbolt takes an exclusive flock and
+waits 2 s for it. So the Go Deployment needs three things together: a PersistentVolumeClaim, or the file lives in
+the container filesystem and a pod replacement still resets spend; `SPEND_STORE_PATH` pointing into that mount; and
+`strategy: Recreate`, because a RollingUpdate starts the new pod while the old one still holds the flock.
+
+**What changed.** `gitops/ai-layer/go-spend-store/` is a kustomize Component. It adds the PVC `guard-proxy-spend`
+(ReadWriteOnce, 1Gi, the default gp3 StorageClass, as `student-work` uses), and JSON 6902 ops on the guard-proxy
+Deployment: `strategy: { type: Recreate }`, pod `fsGroup: 1000` so uid 1000 can create the file on the EBS volume
+(web-terminal needs the same), `SPEND_STORE_PATH=/var/lib/guard-proxy/spend.db` appended as the proxy's last env
+entry, a read-write mount of the claim at `/var/lib/guard-proxy`, and the volume. The root filesystem stays
+read-only. `gitops/ai-layer/kustomization.yaml` does not list it yet, so today's render is byte-for-byte what it was.
+A comment on the guard-proxy Deployment in `resources.yaml` tells the cutover to list it.
+
+**Why a Component.** The issue asks for this "at the cutover", which is #738, placed after KubeCon (2026-11-12) by
+Michael's comments on #412 of 2026-10-24 and 2026-10-31. KubeCon runs proxy.py, which ignores `SPEND_STORE_PATH`
+and keeps spend in memory, and the KubeCon clusters sync from staging. Putting the PVC and Recreate on the
+Deployment now would give KubeCon's chat path an EBS volume to attach before the pod can start, and a few seconds
+of chat outage on every proxy.py rollout, for a file proxy.py never opens. The change is written and tested, and
+going live takes one line: the cutover adds `components: [go-spend-store]` in the same commit that swaps the image
+and command.
+
+**Why JSON ops.** Rendered with `kubectl kustomize`, a strategic merge patch put `SPEND_STORE_PATH` first in the
+env list and shifted every other entry. ai-layer applies guard-proxy's env in its live order
+(RespectIgnoreDifferences, #679). #679's replay shows a git-side addition still lands in git's place, and an append
+keeps every existing entry at its index, which is the smallest change to an order-sensitive list.
+
+**Test.** `verify/test_guard_proxy_spend_store.py`, in the tools tier (it needs `kubectl kustomize` and `jq`). It
+renders the bundle with and without the Component and holds: one replica, Recreate with no rollingUpdate, the env
+set once and last with every existing entry in its order, a read-write mount at the path's directory backed by a
+rendered ReadWriteOnce claim, fsGroup equal to runAsGroup, a read-only root filesystem, the claim as the only added
+object with every other object identical, and an ai-layer guard-proxy ignore that leaves `SPEND_STORE_PATH` out (so
+a path change syncs from git). Its last check ties the store to the cutover: a committed guard-proxy whose container
+no longer runs `python /app/proxy.py` fails unless the committed render carries the store.
+
+**Not yet run on a cluster.** Owed at the #738 cutover, in a session with AWS access, on a fresh attendee cluster:
+`bash verify/run-e2e.sh` with CONTEXT set, then confirm `guard-proxy-spend` is Bound, the pod is Running with
+`SPEND_STORE_PATH` set, and a `kubectl --context "$CONTEXT" -n agent rollout restart deploy/guard-proxy` (or an Argo
+sync of an image change) keeps /cost's spent-so-far. One risk is unverified: ai-layer syncs with
+ServerSideApply, and on a cluster where guard-proxy already exists as a RollingUpdate Deployment, the API server's
+defaulted `rollingUpdate` block may survive the apply and be refused next to `type: Recreate`. A fresh cluster
+creates the Deployment as Recreate and avoids it. If an existing cluster refuses it, the by-hand fix is one JSON
+patch as the Argo controller SA, as `repair_env_order` patches: `replace` `/spec/strategy` with
+`{"type": "Recreate"}`, which drops the defaulted block in the same write.
+
+**Draft reuse.** Run 15265 first wrote this on `agent/751-15265`, and run 15566 reused it as 38e8892 on
+`agent/751-15566`. Neither reached staging: run 15456 ended failed (validation), and run 15566 failed the prose
+gate on contrast phrasing in its decisions.md entry. Run 15947 ran
+`verify/draft-drift.sh origin/agent/751-15566 origin/staging`, which named only decisions.md and PROJECT_STATE.md as
+changed on staging since the draft's base 42954c9. `git diff 42954c9 origin/staging` over `gitops/ai-layer/` touches
+only `web/`, and `gitops/bootstrap/apps/ai-layer.yaml` is unchanged, so the Component, the PVC, the
+`resources.yaml` comment and the test keep the draft's design on the current layout. What differs from the draft:
+this entry and the PROJECT_STATE.md line are rewritten on today's files, and three comments and one check label in
+the Component and the test are reworded to state each reason directly. No rendered field changed.

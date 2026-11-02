@@ -123,7 +123,9 @@ Next, in order:
   pre-call reservation until KubeCon; after it, a separate hop between kagent and Bedrock does
   `CountTokens`, the capped `max_tokens` and the refusal, and guard-proxy stays unchanged. The PRD
   amendment for M3 and M5 is post-talk work. M6 (#738, #782) and M7 follow the cutover after
-  2026-11-12 (decisions.md, 2026-11-02 · #412).
+  2026-11-12 (decisions.md, 2026-11-02 · #412). The Go build's bbolt spend store (guard-proxy#32)
+  needs a PVC, `SPEND_STORE_PATH` and Recreate: staged as `gitops/ai-layer/go-spend-store/`, a Component
+  the #738 cutover lists in the ai-layer kustomization (#751; decisions.md, 2026-11-02 · #751).
 - Closed this cycle: #331, #415, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
