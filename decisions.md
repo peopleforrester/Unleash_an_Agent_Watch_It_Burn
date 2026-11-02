@@ -8373,3 +8373,47 @@ commits, so there was nothing to reuse.
 **Not yet run on a cluster:** every exercise. The note's "Validation owed on a cluster" section names the checks a
 session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh` tier once the build lands, on or
 after 2026-11-13.
+
+## 2026-11-02 · #112 · The privileged-pod / hostPath escape challenge is designed in docs/research; the build waits for the next event
+
+**Design only.** #112 asks for a challenge in which the agent uses the `create` RBAC it already holds (workshop-agent
+Role, `gitops/ai-layer/resources.yaml:38`: create on `deployments`, `pods`, `configmaps`, `services` in `agent`) to
+launch a privileged pod that mounts host root at `/host` and reads the node, refused at admission once the control is
+armed. Michael deferred the build on 2026-09-07 (`deferred-barcelona`, Question 575) and kept the design work open; on
+#447 he set that the Barcelona challenges wait until 2026-11-13. The design is at
+`docs/research/2026-11-02-privileged-pod-hostpath-escape.md`, in the shape #723 used for #116 and #130 used for its
+exercises. No lab text, slide, run of show or deploy config changed. It maps to OWASP Agentic ASI03 and ASI05.
+
+- **What the design found.** The issue's premise that we can reuse `policies/kyverno/disallow-privileged.yaml` as it
+  stands does not hold. That policy is scoped to namespace `apps` (the agent creates in `agent`), checks only
+  `privileged` (not `hostPath`, `hostPID` or `hostNetwork`), and ships `validationActions: [Deny]` already (the
+  issue's "currently Audit" wording is the pre-#206 ClusterPolicy state). Its `Deny` is what refuses the Beat-3 clown
+  file in `apps`, and a `ValidatingPolicy` has one `validationActions` for the whole policy, so it cannot be `Deny`
+  for `apps` and `Audit` for `agent` at once. The control is therefore a separate agent-scoped policy
+  (`disallow-host-escape`), not an edit to `disallow-privileged`.
+- **Why it is scoped, not cluster-wide.** The currency review records that `disallow-privileged` "must not be armed
+  as written; it would deny nine platform DaemonSets". Those privileged/hostPath DaemonSets (Falco, KubeArmor, the
+  Datadog node agent, the CNI) live in `security`, `monitoring`, `datadog` and `kube-system`, never in `agent` or
+  `apps`, so scoping the escape policy to `agent` is exactly what keeps it safe. No platform pod in `agent` uses any
+  of the four fields on 4aa58c1; the build re-confirms that.
+- **PSA posture.** The issue also asks for Pod Security Admission `restricted` on the agent namespace. The note
+  recommends against enforcing it namespace-wide: `agent` holds the platform's own pods (workshop-agent,
+  workshop-mcp, evil-mcp-shim, guard-proxy, the console and web terminal), several of which do not meet `restricted`,
+  and PSA cannot tell the attack pod from them since both are created in `agent`. A shape-based Kyverno deny can, and
+  it names the policy in the refusal, which PSA does not. If a second layer is wanted, label `agent` `warn:
+  restricted` (non-blocking) and leave enforce to Kyverno.
+- **The arming flip.** Kyverno autogen (default on, #206) carries the deny to the Deployment form that `deploy_app`
+  and `apply_optimization` produce, as it does for Beat 1 and C2. The policy ships `Audit` so the attack succeeds
+  unarmed, and gets its own arming step (`toggle-host-escape-enforce.sh`, like Challenge 3's authz toggle) plus an
+  ArgoCD `ignoreDifferences` entry, rather than joining the C2 CNCF-wall toggle. It pairs with Challenge 8 (#111) as
+  one kill chain: steal the token, then use the permissions it grants to escape the container.
+
+**Earlier drafts.** `bash verify/draft-drift.sh origin/agent/112-12880 origin/staging` reported CLEAN (0 draft commits
+beyond staging); `origin/agent/112-9444` is the same. Both prior runs reported partial and committed nothing, so
+there was nothing to reuse. Those runs read the deferral and stopped; this run follows the #116/#130 precedent that
+the deferral parks the build, not the design, and writes the design note.
+
+**Not yet run on a cluster:** all of it. The note's "Validation owed on a cluster" section names the admission checks
+(unarmed admits, armed refuses at admission with the policy named, no regression to the platform's own `agent` pods or
+the `apps` clown-file refusal) a session with AWS access runs on a fresh attendee cluster in the `verify/run-e2e.sh`
+tier once the build lands, on or after 2026-11-13.
