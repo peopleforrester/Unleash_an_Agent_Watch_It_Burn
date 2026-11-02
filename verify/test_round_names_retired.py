@@ -189,9 +189,14 @@ check("bootstrap_one takes a name and a profile, no round",
       'local name="$1" profile="$2"\n' in function_src(src, "bootstrap_one"))
 arm = comment_above(src, "arm_infra_guardrails") + function_src(src, "arm_infra_guardrails")
 check("arm_infra_guardrails and its comment say no round", not re.search(r"\bround\b", arm, re.I))
-check("bootstrap_profile_for_role: community gets burn",
-      fleet_q("bootstrap_profile_for_role community") == "burn")
-check("bootstrap_profile_for_role: admin gets admin", fleet_q("bootstrap_profile_for_role admin") == "admin")
+# The event picks the pair (#774): the workshop's burn and admin, or KubeCon's two, event.sh's default.
+check("bootstrap_profile_for_role: community gets burn at the workshop",
+      fleet_q("WIB_ROSTER_PROFILES=workshop bootstrap_profile_for_role community") == "burn")
+check("bootstrap_profile_for_role: admin gets admin at the workshop",
+      fleet_q("WIB_ROSTER_PROFILES=workshop bootstrap_profile_for_role admin") == "admin")
+check("bootstrap_profile_for_role: KubeCon's pair by default",
+      fleet_q("bootstrap_profile_for_role community; echo; bootstrap_profile_for_role admin")
+      == "kubecon-community\nkubecon-private")
 check("cmd_instructors takes the profile from bootstrap_profile_for_role",
       'bp="$(bootstrap_profile_for_role "${r}")"' in function_src(src, "cmd_instructors"))
 

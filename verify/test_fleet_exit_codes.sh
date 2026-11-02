@@ -37,6 +37,7 @@ src() {
         terraform() { :; }
         print_bootstrap_hints() { echo "hints printed"; }
         cmd_verify() { echo "verify ran on: $*"; return "${VERIFY_RC:-0}"; }
+        cmd_guardrails_link() { echo "guardrails-link ran"; return "${LINK_RC:-0}"; }
         '"$1"'
         echo "rc=$?"
     ' 2>&1 )
@@ -60,6 +61,17 @@ out="$(VERIFY_RC=0 src 'cmd_up watch-it-burn-attendee-001')"
 check "up <name> exits 0 when verify passes" 'grep -q "rc=0" <<<"$out"'
 out="$(VERIFY_RC=1 src 'cmd_up watch-it-burn-attendee-001')"
 check "up <name> exits non-zero when verify fails (it used to swallow the result)" '! grep -q "rc=0" <<<"$out"'
+
+echo "== the KubeCon pair is linked after the build, and a failed link is a failed build (#774) =="
+out="$(VERIFY_RC=0 src 'cmd_instructors up both')"
+check "instructors up both links the guardrails switch across the pair" 'grep -q "guardrails-link ran" <<<"$out"'
+out="$(VERIFY_RC=0 LINK_RC=1 src 'cmd_instructors up both')"
+check "and exits non-zero when the link fails" 'grep -q "guardrails-link ran" <<<"$out" && ! grep -q "rc=0" <<<"$out"'
+out="$(VERIFY_RC=0 src 'cmd_instructors up community')"
+check "one role alone is not linked; it says what to run" \
+  '! grep -q "guardrails-link ran" <<<"$out" && grep -q "guardrails-link. once both are up" <<<"$out" && grep -q "rc=0" <<<"$out"'
+out="$(VERIFY_RC=0 WIB_ROSTER_PROFILES=workshop src 'cmd_instructors up both')"
+check "the workshop pair is not linked" '! grep -q "guardrails-link ran" <<<"$out" && grep -q "rc=0" <<<"$out"'
 
 echo "== the bootstrap hints must not decide the exit code =="
 out="$(VERIFY_RC=0 WIB_NO_BOOTSTRAP=1 src 'cmd_instructors up both')"

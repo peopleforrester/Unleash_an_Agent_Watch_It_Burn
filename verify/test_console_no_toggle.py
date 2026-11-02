@@ -143,11 +143,11 @@ def is_guard_proxy(host: str) -> bool:
 
 conf = strip_comments(CONF)
 servers = blocks(conf, "server")
-# Five: the default server, the service-host server, C6's maintenance-shell server (#664), C6's ticket desk,
-# support-<cluster> (2026-10-28 call), and Challenge 2's deployments page, deployments-<cluster> (#773).
-check("console.conf has the default, service-host, C6 villain, C6 ticket-desk and deployments servers",
-      len(servers) == 5,
-      f"{len(servers)}")
+# Six: the default server, the service-host server, C6's maintenance-shell server (#664), C6's ticket desk,
+# support-<cluster> (2026-10-28 call), Challenge 2's deployments page, deployments-<cluster> (#773), and the
+# internal registry's read-only door, registry-<cluster> (#774).
+check("console.conf has the default, service-host, C6 villain, C6 ticket-desk, deployments and internal registry "
+      "servers", len(servers) == 6, f"{len(servers)}")
 default = servers[0][1] if servers else ""
 check("the first server is the default one (server_name _), which every console hostname reaches",
       re.search(r"\bserver_name\s+_\s*;", default) is not None)

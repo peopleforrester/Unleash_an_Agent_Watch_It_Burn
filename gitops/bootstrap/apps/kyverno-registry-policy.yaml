@@ -1,0 +1,53 @@
+# ABOUTME: ArgoCD Application for restrict-image-registries ALONE, from policies/kyverno/, on the KubeCon community
+# ABOUTME: cluster (#774), which installs no other Kyverno policy. Ships at Audit; guardrails-on flips it to Deny.
+#
+# Why one policy and not kyverno-policies. The community cluster (attackme) is the one the room attacks, and its
+# breakout start has the four Kubernetes guardrails off and nothing else in the way. kyverno-policies would bring the
+# whole set, block-argocd-drift and restrict-agent-spawned-workloads at Deny among them, which is admission control
+# the room never sees turned on. restrict-image-registries is the policy the chat page's Kyverno badge reads
+# (guard-proxy's /controls lights it when its validationActions holds Deny), so it is the one the switch arms here,
+# beside deny-external-registries (kyverno-breakout.yaml).
+#
+# The source is a plain directory read of the one file. policies/kyverno holds a Kustomization, and Argo CD would build
+# the whole directory from it; an explicit directory source is a Directory app whatever files sit beside it, and its
+# include picks the file. The private cluster takes the same file through kyverno-policies, so the two Applications are
+# never on one cluster: verify/test_guardrails_switch.py fails a profile that lists both.
+#
+# The live toggle holds as it does on kyverno-policies: drift on /spec/validationActions is ignored, on sync too.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-registry-policy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: policies/kyverno
+    directory:
+      include: restrict-image-registries.yaml
+  destination:
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+    - group: policies.kyverno.io
+      kind: ValidatingPolicy
+      name: restrict-image-registries
+      jsonPointers:
+        - /spec/validationActions
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

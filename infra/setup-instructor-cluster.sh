@@ -18,6 +18,9 @@ Bootstraps an ALREADY-PROVISIONED roster cluster (infra/terraform/fleet/roster.t
   watch-it-burn-<owner>-admin    admin role, admin profile: the student build with every guardrail
                                  ARMED. Kyverno is flipped to Deny here; NetworkPolicy/Falco/PID come up
                                  enforcing from the admin profile. The AI guards stay OFF to flip live.
+That is the workshop's pair (event.sh WIB_ROSTER_PROFILES=workshop). For KubeCon (kubecon, the default) the two
+roles take kubecon-community and kubecon-private, whose four Kubernetes guardrails start OFF, and nothing is
+armed here: guardrails-on in either terminal arms both once 'fleet.sh guardrails-link' has linked them (#774).
 
 The role is read from the cluster's NAME by fleet.sh (role_of_instructor_name), and the profile and the
 default account from the role (bootstrap_profile_for_role, account_for_role), so this script cannot
@@ -64,6 +67,12 @@ log "    context: ${CONTEXT}"
 log "[2] bootstrap IDP with the '${BOOT}' profile (${ROLE} cluster)"
 KUBECONFIG="${KCFG}" CONTEXT="${CONTEXT}" AWS_PROFILE="${PROFILE}" bash "${REPO}/infra/deploy-full-idp.sh" "${BOOT}"
 
+if [[ "${BOOT}" == kubecon-* ]]; then
+    log "KubeCon ${ROLE} cluster ready: ${NAME} has its four Kubernetes guardrails OFF. Link it to the other one with"
+    log "  infra/terraform/fleet/fleet.sh guardrails-link"
+    log "then guardrails-on in either cluster's terminal arms both (#774)."
+    exit 0
+fi
 if [[ "${ROLE}" == "community" ]]; then
     log "Community cluster ready: ${NAME} has NO guardrails. Point the room at it and let it burn."
     exit 0

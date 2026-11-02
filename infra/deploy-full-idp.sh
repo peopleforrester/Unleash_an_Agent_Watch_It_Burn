@@ -6,7 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_URL="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
 # Profile selects which values file of the gitops/bootstrap chart the root reads (#609); lab-platform.yaml lists
-# the first four; local-inference is built only from here (#394). Each file's header says what its profile is for.
+# the first four; local-inference and the two KubeCon profiles are built only from here (#394, #774). Each file's header
+# says what its profile is for.
 PROFILE="${1:-full}"
 case "${PROFILE}" in
     # full: Cluster 2/3, the guarded instructor clusters.
@@ -22,7 +23,12 @@ case "${PROFILE}" in
     # local-inference: full plus a CPU vLLM behind agentgateway's /local route, for one instructor or demo
     # cluster, never the fleet (#394, question 657).
     local-inference) VALUES="values-local-inference.yaml" ;;
-    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin|local-inference]" >&2; exit 2 ;;
+    # kubecon-community and kubecon-private: the breakout's two clusters, attackme and burritobot-private, each with
+    # the four Kubernetes guardrails present and off until guardrails-on arms them on both (#774). fleet.sh picks
+    # them for the community and admin roles when event.sh's WIB_ROSTER_PROFILES is kubecon.
+    kubecon-community) VALUES="values-kubecon-community.yaml" ;;
+    kubecon-private) VALUES="values-kubecon-private.yaml" ;;
+    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin|local-inference|kubecon-community|kubecon-private]" >&2; exit 2 ;;
 esac
 [[ -f "${REPO}/gitops/bootstrap/${VALUES}" ]] || { echo "gitops/bootstrap/${VALUES} is missing" >&2; exit 1; }
 log() { printf '\n==> %s\n' "$*" >&2; }

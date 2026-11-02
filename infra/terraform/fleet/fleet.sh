@@ -81,12 +81,24 @@ readonly WIB_SERVICE_HOSTS="grafana argocd kagent backstage hedgehog wombat unic
 # 2's page of everything the bot deployed for whom (#773). Routed like a service host, but the console gives each its
 # own server.
 readonly WIB_VILLAIN_HOSTS="maintenance-shell support deployments"
+# registry, the internal registry (#774): registry-<cluster> is the console's read-only door to Distribution, which
+# runs on the KubeCon private cluster (gitops/internal-registry/); on any other cluster the name answers 502.
+readonly WIB_REGISTRY_HOSTS="registry"
+# The name the nodes pull by, registry.burritobot.co: one row of its own, on the console LB of whichever cluster holds
+# the shared admin host (bare_rows), so a standby promoted to burritobot-private takes it with that cluster's rows.
+# Railway's edge holds its certificate (*.burritobot.co) and the apex router routes any host the table carries.
+readonly WIB_REGISTRY_BARE="registry.burritobot.co"
 # Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
 emit_service_hosts() {
     local host="$1" lb="$2" svc label="${1%%.*}"
-    for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS}; do
+    for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS} ${WIB_REGISTRY_HOSTS}; do
         printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
     done
+}
+# The rows a roster cluster carries under a bare name of its own: registry.burritobot.co on the shared admin
+# cluster (#774), nothing on any other. $1 = the cluster's public host, $2 = its console LB.
+bare_rows() {
+    if [[ "$1" == "${SHARED_ADMIN_HOST}" ]]; then printf '%s  %s:443\n' "${WIB_REGISTRY_BARE}" "$2"; fi
 }
 # Both domains serve the roster (#651, Michael 2026-10-28): every roster row gets a burritobot.co twin on the
 # same upstream. The twin goes FIRST, because the router's derive-roster keeps the first host it meets for a
@@ -514,12 +526,18 @@ account_for_role() {
     esac
 }
 # The one place that answers "which bootstrap profile does a roster role get", used by cmd_instructors
-# and by infra/setup-instructor-cluster.sh so the two cannot disagree. community is the unguarded
-# spectacle (burn); admin is the student build with every guardrail armed (#294).
+# and by infra/setup-instructor-cluster.sh so the two cannot disagree. The event picks the set (event.sh's
+# WIB_ROSTER_PROFILES, #774). workshop: community is the unguarded spectacle (burn); admin is the student build
+# with every guardrail armed (#294). kubecon: the breakout's pair, each with the four Kubernetes guardrails present
+# and off until guardrails-on arms them on both (kubecon-community, kubecon-private). Any other value is refused
+# by name, so a typo never builds the roster with the wrong posture.
 bootstrap_profile_for_role() {
-    case "$1" in
-        community) printf 'burn' ;;
-        admin) printf 'admin' ;;
+    case "${WIB_ROSTER_PROFILES:-}:$1" in
+        workshop:community) printf 'burn' ;;
+        workshop:admin) printf 'admin' ;;
+        kubecon:community) printf 'kubecon-community' ;;
+        kubecon:admin) printf 'kubecon-private' ;;
+        *:community|*:admin) log "bad WIB_ROSTER_PROFILES '${WIB_ROSTER_PROFILES:-}': workshop or kubecon (event.sh)"; exit 1 ;;
         *) log "bad role: $1"; exit 1 ;;
     esac
 }
@@ -662,6 +680,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       public /cost and fail unless the counter is \$0 over 0 requests. The fresh process
                       also starts the COST_CAP_USD window, the per-session budgets, the rate window and
                       the projected feed empty, and its guards from the repo's env.
+    guardrails-link [<community>[@<region>] <private>[@<region>]]
+                      Link the KubeCon pair's guardrails switch (#774): write each cluster's endpoint, CA and
+                      guardrails-switch token into the OTHER one's guardrails-switch/guardrails-peer Secret, so
+                      guardrails-on in either terminal arms the four Kubernetes guardrails on both. Defaults to
+                      watch-it-burn-community and watch-it-burn-private in WIB_REGION. 'instructors up' runs it
+                      when event.sh's WIB_ROSTER_PROFILES is kubecon. Each link is checked from this host first.
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -3203,6 +3227,17 @@ cmd_instructors() {
     local _rc=0
     _provision_spec_fleet "the roster" cmd_ingest_instructors "${role_filter}" || _rc=$?
     [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${role_filter}"
+    # The KubeCon pair arms together (#774): each one's terminal needs the other's endpoint and switch token, which
+    # exist only once both are built. A run that built one role, or one presenter's set, says what is left to run.
+    if [[ -z "${WIB_NO_BOOTSTRAP:-}" && "${WIB_ROSTER_PROFILES:-}" == "kubecon" ]]; then
+        if [[ -n "${WIB_DRY_RUN}" ]]; then
+            log "dry run: would link the KubeCon pair's guardrails switch (guardrails-link)"
+        elif [[ -z "${role_filter}" && -z "${owner_filter}" ]]; then
+            cmd_guardrails_link || _rc=1
+        else
+            log "the guardrails switch needs both KubeCon clusters linked: run '${0##*/} guardrails-link' once both are up"
+        fi
+    fi
     return "${_rc}"
 }
 
@@ -4275,6 +4310,7 @@ roster_route_hosts() {
         rows="$(printf '%s\n' "${host}"; emit_service_hosts "${host}" - | awk '{ print $1 }')"
         twin_rows <<<"${rows}"   # the burritobot.co twins the table also carries, first (#651)
         printf '%s\n' "${rows}"
+        bare_rows "${host}" - | awk '{ print $1 }'
     done
 }
 
@@ -4359,6 +4395,7 @@ cmd_routes() {
         rows="$(printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}"; emit_service_hosts "$(public_host_for "${name}")" "${h}")"
         twin_rows <<<"${rows}" >> "${tmp}"
         printf '%s\n' "${rows}" >> "${tmp}"
+        bare_rows "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
         # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
         # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one
@@ -4754,6 +4791,106 @@ cmd_restart_console()   { _admin_each restart-console restart_console_one "$@"; 
 cmd_reset_bot()         { _admin_each reset-bot reset_bot_one "$@"; }
 cmd_terminal_password() { _admin_each terminal-password terminal_password_one "$@"; }
 
+# --- the KubeCon guardrails switch (#774) ----------------------------------------------------------------------
+# guardrails-on in either KubeCon cluster's terminal arms the four Kubernetes guardrails on both (Michael's spec on
+# #774, 2026-11-01). The terminal reaches its own cluster with its own ServiceAccount and the other one with the
+# guardrails-peer Secret written here: a kubeconfig of the other cluster's public endpoint, its CA, and the token of
+# its guardrails-switch ServiceAccount (gitops/guardrails-switch/), whose grant is the four guardrails' objects alone.
+# Both Secrets live in namespace guardrails-switch, where no agent identity holds a grant.
+readonly GUARDRAILS_NS="guardrails-switch"
+readonly GUARDRAILS_TOKEN_SECRET="guardrails-switch-token"
+readonly GUARDRAILS_PEER_SECRET="guardrails-peer"
+
+# Print a kubeconfig that reaches cluster $1 (isolated kubeconfig $2, context $3) as its guardrails-switch
+# ServiceAccount. Waits for the token controller to fill the token in; fails, saying what is missing.
+guardrails_peer_kubeconfig() {
+    local name="$1" kcfg="$2" ctx="$3" server ca token="" i
+    server="$(KUBECONFIG="${kcfg}" kubectl config view --raw --minify --context "${ctx}" \
+        -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+    ca="$(KUBECONFIG="${kcfg}" kubectl config view --raw --minify --context "${ctx}" \
+        -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' 2>/dev/null || true)"
+    for i in $(seq 1 "${WIB_LINK_TOKEN_TRIES:-30}"); do
+        token="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${GUARDRAILS_NS}" get secret \
+            "${GUARDRAILS_TOKEN_SECRET}" -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+        [[ -n "${token}" ]] && break
+        sleep "${WIB_LINK_TOKEN_WAIT:-10}"
+    done
+    [[ "${server}" == https://* && -n "${ca}" ]] || { log "  ${name}: no API endpoint or CA in its kubeconfig"; return 1; }
+    [[ -n "${token}" ]] || {
+        log "  ${name}: ${GUARDRAILS_NS}/${GUARDRAILS_TOKEN_SECRET} has no token (is its guardrails-switch app synced?)"; return 1; }
+    cat <<EOF
+apiVersion: v1
+kind: Config
+clusters:
+  - name: ${name}
+    cluster:
+      server: ${server}
+      certificate-authority-data: ${ca}
+users:
+  - name: guardrails-switch
+    user:
+      token: ${token}
+contexts:
+  - name: ${name}
+    context:
+      cluster: ${name}
+      user: guardrails-switch
+      namespace: agent
+current-context: ${name}
+EOF
+}
+
+# Link one way: cluster $1 (kubeconfig $2, context $3) becomes the peer of cluster $4 (kubeconfig $5, context $6).
+# The new kubeconfig is checked from this host, against the grant the switch needs, before it is written to $4.
+guardrails_link_one() {
+    local from="$1" from_kcfg="$2" from_ctx="$3" to="$4" to_kcfg="$5" to_ctx="$6" peer
+    peer="$(mktemp -t "${from}.peer.XXXX")"
+    if ! guardrails_peer_kubeconfig "${from}" "${from_kcfg}" "${from_ctx}" >"${peer}"; then
+        rm -f "${peer}"; return 1
+    fi
+    if [[ "$(KUBECONFIG="${peer}" kubectl --context "${from}" auth can-i patch \
+            validatingpolicies.policies.kyverno.io/restrict-image-registries 2>/dev/null || true)" != "yes" ]]; then
+        log "  ${from}: its guardrails-switch token cannot patch restrict-image-registries, so ${to} is not linked to it"
+        rm -f "${peer}"; return 1
+    fi
+    if ! KUBECONFIG="${to_kcfg}" kubectl --context "${to_ctx}" -n "${GUARDRAILS_NS}" create secret generic \
+            "${GUARDRAILS_PEER_SECRET}" --from-file=kubeconfig="${peer}" --from-literal=name="${from}" \
+            --dry-run=client -o yaml 2>/dev/null \
+        | KUBECONFIG="${to_kcfg}" kubectl --context "${to_ctx}" apply -f - >/dev/null 2>&1; then
+        log "  ${to}: could not write ${GUARDRAILS_NS}/${GUARDRAILS_PEER_SECRET}"; rm -f "${peer}"; return 1
+    fi
+    rm -f "${peer}"
+    log "  ${to}: guardrails-on here now arms ${from} too"
+}
+
+# guardrails-link [<community>[@<region>] <private>[@<region>]]: link the pair both ways. Each cluster is refused
+# unless its isolated kubeconfig's context is that cluster (admin_kubeconfig).
+cmd_guardrails_link() {
+    local a="${1:-watch-it-burn-community}" b="${2:-${SHARED_ADMIN_NAME}}" acct="${WIB_DEFAULT_ACCOUNT}"
+    local an="${a%@*}" bn="${b%@*}" ar="${WIB_REGION}" br="${WIB_REGION}" akc bkc actx bctx rc=0
+    [[ "${a}" == *@* ]] && ar="${a#*@}"
+    [[ "${b}" == *@* ]] && br="${b#*@}"
+    if [[ ! "${an}" =~ ^watch-it-burn-[a-z0-9-]+$ || ! "${bn}" =~ ^watch-it-burn-[a-z0-9-]+$ || "${an}" == "${bn}" ]]; then
+        log "usage: guardrails-link [<community>[@<region>] <private>[@<region>]], two different watch-it-burn clusters"
+        return 2
+    fi
+    akc="$(mktemp -t "${an}.kcfg.XXXX")"; bkc="$(mktemp -t "${bn}.kcfg.XXXX")"
+    log "guardrails-link: ${an} (${ar}) <-> ${bn} (${br})"
+    if actx="$(WIB_REGION="${ar}" admin_kubeconfig "${an}" "${acct}" "${akc}")" \
+        && bctx="$(WIB_REGION="${br}" admin_kubeconfig "${bn}" "${acct}" "${bkc}")"; then
+        AWS_PROFILE="${acct}" guardrails_link_one "${an}" "${akc}" "${actx}" "${bn}" "${bkc}" "${bctx}" || rc=1
+        AWS_PROFILE="${acct}" guardrails_link_one "${bn}" "${bkc}" "${bctx}" "${an}" "${akc}" "${actx}" || rc=1
+    else
+        rc=1
+    fi
+    rm -f "${akc}" "${bkc}"
+    if [[ "${rc}" -ne 0 ]]; then
+        log "guardrails-link: NOT linked both ways; guardrails-on fails on the side it cannot reach"
+        return 1
+    fi
+    log "guardrails-link: linked; guardrails-on in either terminal arms both"
+}
+
 # One field of a JSON object, empty when absent.
 _json_field() { python3 -c 'import json, sys; v = json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2" 2>/dev/null; }
 
@@ -4998,6 +5135,7 @@ main() {
         restart-agent) cmd_restart_agent "$@" ;;
         restart-console) cmd_restart_console "$@" ;;
         reset-bot) cmd_reset_bot "$@" ;;
+        guardrails-link) cmd_guardrails_link "$@" ;;
         terminal-password) cmd_terminal_password "$@" ;;
         serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;

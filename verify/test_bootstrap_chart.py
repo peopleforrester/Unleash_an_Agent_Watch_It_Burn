@@ -199,12 +199,13 @@ for profile in all_profiles():
         continue
     doc = yaml.safe_load(vp.read_text(encoding="utf-8")) or {}
     names = app_names(profile)
-    # admin alone also says where its C7 control sits (#679): agentgateway's rule, the profile the web terminal's
-    # _c7gw recognises by the root's lab-platform/profile=admin label.
-    want_keys = ["c7Control", "apps"] if profile == "admin" else ["apps"]
+    # admin, and the KubeCon private profile that stands in for it (#774), also say where their C7 control sits
+    # (#679): agentgateway's rule, which the web terminal's _c7gw picks by the root's lab-platform/profile label.
+    gateway = profile in ("admin", "kubecon-private")
+    want_keys = ["c7Control", "apps"] if gateway else ["apps"]
     check(f"{profile}: the values file holds only {' and '.join(want_keys)}", list(doc) == want_keys)
-    if profile == "admin":
-        check("admin: c7Control is gateway", doc.get("c7Control") == "gateway")
+    if gateway:
+        check(f"{profile}: c7Control is gateway", doc.get("c7Control") == "gateway")
     check(f"{profile}: it lists apps, each once", bool(names) and len(names) == len(set(names)))
     missing = [n for n in names if f"{n}.yaml" not in app_files]
     check(f"{profile}: every listed app has its file in apps/ {missing}", not missing)

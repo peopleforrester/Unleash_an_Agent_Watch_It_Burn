@@ -1,0 +1,32 @@
+# ABOUTME: ArgoCD Application for gitops/guardrails-switch/ (#774): the identity the other KubeCon cluster's
+# ABOUTME: guardrails-on uses on this one. Listed on the two KubeCon profiles only.
+#
+# Wave -9: after namespaces (-10) makes `agent`, where its Role and RoleBinding live. The guardrails-peer Secret that
+# fleet.sh guardrails-link writes beside it is not in git, so prune never touches it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: guardrails-switch
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/guardrails-switch
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

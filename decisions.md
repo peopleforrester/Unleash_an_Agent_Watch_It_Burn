@@ -9784,3 +9784,97 @@ root, for C in `watch-it-burn-community` and `watch-it-burn-private`:
 
 Then `python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`, and its trace
 ids go in a comment on #783. Whitney's #746 look (one root row per chat) can be read on the same chats.
+## 2026-11-02 · #774 · The Kubernetes guardrails switch: both KubeCon clusters start with the four off, one guardrails-on arms both, and Kyverno denies external registries
+
+**The spec.** Michael approved #774 on 2026-11-01 (his comment on the issue is the spec): both KubeCon clusters,
+community (attackme) and private, start with the four Kubernetes guardrails off; one `guardrails-on`, run from either
+cluster's terminal, arms all four on both, Kyverno to Deny included, so external registries are denied; and the
+badges come up the way they do when a control arms. #773, #775 and the run-of-show #776 build on it.
+
+**What changed (hecaton run 15985).**
+- Two profiles, `gitops/bootstrap/values-kubecon-community.yaml` and `values-kubecon-private.yaml`, deploy-only (built
+  by `infra/deploy-full-idp.sh`, which fleet.sh calls; lab-platform.yaml does not present them). kubecon-community is
+  burn plus the Kyverno engine, restrict-image-registries alone (`kyverno-registry-policy`), deny-external-registries
+  (`kyverno-breakout`) and the switch's identity (`guardrails-switch`). kubecon-private is admin less
+  network-policies and kubearmor-policies, plus kyverno-breakout, guardrails-switch and the internal registry.
+- `infra/terraform/fleet/event.sh` gains `WIB_ROSTER_PROFILES`, `kubecon` for this event. fleet.sh's
+  `bootstrap_profile_for_role` maps community and admin to the KubeCon pair under `kubecon` and to burn and admin
+  under `workshop`, and refuses any other value by name. fleet.sh arms Kyverno at bootstrap on admin and full only,
+  so nothing on the KubeCon pair is armed before `guardrails-on`; `infra/setup-instructor-cluster.sh` says the same.
+- `policies/kyverno-breakout/deny-external-registries.yaml`, a ValidatingPolicy at Audit: a request from an agent
+  namespace identity (web-terminal excepted) may create a pod, or through autogen any pod controller, in `agent`
+  only from `registry.burritobot.co/`. An UPDATE that keeps every image passes. Background evaluation is off because
+  the rule reads `request.userInfo`.
+- `restrict-image-registries` trusts `registry.burritobot.co/` as well, and its message says so; lab.html quotes the
+  message, and LAB-TEXT.md is regenerated from it.
+- `gitops/guardrails-switch/`: namespace `guardrails-switch`, a ServiceAccount with a long-lived token Secret, and a
+  grant on the four guardrails' objects alone (escalate, get and patch on the `workshop-agent` Role; get and patch on
+  the two registry policies by name; get, create, patch and delete on KubeArmor policies and NetworkPolicies in
+  `agent`). No agent identity holds a grant in that namespace.
+- `fleet.sh guardrails-link [<community>[@<region>] <private>[@<region>]]` writes each cluster's endpoint, CA and
+  switch token into the other's `guardrails-switch/guardrails-peer` Secret, after checking from the fleet host that
+  the token can patch restrict-image-registries. `instructors up` runs it once it has built both KubeCon clusters, and
+  a failed link fails the build.
+- The web terminal (`gitops/ai-layer/web-terminal/entrypoint.sh` and its image copy) gains `guardrails-on` and
+  `guardrails-off`. Each switches RBAC (the staged scoped or broad Role), Kyverno (both registry policies, read back),
+  KubeArmor (`block-recipe-snoop`) and egress (the staged agent NetworkPolicy set), one guardrail at a time, on this
+  cluster and then on the other through `~/.kube/peer`, printing every kubectl it runs. An optional number waits that
+  many seconds between guardrails. It exits non-zero, naming what missed, when the other cluster is unlinked or
+  unreachable or a Kyverno flip does not hold. `_c7gw` accepts `kubecon-private` as an admin cluster.
+- The badges needed no change: guard-proxy's `/controls` already reads `agent-egress-allowlist`,
+  restrict-image-registries' action, `block-recipe-snoop` and the `workshop-agent` Role, the objects the switch flips,
+  and the chat page shows the NetworkPolicy, Kyverno, KubeArmor and RBAC scope badges from them.
+- The internal registry, `gitops/internal-registry/`: Distribution 3.1.2 (`ghcr.io/distribution/distribution`) on
+  the private cluster, with a regctl 0.11.7 sidecar that copies the seed list into it at every pod start and marks the
+  pod Ready once done. The seed list holds Challenge 3's Joker at `burritobot/maintenance-shell:busybox-1.38.0`, the
+  path #775 names. The console serves `registry-<cluster>` and the bare `registry` name on both domains read-only (GET
+  and HEAD), and a NetworkPolicy lets only the console reach it in-cluster. `fleet.sh routes` publishes
+  `registry.burritobot.co` on the private cluster's console LB and `registry-<cluster>` for each roster cluster.
+- `verify/kubecon_probe.py`'s admin run judges the new start (four off), runs the terminal's own `guardrails-on` in
+  the private terminal pod after Challenge 1, judges all four armed and the badges lit, adds a public image denied by
+  deny-external-registries and the internal image admitted, and ends with `guardrails-off` after guards-off.
+  `verify/stage_traces.py` arms before Challenge 3's attack seed. The run-of-show, the readiness doc, docs/floor.md
+  and platform-baseline.yaml say the same.
+- Tests: `verify/test_guardrails_switch.py` (offline) and `verify/test_breakout_registry_policy.py` (tools tier, the
+  Kyverno 1.19.1 CLI); twelve existing tests follow the new profiles, routes and probe beats.
+
+**Decided here: the platform's own images stay on a short list the room's requests cannot use.** The issue left
+this to the build ("mirror them, or keep a short list of approved platform registries that the room's requests
+can't use"). Mirroring every platform image into the internal registry would make the platform's bring-up wait on a
+registry that runs on the platform, and kagent's and agentgateway's images would have to be re-pinned at a second
+path. The line is drawn on who asks, which the API server authenticates: a request from an agent namespace identity
+gets the internal registry alone; Argo CD, the kagent controller and the kube controllers keep restrict-image-
+registries' list. The Kyverno CLI cases show both halves.
+
+**Decided here: the Kyverno guardrail is two policies.** restrict-image-registries stays as the 2-hour workshop's
+Challenge 2 teaches it, and it is the policy the Kyverno badge reads, so the switch sets it to Deny on both clusters.
+deny-external-registries carries the breakout's rule and installs only on the KubeCon profiles. The community cluster
+takes restrict-image-registries alone, through a directory source that includes the one file, so the room meets no
+other admission policy. require-resource-limits is left out of the switch, so a refusal names a registry policy.
+
+**Decided here: the registry runs on the private cluster behind the console.** The room attacks attackme, and both
+clusters' nodes reach the private cluster's console through the apex router, whose Railway edge holds the
+`*.burritobot.co` certificate. `fleet.sh routes` writes `registry.burritobot.co` as a row of its own on the console LB
+of the cluster holding burritobot-private (`bare_rows`), so backups.py's repoint moves it with that cluster's other
+rows, and the router routes it as it routes any row. The apex router's derive-roster scores the label `registry`
+below `burritobot-private`, so the wall's roster is unchanged. `registry-<cluster>` is published beside it.
+
+**The 2-hour workshop.** burn, admin, attendee and full are unchanged; a workshop roster sets
+`WIB_ROSTER_PROFILES=workshop` in event.sh. The one change a workshop student can see is restrict-image-registries'
+message, which now lists registry.burritobot.co; LAB-TEXT.md and lab.html quote it.
+
+**What this leaves for other issues.** Once `guardrails-on` runs, the room's HC-666 Jokers are refused on attackme,
+because their image is on the refused `festival-ops/` path; #775 moves HC-666 onto `registry.burritobot.co`, and #776
+places the switch in the run of show. backups.py's promotion does not re-link the switch; until it does, a promoted
+standby is linked with `fleet.sh guardrails-link <community>@<region> <private>@<region>`.
+
+**Not yet run on a cluster.** No cluster is up in this run. In a session with accen-dev access, on a fresh KubeCon
+bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a day; spend waits on Michael's go):
+1. `instructors up` must log "guardrails-link: linked"; `./fleet.sh guardrails-link` repeats it.
+2. In each cluster's terminal, `guardrails-on` ends "all four Kubernetes guardrails are on." and `guardrails-off`
+   "... are off."; the four badges light and go dark on both chat pages.
+3. `python3 verify/kubecon_probe.py community attackme.burritobot.co --context <community-context> --kubeconfig
+   /tmp/community.kubeconfig --profile accen-dev`, then the same with `admin burritobot-private.burritobot.co` and
+   the private context: both GREEN. The admin run covers the switch, the public-image denial and the internal image.
+4. After `./fleet.sh routes roster`, `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
+   lists `busybox-1.38.0`, and a POST to it answers 403. A pod on attackme running that image pulls it.

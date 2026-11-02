@@ -483,6 +483,31 @@ components:
     apps: [kyverno-policies.yaml]
     why: The workshop's admission policies. Part of the sister's policy-baseline, split out so the burn profile can drop it.
 
+  - name: kyverno-breakout
+    sister: []
+    status: local
+    apps: [kyverno-breakout.yaml, kyverno-registry-policy.yaml]
+    why: >
+      The KubeCon breakout's registry guardrail (#774): deny-external-registries, so what BurritoBot deploys runs
+      only from registry.burritobot.co once guardrails-on arms it, and restrict-image-registries alone for the
+      community cluster. The two KubeCon profiles only.
+
+  - name: guardrails-switch
+    sister: []
+    status: local
+    apps: [guardrails-switch.yaml]
+    why: >
+      The identity the other KubeCon cluster's guardrails-on uses on this one (#774), so one command arms the
+      four Kubernetes guardrails on both. The two KubeCon profiles only.
+
+  - name: internal-registry
+    sister: []
+    status: local
+    apps: [internal-registry.yaml]
+    why: >
+      registry.burritobot.co (#774), Distribution seeded with the images the agent may run once Kyverno denies
+      external registries; Challenge 3's image lives there (#775). The KubeCon private profile only.
+
   - name: minimal-floor
     sister: []
     status: local

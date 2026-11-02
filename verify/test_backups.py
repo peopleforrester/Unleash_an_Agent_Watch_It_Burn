@@ -125,8 +125,10 @@ for c in pub[:1] + pub[-1:] + priv[:1]:
     check(f"{c.name}: it gets the presenters' terminal login, as its roster cluster does",
           fleet("is_instructor_name", c.name, "&& echo yes") == "yes")
     check(f"{c.name}: not the attendee pool", fleet("is_attendee_name", c.name, "|| echo no") == "no")
+    # event.sh's WIB_ROSTER_PROFILES is kubecon (#774), so a standby builds the KubeCon profile its role gets.
     check(f"{c.name}: its bootstrap profile is its roster cluster's",
-          fleet("bootstrap_profile_for_role", want_role) == ("burn" if c.role == "community" else "admin"))
+          fleet("bootstrap_profile_for_role", want_role)
+          == ("kubecon-community" if c.role == "community" else "kubecon-private"))
 check("a public standby answers to attackme", fleet("public_host_for", pub[0].name) == "attackme.agenticburn.com")
 check("a private standby answers to burritobot-private",
       fleet("public_host_for", priv[0].name) == "burritobot-private.agenticburn.com")

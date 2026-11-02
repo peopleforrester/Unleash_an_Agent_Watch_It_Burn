@@ -1,0 +1,62 @@
+# ABOUTME: The KUBECON-PRIVATE profile (#774): the breakout's presenters' cluster, burritobot-private. The admin profile
+# ABOUTME: with the four Kubernetes guardrails OFF at the start, armed with the community cluster's by guardrails-on.
+#
+# Michael's spec on #774 (2026-11-01): both KubeCon clusters start with the four Kubernetes guardrails off, and one
+# guardrails-on, run from either cluster's terminal, arms all four on both. The admin profile (values-admin.yaml) ships
+# three of them armed from the first minute, which is what the 2-hour workshop's presenters still want, so the
+# breakout's private cluster takes this profile instead. fleet.sh picks it from the event (WIB_ROSTER_PROFILES in
+# infra/terraform/fleet/event.sh, bootstrap_profile_for_role), and fleet.sh arms Kyverno at bootstrap only on admin
+# and full, so nothing here is armed before guardrails-on.
+#
+# The four, and where each one's OFF state comes from:
+#   RBAC      the broad workshop-agent Role the ai-layer bundle ships. On: the scoped Role.
+#   Kyverno   kyverno-policies at Audit, as policies/kyverno writes it, and deny-external-registries (kyverno-breakout)
+#             at Audit. On: restrict-image-registries and deny-external-registries at Deny.
+#   KubeArmor network-policies and kubearmor-policies are NOT listed, unlike admin: both run selfHeal with no ignore,
+#   Egress    so a policy they own cannot be turned off live (#281). The engines stay. On: block-recipe-snoop and the
+#             agent egress set, applied from the terminal's staged copies, which nothing here reconciles against.
+#             The apps namespace's own NetworkPolicies go with network-policies; no breakout beat runs there.
+# guardrails-switch is the identity the community cluster's guardrails-on uses here, and internal-registry is
+# registry.burritobot.co, which both clusters' nodes pull from by its public name.
+#
+# C7's control is agentgateway's rule, as on admin (#496), and the web terminal picks it by the root's
+# lab-platform/profile label, which accepts admin and kubecon-private.
+c7Control: gateway
+#
+# Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
+# profile until a line here names it, and a name with no file fails the render.
+apps:
+  - ai-layer-otel
+  - ai-layer
+  - backstage
+  - cert-manager
+  - cluster-network-policies
+  - datadog-agent-cr
+  - datadog-operator
+  - demo-app-hedgehog
+  - demo-app-mantis-shrimp
+  - demo-app-spider
+  - demo-app-unicorn
+  - demo-app-wombat
+  - eso-resources
+  - external-secrets
+  - falco-talon
+  - falco
+  - falcosidekick
+  - grafana-dashboards
+  - guardrails-switch
+  - internal-registry
+  - istio
+  - kagent-crds
+  - kagent
+  - kubearmor
+  - kyverno-breakout
+  - kyverno-policies
+  - kyverno
+  - minimal-floor
+  - namespaces
+  - otel-collector
+  - otel-operator
+  - prometheus
+  - tempo
+  - workshop-agent

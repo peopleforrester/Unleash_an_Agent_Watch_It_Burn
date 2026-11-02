@@ -11,3 +11,10 @@
 # For the next event, change this value. WIB_EVENT in the environment overrides it for one run.
 # KubeCon NA 2026: Michael's answer on #454 (2026-10-23).
 WIB_EVENT="${WIB_EVENT:-kubecon-na-2026}"
+
+# The roster's bootstrap profiles for the same event (#774), read by fleet.sh's bootstrap_profile_for_role.
+# kubecon: the breakout's two clusters start with the four Kubernetes guardrails off, and guardrails-on in either
+# terminal arms them on both (kubecon-community for the community role, kubecon-private for admin; `instructors up`
+# links the pair once it has built both). workshop: the 2-hour workshop's burn and admin, where the presenters'
+# cluster starts armed and the community one has nothing to arm. WIB_ROSTER_PROFILES in the environment overrides it.
+WIB_ROSTER_PROFILES="${WIB_ROSTER_PROFILES:-kubecon}"

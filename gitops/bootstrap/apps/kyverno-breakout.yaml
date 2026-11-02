@@ -1,0 +1,42 @@
+# ABOUTME: ArgoCD Application for the KubeCon breakout's registry guardrail (#774): policies/kyverno-breakout/, the
+# ABOUTME: deny-external-registries policy. Listed on the two KubeCon profiles only; ships at Audit.
+#
+# guardrails-on (the web terminal, gitops/ai-layer/web-terminal/entrypoint.sh) sets the policy's validationActions to
+# [Deny] on both KubeCon clusters, and guardrails-off sets [Audit] again, so this Application ignores drift on that one
+# field and honours the ignore on sync too, as kyverno-policies does for restrict-image-registries. Every other field
+# selfHeal still corrects.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-breakout
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: policies/kyverno-breakout
+  destination:
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+    - group: policies.kyverno.io
+      kind: ValidatingPolicy
+      name: deny-external-registries
+      jsonPointers:
+        - /spec/validationActions
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

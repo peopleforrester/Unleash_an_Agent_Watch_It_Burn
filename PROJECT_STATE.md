@@ -20,6 +20,17 @@ your deployments" once the visitor has one. Owed: #762's guard-proxy repin (so t
 apex-agenticburn's `deployments.burritobot.co` lookup, and `verify/test_deployments_page_live.py` on both KubeCon
 clusters. Details in decisions.md, 2026-11-02 · #773.
 
+## KubeCon guardrails switch (#774)
+
+Both KubeCon clusters now build with the four Kubernetes guardrails (RBAC, Kyverno, KubeArmor, egress) present and
+off: profiles `kubecon-community` and `kubecon-private`, picked by event.sh's `WIB_ROSTER_PROFILES=kubecon` (set
+`workshop` for the 2-hour roster's burn and admin). `guardrails-on` in either terminal arms all four on both, and
+`guardrails-off` turns them off; `fleet.sh guardrails-link` links the pair, and `instructors up` runs it. Once on,
+`deny-external-registries` lets what BurritoBot deploys run only from `registry.burritobot.co`, the internal registry
+on the private cluster. Not yet run on a cluster; the checks owed are in decisions.md, 2026-11-02 · #774. Open
+around it: #775 (HC-666's image onto the internal registry), #776 (where the switch sits in the run of show), and
+re-linking the switch after a standby promotion.
+
 ## KubeCon NA 2026 abstract readiness (#456)
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,

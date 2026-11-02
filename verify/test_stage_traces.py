@@ -36,27 +36,40 @@ def reply(text: str) -> dict:
 
 
 class FakePrivate(st.StageCluster):
-    """The private cluster: Kyverno, NetworkPolicy and KubeArmor armed, every AI guard off, the shipped Role."""
+    """The private cluster at its start (#774): the four Kubernetes guardrails off until guardrails-on, every AI guard
+    off, the shipped Role."""
 
     def __init__(self) -> None:
         super().__init__(HOST, "wib-private", "accen-dev", None, 30)
         self.g = {k: False for k in kp.AI_GUARDS}
         self.tools, self.rule, self.role = list(kp.EVIL_ALL), kp.C7_OPEN, kp.RBAC_SHIPPED
+        self.armed = False
         self.joker, self.log, self.sent, self.witches = False, [], [], []
+
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        """The terminal's guardrails-on and guardrails-off, run in its pod: both clusters switch."""
+        assert "deploy/web-terminal" in args, args
+        state = "on" if args[-1].endswith("guardrails-on") else "off"
+        self.log.append(f"guardrails {state}")
+        self.armed = state == "on"
+        self.role = kp.RBAC_FIX if self.armed else kp.RBAC_SHIPPED
+        return 0, f"Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are {state}.\n"
 
     def get_json(self, path):
         if path == "/cost":
             return {"usd": 1.0}
         return {"ai": dict(self.g), "host": HOST, "infra": {
-            "networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True,
-            "tool_allowlist": self.rule == kp.C7_NARROWED}}
+            "networkpolicy": self.armed, "kyverno": self.armed, "kubearmor": self.armed, "falco": True,
+            "tool_allowlist": self.rule == kp.C7_NARROWED, "rbac_scoped": self.role == kp.RBAC_FIX}}
 
     def identity_host(self):
         return HOST
 
     def measure(self):
+        action = ["Deny"] if self.armed else ["Audit"]
         return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
-                "kyverno_actions": ["Deny"], "networkpolicy": True, "kubearmor_action": "Block"}
+                "kyverno_actions": action, "breakout_actions": action, "networkpolicy": self.armed,
+                "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX}
 
     def toggle(self, q):
         self.log.append(f"toggle {q}")
@@ -105,6 +118,9 @@ class FakePrivate(st.StageCluster):
         if prompt == kp.ROOM_PROMPT:
             if self.g["input_classifier"]:
                 return reply(f"I tried to read {kp.ROOM_TICKET_ID}, but it was withheld.")
+            if not self.armed:  # Kyverno only reports: the Joker lands
+                self.joker = True
+                return reply(f"Done! I created {kp.ROOM_JOKER}.")
             return reply(f"I tried to create {kp.ROOM_JOKER}, but the cluster refused it at admission.")
         if prompt == kp.MCP_PROMPT:
             return reply(C7_LEAK if self.rule == kp.C7_OPEN else C7_DENIED)
@@ -150,8 +166,11 @@ with tempfile.TemporaryDirectory() as tmp:
     check("it exits 0 and every beat passes", rc == 0 and all(b["verdict"] == kp.PASS for b in saved.get("beats", [])),
           str([(b["key"], b["note"]) for b in saved.get("beats", []) if b["verdict"] != kp.PASS]))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
-          keys == ["identity", "start-state", "c1-attack", "guard-rbac-on", "c1-fixed", "c3-attack", "guard-input-on",
-                   "c3-fixed", "c4-attack", "guard-mcp-on", "c4-fixed", "guards-off"], str(keys))
+          keys == ["identity", "start-state", "c1-attack", "guard-rbac-on", "c1-fixed", "guardrails-on", "c3-attack",
+                   "guard-input-on", "c3-fixed", "c4-attack", "guard-mcp-on", "c4-fixed", "guards-off"], str(keys))
+    check("guardrails-on arms the cluster before the Challenge 3 attack, and guardrails-off is the last act",
+          f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
+          and f.log[-1] == "guardrails off" and f.armed is False)
     check("six model calls", f.calls == 6, str(f.calls))
     sessions = [s for s, _ in f.sent]
     check("each seed is its own session, named for the seed and the stamp",

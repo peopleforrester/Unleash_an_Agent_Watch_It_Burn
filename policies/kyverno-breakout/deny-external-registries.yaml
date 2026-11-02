@@ -1,0 +1,84 @@
+# ABOUTME: The KubeCon breakout's registry guardrail (#774): a workload BurritoBot creates may run only images from the
+# ABOUTME: internal registry, registry.burritobot.co. Ships at Audit; guardrails-on flips it to Deny on both clusters.
+#
+# Why its own policy, beside restrict-image-registries. That policy's allow-list has to admit the platform's own
+# images, which come from external registries (ghcr.io/peopleforrester, cr.kagent.dev, cr.agentgateway.dev), so with
+# it alone at Deny a request to deploy an official public image mirrored on ghcr.io still passes admission. The
+# breakout's Challenge 2 (#773) is that request, and the platform has to say no to it. Mirroring every platform image
+# into the internal registry would make the platform's own bring-up depend on a registry that runs on the platform,
+# so the line is drawn on who asks instead, which the API server authenticates and the agent cannot forge: a request
+# from a ServiceAccount of the agent namespace (agent-sa, and workshop-mcp, which deploy_app runs as) may create a
+# pod, or through autogen a Deployment, StatefulSet, DaemonSet, ReplicaSet, Job or CronJob, only from
+# registry.burritobot.co. Argo CD, the kagent controller and the kube controllers that create the platform's pods are
+# not agent-namespace identities, so the platform's short list of external registries stays theirs alone. web-terminal
+# is the presenters' terminal, not the agent's, and is left out as restrict-agent-spawned-workloads leaves it out.
+#
+# Challenge 3 (#775) relies on the other half: the image HC-666 asks for is on registry.burritobot.co, so this policy
+# admits it, and restrict-image-registries trusts that registry too. Kyverno did its job; the attacker used a
+# registry the platform trusts.
+#
+# Only the two KubeCon profiles install it (gitops/bootstrap/apps/kyverno-breakout.yaml), so the 2-hour workshop's
+# Challenge 2, where the student flips restrict-image-registries alone, reads exactly as before.
+#
+# An UPDATE that keeps every image the object already ran is let through, so turning this to Deny never wedges a
+# workload the agent made before the flip, and the agent can still scale or label one. Background evaluation is off:
+# the rule reads request.userInfo, which exists only at admission.
+#
+# Fixture cases run through the Kyverno CLI in verify/test_breakout_registry_policy.py.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: deny-external-registries
+  annotations:
+    policies.kyverno.io/title: Deny External Registries
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      A workload the agent creates may run only images from the internal registry, registry.burritobot.co. No
+      external registry is trusted for the agent's requests.
+spec:
+  # Audit at the start of the breakout, so the room's public-image deploys land; guardrails-on sets Deny, and the
+  # kyverno-breakout Application ignores drift on this field so selfHeal keeps the flip.
+  validationActions:
+    - Audit
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  # The agent namespace only: every grant an agent identity holds is a Role there (agent-sa's and workshop-mcp's), so
+  # it is the one namespace the agent can create a workload in. Scoping the webhook to it also keeps a slow or absent
+  # Kyverno from touching pod creation anywhere else on the room's cluster.
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - agent
+  matchConditions:
+    - name: requested-by-an-agent-namespace-identity
+      expression: >-
+        request.userInfo.username.startsWith('system:serviceaccount:agent:') &&
+        request.userInfo.username != 'system:serviceaccount:agent:web-terminal'
+  variables:
+    - name: internalRegistry
+      expression: "'registry.burritobot.co/'"
+    - name: containers
+      expression: "object.spec.?containers.orValue([]) + object.spec.?initContainers.orValue([])"
+    # A missing oldObject reaches CEL as an empty map on CREATE, so the UPDATE branch tests the operation.
+    - name: oldImages
+      expression: >-
+        request.operation == 'UPDATE' ?
+        (oldObject.spec.?containers.orValue([]) + oldObject.spec.?initContainers.orValue([])).map(c, c.image) : []
+  validations:
+    - expression: >-
+        variables.containers.all(c, c.image.startsWith(variables.internalRegistry) || c.image in variables.oldImages)
+      message: >-
+        BurritoBot may run images only from the internal registry, registry.burritobot.co. Every external registry,
+        Docker Hub, ghcr.io, quay.io and the rest, is denied for a workload the agent creates.

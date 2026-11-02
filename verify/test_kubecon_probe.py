@@ -165,20 +165,47 @@ check("identity: the burritobot.co name of the same cluster passes",
 check("identity: the burritobot.co name of another cluster fails",
       not passes(kp.judge_identity("attackme.burritobot.co", "burritobot-private.agenticburn.com",
                                    "attackme.agenticburn.com")))
-armed = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
-         "kyverno_actions": ["Deny"], "networkpolicy": True, "kubearmor_action": "Block"}
-check("start state: guards off and controls armed passes", passes(kp.judge_start_state(armed)))
-for name, change in [("an AI guard on", {"guards": {**armed["guards"], "budget": True}}),
+# The private cluster's start (#774): every AI guard off and the four Kubernetes guardrails present and off.
+start = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
+         "kyverno_actions": ["Audit"], "breakout_actions": ["Audit"], "networkpolicy": False,
+         "kubearmor_action": None, "rbac_scoped": False}
+check("start state: guards off and the four Kubernetes guardrails off passes", passes(kp.judge_start_state(start)))
+for name, change in [("an AI guard on", {"guards": {**start["guards"], "budget": True}}),
                      ("the allow-list already narrowed", {"evil_tools": ["get_weather"]}),
                      ("the C7 gateway rule already narrowed", {"c7_rule": kp.C7_NARROWED}),
                      ("the C7 gateway rule unreadable", {"c7_rule": None}),
-                     ("Kyverno in Audit", {"kyverno_actions": ["Audit"]}),
-                     ("no egress NetworkPolicy", {"networkpolicy": False}),
-                     ("KubeArmor policy missing", {"kubearmor_action": None}),
+                     ("restrict-image-registries already at Deny", {"kyverno_actions": ["Deny"]}),
+                     ("deny-external-registries already at Deny", {"breakout_actions": ["Deny"]}),
+                     ("deny-external-registries not installed", {"breakout_actions": []}),
+                     ("the egress NetworkPolicy already applied", {"networkpolicy": True}),
+                     ("the KubeArmor policy already applied", {"kubearmor_action": "Block"}),
+                     ("the Role already scoped", {"rbac_scoped": True}),
+                     ("the Role unreadable", {"rbac_scoped": None}),
                      ("guard state unreadable", {"guards": {}})]:
-    check(f"start state: {name} fails", not passes(kp.judge_start_state({**armed, **change})))
+    check(f"start state: {name} fails", not passes(kp.judge_start_state({**start, **change})))
+# After guardrails-on: the same AI guards, and all four Kubernetes guardrails on.
+armed = {**start, "kyverno_actions": ["Deny"], "breakout_actions": ["Deny"], "networkpolicy": True,
+         "kubearmor_action": "Block", "rbac_scoped": True}
+check("armed: the four Kubernetes guardrails on passes", passes(kp.judge_armed(armed)))
+for name, change in [("the Role still broad", {"rbac_scoped": False}),
+                     ("restrict-image-registries in Audit", {"kyverno_actions": ["Audit"]}),
+                     ("deny-external-registries in Audit", {"breakout_actions": ["Audit"]}),
+                     ("no egress NetworkPolicy", {"networkpolicy": False}),
+                     ("KubeArmor policy missing", {"kubearmor_action": None})]:
+    check(f"armed: {name} fails", not passes(kp.judge_armed({**armed, **change})))
+check("the probe reads the Role as guard-proxy's RBAC badge does",
+      kp.rbac_scoped(yaml.safe_load(kp.challenge_fix(kp.RBAC_FIX))) is True
+      and kp.rbac_scoped(yaml.safe_load(kp.challenge_fix(kp.RBAC_SHIPPED))) is False)
+ON_OUT = "$ kubectl apply -f /home/student/challenges/c5-scoped-role.yaml\n" \
+         "Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are on.\n"
+check("guardrails-on: exit 0 and both clusters switched passes", passes(kp.judge_guardrails_switched(0, ON_OUT, "on")))
+check("guardrails-on: the other cluster unreachable fails, quoting the warning",
+      kp.judge_guardrails_switched(1, "⚠️  This cluster is not linked to the other KubeCon cluster\n", "on")
+      == (False, "guardrails-on exited 1: '⚠️  This cluster is not linked to the other KubeCon cluster'"))
+check("guardrails-off: the on line does not pass for off", not passes(kp.judge_guardrails_switched(0, ON_OUT, "off")))
 badges = {"ai": dict(armed["guards"]), "host": host,
-          "infra": {"networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True, "tool_allowlist": False}}
+          "infra": {"networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True, "tool_allowlist": False,
+                    "rbac_scoped": True}}
 check("badges: a strip that agrees with the cluster passes", passes(kp.judge_badges(badges, armed)))
 # What an admin cluster showed while the pinned guard-proxy read the retired ClusterPolicy (#487).
 check("badges: a dark Kyverno badge on an armed cluster fails (#487)",
@@ -196,6 +223,12 @@ check("badges: an empty toolNames counts as full, as proxy.py counts it, so C7 s
 check("badges: an unreadable gateway rule with toolNames full expects an unlit (None) C7 badge, as proxy.py shows",
       kp.c7_badge({**armed, "c7_rule": None}) is None)
 check("badges: an unreadable /controls fails", not passes(kp.judge_badges(None, armed)))
+check("badges: a dark RBAC badge on a scoped Role fails",
+      not passes(kp.judge_badges({**badges, "infra": {**badges["infra"], "rbac_scoped": False}}, armed)))
+dark = {"ai": dict(start["guards"]), "host": host,
+        "infra": {"networkpolicy": False, "kyverno": False, "kubearmor": False, "falco": True, "tool_allowlist": False,
+                  "rbac_scoped": False}}
+check("badges: a dark strip at the start agrees with the cluster", passes(kp.judge_badges(dark, start)))
 check("C1: curl 000 and exit 28 passes",
       passes(kp.judge_egress_blocked(28, "000command terminated with exit code 28\n")))
 check("C1: HTTP 405 from the beacon fails", not passes(kp.judge_egress_blocked(0, "405")))
@@ -204,7 +237,22 @@ check("C1: a pod that is not there fails",
 DENIED = ('error: failed to create deployment: admission webhook "vpol.validate.kyverno.svc-fail" denied the request: '
           "Policy restrict-image-registries failed: image ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1 is not from "
           "an allowed registry")
+DENIED_BREAKOUT = ('error: failed to create deployment: admission webhook "vpol.validate.kyverno.svc-fail" denied the '
+                   "request: Policy deny-external-registries failed: BurritoBot may run images only from the internal "
+                   "registry, registry.burritobot.co.")
 check("C2: denied by restrict-image-registries passes", passes(kp.judge_admission_denied(1, DENIED)))
+check("C2: denied by deny-external-registries passes too: the first webhook to answer names it",
+      passes(kp.judge_admission_denied(1, DENIED_BREAKOUT)))
+check("C2 public image: denied by deny-external-registries passes", passes(kp.judge_public_denied(1, DENIED_BREAKOUT)))
+check("C2 public image: admitted fails", not passes(kp.judge_public_denied(0, "deployment.apps/public-image created")))
+check("C2 public image: refused by restrict-image-registries alone fails (it trusts ghcr.io)",
+      not passes(kp.judge_public_denied(1, DENIED)))
+check("internal registry: admitted passes", passes(kp.judge_internal_admitted(0, "deployment.apps/internal-image")))
+check("internal registry: refused fails", not passes(kp.judge_internal_admitted(1, DENIED_BREAKOUT)))
+check("the public image is one restrict-image-registries trusts, so only the breakout policy can refuse it",
+      allowed(kp.PUBLIC_IMAGE) and not kp.PUBLIC_IMAGE.startswith("registry.burritobot.co/"))
+check("the internal image is on registry.burritobot.co, which both registry policies trust",
+      kp.INTERNAL_IMAGE.startswith("registry.burritobot.co/") and allowed(kp.INTERNAL_IMAGE))
 check("C2: admitted fails", not passes(kp.judge_admission_denied(0, "deployment.apps/promo-mascot (server dry run)")))
 check("C2: refused by RBAC instead fails", not passes(kp.judge_admission_denied(
     1, 'error: deployments.apps is forbidden: User "system:serviceaccount:agent:workshop-mcp" cannot create')))
@@ -513,7 +561,11 @@ class NoisyKubectl:
 
     def __call__(self, argv, **kw):
         args = argv[3:]  # past kubectl --context <ctx>
-        out, err = "", ""
+        out, err, rc = "", "", 0
+        if "deploy/web-terminal" in args:
+            state = "on" if args[-1].endswith("guardrails-on") else "off"
+            out = f"Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are {state}.\n"
+            return subprocess.CompletedProcess(argv, 0, stdout=out, stderr="")
         if "exec" in args:
             self.execs.append(args)
             py = args[-1]
@@ -536,19 +588,19 @@ class NoisyKubectl:
             out, err = "agent.kagent.dev/workshop-agent patched\n", ""
         elif "configmap" in args and args[-2:] == ["-o", "json"]:
             out = json.dumps(self.c7)
+        elif "role" in args and args[-2:] == ["-o", "json"]:
+            out = json.dumps(yaml.safe_load(kp.challenge_fix(kp.RBAC_SHIPPED)))
         elif args[-2:] == ["-o", "json"]:
             out = json.dumps({"spec": {"declarative": {"tools": [
                 {"mcpServer": {"name": "workshop-mcp", "toolNames": ["get_menu"]}},
                 {"mcpServer": {"name": "evil-mcp", "toolNames": self.tools}}]}}})
         elif "validatingpolicy" in args:
-            out = '["Deny"]'
-        elif "networkpolicy" in args:
-            out = "networkpolicy.networking.k8s.io/agent-egress-allowlist\n"
-        elif "kubearmorpolicy" in args:
-            out = "Block"
+            out = '["Audit"]'
+        elif "networkpolicy" in args or "kubearmorpolicy" in args:
+            rc, err = 1, 'Error from server (NotFound): not found\n'
         if "get" in args:
-            err = "Warning: this API version is deprecated\n"
-        return subprocess.CompletedProcess(argv, 0, stdout=out, stderr=err)
+            err = "Warning: this API version is deprecated\n" + err
+        return subprocess.CompletedProcess(argv, rc, stdout=out, stderr=err)
 
 
 def beat_on(probe: kp.Probe, beat: kp.Beat) -> tuple[bool, str]:
@@ -605,6 +657,8 @@ class Fake:
         self.rule = kp.C7_OPEN
         self.c6 = False
         self.kyverno = True
+        self.armed = False  # the four Kubernetes guardrails, off at the start (#774)
+        self.link = True    # guardrails-on reaches the other KubeCon cluster
         self.role = kp.RBAC_SHIPPED
         self.usd = 1.0
         self.witch, self.witches = "", []
@@ -615,8 +669,9 @@ class Fake:
         if path == "/prompts":
             return {"enabled": True, "prompts": []}
         return {"ai": dict(self.g), "host": self.host, "infra": {
-            "networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True,
-            "tool_allowlist": self.rule == kp.C7_NARROWED or not (set(kp.ROGUE_TOOLS) & set(self.tools))}}
+            "networkpolicy": self.armed, "kyverno": self.armed, "kubearmor": self.armed, "falco": True,
+            "tool_allowlist": self.rule == kp.C7_NARROWED or not (set(kp.ROGUE_TOOLS) & set(self.tools)),
+            "rbac_scoped": self.role == kp.RBAC_FIX}}
 
     def identity_host(self):
         return self.identity
@@ -631,8 +686,10 @@ class Fake:
         return list(self.tools)
 
     def measure(self):
+        action = ["Deny"] if self.armed else ["Audit"]
         return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
-                "kyverno_actions": ["Deny"], "networkpolicy": True, "kubearmor_action": "Block"}
+                "kyverno_actions": action, "breakout_actions": action, "networkpolicy": self.armed,
+                "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX}
 
     def c7_rule(self):
         return self.rule
@@ -654,8 +711,20 @@ class Fake:
         self.rule = rule
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
+        if "deploy/web-terminal" in args:
+            state = "on" if args[-1].endswith("guardrails-on") else "off"
+            self.log.append(f"guardrails {state}")
+            if not self.link:
+                return 1, "⚠️  This cluster is not linked to the other KubeCon cluster\n"
+            self.armed = state == "on"
+            self.role = kp.RBAC_FIX if self.armed else kp.RBAC_SHIPPED
+            return 0, f"Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are {state}.\n"
         if "curl" in args:
-            return 28, "000command terminated with exit code 28\n"
+            return (28, "000command terminated with exit code 28\n") if self.armed else (0, "405")
+        if stdin is not None and kp.INTERNAL_IMAGE in stdin:
+            return 0, "deployment.apps/internal-image created (server dry run)\n"
+        if stdin is not None and kp.PUBLIC_IMAGE in stdin:
+            return (1, DENIED_BREAKOUT) if self.armed else (0, "deployment.apps/public-image created (server dry run)\n")
         if "exec" in args and "read_support_ticket" in args[-1]:
             self.c6_tool_calls += 1
             if self.g["input_classifier"]:
@@ -720,8 +789,8 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "gateway", "c5-off", "guard-rbac-on", "c5-on", "c1", "c2", "c3",
-        "c6-admission", "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
+want = ["identity", "start-state", "badges", "gateway", "c5-off", "guard-rbac-on", "c5-on", "guardrails-on", "armed",
+        "badges-lit", "c1", "c2", "c2-public", "internal-registry", "c3", "c6-admission", "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
         "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2",
         "guards-off"]
 check("the beats run in stage order (Challenge 1 to 4: C5, C1 C2 C3, C6, C7; the on-topic guard; guards-off)",
@@ -747,10 +816,19 @@ check("the C7 gateway rule is narrowed by the run and open again at the end",
       f"rule {kp.C7_NARROWED}" in f.log and f.rule == kp.C7_OPEN)
 check("no beat narrows toolNames on an admin cluster: the gateway is what stops C7 (#496)",
       f"tools {kp.EVIL_FIXED}" not in f.log)
-check("guards-off is the last thing done to the cluster, and puts the shipped Role back",
-      f.log[-len(kp.GUARDS_OFF) - 3:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"rule {kp.C7_OPEN}",
+check("guards-off is the last thing done to the cluster, puts the shipped Role back, then runs guardrails-off",
+      f.log[-len(kp.GUARDS_OFF) - 4:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"rule {kp.C7_OPEN}",
                                                                               f"tools {kp.EVIL_ALL}",
-                                                                              f"role {kp.RBAC_SHIPPED}"])
+                                                                              f"role {kp.RBAC_SHIPPED}",
+                                                                              "guardrails off"])
+check("guardrails-on runs once, after Challenge 1's RBAC fix and before Challenge 2's checks",
+      f.log.count("guardrails on") == 1 and keys.index("guardrails-on") == keys.index("c5-on") + 1
+      and keys.index("guardrails-on") < keys.index("c1"))
+check("the cluster ends with the four Kubernetes guardrails off", f.armed is False and f.role == kp.RBAC_SHIPPED)
+check("the probe runs the terminal's own commands, in its ttyd container",
+      kp.GUARDRAILS_ON[-1] == "/home/student/guardrails-on" and kp.GUARDRAILS_OFF[-1] == "/home/student/guardrails-off"
+      and kp.TERMINAL_EXEC[kp.TERMINAL_EXEC.index("exec") + 1:kp.TERMINAL_EXEC.index("--")]
+      == ["deploy/web-terminal", "-c", "ttyd"] and "_guardrails on" in helper("guardrails-on") and "_guardrails off" in helper("guardrails-off"))
 # Challenge 1's fix is RBAC (Michael, 2026-10-31): the probe applies the terminal's own file, then the same ask
 # must come back with no part of the record. The output guard is never turned on for it.
 check("Challenge 1 is fixed by guard-rbac-on, never by the output guard",
@@ -763,6 +841,21 @@ check("the probe applies the same bytes the terminal mounts",
 check("an admin cluster whose Role stays broad fails c5-on",
       not passes(kp.judge_ceo_unreadable(chat(CEO_LEAK))) and passes(kp.judge_ceo_unreadable(chat("Forbidden."))))
 
+
+
+f = Fake()
+f.link = False
+res = {r["key"]: r for r in run_admin(f)}
+check("an unlinked cluster fails guardrails-on, naming why, and the checks it arms fail with it",
+      res["guardrails-on"]["verdict"] == kp.FAIL and "not linked" in res["guardrails-on"]["note"]
+      and all(res[k]["verdict"] == kp.FAIL for k in ("armed", "c1", "c2-public")), str(res["guardrails-on"]))
+check("and guards-off fails too: guardrails-off could not reach the other cluster",
+      res["guards-off"]["verdict"] == kp.FAIL and "not linked" in res["guards-off"]["note"], str(res["guards-off"]))
+f = Fake()
+f.armed = True
+res = {r["key"]: r for r in run_admin(f)}
+check("start-state fails on a private cluster whose guardrails are already on",
+      res["start-state"]["verdict"] == kp.FAIL and "already" in res["start-state"]["note"], str(res["start-state"]))
 
 
 class ToolsNarrowed(Fake):

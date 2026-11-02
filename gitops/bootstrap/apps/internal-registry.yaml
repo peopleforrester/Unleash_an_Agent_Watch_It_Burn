@@ -1,0 +1,29 @@
+# ABOUTME: ArgoCD Application for the internal registry, registry.burritobot.co (#774): gitops/internal-registry/.
+# ABOUTME: Listed on the KubeCon private profile only; both KubeCon clusters' nodes pull from it by its public name.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: internal-registry
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/internal-registry
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

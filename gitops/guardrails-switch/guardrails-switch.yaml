@@ -1,0 +1,94 @@
+# ABOUTME: The identity the OTHER KubeCon cluster's guardrails-on uses on this one (#774): a ServiceAccount in its own
+# ABOUTME: namespace, a long-lived token, and a grant on exactly the objects the four Kubernetes guardrails are.
+#
+# Michael's spec on #774 (2026-11-01): one guardrails-on, run from either cluster's terminal, arms the four guardrails
+# on BOTH KubeCon clusters, community and private. The terminal reaches its own cluster with its own ServiceAccount; it
+# reaches the other one with this ServiceAccount's token, which `fleet.sh guardrails-link` copies into the other
+# cluster as the guardrails-peer Secret, beside the cluster's endpoint and CA (a kubeconfig). Nothing here is that
+# Secret: it is written at bring-up, because only then is the other cluster's endpoint known.
+#
+# Its own namespace, guardrails-switch, because the agent's broad Role reads every Secret in `agent` (Challenge 1
+# starts there), and a token there would hand BurritoBot the other cluster. No agent identity holds any grant in this
+# namespace. The terminal's console-terminal ClusterRole reads Secrets everywhere, which is how its guardrails-on reads
+# the peer Secret.
+#
+# The grant is the four guardrails and nothing else:
+#   RBAC      the workshop-agent Role in `agent`: guardrails-on applies the scoped Role, guardrails-off the broad one.
+#             Writing a Role's rules needs the writer to hold them, or escalate on it, so escalate is granted on that
+#             one Role by name rather than every permission the broad Role carries.
+#   Kyverno   the two registry policies by name, patched between [Audit] and [Deny].
+#   KubeArmor block-recipe-snoop in `agent`, applied and deleted.
+#   Egress    the agent namespace's NetworkPolicies, applied and deleted as one set.
+# create cannot be limited by name in RBAC, so the last two grant create on their kind in `agent`, as the terminal has.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guardrails-switch
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: guardrails-switch
+  namespace: guardrails-switch
+automountServiceAccountToken: false
+---
+# The token the other cluster's terminal presents. A ServiceAccount token Secret, filled in by the token controller
+# and good until the Secret is deleted, so a link made at bring-up holds for the life of the cluster.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: guardrails-switch-token
+  namespace: guardrails-switch
+  annotations:
+    kubernetes.io/service-account.name: guardrails-switch
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: guardrails-switch
+rules:
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["validatingpolicies"]
+    resourceNames: ["restrict-image-registries", "deny-external-registries"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: guardrails-switch
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: guardrails-switch }
+subjects:
+  - kind: ServiceAccount
+    name: guardrails-switch
+    namespace: guardrails-switch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: guardrails-switch
+  namespace: agent
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    resourceNames: ["workshop-agent"]
+    verbs: ["get", "patch", "escalate"]
+  - apiGroups: ["security.kubearmor.com"]
+    resources: ["kubearmorpolicies"]
+    verbs: ["get", "create", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: guardrails-switch
+  namespace: agent
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: guardrails-switch }
+subjects:
+  - kind: ServiceAccount
+    name: guardrails-switch
+    namespace: guardrails-switch
