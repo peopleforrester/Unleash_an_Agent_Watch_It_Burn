@@ -10125,6 +10125,13 @@ because their image is on the refused `festival-ops/` path; #775 moves HC-666 on
 places the switch in the run of show. backups.py's promotion does not re-link the switch; until it does, a promoted
 standby is linked with `fleet.sh guardrails-link <community>@<region> <private>@<region>`.
 
+**Rebased onto staging `e3b4b73` (run 16077).** Run 16040's commits failed promotion on a rebase conflict with
+#773's deployments page, which landed meanwhile. Each conflict was two additions side by side, and both are kept:
+`WIB_VILLAIN_HOSTS` keeps `deployments` and the registry hosts follow it, console.conf has the deployments server and
+then the registry server (six servers, as `verify/test_console_no_toggle.py` now counts), PROJECT_STATE.md has both
+sections, and the run-of-show's Challenge 2 fix names both registry policies for #773's `public.ecr.aws` images.
+The offline suite and the tools tier pass on the rebased branch.
+
 **Not yet run on a cluster.** No cluster is up in this run. In a session with accen-dev access, on a fresh KubeCon
 bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a day; spend waits on Michael's go):
 1. `instructors up` must log "guardrails-link: linked"; `./fleet.sh guardrails-link` repeats it.
