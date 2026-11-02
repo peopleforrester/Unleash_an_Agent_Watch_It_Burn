@@ -9968,11 +9968,15 @@ lab-platform's `deploy/watch-it-burn/images.tsv` row 15 still pins `web` at that
 **Criterion 3 is met by the dispatcher's merge comment.** The first run ended partial because it could not post the
 comment naming the commit. The dispatcher's merge comment on #715 (issuecomment 6542323206) reads "Merged
 `4f9f5c4875dc` into staging", and the SHA was not rewritten on promotion. lab-platform#335 is closed with no
-successor. lab-platform's `deploy/mirror/pulled.tsv` rows 105 to 109 and the "until Unleashed #715" note on
-`images.tsv` row 15 can now be dropped; that is lab-platform's change, filed as a follow-up.
+successor. lab-platform's `deploy/mirror/pulled.tsv` rows 105 to 109, and the note on `images.tsv` row 15
+that waits on this issue, can now be dropped; that is lab-platform's change, filed as a follow-up.
 
 **Not yet run on a cluster.** Unchanged from the 2026-10-31 #715 entry: five Ready demo-app pods on `web@sha256:73cd…`
 and a 200 from each party hostname, on an attendee or full cluster in a session with AWS access.
+On 2026-11-03 hecaton run 16424 was handed watch-it-burn-community and watch-it-burn-private, both of which run the
+five demo apps (every values-*.yaml profile lists them). It could not read them: the run's `clusters/kubeconfig` and
+`aws-credentials` are mode 640, group `hecaton`, and the run's user is not in that group, so kubectl failed with
+"permission denied" before reaching either cluster. The read-only pod check went to the run report's escalate list.
 
 **Tests at this entry.** `bash verify/run-tests.sh` passed. `bash verify/run-e2e-tools.sh` ran 40 checks and failed two,
 `test_datadog_log_services_render.py` and `test_enforce_floor.py`, both on one cause: GitHub answered 500 Internal
