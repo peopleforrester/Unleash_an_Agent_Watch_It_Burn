@@ -8769,3 +8769,39 @@ selfHeal, a Kyverno rule refusing NetworkPolicy deletes, a moved chart and a row
 - `IAM_PIPELINE_PROFILE=<p> IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py` for the new
   audit suite and the new cluster case;
 - one `python3 infra/terraform/drift/drift-report.py` by hand, then the cron line from `docs/floor.md`.
+
+## 2026-11-02 · #555 · Re-dispatch: the live audit-trail check still waits on a session with the KubeCon clusters' credentials
+
+**Context.** #555 asks for `verify/test_tool_audit_live.py` to be run against a cluster, to confirm that the Datadog
+Logs search #474 moved it to finds workshop-mcp's audit lines. Run 15779 is the fourth dispatch. Like the earlier
+ones, it has no AWS credentials and no kubeconfig, so the check is still unrun. The 2026-10-29 entry above has the
+one fix found offline (the probe pod the armed admin profile admits). This entry records what staging has changed
+since then and what live evidence now exists.
+
+**Staging since `e36056b` (#555's fix).** Only #441 (`ea5ea33`) touched the check: `uv` now runs it on the image's
+mcp pin. Nothing that would change what the check expects has moved. The DatadogAgent CR still names no site,
+and `datadog-cluster-identity.sh` and the collector still default to `datadoghq.com`, so searching
+`api.datadoghq.com` when the CR names no site still matches where the Agent ships. `containerCollectAll` is still on.
+The probe still reaches `agentgateway.agent:3001`, which is inside namespace agent, so even C1's default-deny fix
+allows it through `agent-allow-intra-namespace`. #629 (`75dd08e`) added `tags.datadoghq.com` service and env labels to the
+AI-layer pods. Those change a log's service and env, not the kube_* tags the check selects on.
+
+**Live evidence that now exists, from #665 (the 2026-10-31 entry above).** That run searched Whitney's sandbox org
+with `watch-it-burn/datadog`'s read-only application key. Over 30 days the search found `ticket_withheld` on
+`burritobot-private`, grouped by `@event`. workshop-mcp writes `ticket_withheld` with the same `tool_audit.emit` as
+the audit lines (`gitops/ai-layer/workshop-mcp-server.py`), as one JSON object on stdout. Both KubeCon clusters'
+names miss `datadog_keys_for`'s attendee pattern, so their `datadog/datadog-secret` holds that same key. That
+evidence settles two of #555's four assumptions in substance, though not through this check's own query:
+- Datadog parses workshop-mcp's JSON line into attributes, because `@event` was a searchable attribute.
+- The app key in datadog-secret can read log data (`logs_read_data`).
+
+Still unproven: the `kube_deployment:workshop-mcp`, `pod_name:workshop-mcp-*` and `kube_container_name:shim` tags,
+the v2 events-search endpoint, which is a different endpoint from the aggregate one #665 used, and indexing within
+300 seconds.
+
+**Loki's leftover PVC.** Unchanged. Both KubeCon clusters were rebuilt on 2026-10-28 after Loki was removed, so no
+`storage-loki-0` claim is expected. A read-only check and an `--ignore-not-found` delete are escalated again.
+
+**Not yet run on a cluster.** Run `CONTEXT=<ctx> python3 verify/test_tool_audit_live.py` (it runs itself under
+`uv` on mcp 1.29.1) on watch-it-burn-private (admin, armed Kyverno) and on watch-it-burn-community (burn). Each
+cluster's credentials go into an isolated kubeconfig with `--alias`, so the context name is known.
