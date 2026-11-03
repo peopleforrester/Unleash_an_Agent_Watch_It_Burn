@@ -13098,3 +13098,28 @@ the working tree only, `test_model_pin_check.py`, `test_cost_counter.py`, `test_
 `test_c7_badge_grants.py`, `test_recreation_spec_tier_swap.py`, `test_cost_tier_matches_model.py` and
 `test_load_replay.py` also pass, each reading that build as pricing at the bound model; `test_proxy_checksum.py` there
 wants the `19fbbe48283e` that Michael's repin commit sets.
+
+## 2026-11-03 · #827 · The gotchas doc's router probe reads fleet.sh's roster URL, held by a test
+
+**What changed.** The TLS-hop section of `docs/GOTCHAS-FLEET-AND-DELIVERY.md` told an operator to curl
+`provisioning.agenticburn.com` to see whether the router is healthy. That host was retired on 2026-10-29 (#651) and
+answers the apex router's unknown-host 404 while the router is up, so the probe called a healthy router broken. The
+probe now curls `https://start.burritobot.co/roster.json`, the default of `WIB_ROUTER_ROSTER_URL` in
+`infra/terraform/fleet/fleet.sh` that `fleet.sh router-check` reads, and a paragraph under it says why and points at
+`router-check`. The doc names the retired host nowhere. `verify/test_gotchas_router_probe.py`, in the offline suite,
+reads the one "router is healthy" line of the doc and the one `${WIB_ROUTER_ROSTER_URL:-<url>}` of fleet.sh and fails
+when the URLs differ or the doc names the retired host. It also builds edited copies of both texts (doc on the retired
+host, fleet.sh's default moved alone, both moved together, either anchor gone) and checks each verdict, so a reworded
+anchor fails naming the anchor and the file.
+
+**What differs from the draft.** `verify/prior-drafts.sh 827 origin/staging` found no 827 branch. The issue names
+#720's draft on `origin/agent/720-14845`, which changed this line to `start.agenticburn.com/roster.json` with no test.
+Since then fleet.sh's default moved to `start.burritobot.co` (#651's rename), so this change takes the current default
+rather than the draft's URL, and adds the test the draft lacked. The `attackme.agenticburn.com` probe two lines down is
+left as it is: it still answers 200, and it is not the router-health probe the issue is about.
+
+**Live, read-only, 2026-11-03.** `https://start.burritobot.co/roster.json` answered 200 with the router's two rows,
+`attackme.burritobot.co` and `burritobot-private.burritobot.co`; `https://start.agenticburn.com/roster.json` answered
+200; `https://provisioning.agenticburn.com/` answered 404. `bash infra/terraform/fleet/fleet.sh router-check` printed
+PASS for both hosts and "router-check: the router serves exactly the roster". No cluster was changed, and nothing in
+this change needs a cluster to run.

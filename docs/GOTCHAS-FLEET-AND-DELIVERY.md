@@ -236,12 +236,18 @@ and getting it wrong 502s every attendee URL while the router itself keeps looki
 while everything else is fine:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://provisioning.agenticburn.com/   # 200 = router is healthy
+curl -s  -o /dev/null -w '%{http_code}\n' https://start.burritobot.co/roster.json # 200 = router is healthy
 curl -sk -o /dev/null -w '%{http_code}\n' https://<cluster-lb>/                  # 200 = upstream is healthy
 curl -s  -o /dev/null -w '%{http_code}\n' https://attackme.agenticburn.com/ # 502 = the hop config
 ```
 
 Router healthy plus upstream healthy plus routed host 502 means the proxy config, not the fleet.
+
+The first probe reads the roster the router derives from its own table after every reload, the same URL
+`fleet.sh router-check` reads by default (`WIB_ROUTER_ROSTER_URL`); `router-check` then says whether that table
+is exactly the roster. `verify/test_gotchas_router_probe.py` holds the two URLs equal. Do not probe
+provisioning's old host on the apex: it was retired on 2026-10-29 (#651) and answers the router's unknown-host
+404 while the router is healthy.
 
 **Recovery is fast, which is the saving grace.** `routes.map` is applied by reload, so correcting the table
 and running `apex-agenticburn/scripts/reload-routes.sh` restores service in seconds with no redeploy. Keep
