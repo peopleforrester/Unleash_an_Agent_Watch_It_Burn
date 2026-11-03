@@ -8419,6 +8419,51 @@ to anyone who knows the hostname.
 `bash verify/run-e2e.sh`), and `./fleet.sh check-tls burritobot-private.agenticburn.com` with the new probe. This run
 has no cluster. The live test starts one shell, its positive control, and closes it at once.
 
+## 2026-11-03 · #785 · #770's two live checks on burritobot-private: check-tls's shell probe is green, the websocket test could not read the cluster
+
+**check-tls, with the new shell probe, passes.** Hecaton run 16446 ran it from the run host at 2026-11-03 00:48 UTC.
+It needs only the public internet, so it did not depend on the run's cluster files:
+
+    $ infra/terraform/fleet/check-tls.sh burritobot-private.agenticburn.com
+    == burritobot-private.agenticburn.com ==
+      PASS  https 200
+      PASS  TLS chain validates
+      PASS  SAN covers burritobot-private.agenticburn.com
+      PASS  cert valid 77 more day(s)
+      PASS  http redirects to https (301)
+      PASS  websocket upgrade accepted (101)
+      PASS  the terminal's shell protocol (tty) refuses an upgrade with no credential (502)
+
+    TLS CHECKS GREEN for 1 host(s).
+
+The 502 is the one the #770 entry predicts: ttyd drops a `tty` upgrade that has no Basic credential, and the
+console's nginx answers 502 for the dropped socket. The no-subprotocol probe still gets 101, which is ttyd's HTTP
+handler and starts no shell. So, through the public host, the router and nginx, an unauthenticated upgrade on the
+shell's protocol is refused.
+
+**The live websocket test did not reach the cluster.** burritobot-private is the `watch-it-burn-private` context
+(infra/datadog-cluster-identity.sh maps it to that Datadog cluster name). The run was handed a kubeconfig, an env
+file and accen-dev credentials under its `clusters/` directory, but they are mode 640, group `hecaton`, and the run's
+user (`hecaton-s3-claude-certkraken`, groups `hecaton-s3-claude-certkraken`, `hecaton-runs`, `hecaton-tools`) is not
+in that group. This is the same block runs 16386 and 16420 hit (the #783 and #746 re-dispatch entries below). Every
+`kubectl` call failed before reaching the API server, so the test read nothing and started no shell:
+
+    $ CONTEXT=watch-it-burn-private python3 verify/test_terminal_ws_auth_live.py
+    == prerequisites ==
+      FAIL  the cluster records its public host (cluster-identity public-host)
+            error: error loading config file "/var/lib/hecaton/runs/16446/clusters/kubeconfig": open /var/lib/hecaton/runs/16446/clusters/kubeconfig: permission denied
+      FAIL  the terminal-auth Secret holds a user:password TTYD_CREDENTIAL (without it the terminal is open)
+            error: error loading config file "/var/lib/hecaton/runs/16446/clusters/kubeconfig": open /var/lib/hecaton/runs/16446/clusters/kubeconfig: permission denied
+      FAIL  exactly one web-terminal pod is running
+      FAIL  ttyd's log in that pod can be read
+
+    FAILED: 4 check(s)
+
+**Not yet run on a cluster:** `CONTEXT=watch-it-burn-private python3 verify/test_terminal_ws_auth_live.py`, by a
+run whose user can read its `clusters/` files or by a session with the presenters' kubeconfig. It must end "All live
+terminal websocket auth checks passed." with exactly one "started process" added to ttyd's log, the positive
+control's. Paste its output here. check-tls is done and need not run again for #785.
+
 ## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
 
 **Question 899:** Should the PR-gated apply path for the attendee fleet in #201 (a pull request runs a Terraform
