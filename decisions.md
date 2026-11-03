@@ -11769,3 +11769,30 @@ the escalated `crane tag` that publishes it. The first attempt at this run lost 
 emptied mid-run, so the log of the second sat in the run's own directory.
 
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.
+
+## 2026-11-03 · #492 · Run 16711 could not read its session files, so the C6 observable-judge run is still owed
+
+**No code changed.** `verify/prior-drafts.sh 492 origin/staging` printed NONE: every earlier draft of #492 is in
+staging. Since #809 a run gets a session for the two clusters that are up, so this run was meant to run the probe on
+watch-it-burn-community itself. It could not. In `/var/lib/hecaton/runs/16711/clusters`, the files `env`,
+`aws-config`, `aws-credentials` and `kubeconfig` are `hecaton:hecaton` mode 0640, and the run's user
+`hecaton-s3-claude-certkraken` is not in group `hecaton`. That is the failure the 2026-11-03 #759 entry records for
+run 16670, and hecaton#508, which stages the files readable by the run's user, is still open. At 2026-11-03T17:40Z
+`. "$HECATON_CLUSTER_ENV"` printed `Permission denied`, `aws sts get-caller-identity` printed `NoCredentials`, and
+`kubectl --context watch-it-burn-community get ns` printed `open .../clusters/kubeconfig: permission denied`.
+
+**What still holds.** At 2026-11-03T17:40Z a GET of `/guards` on `attackme.agenticburn.com` and
+`attackme.burritobot.co` returned 200 with all five guards off on both. The judge needs `--context`: without it, c6-off
+and c6-on both read red ("needs --context"), so no part of the run is possible over the public hostname alone.
+
+**Not yet run on a cluster.** The first run whose session files it can read runs, after `. "$HECATON_CLUSTER_ENV"`,
+`python3 verify/agent_probe.py attackme.agenticburn.com --context watch-it-burn-community --profile accen-dev --only
+c6-off,c6-on --repeat 5`, compares the result with b23cc9e's 19/20 (now two payload shapes away, as the 2026-11-02
+entry says), and then `infra/terraform/fleet/fleet.sh reset-bot watch-it-burn-community` to clear the ten calls from
+attackme's `/cost`. Until hecaton#508 is deployed, another dispatch of #492 hits this same wall, so this run's report
+holds the issue on hecaton#508.
+
+**Suites.** On this branch, `bash verify/run-e2e-tools.sh` ran 48 checks in 22m44s; the offline suite inside it ran 234
+tests, all green. It exits 1 on `test_image_version_tags.py` alone, with the two reds the #796 entry above already
+records on staging `6408699`: the web-terminal tag CI pushed over, and ghcr.io's 404 for `sample-app-nginx-1.27.5`
+(#814). This change touches only decisions.md.
