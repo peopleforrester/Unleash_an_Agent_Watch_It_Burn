@@ -192,6 +192,13 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
     check("one address sending as 500 phones is held only by the cluster window",
           _plan.predicted_served(lim) == int(lim["proxy_cluster_rpm"] * _plan.minutes()),
           str(_plan.predicted_served(lim)))
+    # The run-of-show's Night Before #644 step quotes the default plan's estimate; it moves when the limits do (#788).
+    _ros = " ".join((REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text().split())
+    _served = _plan.predicted_served(lim)
+    _estimate = (f"at most ${_plan.sends * _plan.usd_per_call:.2f} if all {_plan.sends} turns reached the model",
+                 f"${_served * _plan.usd_per_call:.2f} predicted for about {_served} served turns")
+    check("the run-of-show's #644 estimate is the tool's prediction for the default plan",
+          all(s in _ros for s in _estimate), str(_estimate))
     check("limits read from git: guard-proxy 150/min cluster, 10/min session, $25 cap",
           (lim["proxy_cluster_rpm"], lim["proxy_session_rpm"], lim["cost_cap_usd"]) == (150, 10, 25.0), str(lim))
     check("client timeout outlasts nginx's 285s /chat read timeout",

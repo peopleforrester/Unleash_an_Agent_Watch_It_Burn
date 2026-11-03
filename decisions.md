@@ -10636,3 +10636,39 @@ The change itself is as run 16503 made it, rebased onto staging e586840.
 `test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`,
 not the pinned `68004fb5`. CI has pushed over that tag again. Nothing here touches an image.
 Run 16543 ran both again after the rewording, with the same results.
+
+## 2026-11-03 · #788 · The KubeCon docs give /chat as 10 a minute per conversation, with the estimate held to load_replay.py
+
+**What was left after #786.** #786 took console nginx's per-network zone out and rewrote most of the audience path
+text in the same commit (`803b84e`). Against #788's criteria four things were still open: the run-of-show's #644 step
+gave "about $1.90" where `verify/load_replay.py` predicts $1.88 for the default plan, open question 7 still said only
+"sized in git" and "attackme once it runs this config", the paragraph after the audience path table gave each phone
+"its own 10 a minute" without naming the two places that count it, and no file said whether
+`verify/test_audience_path_live.py` had run on watch-it-burn-community.
+
+**What changed.** In `facilitation/kubecon-na-2026-run-of-show.md`: the paragraph after the table names the 10 a
+minute per conversation in nginx and again in guard-proxy, the room held by guard-proxy's 150 a minute and the $25
+cost cap, and says the live test has not run on watch-it-burn-community. The #644 step quotes the tool's plan line,
+$7.50 at most and $1.88 predicted for about 375 served turns over about 2.5 minutes, names guard-proxy's 150 a minute
+as the limit that binds and says there is no per-network bucket; for `--users 150` it gives the tool's $1.88 for about
+375 of 450 turns, at most $2.25. Open question 7 states the limit and the room's two holds, and names the live test,
+the two load reruns and the phone check as owed as of 2026-11-03. `docs/KUBECON-ABSTRACT-READINESS.md` row 9 and the
+#450 note in `PROJECT_STATE.md` say the same and that the live test has never run on watch-it-burn-community.
+
+**A check for the estimate.** `verify/test_load_replay.py` gains "the run-of-show's #644 estimate is the tool's
+prediction for the default plan": it builds the worst case and the predicted cost and served turns from `Plan` and
+`deployed_limits()`, and finds both phrases in the run-of-show with its line breaks folded. On the old "$1.90" text
+it fails; on this text it passes. A change to the limits in git now has to move the run-of-show's numbers with it.
+
+**What differs from run 15018's draft.** `bash verify/draft-drift.sh origin/agent/450-15018 origin/staging` names 10
+paths staging has edited since, all four of this change's docs among them, so the text was written again on today's
+files. The draft's config and test half is already on staging as #786; this entry carries only the docs and the
+estimate check.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, once the
+ai-layer Application there has synced a staging revision with #786, must end "All live audience-path checks passed.";
+then the #644 reruns at 500 and 150 users in `facilitation/kubecon-na-2026-load-test.md`. This run was handed both
+contexts, but `clusters/env` and `clusters/kubeconfig` are mode 640, group `hecaton`, and its user is not in that
+group, so nothing on a cluster was read.
+
+No dependency was added.
