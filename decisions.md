@@ -10193,6 +10193,16 @@ Agent-only swap and the `MODEL_TIER` fallback. Two new checks read the pinned pr
 is unchanged in what it checks, because the committed `MODEL_TIER` is still the price until the first Agent read, and
 its comment says so.
 
+Three offline tests read proxy.py internals that 78c7cad changed, and failed on the repin until fixed here.
+`verify/test_cost_counter.py` and `verify/test_finale_cap.py` read `COST_PER_1K_IN`, which is gone (#37 prices per
+request through `prices_per_1k(bound_tier())`). They now use that call, and `test_cost_counter.py` gains the swap at
+the logic level, with the Agent read stubbed. Bound to `bedrock-nova`, a request is priced at Nova rates. After a swap
+to `bedrock-haiku`, with `MODEL_TIER` unchanged, it is priced at Haiku rates, and `bedrock-opus` at Opus rates. A
+`gateway-local-qwen3` binding is priced at `MODEL_TIER`, and a swap inside the 5-second cache is not read yet.
+`verify/test_c7_badge_grants.py` required every `_k8s_get` path to be a string literal. The new read passes
+`_AGENT_PATH`, a module constant, so the check now resolves module-level string constants. That also proves the
+issue's "no RBAC change": `guard-proxy-reader` grants `get` on `agents/workshop-agent` by name.
+
 **Not yet run on a cluster.** Run 16460 was handed `clusters/env` and `clusters/kubeconfig` for
 `watch-it-burn-community` and `watch-it-burn-private`, but they are mode 640, group `hecaton`, and the run's user
 (`hecaton-s2-claude-certkraken`) is not in that group, so every `kubectl` call failed with "permission denied" and

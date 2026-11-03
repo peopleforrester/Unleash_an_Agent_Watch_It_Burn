@@ -80,9 +80,22 @@ def k8s_reads(fn: ast.FunctionDef) -> list[ast.Call]:
 
 calls = [(name, c) for name, fn in funcs.items() for c in k8s_reads(fn)]
 check("proxy.py reads the cluster through _k8s_get", bool(calls))
-literal = [(name, c.args[0].value) for name, c in calls
-           if len(c.args) == 1 and isinstance(c.args[0], ast.Constant) and isinstance(c.args[0].value, str)]
-check("every _k8s_get call takes one string-literal path, so this check sees every object read",
+# A path may also be a module-level string constant, as the bound-model read's _AGENT_PATH is
+# (guard-proxy-agenticburn#37, #793): the name resolves to its one assigned literal.
+consts = {t.id: n.value.value for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+          and isinstance(n.value.value, str) for t in n.targets if isinstance(t, ast.Name)}
+
+
+def path_of(arg: ast.AST):
+    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+        return arg.value
+    if isinstance(arg, ast.Name):
+        return consts.get(arg.id)
+    return None
+
+
+literal = [(name, path_of(c.args[0])) for name, c in calls if len(c.args) == 1 and path_of(c.args[0]) is not None]
+check("every _k8s_get call takes one string-literal path, or a module constant holding one, so this check sees every object read",
       len(literal) == len(calls), f"{[ast.unparse(c) for _, c in calls]}")
 reads = {(name, path): resolve(path) for name, path in literal}
 check("every path names one object", all(reads.values()), f"{[p for (_, p), r in reads.items() if not r]}")
