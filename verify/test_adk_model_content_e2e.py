@@ -22,13 +22,14 @@ The fixture payloads are built the way kagent v0.10.1 builds them, read from sou
 Python's json.dumps with compact separators, keys in Go's field order, gives the same bytes.
 
 Each profile's traces processors (datadog-secret present, collector_render.py), with the chart's --feature-gates,
-take seven spans and must:
+take nine spans and must:
   - map a full request and reply to the semconv messages, the system prompt to gen_ai.system_instructions, and the
     function declarations offered to gen_ai.tool.definitions (#784);
   - make a turn that calls a tool finish_reason tool_call, and a functionResponse turn role tool;
   - write nothing, and pass the span on whole, for a payload cut at 2048 characters, one cut on a "}", kagent's
     32 KiB wrapper and capture switched off ("{}");
   - leave alone a span that already has gen_ai.input.messages;
+  - write no tool definitions, and log no failed statement, for a request that offers no function;
 and the collector must still take and pass a second request after all of that.
 
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
@@ -159,6 +160,11 @@ SPANS = [
     ("a5a5a5a5a5a5a721", "wrapper", {"gcp.vertex.agent.llm_request": WRAPPER}),
     ("a6a6a6a6a6a6a721", "capture-off", {"gcp.vertex.agent.llm_request": "{}", "gcp.vertex.agent.llm_response": "{}"}),
     ("a7a7a7a7a7a7a721", "existing", {"gen_ai.input.messages": EXISTING, "gcp.vertex.agent.llm_request": FULL_REQ}),
+    # #784: a request that offers the model no function, with no tools at all or only a non-function tool.
+    ("a8a8a8a8a8a8a721", "no-tools", {"gcp.vertex.agent.llm_request": go_json(
+        {"Model": MODEL, "Contents": [USER_TURN], "Config": {"systemInstruction": CONFIG["systemInstruction"]}})}),
+    ("a9a9a9a9a9a9a721", "search-only", {"gcp.vertex.agent.llm_request": go_json(
+        {"Model": MODEL, "Contents": [USER_TURN], "Config": {"tools": [{"googleSearch": {}}]}})}),
 ]
 AFTER = ("b1b1b1b1b1b1a721", "after", {"gcp.vertex.agent.llm_request": FULL_REQ,
                                        "gcp.vertex.agent.llm_response": FULL_RESP})
@@ -227,7 +233,7 @@ def run_collector(profile: str) -> tuple[dict[str, dict], str, bool]:
         proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *gates], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         try:
-            check(f"{profile}: the collector took the seven spans", post(port, otlp_body(SPANS), proc))
+            check(f"{profile}: the collector took the {len(SPANS)} spans", post(port, otlp_body(SPANS), proc))
             check(f"{profile}: and a second request after them", post(port, otlp_body([AFTER]), proc))
             alive = proc.poll() is None
             deadline = time.time() + 30  # the batch processor holds spans up to its timeout
@@ -294,6 +300,13 @@ for profile in PROFILES:
         check(f"{profile} {label}: the ADK request attribute passes through unchanged",
               a.get("gcp.vertex.agent.llm_request") == kept)
     check(f"{profile} cut: a cut response writes no output either", "gen_ai.output.messages" not in got.get("cut", {}))
+
+    for label in ("no-tools", "search-only"):
+        a = got.get(label, {})
+        check(f"{profile} {label}: a request offering no function writes no gen_ai.tool.definitions",
+              "gen_ai.tool.definitions" not in a, str(a.get("gen_ai.tool.definitions")))
+        check(f"{profile} {label}: and its messages are still mapped",
+              parsed(a.get("gen_ai.input.messages")) == WANT_FULL_IN[:1], str(a.get("gen_ai.input.messages"))[:300])
 
     existing = got.get("existing", {})
     check(f"{profile} existing: gen_ai.input.messages already on the span is left as it was",

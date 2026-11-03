@@ -12650,7 +12650,8 @@ tier) runs one turn carrying the runbook's sentinel through the real otelcol-con
 sentinel reaches the exporter. In Act 2 it appears nowhere in the exporter's file, the blocked tool call is still an
 error, and the system prompt and tool definitions are untouched. `verify/test_adk_model_content_e2e.py` now reads
 `gen_ai.tool.definitions` too, with a `googleSearch` tool, an MCP declaration with `parametersJsonSchema` and one with
-no description in the fixture. `verify/test_genai_semconv_pin.py` (offline) holds the pin, the chat span group
+no description in the fixture, and two requests that offer no function, which must write none and log no failed
+statement. `verify/test_genai_semconv_pin.py` (offline) holds the pin, the chat span group
 against proxy.py's `chat_span` attributes, the copy's drop of that span, and the list of things not adopted.
 
 **Not yet run on a cluster.** This run (hecaton run 16441) has no Datadog read access, which is what #759 provides.
@@ -12668,3 +12669,10 @@ escalate list. Once #759 gives runs read access to Whitney's sandbox org and sta
    shape is `verify/test_collector_act2_redaction_e2e.py`.
 3. After the guard-proxy-agenticburn change is repinned (Michael's), the APM `chat` span must carry both counts, and
    the Agent Observability total must equal the sum of the `generate_content` rows, with no second count.
+
+**Tests at this entry.** `bash verify/run-tests.sh` passed (225 tests). `bash verify/run-e2e-tools.sh` ran 44 checks and
+failed one, `test_image_version_tags.py`, on the cause #783's re-dispatch entry recorded at this run's base: ghcr.io
+serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:d6acd503bc20…`, not the pinned `sha256:68004fb5ed2d…`. That
+belongs to #714 and needs a ghcr.io write. Every #784 check in the tier passed: `test_collector_act2_redaction_e2e.py`,
+`test_adk_model_content_e2e.py`, `test_trace_shape_e2e.py`, `test_collector_pii_scrub_e2e.py` and
+`test_collector_one_root_e2e.py`. `weaver registry check` (0.24.2, sha-verified) passed on the v1.41.1 pin.
