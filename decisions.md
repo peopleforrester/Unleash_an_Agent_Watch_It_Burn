@@ -13052,3 +13052,8 @@ venue network while no room is chatting. It must end "All live audience-path che
 runs it once its session files are readable, after first confirming with
 `kubectl --context watch-it-burn-community -n argocd get application ai-layer -o jsonpath='{.status.sync.revision}'`
 that the synced revision contains `803b84ec`. The #644 load replay reruns wait on the same sync.
+
+**The suites, on this branch.** `bash verify/run-e2e-tools.sh` ran the offline suite first: 240 tests, "ALL OFFLINE
+RENDER-GATE TESTS GREEN". The tools tier ran 53 checks (the offline suite and 52 tier tests) in 24m22s and exited 1
+on `test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `watch-it-burn:sample-app-nginx-1.27.5`,
+the tag staging records under #814. This change is a decisions.md entry and touches no image.
