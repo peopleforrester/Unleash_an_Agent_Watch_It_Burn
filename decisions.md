@@ -12715,3 +12715,10 @@ its four commits onto staging 12b31cd and merged the three files by hand.
 - *Clusters.* This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` are again mode 0640, group `hecaton`, and its user
   (`hecaton-s3-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`) cannot read them (hecaton#508), so the
   KubeCon reads and the Datadog look stay under "Not yet run on a cluster" above.
+- *The suites on this port.* `bash verify/run-e2e-tools.sh` ran 52 checks (the offline suite and 51 tier tests) in
+  23m49s and exits 1 on one, `test_image_version_tags.py`: `sample-app-nginx-1.27.5` answers 404 on ghcr.io, the red
+  staging already records (#814). The web-terminal digest passed this time. Its offline suite ran 237 tests, all
+  green, `test_collector_act2_redaction.py`, `test_genai_semconv_pin.py` and `test_weaver_guard_proxy_spans.py` among
+  them. In the tier, `test_weaver_registry_check.py` (weaver 0.24.2 on the v1.41.1 pin, the chat group resolving with
+  both token counts), `test_collector_act2_redaction_e2e.py`, `test_adk_model_content_e2e.py`,
+  `test_trace_shape_e2e.py`, `test_collector_pii_scrub_e2e.py` and `test_collector_one_root_e2e.py` passed.
