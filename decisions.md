@@ -13534,3 +13534,26 @@ tests, all green. `test_image_version_tags.py` printed
 **No live check.** Clusters pull sample-app by digest, so the tag changes nothing on them, and this run's
 `clusters/kubeconfig` and `clusters/env` are still mode 0640 in group `hecaton`, which this run's user is not in
 (hecaton#508).
+
+## 2026-11-03 · #720 · Test review of the draft on `origin/agent/720-14845`: superseded, not to be promoted
+
+**What was asked.** Run 14901, the test review of #720's draft at `6a0dbef3caa2`, ended with no valid report, and the
+coordinator asked for the review again. Run 16826 read the draft but its shell and file writes were refused, so it
+wrote no report; run 16828 finishes it.
+
+**The verdict.** `bash verify/prior-drafts.sh 720 origin/staging` printed NONE: each draft not in staging is followed
+there by later #720 work. The draft's one commit changes four files, and staging carries each in a later form:
+- `verify/test_challenge_fallbacks.py`: the draft's three checks (the Night Before curls a beacon view, C1 reads the
+  count from that view, C1 names no `https://provisioning.agenticburn.com` URL) and its stub fixture reading that same
+  view are on staging from #826 (`9345bd51`), line for line apart from one variable name and the issue number in a
+  comment. They check their anchor first, read the URL from the run of show rather than hard-coding it, and draw
+  nothing at random. #826's entry above shows them failing on a fallback set back to the retired host.
+- `challenges/c1-exfil-s3/fallback.kubectl.sh`: the draft set `BEACON_VIEW` to `https://agenticburn.com/beacon/view`.
+  Staging's `d2264c1d` (#651) set it to `https://beacon.burritobot.co/beacon/view`, the URL the Night Before step
+  curls, so the draft's value would now fail the test above.
+- `docs/GOTCHAS-FLEET-AND-DELIVERY.md`: the draft's `start.agenticburn.com/roster.json` probe is replaced by #827's
+  `start.burritobot.co/roster.json`, held by `verify/test_gotchas_router_probe.py`.
+- decisions.md: the draft's two answers are the #720 entry above, recorded under #825.
+
+So nothing is ported, and the draft branch is not to be promoted: cherry-picked, it would move the fallback back to
+an `agenticburn.com` URL the test refuses. This entry is the only change.
