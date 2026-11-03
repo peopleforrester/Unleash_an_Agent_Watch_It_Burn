@@ -11459,78 +11459,81 @@ run's report holds the issue on hecaton#508.
 **What it is.** `agent-obs-silent` in `infra/datadog-fleet/monitors.yaml`, next to `no-traces`, session-scoped, priority 2:
 `sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count() < 1` with `notify_no_data` and a 10-minute no-data
 timeframe. #783's outage (Agent Observability filed no BurritoBot turn for six hours from 2026-11-01 ~15:55 UTC while APM
-kept every span) is the case it is for: `no-traces` reads the collector's span count, which is upstream of the
-conversion that failed, so it stayed green through it. `verify/agent_obs_flow.py` answers the same question by hand
+kept every span) is the case it covers. `no-traces` reads the collector's span count, which sits upstream of the
+conversion that failed, so it stayed green through the outage. `verify/agent_obs_flow.py` answers the same question by hand
 before a run-through; the monitor answers it between runs.
 
-**The metric name.** The issue asked for it to be read in Whitney's sandbox org first. It has been: `ml_obs.trace`
-under `ml_app:burritobot` is what `verify/test_datadog_sandbox_live.py` (#629) reads there, and the #711 entry records
-it showing 5 burritobot traces for 2026-10-31. Datadog's metrics page (docs.datadoghq.com/llm_observability/monitoring/
-metrics, read 2026-11-03) lists `ml_obs.trace` as a count tagged env, error, ml_app, service, span_kind and version.
-`ml_obs.trace` and not `ml_obs.span`: since #746's one-root copy a turn is one trace, so the trace count is the turn
-count, and a span count would also move on the copy's inner spans.
+**The metric name.** The issue asked for it to be read in Whitney's sandbox org first. The repo already records that read:
+`ml_obs.trace` under `ml_app:burritobot` is what `verify/test_datadog_sandbox_live.py` (#629) reads there, and the #711
+entry records it showing 5 burritobot traces for 2026-10-31. Datadog's metrics page (docs.datadoghq.com/llm_observability/
+monitoring/metrics, read 2026-11-03) lists `ml_obs.trace` as a count tagged env, error, ml_app, service, span_kind and
+version. The monitor counts traces. Since #746's one-root copy, one BurritoBot turn is one trace, so the trace count tracks
+turns. A span count would also move on the copy's inner spans.
 
 **The grouping rule, and why this monitor is the exception.** The issue assumed Agent Observability's tags carry
-`k8s.cluster.name`. Its spans do (`agent_obs_flow.py` filters the spans API on it), but its metrics do not: the same
-page says "other tags set on spans are not available as tags on Agent Observability metrics, except LLM token and cost
-metric tags", and that exception is the SDK's `cost_tags`, which the collector's OTLP copy does not use. Both KubeCon
-clusters share env, ml_app, service and version, so no metric tag tells them apart. This repo already met the same
-wall twice: `room_view.py` refuses `ml_obs.*` for it (the 2026-10-29 #665 room-view entry), and `test_datadog_sandbox_live.py`
-checks ml_app per env. So the monitor is one alert for the whole org, marked `scope: org`. `fleet_monitors.py` allows
-that only on `ORG_SCOPE_METRICS` (`ml_obs.`): it refuses `scope: org` on any other metric, an `ml_obs.*` monitor
-without it, a cluster filter or any group on it, a monitor of that scope that fires on a rise or lacks
-`notify_no_data`, and a message naming `{{kube_cluster_name.name}}`. The render leaves off the per-cluster
-`fleet.sh verify` line, and `--data` reads its overall state (not No Data) instead of a group per cluster.
+`k8s.cluster.name`. Its spans do: `agent_obs_flow.py` filters the spans API on it. The metrics carry span tags only for
+token and cost metrics, through the SDK's `cost_tags`, which the collector's OTLP copy does not set. Datadog's metrics
+page says: "other tags set on spans are not available as tags on Agent Observability metrics, except LLM token and cost
+metric tags". Both KubeCon clusters share env, ml_app, service and version, so no metric tag separates them.
+This repo already hit the same limit twice: `room_view.py` refuses `ml_obs.*` for it (the 2026-10-29 #665 room-view
+entry), and `test_datadog_sandbox_live.py` checks ml_app per env. So the monitor is one alert for the whole org, marked
+`scope: org`. `fleet_monitors.py` allows that only on `ORG_SCOPE_METRICS` (`ml_obs.`). It refuses `scope: org` on any
+other metric, an `ml_obs.*` monitor without it, a cluster filter or any group on it, a scope-org monitor that fires on a
+rise or lacks `notify_no_data`, and a message naming `{{kube_cluster_name.name}}`. The render leaves off the per-cluster
+`fleet.sh verify` line, and `--data` checks the monitor's overall state, one value for the org, in place of a group per
+cluster.
 
-**Ways of making it per cluster that were not taken.** Stamping the cluster into a tag the metric does carry, on the
-Agent Observability copy only (say `version`, or `env`), would group it, but it rewrites a unified-service tag the
-presenters see on every row, and env is #629's single sandbox-org env that `test_datadog_sandbox_live.py` holds. A
-`span_metrics` count on the collector's `traces/llmobs` pipeline would carry `kube_cluster_name`, but it counts what the
-collector sends, which #783 never stopped. What the org-wide alert cannot see is one cluster's copy stopping while the
-other's arrives; `agent_obs_flow.py chat` answers that per cluster, and the alert's message names it.
+**Per-cluster designs considered and set aside.** Stamping the cluster into a tag the metric does carry, on the Agent
+Observability copy only (say `version` or `env`), would group the monitor. It would rewrite a unified-service tag the
+presenters see on every row, and `env` is the single sandbox-org env that `test_datadog_sandbox_live.py` checks. A
+`span_metrics` count on the collector's `traces/llmobs` pipeline would carry `kube_cluster_name`. It counts what the
+collector sends, and the #783 failure happened after that point. The org-wide alert cannot see one cluster's copy stopping
+while the other's still arrives; `agent_obs_flow.py chat` answers that per cluster, and the alert's message names it.
 
 **Offline.** `verify/test_fleet_monitors.py` holds the definition (metric, ml_app shared with `agent_obs_flow.py`, the
 window, absence, session scope), ten refusals of the exception's misuses, the render, seven monitors through the fake
 org's apply, and `--data` on the org-wide monitor: No Data fails naming the whole org, Alert counts as fed, and it needs
-no per-cluster group. Removing the `scope: org` branch from `data_check` fails the No Data check and the no-group
-check; removing `validate_org_scope`'s call fails nine of the ten refusals (the tenth, a scope other than org, is
-checked before it). Both confirmed on a temporary edit, restored.
+no per-cluster group. Removing the `scope: org` branch from `data_check` fails the No Data check and the no-group check;
+removing `validate_org_scope`'s call fails nine of the ten refusals (the tenth, a scope other than org, is checked before
+it). Both confirmed on a temporary edit, restored.
 
-**Not yet run on a cluster or in the org.** Hecaton run 16655's `clusters/env` and `clusters/kubeconfig` are mode 640,
-group `hecaton`, and its user is not in that group, so the AWS session and the Datadog keys could not be read
-(hecaton#508), and nothing here was read live. The monitor is not in the org until an apply, which needs Whitney's
+**Not yet run on a cluster or in the org.** Hecaton run 16655's `clusters/env` and `clusters/kubeconfig` are mode 640 and
+group `hecaton`, and that run's user was not in the group, so the AWS session and the Datadog keys could not be read
+(hecaton#508). Nothing here was read live. The monitor is absent from the org until an apply, which needs Whitney's
 unscoped write key. Owed, in order, from a session with accen-dev at the repo root:
 
     WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session START/END
     python3 verify/agent_obs_flow.py chat --profile accen-dev        # a chat per bot, so ml_obs.trace has a point
     python3 verify/test_fleet_monitors_live.py                        # --check, then --data: agent-obs-silent must not be No Data
 
-The apply's validate step checks the query's syntax, not that the metric reports, so the `--data` line `DATA     monitor agent-obs-silent (OK, the whole org: no cluster tag)`
-inside 10 minutes of the chat is the one that says the name is right.
+The apply's validate step checks the query's syntax only. The `--data` line `DATA     monitor agent-obs-silent (OK, the whole
+org: no cluster tag)`, printed within 10 minutes of the chat, is the line that confirms the metric name.
 
-**The suites (run 16655, on caeb456).** `bash verify/run-tests.sh`, run as the first half of the E2E command, ran 230
-tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_fleet_monitors.py` among them. `bash verify/run-e2e-tools.sh`
-ran 46 checks and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7`
-at `sha256:0b72ecc7...`, not the pinned `68004fb5`, the tag CI pushed over (#815, #816, #823, #824). Nothing here
-touches an image.
+**The suites (run 16655, on caeb456).** `bash verify/run-tests.sh`, run as the first half of the E2E command, ran 230 tests
+and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_fleet_monitors.py` among them. `bash verify/run-e2e-tools.sh` ran 46
+checks and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at
+`sha256:0b72ecc7...`, a digest that differs from the pinned `68004fb5`. That is the tag CI pushed over (#815, #816, #823,
+#824). Nothing here touches an image.
 
 **Resumed by run 16664: the rebase conflict.** Run 16655 ended `failed (rebase-conflict)` before anything reached staging.
-Its first commit (caeb456) put the PROGRESS.md bullet at the top of `### Added` in `[Unreleased]`, the line every run
-that adds a changelog bullet inserts at. Staging moved from 5d0a620 to 04455a2 in the meantime, and the top of that
-section had gained #759's, #807's and #808's bullets, so the hunks collided (insert-insert, one region). Its
-decisions.md append did not collide: both sides only added to the end of the file. The fix is in the placement, not
-the content. `verify/test_progress_764.py` requires the bullet only under a `###` heading in `[Unreleased]`, once, so
-it now sits at the end of that `### Added` block, just before `### Fixed`, a spot no run inserts at. Rebased onto
-04455a2, the PROGRESS.md hunk applies cleanly. The bullet's text is unchanged. Known limit: a later run that also
-appends at the end of that block will collide the same way; a rebase resolves it by keeping both bullets.
+The cause was placement. Its first commit (caeb456) put the PROGRESS.md bullet at the top of `### Added` in `[Unreleased]`,
+the line every run that adds a changelog bullet inserts at. Staging moved from 5d0a620 to 04455a2, and the top of that
+section had gained #759's, #807's and #808's bullets, so the hunks collided (insert-insert, one region). Its decisions.md
+append merged, since both sides only added to the end of the file. The bullet's text is unchanged. It now sits at the end
+of the `### Added` block, just before `### Fixed`, where no run inserts. `verify/test_progress_764.py` requires only a `###`
+heading above the bullet in `[Unreleased]`, once, so the move passes it. Rebased onto 04455a2, the PROGRESS.md hunk applies
+cleanly. Known limit: a later run that also appends at the end of that block collides the same way, and a rebase resolves
+it by keeping both bullets.
 
 **The suites (run 16664, on the rebased branch).** `bash verify/run-tests.sh` exits 0 with 232 tests (staging added two
 since 230), `test_fleet_monitors.py` and `test_progress_764.py` among them, and ends `ALL OFFLINE RENDER-GATE TESTS GREEN`.
-`bash verify/run-e2e-tools.sh` ran 47 checks and exits 1 on one, `test_image_version_tags.py`: the same web-terminal tag
-CI pushed over (#815, #816, #823, #824). Its log also prints `FAIL` lines from `test_stage_traces.py`, which passes: they
-are the negative cases of its fake private cluster and fake Datadog, not the live clusters. `test_fleet_monitors_live.py`
-is an E2E check and could not read its AWS profile in this run (`config profile (accen-dev) could not be found`): the
-run's session files are not readable by its group (hecaton#508), so it did not reach the org. The org still lacks
-`agent-obs-silent` until the apply in the follow-up.
+`bash verify/run-e2e-tools.sh` ran 47 checks and exits 1 on one, `test_image_version_tags.py`: the same web-terminal tag CI
+pushed over (#815, #816, #823, #824). Its log also prints `FAIL` lines from `test_stage_traces.py`. That test passes, and
+those lines come from its fake private cluster and fake Datadog. `test_fleet_monitors_live.py` is an E2E check that could
+not read its AWS profile in this run (`config profile (accen-dev) could not be found`), so it did not reach the org. The
+org still lacks `agent-obs-silent` until the apply in the follow-up.
+
+**The gate fix (run 16672).** Run 16664 failed the `ai-isms` gate on the antithesis pattern (a reframe that names what a
+thing is not). The sentences that matched, in this entry and in a test label, now state their claim directly.
 
 No dependency was added.

@@ -180,7 +180,7 @@ check("an org-wide monitor grouped by anything is refused", any("one alert group
 check("an org-wide monitor that fires on a rise is refused", any("fires on absence" in p for p in broken_key(
       "agent-obs-silent", query="sum(last_10m):sum:ml_obs.trace.error{ml_app:burritobot}.as_count() > 1",
       options={"thresholds": {"critical": 1}, "notify_no_data": True, "no_data_timeframe": 10})))
-check("an org-wide monitor without notify_no_data is refused (a dead count is No Data, not 0)",
+check("an org-wide monitor without notify_no_data is refused (a dead count reads as No Data)",
       any("needs notify_no_data" in p for p in broken_key("agent-obs-silent", options={"thresholds": {"critical": 1}})))
 check("an org-wide message naming the cluster variable is refused",
       any("empty on an org-wide alert" in p for p in broken_key("agent-obs-silent", message="{{kube_cluster_name.name}} down")))

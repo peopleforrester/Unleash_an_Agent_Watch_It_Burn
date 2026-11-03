@@ -74,8 +74,8 @@ conversion that failed. Agent Observability's metrics carry `env`, `ml_app`, `se
 more, never a span's `k8s.cluster.name` (Datadog's metrics page: "other tags set on spans are not available as
 tags on Agent Observability metrics"), so this monitor cannot be per cluster. It is `scope: org`: one alert,
 no cluster filter, no group. The loader allows that only on `ml_obs.*` (`ORG_SCOPE_METRICS` in
-`fleet_monitors.py`), refuses an `ml_obs.*` monitor without it, and in `--data` reads its overall state instead
-of a group per cluster.
+`fleet_monitors.py`), refuses an `ml_obs.*` monitor without it, and `--data` checks its overall state, one value
+for the org, in place of a group per cluster.
 
 What it cannot see: one cluster whose copy stops while the other's still arrives. That is what
 `python3 verify/agent_obs_flow.py chat --profile accen-dev` answers, per cluster, before every run-through; the
