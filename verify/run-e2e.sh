@@ -22,11 +22,11 @@
 # this suite exists to prove the things the offline suite cannot, and a run that proved none of them must
 # not exit 0. Every prerequisite is checked before anything runs, so one run lists everything that is missing.
 #
-# kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane are not taken from the host (#585, #654, #770, #775). The
-# prerequisite check runs verify/fetch-e2e-tools.sh, which puts the pinned, checksum-verified binaries of
-# e2e-tools.lock in the gitignored verify/.tools/bin, and that directory goes first on PATH for everything after it,
-# so a cluster build runs the same binaries as the gate's E2E command (run-e2e-tools.sh). A failed fetch is one of
-# the missing prerequisites.
+# kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver are not taken from the host
+# (#585, #654, #770, #775, #782). The prerequisite check runs verify/fetch-e2e-tools.sh, which puts the pinned,
+# checksum-verified binaries of e2e-tools.lock in the gitignored verify/.tools/bin, and that directory goes first on
+# PATH for everything after it, so a cluster build runs the same binaries as the gate's E2E command
+# (run-e2e-tools.sh). A failed fetch is one of the missing prerequisites.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"
@@ -35,9 +35,9 @@ NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
 # jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter. curl, tar, unzip and sha256sum fetch
-# and verify the pinned tools. uv brings the Python pins the checks run on (playwright, llm-guard, segno, mcp),
-# as in run-e2e-tools.sh, so nothing is installed globally (#441).
-for tool in python3 node corepack jq curl tar unzip sha256sum uv; do
+# and verify the pinned tools, and xz unpacks weaver's archive. uv brings the Python pins the checks run on
+# (playwright, llm-guard, segno, mcp), as in run-e2e-tools.sh, so nothing is installed globally (#441).
+for tool in python3 node corepack jq curl tar unzip sha256sum xz uv; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
 # Backstage runs on Node 24 (packages/backend/Dockerfile is node:24). Yarn comes from corepack, which
@@ -49,17 +49,19 @@ fi
 # The pinned tools: the kyverno CLI test_kyverno_cel_policies.py evaluates the policies with, the conftest and
 # terraform the IAM policy pipeline (#207) renders and checks the roots with, the kubectl and helm every render and
 # live check runs, the otelcol-contrib the collector tests run (test_lab_pipeline_collector.py, the chart's
-# version), and the ttyd the terminal image ships (test_ttyd_ws_auth.py, #770). The fetch needs the four tools above, so it is only tried once they are there.
+# version), the ttyd the terminal image ships (test_ttyd_ws_auth.py, #770), and the weaver
+# test_weaver_registry_check.py checks weaver/registry with (#782). The fetch needs the four tools above, so it is
+# only tried once they are there.
 tools_ready=0
 if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1 \
     && command -v sha256sum >/dev/null 2>&1; then
     if bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
         tools_ready=1
     else
-        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane could not be fetched (fetch-e2e-tools.sh, reasons above)")
+        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver could not be fetched (fetch-e2e-tools.sh, reasons above)")
     fi
 else
-    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
+    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
 fi
 if [[ "${tools_ready}" -eq 1 ]]; then
     # The six tests that take a path get the fetched one, so a tool already on the host is never what runs.

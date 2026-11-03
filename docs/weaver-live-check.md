@@ -1,12 +1,15 @@
 # Weaver: the guard-proxy span contract (PRD #20 M6)
 
-The guard-proxy emits two spans (PRD #22 M1): an HTTP `SERVER` span for the inbound hop and a
-gen_ai `sanitize` `INTERNAL` span for the guard decision. `weaver/registry/` is the machine-checkable
-contract for those spans, pinned to OpenTelemetry semantic conventions **v1.37.0**. Two checks use it:
+The guard-proxy emits an HTTP `SERVER` span for the inbound hop (PRD #22 M1), a gen_ai `sanitize`
+`INTERNAL` span for the A2A guard decision, a gen_ai `chat` `INTERNAL` span for a /chat turn, an
+`agent.forward` `CLIENT` span per forward, and the `gen_ai.client.cost` gauge. `weaver/registry/` is the
+machine-checkable contract for all five, pinned to OpenTelemetry semantic conventions **v1.37.0**. The Go
+guard-proxy (guard-proxy-agenticburn) generates its attribute keys from it with `scripts/gen-semconv.sh`, so it
+is the one contract proxy.py and the Go build both answer to (#782). Two checks use it:
 
 | Check | What it proves | When it runs |
 |---|---|---|
-| `weaver registry check` | The contract itself is well-formed and every `ref:` resolves against upstream semconv v1.37.0. Catches a typo'd or renamed attribute. | CI, on any change under `weaver/` (`.github/workflows/weaver-registry-check.yml`). |
+| `weaver registry check` | The contract itself is well-formed and every `ref:` resolves against upstream semconv v1.37.0. Catches a typo'd or renamed attribute. | CI, on any change under `weaver/` (`.github/workflows/weaver-registry-check.yml`), and in the gate's E2E command, `bash verify/run-e2e-tools.sh`, as `verify/test_weaver_registry_check.py` with the same pinned weaver (#782). `verify/test_weaver_guard_proxy_spans.py` holds the registry to proxy.py's attributes offline. |
 | `weaver registry live-check` | The spans the **running** proxy actually emits match the contract. Catches drift between `proxy.py` and the registry. | Manually, against live telemetry from a deployed cluster. |
 
 ## Toolchain

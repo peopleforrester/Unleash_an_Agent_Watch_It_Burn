@@ -393,7 +393,9 @@ spec:
       labels: { app.kubernetes.io/name: guard-proxy, tags.datadoghq.com/service: burritobot, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
       # OTel Operator injects the Python SDK (init-container + PYTHONPATH) so proxy.py's manual spans
       # (PRD #22 M1) emit. The image carries no SDK; this annotation activates injection. References the
-      # Instrumentation CR `watch-it-burn-python` in this namespace.
+      # Instrumentation CR `watch-it-burn-python` in this namespace. THE GO CUTOVER (#738) ALSO TURNS ON go-otel/
+      # (#782), which swaps inject-python for inject-sdk on the same CR: the Go build's OTEL_* env, without a Python
+      # agent. verify/test_guard_proxy_go_otel.py fails a guard-proxy that no longer runs proxy.py without it.
       # checksum/proxy-py FORCES A ROLLOUT WHEN proxy.py CHANGES, and it has to be bumped by hand.
       #
       # proxy.py is mounted from the guard-proxy-src ConfigMap and read by Python once, at startup.

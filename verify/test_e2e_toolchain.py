@@ -107,11 +107,12 @@ check(f"with no toolchain it exits 1 (exit {bare.returncode})", bare.returncode 
 check("it says it cannot run, as a failure and not a skip", CANNOT_RUN in bare.stderr)
 for item in ("node is not on PATH", "corepack is not on PATH", "CONTEXT is not set", "curl is not on PATH",
              "unzip is not on PATH", "sha256sum is not on PATH", "uv is not on PATH",
-             "the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane were not fetched: "
+             "the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver were not fetched: "
              "fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum"):
     check(f"it lists what is missing: {item}", f"  - {item}" in bare.stderr)
-# The seven pinned tools come from fetch-e2e-tools.sh (#585, #654, #770), never from PATH, so PATH is never asked for them.
-for tool in ("kubectl", "helm", "kyverno", "conftest", "terraform", "otelcol-contrib", "ttyd"):
+# The pinned tools come from fetch-e2e-tools.sh (#585, #654, #770, #775, #782), never from PATH, so PATH is never asked
+# for them.
+for tool in ("kubectl", "helm", "kyverno", "conftest", "terraform", "otelcol-contrib", "ttyd", "crane", "weaver"):
     check(f"it never asks for {tool} on PATH",
           not any(tool in line and "not on PATH" in line for line in bare.stderr.splitlines()))
 check("it runs no check before the prerequisites pass", "E2E checks ran" not in bare.stdout + bare.stderr)

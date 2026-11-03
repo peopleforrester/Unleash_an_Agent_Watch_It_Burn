@@ -6,10 +6,11 @@
 # Built and validated against weaver 0.24.2.
 name: watch-it-burn
 description: >-
-  Semantic-convention registry for the Watch It Burn workshop guard-proxy. Declares the HTTP SERVER
-  and gen_ai "sanitize" spans the proxy emits (PRD #22 M1) and resolves their attributes against the
-  upstream OpenTelemetry semantic conventions, so `weaver registry check` fails in CI if the proxy
-  drifts from the agreed contract.
+  Semantic-convention registry for the Watch It Burn workshop guard-proxy. Declares the HTTP SERVER,
+  gen_ai "sanitize" and "chat" and agent.forward CLIENT spans the proxy emits (PRD #22 M1, #782) and
+  its gen_ai.client.cost gauge, and resolves their attributes against the upstream OpenTelemetry
+  semantic conventions, so `weaver registry check` fails in CI if the proxy drifts from the agreed
+  contract.
 schema_url: https://agenticburn.com/schemas/watch-it-burn/1.0.0/schema.yaml
 dependencies:
   - name: otel
