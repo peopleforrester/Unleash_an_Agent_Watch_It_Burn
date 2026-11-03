@@ -12292,3 +12292,36 @@ spells out. This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` (`/var/lib/hecat
 640, owner and group `hecaton`, and the run's user (`hecaton-s3-claude-certkraken`, groups `hecaton-runs` and
 `hecaton-tools`) cannot read them, so it is in this run's escalate (hecaton#508). It creates nothing. The Go
 guard-proxy's live spans and cost gauge still wait on the #738 cutover listing go-otel.
+
+## 2026-11-03 · #782 · Run 16743 ports run 16671's draft onto staging `1a59c48` and fixes the prose that failed it
+
+**What was ported.** `bash verify/prior-drafts.sh 782 origin/staging` printed START at `origin/agent/782-16671`:
+eight commits outside staging, cut from staging `329e2f2`, with two drift lines that are edits in place
+(`gitops/ai-layer/resources.yaml` by `d2264c1`, `verify/run-e2e-tools.sh` by `a450551`) and a decisions.md APPEND.
+All eight were cherry-picked in order onto `1a59c48`. decisions.md was the one conflict, and both sides' entries are
+kept, staging's first. The two drift commits were reread against the draft: `d2264c1` changed hostnames in
+`resources.yaml` away from the guard-proxy comment the draft extends, and `a450551` changed prose in the runner away
+from the tool loop the draft adds `xz` to. No code, manifest or test differs from the draft.
+
+**Why the draft did not land.** Run 16671's report said it guessed at the cause. This run ran
+`python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging` on the ported
+branch, and it failed decisions.md on two added lines: an antithesis in the go-otel entry ("The annotation is
+replaced, then a negation of adding one") and a hype verb in the dry-run entry (escalation 737's tier described with
+a word on the list). decisions.md reads `major`, so each of those fails the gate, and every run since 16462 carried
+the same two lines forward. Commit `9774e0c` rewords both, with the meaning kept: the Component swaps the old
+annotation out for the new one, and escalation 737 ran in hecaton's higher-privilege tier. No test or script reads
+either phrase (`git grep` over `verify` and `scripts`). The gate then passed on all three changed prose files.
+
+**The suites, on this branch.** `bash verify/run-e2e-tools.sh` ran 50 checks (the offline suite and 49 tier tests)
+in 22m59s and exited 1. The offline suite inside it ran 235 tests and printed "ALL OFFLINE RENDER-GATE TESTS GREEN".
+The one red is `test_image_version_tags.py`, on the two tags staging already records under #794 and #814: ghcr.io
+serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...` where the pin is `68004fb5`, and answers 404
+for `sample-app-nginx-1.27.5`. This change touches neither. `test_weaver_registry_check.py` passed, ending
+"weaver/registry passes the pinned weaver's check and resolves what the guard-proxy builds generate from", and
+`test_guard_proxy_go_otel.py` passed, ending "All guard-proxy Go OTEL_* environment checks passed".
+
+**Not yet run on a cluster.** The inject-sdk server-side dry run with limits that run 16582's entry spells out. This
+run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` (`/var/lib/hecaton/runs/16743/clusters/`) are mode 640, owner and
+group `hecaton`, and the run's user (`hecaton-s4-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`)
+cannot read them (hecaton#508), so it is in this run's escalate. It creates nothing. The Go guard-proxy's live spans
+and cost gauge wait on the #738 cutover listing go-otel.
