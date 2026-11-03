@@ -11213,3 +11213,56 @@ of the swap is recorded here or on the issue yet.
 **Not yet run on a cluster.** All of the reads in run 15968's entry above, on watch-it-burn-community. The swap reaches
 that cluster by auto-sync from staging, so the next run whose cluster files are readable can run them straight away.
 A pass closes #733.
+
+## 2026-11-03 · #759 · A run reads BurritoBot's traces with watch-it-burn/datadog's read pair; the live read is still owed
+
+**Why this changed from the 2026-11-01 draft.** Run 15550's draft (`4aba168`, on `origin/agent/759-15550`, never
+landed: run 16468 failed hecaton's rebase) read traces through a hecaton `sources datadog` verb holding a new key pair
+Michael was to create. The coordinator's note on #759 (2026-11-03) changed the route: since 2026-11-02 every run on this
+repo gets an accen-dev session, and with it the read pair in Secrets Manager `watch-it-burn/datadog` (api-key,
+app-key, site). The note asks the next run to read traces with that pair first; if its scopes cover LLM Observability
+and APM, no new key and no hecaton verb are needed, and if Datadog refuses, to name the scope it refused. `sources
+datadog` is still refused today (`REFUSED sources datadog: unknown verb or wrong arguments`, checked this run).
+
+**What differs from the draft.** `verify/dd_traces.py` keeps the draft's reader: the org named first from
+`/api/v2/current_user` and refused unless it starts with `WIB_DD_POOL_PREFIX` (default `Datadog`), the newest
+`ml_app:burritobot` LLM Observability spans over `--minutes`, the `--traces` newest read whole by `filter[trace_id]`
+and drawn as roots and children with kind, name, duration, status and tokens, `--apm` for the newest APM spans under
+`env:burritobot-kubecon-na-26 service:burritobot*`, `--trace` and `--json`. GETs only. The draft's `--via
+sources|env` is gone. The pair now comes from `fleet_monitors.read_keys` as a required `--profile` in `--region`
+(default us-west-2), as `verify/agent_obs_flow.py` and `verify/stage_traces.py` read it, never the ambient AWS
+default. New: a 403 names the permission that endpoint needs beside Datadog's own error (`llm_observability_read` for
+`/api/v2/llm-obs/v1/spans/events`, `apm_read` for `/api/v2/spans/events`, `user_self_profile_read` for
+`/api/v2/current_user`; Datadog's permissions list, read 2026-11-01 by run 15550), which is the report the note asks
+for. A run reads traces with:
+
+    . "$HECATON_CLUSTER_ENV"
+    python3 verify/dd_traces.py --profile accen-dev --minutes 1440 --traces 1 --apm
+
+**Tests.** `verify/test_dd_traces.py` (offline) runs the reader against a fake org and a fake key reader: GETs only,
+the org named first, the secret's pair sent to its site, the profile and region passed through and `--profile`
+required, the default reader asking Secrets Manager for `watch-it-burn/datadog` as that profile, an unreadable secret
+failing before any Datadog call, a 403 on each of the three endpoints naming its permission, a 500 reported with no
+scope claimed, another org refused after one lookup, no span and an unknown `--trace` failing, and the APM query and
+JSON shape. `verify/test_dd_traces_live.py` (`# SUITE: e2e`) reads the newest trace and its APM spans as
+`WIB_DEFAULT_ACCOUNT` (default accen-dev) in `WIB_REGION`, as `test_datadog_sandbox_live.py` does.
+
+**The live read did not run: the session files could not be read.** Run 16653's `clusters/env`, `aws-config`,
+`aws-credentials` and `kubeconfig` are mode 640, owned by group `hecaton`, and the run's user
+(`hecaton-s3-claude-certkraken`) is not in it, so `. "$HECATON_CLUSTER_ENV"` is permission denied, as it was for runs
+16574 and 16647 (#807). That is hecaton's to fix (hecaton#508). What the command printed, at 2026-11-03T13:24Z:
+
+    dd_traces: cannot read watch-it-burn/datadog as profile accen-dev in us-west-2: aws: [ERROR]: The config profile (accen-dev) could not be found
+
+So it is not yet known whether the pair's application key carries `llm_observability_read` and `apm_read`. Nothing
+in the record settles it: #665 read logs with it (`logs_read_data`), and `agent_obs_flow.py`'s and
+`stage_traces.py`'s LLM Observability reads have not yet been run live.
+
+**Not yet run.** From a run whose session files it can read: `. "$HECATON_CLUSTER_ENV" && python3
+verify/test_dd_traces_live.py`, with one /chat on either KubeCon cluster in the last day. It must print a `trace <id>`
+block for ml_app burritobot and end "A BurritoBot trace and its APM spans were read". If it exits 1 with a 403, the
+permission it names is the one the pair lacks, and only then is a new read-only key needed. #759's "the credential is
+new" criterion was written for the draft's route; under the coordinator's note the pair is the one runs were handed on
+2026-11-02, and no key was created, rotated or revoked by this run.
+
+No dependency was added.
