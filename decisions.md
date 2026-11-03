@@ -13024,3 +13024,31 @@ and exited 1 on `test_image_version_tags.py` alone, on one check: ghcr.io answer
 the tag staging records under #814. The `web-terminal-ttyd-1.7.7` check (#794) passed this time, at the pinned
 `68004fb5`. `test_weather_feed_e2e.py`,
 red in run 16765 on the weather service's 503, passed this time. No live cluster check applies to this prose change.
+
+## 2026-11-03 · #830 · Run 16809 could not run the live audience-path test: the run's session files are unreadable
+
+**What #830 asks.** Run `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py` once the
+community cluster's ai-layer Application has synced a staging revision carrying #786 (console nginx's per-network
+/chat zone removed, the limit held per conversation) and #787 (the test's tighter checks). Both are in staging:
+`803b84ec` and `9b0b4a01` are ancestors of `origin/staging` `7159717e`, this run's base.
+
+**Why it did not run.** Every file in `/var/lib/hecaton/runs/16809/clusters/` (`kubeconfig`, `env`,
+`aws-credentials`, `aws-config`, `bin/`) is owner `hecaton`, group `hecaton`, mode 0640 or 0750. This run's user,
+`hecaton-s2-claude-certkraken`, is in groups `hecaton-s2-claude-certkraken`, `hecaton-runs` and `hecaton-tools`, not
+`hecaton`, so it can read neither the kubeconfig nor `$HECATON_CLUSTER_ENV`. That is hecaton#508, the same fault
+runs 16758 and 16784 recorded above. The test, run as the issue writes it, failed on its first cluster read and
+exited 1:
+
+    == prerequisites ==
+      FAIL  the cluster records its public host (cluster-identity public-host)
+            error: error loading config file "/var/lib/hecaton/runs/16809/clusters/kubeconfig": open
+            /var/lib/hecaton/runs/16809/clusters/kubeconfig: permission denied
+
+For the same reason this run could not read which revision the ai-layer Application has synced, so whether #786 is
+live on the cluster is not known from here.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, off the
+venue network while no room is chatting. It must end "All live audience-path checks passed." The next run on #830
+runs it once its session files are readable, after first confirming with
+`kubectl --context watch-it-burn-community -n argocd get application ai-layer -o jsonpath='{.status.sync.revision}'`
+that the synced revision contains `803b84ec`. The #644 load replay reruns wait on the same sync.
