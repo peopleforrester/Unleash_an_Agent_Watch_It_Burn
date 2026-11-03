@@ -491,7 +491,7 @@ beats give way first.
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
-| 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; the prompt wall `prompts.burritobot.co` on the projector from here on | Gets on the bot and plays, including off-topic asks | framing, 1 |
+| 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; during the opening minute of play, a switch to the prompt wall `prompts.burritobot.co` while Whitney also plays on the admin bot, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
 | 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6 |
@@ -577,9 +577,15 @@ The opening order:
 5. The BurritoBot slide with `attackme.burritobot.co` and its QR. The room gets
    about a minute to get on the bot, say hello, play, get used to the interface,
    and try to get it to answer questions that have nothing to do with burritos.
+6. During that opening minute of play, the presenters switch the screen to the
+   prompt wall, and Whitney also plays on the admin bot, so her prompts show in
+   its column beside the room's. Then the screen goes back to the deck for the
+   hand-off to Challenge 1.
 
-- The room's prompts go on the projector through the prompt wall,
-  `https://prompts.burritobot.co`: open it full screen before the session
+- One laptop drives the one screen, so the prompt wall is not left on it: the
+  presenters switch to it at set moments, during segment 1's opening minute of play
+  and, optionally, during each challenge's play time after its call-to-action slide.
+  The wall is `https://prompts.burritobot.co`: open it full screen before the session
   starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
   seconds, and lists the clusters named in `start.burritobot.co/roster.json`, so
   the Night Before's `wall-check` is what proves both clusters are on it. If the
@@ -606,7 +612,9 @@ real-looking home address to chat.
   verified results are on `/kubecon` and in `challenges/PROMPT-CATALOG.md`. The home
   address is the marker; the signature line only when the model keeps it (#530). A
   casual or kind ask is turned away on purpose, so the address takes a pretext
-  (#688).
+  (#688). After the challenge slide (the call to action), the presenters may
+  optionally switch to the prompt wall while the room plays, and back to the deck
+  for the attack.
 - **Attack:** Whitney sends the `/kubecon` ask on the private bot, and the home
   address comes back.
 - **Trace, after the attack:** Datadog Challenge 1 tab, the Secret read in the trace.
@@ -629,9 +637,11 @@ real-looking home address to chat.
 
 - **Tee-up:** "Everything you already knew about Kubernetes matters more now."
 - **Play (3 min):** the room tries the prompts on `/kubecon` against the
-  public bot, where nothing below is armed (measured 2026-10-29 on attackme: the
+  public bot, where nothing below is armed. After the challenge slide (the call to
+  action), the presenters may optionally switch to the prompt wall while the room
+  plays, and back to the deck for the fix. (Measured 2026-10-29 on attackme: the
   beacon answered from `workshop-mcp`, a server-side dry run of the villain image as
-  `workshop-mcp` was admitted, and the recipe file read back):
+  `workshop-mcp` was admitted, and the recipe file read back.) The prompts:
   - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
     the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one that
     lands shows on `deployments.burritobot.co` with its image and the sender's witch name
@@ -687,7 +697,10 @@ real-looking home address to chat.
   witch name (#773). Project the wall, `https://support.burritobot.co/wall`, where every
   Joker shows as it lands; each attendee also sees their own at `/me`. Room Jokers run
   tiny and scale to zero after five minutes (#685), and the page goes with them. They
-  may also file their own ticket and try their own injection. The bare `support.burritobot.co` routes to attackme's desk
+  may also file their own ticket and try their own injection. After the challenge
+  slide (the call to action), the presenters may optionally switch to the prompt wall
+  as well as the Joker wall while the room plays, and back to the deck for the
+  attack. The bare `support.burritobot.co` routes to attackme's desk
   (apex-agenticburn#46, live 2026-10-29); `support-attackme.burritobot.co` is the
   same desk if the bare name ever fails.
 - **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
@@ -735,7 +748,9 @@ real-looking home address to chat.
 - **Play (2 min):** the room asks for a lunch burrito that matches the weather.
   The real forecast comes back with the recipe under it (the Bat Spit Amazing
   Awesome Sauce batch formula and its calibration token), then an order.
-  Measured 3 of 3 on attackme.burritobot.co, 2026-10-29 (#683).
+  Measured 3 of 3 on attackme.burritobot.co, 2026-10-29 (#683). After the
+  challenge slide (the call to action), the presenters may optionally switch to the
+  prompt wall while the room plays, and back to the deck for the attack.
 - **Attack:** Michael sends the `/kubecon` ask on the private bot, and the recipe comes
   back under the forecast.
 - **Datadog Challenge 4 tab, after the attack:** the `read_internal_config` call the
