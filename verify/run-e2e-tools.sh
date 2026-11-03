@@ -70,9 +70,13 @@ run_one "run-tests.sh (the offline suite)" bash "${SCRIPT_DIR}/run-tests.sh"
 
 # The pinned tools come first on PATH, and the six tests that take a path get it, so a tool already on the
 # host is never what a check runs.
+# The Terraform provider cache outlives each test, so the ~800 MB aws provider downloads once per checkout, not once
+# per test process; the tests run one after another, so nothing writes to it concurrently (#572).
+TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
+mkdir -p "${TF_CACHE}"
 tier_env=(env -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
     -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
-    KUBECONFIG=/dev/null PATH="${TOOLS_BIN}:${PATH}"
+    KUBECONFIG=/dev/null PATH="${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
     KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
     OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane")
 tier=0
