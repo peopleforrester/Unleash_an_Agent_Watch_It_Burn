@@ -10175,8 +10175,12 @@ peopleforrester/hecaton#507. #795 waits on that issue.
   there. So steps 2, 3 and 5 belong to a session on that machine with every fleet profile, as the 2026-11-02 #205
   entry already says. They went to the run report's escalate list with their exact commands.
 
-**Tests at this entry.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` were run on this tree;
-the run report records their results.
+**Tests at this entry.** `bash verify/run-tests.sh` passes alone (224 tests). Run at the same time as
+`bash verify/run-e2e-tools.sh`, `test_challenge_fallbacks.py` failed in both, because each saw the other's scratch
+directory in the repo's `tmp/`. `bash verify/run-e2e-tools.sh` exits 1 on `test_image_version_tags.py`, which is not
+#795's: ghcr.io now serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:7e5f8986…`, not the pinned and signed
+`sha256:68004fb5…`. That is the tag overwrite the 2026-11-03 #746 entry describes, moved once more since it read
+`sha256:d6acd503…`, most likely by the build-web-terminal push run of #774's `2e1a044`. Run 16420 filed it as a follow-up.
 
 **Not yet run on a cluster.** All five of #795's steps, unchanged: `CONTEXT=<ctx> python3
 verify/test_drift_selfheal_live.py` on watch-it-burn-community and watch-it-burn-private, the audit root's apply in
