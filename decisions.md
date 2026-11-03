@@ -10708,6 +10708,13 @@ text parts, the second carries the name, and every name the storefront assigns i
 `watch-it-burn:workshop-mcp@...` rather than the pinned tag. The stand-in now names `workshop-mcp-mcp-1.29.1@...`. The
 live-check round trip still passes, and so does the reference check.
 
+**Suite results at the pin (run 16562, on 6d8505a plus these commits).** `bash verify/run-e2e-tools.sh` exits 1. It
+ran `bash verify/run-tests.sh` first, which exits 0 with 227 tests, `test_chat_witch_name.py`, `test_chat_turn_cancel.py`,
+`test_c7_badge_grants.py` and `test_proxy_checksum.py` among them. The tier ran 44 tests and failed one check:
+`test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not
+the pinned `68004fb5`. That is the tag CI pushed over, open as #815, #816, #823 and #824. It is registry state, and
+nothing here touches an image. The workshop-mcp reference check in the same test now passes.
+
 **What changed.**
 - `verify/test_chat_witch_name.py` (new, offline) checks that the pinned guard-proxy contains 6f2de73, as
   `test_chat_turn_cancel.py` does for 5fe5a7c. It then runs the pinned proxy.py with every value guard-proxy's
