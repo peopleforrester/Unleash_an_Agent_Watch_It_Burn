@@ -315,11 +315,12 @@ def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str, 
         proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         try:
-            # free_port lets the port go before the collector binds it, so until this collector says it is ready another
-            # process's server may hold it and answer 200 to spans this collector never sees (#799). Once it is up and
-            # running, the port is its own. Both waits count polls, not wall seconds, so a stall of the host that freezes
-            # this test with the collector spends none of them: frozen together for 31 s, the old wall-clock deadline
-            # ran out before the woken collector's file exporter flushed, and all 26 spans read as lost (#799).
+            # free_port closes its socket before the collector binds the port, so until this collector says it is
+            # ready another process's server may hold it and answer 200 to spans this collector never sees (#799).
+            # Once it is up and running, the port is its own. Both waits count polls in place of wall seconds, so a
+            # host stall that freezes this test with the collector spends none of them: frozen together for 31 s, the
+            # old wall-clock deadline ran out before the woken collector's file exporter flushed, and all 26 spans
+            # read as lost (#799).
             sent, polls = False, 0
             while not sent and polls < 100 and proc.poll() is None:
                 polls += 1
