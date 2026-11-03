@@ -12992,3 +12992,12 @@ its", "Tee-up" and "shows its trace" found only that docstring).
 
 **Live check.** None applies: the change is facilitation prose and moves nothing on either cluster. Nothing is owed
 on a cluster for it.
+
+**The suites, on this branch.** `bash verify/run-tests.sh` ran 235 tests and printed "ALL OFFLINE RENDER-GATE TESTS
+GREEN", exit 0. `bash verify/run-e2e-tools.sh` ran 51 checks (the offline suite and 50 tier tests) in 24m28s and
+exited 1 on two tests this change does not touch. `test_image_version_tags.py` failed on the two tags staging
+already records under #794 and #814: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...`
+where the pin is `68004fb5`, and answers 404 for `sample-app-nginx-1.27.5`. `test_weather_feed_e2e.py` failed one
+check, "get_weather opens with the live reading for the city": the deployed tool answered "weather service
+unavailable: HTTP Error 503" for Salt Lake City, an outage of the weather service it calls, while the same test's
+direct feed checks passed. The prose gate passed on the three changed files.
