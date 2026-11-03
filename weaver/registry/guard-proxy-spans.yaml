@@ -229,8 +229,8 @@ groups:
           The turn's input tokens, summed over its forwards from the agent's kagent_usage_metadata
           (promptTokenCount, proxy.py chat_usage_tokens). Datadog's Agent Observability reads an llm span's token
           counts and its cost estimate from gen_ai.usage.* (#784). The pinned proxy.py (88b9b52) sums them into
-          `spent` and sets neither attribute yet; the guard-proxy-agenticburn change #784 asks for sets both, and a
-          repin brings it here.
+          `spent` and sets neither attribute; guard-proxy-agenticburn#49 (96d16214) sets both, a repin brings it
+          here, and verify/test_chat_span_token_counts.py holds the pin to it (#839).
       - ref: gen_ai.usage.output_tokens
         requirement_level: recommended
         note: >-
