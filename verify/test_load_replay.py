@@ -189,7 +189,7 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
           sorted(k for k in lim if k.startswith("edge_")) == ["edge_session_burst", "edge_session_rpm"]
           and "wib_chat_address" not in pathlib.Path(lr.__file__).read_text(), str(lim))
     _plan = lr.Plan(500, 3, 1500, 60.0, 15.0, 45.0, lr.USD_PER_CALL)
-    check("one address sending as 500 phones is held by the cluster window, not by an address bucket",
+    check("one address sending as 500 phones is held only by the cluster window",
           _plan.predicted_served(lim) == int(lim["proxy_cluster_rpm"] * _plan.minutes()),
           str(_plan.predicted_served(lim)))
     check("limits read from git: guard-proxy 150/min cluster, 10/min session, $25 cap",

@@ -10242,8 +10242,8 @@ that tag again after #774's staging push. Nothing here pushes an image. This cha
 starts `build-web-terminal.yml` once more; the fix for that workflow is run 16420's follow-up.
 ## 2026-11-03 · #786 · /chat is limited per conversation only: console nginx's per-network zone is gone
 
-**The ruling.** Michael ruled on 2026-11-01 (#450, comment 6554358563) that the KubeCon chat limit is per person,
-not per network. In the #644 load run, console nginx's `wib_chat_address` zone (120 a minute, burst 60, keyed on the
+**The ruling.** Michael ruled on 2026-11-01 (#450, comment 6554358563) to move the KubeCon chat limit from per
+network to per person. In the #644 load run, console nginx's `wib_chat_address` zone (120 a minute, burst 60, keyed on the
 X-Forwarded-For the apex sends) refused 1,164 of 1,500 turns from one address. On venue Wi-Fi that zone is one bucket
 for a room of about 150.
 
@@ -10260,8 +10260,7 @@ COST_CAP_USD 25, TURN_TIMEOUT 270, PROXY_TIMEOUT 120), the guard-proxy submodule
 route, and the ladder checks in `verify/test_audience_path.py`.
 
 **Each removed per-network check, and what replaces it (for the test review).**
-- `test_audience_path.py`, "the network zone keys on the apex's X-Forwarded-For, not nginx's peer (the NLB)":
-  replaced by "no limit_req_zone is keyed on a client address" (it reads `$remote_addr`, `$binary_remote_addr`,
+- `test_audience_path.py`, the check that the network zone keys on the apex's X-Forwarded-For: replaced by "no limit_req_zone is keyed on a client address" (it reads `$remote_addr`, `$binary_remote_addr`,
   `$http_x_forwarded_for` and real_ip keys) and "no limit_conn or limit_conn_zone".
 - `test_audience_path.py`, "the per-network ceiling is under the cluster window and holds ten phones": replaced by
   "the conversation zone is 10 a minute with a burst of 9" and "guard-proxy keeps RATE_LIMIT_RPM 150,
@@ -10277,7 +10276,7 @@ route, and the ladder checks in `verify/test_audience_path.py`.
   /prompts feed is still guard-proxy's own GET /prompts".
 - `test_load_replay.py`, "limits read from git: nginx 120/min per network, burst 60": replaced by "limits read from
   git: nginx 10/min per conversation, burst 9", "the tool reads only the per-conversation zone, none per network" and
-  "one address sending as 500 phones is held by the cluster window, not by an address bucket" (the old model
+  "one address sending as 500 phones is held only by the cluster window" (the old model
   predicted 360 served for the default plan, the new one 375).
 - `test_audience_path_live.py`, "about 61 of 70 fresh conversations get through from one address": replaced by "all
   80 fresh conversations from one address get through nginx", 80 being more than the old zone's 61. New: "the refusal
@@ -10291,14 +10290,14 @@ address-keyed zone (it finds `$http_x_forwarded_for`), the 10-a-minute sentence 
 that again.
 
 **What differs from run 15018's draft.** The draft is `b40c18a` on `origin/agent/450-15018` (the #644 entry above
-calls it `74c9c2d`, which is not in this clone). `bash verify/draft-drift.sh origin/agent/450-15018 origin/staging`
+calls it `74c9c2d`, a commit this clone does not have). `bash verify/draft-drift.sh origin/agent/450-15018 origin/staging`
 exits 1 with eight paths, console.conf, burritbot.html, load_replay.py and test_load_replay.py among them (#773 and
-#744 edited them since), so the change was made again on staging rather than cherry-picked. Against the draft:
+#744 edited them since), so the change was made again on staging's layout. Against the draft:
 the ladder comment is corrected, where the draft left six calls at 45 s; the refusal check reads the words "10 a
-minute per conversation", not only the digits; the address-key check also catches `$binary_remote_addr` and real_ip
+minute per conversation", where the draft read only the digits; the address-key check also catches `$binary_remote_addr` and real_ip
 keys, and the connection check also catches `limit_conn_zone`; the body check also reads the server and http levels
 and adds `proxy_method` and perl; the `/prompts` and `proxy_pass` checks are new; `deployed_limits()` reads
-`wib_chat_session` by name rather than every zone; the prediction check is new; the live test keeps its 65 s wait
+only `wib_chat_session`, by name; the prediction check is new; the live test keeps its 65 s wait
 before the timed turn and says it spends about 90 of the cluster's 150 a minute; the run-of-show points at the
 150-session command, as the #644 entry asked once #450 landed; and the load-test record names this change.
 
@@ -10314,7 +10313,11 @@ both contexts, but its `clusters/` files are mode 640, group `hecaton`, and its 
 was read.
 
 **Tests at this entry.** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh` ran 43 checks and failed
-one, `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:d6acd503...`, not the pinned
-`sha256:68004fb5...`. That is the tag CI pushed over, as the 2026-11-03 · #746 entry records, and not this change.
+one, `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:d6acd503...`, and resources.yaml pins
+`sha256:68004fb5...`. CI pushed over that tag, as the 2026-11-03 · #746 entry records; this change does not touch it.
+
+**Resumed by run 16465.** Run 16447's report failed hecaton's prose gate on one antithesis in this entry. Run 16465
+reworded those lines as plain claims, and the load replay check this entry quotes along with them, on the branch
+hecaton had rebased onto staging `858ffaf` (#774's guardrails switch). It changed nothing else.
 
 No dependency was added.
