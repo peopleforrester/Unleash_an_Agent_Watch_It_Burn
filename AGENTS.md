@@ -102,7 +102,8 @@ so declaring it would hold main red for good (#543).
 
 A run that hecaton dispatches starts from the current `staging` on its own `agent/<issue>-<run>` branch. It has no
 cluster and no AWS profile, and its governance forbids deploying. Hecaton run 9654 lost its time to the first point
-below and run 9672 to the second (#633).
+below and run 9672 to the second (#633). Runs 9277 and 15763 lost theirs redoing work an earlier run had done that
+never reached staging, the third point, and a stalled wait on the E2E command is the fourth (#798).
 
 1. **A run does not bring clusters up.** "Provision one and validate" in change cadence rules 3 and 4 above is for
    a session Michael runs with AWS access. In a run, write the change and its offline test, run
@@ -114,7 +115,27 @@ below and run 9672 to the second (#633).
 2. **An earlier draft is checked against staging before it is reused.** A re-dispatched issue's earlier drafts are
    on `origin/agent/<issue>-<run>` branches, cut from the staging of their day, and staging moves between runs:
    #474's approved change had to be redone three times, the last after #609 moved `gitops/apps/` into the chart.
-   First run `bash verify/draft-drift.sh origin/agent/<issue>-<run> origin/staging`. It names every path the draft
-   changes that staging has since edited, moved or deleted, and every directory the draft adds files to that
-   staging removed, and exits 1 when there is any. Then make the draft's design again on the current layout
-   rather than cherry-picking it, and say in decisions.md what differs from the draft.
+   First run `bash verify/prior-drafts.sh <issue> origin/staging`. It lists, newest first, each draft whose commits
+   are not in staging, with the verdict of `bash verify/draft-drift.sh origin/agent/<issue>-<run> origin/staging`
+   on it. That names every path the draft changes that staging has since edited, moved or deleted, and every
+   directory the draft adds files to that staging removed, and exits 1 when there is any. Where staging moved or
+   deleted a path, make that part of the draft's design again on the current layout rather than cherry-picking it.
+   Where staging only edited a path, cherry-pick the draft and reread the staging commit the line names against
+   what the draft claims. An APPEND line is decisions.md, which both sides only added to: keep both entries. Say in
+   decisions.md what differs from the draft.
+3. **Work that never landed is reused.** A run's commits reach staging only when hecaton promotes
+   them. A run that fails a gate or stalls leaves them on its branch, or on hecaton's host until it retires the
+   workspace 14 days later, and the issue's comments name those commits. Run 9277 (#604) redid a measurement that
+   run 9249 had committed and that failed only the prose gate; 9249's branch applied to 9277's base with no
+   conflict. Run 15763 (#205) redid a draft 125 commits behind staging whose drift was three edits in place and a
+   decisions.md append. When `prior-drafts.sh` prints START, read why that work did not land in the issue's
+   comments (`gh issue view <issue> --comments`; hecaton writes "Not merged: run N ended failed (validation)"),
+   port the draft as its verdict says, fix what stopped it, and redo only what the verdict or that reason names. A
+   LATER line means a later run's work on the issue is already in staging: take from that draft only what it lacks.
+4. **A long command is polled in the foreground.** `bash verify/run-e2e-tools.sh` runs the offline suite and then
+   the tools tier, and on the shared host it takes over 20 minutes, longer on a cold fetch of the pinned tools.
+   Hecaton stops a run that prints nothing for 15 minutes as stalled, and nothing the run had not committed
+   survives it: the attempt before run 15763 on #205 and two attempts on #520 ended that way. Commit the change
+   first. Then start the command in the background with its output in a log, and keep reading the log in the
+   foreground (`tail -n 5 <log>` every few minutes) until it ends; never end the turn to wait for its completion
+   notice. The E2E command runs `run-tests.sh` first, so it also answers the Test command.

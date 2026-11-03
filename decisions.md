@@ -10381,3 +10381,56 @@ and failed only `test_image_version_tags.py`, with the tag now at `sha256:7e5f89
 since run 16447.
 
 No dependency was added.
+## 2026-11-03 · #798 · A re-dispatched run finds the earlier run's unlanded draft and ports it, and polls the E2E command
+
+Hecaton's insights found two runs that lost their time redoing work an earlier run had already done ("context
+loss"). There was no earlier draft of #798 to check against staging.
+
+- **Run 9277 (#604).** Run 9249 committed the measurement (`808116c`) and a prose fix (`c209a4e`) on
+  `agent/604-9249`. It failed the ai-isms gate, so hecaton did not promote it, and run 9277 started from staging
+  `6908b3c` and measured again. That branch applies to `6908b3c` as it is: `verify/draft-drift.sh
+  origin/agent/604-9249 6908b3c` prints CLEAN. AGENTS.md said nothing about earlier drafts then (#633 added that two
+  days later), so the comments on #604 were the only record of the work.
+- **Run 15763 (#205).** The attempt before it stalled: it started `bash verify/run-e2e-tools.sh` in the background
+  and ended its turn to wait, and hecaton stops a run that prints nothing for 15 minutes. The draft it had to go on,
+  `d7bb3ff` on `agent/205-12982`, was 125 commits behind. AGENTS.md's second item said to make the draft's design
+  again whenever `draft-drift.sh` exits 1, and it exits 1 for nearly every draft, because every run appends to
+  decisions.md. Against `aca67c9`, staging that morning, it named decisions.md and three files staging had only
+  edited: VERSIONS.lock, infra/org/README.md and verify/run-e2e.sh. A cherry-pick of `d7bb3ff` onto `aca67c9`
+  conflicts on decisions.md alone. The run did find real changes to make (#707 had moved the agent's ignores to
+  the workshop-agent app, and #643 had added standby regions), and rereading the staging commits each line names
+  finds those.
+- **The stall was already known, in the wrong file.** The 2026-10-29 #267 entry and the 2026-11-01 #520 entry
+  record that a run waiting silently on a long suite stalls, and that polling the log in the foreground avoids it.
+  AGENTS.md, which each run reads, did not say so.
+
+**The cause.** What one run makes or learns stays where the next run does not look: commits hecaton never promoted
+sit on the run's branch and in the issue's comments, and lessons sit in this file. Then the one rule AGENTS.md gave
+for an old draft sent every draft to a redo.
+
+**The fix.**
+- `verify/prior-drafts.sh <issue> [base]` (new, offline) lists each `origin/agent/<issue>-<run>` branch newest first.
+  It marks a branch LANDED when the base contains it or has each of its commit subjects since the two parted (the
+  dispatcher's rebase keeps them). Any other branch is a DRAFT, shown with its commits and `draft-drift.sh`'s verdict.
+  A DRAFT followed in the base by a commit naming the issue gets a LATER line, since a later run most likely redid
+  it. It ends with START and the newest DRAFT with no LATER line (exit 1), or NONE (exit 0). On today's staging
+  it prints NONE for #205 and #604, whose work has since landed. With base `6908b3c` it names `agent/604-9277`
+  and `agent/604-9249`, both CLEAN; with 9277's branch absent, as it was when 9277 ran, START names 9249's.
+- `verify/draft-drift.sh` no longer counts decisions.md when both sides only added lines to it: it prints an
+  APPEND line, to keep both entries. Its last line now tells the two kinds of drift apart. A moved or deleted path,
+  or a removed directory, is a part of the draft to make again on the base's layout. An edit in place is ported by
+  cherry-pick, after which the run rereads the base commit named. The exit codes are unchanged.
+- AGENTS.md's "Dispatched runs (hecaton)" section: the second item starts from `prior-drafts.sh` and gives the
+  per-line rule. A third item says a run reads in the issue's comments why the draft did not land, ports it, fixes
+  what stopped it, and redoes only what the verdict or that reason names. A fourth says the E2E command takes over
+  20 minutes on the shared host, so a run commits first, starts it in the background with its output in a log and
+  reads the log in the foreground until it ends. Its first sentence, which `verify/test_dispatched_runs_cause_comment.py`
+  reads for #633's runs, is unchanged.
+- **Tests.** `verify/test_prior_drafts.sh` (offline, new) builds a scratch repo with published drafts. It covers
+  no draft; one unlanded draft; two drafts, newest first; a rebased draft with an older one followed by later work;
+  a merged draft; issue 60 against issue 604's branches and commits; and bad input. `verify/test_draft_drift.sh`
+  gains an append on both sides (CLEAN, exit 0), an edit in place (port), and a decisions.md the base removed a
+  line from (drift). Run against the old `draft-drift.sh`, 7 of its checks fail. `verify/test_dispatched_runs.py`
+  holds the new items to the scripts they name.
+
+**Not yet run on a cluster.** Nothing here touches a cluster, and nothing is owed on one.
