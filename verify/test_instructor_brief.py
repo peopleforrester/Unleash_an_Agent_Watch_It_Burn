@@ -70,6 +70,69 @@ check("the Datadog showcase is a beat", "Find their attack in Datadog, live" in 
 check("it says to rehearse the live search", "Rehearse this" in BRIEF)
 check("it tells them to close the Community tab", "close the Community BurritoBot tab" in FLAT)
 
+print("== the showcase says how to find a prompt in Agent Observability (#337, #791) ==")
+# The beat used to say "find their prompt" and not how. The filter is what goes wrong on stage, so the query is the
+# room view verify/stage_traces.py prints (#648), in the tags today's spans carry, and its cluster names are the ones
+# infra/datadog-cluster-identity.sh writes. #337's 2026-09-08 recipe used service: and kube_cluster_name: with EKS names.
+sys.path.insert(0, str(REPO / "verify"))
+import stage_traces as st  # noqa: E402
+from urllib.parse import parse_qs, urlsplit  # noqa: E402
+
+_showcase = " ".join(BRIEF.split("Find their attack in Datadog, live", 1)[1].split("</section>", 1)[0].split())
+_shown = re.sub(r"<!--.*?-->", "", _showcase, flags=re.S)
+IDENT = (REPO / "infra/datadog-cluster-identity.sh").read_text(encoding="utf-8")
+_names = dict(re.findall(r'^\s+(watch-it-burn-[a-z]+)\)\s+DATADOG_CLUSTER_NAME="([^"$]+)" ;;$', IDENT, re.M))
+check("the identity script names the Community cluster as stage_traces.py's room cluster",
+      _names.get("watch-it-burn-community") == st.ROOM_CLUSTER)
+check("and the private cluster as its presenter cluster", _names.get("watch-it-burn-private") == st.PRESENTER_CLUSTER)
+ROOM_TERM = f"k8s.cluster.name:{st.ROOM_CLUSTER}"
+QUERY = f"ml_app:{st.ML_APP} {ROOM_TERM}"
+check(f"it types the room view's query, {QUERY}", f"<code>{QUERY}</code>" in _shown)
+_link = re.search(r'href="(https://app\.datadoghq\.com/llm/traces\?[^"]+)"', _shown)
+check("it links the query as stage_traces.py builds the room view's link",
+      bool(_link) and _link.group(1) == st.llmobs_url("datadoghq.com", ROOM_TERM))
+check("and the link's query parameter is the typed query",
+      bool(_link) and parse_qs(urlsplit(_link.group(1)).query).get("query") == [QUERY])
+check("it says the link fills the query in", "the query as a link</a>, which fills it in" in _shown)
+check("no tag from #337's recipe is left in the beat",
+      "kube_cluster_name" not in _showcase and "<code>service:burritobot " not in _showcase)
+check("it names the org: Whitney's sandbox org", "Whitney's Datadog sandbox org" in _shown)
+check("it names the saved view Every prompt, to open and to save",
+      "saved view <b>Every prompt</b>" in _shown and "save it as a view named <b>Every prompt</b>" in _shown)
+check("it names the column the student's words are in",
+      "the <b>CONTENT</b> column" in _shown and "INPUT is the student's own words" in _shown)
+check("it warns off the rows that show the system prompt, and says why",
+      "Not <code>service:burritobot-agent</code>" in _shown and "<code>generate_content</code>" in _shown
+      and "system prompt" in _shown)
+# The services the beat names are the ones the pods carry: guard-proxy's root is burritobot, the agent burritobot-agent.
+_guard = RES.split("app.kubernetes.io/name: guard-proxy, tags.datadoghq.com/service: ", 1)
+check("guard-proxy's service is burritobot, the ml_app the query filters on",
+      len(_guard) == 2 and _guard[1].startswith(f"{st.ML_APP},"))
+check("the agent's service is burritobot-agent, as the warning says",
+      "tags.datadoghq.com/service: burritobot-agent," in RES)
+# The other clusters' names come from the identity script's arms: the private bot, an -admin cluster, an attendee's.
+check("the presenters' cluster term is the identity script's name",
+      f"<code>k8s.cluster.name:{_names.get('watch-it-burn-private')}</code>" in _shown)
+check("an -admin cluster is burritobot-private-<owner> in the identity script and the beat",
+      'watch-it-burn-*-admin)       owner="${CLUSTER_NAME#watch-it-burn-}"; '
+      'DATADOG_CLUSTER_NAME="burritobot-private-${owner%-admin}"' in IDENT
+      and "<code>k8s.cluster.name:burritobot-private-michael</code>" in _shown)
+check("an attendee's is burritobot-<name> in the identity script and the beat",
+      'DATADOG_CLUSTER_NAME="burritobot-${CLUSTER_NAME#watch-it-burn-}"' in IDENT
+      and "<code>k8s.cluster.name:burritobot-attendee-007</code>" in _shown)
+check("no EKS name is given as a Datadog cluster tag", "k8s.cluster.name:watch-it-burn" not in BRIEF)
+check("it says Datadog runs a minute or two behind", "Datadog runs a minute or two behind" in _shown)
+check("it says one prompt cannot be projected", "no control to put one prompt on the room screen" in _shown)
+check("it says the prompts last only as long as the org keeps them",
+      "kept only as long as the org keeps them" in _shown)
+check("it names prompts.burritobot.co as the projector feed",
+      "The feed made for the projector is the prompt wall" in _shown
+      and 'href="https://prompts.burritobot.co"' in _shown)
+# The scrub the beat promises is the burn collector's, the Community cluster's own (#647).
+_burn = (REPO / "gitops/otel-collector/values-burn.yaml").read_text(encoding="utf-8")
+check("the placeholders it promises are the ones the Community cluster's collector writes",
+      all(f"<code>[{p}]</code>" in _shown and f"[{p}]" in _burn for p in ("EMAIL", "CARD", "SSN", "PHONE")))
+
 print("== Phase 2 says presenters claim like attendees ==")
 check("presenters claim from the same pool", "Presenters claim one the same way, from the same pool" in FLAT)
 check("the admin and Community clusters are not claimable", "not in the pool and cannot be claimed" in FLAT)
