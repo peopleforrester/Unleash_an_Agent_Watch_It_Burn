@@ -9982,4 +9982,6 @@ five demo apps (every values-*.yaml profile lists them). It could not read them:
 `test_datadog_log_services_render.py` and `test_enforce_floor.py`, both on one cause: GitHub answered 500 Internal
 Server Error for `falcosidekick-0.14.0.tgz` from falcosecurity/charts. Rerun alone with the tier's environment a few
 minutes later, when that URL answered 200, both passed. Hecaton run 15909 stalled waiting on the tier in the
-background, so run 15982 finished it.
+background, so run 15982 finished it. Run 16424, on staging `a29bb91`, passed `bash verify/run-tests.sh`. Its
+`bash verify/run-e2e-tools.sh` ran 41 checks and failed one, `test_dispatched_runs_cause_comment.py`, because GitHub
+answered its anonymous comment read with 403 rate limit exceeded. Rerun alone once the limit allowed, it passed.
