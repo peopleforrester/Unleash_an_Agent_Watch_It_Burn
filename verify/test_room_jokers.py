@@ -1,11 +1,16 @@
 # ABOUTME: Holds deploy_app's side of #685: every result is reported to the support desk's wall, a room Joker
-# ABOUTME: (joker-<name>) runs tiny, and it is scaled to zero replicas after the desk's window so 300 fit one node.
+# ABOUTME: (joker-<name>) runs tiny with a page of its own (#775), and is scaled to zero after the desk's window.
 """workshop-mcp's real deploy_app runs here against a stand-in for the Kubernetes API that records every call, and
 reports to the real ticket site served on localhost. No cluster, no model.
 
 Capacity (Michael, 2026-10-29): the public node allocates 110 pods with about 53 in use, so each room Joker is tiny
 and is scaled to 0 replicas after JOKER_SCALE_DOWN_SECONDS (300 on the cluster); the Deployment stays as the proof.
 Raising the pod cap is #686, deferred to the next node rebuild.
+
+Each room Joker's own page (#775): deploy_app gives its pod the Deployment's name as hostname under the headless
+jokers Service, the console proxies maintenance-shell-<cluster>/<name>/ to that one pod, and deploy_app's reply names
+that address, which HC-666 asks the bot to hand over. The reaper scales through deployments/scale, which the
+least-privilege Role (guard-agency-on) keeps, so a Joker that landed before the fix is still scaled down.
 """
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import sys
 import threading
 import time
@@ -66,6 +72,12 @@ def fake_req(method: str, path: str, body=None, content_type: str = "application
     if method == "GET":
         return 200, json.dumps({"resources": [{"kind": "Deployment", "name": "deployments"}]})
     calls.append((method, path.split("?")[0], json.loads(body) if body else {}))
+    if status.get("rbac"):
+        # The API server's own Status body for an RBAC refusal, as guard-agency-on's Role gets one.
+        return 403, json.dumps({
+            "kind": "Status", "apiVersion": "v1", "metadata": {}, "status": "Failure", "reason": "Forbidden",
+            "message": 'deployments.apps "x" is forbidden: User "system:serviceaccount:agent:workshop-mcp" cannot '
+                       'patch resource "deployments" in API group "apps" in the namespace "agent"', "code": 403})
     if status["code"] >= 400:
         # The API server's own Status body for a Kyverno deny, as the private cluster returns it.
         return status["code"], json.dumps({
@@ -118,10 +130,56 @@ check("the wall shows it under the visitor's name",
       wait_for(lambda: any(r["who"] == NAME and r["ok"] for r in wall())), str(wall()))
 
 print("== after the window it is scaled to zero, and the Deployment stays ==")
-scaled = lambda: [x for x in calls if x[0] == "PATCH" and x[1].endswith(f"/deployments/joker-{SLUG}")  # noqa: E731
+scaled = lambda: [x for x in calls if x[0] == "PATCH"  # noqa: E731
+                  and x[1] == f"/apis/apps/v1/namespaces/agent/deployments/joker-{SLUG}/scale"
                   and x[2] == {"spec": {"replicas": 0}}]
-check("a merge patch sets replicas to 0", wait_for(lambda: bool(scaled()), 3), str(calls[-2:]))
+check("a merge patch on its scale subresource sets replicas to 0 (#775)", wait_for(lambda: bool(scaled()), 3),
+      str(calls[-2:]))
 check("nothing deletes it", not any(x[0] == "DELETE" for x in calls))
+
+print("== each room Joker has a page of its own (#775) ==")
+pod = applied["spec"]["template"]
+check("its pod's hostname is the Deployment's name, under the jokers Service",
+      pod["spec"].get("hostname") == f"joker-{SLUG}" and pod["spec"].get("subdomain") == m.ROOM_JOKER_SERVICE == "jokers",
+      str(pod["spec"]))
+check("and it is labeled into that Service, beside the model's own label and the workload label",
+      pod["metadata"]["labels"] == {"app": f"joker-{SLUG}", m.WORKLOAD_LABEL: f"joker-{SLUG}", m.ROOM_JOKER_LABEL: "true"},
+      str(pod["metadata"]))
+check("with no public host the reply names no address", "https://" not in reply, reply)
+m.PUBLIC_HOST = "attackme.agenticburn.com"
+calls.clear()
+reply = m.deploy_app(joker(f"joker-{SLUG}"))
+want = f"https://maintenance-shell-attackme.burritobot.co/joker-{SLUG}/"
+check("the reply names the person's own page, on the burritobot.co twin of the published maintenance-shell host",
+      reply.endswith(f"Once its pod is ready it answers at {want}"), reply)
+calls.clear()
+reply = m.deploy_app(joker("joker-a.b"))
+check("a Joker whose name is not one DNS label gets no hostname and no address",
+      "https://" not in reply and "hostname" not in calls[0][2]["spec"]["template"]["spec"], reply)
+docs = [d for d in __import__("yaml").safe_load_all((AI / "resources.yaml").read_text()) if d]
+svc = next((d for d in docs if d.get("kind") == "Service" and d["metadata"]["name"] == m.ROOM_JOKER_SERVICE), {})
+port = re.search(r"--env PORT=(\d+)", (REPO / "images/villains/build.sh").read_text())
+check("resources.yaml ships the jokers Service: headless, selecting the label, on the Joker's PORT",
+      svc.get("spec", {}).get("clusterIP") == "None" and svc["spec"].get("selector") == {m.ROOM_JOKER_LABEL: "true"}
+      and port is not None and [p["port"] for p in svc["spec"].get("ports", [])] == [int(port.group(1))], str(svc))
+conf = (AI / "console.conf").read_text()
+srv = conf.split("server_name ~^maintenance-shell-[a-z0-9-]+\\.(?:agenticburn\\.com|burritobot\\.co)$;", 1)
+loc = re.search(r'location ~ "(\^/\(\?<wib_joker>[^"]+)" \{(.*?)\n  \}', srv[1] if len(srv) == 2 else "", re.S)
+check("the console's maintenance-shell server has a location for /joker-<name>/", loc is not None)
+if loc:
+    rx = re.compile(loc.group(1).replace("(?<", "(?P<"))
+    check("it matches the address deploy_app names, with or without the slash",
+          bool(rx.match(f"/joker-{SLUG}/")) and bool(rx.match(f"/joker-{SLUG}")))
+    check("and no other path: not maintenance-shell's root, a dotted name or a deeper path",
+          not any(rx.match(x) for x in ("/", "/maintenance-shell/", "/joker-a.b/", f"/joker-{SLUG}/x", "/joker-/")))
+    body = loc.group(2)
+    check("it proxies GET alone to that one pod, by its hostname under jokers, on the Joker's PORT",
+          "limit_except GET { deny all; }" in body and port is not None
+          and f"proxy_pass http://$wib_joker.jokers.agent.svc.cluster.local:{port.group(1)}/;" in body, body)
+    check("a Joker that is not there, or scaled to zero, shows the console's nothing-yet page",
+          "error_page 502 503 504 = @wib_c6_nothing_yet;" in body and "proxy_intercept_errors on;" in body)
+m.PUBLIC_HOST = ""
+time.sleep(0.6)  # the Jokers above are scaled down now, before the next section counts scale-downs
 
 print("== the stage's maintenance-shell and other names are not room Jokers ==")
 calls.clear()
@@ -129,6 +187,7 @@ m.deploy_app(joker("maintenance-shell"))
 time.sleep(0.6)
 applied = calls[0][2]
 check("maintenance-shell keeps the replicas it asked for", applied["spec"]["replicas"] == 3)
+check("and gets no room Joker hostname", "hostname" not in applied["spec"]["template"]["spec"])
 check("and is never scaled down", not any(x[2] == {"spec": {"replicas": 0}} for x in calls))
 check("the desk still hears about it, as an unnamed Joker",
       wait_for(lambda: any(r["name"] == "maintenance-shell" and r["who"] == "an unnamed Joker" for r in wall())))
@@ -147,6 +206,21 @@ refused = lambda: [r for r in wall() if r["who"] == site.NAME_SPACE[1] and not r
 check("the wall shows the refusal", wait_for(lambda: bool(refused())))
 check("as one plain sentence naming the policy, not the API server's JSON (#685)",
       bool(refused()) and refused()[0]["detail"] == site.REFUSED_REGISTRY, str(refused()[:1]))
+
+print("== least privilege's refusal is reported as one plain sentence too (#775) ==")
+status["rbac"] = True
+name3 = site.NAME_SPACE[3]
+try:
+    m.deploy_app(joker(f"joker-{site.slug(name3)}"))
+    raised = ""
+except RuntimeError as e:
+    raised = str(e)
+check("deploy_app raises on an RBAC refusal", "HTTP 403" in raised and "cannot patch resource" in raised, raised)
+forbidden = lambda: [r for r in wall() if r["who"] == name3 and not r["ok"]]  # noqa: E731
+check("the wall says the bot is not allowed to create it",
+      wait_for(lambda: bool(forbidden())) and forbidden()[0]["detail"]
+      == "Refused: the bot's ServiceAccount is not allowed to create that.", str(forbidden()[:1]))
+status["rbac"] = False
 
 print("== a desk that does not answer never fails a deploy ==")
 status["code"] = 201

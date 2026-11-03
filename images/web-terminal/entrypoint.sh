@@ -323,6 +323,7 @@ for k in ("output","input_blocklist","input_classifier","budget","topic"):
 echo
 echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  guard-topic-on  (or guards-on / guards-off)"
 echo "Cluster fixes: guard-rbac-on (the CEO's record)  guard-admission-on (the support ticket's image)"
+echo "               guard-agency-on (the support ticket's Joker at KubeCon: the bot deploys nothing)"
 echo "KubeCon: guardrails-on / guardrails-off (the four Kubernetes guardrails, on both clusters at once)"
 EOS
 
@@ -614,6 +615,36 @@ else
   echo "⚠️  restrict-image-registries is not in Audit. Wait a moment and try 'guard-admission-off' again."; exit 1
 fi
 EOS
+# guard-agency-on: the support ticket's cluster fix at KubeCon (#775), least privilege (OWASP LLM06, Excessive Agency).
+# HC-666's Joker comes from registry.burritobot.co, which Kyverno trusts, so admission passes it. This Role,
+# c6-least-privilege-role.yaml, takes create and patch on Deployments and Pods away from agent-sa, so deploy_app comes
+# back Forbidden whatever the image; the CEO's record stays scoped. guard-agency-off applies c5-scoped-role.yaml, the
+# Role guard-rbac-on and guardrails-on leave. The 2-hour lab's second tier stays guard-admission-on, above.
+cat > "$HOME/guard-agency-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+c=(kubectl apply -f "$HOME/challenges/c6-least-privilege-role.yaml")
+_show "${c[@]}"
+if "${c[@]}" >/dev/null 2>&1; then
+  echo "🛡️  Least privilege ON for the support ticket. agent-sa's Role no longer creates or changes Deployments"
+  echo "    or Pods, so BurritoBot cannot deploy anything, from any registry. Re-send the ticket ask: deploy_app"
+  echo "    comes back Forbidden from the Kubernetes API. The CEO's record stays out of reach."
+else
+  echo "⚠️  The Role did not change. Wait a moment and try 'guard-agency-on' again."; exit 1
+fi
+EOS
+cat > "$HOME/guard-agency-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+c=(kubectl apply -f "$HOME/challenges/c5-scoped-role.yaml")
+_show "${c[@]}"
+if "${c[@]}" >/dev/null 2>&1; then
+  echo "🔓 Least privilege OFF for the support ticket. agent-sa can create Deployments and Pods again, so the"
+  echo "    ticket's Joker lands. The CEO's record stays out of reach."
+else
+  echo "⚠️  The Role did not change. Wait a moment and try 'guard-agency-off' again."; exit 1
+fi
+EOS
 # guardrails-on / guardrails-off: the KubeCon breakout's one command for the four Kubernetes guardrails on both
 # clusters (#774; _guardrails in .guardlib). An optional number of seconds waits between guardrails.
 cat > "$HOME/guardrails-on" <<'EOS'
@@ -631,7 +662,8 @@ chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off \
   "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/guard-rbac-on "$HOME"/guard-rbac-off \
-  "$HOME"/guard-admission-on "$HOME"/guard-admission-off "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
+  "$HOME"/guard-admission-on "$HOME"/guard-admission-off "$HOME"/guard-agency-on "$HOME"/guard-agency-off \
+  "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
 
 # No banner. The shell opens on a prompt and nothing else (#342).
 #

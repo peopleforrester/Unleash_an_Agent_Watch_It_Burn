@@ -71,7 +71,8 @@ with tempfile.TemporaryDirectory() as tmp:
     env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}"}
 
     for cmd in ("guard-input-on", "guard-output-on", "guard-topic-on", "guard-mcp-on", "guard-input-off",
-                "guard-rbac-on", "guard-rbac-off", "guard-admission-on", "guard-admission-off"):
+                "guard-rbac-on", "guard-rbac-off", "guard-admission-on", "guard-admission-off",
+                "guard-agency-on", "guard-agency-off"):
         print(f"== {cmd} ==")
         real = pathlib.Path(tmp, f"{cmd}.real")
         r = subprocess.run(["bash", str(home / cmd)], env={**env, "FAKE_CALLS": str(real)},
@@ -103,7 +104,9 @@ with tempfile.TemporaryDirectory() as tmp:
     for cmd, verb, target in (("guard-rbac-on", "apply", "c5-scoped-role.yaml"),
                               ("guard-rbac-off", "apply", "c8-broad-role.yaml"),
                               ("guard-admission-on", "patch", "restrict-image-registries"),
-                              ("guard-admission-off", "patch", "restrict-image-registries")):
+                              ("guard-admission-off", "patch", "restrict-image-registries"),
+                              ("guard-agency-on", "apply", "c6-least-privilege-role.yaml"),
+                              ("guard-agency-off", "apply", "c5-scoped-role.yaml")):
         ran = calls_of(pathlib.Path(tmp, f"{cmd}.real"))
         check(f"{cmd} runs kubectl {verb} on {target}",
               any(verb in c and any(target in a for a in c) for c in ran), str(ran))
@@ -118,6 +121,7 @@ print("== the guard messages name the attack, not a challenge number ==")
 docs = heredocs()
 for cmd, attack in (("guard-rbac-on", "CEO's record"), ("guard-rbac-off", "CEO's record"),
                     ("guard-admission-on", "support ticket"), ("guard-admission-off", "support ticket"),
+                    ("guard-agency-on", "support ticket"), ("guard-agency-off", "support ticket"),
                     ("guard-input-on", "support ticket"), ("guard-input-off", "support ticket"),
                     ("guard-mcp-on", "weather tool"), ("guard-mcp-off", "weather tool")):
     check(f"{cmd} names the {attack}", attack in docs.get(cmd, ""), docs.get(cmd, "<missing>")[:200])
@@ -144,6 +148,23 @@ check("it reads one Secret, the agent's own workshop-agent config, with get and 
 check("it keeps every other rule of the shipped Role",
       [r for r in scoped.get("rules", []) if "secrets" not in r.get("resources", [])]
       == [r for r in broad["rules"] if "secrets" not in r.get("resources", [])])
+
+print("== Challenge 3's least-privilege Role at KubeCon (#775) ==")
+least = yaml.safe_load(fixes.get("c6-least-privilege-role.yaml", "{}")) or {}
+grants = {(res_, verb) for r in least.get("rules", []) for res_ in r.get("resources", []) for verb in r.get("verbs", [])}
+check("c6-least-privilege-role.yaml is the workshop-agent Role in agent",
+      least.get("kind") == "Role" and least.get("metadata") == {"name": "workshop-agent", "namespace": "agent"})
+check("it creates and patches no Deployment and no Pod, so deploy_app's apply is Forbidden for a new Joker and an old one",
+      not grants & {(r_, v) for r_ in ("deployments", "pods") for v in ("create", "patch", "update", "*")}, str(grants))
+check("it keeps c5-scoped-role.yaml's one Secret, so the CEO's record stays out of reach",
+      [r for r in least.get("rules", []) if "secrets" in r.get("resources", [])] == srules)
+check("it keeps patch on deployments/scale, the reaper's grant, as every Role does",
+      all(("deployments/scale", "patch") in {(r_, v) for r in role.get("rules", []) for r_ in r.get("resources", [])
+                                             for v in r.get("verbs", [])}
+          for role in (least, scoped, broad, yaml.safe_load(fixes["c8-broad-role.yaml"]),
+                       yaml.safe_load(fixes["c8-scoped-role.yaml"]))))
+check("guard-agency-on, read in the terminal's list, belongs to the support ticket at KubeCon",
+      "guard-agency-on (the support ticket's Joker at KubeCon" in ENTRYPOINT)
 
 print("== both copies of the entrypoint ==")
 check("images/web-terminal/entrypoint.sh is byte-identical to gitops/ai-layer/web-terminal/entrypoint.sh",

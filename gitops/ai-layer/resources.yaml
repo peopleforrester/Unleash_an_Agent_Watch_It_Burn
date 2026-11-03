@@ -42,6 +42,10 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["create", "get", "list", "patch"]
+  # workshop-mcp's reaper scales the room's deployments to zero through the scale subresource (#775).
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["patch"]
   - apiGroups: [""]
     resources: ["pods", "configmaps", "services"]
     verbs: ["create", "get", "list", "patch"]
@@ -691,6 +695,19 @@ spec:
   selector: { burritobot.co/workload: maintenance-shell }
   ports: [{ name: http, port: 80, targetPort: 8080 }]
 ---
+# The room's Jokers, one page each (#775). Headless: deploy_app gives each joker-<name> pod the hostname <name> and
+# this Service as its subdomain, and labels it burritobot.co/room-joker, so cluster DNS answers
+# joker-<name>.jokers.agent.svc.cluster.local for that one pod. The console's maintenance-shell server proxies
+# /joker-<name>/ there (console.conf). A Joker scaled to zero drops out of DNS, and the console says nothing runs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: jokers
+spec:
+  clusterIP: None
+  selector: { burritobot.co/room-joker: "true" }
+  ports: [{ name: http, port: 8080, targetPort: 8080 }]
+---
 apiVersion: kagent.dev/v1alpha2
 kind: RemoteMCPServer
 metadata:
@@ -1076,6 +1093,9 @@ data:
       - apiGroups: ["apps"]
         resources: ["deployments"]
         verbs: ["create", "get", "list", "patch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments/scale"]
+        verbs: ["patch"]
       - apiGroups: [""]
         resources: ["pods", "configmaps", "services"]
         verbs: ["create", "get", "list", "patch"]
@@ -1099,6 +1119,9 @@ data:
       - apiGroups: ["apps"]
         resources: ["deployments"]
         verbs: ["create", "get", "list", "patch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments/scale"]
+        verbs: ["patch"]
       - apiGroups: [""]
         resources: ["pods", "configmaps", "services"]
         verbs: ["create", "get", "list", "patch"]
@@ -1122,8 +1145,40 @@ data:
       - apiGroups: ["apps"]
         resources: ["deployments"]
         verbs: ["create", "get", "list", "patch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments/scale"]
+        verbs: ["patch"]
       - apiGroups: [""]
         resources: ["pods", "configmaps", "services"]
+        verbs: ["create", "get", "list", "patch"]
+      - apiGroups: [""]
+        resources: ["secrets"]
+        resourceNames: ["workshop-agent"]
+        verbs: ["get"]
+  c6-least-privilege-role.yaml: |
+    # Challenge 3's cluster fix at KubeCon (#775), applied by guard-agency-on: least privilege, OWASP LLM06, Excessive
+    # Agency. HC-666's Joker comes from registry.burritobot.co, which admission trusts, so Kyverno passes it; what stops
+    # it is a bot that cannot create workloads at all. This Role is c5-scoped-role.yaml (the CEO's record stays out of
+    # reach) without create or patch on Deployments and Pods, so deploy_app's apply comes back Forbidden, for a new
+    # Joker and for one already there. The reaper's patch on deployments/scale stays, so a Joker that landed before the
+    # fix is still scaled to zero. guard-agency-off applies c5-scoped-role.yaml to put the workload verbs back.
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: workshop-agent
+      namespace: agent
+    rules:
+      - apiGroups: ["apps"]
+        resources: ["deployments"]
+        verbs: ["get", "list"]
+      - apiGroups: ["apps"]
+        resources: ["deployments/scale"]
+        verbs: ["patch"]
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["get", "list"]
+      - apiGroups: [""]
+        resources: ["configmaps", "services"]
         verbs: ["create", "get", "list", "patch"]
       - apiGroups: [""]
         resources: ["secrets"]

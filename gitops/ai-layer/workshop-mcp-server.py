@@ -15,6 +15,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import ssl
 import subprocess
 import threading
@@ -400,13 +401,16 @@ def _stamp_workload(obj: dict, name: str) -> None:
 
 def published_address(kind: str, name: str) -> str:
     """The public address the console serves this workload at, or "" when it publishes none."""
-    if kind != "Deployment" or name not in PUBLISHED_WORKLOADS or not PUBLIC_HOST:
+    if kind != "Deployment" or not PUBLIC_HOST or not (name in PUBLISHED_WORKLOADS or room_joker_page(name)):
         return ""
     # The cluster's identity is its agenticburn.com host; the room is shown the burritobot.co twin, which fleet.sh
     # routes to the same console (#651, #663).
     host = PUBLIC_HOST.removesuffix(".agenticburn.com") + ".burritobot.co" \
         if PUBLIC_HOST.endswith(".agenticburn.com") else PUBLIC_HOST
-    return f"https://{name}-{host}/"
+    if name in PUBLISHED_WORKLOADS:
+        return f"https://{name}-{host}/"
+    # A room Joker's own page, on the published maintenance-shell host, under its name (#775).
+    return f"https://{PUBLISHED_WORKLOADS[0]}-{host}/{name}/"
 
 
 # The room's Jokers (#685): support.burritobot.co's HC-666 gets the bot to deploy joker-<the visitor's name>. One
@@ -424,6 +428,40 @@ def _shrink_room_joker(obj: dict, name: str) -> None:
     for c in (_pod_spec(obj) or {}).get("containers") or []:
         if isinstance(c, dict):
             c["resources"] = json.loads(json.dumps(JOKER_RESOURCES))
+
+
+# Each room Joker has a page of its own (#775): https://maintenance-shell-<cluster>/<its name>/, which deploy_app's
+# reply names and HC-666 asks the bot to hand over. Its pod takes the Deployment's name as its hostname under the
+# headless Service ROOM_JOKER_SERVICE (resources.yaml), which selects ROOM_JOKER_LABEL, so cluster DNS answers
+# <name>.jokers.agent.svc for that one pod, and the console's maintenance-shell server proxies /<name>/ to it
+# (console.conf). One static Service and nothing per person, so the agent's Role needs no new grant for it.
+ROOM_JOKER_SERVICE = "jokers"
+ROOM_JOKER_LABEL = "burritobot.co/room-joker"
+# A pod hostname is one DNS label; the console's location takes the same shape.
+_DNS_LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+
+
+def room_joker_page(name: str) -> bool:
+    """Whether a Deployment of this name is a room Joker that gets its own page."""
+    return name.startswith(JOKER_PREFIX) and bool(_DNS_LABEL.match(name))
+
+
+def _name_room_joker(obj: dict, name: str) -> None:
+    """Give a room Joker's pod its Deployment's name as hostname, under the jokers Service it is labeled into."""
+    if obj.get("kind") != "Deployment" or not room_joker_page(name):
+        return
+    spec = obj.get("spec")
+    tmpl = spec.get("template") if isinstance(spec, dict) else None
+    pod = tmpl.get("spec") if isinstance(tmpl, dict) else None
+    if not isinstance(pod, dict):
+        return
+    meta = tmpl.setdefault("metadata", {})
+    if not isinstance(meta, dict):
+        return
+    labels = meta.get("labels") if isinstance(meta.get("labels"), dict) else {}
+    meta["labels"] = {**labels, ROOM_JOKER_LABEL: "true"}
+    pod["hostname"] = name
+    pod["subdomain"] = ROOM_JOKER_SERVICE
 
 
 # The public images the room can ask for by name (#773). In the breakout the room has only phones, so nobody types a
@@ -559,7 +597,9 @@ def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str
 
 
 def _scale_to_zero(base: str, ns: str, plural: str, name: str) -> None:
-    code, body = _req("PATCH", f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp-reaper",
+    # Through the scale subresource (#775): every Role grants patch on deployments/scale apart from the Deployment, so
+    # the Role that takes create and patch on Deployments away from the bot (guard-agency-on) still leaves the reaper.
+    code, body = _req("PATCH", f"{base}/namespaces/{ns}/{plural}/{name}/scale?fieldManager=workshop-mcp-reaper",
                       body=json.dumps({"spec": {"replicas": 0}}), content_type="application/merge-patch+json")
     if code not in (200, 201):
         print(f"scaling {name} to zero failed (HTTP {code}): {body[:200]}", flush=True)
@@ -601,6 +641,7 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     room = _resolve_public_images(obj, f"{kind}/{name}")
     _default_limits(obj)
     _shrink_room_joker(obj, name)
+    _name_room_joker(obj, name)
     if room:
         _shrink_room_deployment(obj)
     _stamp_workload(obj, name)

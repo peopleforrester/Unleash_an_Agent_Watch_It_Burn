@@ -208,9 +208,10 @@ check("it deploys", reply.startswith("deployed Deployment/tron"), err or reply)
 check("one replica, whatever the manifest asked", out.get("spec", {}).get("replicas") == 1)
 check("and the room's small resources, whatever the manifest asked", container(out).get("resources") == m.ROOM_RESOURCES,
       str(container(out).get("resources")))
-scaled = lambda n: [c for c in calls if c[0] == "PATCH" and c[1].endswith(f"/deployments/{n}")  # noqa: E731
+scaled = lambda n: [c for c in calls if c[0] == "PATCH" and c[1].endswith(f"/deployments/{n}/scale")  # noqa: E731
                     and c[2] == {"spec": {"replicas": 0}}]
-check("a merge patch scales it to zero after the window", wait_for(lambda: bool(scaled("tron"))))
+check("a merge patch on its scale subresource scales it to zero after the window (#775)",
+      wait_for(lambda: bool(scaled("tron"))))
 check("nothing deletes it", not any(c[0] == "DELETE" for c in calls))
 _, out, _ = deploy(workload("db", "redis", kind="StatefulSet", replicas=4))
 check("a StatefulSet of a public image runs one replica too", out.get("spec", {}).get("replicas") == 1)
