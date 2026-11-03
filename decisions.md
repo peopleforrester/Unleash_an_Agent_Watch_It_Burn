@@ -12915,3 +12915,42 @@ RENDER-GATE TESTS GREEN", `test_otel_trace_id_fix_live_checks.py` among them. Th
 and exited 1 on one, `test_image_version_tags.py`: ghcr.io answers 404 for
 `watch-it-burn:sample-app-nginx-1.27.5`, the tag #814 introduced and whose `crane tag` it escalated. The web-terminal
 tag red recorded above is gone, since #816 restored it. This change touches no image.
+## 2026-11-03 · #720 (#825) · KubeCon uses no pool row, no presenter bundle and no serve-actions runner
+
+peopleforrester/provisioning-agenticburn filed a status report for KubeCon (2026-11-12) as #720. The provisioning app
+answers only at `https://watch-it-burn-provisioning-production.up.railway.app`, its pool has 0 rows since the `/data`
+volume was wiped, its presenter page says "Datadog accounts not yet configured on the distributor" because
+`ADMIN_DATADOG_EMAIL` and `ADMIN_DATADOG_PASSWORD` are unset, and its fleet console reads "runner is not up: no health
+report has arrived". The report asks this repo two decisions. The answers below cite
+`facilitation/kubecon-na-2026-run-of-show.md` as it stands on staging at `53b2c9c`.
+
+**Decision 1: KubeCon uses neither `/eks-claim` nor the presenter bundle.** The session is a demo. Nobody in the room
+provisions a cluster, and nobody is pointed at the attendee lab or the provisioning page (lines 11 to 16). The
+presenters drive from `/kubecon`, which carries no provisioning or student-lab content (lines 24 to 29). The session
+runs on the roster in `infra/terraform/fleet/roster.tsv`, and the attendee pool is outside it (lines 271 to 273). The
+router table carries the roster only, and nobody is pointed at the provisioning distributor (lines 302 to 306). The
+Night Before brings up the roster with `./fleet.sh instructors up all` and says the attendee pool is not provisioned
+for this session (lines 891 to 893). The presenters log in to the private cluster's terminal as `sprouts` / `sprouts`
+and read that login off the cluster's `terminal-auth` Secret (lines 446 to 449). The provisioning app stays up as the
+C1 beacon collector only (lines 912 to 916, and open question 9 at lines 1285 to 1292, #502 and question 714). So the
+empty pool is correct for KubeCon, and no ingest against the Railway host is owed for it. The unset
+`ADMIN_DATADOG_EMAIL` and `ADMIN_DATADOG_PASSWORD` do not affect the session: they only fill the presenter page, which
+nobody opens at KubeCon, and both KubeCon clusters ship to Whitney's sandbox Datadog org (open question 3 at lines
+1250 to 1252, and the people table at line 52, #629).
+
+**Decision 2: `fleet.sh serve-actions` does not run during the talk.** The admin console has no step in the KubeCon
+run of show. `git grep` finds no `/eks-claim`, presenter page, admin console or `serve-actions` in
+`facilitation/kubecon-na-2026-run-of-show.md` or `gitops/ai-layer/web/kubecon.html`. A presenter runs each Night
+Before and on-stage action in that file directly, from a checkout or a cluster's terminal. So the console's "runner is not up: no
+health report has arrived" line is expected for KubeCon and needs no action. The 2-hour workshop keeps the runner:
+`docs/admin-console.md` says to start `fleet.sh serve-actions` before the doors open and leave it up for the length of
+the workshop (question 629).
+
+**Who decided.** Run 16785 decided both answers from the repo's records, under the decision ladder (the spec, then
+decisions.md, then the rules). The run-of-show and `docs/admin-console.md` settle both, so no question went to
+Michael.
+
+**What differs from the earlier drafts.** `origin/agent/720-13664` and `origin/agent/720-14845` carried the same two
+answers alongside a fix to the C1 fallback's beacon view URL. Staging has since taken that fix (d2264c1d moved the
+fallback to `https://beacon.burritobot.co/beacon/view`), so this entry carries the answers alone, with line citations
+on the current run-of-show. Nothing changes in code, and no cluster check applies: the answers rest on the records.
