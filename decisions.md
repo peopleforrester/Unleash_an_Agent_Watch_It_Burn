@@ -10319,6 +10319,8 @@ one, `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `
 **Resumed by run 16465.** Run 16447's report failed hecaton's prose gate on one antithesis in this entry. Run 16465
 reworded those lines as plain claims, and the load replay check this entry quotes along with them, on the branch
 hecaton had rebased onto staging `858ffaf` (#774's guardrails switch). Run 16477 recounted the checks that fail on
-the old console.conf (four, above) and changed nothing else.
+the old console.conf (four, above) and changed nothing else. Its `bash verify/run-tests.sh` exits 0, and `bash verify/run-e2e-tools.sh` ran 44 checks
+and failed only `test_image_version_tags.py`, with the tag now at `sha256:7e5f8986...`: CI has pushed over it again
+since run 16447.
 
 No dependency was added.
