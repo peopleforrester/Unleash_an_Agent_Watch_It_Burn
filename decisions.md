@@ -11666,3 +11666,10 @@ clicks the button (`verify/run-e2e.sh` has none, and `verify/browser-smoke.py` d
 this host has no browser. The check: open `https://attackme.burritobot.co/` with no cookies and confirm the page
 source calls `otherWitch(WITCH_NAME)`. Note the header's name, open `https://support-attackme.burritobot.co/me` and
 see the same name. Click "Get a new witch name", and see `/me` show the new name after a reload.
+
+**The suites (run 16675, on 1eb7f4a).** `bash verify/run-tests.sh`, run as the E2E command's first stage, passed
+with 232 tests and printed ALL OFFLINE RENDER-GATE TESTS GREEN. `bash verify/run-e2e-tools.sh` ran 48 checks, and
+`test_storefront_witch_name_e2e.py` passed among them. It exits 1 on one check only, in `test_image_version_tags.py`:
+ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c...`, not the pinned
+`sha256:68004fb5ed2d...`. That is the tag CI pushed over, already red on staging b4cad81 and open as #815. Nothing
+in this change touches an image.
