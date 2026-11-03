@@ -10147,3 +10147,60 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
 "to let" as the first-person-plural connective. The five added lines that used that verb (PROJECT_STATE.md, decisions.md, the run-of-show,
 KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
 behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.
+
+## 2026-11-03 · #793 · guard-proxy repinned to main 78c7cad: requests are priced at the bound model, and a live tier swap is the Agent patch alone
+
+**Context.** guard-proxy-agenticburn#37 (c8ac56e, release note of 2026-11-02) has guard-proxy price each request at
+the tier of the `workshop-agent` Agent's `spec.declarative.modelConfig` (`bedrock-nova`, `-haiku`, `-sonnet`, `-opus`),
+read at most every 5 seconds with the `guard-proxy-reader` token, which already has `get` on that Agent
+(`gitops/ai-layer/resources.yaml`, the Role's `agents` rule). `MODEL_TIER` is now the start-up default and the price of
+a ModelConfig with no tier, and `/cost`'s `tier` is the tier in effect. This is build piece 1 of
+`docs/research/2026-11-02-workload-management-exercises.md`. First dispatch of #793 (hecaton run 16460); there is no
+earlier `agent/793-*` draft.
+
+**What changed.**
+- `gitops/ai-layer/guard-proxy` moves from fb6e2bf to 78c7cad, guard-proxy-agenticburn's main head on 2026-11-03, not to
+  c8ac56e itself. Both are on main and both hold #5's fix (`verify/guard-proxy-pin-on-main.sh`). 78c7cad also carries
+  #38 (1cfa6d6): spans and `gen_ai.client.cost` name the model the request was priced at, so a swap to Opus no longer
+  shows on Datadog as Nova Pro spend. Stopping at c8ac56e would have priced a swap right and labelled it wrong. It also
+  carries #34 and #35 (6f2de73, aaf1872), the `/chat` witch-name forwarding that #762 and #803 were waiting on a repin
+  for, plus Go-build-only work (the bbolt spend store, `reset-spend`, M5 telemetry) that KubeCon's proxy.py does not run.
+  `checksum/proxy-py` is `8a40f14f5052`, so the pod rolls when ai-layer syncs.
+- #38's release note asks for the dashboard queries to change in the same commit as the repin: with one cost series
+  per model, `max:gen_ai.client.cost{...} by {kube_cluster_name}` shows only the biggest model's share once a cluster
+  has swapped. The three such queries are now `sum:`: the leaderboard's C4 column and its "biggest bill in the room"
+  toplist (`infra/datadog-fleet/leaderboard.yaml`), and the fleet dashboard's per-cluster cost column
+  (`infra/datadog-fleet/dashboard.yaml`). The room-spend tile and `infra/datadog-room/room_view.yaml` were `sum:`
+  already. The files change in Git only: `fleet_monitors.py` pushes them to the Datadog orgs when it is next run.
+- `verify/model_pin_check.py` prices the pin the way proxy.py does: the bound `bedrock-<tier>` ModelConfig's tier, else
+  `MODEL_TIER`. A live patch of the Agent to `bedrock-haiku` with `MODEL_TIER` left at `nova` passes. A ModelConfig
+  with no `bedrock-<tier>` name prints a `WARN` line, which does not fail the run, and is judged at `MODEL_TIER`, so it
+  still fails when `MODEL_TIER` prices another model. A `bedrock-<tier>` ModelConfig whose model is another tier's
+  fails. The GREEN line names the priced tier.
+- `docs/MASTER-RECREATION-SPEC.md`'s tier-swap bullet and `docs/GO-LIVE-CHECKLIST.md`'s matching item: the swap
+  is the Agent patch alone, with no `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>`. That command now goes only
+  with a swap to a ModelConfig that names no tier.
+
+**Tests.** `verify/test_model_pin_check.py` drops the case "MODEL_TIER pricing another model fails the pin", which
+#37 made false: a `bedrock-nova` pin with `MODEL_TIER=sonnet` is priced at Nova now, and the test asserts that. New
+cases build the pin a live patch to each of `bedrock-haiku`, `-sonnet` and `-opus` leaves, from the committed manifests
+with `MODEL_TIER` unchanged, and pass it. They also cover a mismatched `bedrock-<tier>` model, an untiered name (warns;
+passes or fails on `MODEL_TIER`) and `bedrock-titan`. A last case checks that the check's `bound_tier` agrees with the
+pinned proxy.py's `_tier_of` on every ModelConfig the manifests define and five odd names. Swapping the judge back to
+`MODEL_TIER` alone fails five cases. `verify/test_recreation_spec_tier_swap.py` holds the spec bullet to the
+Agent-only swap and the `MODEL_TIER` fallback. Two new checks read the pinned proxy.py, which must fetch the Agent's
+`modelConfig` and price through `bound_tier()`; both fail against fb6e2bf. `verify/test_cost_tier_matches_model.py`
+is unchanged in what it checks, because the committed `MODEL_TIER` is still the price until the first Agent read, and
+its comment says so.
+
+**Not yet run on a cluster.** Run 16460 was handed `clusters/env` and `clusters/kubeconfig` for
+`watch-it-burn-community` and `watch-it-burn-private`, but they are mode 640, group `hecaton`, and the run's user
+(`hecaton-s2-claude-certkraken`) is not in that group, so every `kubectl` call failed with "permission denied" and
+nothing was read on a cluster. The clusters also run fb6e2bf until this reaches staging and ai-layer syncs. A session
+with accen-dev, on each cluster after the sync:
+1. Confirm `kubectl --context <ctx> -n agent get deploy guard-proxy -o jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'` reads `8a40f14f5052`.
+2. Read `/cost` through the proxy (`kubectl --context <ctx> -n agent exec deploy/guard-proxy -c proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/cost').read().decode())"`): `tier` is `nova`.
+3. `kubectl --context <ctx> -n agent patch agent workshop-agent --type merge -p '{"spec":{"declarative":{"modelConfig":"bedrock-haiku"}}}'`, behind the Kyverno flip in `docs/GOTCHAS-FLEET-AND-DELIVERY.md`, then read `/cost` again within 5 seconds: `tier` is `haiku`, and the proxy log has one `price_tier` line naming `bedrock-haiku`.
+4. Send one `/chat` turn once the agent pod has restarted. The reply's `cost_usd` and the growth of `/cost`'s `usd` equal input tokens x $0.001/1K plus output tokens x $0.005/1K, the Haiku row, not Nova's $0.0008/$0.0032.
+5. Patch `modelConfig` back to `bedrock-nova` and check `tier` reads `nova` again.
+No E2E test in `verify/run-e2e.sh` does this swap yet. O2b in the research note is the place for one.

@@ -94,7 +94,7 @@ widgets:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: metrics
               name: c4
-              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
+              query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
             - data_source: logs
               name: c5
@@ -156,7 +156,7 @@ widgets:
           queries:
             - data_source: metrics
               name: bill
-              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
+              query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
           formulas:
             - formula: bill

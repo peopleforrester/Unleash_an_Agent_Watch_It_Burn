@@ -1,5 +1,5 @@
 # ABOUTME: docs/MASTER-RECREATION-SPEC.md says how a model tier reaches a cluster the way ai-layer and workshop-agent deliver
-# ABOUTME: it: the committed default on a fresh cluster, a live patch of the Agent and MODEL_TIER on a running one.
+# ABOUTME: it: the committed default on a fresh cluster, a live patch of the Agent alone on a running one (#793).
 #
 # Why (#598). The spec's Key Decisions bullet said "Tier swaps by repointing the Agent modelConfig (commit + resync),
 # never kubectl patch live." The ai-layer Application ignores the Agent's .spec.declarative.modelConfig and
@@ -75,8 +75,27 @@ check("it says the next workshop-agent sync applies the committed modelConfig an
       "workshop-agent sync" in line and "resets a live tier patch" in line and "#707" in line)
 check("it names the ignored fields and RespectIgnoreDifferences",
       all(t in line for t in (".spec.declarative.modelConfig", "MODEL_TIER", "RespectIgnoreDifferences=true")))
-check("it patches the Agent and guard-proxy's MODEL_TIER together",
-      "bedrock-<tier>" in line and "set env deploy/guard-proxy MODEL_TIER=<tier>" in line)
+# Since guard-proxy-agenticburn#37 (#793) the proxy prices each request at the bound bedrock-<tier> ModelConfig's
+# tier, so the swap is the Agent patch alone; MODEL_TIER moves only with a ModelConfig that names no tier.
+m = re.search(r"patch Agent `workshop-agent` to `bedrock-<tier>`(.*?)No script applies a tier", line)
+swap_text = m.group(1) if m else ""
+check("it patches Agent workshop-agent to bedrock-<tier>, and nothing else", "and nothing else" in swap_text,
+      swap_text[:200])
+check("it no longer sets guard-proxy's MODEL_TIER with a bedrock-<tier> swap",
+      "both together" not in line and "then `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>`" not in line)
+check("it says guard-proxy prices at the bound ModelConfig within 5 seconds (guard-proxy-agenticburn#37)",
+      "guard-proxy-agenticburn#37" in line and "5 seconds" in line and "/cost`'s `tier`" in line)
+check("it keeps MODEL_TIER as the start-up default and the price of a ModelConfig with no bedrock-<tier> name",
+      "start-up default" in line and "price_tier_unknown" in line and "verify/model_pin_check.py" in line)
+
+# The claim is only true of the pinned build: proxy.py has to read the Agent and price at its tier.
+PROXY = REPO / "gitops/ai-layer/guard-proxy/proxy.py"
+proxy = PROXY.read_text(encoding="utf-8")
+check("the pinned proxy.py reads the workshop-agent Agent's modelConfig",
+      "/agents/workshop-agent" in proxy and '["spec"]["declarative"].get("modelConfig")' in proxy)
+check("and prices each request at the bound tier, not MODEL_TIER alone",
+      re.search(r"tier = bound_tier\(\)\n\s*model = request_model\(tier\)\n\s*price_in, price_out = prices_per_1k\(tier\)",
+                proxy) is not None)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

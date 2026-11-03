@@ -16,9 +16,16 @@ without touching its children. Not yet run on a cluster; details in decisions.md
 Built on staging, not yet run on a cluster. `deploy_app` turns a plain name (busybox, alpine, nginx, httpd, redis,
 2048) into a pinned public.ecr.aws image, runs it as one small replica and scales it to zero after 5 minutes.
 `deployments-<cluster>` lists every landed deployment by name, image and witch name, and the chat page shows "see
-your deployments" once the visitor has one. Owed: #762's guard-proxy repin (so the witch name reaches the model),
-apex-agenticburn's `deployments.burritobot.co` lookup, and `verify/test_deployments_page_live.py` on both KubeCon
-clusters. Details in decisions.md, 2026-11-02 · #773.
+your deployments" once the visitor has one. #793 repinned guard-proxy to 78c7cad, which forwards the witch name
+(guard-proxy-agenticburn#34/#35); not yet synced to a cluster. Owed: apex-agenticburn's `deployments.burritobot.co`
+lookup, and `verify/test_deployments_page_live.py` on both KubeCon clusters. Details in decisions.md, 2026-11-02 · #773.
+
+## guard-proxy prices the bound model (#793)
+
+guard-proxy is pinned at guard-proxy-agenticburn main 78c7cad. Each request is priced at the `workshop-agent` Agent's
+bound `bedrock-<tier>` ModelConfig, so a live tier swap is the Agent patch alone. `MODEL_TIER` is the start-up default.
+The fleet dashboards read `sum:gen_ai.client.cost`. Owed: the nova-to-haiku swap on a cluster, with `/cost`'s tier and
+Haiku-rate spend checked after ai-layer syncs. Details in decisions.md, 2026-11-03 · #793.
 
 ## KubeCon guardrails switch (#774)
 

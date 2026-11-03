@@ -14,7 +14,9 @@
 # pin is read from the manifest the cluster runs (gitops/ai-layer/resources.yaml), never typed in here, and
 # every claim about it is checked against the live Bedrock API as the delivery account:
 #
-#   1. the ModelConfig's bedrock.region is the delivery region, and guard-proxy's MODEL_TIER prices that model
+#   1. the ModelConfig's bedrock.region is the delivery region, and guard-proxy prices that model: at the tier of
+#      the bound bedrock-<tier> ModelConfig since guard-proxy-agenticburn#37, so a live swap of the Agent's
+#      modelConfig needs no MODEL_TIER change; at MODEL_TIER, with a warning, for a ModelConfig with no tier
 #   2. the inference profile exists and is ACTIVE in the delivery region
 #   3. every foundation model the profile routes to is ACTIVE, with no legacy, extended-access or end-of-life
 #      time on or before --through (a Legacy model can lose access after 15 days of inactivity)
@@ -92,17 +94,47 @@ def is_profile(model_id):
     return model_id.startswith(PROFILE_PREFIXES)
 
 
+def bound_tier(model_config, tier_to_model_id):
+    """The tier guard-proxy reads off a ModelConfig name, as its _tier_of does: bedrock-<tier> for a tier it
+    prices, else None, and the proxy then prices at MODEL_TIER (guard-proxy-agenticburn#37)."""
+    prefix = "bedrock-"
+    if model_config.startswith(prefix) and model_config[len(prefix):] in tier_to_model_id:
+        return model_config[len(prefix):]
+    return None
+
+
+def priced_tier(pin, tier_to_model_id):
+    """The tier guard-proxy prices this pin's requests at: the bound ModelConfig's, else MODEL_TIER."""
+    return bound_tier(pin["model_config"], tier_to_model_id) or pin["model_tier"]
+
+
+def warn_pin(pin, tier_to_model_id):
+    """Warnings that do not fail the pin: a ModelConfig with no bedrock-<tier> name is priced at MODEL_TIER, so
+    a swap to it is priced right only if MODEL_TIER is changed with it (guard-proxy logs price_tier_unknown)."""
+    if bound_tier(pin["model_config"], tier_to_model_id):
+        return []
+    return [f"{pin['model_config']} names no price tier (bedrock-<{'|'.join(tier_to_model_id)}>), so guard-proxy "
+            f"prices it at MODEL_TIER {pin['model_tier']!r}; a swap to or from it needs MODEL_TIER set with it"]
+
+
 def judge_pin(pin, delivery_region, tier_to_model_id):
-    """Offline half: the manifest pins a Bedrock model in the delivery region and the proxy prices that model."""
+    """Offline half: the manifest pins a Bedrock model in the delivery region and the proxy prices that model.
+
+    guard-proxy prices each request at the tier of the ModelConfig the Agent is bound to, so a live patch of the
+    Agent to bedrock-haiku with MODEL_TIER left at nova is priced as Haiku and passes. MODEL_TIER only prices a
+    ModelConfig with no bedrock-<tier> name, which warn_pin flags."""
     out = []
     out.append(("the agent's ModelConfig is a Bedrock one", pin["provider"] == "Bedrock",
                 f"{pin['model_config']} has provider {pin['provider']!r}"))
     out.append((f"the ModelConfig calls Bedrock in the delivery region {delivery_region}",
                 pin["region"] == delivery_region,
                 f"{pin['model_config']} has bedrock.region {pin['region']!r}"))
-    out.append((f"guard-proxy MODEL_TIER {pin['model_tier']!r} prices {pin['model_id']}",
-                tier_to_model_id.get(pin["model_tier"]) == pin["model_id"],
-                f"proxy maps {pin['model_tier']!r} to {tier_to_model_id.get(pin['model_tier'])!r}"))
+    tier = priced_tier(pin, tier_to_model_id)
+    via = (f"bound to {pin['model_config']}" if bound_tier(pin["model_config"], tier_to_model_id)
+           else f"MODEL_TIER, as {pin['model_config']} names no tier")
+    out.append((f"guard-proxy prices {pin['model_id']} at tier {tier!r} ({via})",
+                tier_to_model_id.get(tier) == pin["model_id"],
+                f"proxy maps {tier!r} to {tier_to_model_id.get(tier)!r}"))
     out.append(("guard-proxy RATE_LIMIT_RPM sets the room's ceiling", pin["rate_limit_rpm"] > 0,
                 "RATE_LIMIT_RPM is 0 or unset, so nothing bounds what the room can send"))
     return out
@@ -268,7 +300,10 @@ def main(argv=None):
     print(f"== model pin check, {now} ==")
     print(f"  pin: workshop-agent -> {pin['model_config']} -> {pin['model_id']} in {pin['region']}, "
           f"MODEL_TIER={pin['model_tier']}, RATE_LIMIT_RPM={pin['rate_limit_rpm']}")
-    record(judge_pin(pin, a.region, load_tier_map()))
+    tier_map = load_tier_map()
+    record(judge_pin(pin, a.region, tier_map))
+    for w in warn_pin(pin, tier_map):
+        print(f"  WARN  {w}")
 
     if shutil.which("aws") is None:
         print("FAIL: the aws CLI is not on PATH; the pin cannot be checked against Bedrock", file=sys.stderr)
@@ -345,7 +380,7 @@ def main(argv=None):
 
     if all(results):
         print(f"\nMODEL PIN GREEN: {model_id} answers as {a.profile} ({ident.get('Account')}) in {a.region}, "
-              f"Active through {through}, priced as {pin['model_tier']}. Checked {now}.")
+              f"Active through {through}, priced as {priced_tier(pin, tier_map)}. Checked {now}.")
         return 0
     print(f"\nMODEL PIN FAILED: {results.count(False)} check(s). Do not go on stage on this pin.", file=sys.stderr)
     return 1
