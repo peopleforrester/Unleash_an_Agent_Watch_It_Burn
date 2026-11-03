@@ -27,7 +27,9 @@ global kube state. Be explicit about the target cluster on every single command.
    the cluster you provisioned; if it does not match, STOP. Prefer a guarded one-liner:
    `KUBECONFIG=/tmp/x.kubeconfig AWS_PROFILE=p kubectl config current-context | grep -q <expected> && KUBECONFIG=/tmp/x.kubeconfig AWS_PROFILE=p kubectl apply ...`
 9. **Only operate on clusters you provisioned this session.** If you did not create it, do not touch it.
-   Confirm ownership by the context name and cluster ARN, not by assumption.
+   Confirm ownership by the context name and cluster ARN, not by assumption. The one exception is a dispatched
+   run's two clusters, `watch-it-burn-community` and `watch-it-burn-private`: hecaton hands them to the run in an
+   isolated `$KUBECONFIG` of its own, and the run operates on them (Dispatched runs, point 1).
 
 If you are unsure which cluster a command will hit, stop and make the context explicit first. This
 mirrors the global rule `~/.claude/rules/infra/kubernetes.md` (Cluster Context Safety).
@@ -94,24 +96,37 @@ fails when a fetch fails.
 
 The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluster build, with CONTEXT,
 IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster, and DRIFT_PROFILE and
-ATTENDEE_CLUSTER naming the fleet account and attendee cluster the AWS-plane drift check uses (#205). It is deliberately not
-declared as the gate's E2E command: hecaton's promotion gate has no cluster, no AWS and none of its tools,
-so declaring it would hold main red for good (#543).
+ATTENDEE_CLUSTER naming the fleet account and attendee cluster the AWS-plane drift check uses (#205). A dispatched
+run, which brings no cluster up, runs it on one of its two clusters instead (Dispatched runs, point 1). It is
+deliberately not declared as the gate's E2E command: hecaton's promotion gate has no cluster, no AWS and none of its
+tools, so declaring it would hold main red for good (#543).
 
 ## Dispatched runs (hecaton)
 
-A run that hecaton dispatches starts from the current `staging` on its own `agent/<issue>-<run>` branch. It has no
-cluster and no AWS profile, and its governance forbids deploying. Hecaton run 9654 lost its time to the first point
-below and run 9672 to the second (#633). Runs 9277 and 15763 lost theirs redoing work an earlier run had done that
-never reached staging, the third point, and a stalled wait on the E2E command is the fourth (#798).
+A run that hecaton dispatches starts from the current `staging` on its own `agent/<issue>-<run>` branch. It has the
+two clusters that are up and an AWS session for them, it never brings a cluster up or down, and its governance
+forbids deploying. Hecaton run 9654 lost its time to the first point below and run 9672 to the second (#633). Runs
+9277 and 15763 lost theirs redoing work an earlier run had done that never reached staging, the third point, and a
+stalled wait on the E2E command is the fourth (#798).
 
-1. **A run does not bring clusters up.** "Provision one and validate" in change cadence rules 3 and 4 above is for
-   a session Michael runs with AWS access. In a run, write the change and its offline test, run
-   `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`, and name the live check still owed, by its E2E
-   test, under "Not yet run on a cluster" in the change's decisions.md entry. When the issue's own work is a
-   bring-up, a teardown or a live run (#610 was one), there is no code to write: say so, put the exact `fleet.sh`
-   or `verify/` command a session with AWS access runs in the report, and wait on Michael's go for the spend. A go
-   already asked on the issue is pointed at, not asked again in new words.
+1. **A run checks live on the two clusters that are up, and brings none up or down.** Since Michael's ruling of
+   2026-11-02 (hecaton#496, #809), every run gets, in its run directory, a 12-hour session for the `accen-dev` AWS
+   profile (account 515966504359, us-west-2) and a `$KUBECONFIG` whose only contexts are `watch-it-burn-community`
+   (the public community cluster) and `watch-it-burn-private` (the admin cluster). It has AWS and kubectl access to
+   both and runs live checks on them itself: no escalation and no wait on Michael, for access or for the spend of
+   these two clusters. Each `kubectl` call still names its `--context`. A script that needs the AWS session (boto3,
+   `verify/*.py`) runs after `. "$HECATON_CLUSTER_ENV"`, which exports AWS_PROFILE, AWS_REGION and the session
+   files. A run never creates or tears down a cluster or nodegroup, and there is no third cluster; the `aws` and
+   `terraform` on its PATH refuse to. So "provision one and validate" in change cadence rules 3 and 4 above means,
+   in a run, validate on one of the two, and a step written for a fresh attendee cluster runs on one of them
+   instead. In a run, write the change and its offline test, run `bash verify/run-tests.sh` and
+   `bash verify/run-e2e-tools.sh`, run the live check, and put what it printed in the change's decisions.md entry.
+   A live check that changes a cluster leaves it as found. The clusters take a change from staging, through Argo
+   CD, once hecaton promotes the run, so a check that needs the change itself running is named, by its E2E test or
+   command, under "Not yet run on a cluster" in that entry, and the next run on the issue runs it. When the issue's
+   own work is a live run, the run does it; when it is a bring-up (#610 was one), its checks run on one of the two.
+   Session files the run cannot read are hecaton's fault to name in the report (hecaton#508), not a wait on
+   Michael. A go already asked on the issue is pointed at, not asked again in new words.
 2. **An earlier draft is checked against staging before it is reused.** A re-dispatched issue's earlier drafts are
    on `origin/agent/<issue>-<run>` branches, cut from the staging of their day, and staging moves between runs:
    #474's approved change had to be redone three times, the last after #609 moved `gitops/apps/` into the chart.

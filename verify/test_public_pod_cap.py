@@ -10,8 +10,8 @@ cluster already; this test holds the maxPods half: a per-cluster variable, 110 b
 for the community role alone, and bounded so a typo cannot ask kubelet for more than the node was sized for.
 
 What it does NOT prove, and where that is proven: that a rebuilt community node reports allocatable pods 250 and
-that verify/kubecon_probe.py is green on it is the live half, owed on a rebuild with AWS access (decisions.md,
-#686); that max_pods_for_role maps community->250 and everything else->110 against a sourced fleet.sh is
+that verify/kubecon_probe.py is green on it is the live half, owed on watch-it-burn-community once its node is
+rebuilt, which a dispatched run checks itself (AGENTS.md, Dispatched runs point 1; decisions.md, #686); that max_pods_for_role maps community->250 and everything else->110 against a sourced fleet.sh is
 verify/test_cluster_roles.sh.
 """
 from __future__ import annotations

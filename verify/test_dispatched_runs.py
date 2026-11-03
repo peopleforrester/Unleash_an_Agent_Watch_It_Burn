@@ -1,10 +1,10 @@
-# ABOUTME: AGENTS.md tells a dispatched run it brings no cluster up and checks an earlier draft with
-# ABOUTME: verify/draft-drift.sh, and its app-layout bullet names paths that exist and the one that is gone (#633).
+# ABOUTME: AGENTS.md tells a dispatched run it checks live on its two clusters but brings none up (#633, #809), checks
+# ABOUTME: an earlier draft with verify/draft-drift.sh, and its app-layout bullet names paths that exist and are gone.
 # ABOUTME: It also finds unlanded drafts with verify/prior-drafts.sh, reuses them, and polls the E2E command (#798).
 """Holds the two frictions #633 removed, as AGENTS.md states them.
 
 Two hecaton runs lost their time to the environment. Run 9654 (#610) was dispatched on a bring-up that a run cannot
-do: it has no cluster and no AWS profile and may not deploy, while AGENTS.md's cadence rules say to provision a
+do: it had no cluster and no AWS profile and may not deploy, while AGENTS.md's cadence rules say to provision a
 cluster and validate. Run 9672 (#474) found its approved draft no longer applied, because #609 had moved
 `gitops/apps/` into the `lab-bootstrap` chart at `gitops/bootstrap/apps/` in the meantime.
 
@@ -12,6 +12,11 @@ AGENTS.md now has a "Dispatched runs (hecaton)" section for both, and a "Where t
 layout. This checks that the section says what a run does instead of a bring-up, that the drift check it names
 exists and is the one `verify/test_draft_drift.sh` tests, and that the layout bullet stays true: the apps
 directory and every profile's values file exist, `gitops/apps/` does not, and the counts test it names exists.
+
+Since Michael's ruling of 2026-11-02 (hecaton#496), a run has the accen-dev AWS profile and the two clusters that are
+up, watch-it-burn-community and watch-it-burn-private, and runs live checks on them itself (#809). The first item now
+says so, says it still never creates or tears down a cluster or nodegroup, and nothing left in AGENTS.md sends a run
+to a session with AWS access or to Michael's go for those two clusters.
 
 Two more runs lost their work to context that did not carry over (#798). Run 9277 (#604) redid a measurement run
 9249 had committed, which failed only the prose gate; run 15763 (#205) redid a draft 125 commits behind staging
@@ -59,22 +64,52 @@ runs_flat = flat(runs)
 
 print("== AGENTS.md has a section for dispatched runs ==")
 check("a '## Dispatched runs (hecaton)' section exists", bool(runs.strip()))
-check("it says a run has no cluster and no AWS profile", "no cluster and no AWS profile" in runs_flat)
+check("it says a run has the two clusters that are up and an AWS session for them",
+      "two clusters that are up and an AWS session for them" in runs_flat)
+check("it says a run never brings a cluster up or down", "never brings a cluster up or down" in runs_flat)
 check("it says the run's governance forbids deploying", "forbids deploying" in runs_flat)
 check("it names #633", "#633" in runs_flat)
 
-print("== a run does not bring clusters up ==")
-up = item(runs, "A run does not bring clusters up")
-check("an item says a run does not bring clusters up", bool(up))
-check("it scopes the cadence rules' provisioning to a session with AWS access",
-      "rules 3 and 4" in up and "a session Michael runs with AWS access" in up)
+print("== a run checks live on its two clusters and brings none up (#809) ==")
+up = item(runs, "A run checks live on the two clusters that are up, and brings none up or down")
+check("an item says a run checks live on the two clusters and brings none up or down", bool(up))
+check("it names Michael's ruling, hecaton#496 and #809", "2026-11-02" in up and "hecaton#496" in up and "#809" in up)
+check("it names the accen-dev profile, its account and region",
+      "`accen-dev`" in up and "515966504359" in up and "us-west-2" in up)
+check("it names $KUBECONFIG and both contexts as the only ones",
+      "`$KUBECONFIG` whose only contexts are `watch-it-burn-community`" in up and "`watch-it-burn-private`" in up)
+check("it says the run has AWS and kubectl access to both and runs live checks itself",
+      "AWS and kubectl access to both and runs live checks on them itself" in up)
+check("it says no escalation and no wait on Michael, for access or spend",
+      "no escalation and no wait on Michael, for access or for the spend" in up)
+check("it says a script needing the AWS session sources $HECATON_CLUSTER_ENV",
+      '`. "$HECATON_CLUSTER_ENV"`' in up and "AWS_PROFILE, AWS_REGION" in up)
+check("it says a run never creates or tears down a cluster or nodegroup, and there is no third cluster",
+      "never creates or tears down a cluster or nodegroup" in up and "no third cluster" in up)
+check("it maps the cadence rules' provisioning onto the two clusters",
+      "rules 3 and 4" in up and "validate on one of the two" in up)
+check("it runs a step written for a fresh attendee cluster on one of the two",
+      "a step written for a fresh attendee cluster runs on one of them instead" in up)
 for cmd in ("bash verify/run-tests.sh", "bash verify/run-e2e-tools.sh"):
     check(f"it says to run `{cmd}`", f"`{cmd}`" in up)
-check('it says to record the owed live check under "Not yet run on a cluster"',
-      '"Not yet run on a cluster"' in up)
-check("it names #610 as the bring-up case", "#610" in up)
-check("it says to wait on Michael's go for the spend", "wait on Michael's go for the spend" in up)
+check("it says to run the live check and record what it printed",
+      "run the live check, and put what it printed" in up)
+check('it keeps "Not yet run on a cluster" for a check that needs the change promoted',
+      '"Not yet run on a cluster"' in up and "once hecaton promotes the run" in up)
+check("it names #610 as the bring-up case, whose checks run on one of the two",
+      "bring-up (#610 was one), its checks run on one of the two" in up)
 check("it says a go already asked is pointed at, not asked again", "not asked again" in up)
+
+print("== nothing in AGENTS.md sends a run elsewhere for those two clusters (#809) ==")
+agents_flat = flat(agents)
+for stale in ("a session with AWS access", "a session Michael runs with AWS access", "wait on Michael's go",
+              "no cluster and no AWS profile", "A run does not bring clusters up"):
+    check(f"AGENTS.md no longer says {stale!r}", stale not in agents_flat)
+safety = flat(section(agents, "Kube-context safety (CRITICAL: other Claude Codes may be managing other clusters)"))
+check("the provisioned-clusters-only rule excepts a dispatched run's two clusters",
+      "exception is a dispatched run's two clusters" in safety and "`watch-it-burn-private`" in safety)
+check("the live-cluster suite paragraph runs it on one of the two in a dispatched run",
+      "runs it on one of its two clusters instead" in agents_flat)
 
 print("== an earlier draft is checked against staging before reuse ==")
 draft = item(runs, "An earlier draft is checked against staging")

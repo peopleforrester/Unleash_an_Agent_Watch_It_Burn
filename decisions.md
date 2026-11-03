@@ -10976,3 +10976,46 @@ The first was `test_image_version_tags.py`, failing only on ghcr.io serving `web
 `sha256:0b72ecc72c7c…` instead of the pinned `68004fb5…`. That is #794's recorded red, already in the base.
 The second was `test_weather_feed_e2e.py`, which got HTTP 502 from Open-Meteo. Re-run alone a few minutes later with
 the pinned tools on PATH, it passed every check. Neither failure involves this change.
+## 2026-11-03 · #809 · Dispatched runs check live on watch-it-burn-community and watch-it-burn-private themselves
+
+**Why.** Michael's ruling of 2026-11-02, carried to this repo by hecaton#496: "there are two clusters up that you can
+use for any and all tests... We don't need a third cluster." Hecaton now hands every run on this repo a 12-hour
+`accen-dev` session (account 515966504359, us-west-2), a `$KUBECONFIG` holding only the `watch-it-burn-community` and
+`watch-it-burn-private` contexts, and `$HECATON_CLUSTER_ENV` to source for the repo's own scripts; the `aws` and
+`terraform` on its PATH refuse to create or delete an EKS cluster or nodegroup. AGENTS.md (CLAUDE.md links to it)
+still told a run it had no cluster and no AWS profile and should leave live checks to "a session with AWS access" and
+wait on Michael's go for the spend.
+
+**What changed.**
+
+- **Dispatched runs, point 1** is now "A run checks live on the two clusters that are up, and brings none up or
+  down." It names the profile, account, region and both contexts, says the run runs live checks on them itself with
+  no escalation and no wait on Michael for access or for these clusters' spend, says scripts needing the AWS session
+  run after `. "$HECATON_CLUSTER_ENV"`, and says a run never creates or tears down a cluster or nodegroup and there is
+  no third cluster. Cadence rules 3 and 4's "provision one and validate" means, in a run, validate on one of the two,
+  and a step written for a fresh attendee cluster runs on one of them. "Not yet run on a cluster" stays for one case
+  only: a check that needs the change itself on a cluster, which Argo CD syncs from staging after hecaton promotes the
+  run; the next run on the issue runs it. Unreadable session files are hecaton's to fix (hecaton#508), not a wait.
+- **The section's opening** says a run has the two clusters and an AWS session and never brings a cluster up or
+  down, in place of "no cluster and no AWS profile". The sentence `verify/test_dispatched_runs_cause_comment.py`
+  reads ("Hecaton run 9654 lost its time to the first point below...") is unchanged.
+- **Kube-context safety rule 9** ("only operate on clusters you provisioned") names a run's two clusters as its one
+  exception, since a run provisions none and is handed these. Rule 1's `--context` on every call still applies.
+- **The live-cluster suite paragraph** says a dispatched run runs `verify/run-e2e.sh` on one of its two clusters.
+- **Notes that sent a run to a session with AWS access:** `verify/test_public_pod_cap.py`'s docstring and the
+  "Validation owed on a cluster" section of `docs/research/2026-11-02-workload-management-exercises.md` now name the
+  two clusters and a dispatched run. Earlier entries in this file that say "owed by a session with AWS access" are
+  left as written (the file is append-only); from this entry on, such an owed check is a dispatched run's to run on
+  one of the two clusters, unless it needs a cluster other than those two.
+- **Left as is:** `PROJECT_STATE.md`'s standby waves and `challenges/imds-node-creds/FACILITATOR.md`'s fresh build
+  are new clusters, a third cluster that no run brings up, so their wait on Michael's go for the spend stands.
+
+**Test.** `verify/test_dispatched_runs.py` now holds point 1's new claims (profile, account, region, both contexts,
+access and live checks done in the run, no escalation or wait, the env file, no cluster or nodegroup created or torn
+down, no third cluster) and fails if AGENTS.md says "a session with AWS access", "wait on Michael's go" or "no
+cluster and no AWS profile" again.
+
+**Not yet run on a cluster.** Nothing here changes a cluster. This run (16578) was handed the cluster files, but
+they are `hecaton:hecaton` 0640 and its user is not in group `hecaton` (hecaton#508), so it read neither cluster.
+
+No dependency was added.

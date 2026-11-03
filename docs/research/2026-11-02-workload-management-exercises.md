@@ -207,8 +207,9 @@ the workshop relies on. The choice is the facilitator's at build time.
 
 ## Validation owed on a cluster
 
-A session with AWS access runs these on a fresh attendee cluster, in the `verify/run-e2e.sh` tier, taking
-`<kube-context>` like the existing beat checks:
+A dispatched run runs these itself on one of the two clusters that are up, `watch-it-burn-community` or
+`watch-it-burn-private`, rather than a fresh attendee cluster (AGENTS.md, Dispatched runs point 1), in the
+`verify/run-e2e.sh` tier, taking `<kube-context>` like the existing beat checks:
 
 - O1b: with `run_shell` removed, a C3 prompt produces no `run_shell` entry in `workshop-mcp`'s audit log, and under
   choice A the list is back to twelve tools within one selfHeal interval.
