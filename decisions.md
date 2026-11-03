@@ -10214,3 +10214,9 @@ with accen-dev, on each cluster after the sync:
 4. Send one `/chat` turn once the agent pod has restarted. The reply's `cost_usd` and the growth of `/cost`'s `usd` equal input tokens x $0.001/1K plus output tokens x $0.005/1K, the Haiku row, not Nova's $0.0008/$0.0032.
 5. Patch `modelConfig` back to `bedrock-nova` and check `tier` reads `nova` again.
 No E2E test in `verify/run-e2e.sh` does this swap yet. O2b in the research note is the place for one.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (223 tests). `bash verify/run-e2e-tools.sh` exits 1 on one check
+that is not #793's. `test_image_version_tags.py` reads ghcr.io's `watch-it-burn:web-terminal-ttyd-1.7.7` at
+`sha256:7e5f8986428354758278439e6d6f121a…`, not the pinned `sha256:68004fb5ed2d…`. The tag has been pushed over again
+since the 2026-11-02 · #783 entry saw `d6acd503…` there, so it is still #714's build-web-terminal workflow pushing
+over a tag that already exists. Clusters pull the pinned digest, and nothing here touches the web terminal.
