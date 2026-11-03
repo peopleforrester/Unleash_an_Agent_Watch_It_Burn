@@ -12893,3 +12893,19 @@ tests and exited 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-i
 `sha256:0b72ecc72c7c…`, not the pinned `sha256:68004fb5ed2d…`. That is the red the #783 and #746 re-dispatch entries
 above record, from #714's workflow pushing over the tag. Nothing in this change touches images, and the fix needs a
 ghcr.io write and the signing key, which this run has neither of.
+
+## 2026-11-03 · #812 · Resumed run 16784: rebased onto staging 53b2c9c past #813's run-e2e.sh paragraph and four PROGRESS.md bullets
+
+**Why run 16657 did not land.** Its first commit conflicted with staging when hecaton rebased it. Runs 16650, 16651
+and 16653 had added PROGRESS.md bullets at the top of the same list (#813, #814, #811, #759), and #813 had added a
+paragraph to `verify/run-e2e.sh`'s header at the same place as this change's PRIVATE_CONTEXT paragraph. Both were
+insert-insert. This run rebased onto `origin/staging` 53b2c9c and kept both sides of each: the #812 bullet on top of
+staging's four, and #813's Agent Observability paragraph followed by the PRIVATE_CONTEXT one. The PRIVATE_CONTEXT
+prerequisite check and the AGENTS.md sentence applied without conflict. No code differs from run 16657's commits.
+`verify/prose_gate.py` (new on staging since run 16657, #796) passes on the three prose files this branch changes.
+
+**Live, again.** The staging half passed on staging `53b2c9ca4aa8`: it contains `67c956adc5a2`, and both profiles'
+collector values run the statement first (three PASS). The cluster half failed again on "the cluster can be read".
+This run's `/var/lib/hecaton/runs/16784/clusters/` files are also `hecaton:hecaton` mode 0640, and the user
+`hecaton-s4-claude-certkraken` is not in group `hecaton` (hecaton#508). The "Not yet run on a cluster" command in the
+entry above is unchanged.
