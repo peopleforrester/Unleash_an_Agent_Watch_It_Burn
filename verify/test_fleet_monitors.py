@@ -505,6 +505,24 @@ check("a dry run reads no keys and exits 0", rc == 0 and "dry run" in out.getval
 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
     check("a notify handle without @ is refused", fm.main(["--profile", "p", "--region", "r", "--notify", "oncall"], keys=no_keys, env={}) == 1)
 
+print("== the run-of-show's apply carries the KubeCon session window ==")
+# Without --session the loader mutes no-traces indefinitely, so an apply copied from the run-of-show without
+# one leaves that monitor silent through the session it exists for (#485).
+ros = " ".join((REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text().split())
+applies = re.findall(r"monitors --apply(?: --session (\S+?))?[`\s]", ros)
+start_m = re.search(r"The KubeCon start is .*? which is `(\S+?)`", ros)
+check("the run-of-show gives the apply and the KubeCon start", bool(applies) and start_m is not None)
+for i, spec in enumerate(applies):
+    try:
+        window = fm.parse_session(spec or None)
+    except ValueError:
+        window = None
+    check(f"apply {i + 1} in the run-of-show has a --session the loader accepts", window is not None)
+    if window and start_m:
+        kick = dt.datetime.fromisoformat(start_m.group(1).replace("Z", "+00:00"))
+        check(f"apply {i + 1}'s window is the 30-minute slot from the stated start",
+              window == (kick, kick + dt.timedelta(minutes=30)))
+
 print("== fleet.sh is the way in ==")
 check("fleet.sh has a monitors verb", re.search(r"^\s+monitors\) exec python3 .*fleet_monitors\.py", fleet_src, re.M) is not None)
 verb = fleet_src.split("monitors) exec python3", 1)[1].split(";;", 1)[0] if "monitors) exec python3" in fleet_src else ""
