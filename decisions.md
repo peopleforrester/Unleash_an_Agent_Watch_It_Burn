@@ -10434,3 +10434,9 @@ for an old draft sent every draft to a redo.
   holds the new items to the scripts they name.
 
 **Not yet run on a cluster.** Nothing here touches a cluster, and nothing is owed on one.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (225 tests). `bash verify/run-e2e-tools.sh` ran 45 checks in about
+22 minutes on the shared host, started in the background after the commit and read in the foreground as the fourth
+item says. It exits 1 on one check, the red already recorded for #746 and #775 on 2026-11-03:
+`test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at
+`sha256:0b72ecc7...`, not the pinned `68004fb5`, because CI pushed over that tag again. Nothing here touches an image.
