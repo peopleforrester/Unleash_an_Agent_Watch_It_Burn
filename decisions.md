@@ -11186,3 +11186,30 @@ service while its two live-feed checks before it passed. Run alone straight afte
 was the outside service. Nothing here touches the weather feed.
 
 No dependency was added.
+## 2026-11-03 · #733 · Fourth dispatch: the swap is on staging, the run was told it had the clusters, and it could not read them
+
+**No code changed.** Hecaton run 16008 is #733's fourth dispatch, the first since run 15968's swap merged (`a29bb91`).
+Its first attempt, on 2026-11-02, had no kubeconfig context and no AWS credentials, like runs 14867, 15913 and 15968.
+It stalled waiting on a background test run and was resumed on 2026-11-03 as run 16652.
+
+**The resumed attempt was told it had the clusters, but could not read them.** The prompt named AWS profile accen-dev
+and the contexts watch-it-burn-community and watch-it-burn-private in `$KUBECONFIG`
+(`/var/lib/hecaton/runs/16652/clusters/kubeconfig`), with `$HECATON_CLUSTER_ENV` to source. Each file under
+`/var/lib/hecaton/runs/16652/clusters/` (env, kubeconfig, aws-credentials, aws-config, bin/) is owned `hecaton:hecaton`
+with mode 0640 or 0750. The run's user, `hecaton-s4-claude-certkraken` (uid 145), is in the groups
+`hecaton-s4-claude-certkraken`, `hecaton-runs` and `hecaton-tools`, not `hecaton`. So `kubectl config get-contexts`
+and sourcing the env both fail with "permission denied", and `aws sts get-caller-identity` returns NoCredentials.
+`sudo -n -l` allows only `sources` and `sources-elevated` as michael, and neither is a route to cluster credentials.
+The fix is hecaton's: give the run's user group read on those files (for example, chgrp them to the run's group).
+The report escalates it.
+
+**What this run checked.** Staging's tip at the base is `9e7070d`, one #544 entry past `a29bb91`. Nothing since then has
+touched `gitops/workshop-agent/` or `verify/test_agent_tools_sync.py`. `agent.yaml` still lists `lookup_customer_records`,
+`reorder_supply`, `check_inventory` first. The read commands in run 15968's entry above still match the repo: the
+web-terminal Deployment and its `ttyd` container are in `gitops/ai-layer/resources.yaml`, the ai-layer Application puts
+them in namespace `agent`, and `gitops/ai-layer/web-terminal/entrypoint.sh` writes `$HOME/guard-mcp-on`. No live reading
+of the swap is recorded here or on the issue yet.
+
+**Not yet run on a cluster.** All of the reads in run 15968's entry above, on watch-it-burn-community. The swap reaches
+that cluster by auto-sync from staging, so the next run whose cluster files are readable can run them straight away.
+A pass closes #733.
