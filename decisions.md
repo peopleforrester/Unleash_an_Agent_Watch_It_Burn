@@ -10285,9 +10285,9 @@ route, and the ladder checks in `verify/test_audience_path.py`.
   `resources.yaml` and holds the deployment to them.
 
 **It fails on the console.conf it replaces.** Run against staging `bd6db62`'s console.conf, the new
-`test_audience_path.py` fails five checks: the conversation zone and no other, the burst of 9 on that zone, no
-address-keyed zone (it finds `$http_x_forwarded_for`), the 10-a-minute sentence with no network, and wait and send
-that again.
+`test_audience_path.py` fails four checks: the conversation zone and no other, no address-keyed zone (it finds
+`$http_x_forwarded_for`), the 10-a-minute sentence with no network, and wait and send that again. The burst of 9
+passes there too, since the old file gave `wib_chat_session` the same burst.
 
 **What differs from run 15018's draft.** The draft is `b40c18a` on `origin/agent/450-15018` (the #644 entry above
 calls it `74c9c2d`, a commit this clone does not have). `bash verify/draft-drift.sh origin/agent/450-15018 origin/staging`
@@ -10318,6 +10318,7 @@ one, `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `
 
 **Resumed by run 16465.** Run 16447's report failed hecaton's prose gate on one antithesis in this entry. Run 16465
 reworded those lines as plain claims, and the load replay check this entry quotes along with them, on the branch
-hecaton had rebased onto staging `858ffaf` (#774's guardrails switch). It changed nothing else.
+hecaton had rebased onto staging `858ffaf` (#774's guardrails switch). Run 16477 recounted the checks that fail on
+the old console.conf (four, above) and changed nothing else.
 
 No dependency was added.
