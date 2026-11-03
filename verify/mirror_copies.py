@@ -8,10 +8,9 @@ rows are the ones lab-platform#183 handed over on 2026-10-28 (Watch_It_Burn#623,
 public. An app file names a copy as "{{ .Values.imageRegistry }}/<path>", which the root renders at the chart's
 default, ghcr.io/peopleforrester/lab-platform, unless a value is passed.
 
-UNPULLED are copies of a tag no chart here pulls any more. copies.tsv was resolved against this repo at 01c1d9e;
-89fce6a then took Falco chart 9.2.1, which pulls falco 0.45.1 and falcoctl 0.14.2, so naming the 0.44.1 and
-0.13.0 copies would downgrade Falco below the kernel 6.18 fix. Those two images stay on Docker Hub until
-lab-platform copies the tags the chart pulls.
+Falco's two rows are lab-platform#295's: chart 9.2.1 pulls falco 0.45.1 and falcoctl 0.14.2 (the kernel 6.18 fix),
+not the 0.44.1 and 0.13.0 that #183 handed over, and both copies answered an anonymous pull on 2026-11-02 at the
+digests below (#714).
 """
 from __future__ import annotations
 
@@ -37,6 +36,12 @@ HUB = "docker.io"
 COLLECTORS = ("otel-collector", "otel-collector-attendee", "otel-collector-burn")
 
 COPIES = (
+    Copy(("falco",), f"{HUB}/falcosecurity/falco:0.45.1",
+         "sha256:dc34bb8e231e1afda8eefcf9467992a3912b5b6aed5151d49b4a0544369a9048",
+         "mirror/falcosecurity/falco:0.45.1-dc34bb8e231e"),
+    Copy(("falco",), f"{HUB}/falcosecurity/falcoctl:0.14.2",
+         "sha256:d9d2591057eb514b1fbfb57ebf5ae52f3e938e4797dec1b8f7ce422dace81d83",
+         "mirror/falcosecurity/falcoctl:0.14.2-d9d2591057eb"),
     Copy(("falco-talon",), "falco.docker.scarf.sh/falcosecurity/falco-talon:0.3.0",
          "sha256:0a06b6a5e9f0e45d4ccdcf4c7a8c5ac4156e728f81ffd0122cb6675e3b525b40",
          "mirror/falcosecurity/falco-talon:0.3.0-0a06b6a5e9f0"),
@@ -80,15 +85,6 @@ COPIES = (
     Copy(("tempo",), f"{HUB}/grafana/tempo:3.0.3",
          "sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c",
          "mirror/grafana/tempo:3.0.3-05321ebf1f19"),
-)
-
-UNPULLED = (
-    Copy(("falco",), f"{HUB}/falcosecurity/falco:0.44.1",
-         "sha256:9f02feb5544a54a4ca2974bd8ab3a0cca287f3fe7c697d612814357af0cc55e5",
-         "mirror/falcosecurity/falco:0.44.1-9f02feb5544a"),
-    Copy(("falco",), f"{HUB}/falcosecurity/falcoctl:0.13.0",
-         "sha256:ffe71491ff79e5255d25ed627fffce0c7ce7beb7355dc2e507abefc791e13603",
-         "mirror/falcosecurity/falcoctl:0.13.0-ffe71491ff79"),
 )
 
 

@@ -76,10 +76,11 @@ readonly PRESENTER_OWNER_MAX=10
 # filter in apex-agenticburn's derive-roster.sh, which already skips backstage- (#244): a prefix that filter does
 # not know is scored as a cluster name and would rename a cluster on the instructor console.
 readonly WIB_SERVICE_HOSTS="grafana argocd kagent backstage hedgehog wombat unicorn spider mantis-shrimp"
-# Hosts for C6's story, not what the platform installs: the Joker the attack deploys, maintenance-shell (#664), and
-# support, the ticket desk the room can open to read what the bot read (2026-10-28 call). Routed like a service
-# host, but the console gives each its own server.
-readonly WIB_VILLAIN_HOSTS="maintenance-shell support"
+# Hosts for C6's story, not what the platform installs: the Joker the attack deploys, maintenance-shell (#664),
+# support, the ticket desk the room can open to read what the bot read (2026-10-28 call), and deployments, Challenge
+# 2's page of everything the bot deployed for whom (#773). Routed like a service host, but the console gives each its
+# own server.
+readonly WIB_VILLAIN_HOSTS="maintenance-shell support deployments"
 # Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
 emit_service_hosts() {
     local host="$1" lb="$2" svc label="${1%%.*}"

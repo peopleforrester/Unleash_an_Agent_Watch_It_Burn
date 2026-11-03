@@ -32,7 +32,8 @@ hangs kagent's invocation from guard-proxy's turn span. This test runs both thro
 reads the copy for the five things Whitney's sandbox check on #746 asks for: one root; the prompt and the final reply on
 it; the tool calls under it; its duration the whole turn; every llm row with token counts, so the trace is priced.
 The storefront turn (POST /chat, then guard-proxy's chat wrapper) and the raw A2A pass-through (POST /, then sanitize)
-are both sent.
+are both sent. The copy travels under a trace id of its own (#783): sent under APM's, it was one trace at Datadog with
+APM's marked spans, and Agent Observability received nothing from 2026-11-01 ~15:55 UTC.
 
 The interaction's spans and parentage are test_collector_one_root_e2e.py's (read from agentgateway v1.5.0, kagent
 v0.10.1 and a2a-sdk 0.3.26), with the a2a-sdk spans off as the workshop-agent runs, and the content of Challenge 1:
@@ -212,9 +213,15 @@ def sid(key: str) -> str:
     return hashlib.sha256(f"{TRACE_OF[key]}/{key}".encode()).hexdigest()[:16]
 
 
+def copy_trace(trace: str) -> str:
+    """The trace id transform/llmobs_one_root gives Agent Observability's copy (#783): the first 32 hex digits of the
+    SHA-256 of APM's, so the copy is never in a trace whose spans carry dd_llmobs_enabled false."""
+    return hashlib.sha256(trace.encode()).hexdigest()[:32]
+
+
 def turn_id(trace: str) -> str:
-    """The span id transform/llmobs_one_root gives the guard's turn span: the trace id's low 64 bits."""
-    return trace[16:]
+    """The span id transform/llmobs_one_root gives the guard's turn span: the copy's trace id's low 64 bits."""
+    return copy_trace(trace)[16:]
 
 
 def kv(key: str, value: str | int) -> dict:
@@ -375,7 +382,18 @@ for profile in PROFILES:
     for trace, turn_key, turn_name, tools in ((TRACE, "chat-root", "POST /chat", ("run-shell", "intel")),
                                               (TRACE_A2A, "a2a-sanitize", "sanitize", ())):
         label = f"{profile} {turn_name} turn"
-        copy = {k.split("/", 1)[1]: s for k, s in lgot.items() if k.startswith(trace + "/")}
+        # #783: with APM's trace id, the copy was one trace with APM's marked spans at Datadog, and the marker kept
+        # the whole trace out of Agent Observability. The copy must be a trace of its own, every span of the turn in it.
+        shared = sorted(s.get("name", "?") for k, s in lgot.items() if k.startswith(trace + "/"))
+        check(f"{label}: no span of Agent Observability's copy is in APM's trace, whose spans are marked false",
+              not shared, str(shared))
+        copy = {k.split("/", 1)[1]: s for k, s in lgot.items() if k.startswith(copy_trace(trace) + "/")}
+        expected = sorted(key for key, *_ in ALL if TRACE_OF[key] == trace
+                          and key not in ("agent-server", "chat", "a2a-agent-server", turn_key)
+                          and any(k.startswith("gen_ai.") for k in attrs(every[key])))
+        landed = sorted(key for key in expected if sid(key) in copy)
+        check(f"{label}: every gen_ai span of the turn is in the copy's own trace, {copy_trace(trace)}",
+              landed == expected and turn_id(trace) in copy, f"{landed} of {expected}")
         by_key = {key: copy.get(sid(key)) for key, *_ in ALL if TRACE_OF[key] == trace}
         root_id = turn_id(trace)
         roots = sorted(s.get("name", "?") + "@" + sid_ for sid_, s in copy.items()

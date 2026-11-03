@@ -599,17 +599,21 @@ real-looking home address to chat.
 ### Segment 3: Challenge 2, the Kubernetes catch-all (4 min). Owner: Whitney and Michael.
 
 - **Tee-up:** "Everything you already knew about Kubernetes matters more now."
-- **Play (3 min):** the room tries the three prompts on `/kubecon` against the
+- **Play (3 min):** the room tries the prompts on `/kubecon` against the
   public bot, where nothing below is armed (measured 2026-10-29 on attackme: the
   beacon answered from `workshop-mcp`, a server-side dry run of the villain image as
   `workshop-mcp` was admitted, and the recipe file read back):
-  - a malicious image, `promo-mascot` from the villain registry path;
+  - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
+    the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one that
+    lands shows on `deployments.burritobot.co` with its image and the sender's witch name
+    (#773);
   - reading the filesystem, the recipe file under `/tmp/burrito-data`;
   - egress, posting the customer breakdown to `https://agenticburn.com/beacon`.
 - **Fix, by voice (1 min):** each guardrail named, not deep. All three are armed on
   the private cluster from the start, so there is no toggle. If one is asked about,
   its fallback proves it without the model:
-- C2 villain image: admission control, Kyverno's `restrict-image-registries`.
+- C2 public image: admission control, Kyverno's `restrict-image-registries`, which does
+  not allow `public.ecr.aws`.
   `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
   prints the deny.
 - C3 read the recipe off the filesystem: blocked inline in the kernel by KubeArmor,
@@ -748,9 +752,10 @@ real-looking home address to chat.
   "We couldn't show everything in 30 minutes. For the rest of the session, try to drive
   BurritoBot's bill up to its cap and break the demo. You have our permission."
   - **What the room sees when it trips:** BurritoBot stops calling the model for everyone,
-    `cost-watch` reads CAP HIT, and each phone gets "The kitchen tab is frozen. This
-    conversation hit its $X spend budget... Press Reset". Reset does not help, because the
-    cap is the cluster's; say so. Its own wording is asked on guard-proxy-agenticburn#25.
+    `cost-watch` reads CAP HIT, and each phone gets "The kitchen is closed: this cluster hit
+    its $X spend cap, so BurritoBot isn't sending anything else to the model for anyone".
+    Reset does not help, because the cap is the cluster's, and the reply does not offer it
+    (guard-proxy-agenticburn#25).
   - **Measured 2026-10-30 on attackme:** 20 sessions on one address, sending as fast as
     replies came back, put 83 turns through the model at about $0.004 each and crossed a
     $0.30 cap in under 45 seconds; turns past the cap cost nothing. One venue address is
@@ -983,6 +988,16 @@ is merely slow rather than rebuilding:
   must end `SEEDED GREEN`. Whitney opens each link in her org and saves it as a
   view, in that order. The morning of: `python3 verify/stage_traces.py check
   --profile accen-dev` must end `STAGE TRACES GREEN`.
+- [ ] **Agent Observability is receiving from both bots (#783).** Before every
+  run-through, the Night Before and the morning of:
+  `python3 verify/agent_obs_flow.py chat --profile accen-dev`. It sends one marked
+  chat to each bot (two model calls, none in the room's feed) and waits up to ten
+  minutes for its spans in Agent Observability. It must end `AGENT OBSERVABILITY
+  GREEN`. A RED names the cluster that sent nothing: on 2026-11-01 APM kept every
+  trace while Agent Observability got none for six hours, and nothing else went red.
+  Between runs, `python3 verify/agent_obs_flow.py watch --profile accen-dev` spends
+  nothing and goes red when APM's newest BurritoBot span never reached Agent
+  Observability.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
@@ -1028,7 +1043,8 @@ is merely slow rather than rebuilding:
   about $1.80 predicted, because from one machine every turn leaves through one
   address and nginx lets about 120 a minute through, which is what a venue NAT does
   too. The report gives latency percentiles, outcomes by limit (nginx per network or
-  conversation, guard-proxy per session and per cluster, the cost cap), errors by
+  conversation, guard-proxy per session and per cluster, the cluster's cost cap, a
+  conversation's budget), errors by
   HTTP status (502, 504, 429), timeouts, and the `/cost` spend before and after. It
   must end `LOAD REPLAY GREEN`: a refusal is a sentence a phone can read and passes,
   a 502, 504, timeout or empty reply fails. Record the run on #644. `--source catalog`

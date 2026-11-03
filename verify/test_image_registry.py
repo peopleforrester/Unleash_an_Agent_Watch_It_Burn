@@ -111,14 +111,14 @@ check(f"{IMAGE_REGISTRY} appears only in apps/ files, the ones the chart renders
 print("== each mirror/ copy a chart pulls is named in its app files, through the value (#623) ==")
 # test_image_registry_render.py renders each chart to see the whole reference; this is the offline half: the
 # table is self-consistent and every app file it names says the copy's tag and the value.
-from mirror_copies import COPIES, UNPULLED  # noqa: E402
+from mirror_copies import COPIES  # noqa: E402
 
 
 def code(name: str) -> str:
     return "\n".join(uncommented(ln) for ln in (APPS / f"{name}.yaml").read_text(encoding="utf-8").splitlines())
 
 
-for c in COPIES + UNPULLED:
+for c in COPIES:
     check(f"{c.path}: the tag ends in the first twelve characters of {c.digest[:19]}...",
           c.digest.startswith("sha256:") and len(c.digest) == 71 and c.tag.endswith("-" + c.digest[7:19]))
 for c in COPIES:
@@ -126,9 +126,6 @@ for c in COPIES:
         text = code(app)
         check(f"{app}.yaml names {c.path.split(':')[0]} by its tag {c.tag}, under {IMAGE_REGISTRY}/mirror",
               f'{c.tag}"' in text and f'"{IMAGE_REGISTRY}/mirror' in text)
-for c in UNPULLED:
-    named = [p.name for p in sorted(APPS.glob("*.yaml")) if c.tag in code(p.stem)]
-    check(f"{c.path}, a copy of a tag no chart pulls, is named nowhere {named}", not named)
 
 print()
 if failures:

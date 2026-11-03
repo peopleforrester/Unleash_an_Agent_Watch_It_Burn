@@ -178,10 +178,12 @@ print("== it includes the projected feed and the observability surface, and no p
 check("segment 1 points at the projected prompt feed /display", "/display" in KUBECON)
 check("segments 2 to 5 point at the Datadog observability surface",
       "app.datadoghq.com/llm/traces" in KUBECON)
-# No provisioning, claim-by-email or student-lab content on the demo page (run-of-show: it stays off).
+# No provisioning, claim-by-email or student-lab content on the demo page (run-of-show: it stays off). The prompts
+# are what the room sends, and Challenge 2's Tron ask (#773) is about a festival's attendees, so they are left out.
+_unprompted = re.sub(r'<div class="prompt".*?</div>', "", _body, flags=re.S)
 for banned in ("provision", "claim a cluster", "claims a cluster", "claim one",
                "by email", "attendee", "student lab", "student challenge"):
-    check(f"the page body carries no {banned!r}", banned.lower() not in _body.lower())
+    check(f"the page body carries no {banned!r} outside the prompts", banned.lower() not in _unprompted.lower())
 
 print("== the page follows the run-of-show's segments: Challenge 1 to 4 (#687) ==")
 # The run-of-show's segment table, | # | Min | ..., against the page's <h2> chips, SEGMENT n · m min, in order.
@@ -299,8 +301,10 @@ check("every premise is folded", '<p class="premise">' in KUBECON
 check("every prompt and toggle stays visible",
       KUBECON.count('<div class="prompt"') == _visible.count('<div class="prompt"')
       and KUBECON.count('<div class="toggle"') == _visible.count('<div class="toggle"'))
-check("the visible page is under 2,000 words",
-      len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split()) < 2000)
+# 2,100 since #773: Challenge 2's ask is the 2026-11-01 Tron prompt and its follow-up, word for word (83 words,
+# where the promo-mascot prompt was 41), and its marker was cut to one line to make room.
+check("the visible page is under 2,100 words",
+      len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split()) < 2100)
 
 print("== the run-of-show links the page ==")
 check("the run-of-show drives from /kubecon", "/kubecon" in ROS)

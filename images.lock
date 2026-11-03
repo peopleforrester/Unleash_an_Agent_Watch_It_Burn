@@ -32,8 +32,8 @@ cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630
 ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -
 ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python -
 llm-guard ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline -
-ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp -
-ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal -
+ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp -
+ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal -
 ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx -
 {{.Values.imageRegistry}}/mirror/kubearmor/kubearmor:stable-bf867783eb30 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor@sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388 upstream:https://github.com/kubearmor/KubeArmor -
 {{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-init@sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d upstream:https://github.com/kubearmor/KubeArmor -
@@ -50,9 +50,20 @@ laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a
 # llm-guard-cpu-offline's images as that repo reported them on #719, each digest read anonymously from ghcr.io on
 # 2026-11-02: cpu.4 (PromptInjection only), cpu.5 (PromptInjection and BanTopics, signed with the workshop key on
 # 2026-11-01; the deployed llm-guard row above since question 1041), and the zero-shot weights' scratch image that
-# images/llm-guard/Dockerfile builds cpu.5 from. lab-platform's llm-guard:v1, deployed before question 1041, by the
+# llm-guard-cpu-offline's Dockerfile at 31962f2 builds cpu.5 from. lab-platform's llm-guard:v1, deployed before question 1041, by the
 # digest the llm-guard row carried (#730), kept for the return to it after lab-platform#341.
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c2fc935f2208d0c4a84198b29e93307ab2e88debdd045a919ae9f repo:peopleforrester/llm-guard-cpu-offline -
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline -
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot -
 ghcr.io/peopleforrester/lab-platform/llm-guard:v1 sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad repo:peopleforrester/lab-platform/deploy/images -
+# Challenge 2's public images (#773): deploy_app's PUBLIC_IMAGES in gitops/ai-layer/workshop-mcp-server.py, the images
+# the room asks for by plain name. Each is the index digest public.ecr.aws served on 2026-11-02, read anonymously;
+# docker/library/ is Docker's official images on Amazon's public registry, whose digests equal Docker Hub's. 2048 is
+# the image AWS's EKS load-balancer tutorials deploy, in an ECR Public account nobody here knows: the repository it
+# says it is built from is named, and nothing proves that. verify/test_public_images.py holds these to PUBLIC_IMAGES.
+public.ecr.aws/docker/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 upstream:https://github.com/docker-library/busybox -
+public.ecr.aws/docker/library/alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 upstream:https://github.com/alpinelinux/docker-alpine -
+public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de upstream:https://github.com/nginx/docker-nginx -
+public.ecr.aws/docker/library/httpd:2.4-alpine@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c upstream:https://github.com/docker-library/httpd -
+public.ecr.aws/docker/library/redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 upstream:https://github.com/docker-library/redis -
+public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 upstream:https://github.com/alexwhen/docker-2048 -

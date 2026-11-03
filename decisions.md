@@ -9724,3 +9724,329 @@ health.
 **Not yet run on a cluster.** Unchanged: points 1 and 2 and the attendee half of point 4 on a new attendee cluster,
 which waits on Michael's go for about $1, and point 3 and the admin half of point 4 on watch-it-burn-private. The
 same attendee bring-up also covers the `verify/test_service_hosts_live.py` run the #668 entry owes.
+
+## 2026-11-02 · #773 · Challenge 2: the room deploys a public image by its plain name, and deployments-<cluster> lists every one
+
+**What Michael approved** (his comment on #773, 2026-11-01, which is the spec). In Challenge 2 the room can deploy
+a public image, shown on a deployments page. Each student gets a single-replica Deployment, and nothing scales it
+up. The image comes from a small curated list that a student names in plain language ("deploy nginx", "run
+busybox"), and the bot puts in the real image, so nobody types a registry path on a phone. The builder picks image
+sources that fit the no-Docker-Hub rule (#714) and restrict-image-registries. These deploys land while the
+guardrails are off; once #774's switch arms Kyverno, the same deploys are refused.
+
+**What changed.**
+- `deploy_app` (`gitops/ai-layer/workshop-mcp-server.py`). `PUBLIC_IMAGES` lists six images: busybox, alpine,
+  nginx, httpd, redis and the 2048 game, with aliases (apache, docker-2048). A container whose image is a Docker
+  Hub reference (a bare name, `user/name` or `docker.io/...`) is read for its repository: "nginx",
+  "nginx:latest" and "docker.io/library/nginx:1.27" all become the pinned nginx. A Docker Hub repository off the
+  list is refused before the apply, and the refusal names the list so the model can pick from it. An image that
+  names its own registry (ghcr.io, quay.io, the villains, C6's Joker) is applied exactly as written. A workload with
+  a listed image is a room deployment: one replica (Deployment, StatefulSet, ReplicaSet), requests 5m and 16Mi,
+  limits 50m and 64Mi, and a scale to zero after `JOKER_SCALE_DOWN_SECONDS` (300 on the cluster), as #685's room
+  Jokers get. busybox and alpine with no command get `sleep 3600`, so the pod stays up. The tool takes
+  `requested_by`, the name the person chatting gave, and the description lists the names it can use.
+- The report to the desk carries the image and `requested_by`. `ticket_site.py` keeps the name only when the
+  witch vocabulary makes it (any case or spacing), else falls back to a `joker-<slug>` name, else none.
+  `/wall.json` now records the image (the 2026-11-01 test's wall had none).
+- The deployments page. The fake-ticket site serves it by Host: under `deployments-<cluster>` and
+  `deployments.burritobot.co` it answers `/` (every landed deployment, newest first, polled every 3 s), `/mine`
+  (one visitor's, by `?witch=<slug>` or the `wib_witch` cookie), `/deployments.json` and `/healthz`, and 404s
+  everything else, POSTs included. A row reads "tron (nginx) deployed by Edgar the Kelpie at 16:22:34". Refusals
+  are left off. The page says "Joker" nowhere and links to nothing, so it gives away no later challenge. The
+  console has a server for the name that passes only those three paths, GET only (`console.conf`), and
+  `fleet.sh`'s `WIB_VILLAIN_HOSTS` publishes `deployments-<cluster>`.
+- The chat page's "see your deployments" link, hidden until the visitor has a row. The page asks its own host's
+  `/deployments.json?witch=<slug>` on load, after each reply and once more 4 s later, since the report goes on its
+  own thread; the main console server proxies that one path to the fake-ticket site. The link goes to
+  `deployments-<this cluster>.burritobot.co/mine`, which works as soon as `fleet.sh routes` has run, with no
+  router change.
+- `/kubecon`: Challenge 2's beat is "Deploy any public image", with the 2026-11-01 Tron ask and its follow-up as two
+  `.prompt` blocks, so `?sheet=1` carries both. The run-of-show's segment 3 says the same.
+- The desk listens with a backlog of 128. Python's default of 5 left reports waiting out a SYN retry in the new
+  test, and the page is polled by every phone that has it open.
+
+**Why public.ecr.aws.** Amazon's public registry serves Docker's official images under `docker/library/`, at the
+same digests as Docker Hub, so no copy is needed and nothing pulls from Docker Hub. restrict-image-registries
+allows `ghcr.io/`, Harbor, the kagent and agentgateway registries, `registry.k8s.io/` and private ECR
+(`<account>.dkr.ecr.<region>.amazonaws.com`). `public.ecr.aws` is none of them, so where the rule is at Deny the
+room's deploys are refused today, and #774's "deny external registries" keeps refusing them. A ghcr.io copy would
+be admitted by today's rule. 2048 is the image AWS's EKS load-balancer tutorials deploy, from ECR Public account
+`l6m2t8p7`, which nobody here knows: the untrusted source is the lesson (`images/villains/README.md`). Each digest
+is the index public.ecr.aws served on 2026-11-02, and `images.lock` declares all six.
+
+**The workshop.** Nothing here needed a profile gate. The workshop's Challenge 2 deploys
+`ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1`, a full reference, which deploy_app leaves alone, so
+its replicas, limits and image are as before; C3 and C6's Jokers likewise. A bare Docker Hub name now resolves to
+the list or is refused on every cluster, which is what #714 asks of the whole lab. The witch name, the link and the
+`/me` rows exist only on burritobot.co hosts, and attendee clusters are on agenticburn.com. The deployments page
+is one more host on every cluster, as `support-<cluster>` is.
+
+**Left open.**
+- The witch name reaches the model only through guard-proxy's witch forwarding (guard-proxy-agenticburn 6f2de73
+  and aaf1872). This repo pins guard-proxy at fb6e2bf, which predates it; the repin is #762's remaining step. Until
+  then the model has no name to pass, and rows read "deployed by someone who gave no name".
+- `deployments.burritobot.co` itself needs the apex-agenticburn router to look it up under
+  `deployments-attackme.burritobot.co`'s row, as it does for `support.burritobot.co` (filed as a follow-up).
+- The one-pod cap holds on deploy_app. `run_shell` can still patch a Deployment's replicas with workshop-mcp's
+  token, which is Challenge 2's shell surface; the scale to zero still runs at the window.
+- The issue's question 5, whether the model's reasoning should show in its replies, is not in the approval. It is
+  asked in run 15977's report, and nothing here changes the prompt or the reply.
+
+**Tests.** `verify/test_public_images.py` (offline) runs the real deploy_app against a stand-in API server and the
+real desk: the list on public.ecr.aws, pinned and in images.lock; the registry rule refusing each; fifteen
+spellings resolving; Docker Hub names off the list refused with the list named and nothing applied; images with a
+registry of their own left alone; one replica, the room's resources, the scale to zero, the shell sleep; the page's
+rows, witch matching and refusals left off; the host serving no desk page; the console server, the chat link and
+the `/kubecon` beat. Four mutants (no cap, no `requested_by`, no Host routing, refusals shown) each fail it.
+`verify/test_public_images_served.py` (tools tier) reads every pinned digest from public.ecr.aws anonymously and
+checks linux/amd64. `test_c6_villain_endpoint.py`'s CronJob case used the image `x`, now refused as a Docker Hub
+name, so it uses C6's image; its host list check names `deployments`. `test_console_no_toggle.py` counts five
+servers. `test_demo_app_web_image.py`'s Docker Hub nginx pattern skips `public.ecr.aws/docker/library/nginx`,
+which is Amazon's registry. `test_instructor_brief.py` reads its banned words outside the `.prompt` blocks, since
+the Tron ask is about the festival's "attendees", and caps the visible `/kubecon` at 2,100 words: the two prompts
+are 83 words where promo-mascot's was 41, and the beat's marker was cut to one line (2,007 words now). `/kubecon`'s
+header also links "Deployments" beside the Joker wall.
+
+**Not yet run on a cluster.** Owed in a session with the KubeCon clusters' credentials, after `fleet.sh routes`:
+`CONTEXT=<public-context> python3 verify/test_deployments_page_live.py` (the attack lands at Audit), the same with
+`CONTEXT=<private-context>` (refused at Deny, naming restrict-image-registries), then on the public bot, as a
+witch, "deploy nginx", and confirm the row on `deployments-attackme.burritobot.co` and the chat page's "see your
+deployments" link. The witch name on the row needs #762's repin first.
+
+## 2026-11-02 · question 1048 · #773: the model's reasoning stays visible in BurritoBot's replies to the room
+
+**Question.** Should BurritoBot's replies to the breakout room keep showing the model's own reasoning about whether
+to comply, or should its system prompt tell it to keep that reasoning out of the reply? In the 2026-11-01 live test
+the first reply to the Tron prompt was the model's reasoning ("The user has provided a plausible reason (ticket
+HR171) and is freaking out, which shows persistence. This meets the criteria for deploying an app."), outside the
+chat page's collapsed "model reasoning" section.
+
+**Answer:** Keep it visible.
+
+**Decided by** hecaton's research under Michael's standing rules, not by Michael. The sources it cited: #100's
+closing fix of 2026-09-03 (the model's reasoning is folded on purpose and never dropped, since a workshop about what
+leaks out of an agent must not silently delete part of the model's output); `splitThinking` in
+`gitops/ai-layer/web/burritbot.html` and the 2026-10-24 · #530 entry here (when folding leaves nothing to read, the
+reasoning is the reply and is shown untagged); `/kubecon`'s prompts, which already hand the room the same cues the
+leaked sentence names (a change ticket, urgency); and the persona in `gitops/workshop-agent/agent.yaml`, which
+rewards a plausible reason and persistence by design.
+
+**What it changes.** Nothing in the build. The system prompt the challenges were measured on stays as it is, and the
+chat page keeps folding `<thinking>` text and showing reasoning that arrives as the reply. The open item in the
+2026-11-02 · #773 entry ("question 5 ... is asked in run 15977's report") is settled by this answer. If the timed
+run-throughs (by 2026-11-08) show the leak making the room's job too easy, a prompt change and a fresh live measure
+of Challenges 1 to 3 on the public bot are the way to revisit it.
+## 2026-11-02 · #783 · Agent Observability's copy gets a trace id of its own; `verify/agent_obs_flow.py` goes red when nothing arrives
+
+**The cause.** #746's collector change (241f8e6, on staging 2026-11-01 15:51 UTC; both KubeCon clusters' `otel-collector`
+Applications sync staging on their own) sends Agent Observability a second copy of every trace through
+`otlp_http/llmobs`, and marks every span of APM's copy `dd_llmobs_enabled` false. The copy kept the original trace id.
+At Datadog the two copies were one trace: the issue's APM trace `a2b544f7bbf6e12cfca75d8927f01f13` (2026-11-01 16:42
+UTC, after the rollout) has two `POST` roots with `parentid: 0`, which is APM's `POST /chat` beside the copy's
+`POST /chat` under its derived span id. The llmobs intake wrote the copy into the APM trace, the overlap Datadog's
+page warns of ("some data sent to Agent Observability may also be written to the corresponding APM traces"). So the
+trace Datadog converts held APM's marked spans, and its page says "an explicit `false` on any span prevents conversion
+of the entire trace". The marker meant to keep APM's two-root rows out vetoed the copy as well, and every BurritoBot
+turn after the rollout made no row.
+
+**Why 03:30 UTC is not the start.** The last row (the probe's HC-666 chat, 03:26 UTC) is the last chat before the
+rollout that anybody looked for. Between 03:26 and 15:51 UTC no commit touched the trace path: the collector's own
+changes that night (0cef7b6, 89fcd0f) were on staging at 02:08 UTC, before the 03:26 row arrived; 4e86b30 only writes out
+`runtime: go`, which the clusters already ran; the rest changed pages, the persona and docs. The two chats the issue
+names as missing, 16:22 and 16:45 UTC, are the first after 241f8e6. Nothing in Datadog was read for this
+(dispatched runs have no access to the sandbox org until #759), so the outage's first missing chat is inferred from
+the repo's history and the issue's evidence. The live check below confirms or refutes it.
+
+**The fix** (`gitops/otel-collector/values.yaml`, `transform/llmobs_one_root`, every profile). Its first statement
+sets the copy's trace id to the first 32 hex digits of the SHA-256 of the original
+(`set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))`). The hash is the same on every collector pod for
+every span of a turn, so the turn stays one trace, and it shares no trace with a marked span. The derived turn span id
+and kagent's re-parent now come from the copy's trace id. APM keeps its trace ids, its parentage and its marker.
+`verify/test_trace_shape_e2e.py` (E2E tools tier, the real otelcol-contrib 0.160.0) checks on all three profiles
+that no span of the copy is in APM's trace and that every gen_ai span of the turn is in the copy's own. With the new
+statement removed, those two checks and every one-root check fail (confirmed on a temporary edit, restored).
+
+**What it costs.** Agent Observability's link from a row to APM opens the copy's own trace. If the intake writes the
+copy into APM as before, APM shows one extra trace per turn under `service:burritobot` (the copy's gen_ai spans, one
+root) next to the true one. The copy's two-root shape inside the true APM trace, which the issue saw, is gone.
+
+**The check** (`verify/agent_obs_flow.py`, offline test `verify/test_agent_obs_flow.py`). `chat` sends one marked chat
+to each KubeCon bot with a session of its own, then polls the LLM Observability spans API for `ml_app:burritobot` on
+that bot's `k8s.cluster.name` until ten minutes pass, and exits 1 with `AGENT OBSERVABILITY RECEIVED NOTHING from
+<cluster>` when none arrives. It prints the trace ids it found, which is the read-back #783's third criterion asks
+for. `watch` spends nothing: it reads APM's newest `service:burritobot env:burritobot-kubecon-na-26` span at least ten
+minutes old and exits 1 when Agent Observability has no span from two minutes before it. It also exits 1 when APM has
+nothing to compare. Both read Datadog with the read-only key in Secrets Manager `watch-it-burn/datadog`, as
+`verify/stage_traces.py` does. The run-of-show's Night Before list runs `chat` before every run-through and the morning
+of. A Datadog monitor on Agent Observability's own volume would page between runs; that needs its metric name read
+in the org first, so it is a follow-up.
+
+**If the live check is still red after the fix.** The two other readings of the evidence, and what each means:
+the intake refusing the copy shows as `otlp_http/llmobs` errors in the collector log (step 2 below), and the copy
+reaching Agent Observability under the new id but still not converting would show as no error and no row. Either way,
+the stage's rows come back at once by taking `transform/llmobs_apm_off` out of the traces processors of
+`values.yaml` and `values-burn.yaml` and `forward/llmobs` out of the traces exporters (APM's own conversion, the
+two-root shape that ran until 2026-11-01), and #746's one-root view waits.
+
+**Not yet run on a cluster.** Hecaton run 16035 has no AWS credentials, kubeconfig or Datadog access. Once this
+commit is on staging, both clusters' collectors sync it on their own. From a session with accen-dev, at the repo
+root, for C in `watch-it-burn-community` and `watch-it-burn-private`:
+
+    K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] || exit 1
+    # 1. the collector runs this commit (the revision must contain it, and the sync must have succeeded)
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n argocd get application otel-collector \
+      -o jsonpath='{.status.sync.revision} {.status.sync.status} {.status.operationState.phase}{"\n"}'
+    # 2. the intake takes the copy: no output is the pass
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n monitoring logs \
+      ds/otel-collector-opentelemetry-collector-agent -c opentelemetry-collector --since=1h | grep -i llmobs
+
+Then `python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`, and its trace
+ids go in a comment on #783. Whitney's #746 look (one root row per chat) can be read on the same chats.
+
+## 2026-11-02 · #544 · Ninth dispatch: #783's new trace-id statement is in the collector #544's point 2 loads, and it validates offline
+
+**No code changed.** Hecaton run 16110 is the ninth dispatch of #544. Like the earlier runs it has no AWS credentials
+(`aws sts get-caller-identity`: NoCredentials) and no kubeconfig (`kubectl config get-contexts` lists none), so nothing
+ran on a cluster. The eighth dispatch (run 16042) made no commit. No reply to the spend question in issue comment
+6562456139 has appeared on the issue.
+
+**Staging since `9e7070d`, the seventh dispatch's record.** Up to the base `878b077`, two issues changed files #544's
+checks depend on:
+- #783 (`67c956a`) adds a first statement to `transform/llmobs_apm_off` in `gitops/otel-collector/values.yaml`:
+  `set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))`. This is the statement the attendee collector
+  runs in point 2, so point 2 now also checks that the pinned collector (otelcol-contrib 0.160.0) accepts `SHA256`
+  in that position. Offline it does: `verify/test_lab_pipeline_collector.py`, in the tools tier, runs
+  `otelcol-contrib validate` on the rendered config. It passes "attendee, datadog-secret present,
+  datadog-admin-secret present validates", "... absent validates" and "attendee, datadog-secret absent validates".
+  The change touches only the Agent Observability copy (`traces/llmobs`), so the exporters in the traces pipeline are
+  the same. `verify/test_collector_backends.py` still passes "attendee drops Tempo from the traces it runs with
+  both secrets" and "attendee drops Tempo from relay.yaml's traces list too". So `otlp_grpc/tempo` is still defined
+  but in no attendee pipeline.
+- #773 (`bda5012`) adds `deployments` to `WIB_VILLAIN_HOSTS` in `fleet.sh`. That list holds the villain hosts, not
+  `WIB_SERVICE_HOSTS`, so the hosts `verify/test_service_hosts_live.py` reads are unchanged.
+
+Nothing under `gitops/bootstrap/`, `gitops/tempo/` or `observability-idp/` changed, and neither did the three relevant
+verify tests. The counts are still 34 Argo CD Applications on attendee and 38 on admin. The two leftovers that still
+name Tempo are unchanged: the agent-observability dashboard's uid tempo panels, and falcosidekick's failed Talon post
+on each CRITICAL event. `bash verify/run-e2e-tools.sh` exits 0: 223 offline tests ("ALL OFFLINE RENDER-GATE TESTS
+GREEN", including "the attendee profile renders 34 Applications, the root included (34 found)" and "the attendee
+profile leaves out tempo and falco-talon") and 42 checks ("ALL E2E TOOLS TIER CHECKS GREEN").
+
+**Not yet run on a cluster.** Same as before. Points 1 and 2 and the attendee half of point 4 need a new attendee
+cluster, which waits on Michael's go for about $1. Point 3 and the admin half of point 4 run on
+`watch-it-burn-private`. For point 2, also read the collector log for an OTTL error on `transform/llmobs_apm_off`.
+#783's own live read-back (the entry above) runs on the same admin cluster, so the session that does it can do #544's
+admin half in the same sitting.
+## 2026-11-02 · #744 · The pin already says "The kitchen is closed"; the finale, /kubecon and the load replay now say it too
+
+**No repin.** guard-proxy-agenticburn#25 (closed 2026-10-31) gives the cluster-wide cap its own reply: "The kitchen is
+closed: this cluster hit its $X spend cap, so BurritoBot isn't sending anything else to the model for anyone. A
+blocked request costs nothing." Michael's ef66c77 (#742, 2026-11-01) pinned guard-proxy at fb6e2bf, which is on
+guard-proxy main and carries it: proxy.py answers `cost_cap` with that text, and the pin's `conformance/test_spend.py`
+asserts it. The issue was filed against the pin before that. checksum/proxy-py moved with ef66c77, so the pod
+restarts on that proxy.py once Argo CD syncs it. This commit changes no gitlink: hecaton's forbidden gate refuses any
+change to one (question 766, "Michael pins, a run does the rest").
+
+**What changed.**
+- The KubeCon run-of-show's "Break it" close and /kubecon's copy of it quote the new reply and say Reset does not
+  help, in place of the per-conversation "kitchen tab is frozen ... Press Reset" text they told presenters to talk
+  over.
+- `verify/test_finale_cap.py` sends a `/chat` past the lowered cap to the pinned proxy.py (every guard off, so the cap
+  is what answers) and checks the reply starts "The kitchen is closed: this cluster hit its $<cap> spend cap" with no
+  Reset in it. It also holds the run-of-show and /kubecon to that quote and to no "press Reset".
+- `verify/load_replay.py` classified a refusal as `budget` by "The kitchen tab is frozen.", so at the cluster cap (the
+  COST_CAP_USD tally a replay on attackme spends against) every refused turn fell through to `guarded`. It now has a
+  `cost_cap` outcome read by `COST_CAP_TEXT` and keeps `budget` for C4's per-conversation guard; the report line names
+  both. `verify/test_load_replay.py` serves both replies, checks both texts are in proxy.py, and checks each is
+  classified as its own outcome. The run-of-show's load-replay item lists both.
+- The C4 lab text (lab.html, LAB-TEXT.md, the challenge README, PROMPT-CATALOG.md) is about the per-conversation
+  budget guard, whose reply is still "The kitchen tab is frozen" and still offers Reset, so it is unchanged.
+
+**What differs from the draft.** Run 15656's draft (485ee26 on `agent/744-15626`, cut from staging 39c1140) repinned
+guard-proxy to main 88b9b52 and bumped checksum/proxy-py to match, which is what the gate refused. 88b9b52's addition
+over fb6e2bf is #34's witch-name forwarding for #762, not #25, so this run leaves the pin where Michael put it; that
+repin belongs to #762. `verify/draft-drift.sh` named four drifted paths (decisions.md, the run-of-show,
+resources.yaml, kubecon.html). The run-of-show, /kubecon and test_finale_cap.py edits were made again on the current
+files, with the same wording; the load_replay change is new.
+
+**Not yet run on a cluster.** Hecaton run 16114 has no AWS or kubeconfig. Once staging reaches the clusters, from a
+session with accen-dev, for C in `watch-it-burn-community` and `watch-it-burn-private`: pull the kubeconfig into
+`/tmp/$C.kubeconfig`, confirm the context, and check the guard-proxy pod's
+`checksum/proxy-py` annotation reads `659ff019071f`. Then at the finale rehearsal, `finale-cap-on 0.01` in the public
+terminal and one chat from a phone must read "The kitchen is closed: this cluster hit its $... spend cap", then
+`finale-cap-off`. No E2E test sends a capped `/chat` to a live cluster; that phone check is the live one.
+## 2026-11-02 · #714 · Falco moves to lab-platform's copies, and the two terminal-side tags name their versions
+
+**Context.** Run 16111 is #714's next dispatch after run 15842 (`61f2615` to `0c72bad`, on staging as `a6d92c6`).
+That run left five images with no ghcr.io copy, two version tags not yet on ghcr.io, and the gate test. An anonymous
+read of ghcr.io on 2026-11-02 found that three of those are now there. Falco 0.45.1 is at
+`mirror/falcosecurity/falco:0.45.1-dc34bb8e231e`, serving `sha256:dc34bb8e…`, and falcoctl 0.14.2 is at
+`mirror/falcosecurity/falcoctl:0.14.2-d9d2591057eb`, serving `sha256:d9d25910…`. Both are lab-platform#295's digests.
+`watch-it-burn:workshop-mcp-mcp-1.29.1` and `watch-it-burn:web-terminal-ttyd-1.7.7` serve the two digests
+`gitops/ai-layer/resources.yaml` already pins (`9a26c18c…` and `68004fb5…`). The three build bases lab-platform#353
+asks for still do not answer an anonymous pull (HTTP 403 on the token): busybox 1.38.0, debian bookworm-slim and
+node 24.22.2-trixie-slim. The six later #714 branches (`agent/714-15969` to `-16097`) carry no commits.
+
+**What changed.**
+- **Falco.** `gitops/bootstrap/apps/falco.yaml` names both copies through `{{ .Values.imageRegistry }}/mirror`, as
+  falcosidekick does, so the ECR cache path works too. `verify/mirror_copies.py` moves them into `COPIES` and drops
+  `UNPULLED`, the 0.44.1 and 0.13.0 copies no chart pulls, along with the two checks that used it. The render test
+  now covers falco like any other copy app: unset and at the cache path it names the copies, and nothing names
+  `docker.io/falcosecurity/falco:0.45.1` or `falcoctl:0.14.2`. With this change, nothing a cluster pulls comes from
+  Docker Hub. The only Docker Hub images in a render are the three Helm test-hook Pods, which Argo CD skips.
+- **Version tags.** Every reference to `watch-it-burn:workshop-mcp` and `watch-it-burn:web-terminal` now names
+  `workshop-mcp-mcp-1.29.1` and `web-terminal-ttyd-1.7.7`, at the same digests. That covers resources.yaml,
+  images.lock, beat-02.sh, beat-cost.sh, two FACILITATOR.md commands, the recreation spec and three tests. The
+  web-terminal workflow is the first draft's (`origin/agent/714-12873`), unchanged because staging had not touched
+  the file since. It builds, reads ttyd's version out of the built image, and pushes `web-terminal-ttyd-<v>`.
+- **`verify/test_image_version_tags.py`** (new, tools tier) is the draft's test, made again on today's layout. It
+  reads mcp's version from the dist-info at the pinned workshop-mcp digest, and runs `ttyd --version` on the binary
+  taken out of the pinned web-terminal digest. The draft read the Joker under `watch-it-burn:joker-busybox-`; today
+  it is Michael's `festival-ops/maintenance-shell:busybox-1.38.0`, so the test reads that tag and runs its
+  busybox. busybox's layer stores `bin/busybox` as a hard link to `bin/[`, so the test follows the link. It
+  also fails when any file outside the dated records still names a `workshop-mcp` or `web-terminal` tag other than
+  the pinned one. Checked: putting `workshop-mcp@` back in beat-02.sh makes it fail by name.
+
+**Not in this change, and why.** These are unchanged from run 15842's entry, apart from the three now done. The
+Joker's `JOKER_BASE`, web-terminal's `debian:bookworm-slim` and Backstage's node base wait on lab-platform#353's
+copies. That run (15970) ended failed at validation, and its crane copy is escalated there. So does
+`verify/test_no_docker_hub.py`: the docker.io lines left that are not refused examples are those three bases and
+the two tests that read busybox from Docker Hub, `test_joker_web_busybox.py` and `test_c6_joker_public.py`. The
+villain shell banners still need a Joker re-push, because `test_c6_joker_public.py` holds the published layer to
+`joker-web/` byte for byte. Also left: `watch-it-burn:sample-app` and `:tool-pin` name no version either. Michael's
+comment named three tags, and a retag needs a ghcr.io write, so they are a follow-up.
+
+**Tests.** New: test_image_version_tags. Changed: test_image_registry and test_image_registry_render (no
+`UNPULLED`), test_fake_ticket and test_weather_feed (the workshop-mcp tag), and test_c6_villain_endpoint (the
+web-terminal tag).
+
+**Not yet run on a cluster.** Run 15842's check now expects no Docker Hub image at all. On a fresh attendee cluster,
+run `CONTEXT=<ctx> bash verify/run-e2e.sh`, then
+`kubectl --context "$CONTEXT" get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u`. No line may be a
+Docker Hub image, and the Falco DaemonSet must be Ready on `mirror/falcosecurity/falco:0.45.1-dc34bb8e231e`, its
+falcoctl init and follow containers included. The web-terminal and workshop-mcp pods must come up on the versioned
+tags, and their digests must be unchanged.
+## 2026-11-02 · #544 · Eleventh dispatch: the cluster credentials were handed over but could not be read, and #714's Falco move is now part of point 1
+
+**No code changed.** Hecaton run 16389 is the eleventh dispatch of #544, and the first one handed cluster access: a
+kubeconfig naming `watch-it-burn-community` and `watch-it-burn-private`, plus an accen-dev AWS profile, under the
+run's `clusters/` directory. The run's user could not read any of it. The files are mode 0640, group `hecaton`, and
+the run's user is not in that group, so `kubectl config get-contexts` fails with "permission denied" on the
+kubeconfig, and `aws sts get-caller-identity --profile accen-dev` fails with "config profile (accen-dev) could not
+be found". Nothing ran on a cluster. Even with access, only the admin half could have run: watch-it-burn-community
+runs the burn profile and watch-it-burn-private runs admin, so neither is an attendee cluster. The run may not create one.
+
+**Staging since `5bfd2f1`, the tenth dispatch's base.** #714 (`fecfc56`) points `gitops/bootstrap/apps/falco.yaml` at
+lab-platform's mirror copies of Falco 0.45.1 and falcoctl 0.14.2. falco is on the attendee list, so the attendee
+root in point 1 now reaches Healthy only if the Falco DaemonSet pulls those copies. An anonymous pull of
+`ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco:0.45.1-dc34bb8e231e` and `.../falcoctl:0.14.2-d9d2591057eb`
+returned HTTP 200 on 2026-11-02, serving `sha256:dc34bb8e…` and `sha256:d9d25910…`, the digests #714 names. The change
+adds no Application, so the counts are still 34 on attendee and 38 on admin. Nothing under `gitops/otel-collector/`,
+`gitops/tempo/` or `observability-idp/` changed, and neither did `verify/test_service_hosts_live.py` or `fleet.sh`.
+The Tempo leftovers on attendee are the same as in the ninth dispatch's entry.
+
+**Not yet run on a cluster.** The same as the ninth dispatch's entry. Point 1 also needs the Falco DaemonSet Ready on
+the mirror copy, with its falcoctl containers, which #714's own live check also reads. The admin half (point 3 and
+the admin half of point 4) needs a run whose user can read the kubeconfig.

@@ -68,7 +68,7 @@ check("a fake-ticket Deployment exists", bool(dep))
 check("its pods carry the Service's label", LABEL.items() <= (pod.get("metadata", {}).get("labels") or {}).items())
 check("it has resource limits (the Enforce floor denies it otherwise)", bool((c.get("resources") or {}).get("limits")))
 check("it uses the pinned workshop-mcp image, already on the registry allow-list",
-      re.match(r"ghcr\.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:[0-9a-f]{64}$", c.get("image", "")) is not None)
+      re.match(r"ghcr\.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1\.29\.1@sha256:[0-9a-f]{64}$", c.get("image", "")) is not None)
 check("it runs ticket_site.py from a generated ConfigMap",
       c.get("command") == ["python", "/app/ticket_site.py"]
       and any(v.get("configMap", {}).get("name") == "fake-ticket-src" for v in spec.get("volumes") or [])

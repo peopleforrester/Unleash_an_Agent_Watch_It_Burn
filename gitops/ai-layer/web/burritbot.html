@@ -103,6 +103,8 @@
   .chathead .sub{font-size:12px;color:var(--mid)}
   .chathead .witch{display:inline-block;margin-top:3px;font-size:12px;font-weight:800;color:var(--accent);text-decoration:none}
   /* Very small, label-only re-roll (#762): the only text is "Get a new witch name", no tooltip or explanation. */
+  /* "see your deployments" (#773): hidden until the visitor's first deployment lands, then a plain small link. */
+  .chathead .mydeploys{margin-left:6px;font-size:11px;font-weight:700;color:var(--accent)}
   .chathead .newwitch{margin-left:6px;font:inherit;font-size:10px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--accent);padding:1px 6px;border-radius:6px;cursor:pointer;vertical-align:middle}
   .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
   /* PHONE CHAT TITLE (#387). In a row, the tagline squeezed between the avatar and Reset ran to three or
@@ -367,7 +369,7 @@
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
-        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a><button type="button" class="newwitch" id="newwitch" hidden>Get a new witch name</button></div>
+        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a><button type="button" class="newwitch" id="newwitch" hidden>Get a new witch name</button><a class="mydeploys" id="mydeploys" hidden target="_blank" rel="noopener">see your deployments</a></div>
         <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
@@ -666,6 +668,7 @@
         bubble(r||("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again."),'bot'); return; }
       const data=await res.json();
       botReply(data.reply);
+      checkMyDeployments();
       if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();
       const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;
       document.getElementById('tokens').textContent=tokens.toLocaleString();
@@ -813,9 +816,30 @@
       btn.addEventListener('click',function(){
         WITCH_NAME=randWitch(); setWitchCookie(WITCH_NAME);
         el.textContent='\uD83E\uDDD9 You are '+WITCH_NAME;
+        checkMyDeployments();
       });
     }
   })();
+  // "see your deployments" (#773, the link #763 removed as "see your Jokers", renamed). Hidden until BurritoBot has
+  // deployed something under this visitor's witch name, then a link to the deployments page, filtered to them. The
+  // page is deployments-<this cluster>, which the console serves (console.conf) and which links to nothing on the
+  // support desk. Checked on load, after each reply and once more a few seconds later, since deploy_app reports to
+  // the desk on its own thread: /deployments.json on this same host, so the check is same-origin.
+  function checkMyDeployments(again){
+    var a=document.getElementById('mydeploys'), host=location.hostname||"";
+    if(!a) return;
+    if(!WITCH_NAME || !/\.burritobot\.co$/.test(host)){ a.hidden=true; return; }
+    var s=witchSlug(WITCH_NAME);
+    fetch('/deployments.json?witch='+encodeURIComponent(s),{cache:'no-store'}).then(function(r){return r.ok?r.json():[];})
+      .then(function(rows){
+        if(witchSlug(WITCH_NAME)!==s) return;   // re-rolled while the check was out
+        var mine=Array.isArray(rows) && rows.length>0;
+        a.href='https://deployments-'+host.replace(/\.burritobot\.co$/,'')+'.burritobot.co/mine?witch='+encodeURIComponent(s);
+        a.hidden=!mine;
+        if(!mine && !again) setTimeout(function(){ checkMyDeployments(true); },4000);
+      }).catch(function(){});
+  }
+  checkMyDeployments(true);
   greet();
 </script>
 </body>
