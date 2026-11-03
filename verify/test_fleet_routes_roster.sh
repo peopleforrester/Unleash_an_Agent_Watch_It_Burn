@@ -179,7 +179,7 @@ check "the Night Before writes the roster table and checks the router before che
    (( $(line_of "./fleet.sh routes roster") < $(line_of "./fleet.sh router-check") &&
       $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls attackme") ))'
 check "the C1 beat names the beacon view by URL" \
-  'grep -A3 "^- C1 exfiltrate" "${ROS}" | grep -qF "https://beacon.burritobot.co/beacon/view"'
+  'grep -A3 -E "^ *- C1 exfiltrate" "${ROS}" | grep -qF "https://beacon.burritobot.co/beacon/view"'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }

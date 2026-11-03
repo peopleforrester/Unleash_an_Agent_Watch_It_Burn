@@ -744,8 +744,8 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
      (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
      alert here: Falco's recipe-snoop rule fires on a successful read, and on the
      private cluster there is none.
-   - C1 exfiltrate the customer data: the egress NetworkPolicy. The beacon view's count
-     stops moving.
+   - C1 exfiltrate the customer data: the egress NetworkPolicy. The beacon view,
+     `https://beacon.burritobot.co/beacon/view`, stops counting.
      `CONTEXT=<admin-context> bash challenges/c1-exfil-s3/fallback.kubectl.sh` shows the
      POST fail and the count hold, without the model.
 - **Delivers:** point 3 (a full IDP, by voice), point 4, and point 5 (RBAC and the
