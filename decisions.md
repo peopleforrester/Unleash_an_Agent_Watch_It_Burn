@@ -10969,3 +10969,10 @@ file was then restored.
 **Tests.** New: test_progress_764. No existing test changed. PROGRESS.md has a #808 entry above #764's.
 
 **Not yet run on a cluster.** Nothing. This is a docs check with no live half.
+
+**The suites (run 16576, at 05dfb50).** `bash verify/run-tests.sh`, run as the first half of the E2E command,
+passed with 229 tests, test_progress_764 among them. `bash verify/run-e2e-tools.sh` ran 46 checks, and two failed.
+The first was `test_image_version_tags.py`, failing only on ghcr.io serving `web-terminal-ttyd-1.7.7` at
+`sha256:0b72ecc72c7c…` instead of the pinned `68004fb5…`. That is #794's recorded red, already in the base.
+The second was `test_weather_feed_e2e.py`, which got HTTP 502 from Open-Meteo. Re-run alone a few minutes later with
+the pinned tools on PATH, it passed every check. Neither failure involves this change.
