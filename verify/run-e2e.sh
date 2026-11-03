@@ -10,6 +10,11 @@
 # cluster, so it needs COMMUNITY_CONTEXT, the kube-context of the community cluster (attackme). It spends one model
 # call there and removes the Joker it lands.
 #
+# The Agent Observability read-back (test_agent_obs_flow_live.py, #813) sends one fresh chat to each KubeCon bot over
+# the public internet and reads its spans back from Datadog with the read pair in watch-it-burn/datadog, as
+# WIB_DEFAULT_ACCOUNT (default accen-dev) in WIB_REGION (default us-west-2). It spends two model calls and can wait
+# up to ten minutes per bot.
+#
 # The AWS-plane drift check (test_drift_aws_live.py, #205) needs DRIFT_PROFILE, an operator profile in
 # WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied, and ATTENDEE_CLUSTER, a cluster in that
 # account whose attendee key is in infra/terraform/fleet/aws-pool/. They are prerequisites like the rest.

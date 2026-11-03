@@ -38,6 +38,7 @@ class FakeDatadog:
 
     def __init__(self, arrives: dict[str, list[dict]] | None = None, apm: list[dict] | None = None) -> None:
         self.arrives, self.apm, self.gets, self.posts = arrives or {}, apm or [], [], []
+        self.ignores_session = False  # a Datadog that drops the session term from the query and answers the cluster's
 
     def call(self, method, path, body=None):
         if method == "POST":
@@ -47,10 +48,29 @@ class FakeDatadog:
         assert method == "GET" and path.startswith("/api/v2/llm-obs/v1/spans/events?"), path
         q = dict(urllib.parse.parse_qsl(path.split("?", 1)[1]))
         self.gets.append(q)
-        cluster = q.get("filter[query]", "").removeprefix("k8s.cluster.name:")
-        if cluster:
-            return {"data": self.arrives.get(cluster, [])}
-        return {"data": [s for spans in self.arrives.values() for s in spans]}
+        terms = dict(t.split(":", 1) for t in q.get("filter[query]", "").split())
+        assert set(terms) <= {"k8s.cluster.name", "session_id"}, terms
+        cluster, session = terms.get("k8s.cluster.name"), terms.get("session_id")
+        spans = self.arrives.get(cluster, []) if cluster else [s for v in self.arrives.values() for s in v]
+        if session and not self.ignores_session:
+            spans = [s for s in spans if f"session_id:{session}" in s["attributes"]["tags"]]
+        return {"data": spans}
+
+
+class SentSessionDatadog(FakeDatadog):
+    """main stamps its sessions with the real clock, so a span here carries whatever session the bot was sent for
+    its cluster: `sent_to` lists the clusters whose chat's own spans arrive, `other_to` those that send another's."""
+
+    def __init__(self, bot, sent_to=(), other_to=()) -> None:
+        super().__init__()
+        self.bot, self.sent_to, self.other_to = bot, sent_to, other_to
+
+    def call(self, method, path, body=None):
+        self.arrives = {af.cluster_for(h): [span(af.cluster_for(h), str(n), b["session"]
+                                                 if af.cluster_for(h) in self.sent_to else "someone-else")]
+                        for n, (h, b) in enumerate(self.bot.sent, 1)
+                        if af.cluster_for(h) in (*self.sent_to, *self.other_to)}
+        return super().call(method, path, body)
 
 
 class FakeBot:
@@ -64,9 +84,9 @@ class FakeBot:
         return {"reply": "" if self.empty else "We open at 11."}
 
 
-def run_chat(dd, bot, hosts=af.DEFAULT_HOSTS):
+def run_chat(dd, bot, hosts=af.DEFAULT_HOSTS, own_session=False):
     return [af.check_chat(dd, h, "20261101164200", wait_s=0, poll_s=0, timeout=5, chat=bot, now=lambda: T0,
-                          sleep=lambda s: None) for h in hosts]
+                          sleep=lambda s: None, own_session=own_session) for h in hosts]
 
 
 def run_main(argv, dd, bot=None) -> tuple[int, str]:
@@ -139,6 +159,53 @@ rc, out = run_main(["chat", "--profile", "p", "--wait", "0", "--poll", "0"],
                    FakeDatadog({"burritobot-public": [span("burritobot-public", "1")],
                                 "burritobot-private": [span("burritobot-private", "2")]}), FakeBot())
 check("exit 0 and AGENT OBSERVABILITY GREEN when both arrive", rc == 0 and "AGENT OBSERVABILITY GREEN" in out, out)
+
+PUB_S, PRIV_S = "wib-aoflow-burritobot-public-20261101164200", "wib-aoflow-burritobot-private-20261101164200"
+
+print("== chat --own-session: each fresh chat's own spans arrive (#813) ==")
+dd = FakeDatadog({"burritobot-public": [span("burritobot-public", "777"), span("burritobot-public", "111", PUB_S)],
+                  "burritobot-private": [span("burritobot-private", "222", PRIV_S)]})
+res = run_chat(dd, FakeBot(), own_session=True)
+check("both bots are GREEN when each chat's own session is there", all(ok for ok, _ in res), str(res))
+check("Agent Observability is asked for each chat's own session on its own cluster",
+      [q["filter[query]"] for q in dd.gets] == [f"k8s.cluster.name:burritobot-public session_id:{PUB_S}",
+                                                 f"k8s.cluster.name:burritobot-private session_id:{PRIV_S}"],
+      str(dd.gets))
+check("the read-back names the chat's own trace ids, and not another visitor's",
+      "111" in res[0][1] and "777" not in res[0][1] and "222" in res[1][1] and "own session" in res[0][1], str(res))
+
+print("== chat --own-session: the cluster sends spans, but not this chat's ==")
+dd = FakeDatadog({"burritobot-public": [span("burritobot-public", "777", "someone-else")],
+                  "burritobot-private": [span("burritobot-private", "222", PRIV_S)]})
+res = run_chat(dd, FakeBot(), own_session=True)
+check("another visitor's chat does not stand in for this one: the room's bot is RED",
+      [ok for ok, _ in res] == [False, True], str(res))
+check("the RED says the flow runs and names the session that never arrived",
+      "THE CHAT'S OWN SPANS NEVER ARRIVED from burritobot-public" in res[0][1] and PUB_S in res[0][1]
+      and "777" in res[0][1], res[0][1])
+dd.ignores_session = True
+res = run_chat(dd, FakeBot(), own_session=True, hosts=("attackme.burritobot.co",))
+check("RED too when Datadog answers the session query with other sessions' spans: the tag is checked again",
+      not res[0][0], str(res))
+res = run_chat(FakeDatadog({"burritobot-private": [span("burritobot-private", "222", PRIV_S)]}), FakeBot(),
+               own_session=True, hosts=("attackme.burritobot.co",))
+check("RED, as #783's loud RED, when the cluster sends nothing at all",
+      not res[0][0] and "AGENT OBSERVABILITY RECEIVED NOTHING from burritobot-public" in res[0][1], str(res))
+res = run_chat(FakeDatadog({"burritobot-public": [span("burritobot-public", "777")]}), FakeBot(),
+               hosts=("attackme.burritobot.co",))
+check("without --own-session any span from the cluster is still GREEN, as before", res[0][0], str(res))
+
+print("== chat --own-session through main ==")
+bot = FakeBot()
+rc, out = run_main(["chat", "--profile", "p", "--wait", "0", "--poll", "0", "--own-session"],
+                   SentSessionDatadog(bot, sent_to=("burritobot-public",), other_to=("burritobot-private",)), bot)
+check("exit 1 and AGENT OBSERVABILITY RED when one chat's own spans are missing",
+      rc == 1 and "AGENT OBSERVABILITY RED" in out and "NEVER ARRIVED from burritobot-private" in out, out)
+bot = FakeBot()
+rc, out = run_main(["chat", "--profile", "p", "--wait", "0", "--poll", "0", "--own-session"],
+                   SentSessionDatadog(bot, sent_to=("burritobot-public", "burritobot-private")), bot)
+check("exit 0 and AGENT OBSERVABILITY GREEN when both chats' own spans arrive",
+      rc == 0 and "AGENT OBSERVABILITY GREEN" in out, out)
 
 print("== watch: APM against Agent Observability, no model call ==")
 apm = [{"attributes": {"service": "burritobot", "start_timestamp": "2026-11-01T16:42:07.123Z"}}]
