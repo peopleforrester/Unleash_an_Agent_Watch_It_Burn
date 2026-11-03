@@ -11675,3 +11675,11 @@ the one pinned tag, `workshop-mcp-mcp-1.29.1`. Staging's #480 commit `afaa1e6` g
 live-check script copies that image string as it is and never parses it, so the fixture now names
 `workshop-mcp-mcp-1.29.1@sha256:9a26`. Both tests pass with it. Rule 1's grep, run on `watch-it-burn:workshop-mcp`
 before the fixture was written, would have listed the test that reads it.
+
+**The suites in run 16557.** `bash verify/run-e2e-tools.sh` ran 45 checks, the offline suite and 44 tier tests, with
+the log read in the foreground. Its offline suite was green (227 tests). It exited 1 on one test,
+`test_image_version_tags.py`, with two failed checks: the bare `workshop-mcp` tag fixed above, and ghcr.io serving
+`web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins `68004fb5...`. That digest red is the one
+the #798, #801 and #799 entries record: CI pushed over the tag, and nothing here touches an image. After the fixture
+fix, `test_image_version_tags.py` fails only the digest check, `test_tool_pin_live_check.py` passes, and
+`bash verify/run-tests.sh` exits 0 with 227 tests.
