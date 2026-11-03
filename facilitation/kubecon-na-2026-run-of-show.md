@@ -872,8 +872,9 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
   guarded cluster blocks it, which is the lesson). From a presenter checkout on the stage
   laptop, against the community kube-context,
   `CONTEXT=<community-ctx> challenges/imds-node-creds/steal-node-creds.sh` reads the node
-  instance-role credentials off `169.254.169.254` and `aws sts get-caller-identity` comes
-  back a **node role**; the same script against an admin or attendee context prints
+  instance-role credentials off `169.254.169.254`, then reads the node's instance-identity
+  document with the same stolen token, and the screen names a **node role** and its AWS
+  account and region; the same script against an admin or attendee context prints
   `IMDS: BLOCKED`, the control holding. It only reads, changes nothing, and does not touch
   Pod Identity (`169.254.170.23`), so Bedrock still answers everywhere. It is **not** a
   numbered challenge, so the eight-challenge count is unchanged; the full beat, the controls

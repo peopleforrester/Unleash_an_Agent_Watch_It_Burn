@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 
 import yaml
@@ -102,6 +103,36 @@ aws_calls = set(re.findall(r"\baws\s+([a-z0-9-]+)\s+([a-z0-9-]+)", STEAL_CODE))
 check("the steal script invokes no aws CLI at all (nothing to print 'aws: not found'; nothing changed)",
       aws_calls == set())
 check("it does not steal or touch the Pod Identity endpoint 169.254.170.23", "169.254.170.23/" not in STEAL)
+
+print("== the presenter narrative tells the pivot the script actually shows (#837) ==")
+# #748 dropped `aws sts get-caller-identity` from the script; the stage copy that names the script must not
+# still promise it. The runbook is exempt: it names the call only to say the script does not make it.
+NARRATIVE = ("facilitation/kubecon-na-2026-run-of-show.md", "docs/RUN-OF-SHOW-2026-08.md",
+             "gitops/ai-layer/web/kubecon.html", "gitops/ai-layer/web/brief.html")
+for rel in NARRATIVE:
+    text = (REPO / rel).read_text(encoding="utf-8")
+    flat = re.sub(r"\s+", " ", text)
+    check(f"{rel} names the steal script (the anchor this check reads)", "steal-node-creds.sh" in text)
+    check(f"{rel} names the instance-identity document pivot", "instance-identity document" in flat)
+EXEMPT = {"challenges/imds-node-creds/FACILITATOR.md", "challenges/imds-node-creds/steal-node-creds.sh",
+          "verify/test_imds_credential_theft.py", "decisions.md"}
+tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "-z"], capture_output=True, check=True,
+                         text=True).stdout.split("\0")
+stale = []
+for rel in tracked:
+    if not rel or rel in EXEMPT:
+        continue
+    path = REPO / rel
+    if not path.is_file():
+        continue
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        continue
+    if "steal-node-creds.sh" in text and "get-caller-identity" in text:
+        stale.append(rel)
+check(f"no file that names the steal script still says it runs get-caller-identity (found: {stale})",
+      stale == [])
 
 print()
 if failures:
