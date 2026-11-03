@@ -13017,3 +13017,10 @@ on staging. The Night Before step: staging's text is kept, with only its opening
 trace" to "shows its trace after the presenters' attack and again after its fix". Nothing else in the draft
 differs. No test or script reads either changed passage; `verify/stage_traces.py`'s docstring, now line 15, still
 says "opens on its trace", the followup run 16765 named.
+
+**The suites, after the rebase.** `bash verify/run-tests.sh` ran 237 tests and printed "ALL OFFLINE RENDER-GATE
+TESTS GREEN", exit 0. `bash verify/run-e2e-tools.sh` ran 52 checks (the offline suite and 51 tier tests) in 23m43s
+and exited 1 on `test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `sample-app-nginx-1.27.5`,
+the tag staging records under #814. The `web-terminal-ttyd-1.7.7` check (#794) passed this time, at the pinned
+`68004fb5`. `test_weather_feed_e2e.py`,
+red in run 16765 on the weather service's 503, passed this time. No live cluster check applies to this prose change.
