@@ -12886,3 +12886,10 @@ both clusters: `open /var/lib/hecaton/runs/16657/clusters/kubeconfig: permission
 **Not yet run on a cluster.** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
 verify/test_otel_trace_id_fix_live.py`, from a session whose kubeconfig names both contexts. Its PASS lines replace
 step 1 of the 2026-11-02 · #783 entry's commands. #783's `agent_obs_flow.py chat` read-back is still owed after it.
+
+**The suites.** `bash verify/run-e2e-tools.sh` ran the offline suite first: 231 tests, "ALL OFFLINE RENDER-GATE TESTS
+GREEN", `test_otel_trace_id_fix_live_checks.py` among them, so the Test command passes. The tools tier then ran 45
+tests and exited 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at
+`sha256:0b72ecc72c7c…`, not the pinned `sha256:68004fb5ed2d…`. That is the red the #783 and #746 re-dispatch entries
+above record, from #714's workflow pushing over the tag. Nothing in this change touches images, and the fix needs a
+ghcr.io write and the signing key, which this run has neither of.
