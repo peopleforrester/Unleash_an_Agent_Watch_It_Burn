@@ -47,9 +47,19 @@ rc="${HARVEST_RC:-0}"
 if [[ "${rc}" -eq 0 ]]; then printf '%s\n' "${HARVEST_CRED:-agentic:agentic}" >"${out}"; else echo stale >"${out}"; fi
 exit "${rc}"
 S
+# aws: answers the two Datadog pool secrets with AWS_POOL1 and AWS_POOL2, an empty pool when unset; a variable set
+# to "" is the empty answer #835 is about (aws exits 0, prints nothing). AWS_SECRET_RC makes every secret read fail
+# as a missing secret does. Every other call prints nothing.
 cat >"${SHIM}/aws" <<'S'
 #!/usr/bin/env bash
-echo "aws $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"; exit 0
+echo "aws $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
+case "$*" in
+  *"get-secret-value --secret-id watch-it-burn/datadog-pool-2 "*)
+    [[ -z "${AWS_SECRET_RC:-}" ]] || exit "${AWS_SECRET_RC}"; printf '%s\n' "${AWS_POOL2-[]}" ;;
+  *"get-secret-value --secret-id watch-it-burn/datadog-pool "*)
+    [[ -z "${AWS_SECRET_RC:-}" ]] || exit "${AWS_SECRET_RC}"; printf '%s\n' "${AWS_POOL1-[]}" ;;
+esac
+exit 0
 S
 cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
@@ -251,6 +261,63 @@ reset
 POOL_RC=1 src "rc=0; cmd_ingest pool || rc=\$?; echo rc=\${rc}" >"${T}/out"
 check "an unreadable pool is a failure, with nothing posted" \
   '! grep -qx "rc=0" "${T}/out" && [[ "$(ls "${T}/imports" | wc -l)" -eq 0 ]] && grep -q "cannot read the live pool" "${T}/stderr"'
+
+echo "== a Datadog pool secret that is not a JSON array is named, and nothing is registered (#835) =="
+# fleetrun <args...>: fleet.sh run as a script, as an operator runs it, so main() and its set -e are live (sourcing
+# it under `||` turns set -e off, which is how the exit 2 hid). Its stderr goes to ${T}/stderr and its exit code to
+# ${T}/out as rc=<n>. main's EXIT trap removes the ledger, so the failures are read from report_failures' list.
+fleetrun() {
+  local rc=0
+  ( cd "$(dirname "${FLEET}")" && DATABASE_URL=postgresql://lab@db.test/lab USER=tester WIB_EVENT=test-event \
+      WIB_PROVISION_DIR="${PROV}" WIB_DEFAULT_ACCOUNT=acct-default WIB_REGION=us-west-2 \
+      WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" WIB_AWS_POOL_DIR="${POOL}" WIB_INGEST_LB_WAIT=10 \
+      bash "${FLEET}" "$@" ) >/dev/null 2>>"${T}/stderr" || rc=$?
+  echo "rc=${rc}" >"${T}/out"
+}
+failed() { grep -qx "    - $1" "${T}/stderr"; }   # report_failures listed exactly this entry
+imports() { ls "${T}/imports" | wc -l; }
+reset
+AWS_POOL1="" fleetrun ingest "${A}"
+check "ingest with an empty answer for watch-it-burn/datadog-pool exits 1, not set -e's 2" 'grep -qx "rc=1" "${T}/out"'
+check "and says which secret, in which account and region, and that it was empty" \
+  'grep -q "Datadog pool secret watch-it-burn/datadog-pool (acct-default, us-west-2) holds 0 byte(s) that are not a JSON array of org rows" "${T}/stderr"'
+check "and records the failure by the secret's name" 'failed "datadog-pool:watch-it-burn/datadog-pool"'
+check "and the readable pool is not blamed" '! failed "datadog-pool:watch-it-burn/datadog-pool-2"'
+check "and imports nothing, so no row's Datadog login is blanked" '[[ "$(imports)" -eq 0 ]] && ! grep -q "^labctl import" "${CALLS}"'
+reset
+AWS_POOL2="not json" fleetrun ingest "${A}"
+check "text that is not JSON in watch-it-burn/datadog-pool-2 is refused the same way, by that name" \
+  'grep -qx "rc=1" "${T}/out" && failed "datadog-pool:watch-it-burn/datadog-pool-2" && ! failed "datadog-pool:watch-it-burn/datadog-pool" && [[ "$(imports)" -eq 0 ]]'
+for bad in '["an org"]' '{"org":"o1"}' '[] []'; do
+  reset
+  AWS_POOL1="${bad}" fleetrun ingest "${A}"
+  check "a pool answer of ${bad} is refused by name before anything is imported" \
+    'grep -qx "rc=1" "${T}/out" && failed "datadog-pool:watch-it-burn/datadog-pool" && [[ "$(imports)" -eq 0 ]]'
+done
+reset
+AWS_POOL1="" fleetrun ingest-instructors
+check "ingest-instructors with an empty answer exits 1, names the secret, and imports nothing" \
+  'grep -qx "rc=1" "${T}/out" && failed "datadog-pool:watch-it-burn/datadog-pool" && grep -q "ingest-instructors: nothing registered" "${T}/stderr" && [[ "$(imports)" -eq 0 ]]'
+reset
+AWS_POOL1="" src "_ingest_attendee_names() { echo INGEST-RAN >&2; }; WIB_DRY_RUN=''; mkdir -p \"\${LOG_DIR}\"; register_with_provisioning 'the test fleet' _ingest_attendee_names ${A}"
+check "provisioning with an empty pool answer says the clusters were NOT registered, without trying the ingest" \
+  'grep -q "the test fleet was NOT registered" "${T}/stderr" && ! grep -q INGEST-RAN "${T}/stderr"'
+check "and fails the run by the secret's name" 'ledger | grep -qx "datadog-pool:watch-it-burn/datadog-pool"'
+reset
+AWS_SECRET_RC=254 fleetrun ingest "${A}"
+check "a secret aws cannot read is still an empty pool: the cluster registers, Datadog fields blank" \
+  'grep -qx "rc=0" "${T}/out" && [[ "$(imports)" -eq 1 ]] && ctrue "${T}/imports/1.csv" "d[\"datadog_org\"] == \"\""'
+reset
+AWS_POOL1='[{"org":"inst","role":"admin-instructor"},{"org":"o1"},{"org":"o2"},{"org":"o3"},{"org":"o4"}]' \
+  AWS_POOL2='[{"org":"o5"},{"org":"o6"},{"org":"o7","email":"s7@example.com"},{"org":"o8"}]' fleetrun ingest "${A}" "${COMMUNITY}"
+check "a valid pool still resolves: attendee-007 takes the seventh non-admin row across both secrets" \
+  'grep -qx "rc=0" "${T}/out" && (for f in "${T}"/imports/*.csv; do ctrue "${f}" "d[\"name\"] == \"${A}\" and d[\"datadog_org\"] == \"o7\" and d[\"datadog_email\"] == \"s7@example.com\"" && exit 0; done; exit 1)'
+check "and the community cluster takes the admin-instructor row" \
+  '(for f in "${T}"/imports/*.csv; do ctrue "${f}" "d[\"name\"] == \"${COMMUNITY}\" and d[\"datadog_org\"] == \"inst\"" && exit 0; done; exit 1)'
+reset
+AWS_POOL1='[{"org":"o1","role":5}]' fleetrun ingest "${A}"
+check "a pool row the resolver cannot read fails that cluster by name, with a message, not a bare exit 2" \
+  'grep -qx "rc=1" "${T}/out" && failed "datadog-row:${A}" && grep -q "ingest ${A}: the Datadog pool rows do not resolve to an org" "${T}/stderr" && [[ "$(imports)" -eq 0 ]]'
 
 echo "== nothing in fleet.sh writes a .terminal file but the harvester =="
 check "no printf into a .terminal file" '! grep -nE "printf .*>\"?\\\$\{(pwfile|AWS_POOL_DIR\}/\\\$\{name\}\.terminal)" "${FLEET}"'

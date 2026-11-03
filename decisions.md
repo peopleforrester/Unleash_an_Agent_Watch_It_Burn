@@ -13565,3 +13565,47 @@ because releases.hashicorp.com reset the connection. Rerun alone with the tier's
 exited 0 with 0 failures. Read-only probes: `https://beacon.burritobot.co/beacon/view` answered 200, the Railway
 host's `/healthz` 200, and `https://provisioning.agenticburn.com/beacon/view` 404. No cluster was read or changed;
 nothing in this entry needs one.
+
+## 2026-11-04 · #835 · fleet.sh ingest names a Datadog pool secret that is not a JSON array, and registers nothing
+
+**What happened.** `cmd_ingest`, the `ingest-instructors` branch of `main` and `register_with_provisioning` each set
+POOL1 and POOL2 from `aws secretsmanager get-secret-value ... || echo '[]'`. When aws exits 0 with text that is not
+JSON, `ingest_one`'s resolver, `dd="$(jq -cn --argjson a "${POOL1}" ...)"`, fails, and `set -e` ended fleet.sh with
+exit 2 before the `[[ -n "${dd}" ]] || dd='{}'` guard. Reproduced before the change: `fleet.sh ingest
+watch-it-burn-attendee-007` with an aws shim that prints nothing logged only the `ingest -> labctl import` line and
+exited 2.
+
+**The change.** One helper, `load_datadog_pools`, now reads both secrets for all three callers. It checks each answer
+the way the resolver reads it, with `jq -en --argjson p "${v}" '$p | type == "array" and all(.[]; type == "object")'`.
+That refuses an empty answer, text that is not JSON, two JSON texts, a bare object, and an array holding a string,
+which would fail the resolver's `.role`. A refused secret is logged with its id, account, region and byte count (never
+its content) and recorded as `datadog-pool:<secret-id>`, and the helper returns 1. `fleet.sh ingest` and
+`ingest-instructors` then say "nothing registered", print the failure list and exit 1. `register_with_provisioning`
+stays non-fatal, as its comment requires: it logs that the clusters were NOT registered and skips the ingest, and the
+recorded failure fails the build.
+
+Of the issue's two fixes, the first is the one taken: refusing by name before any import, rather than letting the
+resolver's failure fall through to the `{}` guard. A fall-through would send each row with blank Datadog fields, and
+labctl import upserts by name, so `ingest pool` would blank the org login on every row the pool already holds, claimed
+ones included. A secret aws cannot read is still an empty pool, as before, since that is the state before #832's row
+is loaded. In `ingest_one`, a resolver that still fails (a row whose `role` is a number) now fails that cluster as
+`datadog-row:<name>` with a message, instead of the bare exit 2.
+
+**Tests.** `verify/test_fleet_terminal_harvest.sh`'s aws shim now answers the two pool secrets from AWS_POOL1 and
+AWS_POOL2 (an empty pool when unset; set to "" is the issue's empty answer), and AWS_SECRET_RC fails the read as a
+missing secret does. Its new section runs fleet.sh as a script, so `main` and its `set -e` are live, and adds 16
+checks: an empty answer and text that is not JSON each exit 1 naming that secret alone, with nothing imported; three
+other bad shapes are refused; `ingest-instructors` and `register_with_provisioning` refuse the same way; a secret aws
+cannot read still registers; a valid pool still gives attendee-007 the seventh non-admin row across both secrets and
+the community cluster the `admin-instructor` row; and a row whose role is a number fails `datadog-row:<name>`. Against
+the old fleet.sh, 11 of the 16 fail; with the change the file's 77 checks pass. `shellcheck -S warning` reports nothing
+new on either file.
+
+**Live check (run 16827): not run.** The run's `clusters/env` and `kubeconfig` are mode 0640, owner and group
+`hecaton`, and the run's user, `hecaton-s4-claude-certkraken`, is not in that group: `. "$HECATON_CLUSTER_ENV"`
+printed "Permission denied", and `aws` said the `accen-dev` profile could not be found. That is hecaton#508. The
+check is read-only: with the session sourced, read `watch-it-burn/datadog-pool` and `-pool-2` and confirm each passes
+the jq check above, so the change does not refuse the secrets the clusters use.
+
+**Not yet run on a cluster:** that read, and a `fleet.sh ingest` of a live attendee cluster once the change is on
+staging, which `verify/fleet-labctl-import-scratch.sh` covers.

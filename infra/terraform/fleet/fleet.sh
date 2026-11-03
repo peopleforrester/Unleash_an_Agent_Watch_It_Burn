@@ -2670,6 +2670,28 @@ run_pool() {
 # only WHICH clusters to register, so that is the argument: pass the ingest action as the remaining args
 # and this wraps it with everything that must be identical.
 #
+# Sets POOL1 and POOL2, the Datadog pool secrets ingest_one resolves each cluster's org from, and returns 1 when
+# either cannot be used (#835). A secret aws cannot read is an empty pool, as it always was. A secret aws reads
+# that is not a JSON array of org rows (an empty string, or other text) is logged and recorded by name as
+# datadog-pool:<secret-id>: ingest_one's resolver used to fail on it under set -e, so fleet.sh ended with exit 2
+# and nothing logged. The callers then register nothing, because a row sent without its Datadog fields
+# would overwrite the org login lab-platform's pool already holds for that cluster with blanks.
+load_datadog_pools() {
+    local id v i=0 bad=0
+    for id in watch-it-burn/datadog-pool watch-it-burn/datadog-pool-2; do
+        i=$(( i + 1 ))
+        v="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id "${id}" --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        # --argjson is how ingest_one reads the pool, so the check reads it the same way: one JSON text, an
+        # array, each entry an object (a string entry fails the resolver's .role).
+        if ! jq -en --argjson p "${v}" '$p | type == "array" and all(.[]; type == "object")' >/dev/null 2>&1; then
+            log "ingest: Datadog pool secret ${id} (${WIB_DEFAULT_ACCOUNT}, ${WIB_SECRETS_REGION}) holds ${#v} byte(s) that are not a JSON array of org rows"
+            record_fail "datadog-pool:${id}"; bad=1; v='[]'
+        fi
+        printf -v "POOL${i}" '%s' "${v}"
+    done
+    return "${bad}"
+}
+
 # register_with_provisioning <human-label> <ingest-fn> [ingest-args...]
 # Non-fatal by design (an unreachable provisioning app must never fail a provision) and LOUD when it
 # cannot run, because a quiet skip is what made the drift invisible.
@@ -2677,10 +2699,13 @@ register_with_provisioning() {
     local label="$1" ingest_fn="$2"; shift 2
     [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]] || return 0
     if labctl_ready; then
-        POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-        POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-        log_ingest_target
-        "${ingest_fn}" "$@" || log "ingest: re-run the matching 'fleet.sh ingest' once the consoles are up"
+        if load_datadog_pools; then
+            log_ingest_target
+            "${ingest_fn}" "$@" || log "ingest: re-run the matching 'fleet.sh ingest' once the consoles are up"
+        else
+            log "ingest: ${label} was NOT registered. Put a JSON array of org rows in the secret named above,"
+            log "        then re-run the matching 'fleet.sh ingest' by hand."
+        fi
     else
         log "ingest: labctl import CANNOT RUN, so ${label} was NOT registered."
         log "        The clusters are up and routable, but they are not in the handout pool: a student"
@@ -4144,14 +4169,21 @@ ingest_one() {
     # sed below produced an empty slot, the lookup was skipped, and the row went out with every Datadog
     # field blank.
     # Instructor clusters all share the single admin-instructor org, so select it by ROLE, not index.
-    local slot dd="{}"
+    # A resolver that fails (a pool row whose role is not a string, say) is this cluster's failure, named, not
+    # a set -e exit of the whole ingest with nothing logged (#835). load_datadog_pools has already refused a
+    # pool that is not an array of objects.
+    local slot dd="{}" ddrc=0
     slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
     if [[ -n "${slot}" ]]; then
         dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" --argjson i "$(( slot - 1 ))" \
-            '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+            '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)" || ddrc=$?
     elif is_instructor_name "${name}"; then
         dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" \
-            '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+            '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)" || ddrc=$?
+    fi
+    if [[ "${ddrc}" -ne 0 ]]; then
+        log "  ingest ${name}: the Datadog pool rows do not resolve to an org (jq exit ${ddrc}); not registered"
+        record_fail "datadog-row:${name}"; return
     fi
     [[ -n "${dd}" ]] || dd='{}'   # never let an empty resolver result reach --argjson
     # ttyd REFUSES anonymous access (terminal-auth secret), so a row without the terminal login hands the
@@ -4247,8 +4279,7 @@ cmd_ingest() {
         log "ingest pool: re-ingesting ${#_pool_names[@]} row(s) from labctl pool --customer ${WIB_LABCTL_CUSTOMER} --event ${WIB_EVENT}"
         set -- "${_pool_names[@]}"
     fi
-    POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-    POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+    load_datadog_pools || { log "ingest: nothing registered"; report_failures || true; exit 1; }
     log_ingest_target
     if [[ "$1" =~ ^[0-9]+$ ]]; then
         local per_account="$1" accounts idx=0 acct start n name
@@ -5300,8 +5331,7 @@ main() {
         ingest-instructors)
             labctl_ready || exit 1
             require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
-            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            load_datadog_pools || { log "ingest-instructors: nothing registered"; report_failures || true; exit 1; }
             log_ingest_target
             cmd_ingest_instructors "$@"; report_failures ;;
         aws-keys) cmd_aws_keys "$@" ;;
