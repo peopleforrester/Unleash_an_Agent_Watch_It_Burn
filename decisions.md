@@ -10571,4 +10571,9 @@ kubectl on PATH, and with a context that cannot be read, the test prints a FAIL 
 ai-layer Application on that cluster has synced a staging revision carrying #786; it must end "All live
 audience-path checks passed." That live run is its own child of #450.
 
+**Tests at this entry.** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh` ran 45 checks and failed
+only `test_image_version_tags.py`: ghcr.io now serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, and
+resources.yaml pins `sha256:68004fb5...`. CI has pushed over that tag again, as the #786 entry above records; this
+change does not touch it.
+
 No dependency was added.
