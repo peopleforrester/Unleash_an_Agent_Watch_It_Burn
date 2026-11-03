@@ -1,12 +1,16 @@
 # ABOUTME: Weaver span-group contract for the guard-proxy spans (PRD #20 M6 / #22 M1, M3).
-# ABOUTME: The HTTP SERVER hop and the gen_ai "sanitize" INTERNAL span, ref'd to OTel semconv v1.37.0.
+# ABOUTME: Its SERVER, sanitize, chat and agent.forward spans and its cost gauge, ref'd to OTel semconv v1.37.0.
 #
 # This is the source of truth for what guard-proxy/proxy.py emits. `weaver registry check` resolves every
 # ref against the pinned upstream registry (manifest.yaml -> otel v1.37.0); a typo or a renamed upstream
 # attribute fails the check in CI. `weaver live-check` (docs/weaver-live-check.md) then compares real
 # telemetry from the running proxy against this same contract. Keep these groups in lockstep with the
 # set_attribute(...) and _stamp(...) calls in proxy.py; verify/test_weaver_guard_proxy_stamps.py holds the
-# server span's _stamp attributes and witb.guard.decision's members to proxy.py offline (#710).
+# server span's _stamp attributes and witb.guard.decision's members to proxy.py offline (#710), and
+# verify/test_weaver_guard_proxy_spans.py holds every span's set_attribute keys and the cost gauge (#782).
+#
+# The Go guard-proxy (guard-proxy-agenticburn, PRD #412) generates its attribute keys from these groups with
+# its scripts/gen-semconv.sh, so this file is the one contract proxy.py and the Go build both answer to.
 groups:
   # --- The inbound HTTP hop. agentgateway -> guard-proxy, joined to the upstream trace via W3C context. ---
   - id: span.witb.guard_proxy.http
@@ -43,6 +47,22 @@ groups:
         requirement_level:
           conditionally_required: When a guard blocked or rewrote the turn.
         note: Absent on a turn no guard touched. Set by proxy.py's _stamp.
+      # The /chat root. proxy.py's /chat handler sets these on this same SERVER span (trace.get_current_span()
+      # inside do_POST), so Datadog's LLM Observability trace list previews the turn from the root.
+      - ref: gen_ai.operation.name
+        requirement_level:
+          conditionally_required: On the /chat root.
+        note: Fixed to "chat", as on the chat and sanitize spans.
+      - ref: gen_ai.request.model
+        requirement_level:
+          conditionally_required: On the /chat root.
+        note: The Bedrock model id the turn is priced and routed for (proxy.py MODEL_NAME, from MODEL_TIER).
+      - ref: gen_ai.input.messages
+        requirement_level: opt_in
+        note: On the /chat root, the storefront prompt, under the same content-capture gate as the chat span.
+      - ref: gen_ai.output.messages
+        requirement_level: opt_in
+        note: On the /chat root, the reply the storefront is sent, set after the turn when content capture is armed.
 
   # --- Attributes the watch-it-burn proxy defines itself (no upstream semconv equivalent). ---
   - id: registry.witb.guard
@@ -109,6 +129,11 @@ groups:
         note: >-
           Fixed to the "chat" enum member. This is the classification signal Datadog uses to treat the
           span as an LLM operation; it is NOT "sanitize" (that is the span NAME, not the operation).
+      - ref: gen_ai.request.model
+        requirement_level: required
+        note: >-
+          The Bedrock model id (proxy.py MODEL_NAME, from MODEL_TIER), set on every sanitize span. Datadog's
+          LLM Observability panel names the model from it.
       - ref: gen_ai.input.messages
         requirement_level: opt_in
         note: >-
@@ -154,3 +179,61 @@ groups:
           The logical name of the downstream service ("agentgateway" in the target topology). This is the
           Service Map edge signal; defined in the upstream OTel semconv registry (resolved via the
           manifest.yaml dependency), no local definition needed.
+      - ref: error.type
+        requirement_level:
+          conditionally_required: When the forward fails.
+        note: >-
+          The failure's class name (proxy.py sets type(exc).__name__, e.g. "HTTPError", "URLError",
+          "TimeoutError"), alongside an ERROR span status. An HTTPError also keeps http.response.status_code.
+
+  # --- The /chat turn, modelled as a gen_ai "chat" span (the storefront path's counterpart of sanitize). ---
+  #
+  # proxy.py's /chat handler opens it under the POST server span, after the guards have passed the prompt.
+  # Its agent.forward CLIENT spans (span.witb.guard_proxy.egress) parent onto it, one per forward attempt.
+  - id: span.witb.guard_proxy.chat
+    type: span
+    span_kind: internal
+    stability: development
+    brief: >-
+      The guard-proxy `chat` INTERNAL span. Wraps a /chat turn's forwards to the agent, the self-heal retries
+      included, so Datadog LLM Observability shows the storefront prompt and the agent's reply as one LLM call.
+    attributes:
+      - ref: gen_ai.operation.name
+        requirement_level: required
+        note: Fixed to the "chat" enum member, the signal Datadog classifies an LLM span by.
+      - ref: gen_ai.request.model
+        requirement_level: required
+        note: The Bedrock model id (proxy.py MODEL_NAME, from MODEL_TIER), as on the sanitize span.
+      - ref: gen_ai.input.messages
+        requirement_level: opt_in
+        note: >-
+          The storefront prompt as one OTel GenAI message envelope, a JSON string. Present only when content
+          capture is armed (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT in SPAN_ONLY/EVENT_ONLY/SPAN_AND_EVENT).
+      - ref: gen_ai.output.messages
+        requirement_level: opt_in
+        note: >-
+          The agent's reply before the output guard scrubs it, a JSON string, under the same gate. Absent on a
+          turn whose reply is empty.
+
+  # --- The cost gauge. ---
+  #
+  # The OTel GenAI semconv defines no monetary metric, so the proxy reports its running Bedrock spend as a
+  # project metric under the gen_ai namespace, through the same OTLP pipeline as the spans. One observation:
+  # the cluster's spend in USD since the proxy started (proxy.py _observe_cost).
+  - id: metric.witb.guard_proxy.cost
+    type: metric
+    metric_name: gen_ai.client.cost
+    instrument: gauge
+    unit: USD
+    stability: development
+    brief: >-
+      Estimated Bedrock spend (USD) for this cluster, derived from token usage. The live cost counter's source.
+    attributes:
+      - ref: gen_ai.provider.name
+        requirement_level: required
+        note: >-
+          Always "aws.bedrock", the provider of every model the workshop runs. Without it Datadog tags the
+          gauge's provider "N/A"; the Collector also stamps it as a safety net.
+      - ref: gen_ai.request.model
+        requirement_level: required
+        note: The Bedrock model id the spend is priced for (proxy.py MODEL_NAME).
