@@ -109,9 +109,12 @@ for gid, group in sorted(groups.items()):
 
 print("== the gen_ai.client.cost gauge is metric.witb.guard_proxy.cost ==")
 gauge = re.search(r'create_observable_gauge\(\s*"([^"]+)".*?unit="([^"]+)"', PROXY, re.S)
-obs = re.search(r'yield Observation\(_cost\["usd"\], \{(.*?)\}\)', PROXY, re.S)
+# The spend is the first argument: _cost["usd"] at pin 88b9b52, and each model's usd from guard-proxy-agenticburn#38
+# (1cfa6d6), which yields one series per model. Either way there is one yield, so the attributes read are all of them.
+obs = re.search(r'yield Observation\([^,{]+, \{(.*?)\}\)', PROXY, re.S)
 check("proxy.py creates one observable gauge and observes the spend with literal attribute keys",
-      bool(gauge) and bool(obs) and PROXY.count("create_observable_gauge(") == 1)
+      bool(gauge) and bool(obs) and PROXY.count("create_observable_gauge(") == 1
+      and PROXY.count("yield Observation(") == 1)
 observed = dict(re.findall(r'"([^"]+)":\s*("[^"]*"|[A-Za-z_]\w*)', obs.group(1))) if obs else {}
 cost = groups.get("metric.witb.guard_proxy.cost", {})
 check("the group is a gauge named as proxy.py names it, in its unit",
