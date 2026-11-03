@@ -65,7 +65,7 @@ ENV = {"PATH": "/usr/bin:/bin", "DD_API_KEY": "x", "DD_SITE": "datadoghq.com", "
 # about 0.5 s of CPU: the exporter's hostname detection waits out its retries on 169.254.169.254, the cloud metadata
 # address nothing answers here, then makes a DNS lookup. One without a Datadog exporter validates in 0.2 s. 60 s
 # timed out with the load average at 30 on 16 cores (hecaton run 15830). 180 s is seven times the measured wait,
-# and a validate that has not returned by then has hung: that is a FAIL naming the config, not a traceback.
+# and a validate that has not returned by then has hung: the run records a FAIL naming the config and goes on.
 VALIDATE_TIMEOUT = 180
 
 with tempfile.TemporaryDirectory() as tmp:

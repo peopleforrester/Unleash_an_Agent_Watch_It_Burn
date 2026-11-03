@@ -10912,7 +10912,7 @@ No dependency was added.
 
 ## 2026-11-03 · #800 · The lab-pipeline collector test gives each validate 180 s, and a hung validate is a FAIL
 
-**The cause is a wait, not start-up.** Hecaton run 15830 saw `verify/test_lab_pipeline_collector.py` raise
+**The time goes to a network wait.** Hecaton run 15830 saw `verify/test_lab_pipeline_collector.py` raise
 `subprocess.TimeoutExpired` on one `otelcol-contrib validate` at the old 60 s limit, with the load average about 30 on
 16 cores. Measured here with the pinned 0.160.0 from `verify/.tools`: the three configs without a Datadog exporter
 validate in 0.2 s, and the four with one take 25.3 to 25.5 s on about 0.5 s of CPU. Watching the process with
@@ -10937,5 +10937,5 @@ copy: all seven configs FAIL by name, the run exits 1 in 15 s, and no stand-in p
 passing. `bash verify/run-e2e-tools.sh` ran 45 checks with the load average about 11 on 16 cores, and
 `test_lab_pipeline_collector.py` passed all 19, its four Datadog validates taking 25.4 to 26.4 s. The tier exits 1
 on one check, the red already recorded for #746 and #775: `test_image_version_tags.py` finds ghcr.io serving
-`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the pinned `68004fb5`, because CI pushed over
-that tag again. Nothing here builds or pushes an image; the workflow fix is run 16420's follow-up.
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where the pin is `68004fb5`, because CI pushed
+over that tag again. Nothing here builds or pushes an image; the workflow fix is run 16420's follow-up.

@@ -82,7 +82,7 @@ want = re.search(r'^OTELCOL_VERSION = "([^"]+)"', (VERIFY / "test_lab_pipeline_c
 check("otelcol-contrib is the version test_lab_pipeline_collector.py demands",
       bool(want) and "otelcol-contrib" in tools and tools["otelcol-contrib"][1] == f"v{want.group(1)}")
 # Its validate of a config with a Datadog exporter takes about 25 s off-cloud, and 60 s timed out on a loaded gate
-# host (#800). The limit stays well above that, and a hang is a FAIL naming the config, not an uncaught traceback.
+# host (#800). The limit stays well above that, and a hang is caught and recorded as a FAIL naming the config.
 lab_text = (VERIFY / "test_lab_pipeline_collector.py").read_text()
 want = re.search(r"^VALIDATE_TIMEOUT = (\d+)$", lab_text, re.M)
 check(f"test_lab_pipeline_collector.py gives each validate at least 180 s ({want.group(1) if want else None})",
