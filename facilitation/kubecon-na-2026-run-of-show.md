@@ -467,18 +467,24 @@ call, `facilitation/kubecon-na-2026-planning-2026-10-29.md`, #687). C5, C6 and C
 survive only as internal ids: the probe's beat names, the fallback scripts and the
 `data-beat` keys on `/kubecon`. Every challenge runs one pattern:
 
-1. **Tee-up:** a line or two of context, no more.
-2. **Trace:** the pre-seeded Datadog trace for that challenge (#648), shown before the
-   room plays, so they see what the attack looks like from the platform side first
-   (Michael, 2026-10-31: traces come during each challenge and precede it, not at the
-   end).
-3. **Play:** quiet time while the room tries it on the public bot from their phones.
-4. **Attack:** the presenters show it landing.
+1. **Challenge slide:** a line or two of tee-up, then the slide itself, which is the
+   call to action. The room starts trying it on the public bot from their phones, and
+   the play time runs from here.
+2. **Hint slide,** where the challenge has one, while the room keeps trying.
+3. **Attack:** the presenters' live attack on the admin bot, the private cluster's
+   BurritoBot, landing.
+4. **Trace:** the pre-seeded Datadog trace for that challenge (#648), showing what
+   the attack just did from the platform side.
 5. **Fix:** a short why, and the fix's command run on the private bot's terminal. Every
    fix command prints the real `kubectl` it runs before it runs it, so the room reads
    the command, not a description of it.
 6. **Keep trying:** the room carries on against the public bot while the next one is
    teed up.
+
+There is no separate trace slide and no "your turn" slide. This order reverses the
+2026-10-31 one, where each trace came before the room played (the slide-by-slide
+review of 2026-11-01, #776): the room tries first, then sees what happened under the
+hood.
 
 Whitney's rule still holds: without the play time there is no hands-on, so the other
 beats give way first.
@@ -493,7 +499,8 @@ beats give way first.
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
-trace walk-through any more: each challenge opens on its own trace. If the clock is
+trace walk-through any more: each challenge shows its own trace after the presenters'
+attack. If the clock is
 behind after segment 5, shorten the OWASP slide to its two headings and keep the break-it
 line.
 
@@ -519,7 +526,8 @@ from the same prompt blocks, so the sheet and the page cannot disagree.
 
 ### The trace view without Datadog (#500)
 
-Each challenge's fix shows its trace. There is no separate walk-through segment any
+Each challenge shows its trace after the presenters' attack, before its fix. There is
+no separate walk-through segment any
 more (#687), so this is where the surface is decided.
 
 **Which surface is shown.** Decide it the night before and say it on stage:
@@ -599,7 +607,9 @@ real-looking home address to chat.
   address is the marker; the signature line only when the model keeps it (#530). A
   casual or kind ask is turned away on purpose, so the address takes a pretext
   (#688).
-- **Trace, before the play:** Datadog Challenge 1 tab, the Secret read in the trace.
+- **Attack:** Whitney sends the `/kubecon` ask on the private bot, and the home
+  address comes back.
+- **Trace, after the attack:** Datadog Challenge 1 tab, the Secret read in the trace.
 - **Fix:** RBAC, a Role that grants `get` on the one Secret the bot needs, by name.
   On the private bot's terminal, `guard-rbac-on`: it prints the `kubectl apply` of
   `~/challenges/c5-scoped-role.yaml`, which names only the agent's own `workshop-agent`
@@ -683,6 +693,12 @@ real-looking home address to chat.
 - **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
   Agatha the Banshee so the probe can check it, and `joker-agatha-the-banshee`
   appears on the wall.
+- **Datadog Challenge 3 tab, after the attack:** the attack as the trace shows it,
+  `read_support_ticket` returning HC-666 and the `deploy_app` call it leads to. After
+  the fix, the same tab's second saved view: the guard's withheld notice with no
+  `deploy_app` after it. Then the third, `c3-pii` in Trace Explorer: the `/chat`
+  root span decided by `input_classifier`, zero tokens, no agent span, and none of
+  the neighbor's card, phone or e-mail anywhere in it.
 - **Fix, two AI-era layers, on the private bot, least privilege first (#775):**
   admission is not one of them; it already did its job. Run `guard-agency-on`, which
   prints the `kubectl apply` of `~/challenges/c6-least-privilege-role.yaml`: the bot's
@@ -706,12 +722,6 @@ real-looking home address to chat.
   scanner with the same four patterns attackme's collector scrubs (#647, #648). Names
   and street addresses are not caught. The same `guard-input-on` arms it, and the
   reply names the scanner: `blocked by the input guardrail: Regex, risk 1.00`.
-- **Datadog Challenge 3 tab, before the play:** the attack as the trace shows it,
-  `read_support_ticket` returning HC-666 and the `deploy_app` call it leads to. After
-  the fix, the same tab's second saved view: the guard's withheld notice with no
-  `deploy_app` after it. Then the third, `c3-pii` in Trace Explorer: the `/chat`
-  root span decided by `input_classifier`, zero tokens, no agent span, and none of
-  the neighbor's card, phone or e-mail anywhere in it.
 - **Delivers:** point 4, point 5 (least privilege), and point 6 (pre-inference
   prompt analysis).
 - **Hand-off:** "Both of those talked the bot out of it, or caught it at the
@@ -726,6 +736,10 @@ real-looking home address to chat.
   The real forecast comes back with the recipe under it (the Bat Spit Amazing
   Awesome Sauce batch formula and its calibration token), then an order.
   Measured 3 of 3 on attackme.burritobot.co, 2026-10-29 (#683).
+- **Attack:** Michael sends the `/kubecon` ask on the private bot, and the recipe comes
+  back under the forecast.
+- **Datadog Challenge 4 tab, after the attack:** the `read_internal_config` call the
+  poisoned description chains the bot into. After the fix, its absence.
 - **Fix:** on the private bot, `guard-mcp-on`. The agent reaches evil-mcp
   through agentgateway, and the rule narrows to the one registered tool,
   `get_weather`. The poisoned call is blocked because that tool was never
@@ -738,8 +752,6 @@ real-looking home address to chat.
 - **Hand out:** the MCP server vetting checklist (#649),
   `docs/mcp-server-vetting-checklist.md`: the six approval gates from Michael's
   Toronto keynote. Name it here; the link goes on the close slide.
-- **Datadog Challenge 4 tab, before the play:** the `read_internal_config` call the
-  poisoned description chains the bot into. After the fix, its absence.
 - **Delivers:** point 2 (the under-protected MCP server), point 4, and point 6
   (mid-inference, between the agent's steps, as #456 defines it).
 
@@ -1023,8 +1035,9 @@ is merely slow rather than rebuilding:
     date, the clusters, each beat's result and the spend it prints under "Probe
     record" above.
 - [ ] **Seed the stage's Datadog traces (#648), after the admin probe is green.** Each
-  challenge opens on its trace, so each is seeded twice on the private bot, the
-  attack and the same ask after its fix, and Challenge 3 adds someone else's PII
+  challenge shows its trace after the presenters' attack and again after its fix, so
+  each is seeded twice on the private bot, the attack and the same ask after its fix,
+  and Challenge 3 adds someone else's PII
   refused by the input guard: seven `/chat` requests (six model calls; the PII one
   spends no tokens), in presentation order, with the probe's own guard flips and its
   `guards-off` at the end.

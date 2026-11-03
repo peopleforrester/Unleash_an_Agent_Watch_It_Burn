@@ -12959,3 +12959,36 @@ on the current run-of-show. Nothing changes in code, and no cluster check applie
 tests) in 24m12s. The offline suite ran 237 tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`. The tier exits 1 on
 `test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `sample-app-nginx-1.27.5` at its pinned
 digest (#814). This change edits decisions.md alone and does not touch that tag.
+## 2026-11-03 · #818 · The run-of-show shows each challenge's trace after the presenters' live attack
+
+**What changed.** `facilitation/kubecon-na-2026-run-of-show.md`'s per-challenge pattern in "The segments, in order"
+now runs: the challenge slide, which is the call to action and starts the room's play time; a hint slide where the
+challenge has one; the presenters' live attack on the admin bot (the private cluster's BurritoBot); the pre-seeded
+Datadog trace (#648); then the fix and keep trying. There is no separate trace slide and no "your turn" slide. The
+old step 1, the tee-up, is folded into the challenge slide, and the old play step is the time that runs from the
+challenge slide through the attack.
+
+**The reversal.** The 2026-10-31 pattern was "traces come during each challenge and precede it, not at the end"
+(Michael, 2026-10-31). The slide-by-slide review of 2026-11-01 (#776, the deck side rounds-agenticburn#58) moved each
+trace to after the live attack so the room tries first, then sees what happened under the hood. The parenthetical
+quoting the 2026-10-31 decision is gone, and the pattern names the 2026-11-01 one and its reason. #776 puts this
+here for Michael's awareness; it asks no decision of him.
+
+**The segments.** Segments 4 and 5 had their "Datadog Challenge N tab, before the play" bullet after the fix; each
+now sits between the attack and the fix, worded "after the attack", with what it shows unchanged (Challenge 3:
+`read_support_ticket` returning HC-666 and the `deploy_app` call, and after the fix the withheld notice; Challenge
+4: the `read_internal_config` call, and after the fix its absence). Segment 2 had "Trace, before the play" between
+the play and the fix with no attack step; segments 2 and 5 had no attack bullet at all, so each gains one, sent on
+the private bot by the presenter `/kubecon` names for that beat (Whitney for C5, Michael for C7), and the trace
+follows it. Segment 2's fix and segment 3's body are untouched, left to #776's other children, as are the segments
+table's "On screen" and "Min" columns and the abstract points table.
+
+**Other lines.** The sentence under the segments table, the opening of "The trace view without Datadog" ("Each
+challenge's fix shows its trace") and the Night Before seeding step ("Each challenge opens on its trace") now say
+the trace comes after the presenters' attack. `verify/stage_traces.py`'s docstring still says "Each challenge opens
+on its trace, before the room plays"; #818 scopes its edit to the run-of-show, so that line is a followup. No test
+or script read any of the changed words (`git grep` over `verify` and `scripts` for "before the play", "opens on
+its", "Tee-up" and "shows its trace" found only that docstring).
+
+**Live check.** None applies: the change is facilitation prose and moves nothing on either cluster. Nothing is owed
+on a cluster for it.
