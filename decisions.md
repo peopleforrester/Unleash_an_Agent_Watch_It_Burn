@@ -10577,3 +10577,56 @@ resources.yaml pins `sha256:68004fb5...`. CI has pushed over that tag again, as 
 change does not touch it.
 
 No dependency was added.
+## 2026-11-03 · #799 · The burn profile's lost spans: a stall or a borrowed port, not scrub_pii or CPU load
+
+Hecaton run 15841 saw `verify/test_trace_shape_e2e.py` lose all 26 of the burn profile's spans once, at a load average
+of 40 on 16 cores. The send got a 200, and the collector log held only its ready line and, 32 s later, the shutdown
+signal. #799 asked what held the batch before anyone changed the test's 30 s wait. Run 16503 timed it on this host with
+a scratch copy of `run_collector`: when the collector was ready, when the send got its 200, and when `apm.json` first
+held data.
+
+**What does not hold it.** With the collector pinned to one CPU against 0, 3, 10, 30 and 60 busy loops on that CPU, the
+batch reached `apm.json` 5.0 to 5.8 s after the send, every time, for burn and attendee alike. Burn without
+`transform/scrub_pii` was the same. Even 60 loops, about a sixtieth of a CPU and far worse than a load of 40 spread over
+16 cores, only pushed the collector's start out to 18 s, and the send loop's wait covers that. So scrub_pii's OTTL
+statements and CPU contention are ruled out. A load average also counts tasks waiting on disk, so a load of 40 does not
+mean the CPUs were full; this host had 12 GB in swap that day.
+
+**What does.** Two causes give exactly what run 15841 recorded, and both were reproduced against the real test:
+- A stall. Freezing the test and its collector together for 31 s, just after the send, failed with all 26 missing. The
+  collector log held only the ready line and the shutdown signal, 32.4 s apart, the 32 s run 15841's log showed. The
+  wall-clock deadline was spent during the freeze. The woken test read `apm.json` once, before the collector's file
+  exporter had flushed, and stopped. The Agent Observability copy was read a second later and had landed, and the
+  test then crashed with a `KeyError` in the root-duration check.
+- A borrowed port. `free_port` lets its port go before the collector binds it. If another process's server on the
+  host takes that port and answers the send with 200, then lets it go before this collector binds, the spans go
+  elsewhere and the log shows the same two lines. A decoy server holding the port for 1.5 s, against a collector that
+  started 2 s late, reproduced this.
+
+Run 15841's log does not say which of the two it was. With whole-second timestamps, both fit its 32 s.
+
+**Decided here: fix both causes; the bound is unchanged.**
+- The test sends only once its own collector has logged that it is ready. Only one socket can listen on
+  127.0.0.1 at that port, so a 200 from then on comes from this collector. If another server still holds the port,
+  this collector cannot bind and exits, and "the collector took the spans" fails with the log tail showing the bind
+  error.
+- Both waits count polls, not wall seconds: 100 polls of 0.3 s for the start, 60 of 0.5 s for the spans. When the host
+  freezes the test along with the collector, no polls go by, so the stall spends none of the budget. The 31 s freeze
+  now passes. When only the collector is frozen, the test still fails after 30 s, as it should. The failure then says
+  how many polls ran over how long, the longest gap between two polls, and the host's pressure stall totals
+  (`/proc/pressure`, CPU some, memory full and I/O full) over the wait. So the next loss says which kind of stall it
+  was.
+- The root-duration check guards an empty APM span, so a loss fails the check instead of crashing the test.
+
+The siblings that start a collector on a `free_port` port and wait on wall seconds have the same two holes:
+`test_collector_one_root_e2e.py`, `test_tool_failure_status_e2e.py`, `test_collector_pii_scrub_e2e.py` and
+`test_adk_model_content_e2e.py`. They are run 16503's follow-up rather than changed here, because #799 was
+about this test.
+
+**Tests.** `python3 verify/test_trace_shape_e2e.py` passes in about 20 s. It also passes the two reproductions above,
+and it fails cleanly, with the new detail, when only its collector is frozen for 36 s. Nothing here needs a cluster.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (224 tests). `bash verify/run-e2e-tools.sh` ran 45 checks, and
+`verify/test_trace_shape_e2e.py` passed in it. It exits 1 on one check, the red already recorded for #746 and #775:
+`test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`,
+not the pinned `68004fb5`. CI has pushed over that tag again. Nothing here touches an image.

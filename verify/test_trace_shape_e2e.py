@@ -262,7 +262,18 @@ def read_spans(out: pathlib.Path) -> dict[str, dict]:
     return got
 
 
-def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str]:
+def stalled() -> dict[str, float]:
+    """The host's pressure stall totals, in seconds (/proc/pressure): the time some task waited on CPU, and the time
+    every task was held up on memory or I/O. Read around the wait, so a run that loses its spans says whether the host
+    stalled meanwhile (#799)."""
+    out = {}
+    for res, kind in (("cpu", "some"), ("memory", "full"), ("io", "full")):
+        line = next(ln for ln in pathlib.Path(f"/proc/pressure/{res}").read_text().splitlines() if ln.startswith(kind))
+        out[f"{kind} {res}"] = int(line.rsplit("total=", 1)[1]) / 1e6
+    return out
+
+
+def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str, str]:
     """The profile's two trace pipelines with datadog-secret present (both orgs on attendee), from OTLP/HTTP in to a
     file per Datadog intake: the datadog exporter's (APM) and otlp_http/llmobs's (Agent Observability)."""
     conf = collector_config(profile, datadog_secret=True)
@@ -299,24 +310,41 @@ def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str]:
         val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *feature_gate_args(profile)], capture_output=True, text=True,
                              env=env)
         check(f"{profile}: the collector accepts the traces processors", val.returncode == 0, val.stderr)
-        log = (pathlib.Path(d) / "collector.log").open("w")
+        log_file = pathlib.Path(d) / "collector.log"
+        log = log_file.open("w")
         proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         try:
-            sent, deadline = False, time.time() + 30
-            while not sent and time.time() < deadline and proc.poll() is None:
+            # free_port lets the port go before the collector binds it, so until this collector says it is ready another
+            # process's server may hold it and answer 200 to spans this collector never sees (#799). Once it is up and
+            # running, the port is its own. Both waits count polls, not wall seconds, so a stall of the host that freezes
+            # this test with the collector spends none of them: frozen together for 31 s, the old wall-clock deadline
+            # ran out before the woken collector's file exporter flushed, and all 26 spans read as lost (#799).
+            sent, polls = False, 0
+            while not sent and polls < 100 and proc.poll() is None:
+                polls += 1
+                if "Everything is ready" not in log_file.read_text():
+                    time.sleep(0.3)
+                    continue
                 try:
                     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=otlp_body(),
                                                  headers={"Content-Type": "application/json"})
                     sent = urllib.request.urlopen(req, timeout=5).status == 200
                 except OSError:
                     time.sleep(0.3)
-            check(f"{profile}: the collector took the spans", sent)
-            deadline = time.time() + 30  # the batch processor holds spans up to its timeout
+            check(f"{profile}: the collector took the spans", sent, f"collector log tail:\n{log_file.read_text()[-1500:]}")
             got: dict[str, dict] = {}
-            while sent and len(got) < len(ALL) and time.time() < deadline:
+            before, start, last, gap, polls = stalled(), time.monotonic(), time.monotonic(), 0.0, 0
+            # The batch processor holds spans up to its 5 s timeout. Measured on this host for #799, the batch reached
+            # the file 5.0 to 5.8 s after the send for every profile, burn's scrub_pii included, even with the
+            # collector given one CPU against 60 busy loops; CPU contention only slows the collector's start.
+            while sent and len(got) < len(ALL) and polls < 60:
                 time.sleep(0.5)
                 got = read_spans(out)
+                polls, gap, last = polls + 1, max(gap, time.monotonic() - last), time.monotonic()
+            pressure = ", ".join(f"{k} {v - before[k]:.1f} s" for k, v in stalled().items())
+            waited = (f"waited {polls} polls over {time.monotonic() - start:.1f} s, the longest gap between two "
+                      f"{gap:.1f} s; the host's pressure stall over the wait: {pressure}")
             # The forward connector hands the same batch on after the APM exporters, so the copy is written with it.
             time.sleep(1)
             lgot = read_spans(lout)
@@ -324,7 +352,7 @@ def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str]:
             proc.terminate()
             proc.wait(timeout=15)
             log.close()
-        return got, lgot, (pathlib.Path(d) / "collector.log").read_text()
+        return got, lgot, log_file.read_text(), waited
 
 
 def attrs(span: dict) -> dict:
@@ -346,12 +374,12 @@ def is_error(span: dict) -> bool:
 
 for profile in PROFILES:
     print(f"== {profile}: the interaction as Datadog receives it ==")
-    got, lgot, collector_log = run_collector(profile)
+    got, lgot, collector_log, waited = run_collector(profile)
     every = {key: got.get(f"{TRACE_OF[key]}/{sid(key)}", {}) for key, *_ in ALL}
     span = {key: every[key] for key, *_ in SPANS}
     missing = sorted(key for key, s in every.items() if not s)
     check(f"{profile}: all {len(ALL)} spans of both turns reach APM", not missing,
-          f"missing {missing}; collector log tail:\n{collector_log[-1500:]}")
+          f"missing {missing}\n        {waited}\n        collector log tail:\n{collector_log[-1500:]}")
 
     agent = {key: s for key, s in span.items() if s.get("service") == AGENT and key != "agent-server"}
     unclassified = sorted(s.get("name", key) for key, s in agent.items() if not attrs(s).get("gen_ai.operation.name"))
@@ -428,7 +456,7 @@ for profile in PROFILES:
         gone = [k for k in ("agent-server", "chat", "a2a-agent-server") if TRACE_OF[k] == trace and by_key[k]]
         check(f"{label}: kagent's 14 ms request span and the guard's inner chat wrapper are not rows", not gone, str(gone))
         check(f"{label}: the root's duration is the whole turn, the guard span's own",
-              root and duration(root) == duration(every[turn_key])
+              root and every[turn_key] and duration(root) == duration(every[turn_key])
               and all(int(root["startTimeUnixNano"]) <= int(s["startTimeUnixNano"])
                       and int(s["endTimeUnixNano"]) <= int(root["endTimeUnixNano"]) for s in copy.values()))
         llm = {s.get("name"): values(s) for s in copy.values() if attrs(s).get("gen_ai.operation.name") in LLM_OPS}
