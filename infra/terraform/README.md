@@ -40,7 +40,10 @@ terraform -chdir=../org/boundary apply -state=states/<profile>.tfstate -var prof
 # 1. Provision the shared VPC once.
 cd aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}"
 
-# 2. Bring up N attendee clusters (parallel, capped).
+# 2. Bring up N attendee clusters (parallel, capped). Attendee N takes the Nth non-admin row of
+#    watch-it-burn/datadog-pool and -pool-2, and bootstrap refuses it when there is none. With no per-attendee
+#    orgs loaded (none since #629), one cluster runs on the instructor org: `./datadog-pool-row.sh load` first,
+#    `./datadog-pool-row.sh remove` after its `down` (#832). `./datadog-pool-row.sh show` reads the pools.
 cd ../../fleet
 ./fleet.sh up 60                          # watch-it-burn-attendee-001 .. -060
 ./fleet.sh up watch-it-burn-attendee-007  # or specific names

@@ -13240,3 +13240,83 @@ in 9-minute bounded polls instead.
 **Live check blocked in run 16812.** This run's `clusters/kubeconfig` is mode 0640, owner and group `hecaton`, and
 `kubectl --context watch-it-burn-private -n agent get deploy workshop-mcp` failed with `permission denied`
 (hecaton#508), so the `C1 PROVEN` check named above is still not yet run on a cluster.
+## 2026-11-03 · #832 · question 961's attendee build loads question 926's one Datadog row first and removes it after `down`
+
+**Why.** Step 2 of question 961's plan (the 2026-10-31 #655 entry) runs `fleet.sh up watch-it-burn-attendee-001`.
+For an attendee name, `fleet.sh`'s bootstrap takes the Nth non-admin row of `watch-it-burn/datadog-pool` and `-pool-2`
+(`datadog_keys_for`) and refuses the cluster when there is none ("BOOTSTRAP FAILED ... refusing to fall back to the
+shared org"). Datadog no longer issues per-student orgs, so no KubeCon pool was loaded (#629), and the 2026-11-02 #608
+and #544 entries found the plan stops there. #655, #532 and #608 all wait on that cluster.
+
+**The way chosen is the one question 926 already took.** Question 926 (the 2026-10-30 #587 entry) chose a one-row
+pool copied from `watch-it-burn/datadog` for #461's attendee run, so the cluster's own org is Whitney's sandbox org.
+#587 made the platform ship that way: on one org the identity script writes no `datadog-admin-secret`, the attendee
+collector uses its one-org config, `converge` leaves the cluster alone and `verify/datadog-orgs.sh` passes it as "one
+org by design". What was missing was the row itself: nothing in the repo loaded it or took it out again, so each plan
+said "load one row" in prose. No fleet.sh change: an opt-out of the refusal would give attendee clusters two paths to
+their keys, and `converge`, which resolves keys through the same function, would need the same switch on every call.
+
+**What changed.**
+- New `infra/terraform/fleet/datadog-pool-row.sh` with three verbs. `show` prints each pool secret's row count and
+  roles, never a key, and what `watch-it-burn-attendee-001` resolves to: nothing (`up` refuses it), `watch-it-burn/datadog`'s
+  key, or a pool row's own key. `load` copies `watch-it-burn/datadog`'s api-key, app-key and site into one row with
+  role `attendee`, `loaded-by: datadog-pool-row.sh` and empty org, email and password (no attendee gets a Datadog login,
+  #647), puts it in front of `watch-it-burn/datadog-pool`, drops any earlier row of its own from either pool, and reads
+  the pools back with `datadog_keys_for`'s selection to confirm attendee-001 resolves to that key. `remove` takes out
+  only its own rows and leaves every other row as it was; a pool secret that `load` had to create is deleted again once
+  it holds nothing else.
+- It reads and writes with fleet.sh's account and region (`WIB_DEFAULT_ACCOUNT`, `WIB_SECRETS_REGION`, same
+  defaults). A pool it cannot read for any reason but "not found" stops it before it writes, so an access error is
+  never taken for an empty pool. Keys never reach a command line: the secrets go through a mode-700 temporary
+  directory, jq reads files, and `aws` writes with `--secret-string file://`.
+- Putting the row in front, not at the end, matters if the pools still hold DevOpsDays Portland's rows (staged for
+  2026-09, expired 2026-09-18 per docs/GO-LIVE-CHECKLIST.md): there attendee-001 would bootstrap on Portland's first
+  expired org instead of being refused. `load` prints how many other non-admin rows it found, since each now sits one
+  slot later. No attendee fleet is up, so nothing reads those slots.
+- `infra/terraform/README.md`'s fleet usage names the step.
+
+**Question 961's run, in order** (the #655 entry's steps, with the first and last added). Each command runs from
+`infra/terraform/fleet` in the session with the fleet's AWS profiles.
+
+0. `./datadog-pool-row.sh show`, then `./datadog-pool-row.sh load`. It must print `loaded:`, and a second `show` must
+   say attendee-001 resolves to `watch-it-burn/datadog`'s key.
+1. `labctl create-event agenticburn burn@2.1.0 <event> <attendance> <hours>`, then `export WIB_EVENT=<event>` in that
+   session's shell only.
+2. `./fleet.sh up watch-it-burn-attendee-001`; it must log `ingested: watch-it-burn-attendee-001` and no `ingest:`
+   failure. With the row loaded, its bootstrap log says "no dual shipping ... datadog-admin-secret absent", which is
+   one org as #587 designed it, not a fault.
+3. to 5. as the #655 entry has them (the ingests and `labctl status`, the claim and re-ingest, #532's
+   `reconcile-pool`, `fleet-hygiene.sh` and `ingest pool`).
+6. `./fleet.sh down watch-it-burn-attendee-001`, not `down all`.
+7. `./datadog-pool-row.sh remove`, then `./datadog-pool-row.sh show`: the pools are back to what step 0's first `show`
+   printed.
+
+The same step 0 and step 7 go around #544's `WIB_NO_INGEST=1 fleet.sh up 1` and its `down` (the #544 entry's "First,
+`watch-it-burn/datadog-pool` needs one non-admin row"), and around #461's run.
+
+**What the row carries to lab-platform.** Steps 2 and 3 ingest the cluster, and `ingest_one` sends the pool row's api
+and app keys as the handout row's `datadog_api_key` and `datadog_app_key`, as it already does for the roster
+clusters' `admin-instructor` row. The org, email and password it sends are empty, so a claim shows no Datadog login.
+The app key in `watch-it-burn/datadog` is read-only (#629). Step 6's `down` removes the handout row.
+
+**Tests.** New `verify/test_datadog_pool_row.sh`, 39 checks, offline: `aws` is a shim backed by one file per secret and
+jq a recorder. With empty pools, fleet.sh's own `datadog_keys_for` refuses attendee-001 before `load` and resolves it
+to the instructor key (on both destinations, one org) after; a roster cluster is unchanged; a second `load` leaves
+one row; `remove` restores the pools and the refusal. With Portland-style rows in both pools, attendee-001 moves from
+the stale row to the instructor key, the old rows keep their order, and `remove` restores both pools exactly. A row of
+its own left in pool-2 ends up once, in pool-1. With neither pool secret present, `load` creates the first and `remove`
+deletes it; a secret that existed before is kept. A missing or keyless `watch-it-burn/datadog`, an access-denied
+read and a pool that is not a JSON array each fail with nothing written. No key appears in the output or in any
+`aws` or `jq` argument list. It also checks that the script carries `datadog_keys_for`'s selection and fleet.sh's
+account and region defaults, so a change to either shows up here.
+
+**Live check (run 16813): not run.** The run's session files, `clusters/env`, `aws-config`, `aws-credentials` and
+`kubeconfig`, are mode 0640, group `hecaton`, and the run's user (`hecaton-s3-claude-certkraken`) is not in that
+group: `. "$HECATON_CLUSTER_ENV"` printed "Permission denied" and `aws` "Unable to locate credentials". That is the
+block hecaton#507 and #508 track. So whether the pool is empty, holds Portland's rows or is absent is still not
+confirmed; `load` handles each of the three. Nothing here needs a cluster: the check is
+`AWS_PROFILE=accen-dev infra/terraform/fleet/datadog-pool-row.sh show`, read-only, and the next run with a readable
+session runs it and puts what it printed here.
+
+**Not yet run on a cluster:** question 961's eight steps above, with steps 0 and 7 run by the session that brings
+the cluster up.
