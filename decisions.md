@@ -10530,3 +10530,10 @@ runs take about 2 s each, and the guarded runs are unchanged: their reload-delay
 Raising the timeout alone was ruled out, as the issue asks.
 
 **Not yet run on a cluster.** Nothing here touches a cluster, and nothing is owed on one.
+
+**The suites.** `bash verify/run-e2e-tools.sh` ran 45 checks in about 26 minutes on the shared host, with load averages
+of 7 to 10 on 16 cores. It was started in the background after the commit and its log read in the foreground.
+Its offline suite, `run-tests.sh`, is green (225 tests), and `test_challenge_fallbacks.py` passed inside it. The run
+exits 1 on one check: the red already recorded for #746, #775 and #798, where `test_image_version_tags.py` finds
+ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` and not the pinned `68004fb5`,
+because CI pushed over that tag. Nothing here touches an image.
