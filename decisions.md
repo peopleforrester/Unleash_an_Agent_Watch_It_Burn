@@ -11756,4 +11756,10 @@ failure. The labels now say "status 2", and the gate's own counter finds no mark
 changed test files, the same as at the base. `prose_gate.py` and what the test asserts are unchanged. The branch is
 run 16555's, which hecaton rebased onto staging `82e1dd2`.
 
+**Rebased by run 16686.** Run 16677 ended in a rebase conflict: staging had rewritten the section's intro and
+first item for #809 (a run has the two clusters that are up) and added a "Tests own their inputs" section for
+#797. The intro keeps #809's wording with #796's sentence after it; item 4's added lines and item 5 sit before the
+new section; `verify/test_dispatched_runs.py` keeps #809's checks and #796's. Staging's #797 work had also given
+the tool-pin stand-in the versioned `workshop-mcp-mcp-1.29.1` image, so this branch no longer changes that test.
+
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.
