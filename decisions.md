@@ -12350,7 +12350,8 @@ carry the session, the RED says `THE CHAT'S OWN SPANS NEVER ARRIVED` and names t
 missing session tag from #783's `RECEIVED NOTHING`. The flag is keyword-only, so `chat` without it, `watch`, and the
 run-of-show's Night Before command behave as before. The session tag is the one `verify/stage_traces.py` already
 reads (`session_id:<session>` on each span's tags), from the `session` the /chat body carries; it has not been read
-live yet either, and if the live test's first run reports spans without it, that is the finding, not a test to loosen.
+live yet either. If the live test's first run reports spans without it, that is a finding to fix in the bot's
+tracing, and the test stays as written.
 
 **Offline** (`verify/test_agent_obs_flow.py`, its fake now parsing both query terms). New cases: each chat's own
 session is asked for on its own cluster and read back by its own trace ids and not another visitor's; another
@@ -12397,3 +12398,11 @@ OFFLINE RENDER-GATE TESTS GREEN`, then 47 tier tests. One failed, `test_image_ve
 web-terminal tag CI pushed over (the same red as above), and `watch-it-burn:sample-app-nginx-1.27.5`, which ghcr.io
 answers 404 because #814's retag needs a ghcr.io write that #814 escalated. Neither touches anything this change does. The first attempt's log was in /tmp, which was cleared before the run read its
 result, so the suite ran a second time with its log under the run's own TMPDIR, and those are its results.
+
+**Run 16754, after run 16685 failed the prose gate.** Hecaton's ai-isms gate failed run 16685 on one decisions.md
+sentence in this entry, the one on spans without the session tag, which the gate read as an antithesis. This
+run cherry-picked branch `agent/813-16661`'s four commits onto staging 7ae1fc7 (`prior-drafts.sh` called it CLEAN,
+with decisions.md an append) and rewrote that sentence as two plain claims. No code differs from run 16661's commit.
+`python3 verify/prose_gate.py` now passes. Run 16754's session files are mode 640, group `hecaton`, like the earlier
+runs' (hecaton#508), so at 2026-11-03T19:27Z the live test again printed `FAIL: Datadog could not be read: ... The
+config profile (accen-dev) could not be found` and exited 1. The live run above is still owed.
