@@ -12138,7 +12138,7 @@ land here.
   (`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`) and common SDK config (`OTEL_EXPORTER_OTLP_ENDPOINT` from
   `spec.exporter.endpoint`, port 4318; service name, resource attributes, propagators, sampler) and no language agent.
   It never overrides a variable the container sets, so the pod's `OTEL_SERVICE_NAME=burritobot` and
-  `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` still win. The annotation is replaced, not added, because the
+  `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` still win. The Component swaps the old annotation out for the new one, because the
   Operator's pod mutator refuses two injections on a pod that names no containers. The issue suggested the value
   `"true"`. It names the CR instead: `"true"` fails with more than one Instrumentation in the namespace, and the
   ordering gate and the chart test already read this name.
@@ -12189,7 +12189,7 @@ hand, and go-otel stages its OTEL_* env") is on run 16462's branch `agent/782-15
 has not reached staging. Its "Not yet run on a cluster" part names this server-side dry run. This entry is that run's
 result. When the draft is ported, keep both entries.
 
-**What ran.** Escalation 737, hecaton's elevated tier, ran the one act it was given. Credentials came from the
+**What ran.** Escalation 737, hecaton's higher-privilege tier, ran the one act it was given. Credentials came from the
 operator's `accen-dev` profile into an isolated kubeconfig, and the target was confirmed first. The context
 `watch-it-burn-private` resolves to `arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private` (ACTIVE, 1.36).
 Namespace `agent` exists, and it has the `watch-it-burn-python` Instrumentation with endpoint
