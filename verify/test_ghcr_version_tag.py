@@ -288,10 +288,12 @@ if step:
     pins = sorted(set(re.findall(r"ghcr\.io/peopleforrester/watch-it-burn:sample-app-nginx-[0-9.]+(?=@)", svc)))
     check(f"the pin step reads tag={pins[0] if len(pins) == 1 else pins}",
           r.returncode == 0 and len(pins) == 1 and read == f"tag={pins[0]}\n", f"{r.returncode} {read!r} {r.stderr}")
+    # A second tag, built from the pinned one: a literal watch-it-burn reference here would be one
+    # test_image_version_tags.py holds to the pinned tag.
     with tempfile.TemporaryDirectory() as tmp:
         (pathlib.Path(tmp) / "backstage/k8s").mkdir(parents=True)
         (pathlib.Path(tmp) / "backstage/k8s/templated-test-svc.yaml").write_text(
-            svc + "\n# image: ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-9.9.9@sha256:" + "0" * 64 + "\n")
+            svc + f"\n# image: {pins[0].rsplit('-', 1)[0]}-9.9.9@sha256:" + "0" * 64 + "\n")
         r = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=tmp, capture_output=True, text=True,
                            env={**os.environ, "GITHUB_OUTPUT": str(pathlib.Path(tmp) / "out")})
     check("with two sample-app-nginx tags pinned, the pin step fails", r.returncode != 0 and "not one" in r.stderr,

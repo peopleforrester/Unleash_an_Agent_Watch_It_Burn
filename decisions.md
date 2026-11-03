@@ -13178,3 +13178,10 @@ the pinned sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c
 `python3 verify/test_image_version_tags.py` passes the sample-app check, and the heavy gate's
 `bash verify/run-e2e-tools.sh` goes green. If that run fails at login or on the put, `GHCR_TOKEN` cannot write to the
 package, and #814's escalated `crane tag` is the way to make the tag.
+
+**The suites (run 16802).** On 9709756b, `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52 tier
+tests) in 24m39s. The offline suite ran 240 tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`. The tier exited 1
+on `test_image_version_tags.py` alone, on two checks. One is the 404 above, which only the workflow's run on staging
+ends. The other was this change's own: the second-tag case in `test_ghcr_version_tag.py` wrote out a
+`watch-it-burn:sample-app-nginx-9.9.9` reference, which `test_image_version_tags.py` holds to the pinned tag. The
+case now builds that reference from the pinned one, and `test_image_version_tags.py` run alone is down to the 404.
