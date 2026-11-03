@@ -11527,3 +11527,37 @@ Kyverno's external-registry rule (#774) from refusing the probe before the mutat
 `OTEL_EXPORTER_OTLP_ENDPOINT` on 4318 and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and no init container. Run 16462
 could not run it: the run's kubeconfig and cluster env (`/var/lib/hecaton/runs/16462/clusters/`) are mode 640, group
 `hecaton`, and the run's user is not in that group.
+
+## 2026-11-03 · #782 · The inject-sdk dry run on watch-it-burn-private: Kyverno's resource-limits rule refused the probe
+
+**Where this belongs.** The 2026-11-03 #782 entry ("weaver/registry declares the attributes the Go guard-proxy wrote by
+hand, and go-otel stages its OTEL_* env") is on run 16462's branch `agent/782-15696` (`d7fb73c`, `b2d036c`), which
+has not reached staging. Its "Not yet run on a cluster" part names this server-side dry run. This entry is that run's
+result. When the draft is ported, keep both entries.
+
+**What ran.** Escalation 737, hecaton's elevated tier, ran the one act it was given. Credentials came from the
+operator's `accen-dev` profile into an isolated kubeconfig, and the target was confirmed first. The context
+`watch-it-burn-private` resolves to `arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private` (ACTIVE, 1.36).
+Namespace `agent` exists, and it has the `watch-it-burn-python` Instrumentation with endpoint
+`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`. Then:
+
+    kubectl --context watch-it-burn-private -n agent run otel-sdk-probe \
+      --image=ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e \
+      --restart=Never --dry-run=server -o yaml \
+      --annotations=instrumentation.opentelemetry.io/inject-sdk=watch-it-burn-python
+
+It exited 1 with no pod spec:
+
+    Error from server: admission webhook "vpol.validate.kyverno.svc-fail-d07fe444" denied the request:
+    Policy require-resource-limits failed: CPU and memory resource limits are required on every container.
+
+`require-resource-limits` is a Kyverno ValidatingPolicy whose `validationActions` is `["Deny"]`. Validating webhooks
+only run after the mutating ones, but a denied request returns no object, so this run could not see what the
+Operator injects. Nothing was created, and no policy or cluster object was changed.
+
+**Still owed.** The same dry run with a probe that passes the cluster's validating policies. `kubectl run` has no
+resource-limits flag, so the probe needs `--overrides` that give the container CPU and memory limits. It may also
+need what `require-probes` and `require-labels` check. The other way is to set `require-resource-limits` to Audit
+for the one call and set it back to Deny straight after. Either is a different act from the one escalated, so it
+needs its own escalation. Expected as before: `OTEL_EXPORTER_OTLP_ENDPOINT` on 4318,
+`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and no init container.
