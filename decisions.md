@@ -11536,4 +11536,9 @@ org still lacks `agent-obs-silent` until the apply in the follow-up.
 **The gate fix (run 16672).** Run 16664 failed the `ai-isms` gate on the antithesis pattern (a reframe that names what a
 thing is not). The sentences that matched, in this entry and in a test label, now state their claim directly.
 
+**The suites (run 16672, on 6a82df8).** `bash verify/run-e2e-tools.sh` runs the offline suite first: 232 tests, ending
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. Then the tools tier ran 47 checks in all and exits 1 on one, the same
+`test_image_version_tags.py` web-terminal tag (#815, #816, #823, #824). `test_fleet_monitors_live.py` is part of the E2E
+suite, not this tier, and is not run here: its AWS profile is not readable from this run (hecaton#508).
+
 No dependency was added.
