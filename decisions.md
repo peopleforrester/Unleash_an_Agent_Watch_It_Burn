@@ -10675,3 +10675,47 @@ above (then at `d6acd503…`, so the workflow has pushed over the tag again sinc
 fix needs a ghcr.io write and the signing key and is in run 16420's follow-up. Run 16467 stalled waiting on the tier in
 the background with nothing polling it, so run 16549 ran it again and polled it to the end (about 25 minutes on a
 shared box).
+## 2026-11-03 · #803 · The witch-name repin is guard-proxy 88b9b52, one pin for #803 and #744, and the gitlink is Michael's
+
+**The pin.** `gitops/ai-layer/guard-proxy` moves from fb6e2bf to 88b9b52 (`88b9b5229312d785331237474b82bab1d5d31402`),
+on guard-proxy-agenticburn main, CI green in run 41348271248. It contains 6f2de73, guard-proxy-agenticburn#34: `/chat`
+adds the body's `witch` to the A2A message as a second text part after the prompt, "The person chatting with you
+gave their name as <name>.". It also contains aaf1872 (#35), which forwards the name only when it is shaped
+`<First> the <Creature>`. fb6e2bf is its ancestor, so 5fe5a7c (#27's task cancel) and 92b0587 (#25's "The kitchen is
+closed") stay. Of the eight commits since fb6e2bf, only proxy.py's witch-name lines are deployed: the pod runs
+`python /app/proxy.py` from the guard-proxy-src ConfigMap, and the Go build's bbolt spend file, OpenTelemetry and
+reset-spend are not. `checksum/proxy-py` moves from `659ff019071f` to `5ef84f383407`, sha256 of 88b9b52's proxy.py.
+guard-proxy main is now at 78c7cad, whose proxy.py also prices each request at the model the workshop-agent is bound
+to (#37, #38, reading the Agent through guard-proxy-reader). That is a different change with its own live check, so
+this pin stops at 88b9b52.
+
+**How it relates to #744.** #744 asked for a repin to carry #25's cluster-cap reply. Its last run (16114, on staging as
+a1d391f) found fb6e2bf already carries it and left the pin, naming the 88b9b52 repin as #762's work. Its earlier draft
+(485ee26, run 15656) made exactly this repin and was refused for the gitlink. So one pin satisfies both: 88b9b52 holds
+#25's reply and #34's forwarding, and #744 needs no pin of its own.
+
+**Not in this commit: the gitlink.** Hecaton's forbidden gate refuses any gitlink change from a run (question 766,
+"Michael pins, a run does the rest"), so the move and the checksum bump are left for Michael. The exact commands are
+in run 16538's report. Until they land, `verify/test_chat_witch_name.py` fails at fb6e2bf, as it is meant to, on four
+checks: the pin contains 6f2de73, the agent receives two text parts, the second carries the name, and every name the
+storefront assigns is forwarded. `bash verify/run-tests.sh` is red on this branch for that test alone. In a scratch
+worktree with the gitlink at 88b9b52 and the checksum bumped, the test passes, and so does the whole offline suite
+(see the run's report for the counts).
+
+**What changed.**
+- `verify/test_chat_witch_name.py` (new, offline) checks that the pinned guard-proxy contains 6f2de73, as
+  `test_chat_turn_cancel.py` does for 5fe5a7c. It then runs the pinned proxy.py with every value guard-proxy's
+  Deployment sets, against a fake agent that answers `message/send` with a finished task.
+  - A `/chat` carrying a storefront name gets the agent's reply. The agent receives exactly two text parts: the
+    prompt as typed, then a part that carries the name.
+  - Every first name and every creature in burritbot.html's `WITCH_FIRST` and `WITCH_CREATURES` is sent once (32
+    names). A shape check that the storefront's names fail cannot drop them unnoticed.
+  - The three input guards are armed as spies that allow everything. They are asked to scan the prompt only, and
+    `/prompts` shows the prompt and no name.
+  - A `/chat` with no `witch` field, an empty, blank or null one, or an object reaches the agent as the prompt alone.
+
+**Not yet run on a cluster.** After the pin reaches staging and Argo CD syncs, for C in `watch-it-burn-community` and
+`watch-it-burn-private` from a session with accen-dev: the guard-proxy pod's `checksum/proxy-py` annotation reads
+`5ef84f383407`. Then on the public storefront an HC-666 chat lands `joker-<visitor slug>`, not `joker-burritobot`, and
+the wall shows the visitor's name (#762's live check). No E2E test sends a named `/chat` to a live cluster;
+`verify/test_storefront_witch_name_e2e.py` covers the page's side only.
