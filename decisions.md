@@ -11739,4 +11739,13 @@ resumed it; it did not land (run 16533 ended failed, rebase-conflict). Run 16555
   holds the two items.
 - **The cause comment.** Michael's comment on #796 names both causes and the fix, so the first criterion is met.
 
+**The suites.** `bash verify/run-e2e-tools.sh`, run as the fourth item now says (a 3600000 ms background job, its
+own log, `timeout 540` waits), ran 45 checks in 22m53s; the offline suite inside it ran 227 tests, all green. It
+exits 1 on one check, `test_image_version_tags.py`, with two reds. One is the red already recorded for #746, #775
+and #799: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the pinned
+`68004fb5`, because CI pushed over the tag. The other came from staging: b28d5c1 (#480) gave the stand-in Deployment
+in `verify/test_tool_pin_live_check.py` the image `watch-it-burn:workshop-mcp@sha256:9a26`, which names no version.
+That fixture now reads `workshop-mcp-mcp-1.29.1`; `test_tool_pin_live_check.py` still passes, and
+`test_image_version_tags.py` is left with the web-terminal red alone.
+
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.
