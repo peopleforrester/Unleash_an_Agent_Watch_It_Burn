@@ -12100,4 +12100,11 @@ reach.
 the registry's tags list on a KubeCon bring-up, both KubeCon probe runs ending `KUBECON PROBE GREEN`, the visitor's
 HC-666 ask, and `stage_traces.py seed` ending `SEEDED GREEN`.
 
+**The suites.** `bash verify/run-e2e-tools.sh` ran 48 checks in 23m05s; the offline suite inside it ran 234 tests,
+all green, and `verify/test_joker_build_digest.py` passed: `build.sh` still builds both Jokers at the digests
+images.lock pins, so the escalated push lands `sha256:0dbe92d4...`. It exits 1 on `test_image_version_tags.py` alone,
+with the two reds the #796 entry records and #775 does not touch: ghcr.io serves `web-terminal-ttyd-1.7.7` at
+`sha256:cb00c5b7...`, not the pinned `68004fb5` (CI pushed over it again), and `sample-app-nginx-1.27.5` answers 404
+(#814's escalated `crane tag`).
+
 No dependency was added.
