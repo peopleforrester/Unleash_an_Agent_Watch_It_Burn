@@ -10577,3 +10577,30 @@ resources.yaml pins `sha256:68004fb5...`. CI has pushed over that tag again, as 
 change does not touch it.
 
 No dependency was added.
+## 2026-11-03 · #797 · Tests own their inputs: what a test reads is found before it is reworded, and every random draw is pinned
+
+**The cause.** Two runs lost time to a test whose result hung on something the test did not own. Run 9643 (#612)
+reworded row 8's readiness cell in `facilitation/kubecon-na-2026-run-of-show.md` from "At risk" to "Partly", and
+`verify/test_kubecon_deck_pdf.py` built its cut-point case with `ROS.replace("| **At risk.**", ...)`. With the label
+gone the replace did nothing and the check after it failed, so the run put the old label back (dcd6520). The deck
+exporter and its tests were deleted on 2026-10-28 (95f86f2, #639), so that test is gone, but nothing stopped the next
+test that reads a phrase. Run 15808 (#583) saw the E2E tools tier fail
+`verify/test_storefront_witch_name_e2e.py` on "Prudence the Pixie": the check asserted "rude" was not in a name the
+page drew with the real `Math.random`, which fails one run in 32. Run 15808 fixed that predicate (43dd3a0) but left
+the other cases on real draws.
+
+**The fix.** AGENTS.md has a "Tests own their inputs" section: grep `verify` and `scripts` for the exact words before
+rewording them, change any test that reads them in the same commit, and never revert correct text to suit a test; a
+test checks a literal anchor is there before it edits or splits on it; randomness is pinned or enumerated, and a test
+that passes on a rerun is broken. The witch-name test now gives the page a stubbed `Math` in every case. The stub
+fails when the page draws more values than the case pinned, and the cases with a valid cookie pin none. The
+replaced-cookie case runs once per first name, all 32, with the creatures wrapping, so all 24 creatures are drawn too,
+and it checks the exact name each draw picks. With the old bare-"rude" predicate put back, it fails on Prudence every
+run, not one run in 32. `verify/test_tests_own_inputs.py` (offline) holds the section, runs its grep on an anchor
+the witch-name test reads, and checks that the harness has no fallback to the real `Math`.
+
+**Not changed.** No lint scans every test for literal anchors or unseeded randomness. Eleven tests use
+`.replace` on a literal, and several are allowed to find nothing (an exemption comment that may be absent), so a
+scan would flag correct code. The rule is in AGENTS.md and the test that broke is fixed.
+
+**Not yet run on a cluster:** nothing; both changed tests are offline or in the tools tier.

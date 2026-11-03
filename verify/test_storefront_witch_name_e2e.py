@@ -69,9 +69,14 @@ given = me_page.split('id="witch-name">', 1)[1].split("<", 1)[0]
 HARNESS = r"""
 const vm = require('vm');
 const [src, cases] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
-const out = cases.map(([host, cookie, rnd]) => {
+const out = cases.map(([host, cookie, draws]) => {
   const el = {hidden: true, textContent: '', href: '', removeAttribute(a) { this[a] = ''; }};
-  const M = rnd === undefined ? Math : Object.assign(Object.create(Math), {random: () => rnd});
+  // Every Math.random the page calls is one of this case's pinned draws, so no result depends on the run.
+  const left = draws.slice();
+  const M = Object.assign(Object.create(Math), {random: () => {
+    if (!left.length) throw new Error('the page drew more random values than this case pinned');
+    return left.shift();
+  }});
   const ctx = {location: {hostname: host}, Math: M,
                document: {cookie, getElementById: (id) => id === 'witch' ? el : null}};
   vm.createContext(ctx);
@@ -81,20 +86,27 @@ const out = cases.map(([host, cookie, rnd]) => {
 });
 process.stdout.write(JSON.stringify(out));
 """
+
+
+def draws(i: int) -> list[float]:
+    """The two Math.random values that make randWitch() pick first name i and creature i, wrapping (#797)."""
+    return [(i % len(site.FIRST) + 0.5) / len(site.FIRST), (i % len(site.CREATURES) + 0.5) / len(site.CREATURES)]
+
+
+# A name drawn at random once made a check fail one run in 32 (#583: "Prudence" contains "rude"). Each case pins its
+# draws instead, and the replaced cookie is tried once per first name, so every first name and every creature the page
+# can pick is checked on every run. A case that pins no draws also proves the page draws none.
 CASES = [
-    ("attackme.burritobot.co", f"other=1; {cookie}"),
-    ("attackme.burritobot.co", "other=1"),
-    ("attackme.agenticburn.com", cookie),
-    ("burritobot-private.burritobot.co", cookie),
-    ("attackme.burritobot.co", "wib_witch=big-rude-word"),
-    # Math.random pinned so the replacement's first name is Prudence, which contains "rude".
-    ("attackme.burritobot.co", "wib_witch=big-rude-word", (site.FIRST.index("Prudence") + 0.5) / len(site.FIRST)),
-]
+    ("attackme.burritobot.co", f"other=1; {cookie}", []),
+    ("attackme.burritobot.co", "other=1", draws(0)),
+    ("attackme.agenticburn.com", cookie, []),
+    ("burritobot-private.burritobot.co", cookie, []),
+] + [("attackme.burritobot.co", "wib_witch=big-rude-word", draws(i)) for i in range(len(site.FIRST))]
 r = subprocess.run(["node", "-e", HARNESS], input=json.dumps([BLOCK, CASES]), capture_output=True, text=True)
 if r.returncode != 0:
     print(f"FAILED: node exited {r.returncode}: {r.stderr[-400:]}")
     sys.exit(1)
-named, none, other_domain, private, rude, rude_prudence = json.loads(r.stdout)
+named, none, other_domain, private, *rude_cases = json.loads(r.stdout)
 
 
 
@@ -121,16 +133,18 @@ check("no cookie: the page writes a vocabulary name to wib_witch", fresh is not 
 check("on .burritobot.co, for the desk to read", "; Domain=.burritobot.co" in none["cookie"], none["cookie"])
 check("and shows and sends that name", not none["hidden"] and none["textContent"].endswith(f"You are {fresh}")
       and none["sent"] == fresh, repr(none))
-replaced = written_name(rude)
+check("no cookie: the name is the one the pinned draws pick", fresh == f"{site.FIRST[0]} the {site.CREATURES[0]}",
+      repr(fresh))
 # The bad cookie's words, not the bare "rude": a vocabulary name such as "Prudence the Pixie" contains "rude".
-check("a cookie that is not a generated name is replaced with one", replaced is not None
-      and "big-rude-word" not in rude["cookie"] and "rude word" not in rude["textContent"].lower()
-      and rude["textContent"].endswith(f"You are {replaced}"), repr(rude))
-prudence = written_name(rude_prudence)
-check("a replacement named Prudence passes too: the check looks for the bad cookie's words, not 'rude'",
-      prudence is not None and prudence.startswith("Prudence the ")
-      and "big-rude-word" not in rude_prudence["cookie"] and "rude word" not in rude_prudence["textContent"].lower()
-      and rude_prudence["textContent"].endswith(f"You are {prudence}"), repr(rude_prudence))
+bad = []
+for i, rude in enumerate(rude_cases):
+    replaced = written_name(rude)
+    if not (replaced == f"{site.FIRST[i]} the {site.CREATURES[i % len(site.CREATURES)]}"
+            and "big-rude-word" not in rude["cookie"] and "rude word" not in rude["textContent"].lower()
+            and rude["textContent"].endswith(f"You are {replaced}")):
+        bad.append(repr(rude))
+check(f"a cookie that is not a generated name is replaced with one, for each of the {len(site.FIRST)} first names"
+      " (Prudence among them)", len(rude_cases) == len(site.FIRST) and not bad, "; ".join(bad[:3]))
 check("agenticburn.com shows nothing (the cookie is not sent there)", other_domain["hidden"] is True
       and other_domain["sent"] == "", repr(other_domain))
 
