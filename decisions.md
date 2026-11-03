@@ -10147,3 +10147,39 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
 "to let" as the first-person-plural connective. The five added lines that used that verb (PROJECT_STATE.md, decisions.md, the run-of-show,
 KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
 behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.
+
+## 2026-11-03 · #795 · #205's live drift checks did not run: the run could not read the cluster access it was handed
+
+**No code changed, and nothing ran on a cluster or in AWS.** Hecaton run 16469 is the first dispatch of #795, on
+staging `858ffaf`. It was handed `watch-it-burn-community`, `watch-it-burn-private` and the accen-dev profile under
+the run's `clusters/` directory, and could read none of it. `clusters/env`, `kubeconfig`, `aws-config` and
+`aws-credentials` are mode 0640, owner and group `hecaton`, and the run's user is not in group `hecaton`.
+`. "$HECATON_CLUSTER_ENV"` and `kubectl config get-contexts` both failed with "permission denied", and
+`aws sts get-caller-identity --profile accen-dev --region us-west-2` failed with "The config profile (accen-dev)
+could not be found". This is the fault runs 16389 and 16424 hit on #544 and #715, and it is filed as
+peopleforrester/hecaton#507. #795 waits on that issue.
+
+**What a run can do once #507 is fixed, and what it cannot.** The five steps in #795 split by where their inputs live.
+
+- Step 1, the drill, can run from a run on both clusters. Its target, `agent/platform-console-egress`, is in
+  `gitops/ai-layer/resources.yaml`, and `ai-layer` is on every profile list, the two KubeCon profiles from #774
+  included. Their egress switch adds or removes only the agent egress set, never this policy. Neither cluster
+  is a fresh attendee cluster, as the issue's wording asks, but #795's criteria name these two, so the drill on
+  them is what closes it.
+- Step 4, `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`,
+  needs only the profile, so a run can do it too. Its check 2 is billed (the Access Analyzer check-no-new-access calls).
+- Step 2 applies the audit root (a Config recorder and a multi-region trail, both billed) in each fleet account:
+  `WIB_ATTENDEE_ACCOUNTS` defaults to accen-dev and aws1-student31 to 34, and a run holds only accen-dev.
+  Step 3 needs an attendee key CSV under `infra/terraform/fleet/aws-pool/` and step 5 plans every fleet state.
+  Both paths are gitignored and live only on the operator's machine, and step 5 also installs a cron line
+  there. So steps 2, 3 and 5 belong to a session on that machine with every fleet profile, as the 2026-11-02 #205
+  entry already says. They went to the run report's escalate list with their exact commands.
+
+**Tests at this entry.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` were run on this tree;
+the run report records their results.
+
+**Not yet run on a cluster.** All five of #795's steps, unchanged: `CONTEXT=<ctx> python3
+verify/test_drift_selfheal_live.py` on watch-it-burn-community and watch-it-burn-private, the audit root's apply in
+each fleet account, `DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`,
+`verify/test_iam_policy_aws.py` with the audit suite, and one hand run of `infra/terraform/drift/drift-report.py`
+before the cron line in `docs/floor.md` goes in.
