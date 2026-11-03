@@ -14013,3 +14013,38 @@ offline suite and 52 tier tests) in 26m34s and exited 0 with `ALL E2E TOOLS TIER
 `test_weaver_guard_proxy_spans.py` passed inside it.
 
 **Live check.** None applies: no change moves anything on either cluster.
+## 2026-11-04 · change · #837 · presenter narrative realigned to the instance-identity-document pivot
+
+Commit 7805261 (#748) changed `challenges/imds-node-creds/steal-node-creds.sh` to prove the
+node pivot by reading the EC2 instance-identity document with the stolen token, not by calling
+`aws sts get-caller-identity` (the `workshop-mcp` tool-pod image carries no aws CLI). #717 realigned
+the facilitator runbook and the script header but left four presenter-voice spots naming the script
+and still saying it runs `aws sts get-caller-identity` and returns a node role, as Michael's stage
+narrative. This run reworded all four to the instance-identity-document pivot (node role name plus
+AWS account and region), matching `challenges/imds-node-creds/FACILITATOR.md`:
+
+- `facilitation/kubecon-na-2026-run-of-show.md` (ASI beat, ~line 816)
+- `docs/RUN-OF-SHOW-2026-08.md` (~line 74)
+- `gitops/ai-layer/web/kubecon.html` (~line 377)
+- `gitops/ai-layer/web/brief.html` (~line 142)
+
+The attack class is unchanged (the stolen node credential reaches a real AWS account, ASI03); only
+the stale attribution to our named script is fixed. `values-burn.yaml`, `cluster/main.tf` and
+`fleet.sh` keep their `aws sts get-caller-identity` mentions: those are prose about what a node role
+*grants*, not claims about what our script prints, and none of them names `steal-node-creds.sh`.
+
+Added a `#837` block to `verify/test_imds_credential_theft.py`: the four narrative files must name the
+steal script and the "instance-identity document" pivot, and no tracked file that names
+`steal-node-creds.sh` may still say `get-caller-identity` (FACILITATOR.md, the script, this test and
+decisions.md are exempt, since they name the call only to say the script does not make it). Each
+narrative file is checked for the `steal-node-creds.sh` anchor first, so a reworded anchor reads as a
+missing anchor and does not masquerade as a broken pivot check (Tests own their inputs, point 2). Verified failing on the base copy (5 checks
+red) and green after the rewording.
+
+**Suite results.** `python3 verify/test_imds_credential_theft.py` exits 0 (all checks, including the
+new #837 block). Full `bash verify/run-e2e-tools.sh` results recorded below once the run completes.
+
+**Not yet run on a cluster.** This is prose only; no live check is owed by the change. The pre-existing
+live half (the script's instance-identity-document output seen on `watch-it-burn-community` at hop
+limit 2, and `IMDS: BLOCKED` on a fresh attendee cluster) is already tracked under "Not yet run on a
+cluster" in `challenges/imds-node-creds/FACILITATOR.md` and is unchanged by this run.

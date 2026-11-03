@@ -375,8 +375,9 @@
     becomes a cloud-account one. Watch-the-screen on the community cluster, run the way the 2-hour format runs
     the fork bomb "on our box only". The audience cannot do it from a phone. From a presenter checkout against
     the community kube-context, <code>CONTEXT=&lt;community-ctx&gt; challenges/imds-node-creds/steal-node-creds.sh</code>
-    reads the node credentials off 169.254.169.254 and <code>aws sts get-caller-identity</code> returns a
-    <b>node role</b>; the same script against a guarded context prints <code>IMDS: BLOCKED</code>. It only
+    reads the node credentials off 169.254.169.254, then reads the node's instance-identity document with the
+    same stolen token and names a <b>node role</b> and the AWS account and region it lives in; the same script
+    against a guarded context prints <code>IMDS: BLOCKED</code>. It only
     reads, and it stays off the numbered challenge list. Full beat and caveats in
     <code>challenges/imds-node-creds/FACILITATOR.md</code>. Drop this first if the clock is behind, so the
     break-it finale keeps the remaining minutes.</div>
