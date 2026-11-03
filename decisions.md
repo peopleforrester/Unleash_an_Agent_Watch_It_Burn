@@ -13517,3 +13517,20 @@ delete, because both clusters run proxy.py. The reset path's live check is still
 entry above says.
 
 **Who decided.** Nothing here answers a question. Question 1051 is recorded above as decided by hecaton's research.
+
+## 2026-11-04 · #828 · The heavy gate is green on staging at `93258b83` once CI put sample-app-nginx-1.27.5 on ghcr.io
+
+**What happened.** Run 16802's change (`6b751003`, `d1c68bcc`) reached staging, and its
+`.github/workflows/keep-sample-app-tag.yml` ran on that push (Actions run 41729202605, success, 2026-11-03 22:15 UTC)
+and again on main (run 41733570801, success). ghcr.io now serves `watch-it-burn:sample-app-nginx-1.27.5` at the
+pinned `sha256:556e176d...`, and main followed staging to `d1c68bcc`. So #814's escalated crane tag is no longer
+needed, and this run changes no code.
+
+**The suites (run 16825, at `93258b83`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 24m58s, printed `ALL E2E TOOLS TIER CHECKS GREEN` and exited 0. The offline suite inside it ran 241
+tests, all green. `test_image_version_tags.py` printed
+`PASS  ghcr.io serves ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5 at the pinned sha256:556e176dd1ac..., anonymously`.
+
+**No live check.** Clusters pull sample-app by digest, so the tag changes nothing on them, and this run's
+`clusters/kubeconfig` and `clusters/env` are still mode 0640 in group `hecaton`, which this run's user is not in
+(hecaton#508).
