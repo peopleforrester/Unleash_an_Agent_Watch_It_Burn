@@ -12954,3 +12954,8 @@ Michael.
 answers alongside a fix to the C1 fallback's beacon view URL. Staging has since taken that fix (d2264c1d moved the
 fallback to `https://beacon.burritobot.co/beacon/view`), so this entry carries the answers alone, with line citations
 on the current run-of-show. Nothing changes in code, and no cluster check applies: the answers rest on the records.
+
+**Suite results, run 16785.** On 636a6c3, `bash verify/run-e2e-tools.sh` ran 52 checks (the offline suite and 51 tier
+tests) in 24m12s. The offline suite ran 237 tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`. The tier exits 1 on
+`test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `sample-app-nginx-1.27.5` at its pinned
+digest (#814). This change edits decisions.md alone and does not touch that tag.
