@@ -10232,3 +10232,11 @@ tag-overwrite problem that causes is run 16420's follow-up, not changed here.
    `https://maintenance-shell-attackme.burritobot.co/joker-<name>/`, that page shows the breakout's text, and the
    Joker is on `https://deployments.burritobot.co` under the visitor's witch name.
 5. `python3 verify/stage_traces.py seed burritobot-private.burritobot.co ...` ends `SEEDED GREEN`.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (224 tests). `bash verify/run-e2e-tools.sh` ran 45 checks, and
+`verify/test_joker_build_digest.py` passed in it with the fetched crane. It exits 1 on one check, the red already
+recorded for #746 on 2026-11-03: `test_image_version_tags.py` finds ghcr.io serving
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:7e5f8986...`, not the pinned `68004fb5`, because CI pushed over
+that tag again after #774's staging push. Nothing here pushes an image. This change edits
+`images/web-terminal/entrypoint.sh` too (it must stay byte-identical to the copy the pod mounts), so its staging push
+starts `build-web-terminal.yml` once more; the fix for that workflow is run 16420's follow-up.
