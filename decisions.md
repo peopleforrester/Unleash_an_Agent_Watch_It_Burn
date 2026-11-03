@@ -11453,3 +11453,59 @@ permission denied`. So it is still unknown whether the application key in `watch
 **Not yet run.** The first run whose session files it can read runs `. "$HECATON_CLUSTER_ENV" && python3
 verify/test_dd_traces_live.py`. Until hecaton#508 is deployed, another dispatch of #759 hits this same wall, so this
 run's report holds the issue on hecaton#508.
+
+## 2026-11-03 · #810 · A fleet monitor pages when Agent Observability files no BurritoBot trace in a session, for the whole org
+
+**What it is.** `agent-obs-silent` in `infra/datadog-fleet/monitors.yaml`, next to `no-traces`, session-scoped, priority 2:
+`sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count() < 1` with `notify_no_data` and a 10-minute no-data
+timeframe. #783's outage (Agent Observability filed no BurritoBot turn for six hours from 2026-11-01 ~15:55 UTC while APM
+kept every span) is the case it is for: `no-traces` reads the collector's span count, which is upstream of the
+conversion that failed, so it stayed green through it. `verify/agent_obs_flow.py` answers the same question by hand
+before a run-through; the monitor answers it between runs.
+
+**The metric name.** The issue asked for it to be read in Whitney's sandbox org first. It has been: `ml_obs.trace`
+under `ml_app:burritobot` is what `verify/test_datadog_sandbox_live.py` (#629) reads there, and the #711 entry records
+it showing 5 burritobot traces for 2026-10-31. Datadog's metrics page (docs.datadoghq.com/llm_observability/monitoring/
+metrics, read 2026-11-03) lists `ml_obs.trace` as a count tagged env, error, ml_app, service, span_kind and version.
+`ml_obs.trace` and not `ml_obs.span`: since #746's one-root copy a turn is one trace, so the trace count is the turn
+count, and a span count would also move on the copy's inner spans.
+
+**The grouping rule, and why this monitor is the exception.** The issue assumed Agent Observability's tags carry
+`k8s.cluster.name`. Its spans do (`agent_obs_flow.py` filters the spans API on it), but its metrics do not: the same
+page says "other tags set on spans are not available as tags on Agent Observability metrics, except LLM token and cost
+metric tags", and that exception is the SDK's `cost_tags`, which the collector's OTLP copy does not use. Both KubeCon
+clusters share env, ml_app, service and version, so no metric tag tells them apart. This repo already met the same
+wall twice: `room_view.py` refuses `ml_obs.*` for it (the 2026-10-29 #665 room-view entry), and `test_datadog_sandbox_live.py`
+checks ml_app per env. So the monitor is one alert for the whole org, marked `scope: org`. `fleet_monitors.py` allows
+that only on `ORG_SCOPE_METRICS` (`ml_obs.`): it refuses `scope: org` on any other metric, an `ml_obs.*` monitor
+without it, a cluster filter or any group on it, a monitor of that scope that fires on a rise or lacks
+`notify_no_data`, and a message naming `{{kube_cluster_name.name}}`. The render leaves off the per-cluster
+`fleet.sh verify` line, and `--data` reads its overall state (not No Data) instead of a group per cluster.
+
+**Ways of making it per cluster that were not taken.** Stamping the cluster into a tag the metric does carry, on the
+Agent Observability copy only (say `version`, or `env`), would group it, but it rewrites a unified-service tag the
+presenters see on every row, and env is #629's single sandbox-org env that `test_datadog_sandbox_live.py` holds. A
+`span_metrics` count on the collector's `traces/llmobs` pipeline would carry `kube_cluster_name`, but it counts what the
+collector sends, which #783 never stopped. What the org-wide alert cannot see is one cluster's copy stopping while the
+other's arrives; `agent_obs_flow.py chat` answers that per cluster, and the alert's message names it.
+
+**Offline.** `verify/test_fleet_monitors.py` holds the definition (metric, ml_app shared with `agent_obs_flow.py`, the
+window, absence, session scope), ten refusals of the exception's misuses, the render, seven monitors through the fake
+org's apply, and `--data` on the org-wide monitor: No Data fails naming the whole org, Alert counts as fed, and it needs
+no per-cluster group. Removing the `scope: org` branch from `data_check` fails the No Data check and the no-group
+check; removing `validate_org_scope`'s call fails nine of the ten refusals (the tenth, a scope other than org, is
+checked before it). Both confirmed on a temporary edit, restored.
+
+**Not yet run on a cluster or in the org.** Hecaton run 16655's `clusters/env` and `clusters/kubeconfig` are mode 640,
+group `hecaton`, and its user is not in that group, so the AWS session and the Datadog keys could not be read
+(hecaton#508), and nothing here was read live. The monitor is not in the org until an apply, which needs Whitney's
+unscoped write key. Owed, in order, from a session with accen-dev at the repo root:
+
+    WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session START/END
+    python3 verify/agent_obs_flow.py chat --profile accen-dev        # a chat per bot, so ml_obs.trace has a point
+    python3 verify/test_fleet_monitors_live.py                        # --check, then --data: agent-obs-silent must not be No Data
+
+The apply's validate step checks the query's syntax, not that the metric reports, so the `--data` line `DATA     monitor agent-obs-silent (OK, the whole org: no cluster tag)`
+inside 10 minutes of the chat is the one that says the name is right.
+
+No dependency was added.

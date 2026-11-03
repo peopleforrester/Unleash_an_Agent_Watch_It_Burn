@@ -20,6 +20,16 @@
 #                                    maps to kube_cluster_name (gitops/otel-collector/values.yaml).
 #   guard-proxy logs, status:error   guard-proxy logs JSON with "level", which Datadog maps to status;
 #                                    every forward failure is log.error(..., event=forward_error).
+#   ml_obs.trace{ml_app:burritobot}  Agent Observability's own count of the traces it filed, one per BurritoBot turn
+#                                    since the one-root copy (#746, #783). Read in Whitney's sandbox org under
+#                                    ml_app:burritobot (decisions.md, #629 and #711). It carries env, error, ml_app,
+#                                    service, span_kind and version and no cluster tag: Datadog's metrics page says
+#                                    "other tags set on spans are not available as tags on Agent Observability metrics".
+#
+# scope: org marks the one kind of monitor the per-cluster rule cannot fit (#810): a metric that carries no cluster
+# tag, so a kube_cluster_name filter on it never fills and a group by it is empty. Such a monitor is one alert for the
+# whole org, is never filtered or grouped by cluster, and fires on absence. fleet_monitors.py allows it only on the
+# metrics in its ORG_SCOPE_METRICS, so the exception cannot spread to a metric that does carry the cluster.
 #
 # A key is the monitor's identity across applies: the script finds the live monitor by the tag
 # wib-monitor:<key> and updates it in place, so renaming a monitor here never duplicates it. A monitor
@@ -137,4 +147,28 @@ monitors:
       notify_no_data: true
       no_data_timeframe: 10
       new_group_delay: 600
+      require_full_window: false
+
+  # #783: from 2026-11-01 ~15:55 UTC Agent Observability filed no BurritoBot turn while APM kept every span, and nobody
+  # saw it for six hours. no-traces stayed green through it: the collector's span count is upstream of the conversion
+  # that failed. Only Agent Observability's own count sees that, and it carries no cluster tag, so this is one alert
+  # for the whole org (scope: org). verify/agent_obs_flow.py chat names the cluster.
+  - key: agent-obs-silent
+    priority: 2
+    session: true
+    scope: org
+    name: "[WIB fleet] Agent Observability filed no BurritoBot trace for 10 minutes"
+    type: metric alert
+    query: "sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count() < 1"
+    message: |
+      Agent Observability has filed no ml_app:burritobot trace in 10 minutes of the session, from any cluster: its
+      metrics carry no cluster tag, so this alert is for the whole org. The presenters' Agent Observability tab is empty.
+      If no-traces is quiet, the clusters' spans still reach APM and the Agent Observability copy is not converting,
+      which is #783's symptom. If no-traces fires too, nobody is chatting, or the trace path is down before Datadog.
+      Which cluster, and the trace ids: python3 verify/agent_obs_flow.py chat --profile accen-dev
+      Then each cluster's collector log for the llmobs export (decisions.md, the 2026-11-02 #783 entry).
+    options:
+      thresholds: { critical: 1 }
+      notify_no_data: true
+      no_data_timeframe: 10
       require_full_window: false

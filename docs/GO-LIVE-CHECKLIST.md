@@ -82,8 +82,8 @@ infra/terraform/fleet/fleet.sh monitors --data --cluster burritobot-public --clu
       a row, and the agent and console columns are green.
 - [ ] It also printed a `challenge leaderboard:` URL (#307). Put it on the projector in TV mode once the
       challenges start: every live cluster has a row with `online` green, and the challenge cells fill in
-      as the room works. The no-traces monitor stays muted outside the
-      window, so re-run with a corrected `--session` if the timing moves.
+      as the room works. The no-traces and agent-obs-silent monitors stay muted outside
+      the window, so re-run with a corrected `--session` if the timing moves.
 
 ```bash
 # d3) the shared ops view (#308): per cluster, who claimed it, is it up, which challenges it has done.

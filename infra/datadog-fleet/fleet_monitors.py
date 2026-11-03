@@ -19,7 +19,9 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
                        fires on absence has a group per cluster in a state other than No Data; each monitor that
                        fires on a rising count, which is empty on a healthy cluster, has its `signal` (the same
                        source without the bad-news filter) answer for each cluster; every query on the fleet
-                       dashboard answers for each cluster over its widget's window. Exit 1 on any blank.
+                       dashboard answers for each cluster over its widget's window. Exit 1 on any blank. A
+                       `scope: org` monitor (#810), on a metric with no cluster tag, must be in a state other
+                       than No Data as a whole.
 
 The org. For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student
 orgs, so both clusters ship there (#629, #454), and its keys are Secrets Manager watch-it-burn/datadog (the secret
@@ -30,8 +32,8 @@ writes monitors, downtimes and dashboards. --apply therefore takes the applicati
 WIB_FLEET_MONITORS_APP_KEY in this command's environment, a key Whitney issues from her own user. It must be
 unscoped: Datadog refuses log monitors created with a scoped one. Key values are never printed.
 
-The session window. The no-traces monitor only means something while students are at their keyboards; at
-any other time an idle cluster is a correct cluster. Monitors marked `session: true` are muted by downtimes
+The session window. The no-traces and agent-obs-silent monitors only mean something while students are at
+their keyboards; at any other time an idle cluster is a correct cluster. Monitors marked `session: true` are muted by downtimes
 this script owns: with --session START/END they are muted until START and again from END, and with no
 window they are muted indefinitely, so applying outside an event never pages anybody. Every apply cancels
 the downtimes the previous apply created (they carry the marker below in their message) before it creates
@@ -77,6 +79,11 @@ SESSION_TAG = "window:session"
 DOWNTIME_MARK = "[wib-fleet-monitors]"
 GROUP_BY = "kube_cluster_name"
 TYPES = ("metric alert", "query alert", "log alert")
+# The metrics that carry no cluster tag, so a monitor on them is one alert for the whole org (`scope: org`, #810).
+# Agent Observability's ml_obs.* carry env, ml_app, service, version and a few more, never a span's k8s.cluster.name
+# (docs.datadoghq.com/llm_observability/monitoring/metrics, read 2026-11-03). Every other metric is per cluster.
+ORG_SCOPE_METRICS = ("ml_obs.",)
+ORG_SCOPE = "org"
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 # The dashboards --data reads. The leaderboard counts challenge outcomes, so it is blank until the room plays.
 DATA_DASHBOARDS = ("fleet dashboard",)
@@ -124,13 +131,23 @@ def validate_monitors(defs: dict) -> list[str]:
         if m["type"] not in TYPES:
             problems.append(f"{where}: type '{m['type']}' not in {TYPES}")
         q = m["query"]
-        if flt and flt not in q:
-            problems.append(f"{where}: query is not filtered to {flt}")
-        if m["type"] == "log alert":
-            if f'.by("{GROUP_BY}")' not in q:
-                problems.append(f'{where}: log query is not grouped .by("{GROUP_BY}")')
-        elif not re.search(r"\bby \{" + GROUP_BY + r"\}", q):
-            problems.append(f"{where}: metric query is not grouped by {{{GROUP_BY}}}")
+        org_metric = m["type"] != "log alert" and metric_source(q)[0].startswith(ORG_SCOPE_METRICS)
+        if "scope" in m and m["scope"] != ORG_SCOPE:
+            problems.append(f"{where}: scope '{m['scope']}' is not '{ORG_SCOPE}'; leave it out for a per-cluster monitor")
+            continue
+        if m.get("scope") == ORG_SCOPE or org_metric:
+            problems += validate_org_scope(where, m, org_metric)
+        else:
+            if flt and flt not in q:
+                problems.append(f"{where}: query is not filtered to {flt}")
+            if m["type"] == "log alert":
+                if f'.by("{GROUP_BY}")' not in q:
+                    problems.append(f'{where}: log query is not grouped .by("{GROUP_BY}")')
+            elif not re.search(r"\bby \{" + GROUP_BY + r"\}", q):
+                problems.append(f"{where}: metric query is not grouped by {{{GROUP_BY}}}")
+            if "{{" + GROUP_BY + ".name}}" not in m["message"]:
+                problems.append(f"{where}: message does not name the cluster ({{{{{GROUP_BY}.name}}}})")
+            problems += validate_signal(where, m, flt)
         th = (m["options"] or {}).get("thresholds") or {}
         if "critical" not in th:
             problems.append(f"{where}: options.thresholds.critical is required")
@@ -140,12 +157,35 @@ def validate_monitors(defs: dict) -> list[str]:
                 problems.append(f"{where}: query does not end in a comparison with a threshold")
             elif float(tail.group(2)) != float(th["critical"]):
                 problems.append(f"{where}: query threshold {tail.group(2)} != options.thresholds.critical {th['critical']}")
-        problems += validate_signal(where, m, flt)
         opts = m["options"]
         if opts.get("notify_no_data") and not opts.get("no_data_timeframe"):
             problems.append(f"{where}: notify_no_data without no_data_timeframe")
-        if "{{" + GROUP_BY + ".name}}" not in m["message"]:
-            problems.append(f"{where}: message does not name the cluster ({{{{{GROUP_BY}.name}}}})")
+    return problems
+
+
+def validate_org_scope(where: str, m: dict, org_metric: bool) -> list[str]:
+    """A `scope: org` monitor (#810) is one alert for the whole org, on a metric that carries no cluster tag. A
+    cluster filter on such a metric never fills and a group by cluster is empty, so either would make it silent;
+    and on a metric that does carry the cluster, org scope would average a dead cluster into the room."""
+    q = m["query"]
+    if not org_metric:
+        return [f"{where}: scope: org on '{metric_source(q)[0] or m['type']}', which carries the cluster; only "
+                f"{', '.join(ORG_SCOPE_METRICS)}* are org-wide, everything else is one alert group per {GROUP_BY}"]
+    problems = []
+    if m.get("scope") != ORG_SCOPE:
+        problems.append(f"{where}: {metric_source(q)[0]} carries no cluster tag, so it cannot be per cluster; "
+                        f"mark it scope: {ORG_SCOPE}")
+    if GROUP_BY in q:
+        problems.append(f"{where}: {metric_source(q)[0]} carries no {GROUP_BY}, so a filter or group on it never fills")
+    if re.search(r"\bby \{", q):
+        problems.append(f"{where}: an org-wide monitor is one alert group; drop the 'by {{...}}'")
+    if fires_on_rise(q) or m.get("signal"):
+        problems.append(f"{where}: an org-wide monitor fires on absence ('< n' and notify_no_data); "
+                        "--data reads its state, so it takes no signal")
+    if not (m["options"] or {}).get("notify_no_data"):
+        problems.append(f"{where}: an org-wide absence monitor needs notify_no_data: a count with nothing in it is No Data")
+    if "{{" + GROUP_BY in m["message"]:
+        problems.append(f"{where}: the message names {{{{{GROUP_BY}...}}}}, which is empty on an org-wide alert")
     return problems
 
 
@@ -237,7 +277,8 @@ def render_monitor(m: dict, notify: list[str]) -> dict:
     if m.get("session"):
         tags.append(SESSION_TAG)
     message = m["message"].rstrip()
-    message += "\n\nFrom outside, for this cluster: fleet.sh verify {{" + GROUP_BY + ".name}}"
+    if m.get("scope") != ORG_SCOPE:  # an org-wide alert names no cluster; its message says how to find one
+        message += "\n\nFrom outside, for this cluster: fleet.sh verify {{" + GROUP_BY + ".name}}"
     if notify:
         message += "\n\n" + " ".join(notify)
     opts = {"include_tags": True, "notify_audit": False, **m["options"]}
@@ -572,6 +613,13 @@ def data_check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], clusters
         if lm is None:
             say(f"  MISSING  monitor {m['key']}: not in the org (run fleet.sh monitors --apply)")
             blank += 1
+            continue
+        if m.get("scope") == ORG_SCOPE:
+            # One alert for the org (#810): fed when the whole monitor is in a state other than No Data. It cannot say
+            # which cluster is feeding it; verify/agent_obs_flow.py chat does that per cluster.
+            st = lm.get("overall_state", "?")
+            need(f"monitor {m['key']} ({st}, the whole org: no cluster tag)", False,
+                 {"": 1.0} if st in ("OK", "Warn", "Alert") else {})
             continue
         # Keyed kube_cluster_name:<name>. No Data, Unknown and Skipped all mean the query answered nothing for it.
         groups = ((lm.get("state") or {}).get("groups") or {}).items()

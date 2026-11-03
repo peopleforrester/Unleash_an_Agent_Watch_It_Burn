@@ -51,7 +51,7 @@ check("fleet.sh names every cluster watch-it-burn-<something>",
       re.search(r'NAME_PREFIX="?\$\{NAME_PREFIX:-watch-it-burn-|NAME_PREFIX="watch-it-burn-', fleet_src) is not None)
 
 print("== every signal the issue asks for is a monitor ==")
-check("six monitors", len(mons) == 6)
+check("seven monitors", len(mons) == 7)
 cs = mons.get("cluster-silent", {})
 check("cluster stopped reporting: datadog.agent.running by kube_cluster_name",
       "datadog.agent.running" in cs.get("query", "") and "by {kube_cluster_name}" in cs.get("query", ""))
@@ -74,7 +74,20 @@ for k in ("cluster-silent", "console-unavailable", "burritobot-not-ready", "no-t
     check(f"{k} fires when the signal drops below 1", mons.get(k, {}).get("query", "").rstrip().endswith("< 1"))
 for k in ("node-not-ready", "guard-proxy-erroring"):
     check(f"{k} fires when its bad-news count rises", re.search(r">\s*[0-9]+$", mons.get(k, {}).get("query", "").rstrip()) is not None)
-check("only the traces monitor is session-scoped", [k for k, m in mons.items() if m.get("session")] == ["no-traces"])
+check("only the two trace monitors are session-scoped",
+      sorted(k for k, m in mons.items() if m.get("session")) == ["agent-obs-silent", "no-traces"])
+ao = mons.get("agent-obs-silent", {})
+check("Agent Observability silent (#810): ml_obs.trace under ml_app:burritobot, no data for 10 minutes",
+      ao.get("query", "").startswith("sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count()")
+      and ao.get("options", {}).get("notify_no_data") is True and ao["options"].get("no_data_timeframe") == 10)
+check("agent-obs-silent fires when the count drops below 1", ao.get("query", "").rstrip().endswith("< 1"))
+check("agent-obs-silent is the only org-wide monitor, and the only one on an ml_obs metric",
+      [k for k, m in mons.items() if m.get("scope")] == ["agent-obs-silent"]
+      and [k for k, m in mons.items() if "ml_obs." in m["query"]] == ["agent-obs-silent"])
+check("agent-obs-silent names no cluster: ml_obs.* carries none", "kube_cluster_name" not in ao.get("query", "") + ao.get("message", ""))
+check("agent-obs-silent points at the per-cluster check", "verify/agent_obs_flow.py chat" in ao.get("message", ""))
+flow = (REPO / "verify/agent_obs_flow.py").read_text()
+check("the ml_app it watches is the one agent_obs_flow.py reads", 'ML_APP = "burritobot"' in flow and "ml_app:burritobot" in ao.get("query", ""))
 
 print("== the names they watch exist in the platform ==")
 docs = [d for p in ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml")  # the Agent's bundle (#707)
@@ -142,6 +155,38 @@ check("an ungrouped query", any("not grouped" in p for p in broken(query="max(la
 check("a threshold that disagrees with the query", any("!=" in p for p in broken(options={"thresholds": {"critical": 3}})))
 check("a message that does not name the cluster", any("name the cluster" in p for p in broken(message="down")))
 check("a duplicate key", any("duplicate" in p for p in broken(key="cluster-silent")))
+
+print("== validation: the org-wide exception stays narrow (#810) ==")
+def broken_key(key, **over):
+    d = json.loads(json.dumps(defs))
+    m = next(m for m in d["monitors"] if m["key"] == key)
+    for k, v in over.items():
+        if v is None:
+            m.pop(k, None)
+        else:
+            m[k] = v
+    return fm.validate_monitors(d)
+ML = "sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count() < 1"
+check("scope: org on a metric that carries the cluster is refused",
+      any("which carries the cluster" in p for p in broken_key("no-traces", scope="org")))
+check("an ml_obs metric without scope: org is refused",
+      any("mark it scope: org" in p for p in broken_key("no-traces", query=ML)))
+check("an ml_obs metric filtered to a cluster is refused (it would never fill)", any("never fills" in p for p in broken_key(
+      "agent-obs-silent", query="sum(last_10m):sum:ml_obs.trace{kube_cluster_name:burritobot-*,ml_app:burritobot}.as_count() < 1")))
+check("an ml_obs metric grouped by cluster is refused", any("never fills" in p for p in broken_key(
+      "agent-obs-silent", query="sum(last_10m):sum:ml_obs.trace{ml_app:burritobot} by {kube_cluster_name}.as_count() < 1")))
+check("an org-wide monitor grouped by anything is refused", any("one alert group" in p for p in broken_key(
+      "agent-obs-silent", query="sum(last_10m):sum:ml_obs.trace{ml_app:burritobot} by {env}.as_count() < 1")))
+check("an org-wide monitor that fires on a rise is refused", any("fires on absence" in p for p in broken_key(
+      "agent-obs-silent", query="sum(last_10m):sum:ml_obs.trace.error{ml_app:burritobot}.as_count() > 1",
+      options={"thresholds": {"critical": 1}, "notify_no_data": True, "no_data_timeframe": 10})))
+check("an org-wide monitor without notify_no_data is refused (a dead count is No Data, not 0)",
+      any("needs notify_no_data" in p for p in broken_key("agent-obs-silent", options={"thresholds": {"critical": 1}})))
+check("an org-wide message naming the cluster variable is refused",
+      any("empty on an org-wide alert" in p for p in broken_key("agent-obs-silent", message="{{kube_cluster_name.name}} down")))
+check("a scope other than org is refused", any("is not 'org'" in p for p in broken_key("agent-obs-silent", scope="room")))
+check("the org-wide monitor's threshold is still held to its query",
+      any("!=" in p for p in broken_key("agent-obs-silent", options={"thresholds": {"critical": 3}, "notify_no_data": True, "no_data_timeframe": 10})))
 bad_dash = json.loads(json.dumps(dash))
 bad_dash["widgets"][-1]["definition"]["requests"][0]["formulas"] = [{"formula": "nope"}]
 check("a dashboard formula naming no query", fm.validate_dashboard(bad_dash, FILTER) != [])
@@ -153,6 +198,10 @@ check("a non-session monitor has no session tag", fm.SESSION_TAG not in fm.rende
 check("notify handles are appended to the message", r["message"].rstrip().endswith("@oncall@example.test"))
 check("the message points at the outside check for that cluster", "fleet.sh verify {{kube_cluster_name.name}}" in r["message"])
 check("no repo-only fields leak into the API body", not {"key", "session"} & set(r) and r["priority"] == 3)
+ra = fm.render_monitor(mons["agent-obs-silent"], [])
+check("the org-wide monitor renders without a cluster line, as a session monitor, without its scope field",
+      "kube_cluster_name" not in ra["message"] and fm.SESSION_TAG in ra["tags"] and "scope" not in ra
+      and ra["query"] == mons["agent-obs-silent"]["query"])
 
 print("== planning ==")
 rendered = {k: fm.render_monitor(m, []) for k, m in mons.items()}
@@ -297,7 +346,7 @@ foreign = {"id": "theirs", "attributes": {"message": "someone else's maintenance
 org = FakeOrg(downtimes=[stale, foreign])
 rc, text = run(["--apply", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], org)
 check("exit 0", rc == 0)
-check("six monitors created, all managed", len(org.monitors) == 6
+check("seven monitors created, all managed", len(org.monitors) == 7
       and all(fm.MANAGED_TAG in m["tags"] for m in org.monitors.values()))
 check("the dashboard was created and its URL printed", "fleet dashboard: https://app.datadoghq.com/dashboard/abc-def-ghi/fleet" in text)
 check("the leaderboard was created and its URL printed",
@@ -326,7 +375,7 @@ print("== apply again: in place, nothing duplicated ==")
 ids_before = set(org.monitors)
 rc, text = run(["--apply", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], org)
 check("exit 0", rc == 0)
-check("the same six monitor ids", set(org.monitors) == ids_before)
+check("the same seven monitor ids", set(org.monitors) == ids_before)
 check("both dashboards were updated, not duplicated", len(org.dashboards) == 2 and text.count("dashboard updated") == 2)
 check("exactly two of our mutes are active afterwards",
       len([d for d in org.downtimes if d["attributes"]["status"] == "active" and fm.ours(d)]) == 2)
@@ -354,6 +403,7 @@ fleet_queries = [(w["definition"], q) for w in dash["widgets"]
                  for r in w["definition"].get("requests", []) for q in r.get("queries", [])]
 signals = {k: m["signal"] for k, m in mons.items() if m.get("signal")}
 absence = [k for k in mons if k not in signals]
+org_wide = [k for k in absence if mons[k].get("scope") == "org"]
 
 
 def is_grouped(q):
@@ -438,12 +488,29 @@ rc, text, _ = blanked(lambda o: o.data.pop(fm.query_text(table)))
 check("a column that answers nothing at all fails", rc == 1 and "NO DATA  fleet dashboard / Every cluster, last 5 minutes / traces" in text)
 rc, text, _ = blanked(lambda o: o.monitors.pop(next(i for i, m in o.monitors.items() if "wib-monitor:no-traces" in m["tags"])))
 check("a monitor not in the org fails --data too", rc == 1 and "MISSING  monitor no-traces" in text)
+
+
+def overall(key, state):
+    def f(o):
+        o.monitors[next(i for i, m in o.monitors.items() if f"wib-monitor:{key}" in m["tags"])]["overall_state"] = state
+    return f
+
+
+rc, text, crc = blanked(overall("agent-obs-silent", "No Data"))
+check("the org-wide monitor in No Data fails --data, saying it is the whole org (#810)",
+      rc == 1 and "NO DATA  monitor agent-obs-silent (No Data, the whole org: no cluster tag): (no value)" in text)
+check("--check alone passes an org whose Agent Observability monitor is No Data", crc == 0)
+rc, text, _ = blanked(overall("agent-obs-silent", "Alert"))
+check("the org-wide monitor in Alert has data: it is fed, and its query answered below 1",
+      rc == 0 and "DATA     monitor agent-obs-silent (Alert" in text)
+rc, text, _ = blanked(lambda o: o.groups.pop("agent-obs-silent"))
+check("the org-wide monitor needs no per-cluster group", rc == 0 and "DATA     monitor agent-obs-silent" in text)
 o3 = FakeOrg()
 run(["--apply"], o3)
 o3.data, o3.groups = shipping()
 rc, text = run([*DATA_ARGS, "--cluster", "burritobot-attendee-007"], o3, env={})
 check("a named cluster that ships nothing fails every per-cluster query",
-      rc == 1 and text.count("burritobot-attendee-007") >= len(absence) + 1)
+      rc == 1 and text.count("burritobot-attendee-007") >= len(absence) - len(org_wide) + 1)
 
 def keys_unread(*_):
     raise AssertionError("keys read before the arguments were checked")
@@ -493,7 +560,7 @@ for mode in (["--apply"], ["--check"]):
           and [p for _, p, _ in org.calls] == ["/api/v2/current_user"])
 org = FakeOrg(org="Acme Pool 3")
 rc, text = run(["--apply"], org, env={**WRITE_ENV, "WIB_DD_POOL_PREFIX": "Acme Pool"})
-check("WIB_DD_POOL_PREFIX names a per-event pool's org instead", rc == 0 and len(org.monitors) == 6)
+check("WIB_DD_POOL_PREFIX names a per-event pool's org instead", rc == 0 and len(org.monitors) == 7)
 
 print("== dry run touches nothing ==")
 def no_keys(*_):

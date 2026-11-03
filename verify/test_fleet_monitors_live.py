@@ -10,7 +10,7 @@
 # Then it proves they are FED, which a loaded monitor on a wrong name is not: it runs `fleet.sh monitors --data`
 # for every cluster in WIB_FLEET_CLUSTERS (default burritobot-public,burritobot-private, the two KubeCon
 # clusters in Whitney's sandbox org, #629). Every monitor that fires on absence must have a group for each
-# cluster in a state other than No Data, every monitor that fires on a rising count must have its signal answer
+# cluster in a state other than No Data (agent-obs-silent, on a metric with no cluster tag, as a whole, #810), every monitor that fires on a rising count must have its signal answer
 # for each, and every query on the fleet dashboard must answer for each over its widget's window. The traces
 # and spend columns only fill after a chat: drive one /chat on each cluster within 5 minutes before running it.
 #

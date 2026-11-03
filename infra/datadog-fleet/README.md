@@ -9,7 +9,7 @@ nothing looked at it. These files are what looks.
 
 | File | What it is |
 |---|---|
-| `monitors.yaml` | Six monitors, each one alert group per `kube_cluster_name` |
+| `monitors.yaml` | Seven monitors: six with one alert group per `kube_cluster_name`, and one for the whole org on Agent Observability's own count |
 | `dashboard.yaml` | The fleet dashboard: one row per cluster, plus the alert list and the room's spend |
 | `leaderboard.yaml` | The challenge leaderboard (#307): one row per cluster, one green cell per challenge done |
 | `fleet_monitors.py` | The loader. Dry run by default, `--apply` writes, `--check` compares the live org, `--data` checks every query answers |
@@ -57,12 +57,29 @@ monitors still change state on the dashboard and the Monitors page, but they pag
 | `guard-proxy-erroring` | more than 2 guard-proxy error logs in 5 min | "BurritoBot's kitchen isn't answering" |
 | `node-not-ready` | a node reports Ready false/unknown for 5 min | Pods stop scheduling, then everything above |
 | `no-traces` | no span reaches the collector for 10 min, **during the session only** | Idle, or a broken trace path |
+| `agent-obs-silent` | Agent Observability files no `ml_app:burritobot` trace for 10 min, from any cluster, **during the session only** | Nothing; the presenters' Agent Observability tab is empty on stage |
 
-`no-traces` is the only session-scoped monitor: outside the session an idle cluster is a healthy one. The
-loader mutes it with downtimes until `--session` START and again from END (and indefinitely when no
+`no-traces` and `agent-obs-silent` are the session-scoped monitors: outside the session an idle cluster is a
+healthy one. The loader mutes them with downtimes until `--session` START and again from END (and indefinitely when no
 window is given), and cancels its own previous downtimes on every apply.
 
 A cluster torn down on purpose fires `cluster-silent` once. Resolve it from the monitor page.
+
+### Agent Observability, for the whole org (#810)
+
+`agent-obs-silent` watches `ml_obs.trace{ml_app:burritobot}`, Agent Observability's own count of the traces it
+filed: one per BurritoBot turn. It exists because of #783: for six hours Agent Observability filed nothing while
+APM kept every span, and `no-traces` stayed green, because the collector's span count is upstream of the
+conversion that failed. Agent Observability's metrics carry `env`, `ml_app`, `service`, `version` and a few
+more, never a span's `k8s.cluster.name` (Datadog's metrics page: "other tags set on spans are not available as
+tags on Agent Observability metrics"), so this monitor cannot be per cluster. It is `scope: org`: one alert,
+no cluster filter, no group. The loader allows that only on `ml_obs.*` (`ORG_SCOPE_METRICS` in
+`fleet_monitors.py`), refuses an `ml_obs.*` monitor without it, and in `--data` reads its overall state instead
+of a group per cluster.
+
+What it cannot see: one cluster whose copy stops while the other's still arrives. That is what
+`python3 verify/agent_obs_flow.py chat --profile accen-dev` answers, per cluster, before every run-through; the
+alert's message names it.
 
 ## The challenge leaderboard
 
