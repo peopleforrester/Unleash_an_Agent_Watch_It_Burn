@@ -11422,3 +11422,34 @@ Both are kept, #811's above #759's. decisions.md took the later entries by appen
 On the rebased branch (run 16668, at bfb7a2c), `bash verify/run-tests.sh` passed with 232 tests, and
 `bash verify/run-e2e-tools.sh` ran 48 checks and failed only `test_image_version_tags.py`, on the same
 `web-terminal-ttyd-1.7.7` digest red the #608 entry records on staging. test_agent_obs_cause_comment passed in the tier.
+
+## 2026-11-03 · #759 · Run 16670 could not read its session files either, so the live trace read is still owed
+
+**What this run did.** Run 16670 started from staging b4cad81, which already holds run 16653's reader
+(`verify/dd_traces.py`, `verify/test_dd_traces.py` and `verify/test_dd_traces_live.py`). Its one job was the live read
+that the 2026-11-03 #759 entry above leaves owed. `verify/prior-drafts.sh 759 origin/staging` printed NONE: runs 16653
+and 16658 are in staging, and run 15550's draft is superseded by that later work. No code changed.
+
+**Why the live read did not run.** The session files were unreadable again. In `/var/lib/hecaton/runs/16670/clusters`,
+the files `env`, `aws-config`, `aws-credentials` and `kubeconfig` are `hecaton:hecaton` mode 0640, and the run's
+user `hecaton-s2-claude-certkraken` is not in group `hecaton`. The directory itself has the run's group. This is the
+same failure that stopped runs 16574, 16647, 16650 and 16653. The fix, hecaton#508's commit 35a091a on
+`agent/508-16539`, failed hecaton's validation and is not deployed. `sources datadog`, `sources aws-env` and
+`sources eks-session` are all refused for this run's user. That leaves no other read-only route to the pair. At
+2026-11-03T15:16:08Z this run ran:
+
+    . "$HECATON_CLUSTER_ENV"
+    python3 verify/dd_traces.py --profile accen-dev --minutes 1440 --traces 1 --apm
+
+It printed:
+
+    /bin/bash: line 1: /var/lib/hecaton/runs/16670/clusters/env: Permission denied
+    dd_traces: cannot read watch-it-burn/datadog as profile accen-dev in us-west-2: aws: [ERROR]: The config profile (accen-dev) could not be found
+
+Then `kubectl --context watch-it-burn-community get ns` printed `open /var/lib/hecaton/runs/16670/clusters/kubeconfig:
+permission denied`. So it is still unknown whether the application key in `watch-it-burn/datadog` carries
+`llm_observability_read` and `apm_read`.
+
+**Not yet run.** The first run whose session files it can read runs `. "$HECATON_CLUSTER_ENV" && python3
+verify/test_dd_traces_live.py`. Until hecaton#508 is deployed, another dispatch of #759 hits this same wall, so this
+run's report holds the issue on hecaton#508.
