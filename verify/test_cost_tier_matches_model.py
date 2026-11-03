@@ -1,5 +1,9 @@
 # ABOUTME: Contract test — the proxy's MODEL_TIER must match the kagent ModelConfig the agent is bound to,
 # ABOUTME: and that tier must be priced, or the on-screen cost counter shows the wrong model's money.
+#
+# Since guard-proxy-agenticburn#37 (#793) the proxy prices each request at the bound bedrock-<tier> ModelConfig's
+# tier, so a live swap needs no MODEL_TIER change. MODEL_TIER is still the start-up default, the price until the
+# proxy has first read the Agent, so the committed pair has to agree; verify/model_pin_check.py judges a swap.
 import importlib.util
 import pathlib
 import re

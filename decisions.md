@@ -13024,3 +13024,69 @@ and exited 1 on `test_image_version_tags.py` alone, on one check: ghcr.io answer
 the tag staging records under #814. The `web-terminal-ttyd-1.7.7` check (#794) passed this time, at the pinned
 `68004fb5`. `test_weather_feed_e2e.py`,
 red in run 16765 on the weather service's 503, passed this time. No live cluster check applies to this prose change.
+
+## 2026-11-03 · #793 · model_pin_check and the cost tests price by whichever guard-proxy build is pinned; the repin to 2cff90d is Michael's commit
+
+**Context.** guard-proxy-agenticburn#37 (c8ac56e, release note of 2026-11-02) has guard-proxy price each request at
+the tier of the `workshop-agent` Agent's `spec.declarative.modelConfig` (`bedrock-nova`, `-haiku`, `-sonnet`, `-opus`),
+read at most every 5 seconds with the `guard-proxy-reader` token, which already has `get` on that Agent.
+`MODEL_TIER` becomes the start-up default and the price of a ModelConfig with no tier, and `/cost`'s `tier` is the
+tier in effect. This is build piece 1 of `docs/research/2026-11-02-workload-management-exercises.md`.
+
+**Why the gitlink is not in this change.** Runs 16460 and 16752 both moved `gitops/ai-layer/guard-proxy` (to 78c7cad,
+then 2cff90d) and both failed hecaton's forbidden gate, "adds submodule gitops/ai-layer/guard-proxy". The gate's
+`gate_forbidden` (hecaton `run/validate.py`) fails every changed path whose tree mode is 160000, so it refuses a bump
+of an existing submodule as well as a new one. That is the rule question 766 settled, "Michael pins, a run does the
+rest" (the #559 and #762 entries above), and run 16752 missed it. Run 16791 (this entry) keeps the gitlink at staging's
+88b9b52 and `checksum/proxy-py` at `5ef84f383407`, and puts Michael's repin in its escalate: move the gitlink to
+2cff90d, guard-proxy-agenticburn main's head, which carries #37, #38 (1cfa6d6, spans and `gen_ai.client.cost` name the
+priced model) and #43 (82b7daf, both rate-limit replies end "Wait a few seconds and send that again."), and set
+`checksum/proxy-py` to `19fbbe48283e`, the sha256 of 2cff90d's proxy.py. `verify/load_replay.py` tells the two limits
+apart by `/min per conversation.)` and `/min cap on this cluster.)`, which #43's replies keep.
+
+**So the rest holds at either pin.** Everything here is written to be right before and after that commit, and its
+tests pass with the submodule at 88b9b52 and at 2cff90d (both run; see the suites below):
+- `verify/model_pin_check.py` reads which build is pinned: `prices_bound_model` is true when the pinned proxy.py
+  defines both `_tier_of` and `bound_tier`, which #37 added. On such a build it prices the pin at the bound
+  `bedrock-<tier>` ModelConfig's tier, else `MODEL_TIER`, so a live patch of the Agent to `bedrock-haiku` with
+  `MODEL_TIER` left at `nova` passes, and a ModelConfig with no `bedrock-<tier>` name prints a non-failing `WARN` and
+  is judged at `MODEL_TIER`. On an earlier build it prices at `MODEL_TIER` alone, as that build does, so the same
+  patch fails as mispriced. It prints which pricing it read, and the GREEN line names the priced tier.
+- `verify/test_model_pin_check.py` judges both builds on every run. With bound pricing: live patches to haiku, sonnet
+  and opus pass with `MODEL_TIER` at nova, `MODEL_TIER=sonnet` on a `bedrock-nova` pin passes (the issue's case
+  "MODEL_TIER pricing another model fails the pin" is false there), a `bedrock-<tier>` ModelConfig whose model is
+  another tier's fails, and untiered names warn. With `MODEL_TIER` pricing, the issue's case still fails the pin, and
+  the three patches fail unless `MODEL_TIER` moves with them. It also checks `prices_bound_model` on three stand-in
+  sources and against the imported pinned proxy.py, and then holds the check to the pinned build: on a #37 build
+  `bound_tier` agrees with its `_tier_of` on every ModelConfig the manifests define and five odd names; on an earlier
+  one the build's fixed price is the `MODEL_TIER` row.
+- `verify/test_cost_counter.py` and `verify/test_finale_cap.py` priced through `COST_PER_1K_IN`, which #37 removes.
+  They now take the `MODEL_TIER` row of `TIER_PRICES_PER_1K`, which is the off-cluster price on both builds. The
+  counter test's swap section, with the Agent read stubbed, holds a #37 build to Nova, Haiku and Opus rates after each
+  patch, `MODEL_TIER` for `gateway-local-qwen3`, and no change inside the 5-second cache, and an earlier build to the
+  `MODEL_TIER` row whatever the Agent is bound to.
+- `verify/test_c7_badge_grants.py` resolves a `_k8s_get` path held in a module-level string constant, as #37's
+  `_AGENT_PATH` is. At 2cff90d that read resolves to `agents/workshop-agent`, which `guard-proxy-reader` is granted
+  `get` on by name, so the issue's "no RBAC change" holds.
+- `docs/MASTER-RECREATION-SPEC.md`'s tier-swap bullet: the swap is the Agent patch alone from #37 (guard-proxy 2cff90d)
+  on; a pin before #37 still needs `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>` with it, and
+  `verify/model_pin_check.py` reads which build is pinned. `docs/GO-LIVE-CHECKLIST.md`'s item says the same.
+  `verify/test_recreation_spec_tier_swap.py` holds both cases in the bullet, and checks that the pinned proxy.py
+  prices through `bound_tier()` exactly when `model_pin_check` reads it as doing so.
+
+**What differs from run 16752's draft** (`agent/793-16752`, aa2dcc6 and 86c1ce2, failed at the forbidden gate): no
+gitlink or checksum move; the check and the tests take the build as an input instead of assuming 2cff90d; the spec
+and checklist name both cases; PROJECT_STATE.md says the repin waits on Michael. The #773 line it corrected (the
+witch-name repin was 6d8505a) is kept.
+
+**Not yet run on a cluster.** Run 16791's `clusters/env` and `clusters/kubeconfig` are mode 640, owner and group
+`hecaton`, and the run's user (`hecaton-s3-claude-certkraken`, groups `hecaton-s3-claude-certkraken`, `hecaton-runs`,
+`hecaton-tools`) is not in that group: `kubectl --context watch-it-burn-community -n agent get deploy guard-proxy`
+answers "open .../clusters/kubeconfig: permission denied", as runs 16460 and 16752 did (hecaton#508). The clusters
+also price at `MODEL_TIER` until the repin lands and ai-layer syncs. The next run on #793, after both, on one cluster:
+1. `kubectl --context <ctx> -n agent get deploy guard-proxy -o jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'` reads `19fbbe48283e`.
+2. Read `/cost` through the proxy (`kubectl --context <ctx> -n agent exec deploy/guard-proxy -c proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/cost').read().decode())"`): `tier` is `nova`.
+3. `kubectl --context <ctx> -n agent patch agent workshop-agent --type merge -p '{"spec":{"declarative":{"modelConfig":"bedrock-haiku"}}}'`, behind the Kyverno flip in `docs/GOTCHAS-FLEET-AND-DELIVERY.md`, then read `/cost` again within 5 seconds: `tier` is `haiku`, and the proxy log has one `price_tier` line naming `bedrock-haiku`.
+4. Send one `/chat` turn once the agent pod has restarted. The reply's `cost_usd` and the growth of `/cost`'s `usd` equal input tokens x $0.001/1K plus output tokens x $0.005/1K, the Haiku row, not Nova's $0.0008/$0.0032.
+5. Patch `modelConfig` back to `bedrock-nova`, check `tier` reads `nova` again, and turn Kyverno back as found.
+No E2E test in `verify/run-e2e.sh` does this swap yet; O2b in the research note is the place for one.

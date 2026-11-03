@@ -13,6 +13,8 @@ import subprocess
 import sys
 import tempfile
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 CHECK = REPO / "verify" / "model_pin_check.py"
 spec = importlib.util.spec_from_file_location("model_pin_check", CHECK)
@@ -60,15 +62,97 @@ QUOTAS = [
 print("== the pin as the manifest declares it ==")
 pin = mpc.pinned(mpc.committed_manifests())
 tiers = mpc.load_tier_map()
-check("the real manifest's pin passes the offline judge", all_ok(mpc.judge_pin(pin, "us-west-2", tiers)),
-      str(mpc.judge_pin(pin, "us-west-2", tiers)))
+BOUND = mpc.prices_bound_model(mpc.PROXY.read_text())  # what the pinned proxy.py does, read as the check reads it
+print(f"  (the pinned proxy.py prices at {'the bound ModelConfig' if BOUND else 'MODEL_TIER alone'})")
+check("the real manifest's pin passes the offline judge", all_ok(mpc.judge_pin(pin, "us-west-2", tiers, BOUND)),
+      str(mpc.judge_pin(pin, "us-west-2", tiers, BOUND)))
 check("the pin is a cross-region inference profile", mpc.is_profile(pin["model_id"]), pin["model_id"])
 check("a different delivery region fails the pin",
-      not all_ok(mpc.judge_pin(pin, "us-east-1", tiers)))
+      not all_ok(mpc.judge_pin(pin, "us-east-1", tiers, BOUND)))
+check("the committed pin, a bedrock-<tier> ModelConfig, raises no warning", mpc.warn_pin(pin, tiers, BOUND) == [],
+      str(mpc.warn_pin(pin, tiers, BOUND)))
+
+print("== which build prices how ==")
+# guard-proxy-agenticburn#37 (c8ac56e) added _tier_of and bound_tier; an earlier build has neither.
+check("a proxy.py that defines _tier_of and bound_tier prices at the bound model",
+      mpc.prices_bound_model("x = 1\ndef _tier_of(model_config):\n    pass\ndef bound_tier():\n    pass\n"))
+check("one that defines neither prices at MODEL_TIER alone",
+      not mpc.prices_bound_model("MODEL_TIER = 'nova'\ndef record_usage(resp):\n    pass\n"))
+check("and one with only _tier_of is not read as pricing at the bound model",
+      not mpc.prices_bound_model("x = 1\ndef _tier_of(model_config):\n    pass\n"))
+
+# The shapes a live patch leaves, judged as each build prices them. Both builds are judged on every run, so the
+# check is right before and after gitops/ai-layer/guard-proxy moves to a build that carries #37.
+def patched_to(model_config):
+    """The pin a live `kubectl patch agent workshop-agent` to model_config leaves: the Agent's modelConfig and that
+    ModelConfig's model change, guard-proxy's env (MODEL_TIER) does not."""
+    return mpc.pinned(mpc.committed_manifests().replace("modelConfig: bedrock-nova", f"modelConfig: {model_config}", 1))
+
+
+check("the committed Agent is bound to bedrock-nova with MODEL_TIER nova, the shape a swap starts from",
+      pin["model_config"] == "bedrock-nova" and pin["model_tier"] == "nova", str(pin))
+
+print("== a build that prices at the bound model (guard-proxy-agenticburn#37) ==")
+for target in ("bedrock-haiku", "bedrock-sonnet", "bedrock-opus"):
+    swapped = patched_to(target)
+    check(f"a live patch to {target} with MODEL_TIER left at nova is not mispriced",
+          swapped["model_config"] == target and swapped["model_tier"] == "nova"
+          and all_ok(mpc.judge_pin(swapped, "us-west-2", tiers, True)) and mpc.warn_pin(swapped, tiers, True) == [],
+          str(mpc.judge_pin(swapped, "us-west-2", tiers, True)))
+check("a swap to bedrock-haiku is priced at haiku, the bound tier",
+      mpc.priced_tier(patched_to("bedrock-haiku"), tiers, True) == "haiku")
+check("a MODEL_TIER naming another model does not fail a bedrock-<tier> pin",
+      all_ok(mpc.judge_pin({**pin, "model_tier": "sonnet"}, "us-west-2", tiers, True)))
+check("a bedrock-<tier> ModelConfig whose model is another tier's fails the pin",
+      not all_ok(mpc.judge_pin({**pin, "model_config": "bedrock-haiku"}, "us-west-2", tiers, True)))
+untiered = {**pin, "model_config": "custom-nova"}
+check("a ModelConfig with no bedrock-<tier> name warns", len(mpc.warn_pin(untiered, tiers, True)) == 1
+      and "MODEL_TIER" in mpc.warn_pin(untiered, tiers, True)[0], str(mpc.warn_pin(untiered, tiers, True)))
+check("and is priced at MODEL_TIER, passing when MODEL_TIER prices its model",
+      mpc.priced_tier(untiered, tiers, True) == "nova" and all_ok(mpc.judge_pin(untiered, "us-west-2", tiers, True)))
+check("and failing when MODEL_TIER prices another model",
+      not all_ok(mpc.judge_pin({**untiered, "model_tier": "sonnet"}, "us-west-2", tiers, True)))
+check("bedrock-<a name with no price row> is no tier, and warns",
+      mpc.bound_tier("bedrock-titan", tiers) is None
+      and len(mpc.warn_pin({**pin, "model_config": "bedrock-titan"}, tiers, True)) == 1)
+check("the four direct Bedrock ModelConfigs each bind their tier",
+      all(mpc.bound_tier(f"bedrock-{t}", tiers) == t for t in ("nova", "haiku", "sonnet", "opus")))
+
+print("== a build that prices at MODEL_TIER alone (before #37) ==")
+for target in ("bedrock-haiku", "bedrock-sonnet", "bedrock-opus"):
+    check(f"a live patch to {target} with MODEL_TIER left at nova is mispriced, so it fails",
+          not all_ok(mpc.judge_pin(patched_to(target), "us-west-2", tiers, False)))
 check("MODEL_TIER pricing another model fails the pin",
-      not all_ok(mpc.judge_pin({**pin, "model_tier": "sonnet"}, "us-west-2", tiers)))
+      not all_ok(mpc.judge_pin({**pin, "model_tier": "sonnet"}, "us-west-2", tiers, False)))
+check("a patch to bedrock-haiku with MODEL_TIER set to haiku passes",
+      all_ok(mpc.judge_pin({**patched_to("bedrock-haiku"), "model_tier": "haiku"}, "us-west-2", tiers, False)))
+check("and no ModelConfig warns, since MODEL_TIER prices every one and the judge holds it",
+      mpc.warn_pin(untiered, tiers, False) == [] and mpc.priced_tier(untiered, tiers, False) == "nova")
+
+print("== the check reads the pinned build the way it prices ==")
+proxy_spec = importlib.util.spec_from_file_location("guard_proxy_tier_of", mpc.PROXY)
+proxy = importlib.util.module_from_spec(proxy_spec)
+proxy_spec.loader.exec_module(proxy)
+check("the source read agrees with the imported proxy.py",
+      BOUND == (callable(getattr(proxy, "_tier_of", None)) and callable(getattr(proxy, "bound_tier", None))))
+names = sorted(d["metadata"]["name"] for d in yaml.safe_load_all(mpc.committed_manifests())
+               if isinstance(d, dict) and d.get("kind") == "ModelConfig")
+names += ["custom-nova", "bedrock-titan", "bedrock-", "bedrock-HAIKU", "gateway-bedrock-haiku"]
+if BOUND:
+    # The tier comes off the name as the pinned proxy.py's _tier_of reads it, for every ModelConfig the manifests
+    # define and the odd names above, so the two cannot drift apart unnoticed.
+    disagree = [n for n in names if mpc.bound_tier(n, tiers) != proxy._tier_of(n)]
+    check(f"bound_tier agrees with proxy.py's _tier_of on {len(names)} ModelConfig names", not disagree, str(disagree))
+else:
+    # The pinned build prices every request at one fixed price, the MODEL_TIER row, which is what the check
+    # judges it by. (It may read the Agent for the C7 badge; it does not price by it.)
+    row = proxy.TIER_PRICES_PER_1K.get(proxy.MODEL_TIER, proxy.TIER_PRICES_PER_1K["haiku"])
+    check("the pinned proxy.py prices every request at the MODEL_TIER row",
+          (proxy.COST_PER_1K_IN, proxy.COST_PER_1K_OUT) == (row["in"], row["out"]),
+          f"{(proxy.COST_PER_1K_IN, proxy.COST_PER_1K_OUT)} vs {row}")
+
 check("an unset RATE_LIMIT_RPM fails the pin",
-      not all_ok(mpc.judge_pin({**pin, "rate_limit_rpm": 0}, "us-west-2", tiers)))
+      not all_ok(mpc.judge_pin({**pin, "rate_limit_rpm": 0}, "us-west-2", tiers, BOUND)))
 
 print("\n== inference profile ==")
 c, arns = mpc.judge_profile(PROFILE_OK, "us.amazon.nova-pro-v1:0", "us-west-2")

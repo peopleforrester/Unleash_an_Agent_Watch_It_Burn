@@ -241,9 +241,12 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
   cluster per presenter. What is in place is the hook for the live patch decisions.md recommends: the
   workshop-agent Application's `ignoreDifferences` covers the Agent's `.spec.declarative.modelConfig` and the
   ai-layer Application's the guard-proxy's `MODEL_TIER` env, so a cluster switched by hand keeps its tier until the
-  next workshop-agent sync, which any other change to the Agent brings and which applies the committed tier (#707). To switch one, change
-  both together, or the counter prices the wrong model: patch Agent `workshop-agent` to `bedrock-<tier>`,
-  then `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>` behind the Kyverno flip in
+  next workshop-agent sync, which any other change to the Agent brings and which applies the committed tier (#707). To switch one,
+  patch Agent `workshop-agent` to `bedrock-<tier>`: guard-proxy prices each request at the bound `bedrock-<tier>`
+  ModelConfig's tier within 5 seconds from guard-proxy-agenticburn#37 on (guard-proxy 2cff90d, #793), so
+  `MODEL_TIER` stays as it is. Only a ModelConfig with no `bedrock-<tier>` name, or a guard-proxy pin before #37,
+  is priced at `MODEL_TIER`, and a swap there needs `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>` with
+  it (`verify/model_pin_check.py` prints which pricing the pinned build uses), behind the Kyverno flip in
   docs/GOTCHAS-FLEET-AND-DELIVERY.md. Not validated live.
 
 ---

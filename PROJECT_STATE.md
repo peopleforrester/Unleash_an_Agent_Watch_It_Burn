@@ -16,9 +16,18 @@ without touching its children. Not yet run on a cluster; details in decisions.md
 Built on staging, not yet run on a cluster. `deploy_app` turns a plain name (busybox, alpine, nginx, httpd, redis,
 2048) into a pinned public.ecr.aws image, runs it as one small replica and scales it to zero after 5 minutes.
 `deployments-<cluster>` lists every landed deployment by name, image and witch name, and the chat page shows "see
-your deployments" once the visitor has one. Owed: #762's guard-proxy repin (so the witch name reaches the model),
-apex-agenticburn's `deployments.burritobot.co` lookup, and `verify/test_deployments_page_live.py` on both KubeCon
-clusters. Details in decisions.md, 2026-11-02 · #773.
+your deployments" once the visitor has one. 6d8505a repinned guard-proxy to 88b9b52, which forwards the witch name
+(guard-proxy-agenticburn#34/#35). Owed: apex-agenticburn's `deployments.burritobot.co`
+lookup, and `verify/test_deployments_page_live.py` on both KubeCon clusters. Details in decisions.md, 2026-11-02 · #773.
+
+## guard-proxy prices the bound model (#793)
+
+Waiting on Michael's repin. guard-proxy-agenticburn main 2cff90d prices each request at the `workshop-agent` Agent's
+bound `bedrock-<tier>` ModelConfig (#37), so on it a live tier swap is the Agent patch alone. A run cannot move the
+gitlink (question 766), so `gitops/ai-layer/guard-proxy` stays at 88b9b52 until Michael commits the move and
+`checksum/proxy-py` `19fbbe48283e`. `verify/model_pin_check.py`, its test, the cost-counter and finale-cap tests and
+the recreation spec already hold for either build. Owed after the repin syncs: the nova-to-haiku swap on a cluster,
+with `/cost`'s tier and Haiku-rate spend checked. Details in decisions.md, 2026-11-03 · #793.
 
 ## KubeCon guardrails switch (#774)
 

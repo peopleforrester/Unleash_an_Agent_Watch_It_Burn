@@ -104,7 +104,8 @@ with tempfile.TemporaryDirectory() as tmp:
           and "cost_cap=" in out, out)
     check("the spend is kept, not reset", abs(cost()["usd"] - before) < 1e-9)
     check("under the new cap the room still gets answers", not proxy.cost_capped())
-    spend(int(0.6 / proxy.COST_PER_1K_IN * 1000))  # the room spends past the headroom
+    # the room spends past the headroom, at the MODEL_TIER row: off a cluster every build prices there
+    spend(int(0.6 / proxy.TIER_PRICES_PER_1K.get(proxy.MODEL_TIER, proxy.TIER_PRICES_PER_1K["haiku"])["in"] * 1000))
     check("past it, guard-proxy refuses before the model for everyone", proxy.cost_capped())
     check("and a session with a budget of its own is refused too", proxy.cost_capped("phone-17"))
     # What each phone reads: /chat with no model and no scanner behind it, every guard off, so the cap is
