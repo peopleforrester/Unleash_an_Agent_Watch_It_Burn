@@ -11980,3 +11980,8 @@ prose gate on one phrase. This entry stands in for it with the 2026-11-03 re-che
 watch-it-burn-private against images.lock, could not run: the session files in this run's `clusters/` directory are
 group `hecaton` and mode 640, which this run's user cannot read (hecaton#508). The next run on the issue runs
 `kubectl --context <each> get pods -A -o jsonpath='{..image}'` and names any image with no row.
+
+**The suites.** `bash verify/run-e2e-tools.sh` ran 49 checks in 23m15s and exits 1 on one, `test_image_version_tags.py`:
+ghcr.io serves the web-terminal tag at another digest, and `sample-app-nginx-1.27.5` answers 404, the two reds
+recorded on staging before this change (#796, #814). Its offline suite ran 234 tests, all green. In the tier,
+`test_images_lock_render.py` and `test_no_docker_hub_render.py` passed.
