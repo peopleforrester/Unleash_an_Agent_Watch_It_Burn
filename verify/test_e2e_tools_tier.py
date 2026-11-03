@@ -81,6 +81,14 @@ check(f"otelcol-contrib is the collector image's version {sorted(collector_tags)
 want = re.search(r'^OTELCOL_VERSION = "([^"]+)"', (VERIFY / "test_lab_pipeline_collector.py").read_text(), re.M)
 check("otelcol-contrib is the version test_lab_pipeline_collector.py demands",
       bool(want) and "otelcol-contrib" in tools and tools["otelcol-contrib"][1] == f"v{want.group(1)}")
+# Its validate of a config with a Datadog exporter takes about 25 s off-cloud, and 60 s timed out on a loaded gate
+# host (#800). The limit stays well above that, and a hang is a FAIL naming the config, not an uncaught traceback.
+lab_text = (VERIFY / "test_lab_pipeline_collector.py").read_text()
+want = re.search(r"^VALIDATE_TIMEOUT = (\d+)$", lab_text, re.M)
+check(f"test_lab_pipeline_collector.py gives each validate at least 180 s ({want.group(1) if want else None})",
+      bool(want) and int(want.group(1)) >= 180 and "timeout=VALIDATE_TIMEOUT" in lab_text)
+check("test_lab_pipeline_collector.py fails a validate that hangs instead of raising",
+      re.search(r"except subprocess\.TimeoutExpired:\n\s+check\(f\"\{label\} validates within", lab_text) is not None)
 
 # ttyd runs test_ttyd_ws_auth.py (#770) on the terminal the clusters run, so its pin is the one the web-terminal
 # image downloads.

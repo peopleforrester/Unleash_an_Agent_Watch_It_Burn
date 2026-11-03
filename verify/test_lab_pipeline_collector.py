@@ -61,6 +61,12 @@ check(f"every collector Application pins chart {CHART}",
 
 ENV = {"PATH": "/usr/bin:/bin", "DD_API_KEY": "x", "DD_SITE": "datadoghq.com", "DD_ADMIN_API_KEY": "y",
        "WIB_CLUSTER_NAME": "burritobot-attendee-001", "MY_POD_IP": "127.0.0.1"}
+# How long one validate may take (#800). A config with a Datadog exporter takes about 25 s to validate off-cloud on
+# about 0.5 s of CPU: the exporter's hostname detection waits out its retries on 169.254.169.254, the cloud metadata
+# address nothing answers here, then makes a DNS lookup. One without a Datadog exporter validates in 0.2 s. 60 s
+# timed out with the load average at 30 on 16 cores (hecaton run 15830). 180 s is seven times the measured wait,
+# and a validate that has not returned by then has hung: that is a FAIL naming the config, not a traceback.
+VALIDATE_TIMEOUT = 180
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = pathlib.Path(tmp)
@@ -77,9 +83,14 @@ with tempfile.TemporaryDirectory() as tmp:
         f.write_text(yaml.safe_dump(collector_render.collector_config(profile, secret, admin)), encoding="utf-8")
         env = ENV if admin else {k: v for k, v in ENV.items() if k != "DD_ADMIN_API_KEY"}
         # The chart's --feature-gates too: transform/adk_model_content needs the lambda gate (#721).
-        r = subprocess.run([binary, "validate", f"--config=file:{f}", *collector_render.feature_gate_args(profile)],
-                           capture_output=True, text=True, env=env, timeout=60)
-        check(f"{label} validates", r.returncode == 0)
+        started = time.monotonic()
+        try:
+            r = subprocess.run([binary, "validate", f"--config=file:{f}", *collector_render.feature_gate_args(profile)],
+                               capture_output=True, text=True, env=env, timeout=VALIDATE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            check(f"{label} validates within {VALIDATE_TIMEOUT} s (the collector hung)", False)
+            continue
+        check(f"{label} validates ({time.monotonic() - started:.1f} s)", r.returncode == 0)
         if r.returncode:
             print("        " + (r.stderr or r.stdout).strip()[-400:])
 

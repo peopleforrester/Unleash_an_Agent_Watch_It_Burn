@@ -10909,3 +10909,26 @@ ran 45 checks and failed one, `test_image_version_tags.py`, on one check: ghcr.i
 (#815). The workshop-mcp fixture check that run 16548 fixed passes.
 
 No dependency was added.
+
+## 2026-11-03 · #800 · The lab-pipeline collector test gives each validate 180 s, and a hung validate is a FAIL
+
+**The cause is a wait, not start-up.** Hecaton run 15830 saw `verify/test_lab_pipeline_collector.py` raise
+`subprocess.TimeoutExpired` on one `otelcol-contrib validate` at the old 60 s limit, with the load average about 30 on
+16 cores. Measured here with the pinned 0.160.0 from `verify/.tools`: the three configs without a Datadog exporter
+validate in 0.2 s, and the four with one take 25.3 to 25.5 s on about 0.5 s of CPU. Watching the process with
+`ss` shows why: the Datadog exporter's hostname detection opens repeated connections to 169.254.169.254, the cloud
+metadata address, which nothing answers off-cloud, until its retries run out at about 25 s, then makes a DNS lookup.
+`AWS_EC2_METADATA_DISABLED=true` and `GCE_METADATA_HOST` do not shorten it, and setting a `hostname` on the exporter
+would change the config the test exists to validate, so the wait stays and the limit moves.
+
+**Decided here.** `VALIDATE_TIMEOUT = 180`, seven times the measured wait. That is the issue's own figure. A validate
+that has not returned by then has hung: `subprocess.run` kills it, and the run records `<config> validates within
+180 s (the collector hung)` as a FAIL, goes on to the next config, and exits 1, where before it left a traceback
+that named no config. Each PASS line now shows its validate's seconds, so the headroom is visible in every run. A config the
+collector rejects still fails as before, with the collector's error printed. The lab pipeline's own 30 s start
+deadline is unchanged, because that config swaps the Datadog exporters for files and starts in well under a second.
+`verify/test_e2e_tools_tier.py` (offline) now holds the limit at 180 s or more and holds the hang as a named FAIL.
+Checked by hand with a stand-in `otelcol-contrib` whose `validate` sleeps, and the limit cut to 2 s in a scratch
+copy: all seven configs FAIL by name, the run exits 1 in 15 s, and no stand-in process is left running.
+
+**Not yet run on a cluster.** Nothing here touches a cluster; the test is in the tools tier.
