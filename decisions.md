@@ -11762,4 +11762,10 @@ first item for #809 (a run has the two clusters that are up) and added a "Tests 
 new section; `verify/test_dispatched_runs.py` keeps #809's checks and #796's. Staging's #797 work had also given
 the tool-pin stand-in the versioned `workshop-mcp-mcp-1.29.1` image, so this branch no longer changes that test.
 
+On staging `6408699`, `bash verify/run-e2e-tools.sh` ran 48 checks in 23m50s; the offline suite inside it ran 234
+tests, all green. It exits 1 on `test_image_version_tags.py` alone, with two reds this branch does not touch: the
+web-terminal tag CI pushed over, and ghcr.io's 404 for `sample-app-nginx-1.27.5`, which #814's entry records with
+the escalated `crane tag` that publishes it. The first attempt at this run lost its log when the host's `/tmp` was
+emptied mid-run, so the log of the second sat in the run's own directory.
+
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.
