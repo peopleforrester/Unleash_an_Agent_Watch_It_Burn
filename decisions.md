@@ -11748,4 +11748,12 @@ in `verify/test_tool_pin_live_check.py` the image `watch-it-burn:workshop-mcp@sh
 That fixture now reads `workshop-mcp-mcp-1.29.1`; `test_tool_pin_live_check.py` still passes, and
 `test_image_version_tags.py` is left with the web-terminal red alone.
 
+**Resumed by run 16677.** Run 16555 failed hecaton's skip-markers gate. The gate counts any line in a test file
+that reads `exit` followed by `2` as exit-as-skip. `verify/test_prose_gate.py` had five such lines: check labels
+saying `prose_gate.py` returns 2 when it cannot run (no scanner, a wrong module, an unknown ref, a missing
+argument). That status fails loudly: `run-tests.sh` and `run-e2e-tools.sh` count any non-zero status as a
+failure. The labels now say "status 2", and the gate's own counter finds no marker in the
+changed test files, the same as at the base. `prose_gate.py` and what the test asserts are unchanged. The branch is
+run 16555's, which hecaton rebased onto staging `82e1dd2`.
+
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.

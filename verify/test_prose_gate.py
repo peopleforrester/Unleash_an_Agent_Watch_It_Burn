@@ -1,5 +1,5 @@
 # ABOUTME: Tests verify/prose_gate.py (#796) on a throwaway repo with a stand-in scanner: an added hype word in a
-# ABOUTME: prose file fails with its line, the name in backticks passes, a moved hit passes, bad input exits 2.
+# ABOUTME: prose file fails with its line, the name in backticks passes, a moved hit passes, bad input gives status 2.
 """verify/prose_gate.py reads a branch's prose as hecaton's ai-isms gate does, so a run finds the word that would
 fail it before the dispatcher does. The real scanner is on hecaton hosts only, so this drives the script with
 `verify/fixtures/prose-gate/fake_aiisms.py`, which has the same interface, and checks the script's own work: which
@@ -133,18 +133,18 @@ git("checkout", "-q", "agent/796-1")
 r = run(str(FAKE), "staging")
 check("exit 0 on a branch that changed nothing, though staging added a hit", r.returncode == 0, r.stdout + r.stderr)
 
-print("== it cannot run: exit 2 with the reason ==")
+print("== it cannot run: status 2 with the reason ==")
 r = run(str(tmp / "no-such-scanner.py"), "staging")
-check("exit 2 and the hecaton path when the scanner is missing",
+check("status 2 and the hecaton path when the scanner is missing",
       r.returncode == 2 and "no scanner at" in r.stderr and "hecaton/run/aiisms.py" in r.stderr, r.stderr)
 (tmp / "not_a_scanner.py").write_text("X = 1\n")
 r = run(str(tmp / "not_a_scanner.py"), "staging")
-check("exit 2 when the module is not the gate's scanner", r.returncode == 2 and "is not the gate's scanner" in r.stderr,
-      r.stderr)
+check("status 2 when the module is not the gate's scanner",
+      r.returncode == 2 and "is not the gate's scanner" in r.stderr, r.stderr)
 r = run(str(FAKE), "no-such-ref")
-check("exit 2 on an unknown base ref", r.returncode == 2 and "no merge base" in r.stderr, r.stderr)
+check("status 2 on an unknown base ref", r.returncode == 2 and "no merge base" in r.stderr, r.stderr)
 r = run(str(FAKE))
-check("exit 2 and the usage with one argument", r.returncode == 2 and "usage:" in r.stderr, r.stderr)
+check("status 2 and the usage with one argument", r.returncode == 2 and "usage:" in r.stderr, r.stderr)
 
 subprocess.run(["rm", "-rf", str(tmp)], check=False)
 print()
