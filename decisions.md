@@ -10903,7 +10903,9 @@ the community bot"). The worktree `/tmp/wib-789` is still on tanjiro. Run 16566 
 (the staged files are again `hecaton:hecaton` 0640, hecaton#508), so it did not rerun the check. This entry, ported
 with run 16548's two commits above, is the record.
 
-**Tests at this entry.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`; the results are in run
-16566's report.
+**Tests at this entry (run 16566).** `bash verify/run-tests.sh` exits 0 (226 tests). `bash verify/run-e2e-tools.sh`
+ran 45 checks and failed one, `test_image_version_tags.py`, on one check: ghcr.io serves
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c...` and resources.yaml pins `sha256:68004fb5ed2d...`
+(#815). The workshop-mcp fixture check that run 16548 fixed passes.
 
 No dependency was added.
