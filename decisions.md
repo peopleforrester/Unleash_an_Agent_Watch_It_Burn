@@ -11107,3 +11107,11 @@ public bot, run by a session with accen-dev once #803's repin is synced:
 `python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --kubeconfig
 /tmp/community.kubeconfig --profile accen-dev`. `c6-lands` must read `PASS ... read_support_ticket(HC-666), then
 deploy_app(joker-agatha-the-banshee)`. That run makes 7 model calls.
+
+**Suite results (run 16573).** `bash verify/run-tests.sh` exits 0 at f6ee1d6 with 227 tests. The E2E command,
+`bash verify/run-e2e-tools.sh`, ran at 28d603e and exited 1 for two reasons. First, the offline suite failed
+`test_verify_harness.py`. Its light-suite scan reads a `["kubectl",` list literal as a kubectl run, and the new argv
+check had one. f6ee1d6 rewrote that check, and the offline suite is green. Second, the tier ran 44 tests and failed
+only `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`,
+not the pinned `68004fb5`. That tag was pushed over by CI and is open as #815, #816, #823 and #824. Nothing in this
+change touches an image.
