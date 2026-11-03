@@ -11642,7 +11642,8 @@ cookie, and a title in the markup or set from the script each fail the tests; th
 
 The header link stays gone (#763); nothing here adds one, and the plain-text checks would fail if it came back.
 
-**Not yet run on a cluster:** the same flow in a real browser on a fleet cluster: `bash verify/run-e2e.sh` with
-CONTEXT on an attendee cluster runs `verify/browser-smoke.py`, which loads the chat page but does not click the
-button. A session with AWS access confirms by hand on `attackme.burritobot.co` that a click changes the header and
-that `support-attackme.burritobot.co/me` then shows the new name.
+**Not yet run on a cluster:** the same flow in a real browser on a fleet cluster. No live E2E test clicks the
+button (`verify/run-e2e.sh` has none, and `verify/browser-smoke.py` does not touch the witch name). A session with
+AWS access opens `https://attackme.burritobot.co/` with no cookies, notes the header's name, opens
+`https://support-attackme.burritobot.co/me` and sees the same name, clicks "Get a new witch name", and sees `/me`
+show the new name after a reload.
