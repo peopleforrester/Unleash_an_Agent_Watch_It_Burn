@@ -11108,10 +11108,18 @@ public bot, run by a session with accen-dev once #803's repin is synced:
 /tmp/community.kubeconfig --profile accen-dev`. `c6-lands` must read `PASS ... read_support_ticket(HC-666), then
 deploy_app(joker-agatha-the-banshee)`. That run makes 7 model calls.
 
-**Suite results (run 16573).** `bash verify/run-tests.sh` exits 0 at f6ee1d6 with 227 tests. The E2E command,
-`bash verify/run-e2e-tools.sh`, ran at 28d603e and exited 1 for two reasons. First, the offline suite failed
-`test_verify_harness.py`. Its light-suite scan reads a `["kubectl",` list literal as a kubectl run, and the new argv
-check had one. f6ee1d6 rewrote that check, and the offline suite is green. Second, the tier ran 44 tests and failed
-only `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`,
-not the pinned `68004fb5`. That tag was pushed over by CI and is open as #815, #816, #823 and #824. Nothing in this
+**Suite results (run 16573, then run 16637).** Run 16573 ran `bash verify/run-e2e-tools.sh` at the first commit of
+this change, and it exited 1 for two reasons. First, the offline suite failed `test_verify_harness.py`. Its
+light-suite scan reads a `["kubectl",` list literal as a kubectl run, and the new argv check had one. The second commit
+rewrote that check, and the offline suite went green with 227 tests. Second, the tier ran 44 tests and failed only
+`test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not
+the pinned `68004fb5`. That tag was pushed over by CI and is open as #815, #816, #823 and #824. Nothing in this
 change touches an image.
+
+**Rebased in run 16637.** Run 16573's commits (28d603e, f6ee1d6, a891ce1) never reached staging: hecaton's rebase onto
+c25c221 stopped on PROGRESS.md, where #808's 2026-11-03 bullet and this change's bullet were both inserted under
+`### Added`. Run 16637 rebased the three commits onto staging 2efc223 and kept both bullets, #808's first. Staging
+had changed none of the code files this change touches, only PROGRESS.md and decisions.md, so the code is
+unchanged from run 16573's. Run 16637 again got permission denied on its cluster files
+(`/var/lib/hecaton/runs/16637/clusters/`, owned by group `hecaton`, which the run's user is not in), so the live
+`c6-lands` check above is still owed.
