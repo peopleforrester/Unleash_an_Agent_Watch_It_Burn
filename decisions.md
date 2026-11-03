@@ -11163,4 +11163,6 @@ after ai-layer on the community cluster has synced 6d8505a's repin, and not whil
 `COMMUNITY_CONTEXT=watch-it-burn-community KUBECONFIG=<isolated file> python3 verify/test_kubecon_c3_live.py`, ending
 "All live Challenge 3 probe checks passed." That run is #764's last criterion.
 
+**The suites (run 16574, on 6c283e3).** `bash verify/run-tests.sh` exits 0 with 228 tests, `test_kubecon_c3_live_checks.py` and `test_gate_commands.py` among them, and lists `test_kubecon_c3_live.py` with the live suite. `bash verify/run-e2e-tools.sh` ran 45 checks and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the pinned `68004fb5`. That is the tag CI pushed over, open as #815, #816, #823 and #824; nothing here touches an image.
+
 No dependency was added.
