@@ -11749,3 +11749,11 @@ the pinned `68004fb5`, the tag CI pushed over (#815, #816, #823, #824); nothing 
 session files are mode 640, group `hecaton`, like run 16661's, so at 2026-11-03T15:40Z the live test again printed
 `FAIL: Datadog could not be read: ... The config profile (accen-dev) could not be found` and exited 1. The live run
 above is still owed.
+
+**Rebased past #811, #814, #810 and #797 (run 16685, resuming run 16673).** Hecaton's rebase of run 16673 onto
+staging 329e2f2 stopped on PROGRESS.md. #811's and #814's bullets and this one were all inserted at the top of
+[Unreleased]'s Added list. Run 16685 rebased onto staging 6408699 and kept all three bullets, with #813's first.
+decisions.md took the later entries by append. Of the files this change uses, only `infra/datadog-fleet/fleet_monitors.py`
+moved (#810's session-window monitor), and `read_keys` and `Datadog.call`, the two parts `agent_obs_flow.py` calls,
+are unchanged. No code differs from run 16661's commit. Run 16685's session files are mode 640, group `hecaton`, like
+the earlier runs', so the live run is still owed.
