@@ -10147,3 +10147,76 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
 "to let" as the first-person-plural connective. The five added lines that used that verb (PROJECT_STATE.md, decisions.md, the run-of-show,
 KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
 behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.
+
+## 2026-11-03 · #782 · weaver/registry declares the attributes the Go guard-proxy wrote by hand, and go-otel stages its OTEL_* env
+
+guard-proxy-agenticburn#36 (PRD #412 M5) generates the Go build's attribute keys from `weaver/registry`, and wrote
+three keys by hand in `internal/telemetry/semconv/extra.go` because the registry did not declare them. Two changes
+land here.
+
+- **The registry.** `gen_ai.request.model` is on the `sanitize` span, required, since proxy.py always sets it. The
+  /chat root is the POST SERVER span, so `span.witb.guard_proxy.http` gains `gen_ai.operation.name` and
+  `gen_ai.request.model` (conditionally required: on the /chat root) and the two opt-in message attributes.
+  `error.type` is on `span.witb.guard_proxy.egress`, conditionally required when the forward fails. The new
+  `span.witb.guard_proxy.chat` INTERNAL group is the /chat `chat` span. The new `metric.witb.guard_proxy.cost` group is
+  the `gen_ai.client.cost` gauge (unit `USD`, as proxy.py registers it), with `gen_ai.provider.name` and
+  `gen_ai.request.model` required. semconv v1.37.0's `gen_ai.provider.name` enum has `aws.bedrock`, the value
+  proxy.py observes. All are refs to upstream; nothing is redefined locally.
+- **Held offline.** `verify/test_weaver_guard_proxy_spans.py` reads the pinned proxy.py. It maps each span variable
+  to its group, checks each span's name and kind, and fails when proxy.py sets an attribute its group does not
+  declare or does not set one its group requires. It also holds the gauge's name, unit and observed attributes.
+- **weaver joins the tools tier.** Until now `weaver registry check` ran only in
+  `.github/workflows/weaver-registry-check.yml`, which the hecaton gate does not see. It now has a row in
+  `verify/e2e-tools.lock`: weaver v0.24.2 with the workflow's SHA-256, and `test_e2e_tools_tier.py` holds the row to the
+  workflow's pin. `fetch-e2e-tools.sh` gains a `.tar.xz` case, so both runners now list `xz` as a prerequisite.
+  `verify/test_weaver_registry_check.py` (`# E2E TIER: tools`) runs the check. It also confirms that a typo'd ref
+  fails, and it resolves the registry to check the groups above and the `aws.bedrock` member. A new tool pin, recorded
+  here as the governance asks: it is the version CI already used, so nothing new is trusted.
+- **The Go build's OTEL_* env is a Component, `gitops/ai-layer/go-otel/`.** It replaces the guard-proxy pod's
+  `inject-python` annotation with `instrumentation.opentelemetry.io/inject-sdk: watch-it-burn-python`. Read from the
+  Operator's `internal/instrumentation/sdk.go` (main, 2026-11-02): `injectSdk` adds the CR's `spec.env`
+  (`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`) and common SDK config (`OTEL_EXPORTER_OTLP_ENDPOINT` from
+  `spec.exporter.endpoint`, port 4318; service name, resource attributes, propagators, sampler) and no language agent.
+  It never overrides a variable the container sets, so the pod's `OTEL_SERVICE_NAME=burritobot` and
+  `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` still win. The annotation is replaced, not added, because the
+  Operator's pod mutator refuses two injections on a pod that names no containers. The issue suggested the value
+  `"true"`. It names the CR instead: `"true"` fails with more than one Instrumentation in the namespace, and the
+  ordering gate and the chart test already read this name.
+- **Why a Component.** KubeCon (2026-11-12) runs proxy.py, which needs `inject-python`, and its clusters sync from
+  staging. #751 staged the spend store the same way, and the #738 cutover lists both under `components:` in the commit
+  that swaps the image and command. go-otel does not depend on go-spend-store, and the two patch different fields of
+  the Deployment. `verify/test_guard_proxy_go_otel.py` (`# E2E TIER: tools`) renders
+  the bundle with and without the Component and checks the CR's 4318 endpoint and http/protobuf. It checks that the
+  pod sets no `OTEL_EXPORTER_OTLP_*` of its own and that nothing else in the render changes. It fails a committed
+  guard-proxy that no longer runs proxy.py without go-otel, which a simulated cutover confirmed.
+
+**What guard-proxy-agenticburn still has to do (follow-ups filed).** Its codegen filter in
+`weaver/templates/registry/go/weaver.yaml` selects `span.witb.` and `registry.witb.` groups only. So
+`gen_ai.provider.name`, declared on the metric group alone, is generated only once `metric.witb.` is added. With that
+filter, a local run of its template on this registry generated `GenAiProviderNameKey` and
+`GenAiProviderNameAwsBedrock`, which renames extra.go's `GenAiProviderNameAWSBedrock`. Separately, proxy.py's /chat
+`agent.forward` span sets no `url.full`, which `span.witb.guard_proxy.egress` requires, so a live-check of a /chat
+turn would flag it. This change leaves that requirement alone, as it predates #782.
+
+**Earlier draft.** None: no `origin/agent/782-*` branch existed, so there was nothing to check with `draft-drift.sh`.
+Run 15696 wrote this work on staging `4aa58c1` and stalled before committing it: it left the gate run in the
+background and ended its turn, and nothing woke it within the 900-second stall limit. Run 16462 found staging 65
+commits on, at `858ffaf`. Those commits included #751's go-spend-store, now on staging, and #770's ttyd row in the tools
+lock. So the branch was fast-forwarded to `858ffaf` and the edits to the lock, both runners and the two tier tests
+were made again on staging's text, with weaver as the eighth tool after ttyd. The gate run was then run in the
+foreground.
+
+**Not yet run on a cluster:** the Go guard-proxy admitted with go-otel on. That means `kubectl --context "$CONTEXT" -n
+agent get pod -l app.kubernetes.io/name=guard-proxy -o yaml` shows the injected `OTEL_EXPORTER_OTLP_ENDPOINT` on 4318
+and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and its spans and the cost gauge reach the collector. The checks are
+`verify/test_datadog_service_map.py` (the guard-proxy -> agentgateway edge) and `docs/weaver-live-check.md`'s
+`weaver registry live-check`, run by a session with AWS access once the #738 cutover lists the Component (after
+2026-11-12).
+
+One part can be run before the cutover without changing a cluster: a server-side dry run of a pod carrying the
+annotation, which runs the Operator's webhook and shows what it injects, `kubectl --context watch-it-burn-private -n
+agent run otel-sdk-probe --image=busybox --restart=Never --dry-run=server -o yaml
+--annotations=instrumentation.opentelemetry.io/inject-sdk=watch-it-burn-python`. The pod spec should show
+`OTEL_EXPORTER_OTLP_ENDPOINT` on 4318 and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and no init container. Run 16462
+could not run it: the run's kubeconfig and cluster env (`/var/lib/hecaton/runs/16462/clusters/`) are mode 640, group
+`hecaton`, and the run's user is not in that group.
