@@ -1,5 +1,5 @@
-# ABOUTME: Runs the storefront's own witch-name code in node against the real support desk, so the chat page is proven
-# ABOUTME: to show and send the desk's name, and that a name it assigns or re-rolls is the one the desk's /me shows (#685, #762, #802).
+# ABOUTME: Runs the storefront's own witch-name code in node against the real support desk: the chat page shows and
+# ABOUTME: sends the desk's name, and a name it assigns or re-rolls is the one the desk's /me shows (#685, #762, #802).
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The desk (gitops/ai-layer/ticket_site.py) hands each browser a generated name in the wib_witch cookie on

@@ -10637,15 +10637,15 @@ The change itself is as run 16503 made it, rebased onto staging e586840.
 not the pinned `68004fb5`. CI has pushed over that tag again. Nothing here touches an image.
 Run 16543 ran both again after the rewording, with the same results.
 
-## 2026-11-03 · #802 · The chat page's witch name, cookie and re-roll button proven against the real desk; a re-roll never repeats the name
+## 2026-11-03 · #802 · The chat page's witch name, cookie and re-roll button checked against the real desk; a re-roll never repeats the name
 
 `verify/test_storefront_witch_name_e2e.py` (E2E TIER: tools) now keeps `ticket_site.py` running on localhost for the
 whole test and runs the page's witch-name block and its real `send()` in a node vm. The vm's `document.cookie` is a
 cookie store that behaves as a browser's does for these cookies: keyed by name, domain and path, a Domain the page is
 not under is dropped, and a host is sent only the cookies whose domain it is under. The desk's own Set-Cookie seeds
 it, and the Cookie header that store would send `support-attackme.burritobot.co` goes back to the desk's `/me`. So a
-cookie the page wrote host-only, on the wrong domain or beside the desk's (rather than replacing it) fails the test,
-where the old harness, which replaced the whole cookie string on each write, could not tell.
+cookie the page wrote host-only, on the wrong domain, or as a second wib_witch beside the desk's fails the test. The
+old test code replaced the whole cookie string on each write, so it could not tell these apart.
 
 The new checks: a first visit with no cookie shows a plain-text name (no href, target or rel; only `textContent` and
 `hidden` ever written), writes one wib_witch on `.burritobot.co` that `name_from_slug()` accepts, and the desk's
@@ -10661,8 +10661,8 @@ pointing at it, no CSS ::before/::after or content on it, and the script touches
 **A defect the test found, fixed in the page.** The click handler called `randWitch()`, which can return the
 current name: one click in 768 left the header, the cookie and the desk on the same name. With `Math.random`
 pinned the test fails on the old handler. The page now calls `otherWitch(WITCH_NAME)`, which picks uniformly
-among the other 767 names. The test sweeps it from every one of the 768 names over every draw: each other name is
-reached once and the old one never. Mutation runs: the old handler, a dropped skip, a host-only or wrong-domain
+among the other 767 names. The test runs it from each of the 768 names over every draw: each other name comes up
+once and the old one never does. Mutation runs: the old handler, a dropped skip, a host-only or wrong-domain
 cookie, and a title in the markup or set from the script each fail the tests; the e2e passed 20 runs in a row.
 
 The header link stays gone (#763); nothing here adds one, and the plain-text checks would fail if it came back.
@@ -10683,4 +10683,8 @@ in the background after the commit and read in the foreground. `test_storefront_
 exits 1 on `test_image_version_tags.py` alone. Its workshop-mcp red is the fixture fixed above, which passes when rerun
 alone. Its other red is the one recorded for #746, #775 and #786: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7`
 at `sha256:0b72ecc7...`, not the pinned `68004fb5`, because CI pushed over that tag. Nothing here touches an image,
-and run 16420's follow-up owns the fix for that workflow.
+and the fix for that workflow is run 16420's follow-up.
+
+**Resumed by run 16561.** Run 16537's commits failed hecaton's prose gate, which read one word in this entry as
+connective filler and another as a hype verb. Run 16561 reworded those sentences. The change itself is as run 16537
+made it, rebased onto staging 6d8505a.
