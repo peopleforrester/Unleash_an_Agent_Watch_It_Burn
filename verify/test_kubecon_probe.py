@@ -663,8 +663,9 @@ lc = kp.KubeconCluster("attackme.burritobot.co", "ctx-community", None, "/tmp/co
                        runner=logs_runner)
 got = lc.tool_calls_since(dt.datetime(2026, 11, 3, 18, 0, 0, tzinfo=dt.timezone.utc))
 check("the log is workshop-mcp's shim container, on the named context, from AUDIT_SKEW_S before the ask",
-      logs_argv == [["kubectl", "--context", "ctx-community", "-n", "agent", "logs", "deploy/workshop-mcp", "-c", "shim",
-                     "--since-time=2026-11-03T17:59:50Z"]] and kp.AUDIT_SKEW_S == 10, str(logs_argv))
+      len(logs_argv) == 1 and logs_argv[0][0] == "kubectl"
+      and logs_argv[0][1:] == ["--context", "ctx-community", "-n", "agent", "logs", "deploy/workshop-mcp", "-c", "shim",
+                               "--since-time=2026-11-03T17:59:50Z"] and kp.AUDIT_SKEW_S == 10, str(logs_argv))
 check("and it parses to the chain the judge passes", passes(kp.judge_ticket_then_deploy(got)), str(got))
 try:
     kp.KubeconCluster("h", "ctx", None, None, 5, runner=lambda argv, **kw: subprocess.CompletedProcess(
