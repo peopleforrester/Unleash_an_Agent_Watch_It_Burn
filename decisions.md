@@ -11631,9 +11631,9 @@ test checks a literal anchor is there before it edits or splits on it; randomnes
 that passes on a rerun is broken. The witch-name test now gives the page a stubbed `Math` in every case. The stub
 fails when the page draws more values than the case pinned, and the cases with a valid cookie pin none. The
 replaced-cookie case runs once per first name, all 32, with the creatures wrapping, so all 24 creatures are drawn too,
-and it checks the exact name each draw picks. With the old bare-"rude" predicate put back, it fails on Prudence every
-run, not one run in 32. `verify/test_tests_own_inputs.py` (offline) holds the section, runs its grep on an anchor
-the witch-name test reads, and checks that the harness has no fallback to the real `Math`.
+and it checks the exact name each draw picks. With the old bare-"rude" predicate put back, it fails on Prudence in
+every run. `verify/test_tests_own_inputs.py` (offline) holds the section, runs its grep on an anchor
+the witch-name test reads, and checks that the test's node script never hands the page the real `Math`.
 
 **Not changed.** No lint scans every test for literal anchors or unseeded randomness. Eleven tests use
 `.replace` on a literal, and several are allowed to find nothing (an exemption comment that may be absent), so a
@@ -11641,7 +11641,7 @@ scan would flag correct code. The rule is in AGENTS.md and the test that broke i
 
 **Seen in this run, not fixed: a one-off hang in `verify/test_challenge_fallbacks.py`.** The first full offline
 run failed it: the C7 fallback's "down" case, `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` against the
-stub gateway that stops answering, hit the harness's 120 s `subprocess.run` timeout. That case takes 9.5 s alone,
+stub gateway that stops answering, hit the test's 120 s `subprocess.run` timeout. That case takes 9.5 s alone,
 about 11 s with eight copies of the test running at once, and at most 23.7 s over 20 more runs, none of which timed
 out, so host load does not explain it. The script's waits run on the stub clock, so a hang means that clock stopped
 advancing: if the `date` stub ever printed nothing, `WAITED` would go negative and `wait_for` would never return.
@@ -11653,7 +11653,7 @@ which landed on staging meanwhile, already covers that cause, so this run adds n
 foreground instead. #798 appended to AGENTS.md and decisions.md at the same places this branch does. The rebase keeps
 both: #798's points 3 and 4 and then this section, and #798's entries and then this one. The E2E tools tier's one
 red on run 16473's base was `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at
-`sha256:0b72ecc7...`, not the pinned `68004fb5...`, because CI pushed over that tag, as the #798 and #786 entries
+`sha256:0b72ecc7...` where the pin is `68004fb5...`, because CI pushed over that tag, as the #798 and #786 entries
 record. Nothing here touches an image.
 
 **Not yet run on a cluster:** nothing; both changed tests are offline or in the tools tier.
@@ -11663,7 +11663,7 @@ not land. Its report listed them as 7b1cc13, 1f3f737 and 3629b6f, but the branch
 d8d6b63, 21617c9 and 3f9519e. This run takes them with `git cherry-pick` as `verify/prior-drafts.sh 797 origin/staging`
 says (CLEAN, with the decisions.md APPEND keeping staging's entries first), and its report lists the SHAs on this
 branch. Michael posted the cause on #797 from run 16526's report, so the first criterion is met on the issue. Since
-run 16526, #801 (`e1ba2a9`) fixed the C7 fallback timeout this entry records as not fixed. It found no stopped clock:
+run 16526, #801 (`e1ba2a9`) fixed the C7 fallback timeout this entry records as not fixed. Its cause was poll count:
 the gateway-down run waits out its whole window, one poll per 3 s step of the fake clock, about six process starts a
 poll, and under load those polls went past 120 s. The test now steps that clock 30 s in those runs. The follow-up
 named above is therefore not filed; #801 closed it.
@@ -11683,3 +11683,8 @@ the log read in the foreground. Its offline suite was green (227 tests). It exit
 the #798, #801 and #799 entries record: CI pushed over the tag, and nothing here touches an image. After the fixture
 fix, `test_image_version_tags.py` fails only the digest check, `test_tool_pin_live_check.py` passes, and
 `bash verify/run-tests.sh` exits 0 with 227 tests.
+
+**Resumed in run 16678, on staging `2b3c7df`.** Run 16557 ended failed at the prose gate, which flagged two words in
+this entry as AI-isms. This run rewords those lines and a few in the same entry that set one claim against
+another, and changes no code. Hecaton had already rebased the branch onto `2b3c7df`, past Michael's guard-proxy pin move
+(`35d3e75`) and #803's suite record, with no conflict.
