@@ -102,7 +102,7 @@ so declaring it would hold main red for good (#543).
 
 A run that hecaton dispatches starts from the current `staging` on its own `agent/<issue>-<run>` branch. It has no
 cluster and no AWS profile, and its governance forbids deploying. Hecaton run 9654 lost its time to the first point
-below and run 9672 to the second (#633).
+below and run 9672 to the second (#633). Runs 9604 and 15816 lost theirs to the third and the fourth (#796).
 
 1. **A run does not bring clusters up.** "Provision one and validate" in change cadence rules 3 and 4 above is for
    a session Michael runs with AWS access. In a run, write the change and its offline test, run
@@ -118,3 +118,20 @@ below and run 9672 to the second (#633).
    changes that staging has since edited, moved or deleted, and every directory the draft adds files to that
    staging removed, and exits 1 when there is any. Then make the draft's design again on the current layout
    rather than cherry-picking it, and say in decisions.md what differs from the draft.
+3. **Prose is put through the ai-isms gate before it is committed.** Hecaton's ai-isms gate reads every changed
+   `.md`, `.mdx` and `.html` file here, since a talk repo's Markdown is public prose. It fails a change that adds an
+   em-dash, or that adds a hype word or connective filler to a file that then reads `major`. decisions.md,
+   PROJECT_STATE.md and PROGRESS.md already read `major`, so one word in a run's record fails the run. Two words
+   recur: the talk's own verb (`Unleash`, and the nickname `Unleashed`) is on the hype-verb list, and the
+   third-person verb `lets` is read as `let's` (run 16077 failed on the second). Write the repo as
+   `Unleash_an_Agent_Watch_It_Burn` or put the word in backticks, which the gate strips, and say "allows" or
+   "admits" for the verb. Then run
+   `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`: it reads
+   the working tree against staging with the gate's own scanner, names each file, label and added line the gate
+   would fail, and exits 1 on any.
+4. **The E2E command runs in the background with an hour's limit, and its own exit is the signal.**
+   `bash verify/run-e2e-tools.sh` takes over 20 minutes on the shared host, longer than the shell tool's default
+   limit and the 20 minutes run 15816 gave it. Start it as a background job with a limit of 3600000 ms, wait for the
+   notice that the job exited, and read its verdict from the job's own output: the `checks ran` line and
+   `ALL E2E TOOLS TIER CHECKS GREEN`. Do not watch it with `pgrep` or `pkill` by script name: other runs on the host
+   run the same scripts from their own worktrees, so a name match finds their processes, not this run's.

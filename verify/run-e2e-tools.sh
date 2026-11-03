@@ -90,7 +90,9 @@ if [[ "${tier}" -eq 0 ]]; then
     exit 1
 fi
 
-printf '\n%d checks ran (the offline suite and %d tier tests)\n' "${ran}" "${tier}"
+# The time taken, since a run waits on this in the background and sets its limit from it (#796).
+printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds\n' "${ran}" "${tier}" \
+    "$((SECONDS / 60))" "$((SECONDS % 60))"
 if [[ "${fail}" -eq 0 ]]; then
     printf '\nALL E2E TOOLS TIER CHECKS GREEN\n'
 else

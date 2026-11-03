@@ -10147,3 +10147,39 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
 "to let" as the first-person-plural connective. The five added lines that used that verb (PROJECT_STATE.md, decisions.md, the run-of-show,
 KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
 behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.
+
+## 2026-11-03 · #796 · Two more frictions for dispatched runs: the prose gate's words, and waiting on the E2E command
+
+Hecaton's insights found two more runs that lost time to the environment. There was no earlier draft of this issue.
+
+- **Run 9604: the repo's own name failed the ai-isms gate.** Hecaton's gate (`gate_ai_isms`, with the scanner
+  ported from check-ai-isms to `hecaton/run/aiisms.py`) reads every changed `.md`, `.mdx` and `.html` file, since
+  hecaton's governance makes all Markdown public prose in a talk repo. A change fails when it adds a dash, or adds a
+  pattern hit to a file that then reads `major`. Read with that scanner on staging `858ffaf`, decisions.md (about
+  120,000 prose words), PROJECT_STATE.md and PROGRESS.md all read `major`, so one hit anywhere in a run's record is a
+  failure. The hype-verb pattern matches `unleash` in every form, which covers the talk's title and the `Unleashed`
+  nickname. The repo slug `Unleash_an_Agent_Watch_It_Burn` does not match, because `_` is a word character to the
+  pattern's word boundary, and inline code is stripped before the scan. The same gate failed runs 14794 and 14817
+  (#548) on their decisions.md entry, and run 16077 (#774) on the verb `lets`.
+- **Run 15816: the E2E command outran its background limit.** `bash verify/run-e2e-tools.sh` took over 20 minutes on
+  the shared host (#205's entry of 2026-11-02), and the run gave its background job 20. Watching it with `pgrep` by
+  script name found the same scripts running from other runs' worktrees, so it could not tell its own job's state.
+- **The fix.** AGENTS.md's "Dispatched runs (hecaton)" section gets a third and a fourth item. The third names the
+  words, says to write the slug or use backticks, and gives the pre-check: `python3 verify/prose_gate.py
+  /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging` runs the gate's own logic with the gate's
+  own scanner over the working tree, against the merge base, and names each file, label and added line it would
+  fail. It takes the scanner by path rather than copying its patterns, so the two cannot drift; it exits 2 when the
+  path holds no scanner. The fourth says to give the E2E command a background limit of 3600000 ms, wait for the job's
+  exit notice and read its last lines, and never `pgrep` by name. `run-e2e-tools.sh` now prints how long it took on
+  its `checks ran` line, so the next limit is set from a reading. The pre-check's first use was this entry: its
+  draft named the `_` character by a word that is also on the hype-verb list, and the script named the line.
+- **Tests.** `verify/test_prose_gate.py` (offline) drives the script in a scratch repo with a stand-in scanner,
+  `verify/fixtures/prose-gate/fake_aiisms.py`, which has the real one's interface: an added hype word fails with its
+  line, the slug and backticks pass, committed and untracked files are read, a hit moved between files passes, an
+  exempt file is skipped and a newly exempt one held, staging moving on does not count against the branch, and a
+  missing scanner, a wrong module, an unknown ref and a missing argument exit 2. `verify/test_dispatched_runs.py`
+  holds the two new items.
+- **The cause comment.** The criterion asks for the cause on #796 in a comment. This run cannot write to GitHub;
+  the dispatcher posts the run's report on the issue, and the report's summary names both causes.
+
+**Not yet run on a cluster.** No cluster is needed; nothing here deploys.
