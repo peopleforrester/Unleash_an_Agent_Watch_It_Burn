@@ -1,0 +1,41 @@
+# ABOUTME: Keep watch-it-burn:sample-app-nginx-<v> on the digest backstage/k8s/templated-test-svc.yaml pins (#828): a missing
+# ABOUTME: or moved tag is put on that digest, byte for byte. No build; triggered on a change to the pins or by dispatch.
+name: keep-sample-app-tag
+
+# #814 renamed the sample-app pin to the nginx inside it, sample-app-nginx-1.27.5, at the digest the old sample-app tag
+# served, and ghcr.io had no such tag, so verify/test_image_version_tags.py answered 404 on staging. A run may not write
+# to ghcr.io, so the tag is created here, on the push to staging that carries the pin. Nothing rebuilds sample-app.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [staging, main]
+    paths:
+      - 'backstage/k8s/templated-test-svc.yaml'
+      - 'images.lock'
+      - '.github/workflows/keep-sample-app-tag.yml'
+      - 'scripts/ghcr_version_tag.py'
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the sample-app tag templated-test-svc.yaml pins
+        id: pin
+        run: |
+          refs="$(grep -oE 'ghcr\.io/peopleforrester/watch-it-burn:sample-app-nginx-[0-9]+\.[0-9]+\.[0-9]+@' backstage/k8s/templated-test-svc.yaml | sort -u)"
+          n="$(printf '%s\n' "${refs}" | grep -c . || true)"
+          [ "${n}" = 1 ] || { echo "templated-test-svc.yaml pins ${n} sample-app-nginx tags, not one: ${refs}" >&2; exit 1; }
+          echo "tag=${refs%@}" >> "${GITHUB_OUTPUT}"
+      # The same GHCR_TOKEN build-web-terminal.yml pushes with, for the same reason: the peopleforrester/watch-it-burn
+      # package is not linked to this repo, so GITHUB_TOKEN cannot write to it (issue #91).
+      # "-" is no build: the script puts the pinned digest's manifest to the tag, and refuses an unpinned tag.
+      - name: Put the pinned tag on its pinned digest
+        env:
+          GHCR_USER: peopleforrester
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          TAG: ${{ steps.pin.outputs.tag }}
+        run: python3 scripts/ghcr_version_tag.py - "${TAG}" backstage/k8s/templated-test-svc.yaml images.lock

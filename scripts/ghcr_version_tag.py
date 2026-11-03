@@ -1,8 +1,8 @@
-# ABOUTME: The web-terminal build's push step (#816): a version tag the repo pins is put back on its pinned digest,
-# ABOUTME: never pushed over, and a build is pushed only to a version tag that ghcr.io does not have yet.
+# ABOUTME: The web-terminal build's push step (#816), and sample-app's tag keeper (#828): a version tag the repo pins is
+# ABOUTME: put on its pinned digest, never pushed over, and a build is pushed only to a version tag ghcr.io lacks.
 """Push a version tag once, and keep it on the digest the repo pins.
 
-    GHCR_USER=... GHCR_TOKEN=... python3 scripts/ghcr_version_tag.py <local-image> <ghcr.io/owner/repo:tag> <pin-file>...
+    GHCR_USER=... GHCR_TOKEN=... python3 scripts/ghcr_version_tag.py <local-image|-> <ghcr.io/owner/repo:tag> <pin-file>...
 
 Why (#816). The web-terminal tag names the ttyd inside (#714): web-terminal-ttyd-1.7.7. Its build is not
 reproducible, so every run of .github/workflows/build-web-terminal.yml used to push a new digest over that same tag.
@@ -15,6 +15,7 @@ What it does, by what the pin files and ghcr.io say:
   a pin file pins <tag>@D, and the tag serves D    nothing; the build is not pushed
   a pin file pins <tag>@D, and the tag serves E    D's manifest, byte for byte, is put to the tag, so it serves D
                                                    again; the build is not pushed
+  a pin file pins <tag>@D, and ghcr.io lacks it    D's manifest is put to the tag the same way, so it serves D
   no pin file pins <tag>, and ghcr.io lacks it     the build is pushed: a new ttyd version's first push
   no pin file pins <tag>, and ghcr.io has it       nothing: a later run (the main promotion, say) leaves the first
                                                    push in place, for its digest to be pinned and signed
@@ -22,6 +23,11 @@ What it does, by what the pin files and ghcr.io say:
 It exits 1 when the pin files pin the tag at more than one digest, when the pinned digest is not in the registry, or
 when the tag does not serve the pinned digest after the put. A change to what runs in the terminal under the same
 ttyd version is not shipped by this step: it needs a tag of its own, which is the tag scheme's question, not this one.
+
+A local image of "-" means there is no build (#828). .github/workflows/keep-sample-app-tag.yml runs the script that
+way for sample-app-nginx-<v>, which #814 pinned in backstage/k8s/templated-test-svc.yaml and images.lock at the
+digest the old sample-app tag served, a tag ghcr.io did not have yet (404). The pinned rows of the table act as
+above, so the missing tag is put on its pinned digest; an unpinned tag is refused, since there is nothing to push.
 """
 from __future__ import annotations
 
@@ -114,9 +120,11 @@ def docker_push(local: str, ref: str) -> None:
     subprocess.run(["docker", "push", ref], check=True)
 
 
-def keep(local: str, ref: str, pin_files: list[str], registry: Registry,
+def keep(local: str | None, ref: str, pin_files: list[str], registry: Registry,
          push: Callable[[str, str], None] = docker_push) -> str:
-    """Act on ref as the table in the docstring says, and return the line the workflow log prints."""
+    """Act on ref as the table in the docstring says, and return the line the workflow log prints.
+
+    local is None when there is no build: then only a pinned ref is acted on."""
     _, _, tag = split(ref)
     texts = {p: pathlib.Path(p).read_text(encoding="utf-8") for p in pin_files}
     want = pinned(ref, texts)
@@ -131,7 +139,11 @@ def keep(local: str, ref: str, pin_files: list[str], registry: Registry,
         after = registry.served(tag)
         if after != want:
             raise Refused(f"{ref} was put back on {want}, and it serves {after}")
+        if got is None:
+            return f"{ref} was not on the registry; it now serves the pinned {want}, and no build is pushed"
         return f"{ref} served {got}; it is back on the pinned {want}, and the build is not pushed"
+    if local is None:
+        raise Refused(f"no pin file ({', '.join(pin_files)}) pins {ref} at a digest, and there is no build to push")
     if got is not None:
         return (f"{ref} is already on ghcr.io at {got}, and nothing pins it yet: the build is not pushed over it. "
                 f"Pin {ref}@{got} in gitops/ai-layer/resources.yaml and images.lock, and sign it")
@@ -143,7 +155,7 @@ def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__.splitlines()[2].strip(), file=sys.stderr)
         return 2
-    local, ref, pin_files = argv[0], argv[1], argv[2:]
+    local, ref, pin_files = (None if argv[0] == "-" else argv[0]), argv[1], argv[2:]
     user, password = os.environ.get("GHCR_USER", ""), os.environ.get("GHCR_TOKEN", "")
     if not user or not password:
         print("GHCR_USER and GHCR_TOKEN must both be set", file=sys.stderr)

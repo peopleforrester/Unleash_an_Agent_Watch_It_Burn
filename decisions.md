@@ -13129,3 +13129,52 @@ GREEN", `test_gotchas_router_probe.py` among them, so the Test command passes. R
 failed its two checks, naming `https://provisioning.agenticburn.com/` against `https://start.burritobot.co/roster.json`.
 The tools tier ran 52 tests in 24m28s and exited 1 on one, `test_image_version_tags.py`: ghcr.io answers 404 for
 `watch-it-burn:sample-app-nginx-1.27.5`, the #814 tag the #812 entries above record. This change touches no image.
+
+## 2026-11-03 · #828 · keep-sample-app-tag.yml creates sample-app-nginx-1.27.5 on ghcr.io when staging takes it
+
+**The red.** The heavy gate on staging (`858ffafb9af2`) failed `bash verify/run-e2e-tools.sh` on
+`test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `watch-it-burn:sample-app-nginx-1.27.5`.
+#814 renamed sample-app's pin to the nginx inside it, at the digest the old `sample-app` tag served
+(`sha256:556e176d…`), and escalated the `crane tag` that creates the new tag, since a run may not write to ghcr.io. That
+command has not run, so the gate has been red on this one check since #814 merged, and main has not moved.
+`bash verify/prior-drafts.sh 828 origin/staging` printed NONE: no earlier draft.
+
+**The fix: CI makes the tag, as #816 and #824 did for web-terminal.** #824's entry above records the precedent:
+web-terminal's tag went back on its pinned digest through `scripts/ghcr_version_tag.py`, run by
+`build-web-terminal.yml` with the repo's `GHCR_TOKEN` on the push to staging, and no run wrote to ghcr.io. That
+script's pinned rows already do what sample-app needs: when a pin file pins `<tag>@D` and the tag does not serve D,
+it puts D's manifest, byte for byte, to the tag (the same registry call `crane tag` makes). Two changes:
+- `scripts/ghcr_version_tag.py` takes `-` as its local image, meaning no build. Pinned tags act as before, and a
+  missing tag now prints `was not on the registry; it now serves the pinned D` instead of `served None`. An unpinned
+  tag with no build is refused, so the step can never push anything the repo has not pinned.
+- `.github/workflows/keep-sample-app-tag.yml` (new) reads the one `sample-app-nginx-<v>` tag that
+  `backstage/k8s/templated-test-svc.yaml` pins and runs the script with `-` on that file and `images.lock`. It runs on
+  a push to staging or main that changes either pin file, the script or the workflow, and on dispatch. It builds
+  nothing. The push that brings this change to staging adds the workflow, so it runs then, minutes before the tier
+  reaches `test_image_version_tags.py`. Editing the script also starts `build-web-terminal.yml` on that push. #816
+  made that run safe: it finds `web-terminal-ttyd-1.7.7` on its pinned digest and pushes nothing.
+
+**Tests.** `verify/test_ghcr_version_tag.py` (offline) gains these cases against its loopback registry: a pinned tag
+ghcr.io lacks, with and without a build (one put, at the pinned digest, with the pinned manifest's bytes and media
+type, and nothing pushed); a moved pinned tag with no build; an unpinned tag with no build, present or not (refused,
+nothing put); and `-` on the command line reaching `keep()` as no build. It holds the workflow to calling the script
+with `-` on both pin files, to its four trigger paths and to building and pushing nothing of its own. It runs the
+workflow's pin step in bash against the repo's templated-test-svc.yaml and checks that the step reads
+`tag=ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5`, and that a file pinning two such tags fails the
+step. Last, it checks that both pin files pin that tag at one digest. Checked by mutation: with the no-build refusal
+removed from `keep()`, three checks fail.
+
+**Live checks run (run 16802).** `python3 verify/test_image_version_tags.py` on the base fails only
+`ghcr.io serves …:sample-app-nginx-1.27.5 at the pinned sha256:556e176dd1ac…, anonymously (manifest: HTTP 404)`. It
+also passes `the image at sha256:556e176dd1ac… carries usr/sbin/nginx`, so the digest the workflow will put is in the
+`watch-it-burn` repository. The cluster read #814 owes did not run: this run's `clusters/kubeconfig` and
+`clusters/env` are mode 0640, owner and group `hecaton`, so `kubectl --context watch-it-burn-private` and
+`--context watch-it-burn-community` both fail with "permission denied" (hecaton#508). Clusters pull sample-app by
+digest, so creating the tag changes nothing on them.
+
+**Not yet run on a cluster or in CI.** The keep-sample-app-tag run started by the push that promotes this change to
+staging must log `ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5 was not on the registry; it now serves
+the pinned sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24`. After it,
+`python3 verify/test_image_version_tags.py` passes the sample-app check, and the heavy gate's
+`bash verify/run-e2e-tools.sh` goes green. If that run fails at login or on the put, `GHCR_TOKEN` cannot write to the
+package, and #814's escalated `crane tag` is the way to make the tag.

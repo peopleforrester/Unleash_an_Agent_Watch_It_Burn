@@ -1,5 +1,5 @@
-# ABOUTME: scripts/ghcr_version_tag.py never pushes a build over a version tag (#816): a moved pinned tag goes back on
-# ABOUTME: its pinned digest byte for byte. Offline: a fake registry on loopback, and the docker push is a stub.
+# ABOUTME: scripts/ghcr_version_tag.py never pushes a build over a version tag (#816): a moved or missing pinned tag goes
+# ABOUTME: on its pinned digest byte for byte (#828). Offline: a fake registry on loopback, and the docker push is a stub.
 """Offline. The live half is verify/test_image_version_tags.py (tools tier): ghcr.io must serve
 web-terminal-ttyd-<v> at the digest gitops/ai-layer/resources.yaml pins.
 
@@ -7,6 +7,9 @@ web-terminal-ttyd-<v> at the digest gitops/ai-layer/resources.yaml pins.
 the tag moved off the pinned, signed digest on each push run. Each row of the script's table is a case here, run
 against a registry that keeps manifests by digest and tags by name, the way ghcr.io does, and the workflow is held to
 calling the script with the pin files and running when the script changes.
+
+#828: #814 pinned sample-app-nginx-1.27.5 at a digest ghcr.io had under the old sample-app tag only, so the tag answered
+404. keep-sample-app-tag.yml runs the script with no build ("-"); its cases and the workflow are held here too.
 """
 from __future__ import annotations
 
@@ -123,7 +126,7 @@ def serve(fake: Fake) -> http.server.ThreadingHTTPServer:
     return srv
 
 
-def case(title: str, fake: Fake, pins: list[str]):
+def case(title: str, fake: Fake, pins: list[str], local: str | None = "web-terminal:built"):
     """Run keep() for REF against fake with pin files holding pins; return (message or Refused text, pushes)."""
     print(f"== {title} ==")
     pushes: list[tuple[str, str]] = []
@@ -136,7 +139,7 @@ def case(title: str, fake: Fake, pins: list[str]):
             files.append(str(f))
         try:
             reg = gvt.Registry(f"http://127.0.0.1:{srv.server_address[1]}", REPO_NAME, "user", "secret")
-            out = gvt.keep("web-terminal:built", REF, files, reg, push=lambda a, b: pushes.append((a, b)))
+            out = gvt.keep(local, REF, files, reg, push=lambda a, b: pushes.append((a, b)))
         except gvt.Refused as e:
             out = f"REFUSED: {e}"
         finally:
@@ -204,6 +207,52 @@ out, pushes = case("not pinned, and the tag exists", fake, [""])
 check("the build is not pushed over it", pushes == [] and fake.puts == [], f"{pushes} {fake.puts}")
 check("it names the digest to pin", f"{REF}@{first}" in out, out)
 
+# 6b. Pinned, and ghcr.io has no such tag (sample-app-nginx-1.27.5 after #814): the tag is put on the pin.
+fake = Fake()
+body, want = pinned_index(fake)
+out, pushes = case("pinned, and the tag is missing", fake, [f"image: {REF}@{want}\n"])
+check("the build is not pushed", pushes == [], str(pushes))
+check("the one put is the tag, at the pinned digest", fake.puts == [(TAG, want)], str(fake.puts))
+check("the put carried the pinned manifest's bytes and media type", fake.blobs[want] == (body, INDEX))
+check("it says the tag was missing and now serves the pin", "was not on the registry" in out and want in out, out)
+
+# 6c. No build ("-", keep-sample-app-tag.yml): a pinned tag that is missing or moved is put on the pin, as with one.
+for title, moved in (("no build, pinned, and the tag is missing", False), ("no build, pinned, and the tag has moved", True)):
+    fake = Fake()
+    body, want = pinned_index(fake)
+    if moved:
+        fake.add(b'{"moved":1}', MANIFEST, TAG)
+    out, pushes = case(title, fake, [f"image: {REF}@{want}\n", f"{REF}@{want} {want} repo:x -\n"], local=None)
+    check("nothing is pushed", pushes == [], str(pushes))
+    check("the one put is the tag, at the pinned digest", fake.puts == [(TAG, want)], str(fake.puts))
+    check("the tag serves the pinned digest", fake.tags.get(TAG) == want, str(fake.tags))
+
+# 6d. No build, and nothing pins the tag: refuse, whether ghcr.io has it or not, and touch nothing.
+for title, present in (("no build, not pinned, and the tag is new", False), ("no build, not pinned, and the tag exists", True)):
+    fake = Fake()
+    if present:
+        fake.add(b'{"first":1}', MANIFEST, TAG)
+    before = dict(fake.tags)
+    out, pushes = case(title, fake, [""], local=None)
+    check("it refuses, saying there is no build", out.startswith("REFUSED") and "no build" in out, out)
+    check("nothing is pushed or put", pushes == [] and fake.puts == [] and fake.tags == before,
+          f"{pushes} {fake.puts}")
+
+# 6e. The command line: "-" is no build.
+print("== the command line ==")
+seen: list = []
+real_keep, real_registry = gvt.keep, gvt.Registry
+gvt.keep = lambda local, ref, files, reg: seen.append((local, ref, files)) or "ok"
+gvt.Registry = lambda *a: None
+import os
+os.environ["GHCR_USER"], os.environ["GHCR_TOKEN"] = "u", "t"
+try:
+    rc = gvt.main(["-", REF, "a.yaml", "images.lock"])
+finally:
+    gvt.keep, gvt.Registry = real_keep, real_registry
+check("\"-\" reaches keep() as no build, with the ref and the pin files",
+      rc == 0 and seen == [(None, REF, ["a.yaml", "images.lock"])], f"{rc} {seen}")
+
 # 7. The workflow runs the script on the pin files, and runs when the script changes.
 print("== the workflow ==")
 workflow = (REPO / ".github/workflows/build-web-terminal.yml").read_text(encoding="utf-8")
@@ -212,6 +261,41 @@ check(f"build-web-terminal.yml pushes through the script ({call})", call in work
 check("it has no docker push of its own", "docker push" not in workflow)
 check("it runs on a change to the script", "- 'scripts/ghcr_version_tag.py'" in workflow)
 check("the script's TAG is the tag the version step read", "TAG: ${{ steps.version.outputs.tag }}" in workflow)
+
+# 7b. keep-sample-app-tag.yml runs the script with no build, on the pins, when the pins, the script or it changes.
+print("== keep-sample-app-tag.yml ==")
+keeper_text = (REPO / ".github/workflows/keep-sample-app-tag.yml").read_text(encoding="utf-8")
+call = ('python3 scripts/ghcr_version_tag.py - "${TAG}" backstage/k8s/templated-test-svc.yaml images.lock')
+check(f"it calls the script with no build on both pin files ({call})", call in keeper_text)
+for path in ("backstage/k8s/templated-test-svc.yaml", "images.lock", ".github/workflows/keep-sample-app-tag.yml",
+             "scripts/ghcr_version_tag.py"):
+    check(f"it runs on a change to {path}", f"- '{path}'" in keeper_text)
+check("it runs on pushes to staging and main", "branches: [staging, main]" in keeper_text)
+check("it builds and pushes nothing of its own", not re.search(r"docker (push|build)|build-push-action|crane", keeper_text))
+check("the script's TAG is the tag the pin step read", "TAG: ${{ steps.pin.outputs.tag }}" in keeper_text)
+# The pin step's shell, run here on the repo's templated-test-svc.yaml, reads the one tag the test below reads.
+import subprocess
+step = re.search(r"id: pin\n\s+run: \|\n((?:\s{10}.+\n)+)", keeper_text)
+check("the workflow has a pin step whose shell this test can run", step is not None)
+if step:
+    script = "\n".join(line[10:] for line in step.group(1).splitlines())
+    with tempfile.TemporaryDirectory() as tmp:
+        outf = pathlib.Path(tmp) / "out"
+        r = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=REPO, capture_output=True, text=True,
+                           env={**os.environ, "GITHUB_OUTPUT": str(outf)})
+        read = outf.read_text() if outf.exists() else ""
+    svc = (REPO / "backstage/k8s/templated-test-svc.yaml").read_text(encoding="utf-8")
+    pins = sorted(set(re.findall(r"ghcr\.io/peopleforrester/watch-it-burn:sample-app-nginx-[0-9.]+(?=@)", svc)))
+    check(f"the pin step reads tag={pins[0] if len(pins) == 1 else pins}",
+          r.returncode == 0 and len(pins) == 1 and read == f"tag={pins[0]}\n", f"{r.returncode} {read!r} {r.stderr}")
+    with tempfile.TemporaryDirectory() as tmp:
+        (pathlib.Path(tmp) / "backstage/k8s").mkdir(parents=True)
+        (pathlib.Path(tmp) / "backstage/k8s/templated-test-svc.yaml").write_text(
+            svc + "\n# image: ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-9.9.9@sha256:" + "0" * 64 + "\n")
+        r = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=tmp, capture_output=True, text=True,
+                           env={**os.environ, "GITHUB_OUTPUT": str(pathlib.Path(tmp) / "out")})
+    check("with two sample-app-nginx tags pinned, the pin step fails", r.returncode != 0 and "not one" in r.stderr,
+          f"{r.returncode} {r.stderr}")
 
 # 8. The repo's own pins: the tag the workflow builds today is pinned at one digest across both pin files.
 print("== the repo's pins ==")
@@ -228,6 +312,18 @@ if len(refs) == 1:
         print(f"    {e}")
     check(f"resources.yaml and images.lock pin {ref.rsplit(':', 1)[1]} at the one digest ({d})",
           d is not None and all(f"{ref}@{d}" in t for t in texts.values()))
+texts = {p: (REPO / p).read_text(encoding="utf-8") for p in ("backstage/k8s/templated-test-svc.yaml", "images.lock")}
+refs = set(re.findall(r"ghcr\.io/peopleforrester/watch-it-burn:sample-app-nginx-[0-9.]+(?=@)", "".join(texts.values())))
+check(f"templated-test-svc.yaml and images.lock name one sample-app-nginx tag ({sorted(refs)})", len(refs) == 1)
+if len(refs) == 1:
+    ref = next(iter(refs))
+    try:
+        d = gvt.pinned(ref, texts)
+    except gvt.Refused as e:
+        d = None
+        print(f"    {e}")
+    check(f"both pin {ref.rsplit(':', 1)[1]} at the one digest ({d}), so keep-sample-app-tag has one to put",
+          d is not None and all(f"{ref}@{d}" in t for t in texts.values()))
 
 print()
 if failures:
@@ -235,4 +331,5 @@ if failures:
     for name in failures:
         print(f"  - {name}")
     raise SystemExit(1)
-print("The web-terminal build pushes only a new version tag and keeps a pinned one on its digest.")
+print("The web-terminal build pushes only a new version tag and keeps a pinned one on its digest; keep-sample-app-tag")
+print("puts sample-app's pinned tag on its digest with no build.")
