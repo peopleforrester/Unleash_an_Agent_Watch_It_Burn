@@ -13712,8 +13712,11 @@ the attendee kind, and that the live check uses the module and these branches.
 **Tests.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`; results in the run report.
 
 **Not yet run on a cluster.** This run (hecaton 16004) had no AWS profile, no EKS session in its run directory and
-no Datadog keys, so `verify/test_lab_pipeline_live.py` did not run. A session with accen-dev runs it after this
-commit is on staging, once for each cluster:
+no Datadog keys, so `verify/test_lab_pipeline_live.py` did not run. Its two re-dispatches, 16391 (2026-11-02) and
+16837 (2026-11-04), were handed a cluster session. Its files were `hecaton:hecaton` mode 0640, which the run user
+cannot read, so kubectl, the session env and aws all failed with Permission denied. That is
+peopleforrester/hecaton#507, whose fix had not merged on 2026-11-04. A run that can read its session, or a session
+with accen-dev, runs the check after this commit is on staging, once for each cluster:
 
     for C in watch-it-burn-community watch-it-burn-private; do
       K=/tmp/$C.kubeconfig
