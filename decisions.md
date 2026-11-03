@@ -11688,3 +11688,6 @@ fix, `test_image_version_tags.py` fails only the digest check, `test_tool_pin_li
 this entry as AI-isms. This run rewords those lines and a few in the same entry that set one claim against
 another, and changes no code. Hecaton had already rebased the branch onto `2b3c7df`, past Michael's guard-proxy pin move
 (`35d3e75`) and #803's suite record, with no conflict.
+On `2b3c7df`, `bash verify/run-e2e-tools.sh` ran 45 checks. Its offline suite was green (228 tests), and it exited 1
+on one check: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins
+`68004fb5...`, the red recorded above. The workshop-mcp tag check passes.
