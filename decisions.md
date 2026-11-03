@@ -11318,3 +11318,58 @@ then 46 checks, and exits 1 on one: `test_image_version_tags.py`. ghcr.io serves
 the tag CI pushed over (#815), which staging's own entries already record, and nothing here touches it.
 
 No dependency was added.
+
+## 2026-11-03 · #608 · The first live run stopped on an empty line kustomize adds, so the live test now compares expressions modulo whitespace
+
+**What escalation 755 found.** Escalation 755 ran the 2026-11-02 #608 entry's guarded command against
+watch-it-burn-private (`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private`, account 515966504359, ACTIVE)
+from a checkout of staging 2efc223. This was the first run of the suite on a cluster since the #607 fix. It passed
+seventeen prerequisites and failed one, "live restrict-agent-spawned-workloads validation expressions are the repo's",
+with exit 1. So **the three #607 Secret checks and the #490 and #552 checks still have not run**. The run created
+nothing: `kubectl get deploy,pods,configmaps -n agent -l wib.test/run` found no resources afterwards. Argo CD's
+kyverno-policies Application was synced to 2efc223 too. The only difference in the live expressions was one empty
+line after the first line of expressions 2 and 3, the #607 secret-volume and secretKeyRef rules
+(`exists(v,\n\n  (has(v.secret)…` live, `exists(v,\n  (has(v.secret)…` in the file). Run 12662's unlanded draft
+records the same stop, at staging 2e1829c, from escalation 352.
+
+**The cause is kustomize, from #638, not the cluster's parser.** Commit ea699ed (#638) gave `policies/kyverno` a
+Kustomization, so Argo CD now builds the directory with kustomize. Kustomize writes out a `>-` block whose second line
+is more indented with one extra empty line. `kubectl kustomize policies/kyverno` with the pinned kubectl v1.36.2
+(kustomize v5.8.1) shows it offline. Read with PyYAML, its restrict-agent-spawned-workloads expressions 2 and 3
+start `…exists(v,\n\n  (has(v.secret)` and `…exists(c,\n\n  c.?env`, which is the live diff exactly. The test reads
+the file itself with PyYAML, which has no such line. That is also why run 12431's unlanded draft could report the
+whole suite passing at staging 0d73c8d, the last staging before ea699ed. Neither the test nor the policy file changed
+between the two bases. CEL reads any whitespace run as one separator, so the cluster runs the repo's policy.
+
+**The change.**
+
+- `verify/policy_spec.py` (new) collapses each whitespace run in an `expression` to one space before comparing. It
+  does this for matchConditions, variables and validations, and leaves every other key as it is.
+  `verify/test_llm_bypass_live.py` compares both ValidatingPolicies through it. When expressions differ, the FAIL
+  line now names the first expression that differs, the cluster's text and the repo's. Escalation 755 had to produce
+  that diff by hand.
+- `verify/test_policy_spec.py` (new, offline) rebuilds escalation 755's live form from the repo file. It checks that
+  the old exact comparison fails on that form and the new comparison passes. A changed operator, field name,
+  negation, string literal, expression count, variable name or message must still differ.
+- `verify/test_policy_spec_kustomize.py` (new, `# E2E TIER: tools`) renders `policies/kyverno` with the pinned
+  kubectl's kustomize. It checks that every ValidatingPolicy in the render matches its own file under the same
+  comparison, and it prints which expressions differ when compared exactly (today, 2 and 3 of
+  restrict-agent-spawned-workloads).
+- Collapsing whitespace would also hide a change of spacing inside a CEL string literal. None of the compared
+  policies' literals contain a whitespace run. A spacing-only change inside a literal is the one difference this
+  check now misses. The alternative was writing the expressions as `|` literal blocks, which kustomize might also
+  reformat. That would also have changed policy files the Kyverno CLI tests read.
+
+**Live, this run (hecaton run 16651).** Not run. The run was handed watch-it-burn-private and watch-it-burn-community,
+but its `clusters/` files (kubeconfig, env, aws-config, aws-credentials, bin/) are still `hecaton:hecaton` mode 0640,
+and uid 143 is not in group `hecaton`. `CONTEXT=watch-it-burn-private python3 verify/test_llm_bypass_live.py` passed
+its first two prerequisites, then failed "cluster for context 'watch-it-burn-private' is reachable" with
+"permission denied" on the kubeconfig, exit 1. `aws sts get-caller-identity --profile accen-dev` found no such
+profile. peopleforrester/hecaton#507 and #508, both still open, track this.
+
+**Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it, with this change on the checkout. The
+command is the 2026-11-02 #608 entry's guarded one, or `CONTEXT=watch-it-burn-private python3
+verify/test_llm_bypass_live.py` in a run that can read its handover. The policy comparison needs only the checkout,
+so no Argo sync of this change is needed. The result goes here: whether the three #607 checks pass (terminal-auth
+refused by volume and by secretKeyRef, each with its message; ceo-personal-record admitted), and whether the #490 and
+#552 checks the TypeError hid pass.

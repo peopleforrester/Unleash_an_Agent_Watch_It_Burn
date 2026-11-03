@@ -72,6 +72,9 @@ import uuid
 
 import yaml
 
+# The script's own directory is first on sys.path when run as `python3 verify/test_llm_bypass_live.py`.
+from policy_spec import expressions, first_difference, normalized
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 POLICY_FILE = REPO / "policies/kyverno/deny-llm-endpoint-bypass.yaml"
 POLICY = "deny-llm-endpoint-bypass"
@@ -146,16 +149,18 @@ have = live["spec"]
 
 
 def same(field: str) -> bool:
-    return (have.get(field) or []) == (want.get(field) or [])
+    return normalized(have.get(field)) == normalized(want.get(field))
 
 
-# The fields that decide what matches and what the verdict is. The API server adds defaults elsewhere.
+# The fields that decide what matches and what the verdict is. The API server adds defaults elsewhere. Expressions
+# are compared with whitespace runs collapsed: kustomize, which builds policies/kyverno for Argo CD since #638, adds
+# an empty line to a `>-` block with a more-indented line, and CEL does not read it (#608, policy_spec.py).
 for field in ("validationActions", "matchConditions", "variables"):
     check(f"live spec.{field} is the repo's", same(field), f"cluster: {have.get(field)!r}")
-check("live validation expressions are the repo's",
-      [v.get("expression") for v in have.get("validations") or []]
-      == [v.get("expression") for v in want.get("validations") or []],
-      "the cluster runs a different policy; sync the kyverno-policies Application first")
+have_x, want_x = expressions(have.get("validations")), expressions(want.get("validations"))
+check("live validation expressions are the repo's", have_x == want_x,
+      f"the cluster runs a different policy; sync the kyverno-policies Application first. "
+      f"{first_difference(have_x, want_x)}")
 check("live namespaceSelector is the repo's",
       have.get("matchConstraints", {}).get("namespaceSelector")
       == want["matchConstraints"]["namespaceSelector"])
@@ -170,10 +175,11 @@ if failures:
 want_spawn, have_spawn = yaml.safe_load(SPAWN_FILE.read_text())["spec"], spawn["spec"]
 for field in ("validationActions", "matchConditions", "variables"):
     check(f"live {SPAWN} spec.{field} is the repo's",
-          (have_spawn.get(field) or []) == (want_spawn.get(field) or []), f"cluster: {have_spawn.get(field)!r}")
-check(f"live {SPAWN} validation expressions are the repo's",
-      [v.get("expression") for v in have_spawn.get("validations") or []]
-      == [v.get("expression") for v in want_spawn.get("validations") or []])
+          normalized(have_spawn.get(field)) == normalized(want_spawn.get(field)), f"cluster: {have_spawn.get(field)!r}")
+have_x, want_x = expressions(have_spawn.get("validations")), expressions(want_spawn.get("validations"))
+check(f"live {SPAWN} validation expressions are the repo's", have_x == want_x,
+      f"the cluster runs a different policy; sync the kyverno-policies Application first. "
+      f"{first_difference(have_x, want_x)}")
 status = (spawn.get("status") or {}).get("conditionStatus") or {}
 check(f"Kyverno reports {SPAWN} ready", status.get("ready") is True, json.dumps(status.get("conditions")))
 r = kubectl("auth", "can-i", "create", "pods", "-n", NS, f"--as={AGENT}")
