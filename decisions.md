@@ -12406,3 +12406,8 @@ with decisions.md an append) and rewrote that sentence as two plain claims. No c
 `python3 verify/prose_gate.py` now passes. Run 16754's session files are mode 640, group `hecaton`, like the earlier
 runs' (hecaton#508), so at 2026-11-03T19:27Z the live test again printed `FAIL: Datadog could not be read: ... The
 config profile (accen-dev) could not be found` and exited 1. The live run above is still owed.
+The suites on bf6462a, run 16754: `bash verify/run-e2e-tools.sh` ran the offline suite, 234 tests ending `ALL
+OFFLINE RENDER-GATE TESTS GREEN` with `test_agent_obs_flow.py` among them, then 48 tier tests in 23m54s, and exited 1
+on one, `test_image_version_tags.py`. Its two reds are the ones staging's entries already record: ghcr.io serves
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...` where the pin is `68004fb5...` (#815, #816, #823,
+#824), and `watch-it-burn:sample-app-nginx-1.27.5` answers HTTP 404 (#814). This change touches no image.
