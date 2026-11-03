@@ -12463,3 +12463,9 @@ log `... is back on the pinned sha256:68004fb5...`. After it, `python3 verify/te
 The run on main's promotion must log `serves the pinned`, with no put and no push.
 
 No dependency was added: the script uses only Python's standard library, which the runner's python3 has.
+
+**The suites (run 16758, at b13c01c).** `bash verify/run-e2e-tools.sh` ran 49 checks (the offline suite and 48 tier
+tests) in 24m05s. The offline suite inside it ran 235 tests, all green, `verify/test_ghcr_version_tag.py` among them.
+It exits 1 on `test_image_version_tags.py` alone, with two reds, both in what the registry serves: ghcr.io serves
+`web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...`, which this change's first CI run puts back on `68004fb5`, and
+`sample-app-nginx-1.27.5` answers 404, which is #814's escalated `crane tag`.
