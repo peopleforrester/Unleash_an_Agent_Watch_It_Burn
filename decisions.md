@@ -11018,4 +11018,9 @@ cluster and no AWS profile" again.
 **Not yet run on a cluster.** Nothing here changes a cluster. This run (16578) was handed the cluster files, but
 they are `hecaton:hecaton` 0640 and its user is not in group `hecaton` (hecaton#508), so it read neither cluster.
 
+**Tests (run 16578).** `bash verify/run-e2e-tools.sh` ran its offline stage, `bash verify/run-tests.sh`, green (228
+tests), then 45 tier tests, and failed one, `test_image_version_tags.py`: ghcr.io serves
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c...` and `gitops/ai-layer/resources.yaml` pins
+`sha256:68004fb5ed2d...`, the red already recorded under #815. Nothing here touches an image.
+
 No dependency was added.
