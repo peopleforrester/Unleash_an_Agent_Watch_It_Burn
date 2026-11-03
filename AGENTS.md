@@ -97,8 +97,9 @@ fails when a fetch fails.
 The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluster build, with CONTEXT,
 IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster, and DRIFT_PROFILE and
 ATTENDEE_CLUSTER naming the fleet account and attendee cluster the AWS-plane drift check uses (#205), and
-COMMUNITY_CONTEXT naming the community cluster the KubeCon probe's Challenge 3 beat runs on (#807). A dispatched
-run, which brings no cluster up, runs it on one of its two clusters instead (Dispatched runs, point 1). It is
+COMMUNITY_CONTEXT naming the community cluster the KubeCon probe's Challenge 3 beat runs on (#807), and
+PRIVATE_CONTEXT naming the private admin cluster that, with the community one, #783's collector fix is checked on (#812).
+A dispatched run, which brings no cluster up, runs it on one of its two clusters instead (Dispatched runs, point 1). It is
 deliberately not declared as the gate's E2E command: hecaton's promotion gate has no cluster, no AWS and none of its
 tools, so declaring it would hold main red for good (#543).
 

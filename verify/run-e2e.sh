@@ -4,7 +4,7 @@
 #
 # Usage: CONTEXT=<kube-context> IAM_PIPELINE_PROFILE=<aws-profile> IAM_PIPELINE_REGION=<region> \
 #            DRIFT_PROFILE=<aws-profile> ATTENDEE_CLUSTER=<cluster> COMMUNITY_CONTEXT=<kube-context> \
-#            [NAMESPACE=agent] bash verify/run-e2e.sh
+#            PRIVATE_CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
 #
 # The KubeCon probe's Challenge 3 beat (test_kubecon_c3_live.py, #807) runs on the live public bot, not the attendee
 # cluster, so it needs COMMUNITY_CONTEXT, the kube-context of the community cluster (attackme). It spends one model
@@ -14,6 +14,9 @@
 # the public internet and reads its spans back from Datadog with the read pair in watch-it-burn/datadog, as
 # WIB_DEFAULT_ACCOUNT (default accen-dev) in WIB_REGION (default us-west-2). It spends two model calls and can wait
 # up to ten minutes per bot.
+#
+# #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
+# also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
 #
 # The AWS-plane drift check (test_drift_aws_live.py, #205) needs DRIFT_PROFILE, an operator profile in
 # WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied, and ATTENDEE_CLUSTER, a cluster in that
@@ -91,6 +94,12 @@ if [[ -z "${COMMUNITY_CONTEXT:-}" ]]; then
 elif [[ "${tools_ready}" -eq 1 ]] \
     && ! kubectl --context "${COMMUNITY_CONTEXT}" --request-timeout=15s get --raw /readyz >/dev/null 2>&1; then
     missing+=("community cluster for context '${COMMUNITY_CONTEXT}' is not reachable (kubectl --context ${COMMUNITY_CONTEXT} get --raw /readyz failed)")
+fi
+if [[ -z "${PRIVATE_CONTEXT:-}" ]]; then
+    missing+=("PRIVATE_CONTEXT is not set: name the kube-context of the private admin cluster (watch-it-burn-private) #783's trace-id fix is checked on (test_otel_trace_id_fix_live.py)")
+elif [[ "${tools_ready}" -eq 1 ]] \
+    && ! kubectl --context "${PRIVATE_CONTEXT}" --request-timeout=15s get --raw /readyz >/dev/null 2>&1; then
+    missing+=("private cluster for context '${PRIVATE_CONTEXT}' is not reachable (kubectl --context ${PRIVATE_CONTEXT} get --raw /readyz failed)")
 fi
 if [[ "${#missing[@]}" -gt 0 ]]; then
     printf 'E2E SUITE CANNOT RUN; this is a failure, not a skip:\n' >&2

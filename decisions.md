@@ -12844,3 +12844,45 @@ and no ghcr.io write. What this run did was check that the restore happened and 
 tier tests) in 23m49s. The offline suite inside it ran 236 tests, all green. It exits 1 on
 `test_image_version_tags.py` alone, with one red: `sample-app-nginx-1.27.5` answers 404, which is #814's. Its
 web-terminal check passes.
+## 2026-11-03 · #812 · A live test for #783's "on staging and applied to both clusters"
+
+**What it checks.** `verify/test_otel_trace_id_fix_live.py` (`# SUITE: e2e`) is the test #783's criterion "the fix is on
+staging and applied to watch-it-burn-community and watch-it-burn-private" lacked. It fetches GitHub's `staging`, the
+branch both clusters' Argo CD reads, into FETCH_HEAD and checks that `67c956a` is in its history. It then checks that the
+collector values at that commit run `set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))` as the first
+statement of `transform/llmobs_one_root`, which is first in `traces/llmobs`, fed by the traces pipeline's
+`forward/llmobs`. It renders that per cluster: the community cluster's burn Application (values.yaml plus
+values-burn.yaml) and the private cluster's instructor one (values.yaml), each alone and with every file of its Datadog
+overlay. The statement has to be first because the span id and kagent's re-parent are derived from the copy's trace id.
+Then, on each cluster, with `--context` from COMMUNITY_CONTEXT and PRIVATE_CONTEXT, it checks that the context is that
+cluster (its name or its EKS ARN). It also checks that the `otel-collector` Application reads its values source at
+`staging`, is Synced, Healthy and Succeeded, and is synced at a revision that is on staging and contains `67c956a`. The
+collector DaemonSet must have rolled its current template out, available, to every node. Last, the relay ConfigMap the
+DaemonSet mounts must run the statement, alone and with each overlay file. It only reads.
+
+**Why not a commit pin alone.** A cluster synced at a staging commit after 67c956a could still run a config without the
+statement if a later commit reverted it. So the live ConfigMap is read as well, and staging's tree is checked as well
+as its history.
+
+**Offline half.** `verify/test_otel_trace_id_fix_live_checks.py` runs the same `run` against a fake git and fake clusters
+built from this checkout's own collector values (`collector_render`). The healthy pair passes. Each of these fails it:
+the statement reverted or moved second on staging, burn's traces/llmobs without the processor, staging without the
+commit, a fetch that fails, an Application reading main, OutOfSync, Degraded or Failed, a sync at a pre-fix or
+off-staging revision, a missing Application or DaemonSet, a half-rolled or unavailable DaemonSet, a live relay without
+the statement, without the processor or without the forward, a missing overlay ConfigMap or relay key, swapped
+contexts, and a standby context (`watch-it-burn-community-b01`).
+
+**run-e2e.sh now requires PRIVATE_CONTEXT** beside COMMUNITY_CONTEXT, with the same reachability check, and AGENTS.md
+names it. No dependency was added.
+
+**What ran live.** The staging half ran against GitHub: staging `41c0b9c0aeb0` contains `67c956adc5a2`, and both
+profiles' collector values run the statement first (three PASS). The cluster half did not run. This run's
+`$KUBECONFIG` (`/var/lib/hecaton/runs/16657/clusters/kubeconfig`) and `$HECATON_CLUSTER_ENV` are owned
+`hecaton:hecaton` mode 0640, and the run's user (`hecaton-s4-claude-certkraken`, groups `hecaton-s4-claude-certkraken`,
+`hecaton-runs`, `hecaton-tools`) is not in group `hecaton`. So the full run ended with "the cluster can be read" FAIL on
+both clusters: `open /var/lib/hecaton/runs/16657/clusters/kubeconfig: permission denied`. That is the same block the
+#733, #746 and #783 re-dispatch entries above record (hecaton#508).
+
+**Not yet run on a cluster.** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_otel_trace_id_fix_live.py`, from a session whose kubeconfig names both contexts. Its PASS lines replace
+step 1 of the 2026-11-02 · #783 entry's commands. #783's `agent_obs_flow.py chat` read-back is still owed after it.
