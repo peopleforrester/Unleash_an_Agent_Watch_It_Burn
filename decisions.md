@@ -12909,3 +12909,9 @@ collector values run the statement first (three PASS). The cluster half failed a
 This run's `/var/lib/hecaton/runs/16784/clusters/` files are also `hecaton:hecaton` mode 0640, and the user
 `hecaton-s4-claude-certkraken` is not in group `hecaton` (hecaton#508). The "Not yet run on a cluster" command in the
 entry above is unchanged.
+
+**The suites after the rebase.** `bash verify/run-e2e-tools.sh` ran the offline suite first: 238 tests, "ALL OFFLINE
+RENDER-GATE TESTS GREEN", `test_otel_trace_id_fix_live_checks.py` among them. The tools tier ran 51 tests in 23m58s
+and exited 1 on one, `test_image_version_tags.py`: ghcr.io answers 404 for
+`watch-it-burn:sample-app-nginx-1.27.5`, the tag #814 introduced and whose `crane tag` it escalated. The web-terminal
+tag red recorded above is gone, since #816 restored it. This change touches no image.
