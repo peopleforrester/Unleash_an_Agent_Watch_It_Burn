@@ -1,6 +1,6 @@
 # ABOUTME: Runs the pinned weaver on weaver/registry: `registry check` passes, a typo'd ref fails it, and the resolved
 # ABOUTME: groups carry the attributes the Go guard-proxy generates its keys from, and the values proxy.py sends (#782).
-# SUITE: e2e (needs the pinned weaver binary, and network for the OTel semconv v1.37.0 archive the manifest pins)
+# SUITE: e2e (needs the pinned weaver binary, and network for the OTel semconv v1.41.1 archive the manifest pins)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why. guard-proxy-agenticburn's scripts/gen-semconv.sh generates the Go build's attribute keys from this registry, so
@@ -77,7 +77,8 @@ for gid, need in (("span.witb.guard_proxy.http", {"gen_ai.request.model", "gen_a
                   ("span.witb.guard_proxy.sanitize", {"gen_ai.request.model"}),
                   ("span.witb.guard_proxy.egress", {"error.type"}),
                   ("span.witb.guard_proxy.chat", {"gen_ai.operation.name", "gen_ai.request.model",
-                                                  "gen_ai.input.messages", "gen_ai.output.messages"}),
+                                                  "gen_ai.input.messages", "gen_ai.output.messages",
+                                                  "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"}),
                   ("metric.witb.guard_proxy.cost", {"gen_ai.provider.name", "gen_ai.request.model"})):
     have = set(attrs(gid))
     check(f"{gid} resolves with {sorted(need)}", need <= have, f"resolved: {sorted(have)}")
@@ -98,7 +99,7 @@ def member_values(gid: str, name: str) -> set:
 
 
 members = member_values("metric.witb.guard_proxy.cost", "gen_ai.provider.name")
-check("aws.bedrock, which proxy.py observes on the gauge, is a gen_ai.provider.name member in semconv v1.37.0",
+check("aws.bedrock, which proxy.py observes on the gauge, is a gen_ai.provider.name member in semconv v1.41.1",
       "aws.bedrock" in members, f"members: {sorted(m for m in members if m)}")
 check("gen_ai.request.model resolves as a string", attrs("span.witb.guard_proxy.sanitize")
       .get("gen_ai.request.model", {}).get("type") == "string")

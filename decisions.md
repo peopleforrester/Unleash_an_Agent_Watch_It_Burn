@@ -12564,3 +12564,107 @@ On 1b576cb, `bash verify/run-e2e-tools.sh` ran 49 checks in 23m22s. The offline 
 the tier exits 1 on `test_image_version_tags.py` alone, on the same two ghcr.io reds as before (the web-terminal tag
 at another digest, and the 404 for `sample-app-nginx-1.27.5`, #814), which this change does not touch.
 `test_input_pii_guard_llm_guard.py` passed again.
+
+## 2026-11-03 · #784 · GenAI telemetry: Act 2 redacts the messages, the collector maps tool definitions, weaver pins semconv v1.41.1, and guard-proxy's token counts go to guard-proxy-agenticburn
+
+**What Datadog documents.** Datadog's OpenTelemetry page for Agent Observability (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation,
+read 2026-11-03) says it supports "OpenTelemetry 1.37+" GenAI conventions and gives no upper bound. Its mapping table
+names `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`, the cost attributes (`gen_ai.usage.cost.amount` with
+`gen_ai.usage.cost.currency` USD, `gen_ai.usage.cost`, `gen_ai.cost.*`), and `gen_ai.tool.definitions`, which it maps
+to `meta.tool_definitions`. It reads input and output from `gen_ai.input.messages` and `gen_ai.output.messages` first,
+and from the `gen_ai.client.inference.operation.details` event after that. It names none of `gen_ai.agent.version`,
+the cache and reasoning token attributes, any `mcp.*` attribute or MCP span, or a span-kind split for `invoke_agent`.
+It also warns that exporting the same model calls twice counts their tokens twice.
+
+**1. Token counts on guard-proxy's model-call span.**
+- *The row the issue saw is already gone from Agent Observability.* The `skipped_tokens_missing` row (trace
+  `c943363f5467508c8bfc14c6a40c4b59`, 2026-11-01) came from guard-proxy's `chat` span being sent as an llm row with no
+  tokens. Agent Observability received no BurritoBot row after about 03:26 UTC that day (#783), and #746's copy was
+  committed at 15:51 UTC, so that row came from before the copy. Since #746, `filter/llmobs_one_root` drops that span
+  from Agent Observability's copy, and guard-proxy's turn span becomes the `invoke_agent` root. The llm rows under it
+  are kagent's `generate_content` spans, which carry `gen_ai.usage.*` themselves. `verify/test_trace_shape_e2e.py`
+  checks that every llm row in the copy has both counts. Datadog prices those rows from the tokens, so it can estimate
+  a cost for the trace. The live look below still has to confirm this.
+- *Setting the counts on the span itself is guard-proxy-agenticburn's change.* proxy.py is in the
+  `gitops/ai-layer/guard-proxy` submodule, and a run cannot move that gitlink (question 766: Michael pins, and a run
+  does the rest). The change is filed as a follow-up in guard-proxy-agenticburn: set `gen_ai.usage.input_tokens`
+  and `gen_ai.usage.output_tokens`, summed from `kagent_usage_metadata` as `chat_usage_tokens` already reads them, on
+  the `/chat` `chat` span. It may add `gen_ai.usage.cost.amount` with `gen_ai.usage.cost.currency` USD as well. The
+  Go build (#738) needs the same change. The counts belong only on that span, never on the `POST /chat` root or on
+  `sanitize`. Both of those become the `invoke_agent` root in the copy, and counts there would be the turn's second
+  count next to kagent's. On that span the counts show in APM. Agent Observability never adds them, because the copy
+  drops the span. The `gen_ai.client.cost` metric stays as it is. `weaver/registry` now declares the span
+  (`span.witb.guard_proxy.chat`) with both counts as recommended, so the repin conforms. The
+  `url.scheme` precedent is that an attribute declared Recommended and not emitted does not fail `live-check`.
+
+**2. The redaction.** `gitops/otel-collector/otel-collector-act2-overlay.yaml` redacted the `content` attribute of the
+`gen_ai.content.prompt` and `gen_ai.content.completion` events. Semconv v1.37 dropped those names, and nothing in the
+stack emits them: proxy.py writes the two message attributes in every capture mode and emits no event. So Act 2
+redacted nothing. `transform/redact_sentinel` now replaces, on every span and on every span event (the details event
+is Datadog's fallback), the same keys that burn's `transform/scrub_pii` keeps for its scrub. Those are the messages,
+`gen_ai.tool.call.arguments` and `.result`, and the `gcp.vertex.agent.*` keys they are copied from. The scope is every
+span, not only guard-proxy's: `transform/adk_model_content` copies the prompt onto every kagent model call. The
+messages become one message in the semconv shape whose text is `[DEMO-REDACTED]`, so Datadog's panel still parses
+them. The other keys become the bare string. The overlay's steps now name where the config lives (`values.yaml`,
+`values-burn.yaml` on burn), and it goes last in the traces processors, after the ADK copies and before every
+exporter, `forward/llmobs` included, so both copies carry the redaction. The Challenge 3 runbook and
+MASTER-RECREATION-SPEC say the same.
+*Which config redacts the KubeCon clusters' content:* neither cluster loads the overlay (no file under `gitops/`
+names it, and the new offline test holds that). watch-it-burn-community runs `otel-collector-burn`, whose
+`transform/scrub_pii` (values-burn.yaml, #647) replaces e-mail addresses, card numbers, SSNs and phone numbers in
+those same keys before any exporter runs. watch-it-burn-private runs `otel-collector` on the admin profile and
+redacts nothing. That is by design: the presenters' cluster carries no attendee's text.
+
+**3. Semconv v1.41.1, only where Datadog maps it.**
+- `weaver/registry/manifest.yaml` pins `semantic-conventions` v1.41.1 (2026-05-11), the last release that carries
+  the GenAI conventions. Weaver 0.24.2 (the CI's sha-pinned binary, run here) passes `weaver registry check` on it.
+  Diffing the resolved registries at v1.37.0 and v1.41.1 for every attribute the groups ref shows only new enum
+  members (`retrieval` and `invoke_workflow` for the operation, `QUERY` for the method) and `peer.service`, which is
+  deprecated from v1.38 and renamed to `service.peer.name`. The proxy keeps emitting `peer.service`: Datadog's
+  service map reads it, and Datadog documents nothing for `service.peer.name`. The registry note says so.
+- *Adopted:* the `gen_ai.usage.*` token counts on guard-proxy's chat span (above), and `gen_ai.tool.definitions`
+  (new in v1.38). `transform/adk_model_content` now writes `gen_ai.tool.definitions` on kagent's model calls from the
+  ADK request. adk-go v2.1.0 packs every declaration into the first `genai.Tool` that has `functionDeclarations`
+  (tool/toolutils PackTool and agent transfer both do this; read at tag v2.1.0), so that one list is the whole set.
+  Each entry is `{"type":"function","name","description"}`. The semconv makes the description optional, and it is
+  kept here because a poisoned tool description is what Challenge 3 is about. The parameters schema is left out, as
+  the semconv recommends for size by default.
+- *Not adopted, because Datadog does not document them:* the `invoke_agent` client/internal split (v1.41). Datadog
+  maps `invoke_agent` to the agent kind whatever the span kind, so the collector keeps stamping it as before. Also
+  not adopted: MCP's conventions and spans (v1.39), `gen_ai.agent.version` (v1.40), and the cache and reasoning token
+  attributes (v1.40, v1.41), which Datadog maps only in its OpenInference and Langfuse sections. `execute_tool` spans
+  already carry the tool name (ADK names them `execute_tool {gen_ai.tool.name}`), so v1.41's naming changes nothing.
+  `verify/test_genai_semconv_pin.py` fails if a registry group or a collector config adopts any of these. Revisit
+  each one when Datadog's page documents it.
+- *The move to semantic-conventions-genai.* From semantic-conventions v1.42.0 (2026-06-12) every `gen_ai.*`
+  convention is deprecated in the main repository and maintained in open-telemetry/semantic-conventions-genai. On
+  2026-11-03 that repository had no tag and no release (GitHub API). The pin stays on v1.41.1 until then. **Revisit
+  when semantic-conventions-genai tags its first release:** add it as the registry's GenAI dependency (weaver 0.24.2
+  accepts a second dependency), check it against Datadog's page again, and move the guard-proxy groups' `gen_ai.*`
+  refs to it.
+
+**Tests.** `verify/test_collector_act2_redaction.py` (offline) holds the overlay's keys equal to the burn scrub's, on
+spans and span events. It also checks that the messages stay semconv JSON, that nothing is deleted, that the dropped
+event names are gone, and that no profile wires the overlay in. `verify/test_collector_act2_redaction_e2e.py` (tools
+tier) runs one turn carrying the runbook's sentinel through the real otelcol-contrib for every profile. In Act 1 the
+sentinel reaches the exporter. In Act 2 it appears nowhere in the exporter's file, the blocked tool call is still an
+error, and the system prompt and tool definitions are untouched. `verify/test_adk_model_content_e2e.py` now reads
+`gen_ai.tool.definitions` too, with a `googleSearch` tool, an MCP declaration with `parametersJsonSchema` and one with
+no description in the fixture. `verify/test_genai_semconv_pin.py` (offline) holds the pin, the chat span group
+against proxy.py's `chat_span` attributes, the copy's drop of that span, and the list of things not adopted.
+
+**Not yet run on a cluster.** This run (hecaton run 16441) has no Datadog read access, which is what #759 provides.
+The cluster files it was handed (`clusters/kubeconfig`, `clusters/env`) are mode 0640, group `hecaton`, and the run's
+user is not in that group, so it could not read either KubeCon cluster. The read-only checks are in the run report's
+escalate list. Once #759 gives runs read access to Whitney's sandbox org and staging has reached the clusters:
+1. On each KubeCon bot (`attackme.burritobot.co`, `burritobot-private.burritobot.co`), send a fresh chat. In LLM
+   Observability under `ml_app:burritobot`, its row must show input and output tokens and a cost (not
+   `skipped_tokens_missing`), and the `generate_content` rows must show `tool_definitions`.
+   `python3 verify/agent_obs_flow.py chat --profile accen-dev` must first end GREEN; it confirms that rows arrive,
+   not tokens.
+2. On one cluster in a rehearsal, flip Act 2 as the overlay says. Send a prompt carrying
+   `DEMO-SENTINEL-ACT1-9f3c2a`, and confirm that its row and the kagent rows under it show `[DEMO-REDACTED]` and that
+   the sentinel is in no span of that trace, in APM or in Agent Observability. Then revert the flip. Offline, the same
+   shape is `verify/test_collector_act2_redaction_e2e.py`.
+3. After the guard-proxy-agenticburn change is repinned (Michael's), the APM `chat` span must carry both counts, and
+   the Agent Observability total must equal the sum of the `generate_content` rows, with no second count.

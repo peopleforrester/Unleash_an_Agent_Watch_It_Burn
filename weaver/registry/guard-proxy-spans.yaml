@@ -1,8 +1,8 @@
 # ABOUTME: Weaver span-group contract for the guard-proxy spans (PRD #20 M6 / #22 M1, M3).
-# ABOUTME: Its SERVER, sanitize, chat and agent.forward spans and its cost gauge, ref'd to OTel semconv v1.37.0.
+# ABOUTME: Its SERVER, sanitize, chat and agent.forward spans and its cost gauge, ref'd to OTel semconv v1.41.1.
 #
 # This is the source of truth for what guard-proxy/proxy.py emits. `weaver registry check` resolves every
-# ref against the pinned upstream registry (manifest.yaml -> otel v1.37.0); a typo or a renamed upstream
+# ref against the pinned upstream registry (manifest.yaml -> otel v1.41.1); a typo or a renamed upstream
 # attribute fails the check in CI. `weaver live-check` (docs/weaver-live-check.md) then compares real
 # telemetry from the running proxy against this same contract. Keep these groups in lockstep with the
 # set_attribute(...) and _stamp(...) calls in proxy.py; verify/test_weaver_guard_proxy_stamps.py holds the
@@ -178,7 +178,9 @@ groups:
         note: >-
           The logical name of the downstream service ("agentgateway" in the target topology). This is the
           Service Map edge signal; defined in the upstream OTel semconv registry (resolved via the
-          manifest.yaml dependency), no local definition needed.
+          manifest.yaml dependency), no local definition needed. Deprecated from semconv v1.38 (renamed to
+          service.peer.name) and kept on purpose: Datadog's service map reads peer.service, and Datadog documents
+          no mapping for service.peer.name (#784).
       - ref: error.type
         requirement_level:
           conditionally_required: When the forward fails.
@@ -190,6 +192,13 @@ groups:
   #
   # proxy.py's /chat handler opens it under the POST server span, after the guards have passed the prompt.
   # Its agent.forward CLIENT spans (span.witb.guard_proxy.egress) parent onto it, one per forward attempt.
+  #
+  # Datadog's Agent Observability maps gen_ai.operation.name "chat" to an llm span and reads its token counts from
+  # gen_ai.usage.input_tokens / gen_ai.usage.output_tokens (docs.datadoghq.com/llm_observability/instrumentation/
+  # otel_instrumentation, read 2026-11-03). Those two are the GenAI attributes #784 adopts on guard-proxy; they are in
+  # semconv v1.37 and v1.41.1 alike. Agent Observability's copy (#746) drops this span (filter/llmobs_one_root in
+  # gitops/otel-collector/values.yaml), so the counts are APM's to show and never add to kagent's generate_content
+  # counts, which are the ones Agent Observability prices.
   - id: span.witb.guard_proxy.chat
     type: span
     span_kind: internal
@@ -214,6 +223,18 @@ groups:
         note: >-
           The agent's reply before the output guard scrubs it, a JSON string, under the same gate. Absent on a
           turn whose reply is empty.
+      - ref: gen_ai.usage.input_tokens
+        requirement_level: recommended
+        note: >-
+          The turn's input tokens, summed over its forwards from the agent's kagent_usage_metadata
+          (promptTokenCount, proxy.py chat_usage_tokens). Datadog's Agent Observability reads an llm span's token
+          counts and its cost estimate from gen_ai.usage.* (#784). The pinned proxy.py (88b9b52) sums them into
+          `spent` and sets neither attribute yet; the guard-proxy-agenticburn change #784 asks for sets both, and a
+          repin brings it here.
+      - ref: gen_ai.usage.output_tokens
+        requirement_level: recommended
+        note: >-
+          The turn's output tokens (candidatesTokenCount), summed and pending the same change as the input tokens.
 
   # --- The cost gauge. ---
   #

@@ -1,9 +1,15 @@
 # ABOUTME: OTel Weaver registry manifest for the watch-it-burn guard-proxy span contract (PRD #20 M6).
-# ABOUTME: Pins upstream OTel semantic conventions v1.37.0 so our custom span groups resolve their ref'd attrs.
+# ABOUTME: Pins upstream OTel semantic conventions v1.41.1 so our custom span groups resolve their ref'd attrs.
 #
 # Weaver >= 0.22.1 changed this format (PRD #20 M6 note): the file is `manifest.yaml` (not
 # registry_manifest.yaml), and `schema_url` replaces the deprecated semconv_version/schema_base_url pair.
 # Built and validated against weaver 0.24.2.
+#
+# v1.41.1 (2026-05-11) is the last semantic-conventions release that carries the GenAI conventions; from v1.42.0 they
+# are deprecated there and live in open-telemetry/semantic-conventions-genai, which has tagged no release yet (#784,
+# decisions.md). Moving the pin from v1.37.0 changes nothing the proxy emits: every attribute the span groups ref
+# resolves the same, except that peer.service is deprecated (renamed to service.peer.name) from v1.38. The proxy keeps
+# emitting peer.service, which Datadog's service map reads; Datadog documents nothing for service.peer.name.
 name: watch-it-burn
 description: >-
   Semantic-convention registry for the Watch It Burn workshop guard-proxy. Declares the HTTP SERVER,
@@ -14,4 +20,4 @@ description: >-
 schema_url: https://agenticburn.com/schemas/watch-it-burn/1.0.0/schema.yaml
 dependencies:
   - name: otel
-    registry_path: https://github.com/open-telemetry/semantic-conventions/archive/refs/tags/v1.37.0.zip[model]
+    registry_path: https://github.com/open-telemetry/semantic-conventions/archive/refs/tags/v1.41.1.zip[model]

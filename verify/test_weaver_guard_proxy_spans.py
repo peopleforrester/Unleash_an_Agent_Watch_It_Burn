@@ -5,7 +5,7 @@ and wrote gen_ai.request.model, error.type and gen_ai.provider.name by hand unti
 This reads the pinned submodule's proxy.py offline: which span variable each set_attribute call is on, which span
 name and kind each variable is opened with, and the cost gauge's name, unit and attributes, and holds the registry to
 all of it. test_weaver_guard_proxy_stamps.py covers the _stamp calls; test_weaver_registry_check.py (E2E tier) runs
-weaver itself, which resolves each ref against semconv v1.37.0.
+weaver itself, which resolves each ref against semconv v1.41.1 (#784).
 """
 from __future__ import annotations
 

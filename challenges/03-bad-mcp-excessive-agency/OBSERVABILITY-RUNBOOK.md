@@ -66,9 +66,11 @@ observability became an exfil path. The two acts show the leak, then close it at
 - **Act 2 (the Collector redaction) is GitOps-only.** The cluster's kyverno `block-argocd-drift`
   policy rejects direct edits to the ArgoCD-managed Collector ConfigMap (`This resource is managed by
   ArgoCD. Change it in Git, not in the cluster.`). So the OTTL redaction toggle must go through Git:
-  add the `transform/redact_sentinel` processor to `gitops/bootstrap/apps/otel-collector.yaml` and let ArgoCD
-  sync. Canonical source for the processor is `gitops/otel-collector/otel-collector-act2-overlay.yaml`. Commit
-  to flip to Act 2; revert the commit to return to Act 1.
+  add the `transform/redact_sentinel` processor to `gitops/otel-collector/values.yaml` and append it to the end of
+  the traces pipeline's processors in the value file that states that list for the profile (`values.yaml`, or
+  `values-burn.yaml` on burn), then let ArgoCD sync. Canonical source for the processor, and the exact steps, is
+  `gitops/otel-collector/otel-collector-act2-overlay.yaml`. Commit to flip to Act 2; revert the commit to return to
+  Act 1.
 
 ### Act 1: arm capture, show the leak
 
@@ -94,8 +96,8 @@ Verified 2026-06-25 (trace `97d2eef4003e3eba4adf56cdd59433e`): both attributes c
 Flip the toggle in Git (the only allowed path), then let ArgoCD sync:
 
 ```bash
-# In gitops/bootstrap/apps/otel-collector.yaml, add transform/redact_sentinel to processors AND to the
-# traces pipeline processors (last, before exporters); see otel-collector-act2-overlay.yaml.
+# In gitops/otel-collector/values.yaml, add transform/redact_sentinel to config.processors AND to the end of the
+# traces pipeline processors (values-burn.yaml's list on burn); see otel-collector-act2-overlay.yaml.
 git commit -am "flip re-leak-trap to Act 2" && git push origin staging
 AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n argocd \
   annotate application otel-collector argocd.argoproj.io/refresh=hard --overwrite
@@ -103,10 +105,13 @@ AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n argocd \
 # Re-run the same prompt.
 ```
 
-**Expected in Datadog:** the `sanitize` span now shows `gen_ai.input.messages = "[DEMO-REDACTED]"`
-and `gen_ai.output.messages = "[DEMO-REDACTED]"`. The attribute key is still present (the transform
-replaces the value, it does not delete the key), so Datadog confirms the redaction happened and the
-secret never reached the platform.
+**Expected in Datadog:** the `sanitize` span, and every kagent model call and tool call in the same trace, now
+shows `[DEMO-REDACTED]` as its input and output: `gen_ai.input.messages` and `gen_ai.output.messages` are one
+message whose text is `[DEMO-REDACTED]` (still the semconv JSON shape, so the panel renders it), and the tool call's
+arguments and result are the bare `[DEMO-REDACTED]`. The attribute keys are still present (the transform replaces
+the value, it does not delete the key), so Datadog confirms the redaction happened and the secret never reached the
+platform. Until #784 the overlay matched the `gen_ai.content.prompt` / `gen_ai.content.completion` events, which
+nothing emits, so Act 2 redacted nothing; `verify/test_collector_act2_redaction_e2e.py` now runs it.
 
 Verified 2026-06-25 (trace `20211b7a66106d17d837f7fc403521ec`): both attributes read `[DEMO-REDACTED]`;
 the Act-2 sentinel `DEMO-SENTINEL-ACT2-7b1e84` never reached the trace store.

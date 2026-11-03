@@ -308,6 +308,14 @@ config:
     # arguments) and tool_call_response (id, response). Copy, never move, as above. A span that already carries
     # gen_ai.input.messages (the Python runtime, guard-proxy) is left as it is.
     #
+    # The tools the model was offered go to gen_ai.tool.definitions (#784), the one GenAI attribute newer than semconv
+    # v1.37 (it came in v1.38) that Datadog's page maps: to meta.tool_definitions, a parsed JSON array. adk-go v2.1.0
+    # packs every tool's declaration into the first genai.Tool that has functionDeclarations (tool/toolutils PackTool,
+    # and agent transfer the same), so that one list is the whole set. Each becomes {"type":"function","name",
+    # "description"}, the semconv's FunctionToolDefinition. The description is optional there and kept here, because a
+    # poisoned tool description is what Challenge 3 is about. The parameters (an MCP tool's parametersJsonSchema) are
+    # left out, as the semconv recommends by default for size.
+    #
     # When the payload does not parse, nothing is written and the span goes on unchanged. kagent replaces a payload
     # over 32 KiB with {"original_size":..,"payload_prefix":..,"truncated":true}, and a payload cut anywhere else is
     # not JSON. The 2048-character cut read in Tempo matches Tempo's own max_attribute_bytes default (2048), which would
@@ -363,6 +371,19 @@ config:
               and ContainsValue(Keys(cache["adk_req"]["Config"]), "systemInstruction") and IsMap(cache["adk_req"]["Config"]["systemInstruction"])
               and ContainsValue(Keys(cache["adk_req"]["Config"]["systemInstruction"]), "parts")
               and IsList(cache["adk_req"]["Config"]["systemInstruction"]["parts"])
+            - >-
+              set(cache["adk_fns"], Filter(cache["adk_req"]["Config"]["tools"], (_, t) => IsMap(t)
+              and ContainsValue(Keys(t), "functionDeclarations") and IsList(t["functionDeclarations"])))
+              where IsMap(cache["adk_req"]) and IsMap(cache["adk_req"]["Config"])
+              and ContainsValue(Keys(cache["adk_req"]["Config"]), "tools") and IsList(cache["adk_req"]["Config"]["tools"])
+            - >-
+              set(attributes["gen_ai.tool.definitions"], String(MapEach(Filter(cache["adk_fns"][0]["functionDeclarations"],
+              (_, d) => IsMap(d) and ContainsValue(Keys(d), "name") and IsString(d["name"])),
+              (_, d) => When(() => ContainsValue(Keys(d), "description") and IsString(d["description"]),
+              {"type": "function", "name": d["name"], "description": d["description"]},
+              {"type": "function", "name": d["name"]}))))
+              where attributes["gen_ai.tool.definitions"] == nil and IsList(cache["adk_fns"]) and Len(cache["adk_fns"]) > 0
+              and Len(cache["adk_fns"][0]["functionDeclarations"]) > 0
             # Output: the one Content, as the assistant, with the semconv finish_reason. ADK leaves FinishReason ""
             # when the model adapter did not set one; then a reply that calls a tool is tool_call and any other stop.
             - >-
