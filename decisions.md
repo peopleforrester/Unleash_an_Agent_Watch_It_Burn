@@ -11414,3 +11414,8 @@ passed with 230 tests. `bash verify/run-e2e-tools.sh` ran 47 checks, and one fai
 passed in the tier and found the cause at issuecomment-6578827445. The failure was `test_image_version_tags.py`,
 failing only on ghcr.io serving `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c…` instead of the pinned
 `68004fb5…`. That is the red the #808 and #807 entries record, already in the base, and it does not involve this change.
+
+**Rebased past #759, #485 and #608 (run 16668, resuming run 16656).** Hecaton's rebase of run 16656 onto staging
+41c0b9c stopped on PROGRESS.md: #759's bullet and this one were both inserted at the top of [Unreleased]'s Added list.
+Both are kept, #811's above #759's. decisions.md took the later entries by append, and nothing the test reads changed:
+`gitops/otel-collector/values.yaml` and the #783 entry are as they were at 5d0a620. No code differs from run 16656's draft.
