@@ -75,7 +75,8 @@ def cluster() -> dict:
             status={"conditions": [{"type": "Accepted", "status": "True"}]}),
         deploy("evil-mcp-shim", template={"spec": {
             "volumes": [{"name": "src", "configMap": {"name": "evil-mcp-src"}}],
-            "containers": [{"name": "shim", "image": "ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26"}]}}),
+            "containers": [{"name": "shim", "image": "ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1"
+                            "@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e"}]}}),
         deploy("workshop-agent", template={"spec": {"containers": [{"name": "kagent", "image": "kagent-adk"}]}}),
         deploy("agentgateway", template={"spec": {"containers": [{"name": "agentgateway", "image": "agw"}]}}),
         pod("agent", "workshop-agent-0", "workshop-agent", "10.1.0.1"),

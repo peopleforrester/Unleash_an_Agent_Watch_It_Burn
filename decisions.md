@@ -10672,3 +10672,15 @@ button (`verify/run-e2e.sh` has none, and `verify/browser-smoke.py` does not tou
 AWS access opens `https://attackme.burritobot.co/` with no cookies, notes the header's name, opens
 `https://support-attackme.burritobot.co/me` and sees the same name, clicks "Get a new witch name", and sees `/me`
 show the new name after a reload.
+
+**Fixed on the way: a bare `workshop-mcp` tag in #480's stand-in.** #480's `b28d5c1` gave the `evil-mcp-shim`
+Deployment in `verify/test_tool_pin_live_check.py` the image `watch-it-burn:workshop-mcp@sha256:9a26`. It is only a
+fixture, but `test_image_version_tags.py` requires every reference to that image to name `workshop-mcp-mcp-1.29.1`,
+so the tier went red on it. The fixture now carries resources.yaml's own pin, and both tests pass.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (226 tests). `bash verify/run-e2e-tools.sh` ran 45 checks, started
+in the background after the commit and read in the foreground. `test_storefront_witch_name_e2e.py` passed in it. It
+exits 1 on `test_image_version_tags.py` alone. Its workshop-mcp red is the fixture fixed above, which passes when rerun
+alone. Its other red is the one recorded for #746, #775 and #786: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7`
+at `sha256:0b72ecc7...`, not the pinned `68004fb5`, because CI pushed over that tag. Nothing here touches an image,
+and run 16420's follow-up owns the fix for that workflow.
