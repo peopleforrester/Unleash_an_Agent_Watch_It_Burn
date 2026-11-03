@@ -10313,4 +10313,8 @@ audience-path checks passed." Then the #644 reruns in `facilitation/kubecon-na-2
 both contexts, but its `clusters/` files are mode 640, group `hecaton`, and its user is not in that group, so nothing
 was read.
 
+**Tests at this entry.** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh` ran 43 checks and failed
+one, `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:d6acd503...`, not the pinned
+`sha256:68004fb5...`. That is the tag CI pushed over, as the 2026-11-03 · #746 entry records, and not this change.
+
 No dependency was added.
