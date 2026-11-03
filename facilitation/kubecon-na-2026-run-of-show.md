@@ -668,43 +668,88 @@ real-looking home address to chat.
 
 ### Segment 3: Challenge 2, the Kubernetes catch-all (4 min). Owner: Whitney and Michael.
 
-- **Tee-up:** "Everything you already knew about Kubernetes matters more now."
-- **Play (3 min):** the room tries the prompts on `/kubecon` against the
-  public bot, where nothing below is armed. After the challenge slide (the call to
-  action), the presenters may optionally switch to the prompt wall while the room
-  plays, and back to the deck for the fix. (Measured 2026-10-29 on attackme: the
-  beacon answered from `workshop-mcp`, a server-side dry run of the villain image as
-  `workshop-mcp` was admitted, and the recipe file read back.) The prompts:
-  - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
-    the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one that
-    lands shows on `deployments.burritobot.co` with its image and the sender's witch name
-    (#773);
-  - reading the filesystem, the recipe file under `/tmp/burrito-data`;
-  - egress, posting the customer breakdown to `https://beacon.burritobot.co/beacon`.
-- **Fix (1 min):** `guardrails-on` on the private bot's terminal arms the four
-  Kubernetes guardrails on both clusters (#774); each badge lights on the room's
-  chat page, and each guardrail is named, not deep. From here on a public image the
-  room asks for is refused by `deny-external-registries`. Segment 4's Jokers still
-  land: HC-666 asks for `registry.burritobot.co`'s image, which both registry policies
-  trust (#775). If one is asked about, its fallback proves it without the model:
-- C2 public image: admission control. Kyverno's `restrict-image-registries` does
-  not allow `public.ecr.aws`, and `deny-external-registries` admits what the bot
-  deploys come from `registry.burritobot.co` alone.
-  `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
-  prints the deny.
-- C3 read the recipe off the filesystem: blocked inline in the kernel by KubeArmor,
-  and caught by KubeArmor's own alert for the denied attempt. One command shows
-  prevention and detection doing different jobs:
-  `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
-  prints the agent's `Permission denied` and then the `kubearmor-relay` alert line
-  (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
-  alert here: Falco's recipe-snoop rule fires on a successful read, and on the
-  private cluster there is none.
-- C1 exfiltrate the customer data: the egress NetworkPolicy. Keep the beacon view,
-  `https://beacon.burritobot.co/beacon/view`, open in its own tab: the count moves while
-  the room plays on the public bot, and does not move for the private one.
-- **Delivers:** point 3 (a full IDP, by voice), point 4, and point 5 (the layers
-  named).
+Six steps, in the deck's order (#776, #821). The quoted slide lines are the deck's own
+words (rounds-agenticburn#58).
+
+**Start state (#774).** Both clusters start with the four Kubernetes guardrails
+present and off, so nothing below is armed when the segment opens. Before #774 the
+private cluster had them armed from the start; #774 changed that, merged into staging
+on 2026-11-03, and the switch in step 5 is what arms them now.
+
+1. **The pre-AI questions.** The slide reads:
+
+   > **Everything you already knew about Kubernetes security**
+
+   It asks the room the questions they already ask of any workload, before AI: is
+   there cluster-level policy, with Kyverno? Runtime security, with Falco or
+   KubeArmor? RBAC? A secrets manager? Kubernetes Network Policy for egress?
+2. **The answer.** The next slide reads:
+
+   > **BurritoBot has none of these things**
+
+3. **The call to action, three attacks.** The challenge slide asks the room to do any
+   one of three things to the public bot from their phones: run a malicious image,
+   read the secret recipe off the filesystem, or send customer data off the cluster.
+   Any one of the three counts. The play time (3 min) runs from here. The room tries
+   the prompts on `/kubecon`; the presenters may optionally switch to the prompt wall
+   while the room plays, and back to the deck for the attack. (Measured 2026-10-29 on
+   attackme: the beacon answered from `workshop-mcp`, a server-side dry run of the
+   villain image as `workshop-mcp` was admitted, and the recipe file read back.) The
+   prompts:
+   - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
+     the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one
+     that lands shows on `deployments.burritobot.co` with its image and the sender's
+     witch name (#773);
+   - reading the filesystem, the recipe file under `/tmp/burrito-data`;
+   - egress, posting the customer breakdown to `https://beacon.burritobot.co/beacon`.
+
+   Keep the beacon view, `https://beacon.burritobot.co/beacon/view`, open in its own
+   tab: the count moves while the room plays, and stops moving once step 5 has run.
+4. **Attack, then its trace.** Whitney sends one of the three `/kubecon` asks on the
+   admin bot, the private cluster's BurritoBot, and it lands, since the private
+   cluster's guardrails are off too. Then the pre-seeded Datadog trace for Challenge 2
+   (#648) shows what the attack did from the platform side. `verify/stage_traces.py`
+   seeds traces for Challenges 1, 3 and 4 only today, so a Challenge 2 seed and its
+   saved view are still to be added under #648; until then, show the trace of
+   Whitney's attack in the `burritobot-private` tab, or the Grafana view (#500).
+5. **One switch, depending on #774.** The slide reads:
+
+   > **Kubernetes guardrails on**
+
+   One command, run from the admin cluster's terminal (the private bot's terminal),
+   turns on RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy together,
+   for both clusters. That command is `guardrails-on`, which #774 added; it prints
+   every `kubectl` it runs, and each badge lights on the room's chat page within a
+   poll (see "The Kubernetes guardrails switch (#774)" above). The room is invited to
+   try their Challenge 1 and Challenge 2 attacks again: the CEO's Secret read now comes
+   back Forbidden, and a public image, the recipe read and the beacon post are each
+   stopped. From here on a public image the room asks for is refused by
+   `deny-external-registries`. Segment 4's Jokers still land: HC-666 asks for
+   `registry.burritobot.co`'s image, which both registry policies trust (#775).
+6. **One slide per guardrail,** each named, not deep. If one is asked about, its
+   fallback proves it without the model:
+   - RBAC: agent-sa's Role reads one Secret by name, the agent's own `workshop-agent`
+     config Secret, so the CEO's record is out of reach. It has no fallback script;
+     the room's own Challenge 1 ask, coming back Forbidden after step 5, is the proof.
+   - C2 public image: Kyverno admission. Kyverno's `restrict-image-registries` does
+     not allow `public.ecr.aws`, and `deny-external-registries` admits what the bot
+     deploys from `registry.burritobot.co` alone.
+     `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
+     prints the deny.
+   - C3 read the recipe off the filesystem: KubeArmor. Blocked inline in the kernel by
+     KubeArmor, and caught by KubeArmor's own alert for the denied attempt. One command
+     shows prevention and detection doing different jobs:
+     `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
+     prints the agent's `Permission denied` and then the `kubearmor-relay` alert line
+     (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
+     alert here: Falco's recipe-snoop rule fires on a successful read, and on the
+     private cluster there is none.
+   - C1 exfiltrate the customer data: the egress NetworkPolicy. The beacon view's count
+     stops moving.
+     `CONTEXT=<admin-context> bash challenges/c1-exfil-s3/fallback.kubectl.sh` shows the
+     POST fail and the count hold, without the model.
+- **Delivers:** point 3 (a full IDP, by voice), point 4, and point 5 (RBAC and the
+  other three layers, switched on together and named).
 - **Hand-off:** "Those were the bot doing what it was asked. Next, the bot doing what
   a stranger asked."
 
