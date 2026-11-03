@@ -11508,4 +11508,10 @@ unscoped write key. Owed, in order, from a session with accen-dev at the repo ro
 The apply's validate step checks the query's syntax, not that the metric reports, so the `--data` line `DATA     monitor agent-obs-silent (OK, the whole org: no cluster tag)`
 inside 10 minutes of the chat is the one that says the name is right.
 
+**The suites (run 16655, on caeb456).** `bash verify/run-tests.sh`, run as the first half of the E2E command, ran 230
+tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_fleet_monitors.py` among them. `bash verify/run-e2e-tools.sh`
+ran 46 checks and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7`
+at `sha256:0b72ecc7...`, not the pinned `68004fb5`, the tag CI pushed over (#815, #816, #823, #824). Nothing here
+touches an image.
+
 No dependency was added.
