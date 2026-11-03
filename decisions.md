@@ -13364,3 +13364,124 @@ is the fleet-wide save). Until then the hand-run `bash verify/run-e2e.sh` fails 
 **The suites (run 16818).** On 59304af9, `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52 tier
 tests) in 25m38s and ended `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 242 tests, all green,
 `test_images_saved_judge.py` among them, and listed `test_images_saved.py` under the E2E suite.
+## 2026-11-03 · #778 · reset-bot runs `guard-proxy reset-spend` when the live guard-proxy keeps its spend on a volume
+
+guard-proxy-agenticburn#33 added `guard-proxy reset-spend --store PATH` to the Go build. It clears the bbolt
+store at `SPEND_STORE_PATH`: the spend tally, each session's spend and the runtime cost cap. It prints one line
+naming what it cleared, and it refuses a store the proxy holds (bbolt's flock) or a path with no store. After the
+#738 cutover the store sits on the `guard-proxy-spend` claim (#751), so a pod restart no longer starts a delivery
+from $0. The issue asks for one step that scales guard-proxy to 0, runs one pod from the same image with the
+volume mounted and `reset-spend --store <SPEND_STORE_PATH>`, prints its output and scales back to 1. It asks for
+the step in the run of show only if deliveries reuse a cluster's volume.
+
+**Deliveries reuse the volume, so the step goes in the run of show.** The run of show already resets the
+community bot before run-through 1, before run-through 2 and before the delivered session, all on one bring-up,
+with `./fleet.sh reset-bot watch-it-burn-community` (#539). The volume lives as long as the bring-up does. So the
+reset-spend steps are part of `reset-bot`, and the run of show keeps its one command.
+
+**What changed.** In `infra/terraform/fleet/fleet.sh`, `reset_bot_one` now reads the live guard-proxy Deployment
+first. `reset_spend_pod` reads that Deployment and prints nothing when the proxy container has no
+`SPEND_STORE_PATH`. That is proxy.py, and reset-bot keeps the pod delete it has always done, so KubeCon's reset
+is unchanged. When the variable is set, `reset_spend_pod` prints a one-shot Pod. The Pod uses the proxy's own
+image, so the signed, digest-pinned reference the cluster already admitted needs no second copy in git. It copies
+the proxy's pod and container security contexts, its resources and its scheduling. It mounts only the store's
+volume at the proxy's mount path, with no API token, and its label does not select it as guard-proxy. It refuses
+a store on no read-write mount, a store on a volume that is not a PersistentVolumeClaim, and a `command` with
+arguments of its own. `reset_spend_store` then runs the steps in order. It sets `argocd.argoproj.io/skip-reconcile`
+on the ai-layer Application, scales guard-proxy to 0, and waits for the old pod to be gone. It deletes any reset
+pod an interrupted run left, creates the reset pod and waits for it to finish. It logs every line of the pod's
+output, then deletes the pod. It scales guard-proxy back to its replica count, at least 1, and removes the
+annotation. A failure after the pause still scales back and resumes, and it says which step failed. The existing
+`/cost` read at zero closes both paths. `wait_ready_pod` is split out of `restart_pods` so both paths share it.
+
+**Why Argo CD is paused.** ai-layer syncs with `selfHeal: true` and has no ignore on `/spec/replicas`. A scale to
+0 would come back to 1 within seconds. The new proxy and the reset pod would then race for the store's flock, and
+the loser fails. Adding a replicas ignore to `gitops/bootstrap/apps/ai-layer.yaml` would also stop selfHeal from
+restoring a guard-proxy the bot scaled down, for the whole show. The skip-reconcile annotation pauses ai-layer
+only for the reset. The lab-bootstrap root does not revert it, because the annotation is not in git and the
+root's diff skips fields that only the live object has. The annotation is an alpha feature in Argo CD since 2.7,
+and the clusters run Argo CD 3.5.2 (VERSIONS.lock). Both scales run as the Argo CD controller service account,
+which block-argocd-drift admits, the same way `repair_env_order` patches.
+
+**Tests.** `verify/test_reset_bot.sh` (offline) gains a Go Deployment fixture and checks the call order: pause,
+scale to 0, clear leftovers, create, logs, delete, scale to 1, resume, read. It checks that both scales run as the
+controller and that the old pod is gone before the reset pod is created. It checks that the command's line is
+printed, and it checks the reset pod's image, args, volume, mount, security context, resources and label. It
+checks that a Failed pod, a refused create, a refused scale and an old pod that never exits each fail, and that
+guard-proxy and Argo CD still come back. An Argo CD that cannot be paused leaves guard-proxy running. An emptyDir
+store, a store with no mount, a command with arguments and an unreadable Deployment are each refused before
+anything changes. The proxy.py path is unchanged: no scale, no pause, no create. The run-of-show checks gain the
+Go paragraph. `verify/test_guard_proxy_spend_store.py` (tools tier) feeds the go-spend-store render, with
+proxy.py's command removed as the cutover removes it, to `reset_spend_pod`. It checks that the pod runs
+`reset-spend --store /var/lib/guard-proxy/spend.db` with the `guard-proxy-spend` claim at `/var/lib/guard-proxy`
+and the Component's pod security context, and that proxy.py's render builds no pod.
+
+**Not yet run on a cluster.** It is owed at the #738 cutover, in a session with AWS access, on a cluster running the
+Go image with go-spend-store listed. Spend a few turns through the chat, then run
+`./fleet.sh reset-bot <cluster>`. It must print the `reset-spend: cleared $…` line with non-zero figures and end
+`counter at zero`. Afterwards, `kubectl --context "$CONTEXT" -n argocd get application ai-layer -o jsonpath='{.metadata.annotations}'`
+must show no skip-reconcile, and ai-layer must be Synced and Healthy. Four things are unverified. Argo CD 3.5.2
+must still honor skip-reconcile. The lab-bootstrap root must leave the annotation on ai-layer for the reset's
+minute or two. Kyverno's verify-image-signatures and require-resource-limits must admit the
+reset pod on an attendee cluster. The EBS volume must move to the reset pod's node inside `WIB_RESET_SPEND_WAIT`
+(300 s by default).
+
+## 2026-11-03 · #778 · The E2E tools tier stalled on unbounded Terraform downloads; the provider cache now lives per checkout
+
+**What stalled.** The previous dispatch of #778 failed as a stall: 900 seconds with no output. Its E2E tools
+tier was in `test_iam_policy_structural.py`. The `terraform init` it started had open HTTPS connections to the
+provider registry, no bytes moving and the process idle for minutes. It was the AWS provider, about 800 MB.
+Each test process fetched its own copy into a fresh temp cache (`_plugin_cache` in `verify/iam_plan_render.py`),
+and at least three runs on this host were fetching it at the same time. Nothing bounded any of these calls:
+`subprocess.run` in `iam_plan_render.py` and `test_terraform_lock_init.py` had no timeout. The lock-init test also
+clears `TF_PLUGIN_CACHE_DIR` on purpose, so its five roots fetch from the registry on every run.
+
+**What changed.**
+- `verify/iam_plan_render.py`: every `terraform` call has a 600-second bound (`TERRAFORM_TIMEOUT`). A call past it exits
+  non-zero and names the stalled download, so the tier fails loudly rather than waiting.
+- `verify/test_terraform_lock_init.py`: the fresh init has the same bound (`INIT_TIMEOUT`). A timeout is a failed check
+  for that root. The cache stays cleared, since the test exists to check a fresh init.
+- `verify/run-e2e-tools.sh`: the tier sets `TF_PLUGIN_CACHE_DIR` to `verify/.tools/plugin-cache`. That directory
+  is gitignored, lives in this checkout, and survives between tests. The tier runs its tests one after another in one
+  checkout, so nothing writes to the cache concurrently. The aws provider now downloads once per checkout, not once per
+  test process.
+
+**Why 600 seconds.** The clean lock-init run took about 90 seconds for the cluster root, which is the largest, on a
+host with no other E2E tier running. Six times that leaves room for a loaded host and still fails well before the
+900-second silence the harness reads as a stall.
+
+**Not yet run on a cluster.** Nothing here touches a cluster. The change to the Go reset path in the entry above is
+still owed its live check, as that entry says.
+
+**The ttyd pin, resolved on staging, not here.** `verify/test_image_version_tags.py` failed on the ttyd image at the
+time of this run: ghcr.io served `sha256:7e5f8986…` for the tag that `images.lock` and `resources.yaml` pin at
+`sha256:68004fb5…`. Question 1051 was answered to restore the old digest (entry below). That is already on staging:
+#816 (`e33a0fe5`) made `build-web-terminal.yml` push only a tag ghcr.io lacks, and #824 (run 16781) checked that the
+tag is back on `68004fb5` and that its cosign signature verifies. This branch changes no image.
+
+**What differs from the draft.** The draft was written on 3120d2d. On staging the `reset-bot` `/cost` read goes through
+the burritobot.co twin rows (#651), which is the host the room sees, so the Go path reads the same host. The draft's
+`fleet.sh` hunks were re-applied to that layout, and the `test_reset_bot.sh` additions were applied as zero-context
+hunks, since staging only renamed hosts in the lines around them. `iam_plan_render.py` and `test_terraform_lock_init.py`
+did not change on staging, so their draft is used as it was. `run-e2e-tools.sh` gets the same one-line tier env.
+
+## 2026-11-03 · #778 · question 1051: keep the pin and restore the old digest
+
+**The question.** Which digest should the web-terminal image pin name: the one ghcr.io serves for the tag today
+(`sha256:7e5f8986…`), or the one `images.lock` and `gitops/ai-layer/resources.yaml` pin (`sha256:68004fb5…`)? The tag
+`watch-it-burn:web-terminal-ttyd-1.7.7` is the attendees' browser-terminal image, and CI had pushed over it.
+
+**The answer.** Keep the pin and restore the old digest. The pin stays `sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf`.
+The rebuilt digest carries no cosign signature, and `policies/kyverno/verify-image-signatures.yaml` requires one, so
+re-pinning it is not a fix. The tag has to point back at `68004fb5`, and the workflow must stop pushing over a tag that
+already exists. The third re-dispatch of #746 (decisions.md, 2026-11-03) records the same ruling, and #783, #774 and #824
+record the same red and the same two fixes.
+
+**Who decided.** Decided by hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes.** Nothing in this branch: the pins in `images.lock` and `resources.yaml` already name `68004fb5`, and
+this run's first recommendation (re-pin to the digest ghcr.io served) is not taken. The restore and the workflow fix are
+on staging already (#816 and #824 above). An anonymous HEAD of the tag on 2026-11-03 answers
+`docker-content-digest: sha256:68004fb5…`, so `verify/test_image_version_tags.py`'s web-terminal check passes. The
+registry state this question was about is resolved. The tools tier still has one red on staging, the
+`sample-app-nginx-1.27.5` tag answering 404 under #814, which this issue does not touch.

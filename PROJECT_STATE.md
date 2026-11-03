@@ -166,6 +166,8 @@ Next, in order:
   2026-11-12 (decisions.md, 2026-11-02 · #412). The Go build's bbolt spend store (guard-proxy#32)
   needs a PVC, `SPEND_STORE_PATH` and Recreate: staged as `gitops/ai-layer/go-spend-store/`, a Component
   the #738 cutover lists in the ai-layer kustomization (#751; decisions.md, 2026-11-02 · #751).
+  Its between-deliveries reset is `fleet.sh reset-bot`, which runs `guard-proxy reset-spend` against the store
+  whenever the live guard-proxy sets `SPEND_STORE_PATH` (#778; decisions.md, 2026-11-03 · #778).
   The Go build's OTEL_* env is staged the same way, as `gitops/ai-layer/go-otel/` (inject-sdk in place
   of inject-python), and weaver/registry now declares the three attributes guard-proxy#36 wrote by hand,
   with `chat` span and cost gauge groups (#782; decisions.md, 2026-11-03 · #782).
