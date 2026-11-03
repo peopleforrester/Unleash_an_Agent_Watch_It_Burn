@@ -136,7 +136,11 @@ check("and still admits the platform's own ghcr.io images",
       registry_allowlist.allowed("ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:" + "0" * 64))
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)
 check("the Joker is no longer a plain log loop in the V roster", bool(v) and "[joker]=" not in v.group(1))
-check("build_joker_web is the last thing build.sh runs", BUILD.rstrip().endswith("build_joker_web"))
+check("building the Jokers is the last thing build.sh does: joker, and the breakout's joker-internal (#775)",
+      BUILD.rstrip().endswith("""    joker)          build_joker_web "$JOKER_REF" ;;
+    joker-internal) build_joker_web "$JOKER_INTERNAL_REF" joker-web-internal ;;
+  esac
+done"""))
 check("build.sh pushes nothing to Docker Hub, and no roster loop: the ten C2 villains are lab-platform's (#653, #714)",
       "crane auth login docker" not in BUILD and "build_one" not in BUILD and 'ORG="' not in BUILD)
 
@@ -168,9 +172,16 @@ check("`build.sh joker` pushes only the Joker: crane append then mutate, both to
       and set(tags(calls)) == {ref.group(1)}, f"rc={proc.returncode} {calls} {proc.stderr}")
 check("the Joker's layer holds start.sh and the page under villain/",
       {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
+proc, calls, members = run_build("joker-internal")
+check("`build.sh joker-internal` pushes only the breakout's Joker, beside $JOKER_REF's tag (#775)",
+      proc.returncode == 0 and [c[0] for c in calls] == ["append", "mutate"]
+      and set(tags(calls)) == {ref.group(1) + "-internal"}, f"rc={proc.returncode} {calls} {proc.stderr}")
+check("its layer holds the same start.sh and a page under villain/",
+      {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
 proc, calls, _ = run_build()
-check("with no names build.sh pushes the Joker and nothing else",
-      proc.returncode == 0 and tags(calls) == [ref.group(1)] * 2, f"rc={proc.returncode} {tags(calls)}")
+check("with no names build.sh pushes the two Jokers and nothing else",
+      proc.returncode == 0 and tags(calls) == [ref.group(1)] * 2 + [ref.group(1) + "-internal"] * 2,
+      f"rc={proc.returncode} {tags(calls)}")
 proc, calls, _ = run_build("joker", "gargamel")
 check("a roster name is refused before anything is pushed, as lab-platform's build",
       proc.returncode != 0 and calls == [] and "lab-platform's promo/ build" in proc.stderr,
@@ -182,11 +193,12 @@ check("a name build.sh does not know fails before anything is pushed",
 base = re.search(r'^JOKER_BASE="(docker\.io/library/busybox@sha256:[0-9a-f]{64})"', BUILD, re.M)
 check("the Joker's base is busybox pinned by digest", base is not None)
 check("joker-web goes in as a layer under /villain",
-      "--transform 's,^joker-web,villain,'" in BUILD and '-b "$JOKER_BASE"' in BUILD and "-C \"${HERE}\"" in BUILD)
+      "--transform 's,^joker-web,villain,'" in BUILD and '-b "$JOKER_BASE"' in BUILD and '-C "${src}"' in BUILD
+      and 'src="${HERE}"' in BUILD)
 check("the layer is amd64, the nodes' architecture",
       "--platform linux/amd64" in BUILD
       and 'ami_type       = "AL2023_x86_64_STANDARD"' in (REPO / "infra/terraform/aws/cluster/main.tf").read_text())
-mut = re.search(r'"\$CR" mutate "\$JOKER_REF" (.*) -t "\$JOKER_REF"', BUILD)
+mut = re.search(r'"\$CR" mutate "\$\{ref\}" (.*) -t "\$\{ref\}"', BUILD)
 check("the entrypoint runs start.sh with the image's own sh", bool(mut) and '--entrypoint "/bin/sh,/villain/start.sh"' in mut.group(1))
 port = re.search(r"--env PORT=(\d+)", mut.group(1) if mut else "")
 check("the image sets PORT, which start.sh requires", port is not None and ': "${PORT:?' in START)

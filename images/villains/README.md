@@ -58,5 +58,24 @@ burritobot.co twin), `fleet.sh` publishes the host, and `deploy_app`'s reply nam
 hand it to the attendee. `verify/test_joker_web_busybox.py` runs `start.sh` on the pinned busybox's own binary.
 The image is amd64 only, as the cluster nodes are.
 
-`build.sh` (or `build.sh joker`) pushes the Joker and nothing else. A roster name is refused before anything is
-pushed: those ten are lab-platform's build.
+`build.sh joker` pushes the workshop's Joker and nothing else, `build.sh joker-internal` the breakout's (below), and
+`build.sh` with no name both. A roster name is refused before anything is pushed: those ten are lab-platform's build.
+
+## The breakout's Joker, from the internal registry (KubeCon Challenge 3, #775)
+
+At KubeCon, `guardrails-on` sets both registry policies to Deny, so the room's ticket, HC-666, asks for
+`registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0` instead, an image the policies trust. The internal
+registry (`gitops/internal-registry/`) copies it, by digest, from
+`ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal`, which `build.sh joker-internal`
+builds: the same image with `joker-web-internal/www/index.html` laid over the page. That page keeps the persona and
+says what is true there: admission let it in, because it came from a registry the cluster trusts, and the input
+classifier or a bot that cannot create Deployments would have stopped it. The workshop's Joker keeps its own page,
+because on a workshop cluster the allow-list does refuse it.
+
+The build is reproducible, so its digest is pinned before it is pushed: `verify/test_joker_build_digest.py` (tools tier)
+runs `build.sh` with crane 0.22.1 into a loopback registry and holds both Jokers to their `images.lock` rows. Push with
+that same crane: `CRANE=verify/.tools/bin/crane bash images/villains/build.sh joker-internal` (after
+`bash verify/fetch-e2e-tools.sh` and the `crane auth login ghcr.io` above).
+
+Each room Joker, `joker-<name>`, has its own page at `https://maintenance-shell-<cluster>.burritobot.co/joker-<name>/`:
+`deploy_app` gives its pod that hostname under the headless `jokers` Service, and the console proxies the path to it.

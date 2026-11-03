@@ -17,7 +17,7 @@
 # this suite exists to prove the things the offline suite cannot, and a run that proved none of them must
 # not exit 0. Every prerequisite is checked before anything runs, so one run lists everything that is missing.
 #
-# kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd are not taken from the host (#585, #654, #770). The
+# kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane are not taken from the host (#585, #654, #770, #775). The
 # prerequisite check runs verify/fetch-e2e-tools.sh, which puts the pinned, checksum-verified binaries of
 # e2e-tools.lock in the gitignored verify/.tools/bin, and that directory goes first on PATH for everything after it,
 # so a cluster build runs the same binaries as the gate's E2E command (run-e2e-tools.sh). A failed fetch is one of
@@ -51,16 +51,16 @@ if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command 
     if bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
         tools_ready=1
     else
-        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd could not be fetched (fetch-e2e-tools.sh, reasons above)")
+        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane could not be fetched (fetch-e2e-tools.sh, reasons above)")
     fi
 else
-    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
+    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
 fi
 if [[ "${tools_ready}" -eq 1 ]]; then
-    # The five tests that take a path get the fetched one, so a tool already on the host is never what runs.
+    # The six tests that take a path get the fetched one, so a tool already on the host is never what runs.
     export PATH="${TOOLS_BIN}:${PATH}"
     export KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform" \
-        OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd"
+        OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
 fi
 # test_iam_policy_aws.py sends the IAM documents to Access Analyzer and the policy simulator as a named profile.
 command -v aws >/dev/null 2>&1 || missing+=("the aws CLI is not on PATH")

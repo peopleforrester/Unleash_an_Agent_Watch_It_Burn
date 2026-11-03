@@ -16,7 +16,9 @@
 # kustomize name gitops/bootstrap/apps/backstage.yaml sets, is lab-platform's mirror/ copy at its copies.tsv digest,
 # and C6's Joker is the digest ghcr.io served on 2026-11-02 (#714: nothing here names a Docker Hub image any more).
 # The internal registry's two (#774), Distribution 3.1.2 and regctl 0.11.7-alpine, are the digests their own ghcr.io
-# publications served anonymously on 2026-11-02.
+# publications served anonymously on 2026-11-02. The breakout's Joker, busybox-1.38.0-internal (#775), is the digest
+# images/villains/build.sh builds from this checkout with crane 0.22.1, computed on 2026-11-03 before its first push:
+# verify/test_joker_build_digest.py rebuilds it, and the festival-ops Joker above, and holds both to these rows.
 # saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
 # verify/test_images_lock.py holds every reference to a row here.
 node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
@@ -28,6 +30,7 @@ ghcr.io/peopleforrester/lab-platform/promo/joker@sha256:66c4daed3ab1872890aef263
 REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-the-facilitator-fills-in-at-build -
 ghcr.io/peopleforrester/watch-it-burn:tool-pin - build:images/tool-pin -
 ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
+ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
 ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator -
 cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway -
 ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -

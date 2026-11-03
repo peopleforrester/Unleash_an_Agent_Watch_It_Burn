@@ -58,8 +58,8 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd ({sorted(tools)})",
-      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd"})
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane ({sorted(tools)})",
+      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd", "crane"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -88,6 +88,12 @@ want = re.search(r"tsl0922/ttyd/releases/download/([0-9.]+)/ttyd\.",
                  (REPO / "images/web-terminal/Dockerfile").read_text())
 check(f"ttyd is the web-terminal image's version ({want.group(1) if want else None})",
       bool(want) and "ttyd" in tools and tools["ttyd"][1] == want.group(1))
+
+# crane rebuilds the Jokers in test_joker_build_digest.py (#775), and gzip output can change between releases, so its
+# pin is the crane images/villains/build.sh says the pushed digests come from.
+want = re.search(r"crane ([0-9.]+) \(verify/e2e-tools\.lock\)", (REPO / "images/villains/build.sh").read_text())
+check(f"crane is the version images/villains/build.sh pushes with ({want.group(1) if want else None})",
+      bool(want) and "crane" in tools and tools["crane"][1] == f"v{want.group(1)}")
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
@@ -119,7 +125,8 @@ tier = [t for t in tests if re.search(r"^# E2E TIER: tools", t.read_text(), re.M
 names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
              "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
-             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_ttyd_ws_auth.py"):
+             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_ttyd_ws_auth.py",
+             "test_joker_build_digest.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()
@@ -141,7 +148,7 @@ for var in ("CONTEXT", "IAM_PIPELINE_PROFILE", "IAM_PIPELINE_REGION", "AWS_PROFI
     check(f"run-e2e-tools.sh runs each tier test with {var} unset", f"-u {var}" in code)
 check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECONFIG=/dev/null" in code)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane")):
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
 check("run-e2e-tools.sh puts the fetched tools first on PATH", 'PATH="${TOOLS_BIN}:${PATH}"' in code)
 
@@ -365,7 +372,7 @@ check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools
 check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
 check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane")):
     check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
 check("run-e2e.sh never looks for otelcol-contrib on PATH (#654)",
       "command -v" not in "\n".join(line for line in live.splitlines() if "otelcol" in line.lower()))
@@ -414,7 +421,7 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
     check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd could not be fetched" in r.stderr,
+          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and crane could not be fetched" in r.stderr,
           r.stderr)
     check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
     check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))

@@ -30,6 +30,9 @@ metadata:
 ---
 # One copy per line: <source reference, by digest> <path on registry.burritobot.co>. The path names the image the
 # platform's requests ask for; the source is where we already publish it (images.lock holds every source).
+# Challenge 3's Joker is the breakout's own build, busybox-1.38.0-internal (images/villains/build.sh, #775): its page
+# says admission passed it because it came from this registry. The workshop's festival-ops Joker keeps the page that
+# says an allow-list would have stopped it, which is true where it runs.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -37,7 +40,7 @@ metadata:
   namespace: registry
 data:
   images.txt: |
-    ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff burritobot/maintenance-shell:busybox-1.38.0
+    ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf burritobot/maintenance-shell:busybox-1.38.0
   seed.sh: |
     #!/bin/sh
     # Waits for the registry, copies every line of images.txt into it, marks the pod ready, then stays up.

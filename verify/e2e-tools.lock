@@ -9,6 +9,9 @@
 # SHA-256 was checked against the release asset's published digest on 2026-10-29. ttyd (#770) is the terminal binary
 # images/web-terminal/Dockerfile downloads, 1.7.7; its SHA-256 is the release's SHA256SUMS line for ttyd.x86_64, checked
 # on 2026-11-02, and the same bytes as /usr/local/bin/ttyd in the web-terminal image gitops/ai-layer/resources.yaml pins.
+# crane (#775) is go-containerregistry 0.22.1, the crane images/villains/build.sh pushes the Jokers with; its SHA-256 is
+# the release's checksums.txt line for go-containerregistry_Linux_x86_64.tar.gz, checked on 2026-11-03. With it,
+# verify/test_joker_build_digest.py rebuilds both Jokers and holds them to the digests images.lock pins.
 kyverno    v1.19.1  b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz  kyverno
 conftest   v0.71.1  c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985  https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/conftest_0.71.1_Linux_x86_64.tar.gz  conftest
 terraform  v1.15.6  a7150d3b0e1b5c466ad42e8c499954a3c54645f8b56b385fa025d34f7e88faa9  https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_linux_amd64.zip  terraform
@@ -16,3 +19,4 @@ kubectl    v1.36.2  1e9045ec32bea85da43de85f0065358529ea7c7a152eca78154fba5b58c2
 helm       v4.2.1   479dca836e5b45e8bd222400c5591b0e3a647378f03ff96597180db97c17fdae  https://get.helm.sh/helm-v4.2.1-linux-amd64.tar.gz  linux-amd64/helm
 otelcol-contrib  v0.160.0  7bb60c584c241c86261c2b8697cd3725dd8c56691f5ad5d98454eaa005b47b0c  https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.160.0/otelcol-contrib_0.160.0_linux_amd64.tar.gz  otelcol-contrib
 ttyd       1.7.7    8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55  https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64  -
+crane      v0.22.1  0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0  https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz  crane
