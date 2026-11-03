@@ -12215,3 +12215,44 @@ need what `require-probes` and `require-labels` check. The other way is to set `
 for the one call and set it back to Deny straight after. Either is a different act from the one escalated, so it
 needs its own escalation. Expected as before: `OTEL_EXPORTER_OTLP_ENDPOINT` on 4318,
 `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and no init container.
+
+## 2026-11-03 · #782 · Run 16582 ports run 16462's draft and run 16579's dry-run record onto staging `c25c221`
+
+**What was ported.** `bash verify/prior-drafts.sh 782 origin/staging` named two drafts with commits outside staging.
+Run 16462's branch `agent/782-15696` holds the registry, go-otel and decisions.md commits (`2c31d05`, `74893a0`,
+`d7fb73c`, `b2d036c`). Run 16579's branch `agent/782-16579` holds the dry-run entry above (`08c8a4e`). The verdict on
+16462's draft was seven edits in place and a decisions.md append, so all five commits were cherry-picked in order. The
+issue's comment says only that run 16462 "ended failed (validation)". Its report shows a green offline suite, a tools
+tier stopped by the 20-minute cap and finished one test at a time, and one red, the web-terminal digest. This run
+reruns both suites in the foreground on the ported branch.
+
+**What differs from the draft.** Staging's `3946e94` (#775) added crane as the eighth row of `verify/e2e-tools.lock`
+after the draft was cut, so weaver is now the ninth. The lock keeps both rows and both comments. The tool lists in
+`run-e2e.sh`'s header and missing-fetch messages, `test_e2e_toolchain.py` and `test_e2e_tools_tier.py` now read
+"ttyd, crane and weaver". `test_e2e_toolchain.py`'s never-on-PATH loop now names crane as well, which staging had
+left out. The tier test keeps staging's crane-version check next to the draft's weaver-pin check, and its tier list
+names `test_joker_build_digest.py`, `test_weaver_registry_check.py` and `test_guard_proxy_go_otel.py`. The other base
+commits the verdict named were reread against the draft. `6d8505a` repins guard-proxy and leaves the
+`inject-python` annotation and the comment block the draft extends unchanged. `803b84e` edits other lines of
+PROJECT_STATE.md. `0646a73` rewords prose that the draft does not touch. The draft's own "Earlier draft. None" line
+was true when run 16462 wrote it. This entry supersedes it.
+
+**The dry run is still owed, with limits.** This run's cluster files (`/var/lib/hecaton/runs/16582/clusters/`) are
+mode 640, group `hecaton`, as run 16462's were, so this run cannot reach a cluster. Run 16579's escalation showed that
+`require-resource-limits` is in Deny on watch-it-burn-private, although `policies/kyverno/require-resource-limits.yaml`
+here says Audit. `require-probes` and `require-labels` match only the `apps` namespace, so they do not apply in
+`agent`. So the probe needs CPU and memory limits and nothing else:
+
+    kubectl --context watch-it-burn-private -n agent run otel-sdk-probe \
+      --image=ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e \
+      --restart=Never --dry-run=server -o yaml \
+      --annotations=instrumentation.opentelemetry.io/inject-sdk=watch-it-burn-python \
+      --overrides='{"apiVersion":"v1","spec":{"containers":[{"name":"otel-sdk-probe","image":"ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e","resources":{"limits":{"cpu":"100m","memory":"64Mi"},"requests":{"cpu":"10m","memory":"32Mi"}}}]}}'
+
+Expected: `OTEL_EXPORTER_OTLP_ENDPOINT` on 4318, `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and no init container.
+It creates nothing.
+
+**Not yet run on a cluster.** The dry run above, and the Go guard-proxy's spans and cost gauge after the #738 cutover
+lists go-otel (`verify/test_datadog_service_map.py` and `docs/weaver-live-check.md`'s `weaver registry live-check`).
+
+No dependency was added beyond the draft's weaver pin, which is the version CI already used.
