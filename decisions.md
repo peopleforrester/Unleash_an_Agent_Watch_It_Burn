@@ -11985,3 +11985,74 @@ group `hecaton` and mode 640, which this run's user cannot read (hecaton#508). T
 ghcr.io serves the web-terminal tag at another digest, and `sample-app-nginx-1.27.5` answers 404, the two reds
 recorded on staging before this change (#796, #814). Its offline suite ran 234 tests, all green. In the tier,
 `test_images_lock_render.py` and `test_no_docker_hub_render.py` passed.
+## 2026-11-03 · #717 · The IMDS beat's facilitator doc and script header are realigned with #748; the live re-run is owed, and this run could not read its session files
+
+**Context.** #717 asks to live-validate the IMDS credential-theft beat (#113, OWASP Agentic **ASI03,
+Identity and Privilege Abuse**: a compromised pod on the unguarded community cluster steals the EC2 node
+instance-role credentials off `169.254.169.254` and pivots into the AWS account, while every attendee and
+admin cluster blocks it). The coordinator (Michael, with AWS access) ran the live half and recorded it on
+the issue. This run ports the doc alignment that run 15910 made and never landed, and records why the
+residual live re-run still did not happen here.
+
+**What the coordinator validated (recorded on #717).**
+- **2026-10-31:** against the already-running `watch-it-burn-community` node the steal script printed
+  `IMDS: BLOCKED`, because that node was still at IMDS hop limit 1, never reprovisioned to the burn role's
+  `imds_hop_limit=2`. The guarded `watch-it-burn-private` node (hop limit 1) correctly printed
+  `IMDS: BLOCKED`, and `verify/test_bedrock_profile_live.py` confirmed Pod Identity and Bedrock still answer
+  on community. The root cause was the stale running node rather than the fleet.sh wiring, which
+  `verify/test_imds_credential_theft.py` proves offline.
+- **2026-11-01:** the rebuilt `watch-it-burn-community` node came up at IMDS hop limit 2 (via
+  `imds_hop_limit_for_role=community`). The steal script from the tool pod REACHED IMDS and the node handed
+  out its instance-role name, so the theft lands (ASI03). One gap noted on stage: the pre-#748 script's
+  closing `aws sts get-caller-identity` printed `aws: not found`, because the `workshop-mcp` tool-pod image
+  carries no aws CLI. That gap was filed as #748 and fixed the same day (commit `7805261`): the script now
+  reads the node instance-identity document with the stolen token and prints the node role name plus its
+  AWS account and region, the same cloud-account reach with nothing to go missing.
+
+**The doc drift this run fixed (ported from run 15910, `ca82973` on `origin/agent/717-15910`, which failed
+hecaton's ai-isms gate on added em-dashes and so never reached staging).** Commit `7805261` (#748) changed
+`challenges/imds-node-creds/steal-node-creds.sh` and `verify/test_imds_credential_theft.py` to the
+identity-document pivot but left the two places that describe what the script does still naming `aws sts
+get-caller-identity` and a node-role STS ARN the script no longer prints:
+- `challenges/imds-node-creds/steal-node-creds.sh`: the ABOUTME header and an inline comment said the
+  script "runs `aws sts get-caller-identity`", contradicting its own body. Reworded to "names the AWS
+  account they belong to" and "no aws CLI, which the minimal tool-pod image lacks (#748)".
+- `challenges/imds-node-creds/FACILITATOR.md`: the ABOUTME, the "Run the theft" paragraph, the
+  node-role-scope gotcha and the "Not yet run on a cluster" section all named `aws sts get-caller-identity`
+  or the STS ARN. Rewritten to describe the instance-identity-document pivot (node role name plus AWS
+  account and region) and why there is no aws call. The "Not yet run on a cluster" section now records the
+  coordinator's live validation above and names the residual still owed. This is run 15910's draft text with
+  its em-dashes replaced by commas, so the ai-isms gate accepts it; `verify/prose_gate.py` against staging
+  is clean on these files.
+
+**Not changed (conceptual attack descriptions, still true).** The comments in
+`gitops/bootstrap/values-burn.yaml`, `infra/terraform/aws/cluster/main.tf` and
+`infra/terraform/fleet/fleet.sh` say a compromised pod can steal the node creds and run `aws sts
+get-caller-identity` to a node role. That describes the vulnerability class, not our demo script's literal
+commands, and stays accurate, so they are left alone. The presenter narrative copy that names the script
+and still says it runs `aws sts get-caller-identity` (`facilitation/kubecon-na-2026-run-of-show.md`,
+`docs/RUN-OF-SHOW-2026-08.md`, `gitops/ai-layer/web/kubecon.html`, `gitops/ai-layer/web/brief.html`) is
+Michael's voice and is filed as a follow-up of #717 rather than rewritten here.
+
+**Why the live re-run did not run here: the session could not be read.** Run 16720 was handed AWS profile
+accen-dev and the contexts watch-it-burn-community and watch-it-burn-private in `$KUBECONFIG`, with
+`$HECATON_CLUSTER_ENV` to source. Each file under `/var/lib/hecaton/runs/16720/clusters/` (env, kubeconfig,
+aws-config, aws-credentials, bin/) is owned `hecaton:hecaton` at mode 0640 or 0750. The run's user,
+`hecaton-s6-claude-certkraken` (uid 147), is in the groups `hecaton-s6-claude-certkraken`, `hecaton-runs`
+and `hecaton-tools`, not `hecaton`. So `. "$HECATON_CLUSTER_ENV"` is "Permission denied", `kubectl
+--context watch-it-burn-community get nodes` is "error loading config file .../clusters/kubeconfig: open
+.../clusters/kubeconfig: permission denied", and `test -r` fails on all four credential files. `sudo -n -l`
+allows only `sources` and `sources-elevated` as michael, neither a route to cluster credentials. This is the
+same session-read failure runs 16650, 16651, 16652 and 16653 hit on 2026-11-03; it is hecaton's to fix
+(peopleforrester/hecaton#507 and #508, both open), for example by group-reading those files to the run's
+group. The report escalates it.
+
+**Not yet run on a cluster.** From a run whose session files it can read, or a coordinator session with AWS
+access: `CONTEXT=watch-it-burn-community challenges/imds-node-creds/steal-node-creds.sh` and confirm the
+current (#748) script names the node role and its AWS account and region (the identity-document output has
+not been seen live; the 2026-11-01 run used the pre-#748 script), then the same script against
+watch-it-burn-private (standing in for a fresh attendee cluster, per the dispatched-run rule that a step
+written for a fresh attendee cluster runs on one of the two clusters that are up) and confirm
+`IMDS: BLOCKED`, and `. "$HECATON_CLUSTER_ENV" && CONTEXT=watch-it-burn-community python3
+verify/test_bedrock_profile_live.py` to confirm Pod Identity and Bedrock still answer at hop limit 2. A pass
+of all three closes #717.

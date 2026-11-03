@@ -1,5 +1,5 @@
 <!-- ABOUTME: Facilitator runbook for the IMDS credential-theft beat (#113, ASI03): a pod on the community
-     ABOUTME: cluster steals the node instance-role creds via 169.254.169.254 and `sts get-caller-identity`s to a node role. -->
+     ABOUTME: cluster steals the node instance-role creds via 169.254.169.254 and names the node role and its AWS account. -->
 
 # Facilitator runbook: IMDS credential theft (the blast radius leaves the cluster)
 
@@ -33,9 +33,12 @@ CONTEXT="$CONTEXT" challenges/imds-node-creds/steal-node-creds.sh
 ```
 
 The script execs into the agent's tool pod (`workshop-mcp`, which is what runs `run_shell`), requests an
-IMDSv2 token, reads the node role name and its credentials, and runs `aws sts get-caller-identity` **with
-the stolen node credentials**. On the community cluster it prints a node-role ARN
-(`arn:aws:sts::<acct>:assumed-role/<cluster>-node-*/i-...`). It only reads; it changes nothing.
+IMDSv2 token, reads the node role name and its credentials, then reads the node **instance-identity
+document** with the stolen token to name the AWS account and region the node role lives in. On the
+community cluster it prints the node instance-role name and that account and region, the pivot off the
+node into a real AWS account. It does **not** call `aws sts get-caller-identity`: the minimal tool-pod
+image carries no aws CLI, so an aws call would only print `aws: not found` on stage, and the identity
+document proves the same cloud-account reach using the stolen token (#748). It only reads; it changes nothing.
 
 Then point it at a guarded cluster to show the control:
 
@@ -62,8 +65,8 @@ the probe's `BLOCKED` first (the control working), then this on the community cl
 
 ## Gotchas
 
-- **Node role scope.** The drama is `get-caller-identity` returning a *node* role, which is instantly
-  legible. On a stock EKS node role the stolen credential can read ECR and describe the cluster. It cannot
+- **Node role scope.** The drama is the stolen credential being a *node* role in a real AWS account,
+  which is instantly legible. On a stock EKS node role the stolen credential can read ECR and describe the cluster. It cannot
   list S3 or read Secrets Manager, so do not promise S3 or Secrets on stage unless the node role has been
   widened for the demo. The lesson is the boundary crossing itself. A disposable cluster's node role is fine
   to leave as it is.
@@ -75,7 +78,18 @@ the probe's `BLOCKED` first (the control working), then this on the community cl
 
 ## Not yet run on a cluster
 
-Owed on a fresh build with AWS access: provision the community cluster (`fleet.sh instructors up
-community`), run `CONTEXT=<community-ctx> challenges/imds-node-creds/steal-node-creds.sh` and confirm it
-prints a node-role ARN; run it against a fresh attendee cluster and confirm `IMDS: BLOCKED`. This is the
-live half of `verify/test_imds_credential_theft.py` (offline today).
+**Validated live by the coordinator (recorded on #717).** On 2026-11-01, on the rebuilt
+`watch-it-burn-community` node at IMDS hop limit 2, `CONTEXT=<community-ctx>
+challenges/imds-node-creds/steal-node-creds.sh` from the tool pod REACHED IMDS and the node handed out its
+instance-role name, so the theft lands (ASI03). On 2026-10-31 the same script against the guarded
+`watch-it-burn-private` node (hop limit 1) printed `IMDS: BLOCKED`, and `verify/test_bedrock_profile_live.py`
+confirmed Pod Identity / Bedrock still answers on the community cluster at hop limit 2.
+
+**Still owed on a build with AWS access.** The 2026-11-01 run used the pre-#748 script, whose closing line
+was the (now removed) `aws sts get-caller-identity`, so the current script's instance-identity-document
+output (the node role name plus its AWS account and region) has not yet been seen live; and `IMDS: BLOCKED`
+has so far been shown only on the guarded cluster, not a fresh attendee cluster. At the next
+community/attendee bring-up (`fleet.sh instructors up community`), re-run `CONTEXT=<community-ctx>
+challenges/imds-node-creds/steal-node-creds.sh` and confirm it names the node role and its AWS account and
+region, then run it against a fresh attendee cluster and confirm `IMDS: BLOCKED`. This is the live half of
+`verify/test_imds_credential_theft.py` (offline today).

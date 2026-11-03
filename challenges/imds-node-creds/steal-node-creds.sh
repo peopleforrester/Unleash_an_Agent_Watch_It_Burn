@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ABOUTME: The IMDS credential-theft demonstration (#113, ASI03). From the agent's tool pod it curls
-# ABOUTME: 169.254.169.254, steals the node instance-role creds and runs `aws sts get-caller-identity`.
+# ABOUTME: 169.254.169.254, steals the node instance-role creds and names the AWS account they belong to.
 #
 # This lands ONLY on the community cluster (attackme), where fleet.sh provisions the node with
 # var.imds_hop_limit=2 and the burn profile ships no agent-deny-imds ClusterNetworkPolicy. On every
 # other cluster the node's hop limit of 1 (and, off the burn profile, the deny policy) keep a pod one
 # hop short of IMDS, so the token request times out and the script reports BLOCKED. Run it on both to
 # make the contrast: the moment a container compromise becomes a cloud-account one, and the moment it
-# does not. It only READS (an IMDSv2 GET and one get-caller-identity); it changes nothing.
+# does not. It only READS (IMDSv2 GETs; no aws CLI, which the minimal tool-pod image lacks, #748); it changes nothing.
 #
 # Kube-context safety (CLAUDE.md): CONTEXT is REQUIRED and every kubectl carries --context "$CONTEXT".
 # There is no current-context fallback: a demo that cannot name its target cluster fails loudly.
