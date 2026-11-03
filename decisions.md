@@ -11373,3 +11373,10 @@ verify/test_llm_bypass_live.py` in a run that can read its handover. The policy 
 so no Argo sync of this change is needed. The result goes here: whether the three #607 checks pass (terminal-auth
 refused by volume and by secretKeyRef, each with its message; ceo-personal-record admitted), and whether the #490 and
 #552 checks the TypeError hid pass.
+
+**The suites (run 16651, on staging 5d0a620).** `bash verify/run-tests.sh`, run as the first half of the E2E command,
+ran 231 tests, all green, `test_policy_spec.py` among them. `bash verify/run-e2e-tools.sh` ran 47 checks.
+`test_policy_spec_kustomize.py` passed and reported expressions 2 and 3 of restrict-agent-spawned-workloads as the ones
+kustomize changes. The only red was `test_image_version_tags.py`: ghcr.io serves
+`watch-it-burn:web-terminal-ttyd-1.7.7` at sha256:0b72ecc7… instead of the pinned sha256:68004fb5…. That is the
+web-terminal digest red the #794 entry above records, and this change does not touch it. No dependency was added.
