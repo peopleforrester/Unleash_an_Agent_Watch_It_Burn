@@ -11921,3 +11921,8 @@ only a secret holding text that is not JSON reaches this. Filed as a follow-up.
 **Not covered.** lab-platform's production database was not used; this run has no `DATABASE_URL` for it, and the
 deployed control plane may lag main `4fc24e6c4c84`. The cluster reads are covered by
 `verify/test_fleet_terminal_harvest.sh`, not here.
+
+**The suites.** `bash verify/run-e2e-tools.sh` on this branch ran 48 checks in 22m20s; the offline suite inside it
+ran 234 tests, all green. It exits 1 on `test_image_version_tags.py` alone, with the two reds the 2026-11-03 #796
+entry records on staging `6408699`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the
+pinned `68004fb5`, and answers 404 for `sample-app-nginx-1.27.5`. This change touches neither.
