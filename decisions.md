@@ -11667,3 +11667,11 @@ run 16526, #801 (`e1ba2a9`) fixed the C7 fallback timeout this entry records as 
 the gateway-down run waits out its whole window, one poll per 3 s step of the fake clock, about six process starts a
 poll, and under load those polls went past 120 s. The test now steps that clock 30 s in those runs. The follow-up
 named above is therefore not filed; #801 closed it.
+
+**A third case of the same cause, found by this run's E2E tier and fixed here.** `test_image_version_tags.py` failed
+a check besides the web-terminal digest. It reads every `watch-it-burn:workshop-mcp` reference in the repo and wants
+the one pinned tag, `workshop-mcp-mcp-1.29.1`. Staging's #480 commit `afaa1e6` gave the stand-in Deployment in
+`verify/test_tool_pin_live_check.py` the bare tag `workshop-mcp@sha256:9a26`, so the scan found a second tag. The
+live-check script copies that image string as it is and never parses it, so the fixture now names
+`workshop-mcp-mcp-1.29.1@sha256:9a26`. Both tests pass with it. Rule 1's grep, run on `watch-it-burn:workshop-mcp`
+before the fixture was written, would have listed the test that reads it.
