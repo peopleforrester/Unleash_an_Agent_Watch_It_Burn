@@ -12550,3 +12550,13 @@ among them, and the tier's `test_input_pii_guard_llm_guard.py` printed "The depl
 five PII prompts and passes the workshop's own text". It exits 1 on `test_image_version_tags.py` alone, with the two
 reds staging 382d570 already records in #796's entry and that this change does not touch: the web-terminal tag
 ghcr.io now serves at another digest, and the 404 for `sample-app-nginx-1.27.5` (#814).
+
+**Resumed by run 16764.** Run 16717 failed hecaton's skip-markers gate, not the prose gate. The gate counts any
+non-comment line in a test file that reads `exit` followed by `2` as exit-as-skip, and compares the count against the
+base. `verify/test_stage_traces.py` had two such check labels at the base (`seed` with no context, and on the room's
+host) and the draft added two more for `pii`. Each asserts that the script returns 2 and refuses to touch a cluster,
+which `run-tests.sh` and `run-e2e-tools.sh` count as a failure like any non-zero status. All four labels now say
+"status 2", as #796's run 16677 did for `verify/test_prose_gate.py`. What the checks assert is unchanged. The gate's own
+counter (`hecaton/run/skipmarks.py`) now finds no marker in any test file this branch changes; the test file had 2
+at the base and has 0 now. Run 16764's session files have the same permissions as run 16717's (group `hecaton`, mode
+0640, so `. "$HECATON_CLUSTER_ENV"` printed `Permission denied`), so the live checks above are still owed (hecaton#508).

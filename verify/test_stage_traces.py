@@ -457,11 +457,11 @@ rc, lines = run_pii(e)
 check("pii on a context that is not the named cluster exits 1 and asks nothing", rc == 1 and not e.asked, str(lines))
 
 print("== it refuses what it must not touch ==")
-check("no --context: exit 2", st.main(["seed", HOST, "--profile", "accen-dev"]) == 2)
-check("the room's host: exit 2",
+check("no --context: status 2", st.main(["seed", HOST, "--profile", "accen-dev"]) == 2)
+check("the room's host: status 2",
       st.main(["seed", "attackme.burritobot.co", "--context", "x", "--profile", "accen-dev"]) == 2)
-check("pii with no --context: exit 2", st.main(["pii", HOST]) == 2)
-check("pii on the room's host: exit 2", st.main(["pii", "attackme.burritobot.co", "--context", "x"]) == 2)
+check("pii with no --context: status 2", st.main(["pii", HOST]) == 2)
+check("pii on the room's host: status 2", st.main(["pii", "attackme.burritobot.co", "--context", "x"]) == 2)
 
 print()
 if failures:
