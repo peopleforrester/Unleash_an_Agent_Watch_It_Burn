@@ -12411,3 +12411,55 @@ OFFLINE RENDER-GATE TESTS GREEN` with `test_agent_obs_flow.py` among them, then 
 on one, `test_image_version_tags.py`. Its two reds are the ones staging's entries already record: ghcr.io serves
 `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...` where the pin is `68004fb5...` (#815, #816, #823,
 #824), and `watch-it-burn:sample-app-nginx-1.27.5` answers HTTP 404 (#814). This change touches no image.
+
+## 2026-11-03 · #816 · The web-terminal build no longer pushes over a version tag, and puts a moved pinned tag back on its digest
+
+**The fault.** `.github/workflows/build-web-terminal.yml` ran `docker push` on every run, and its build is not
+reproducible, so each push run that touched `images/web-terminal/**` or the workflow wrote a new digest over
+`watch-it-burn:web-terminal-ttyd-1.7.7`. The tag has been seen at `d6acd503`, `0b72ecc7`, `7e5f8986` and, read on
+2026-11-03 by this run, `cb00c5b7` (build-web-terminal run 41696390852, 18:42 UTC). `gitops/ai-layer/resources.yaml`
+and images.lock pin `sha256:68004fb5...`, an OCI index that still exists and still carries its cosign signature
+(`sha256-68004fb5....sig` answers 200), so clusters pulling by digest were not affected. The tag stopped naming the
+pin, and `verify/test_image_version_tags.py` went red.
+
+**Which of the issue's two fixes.** Pinning the new digest is not one: the 2026-11-03 #746 entry records that the
+rebuild carries no cosign signature and `verify-image-signatures` requires one, a dispatched run has no signing key,
+and the next push run would move the tag again anyway. So the workflow stops pushing over a tag that already
+exists. On its own that would leave the tag on `cb00c5b7`, and moving it back needs a ghcr.io write this run may not
+make. The workflow holds `GHCR_TOKEN`, so the same step puts the tag back: the first push run after this change
+reaches staging, which this change starts because it edits the workflow, does that write in CI.
+
+**What changed.**
+- `scripts/ghcr_version_tag.py` is the push step. It reads the digest that `resources.yaml` and images.lock pin for
+  the tag the build read (it refuses when they pin more than one). When the tag serves that digest it does nothing;
+  when the tag serves another, it fetches the pinned manifest, checks its bytes hash to the pinned digest, PUTs
+  those bytes with their own media type to the tag, and checks that the tag now serves the pin. In neither case is the
+  build pushed. When nothing pins the tag, it pushes the build only if ghcr.io lacks that tag, which is how a new ttyd
+  version is pushed once; a later run, the main promotion's for example, leaves that first push in place and names its
+  digest to pin and sign. It exits 1 when the pinned digest is not in the registry.
+- The workflow's Push step runs the script with `GHCR_USER`, `GHCR_TOKEN` and the version step's tag in its
+  environment, and the workflow also runs on a change to the script.
+- `verify/test_ghcr_version_tag.py` (offline) runs every case against a fake registry on loopback that keeps
+  manifests by digest and tags by name, with the docker push stubbed. It checks that the put carries the pinned
+  manifest's exact bytes and media type, holds the workflow to calling the script and to having no `docker push` of
+  its own, and holds both pin files to the one digest.
+
+**What this does not do.** A change to the image under the same ttyd version (an entrypoint copy, kubectl) is no
+longer shipped by the push run, since its tag already exists. The pods take the entrypoint from the
+`web-terminal-entrypoint` ConfigMap, not the image. Shipping a rebuild under the same ttyd version needs a tag of its
+own, which is a question about #714's tag scheme and is left to it.
+
+**Live checks run.** The script's registry reads, run anonymously against ghcr.io on 2026-11-03: the tag serves
+`sha256:cb00c5b7e716...`, the pinned `68004fb5` manifest is 856 bytes of `application/vnd.oci.image.index.v1+json`
+that hash to the pin, and a missing tag answers 404. The cluster reads did not run: this run's `clusters/kubeconfig`
+and `clusters/env` are mode 640, group `hecaton`, and `kubectl --context watch-it-burn-community` (and `-private`)
+fails with "permission denied" on the kubeconfig, which is hecaton#508's to fix. Nothing on either cluster was read
+or changed.
+
+**Not yet run on a cluster.** The build-web-terminal run that the promotion of this change to staging starts must
+log `... is back on the pinned sha256:68004fb5...`. After it, `python3 verify/test_image_version_tags.py` (inside
+`bash verify/run-e2e-tools.sh`) must pass the check
+`ghcr.io serves ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5ed2d...`.
+The run on main's promotion must log `serves the pinned`, with no put and no push.
+
+No dependency was added: the script uses only Python's standard library, which the runner's python3 has.

@@ -1,5 +1,5 @@
-# ABOUTME: Build and push the attendee web-terminal image (ttyd + kubectl) to GHCR on GitHub's runners, tagged with ttyd's version.
-# ABOUTME: Triggered on changes to images/web-terminal/** or manually via workflow_dispatch.
+# ABOUTME: Build the attendee web-terminal image (ttyd + kubectl) on GitHub's runners and push it to GHCR under ttyd's version,
+# ABOUTME: only when that tag is new (#816). Triggered on changes to images/web-terminal/** or by workflow_dispatch.
 name: build-web-terminal
 
 on:
@@ -9,6 +9,7 @@ on:
     paths:
       - 'images/web-terminal/**'
       - '.github/workflows/build-web-terminal.yml'
+      - 'scripts/ghcr_version_tag.py'
 
 permissions:
   contents: read
@@ -58,8 +59,12 @@ jobs:
           v="$(printf '%s\n' "${out}" | sed -nE 's/^ttyd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
           [ -n "${v}" ] || { echo "ttyd reported no version: ${out}" >&2; exit 1; }
           echo "tag=ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-${v}" >> "${GITHUB_OUTPUT}"
-      - name: Push
-        run: |
-          docker tag web-terminal:built "${{ steps.version.outputs.tag }}"
-          docker push "${{ steps.version.outputs.tag }}"
-          echo "pushed ${{ steps.version.outputs.tag }}; pin its digest in gitops/ai-layer/resources.yaml and sign it"
+      # The build is not reproducible, so a push over the existing tag moves it off the digest
+      # gitops/ai-layer/resources.yaml pins and signs (#816). scripts/ghcr_version_tag.py pushes only a version tag
+      # ghcr.io does not have yet, and puts a pinned tag that has moved back on its pinned digest.
+      - name: Push a new version tag, or keep the pinned one on its digest
+        env:
+          GHCR_USER: peopleforrester
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: python3 scripts/ghcr_version_tag.py web-terminal:built "${TAG}" gitops/ai-layer/resources.yaml images.lock
