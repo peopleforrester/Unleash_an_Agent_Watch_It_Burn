@@ -11514,4 +11514,23 @@ ran 46 checks and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves `
 at `sha256:0b72ecc7...`, not the pinned `68004fb5`, the tag CI pushed over (#815, #816, #823, #824). Nothing here
 touches an image.
 
+**Resumed by run 16664: the rebase conflict.** Run 16655 ended `failed (rebase-conflict)` before anything reached staging.
+Its first commit (caeb456) put the PROGRESS.md bullet at the top of `### Added` in `[Unreleased]`, the line every run
+that adds a changelog bullet inserts at. Staging moved from 5d0a620 to 04455a2 in the meantime, and the top of that
+section had gained #759's, #807's and #808's bullets, so the hunks collided (insert-insert, one region). Its
+decisions.md append did not collide: both sides only added to the end of the file. The fix is in the placement, not
+the content. `verify/test_progress_764.py` requires the bullet only under a `###` heading in `[Unreleased]`, once, so
+it now sits at the end of that `### Added` block, just before `### Fixed`, a spot no run inserts at. Rebased onto
+04455a2, the PROGRESS.md hunk applies cleanly. The bullet's text is unchanged. Known limit: a later run that also
+appends at the end of that block will collide the same way; a rebase resolves it by keeping both bullets.
+
+**The suites (run 16664, on the rebased branch).** `bash verify/run-tests.sh` exits 0 with 232 tests (staging added two
+since 230), `test_fleet_monitors.py` and `test_progress_764.py` among them, and ends `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+`bash verify/run-e2e-tools.sh` ran 47 checks and exits 1 on one, `test_image_version_tags.py`: the same web-terminal tag
+CI pushed over (#815, #816, #823, #824). Its log also prints `FAIL` lines from `test_stage_traces.py`, which passes: they
+are the negative cases of its fake private cluster and fake Datadog, not the live clusters. `test_fleet_monitors_live.py`
+is an E2E check and could not read its AWS profile in this run (`config profile (accen-dev) could not be found`): the
+run's session files are not readable by its group (hecaton#508), so it did not reach the org. The org still lacks
+`agent-obs-silent` until the apply in the follow-up.
+
 No dependency was added.
