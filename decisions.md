@@ -13448,7 +13448,7 @@ clears `TF_PLUGIN_CACHE_DIR` on purpose, so its five roots fetch from the regist
 
 **Why 600 seconds.** The clean lock-init run took about 90 seconds for the cluster root, which is the largest, on a
 host with no other E2E tier running. Six times that leaves room for a loaded host and still fails well before the
-900-second silence the harness reads as a stall.
+900-second silence that hecaton reads as a stall.
 
 **Not yet run on a cluster.** Nothing here touches a cluster. The change to the Go reset path in the entry above is
 still owed its live check, as that entry says.
@@ -13485,3 +13485,35 @@ on staging already (#816 and #824 above). An anonymous HEAD of the tag on 2026-1
 `docker-content-digest: sha256:68004fb5…`, so `verify/test_image_version_tags.py`'s web-terminal check passes. The
 registry state this question was about is resolved. The tools tier still has one red on staging, the
 `sample-app-nginx-1.27.5` tag answering 404 under #814, which this issue does not touch.
+
+## 2026-11-03 · #778 · Run 16817 rebases the reset path and its record onto staging d1c68bcc, and the tools tier is green
+
+**Why this entry.** Run 16804 ended with the tools tier red on `test_image_version_tags.py` (question 1051) and
+with `test_ghcr_version_tag.py` on staging. Its loop before this run stopped the tier's log partway, so no full run
+existed on the branch. Staging then moved from `7159717e` to `d1c68bcc`.
+
+**What was re-applied, and how.** `bash verify/draft-drift.sh HEAD origin/staging` named two in-place edits and a
+decisions.md append. `PROJECT_STATE.md` and `facilitation/kubecon-na-2026-run-of-show.md` rebased with no conflict.
+The `decisions.md` conflict was an append on both sides, so both sides are kept, staging's first. The rebased commits
+are `ff7aa472` (reset-bot, run of show, `test_reset_bot.sh`), `cd507b15` (the Terraform bound and the shared provider
+cache) and `e1dce477` (PROJECT_STATE, the decisions entries). `ecd55aca` and `029e3b8a` were read against the lines
+they touch: the run-of-show's Go paragraph and the reset bullet are still in place, and the PROJECT_STATE line
+after the #751 bullet is intact.
+
+**Prose gate.** One added phrase read as connective filler and failed the prose gate, so it was reworded. The gate
+passes against `d1c68bcc` now.
+
+**The tools tier.** `bash verify/run-e2e-tools.sh` on the rebased branch ran 53 checks in 25m08s and exited 0, with
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` in `tmp/e2e-tools-16817.log`. The offline suite inside it is green.
+The ttyd check reads `ghcr.io serves ... web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5…, anonymously`.
+`test_reset_bot.sh` reports 57 passed. The lock-init and spend-store checks are green. One `FAIL` line in the log is
+the datadog-secret script's own negative case, which expects an empty key to be reported and passes.
+
+**Live read, not done.** This run's `$KUBECONFIG` is `runs/16817/clusters/kubeconfig`, mode 640, group `hecaton`, and
+this run's user is not in that group. The read-only check that `guard-proxy` on `watch-it-burn-community` and
+`watch-it-burn-private` has no `SPEND_STORE_PATH` failed with `permission denied`, the hecaton#508 problem the 2026-11-03
+#824 entry already names. The check is a read, so nothing on either cluster changed. The expected result is a pod
+delete, because both clusters run proxy.py. The reset path's live check is still owed at the Go cutover (#738), as the
+entry above says.
+
+**Who decided.** Nothing here answers a question. Question 1051 is recorded above as decided by hecaton's research.
