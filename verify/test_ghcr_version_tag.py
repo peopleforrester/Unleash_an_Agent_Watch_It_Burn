@@ -1,5 +1,5 @@
-# ABOUTME: scripts/ghcr_version_tag.py never pushes a build over a version tag (#816): a moved or missing pinned tag goes
-# ABOUTME: on its pinned digest byte for byte (#828). Offline: a fake registry on loopback, and the docker push is a stub.
+# ABOUTME: scripts/ghcr_version_tag.py never pushes a build over a version tag (#816), puts a pinned tag on its digest (#828),
+# ABOUTME: and pushes new source to web-terminal-ttyd-<v>-<n> (#838). Offline: a fake registry on loopback, docker stubbed.
 """Offline. The live half is verify/test_image_version_tags.py (tools tier): ghcr.io must serve
 web-terminal-ttyd-<v> at the digest gitops/ai-layer/resources.yaml pins.
 
@@ -10,6 +10,10 @@ calling the script with the pin files and running when the script changes.
 
 #828: #814 pinned sample-app-nginx-1.27.5 at a digest ghcr.io had under the old sample-app tag only, so the tag answered
 404. keep-sample-app-tag.yml runs the script with no build ("-"); its cases and the workflow are held here too.
+
+#838: a change to images/web-terminal under the same ttyd version had no tag to go to. ship() finds the tag whose image
+carries the build's source-tree label, or the first free web-terminal-ttyd-<v>[-<n>]; its cases are run here, with the
+build's labels stubbed, against images whose config blobs the fake registry serves.
 """
 from __future__ import annotations
 
@@ -69,7 +73,7 @@ def serve(fake: Fake) -> http.server.ThreadingHTTPServer:
             pass
 
         def _target(self):
-            m = re.fullmatch(rf"/v2/{re.escape(REPO_NAME)}/manifests/(.+)", self.path)
+            m = re.fullmatch(rf"/v2/{re.escape(REPO_NAME)}/(?:manifests|blobs)/(.+)", self.path)
             if not m or self.headers.get("Authorization") != "Bearer tok":
                 self.send_error(401 if m else 404)
                 return None
@@ -126,8 +130,9 @@ def serve(fake: Fake) -> http.server.ThreadingHTTPServer:
     return srv
 
 
-def case(title: str, fake: Fake, pins: list[str], local: str | None = "web-terminal:built"):
-    """Run keep() for REF against fake with pin files holding pins; return (message or Refused text, pushes)."""
+def case(title: str, fake: Fake, pins: list[str], local: str | None = "web-terminal:built", run=None):
+    """Run keep() for REF against fake with pin files holding pins (or run(reg, files, push), for ship()); return
+    (message or Refused text, pushes)."""
     print(f"== {title} ==")
     pushes: list[tuple[str, str]] = []
     srv = serve(fake)
@@ -139,7 +144,8 @@ def case(title: str, fake: Fake, pins: list[str], local: str | None = "web-termi
             files.append(str(f))
         try:
             reg = gvt.Registry(f"http://127.0.0.1:{srv.server_address[1]}", REPO_NAME, "user", "secret")
-            out = gvt.keep(local, REF, files, reg, push=lambda a, b: pushes.append((a, b)))
+            push = lambda a, b: pushes.append((a, b))  # noqa: E731
+            out = run(reg, files, push) if run else gvt.keep(local, REF, files, reg, push=push)
         except gvt.Refused as e:
             out = f"REFUSED: {e}"
         finally:
@@ -238,20 +244,123 @@ for title, present in (("no build, not pinned, and the tag is new", False), ("no
     check("nothing is pushed or put", pushes == [] and fake.puts == [] and fake.tags == before,
           f"{pushes} {fake.puts}")
 
-# 6e. The command line: "-" is no build.
+# 6e. The command line: "-" is no build, and goes to keep(); a local image goes to ship().
 print("== the command line ==")
 seen: list = []
-real_keep, real_registry = gvt.keep, gvt.Registry
-gvt.keep = lambda local, ref, files, reg: seen.append((local, ref, files)) or "ok"
+real_keep, real_ship, real_registry = gvt.keep, gvt.ship, gvt.Registry
+gvt.keep = lambda local, ref, files, reg: seen.append(("keep", local, ref, files)) or "ok"
+gvt.ship = lambda local, ref, files, reg: seen.append(("ship", local, ref, files)) or "ok"
 gvt.Registry = lambda *a: None
 import os
 os.environ["GHCR_USER"], os.environ["GHCR_TOKEN"] = "u", "t"
 try:
     rc = gvt.main(["-", REF, "a.yaml", "images.lock"])
+    rc2 = gvt.main(["web-terminal:built", REF, "a.yaml", "images.lock"])
 finally:
-    gvt.keep, gvt.Registry = real_keep, real_registry
+    gvt.keep, gvt.ship, gvt.Registry = real_keep, real_ship, real_registry
 check("\"-\" reaches keep() as no build, with the ref and the pin files",
-      rc == 0 and seen == [(None, REF, ["a.yaml", "images.lock"])], f"{rc} {seen}")
+      rc == 0 and seen[:1] == [("keep", None, REF, ["a.yaml", "images.lock"])], f"{rc} {seen}")
+check("a local image reaches ship(), with the ref and the pin files",
+      rc2 == 0 and seen[1:] == [("ship", "web-terminal:built", REF, ["a.yaml", "images.lock"])], f"{rc2} {seen}")
+
+# 6f. #838: a build under a version that already has a tag. Each image here is a config blob carrying labels, a
+# manifest naming it, and, when index=True, an OCI index over that manifest the way buildx writes one.
+TREE, OTHER = "a" * 40, "b" * 40
+
+
+def image(fake: Fake, tree: str | None, index: bool = False, tag: str | None = None) -> str:
+    labels = {gvt.SOURCE_TREE: tree} if tree else None
+    config = json.dumps({"architecture": "amd64", "os": "linux", "config": {"Labels": labels}}).encode()
+    cd = fake.add(config, "application/vnd.oci.image.config.v1+json")
+    m = fake.add(json.dumps({"schemaVersion": 2, "mediaType": MANIFEST, "layers": [],
+                             "config": {"mediaType": "application/vnd.oci.image.config.v1+json", "digest": cd,
+                                        "size": len(config)}}).encode(), MANIFEST, None if index else tag)
+    if not index:
+        return m
+    return fake.add(json.dumps({"schemaVersion": 2, "mediaType": INDEX, "manifests": [
+        {"mediaType": MANIFEST, "digest": m, "platform": {"architecture": "amd64", "os": "linux"}},
+        {"mediaType": MANIFEST, "digest": "sha256:" + "0" * 64,
+         "platform": {"architecture": "unknown", "os": "unknown"}}]}).encode(), INDEX, tag)
+
+
+def shipping(title: str, fake: Fake, pins: list[str], tree: str | None = TREE):
+    labels = {gvt.SOURCE_TREE: tree} if tree else {}
+    seen_local: list[str] = []
+
+    def run(reg, files, push):
+        return gvt.ship("web-terminal:built", REF, files, reg, push=push,
+                        labels_of=lambda local: seen_local.append(local) or labels)
+    out, pushes = case(title, fake, pins, run=run)
+    print("    " + out.replace("\n", "\n    "))
+    return out, pushes, seen_local
+
+
+# A new ttyd version: nothing of it on ghcr.io, nothing pinned. The build goes to the bare version tag.
+fake = Fake()
+out, pushes, seen_local = shipping("#838: a new version", fake, [""])
+check("its labels are read from the local build", seen_local == ["web-terminal:built"], str(seen_local))
+check("the build is pushed to the bare version tag", pushes == [("web-terminal:built", REF)], str(pushes))
+
+# The version's tag is pinned and was built from other source (or carries no label, as 68004fb5 does): -1.
+for title, tree in (("#838: the pinned tag was built from other source", OTHER),
+                    ("#838: the pinned tag carries no source label", None)):
+    fake = Fake()
+    want = image(fake, tree, index=True, tag=TAG)
+    out, pushes, _ = shipping(title, fake, [f"image: {REF}@{want}\n", f"{REF}@{want} {want} repo:x -\n"])
+    check("the build is pushed to <tag>-1", pushes == [("web-terminal:built", f"{REF}-1")], str(pushes))
+    check("nothing is put, and the pinned tag still serves its pin", fake.puts == [] and fake.tags[TAG] == want,
+          f"{fake.puts} {fake.tags}")
+    check("it says -1 is the first free tag", f"{REF}-1 is the first free one" in out, out)
+
+# The main promotion's run of a source staging's run already pushed to -1: found by its label, not pushed again.
+fake = Fake()
+want = image(fake, None, index=True, tag=TAG)
+first = image(fake, TREE, tag=f"{TAG}-1")
+out, pushes, _ = shipping("#838: <tag>-1 already carries this source", fake, [f"image: {REF}@{want}\n"])
+check("the build is not pushed", pushes == [] and fake.puts == [], f"{pushes} {fake.puts}")
+check("it names <tag>-1's digest to pin", f"{REF}-1@{first}" in out and "Pin" in out, out)
+check("it does not touch <tag>-2", f"{TAG}-2" not in fake.tags, str(fake.tags))
+
+# The pinned tag carries this source (a workflow-only edit): it serves its pin, so nothing happens.
+fake = Fake()
+want = image(fake, TREE, index=True, tag=TAG)
+out, pushes, _ = shipping("#838: the pinned tag carries this source", fake, [f"image: {REF}@{want}\n"])
+check("nothing is pushed or put", pushes == [] and fake.puts == [], f"{pushes} {fake.puts}")
+check("it says the tag serves the pin", "serves the pinned" in out, out)
+
+# The pinned tag has moved, and its pinned image is other source: it goes back on its pin, the build goes to -1.
+fake = Fake()
+want = image(fake, OTHER, index=True)
+moved = image(fake, TREE, tag=TAG)
+out, pushes, _ = shipping("#838: the pinned tag has moved, and the build is new source", fake, [f"image: {REF}@{want}\n"])
+check("the pinned tag is put back on its pin", fake.puts == [(TAG, want)] and fake.tags[TAG] == want,
+      f"{fake.puts} {fake.tags}")
+check("the pin's labels decide, not the moved image's: the build is pushed to -1",
+      pushes == [("web-terminal:built", f"{REF}-1")], str(pushes))
+
+# Pinned at -1, -2 on ghcr.io from other source, unpinned: the build goes to -3.
+fake = Fake()
+image(fake, None, index=True, tag=TAG)
+want = image(fake, OTHER, tag=f"{TAG}-1")
+image(fake, "c" * 40, tag=f"{TAG}-2")
+out, pushes, _ = shipping("#838: -1 pinned, -2 other source", fake, [f"image: {REF}-1@{want}\n"])
+check("the build is pushed to <tag>-3", pushes == [("web-terminal:built", f"{REF}-3")], str(pushes))
+check("nothing is put", fake.puts == [], str(fake.puts))
+
+# A build without the label cannot be told from any tag's: refuse, touch nothing.
+fake = Fake()
+image(fake, OTHER, tag=TAG)
+before = dict(fake.tags)
+out, pushes, _ = shipping("#838: the build carries no source label", fake, [""], tree=None)
+check("it refuses, naming the label", out.startswith("REFUSED") and gvt.SOURCE_TREE in out, out)
+check("nothing is pushed or put", pushes == [] and fake.puts == [] and fake.tags == before, f"{pushes} {fake.puts}")
+
+# A pinned digest the registry lacks: its labels cannot be read, so refuse.
+fake = Fake()
+gone = "sha256:" + "ab" * 32
+out, pushes, _ = shipping("#838: pinned at a digest the registry lacks", fake, [f"image: {REF}@{gone}\n"])
+check("it refuses, naming the missing digest", out.startswith("REFUSED") and gone in out, out)
+check("nothing is pushed or put", pushes == [] and fake.puts == [], f"{pushes} {fake.puts}")
 
 # 7. The workflow runs the script on the pin files, and runs when the script changes.
 print("== the workflow ==")
@@ -261,6 +370,12 @@ check(f"build-web-terminal.yml pushes through the script ({call})", call in work
 check("it has no docker push of its own", "docker push" not in workflow)
 check("it runs on a change to the script", "- 'scripts/ghcr_version_tag.py'" in workflow)
 check("the script's TAG is the tag the version step read", "TAG: ${{ steps.version.outputs.tag }}" in workflow)
+check("the build labels the image with the source tree, under the key the script reads",
+      f"labels: {gvt.SOURCE_TREE}=${{{{ steps.tree.outputs.tree }}}}" in workflow)
+check("the tree step reads the git tree id of images/web-terminal",
+      'echo "tree=$(git rev-parse HEAD:images/web-terminal)" >> "${GITHUB_OUTPUT}"' in workflow)
+check("one build runs at a time, so two runs cannot take one -<n>",
+      re.search(r"^concurrency:\n  group: build-web-terminal\n  cancel-in-progress: false$", workflow, re.M) is not None)
 
 # 7b. keep-sample-app-tag.yml runs the script with no build, on the pins, when the pins, the script or it changes.
 print("== keep-sample-app-tag.yml ==")
@@ -302,7 +417,7 @@ if step:
 # 8. The repo's own pins: the tag the workflow builds today is pinned at one digest across both pin files.
 print("== the repo's pins ==")
 texts = {p: (REPO / p).read_text(encoding="utf-8") for p in ("gitops/ai-layer/resources.yaml", "images.lock")}
-refs = set(re.findall(r"ghcr\.io/peopleforrester/watch-it-burn:web-terminal-ttyd-[0-9.]+(?=@)", texts[
+refs = set(re.findall(r"ghcr\.io/peopleforrester/watch-it-burn:web-terminal-ttyd-[0-9.]+(?:-[1-9][0-9]*)?(?=@)", texts[
     "gitops/ai-layer/resources.yaml"]))
 check(f"resources.yaml pins one web-terminal-ttyd tag ({sorted(refs)})", len(refs) == 1)
 if len(refs) == 1:
@@ -333,5 +448,5 @@ if failures:
     for name in failures:
         print(f"  - {name}")
     raise SystemExit(1)
-print("The web-terminal build pushes only a new version tag and keeps a pinned one on its digest; keep-sample-app-tag")
+print("The web-terminal build pushes new source to a tag ghcr.io lacks and keeps a pinned one on its digest; keep-sample-app-tag")
 print("puts sample-app's pinned tag on its digest with no build.")

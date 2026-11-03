@@ -13614,3 +13614,63 @@ staging, which `verify/fleet-labctl-import-scratch.sh` covers.
 verify/run-tests.sh`, ran 242 tests, all green, `test_fleet_terminal_harvest.sh` among them with 77 passed. Then it
 printed "53 checks ran (the offline suite and 52 tier tests) in 24m55s" and "ALL E2E TOOLS TIER CHECKS GREEN". No
 dependency was added.
+## 2026-11-04 · #838 · A web-terminal rebuild under the same ttyd goes to web-terminal-ttyd-<v>-<n>, picked by its source tree
+
+**The gap.** Since #816, `scripts/ghcr_version_tag.py` pushes a build only to a version tag ghcr.io lacks. A change to
+`images/web-terminal` that kept ttyd at 1.7.7 (kubectl, a package) was built in CI and pushed nowhere, so there was
+no digest to pin and sign. The issue offered two shapes: a suffix on the version (`web-terminal-ttyd-1.7.7-<n>`), or
+a per-commit tag left unpinned until someone signs it.
+
+**Which one, and why it is settled here.** The suffix. Michael's #714 rule is that a tag names the version of the
+software inside, and a commit id is not a version of anything in the image. A suffix keeps ttyd's version at the
+front, where `test_image_version_tags.py` still checks it against the binary, and adds a rebuild count after it, the
+way a distribution's package revision does. A per-commit tag would also put one tag on ghcr.io for every commit that
+touches the directory, and a signed image would still need a version tag before the repo could pin it under #714. Both
+shapes need the digest pinned and signed by hand before a cluster runs it; neither changes that.
+
+**How `<n>` is chosen.** By the source, not by a counter kept by hand. The workflow reads
+`git rev-parse HEAD:images/web-terminal`, the tree id of the directory, which changes exactly when a file under it
+does, and builds the image with the label `io.github.peopleforrester.watch-it-burn.source-tree` set to it. The
+script's new `ship()` reads that label from the local build, then walks `web-terminal-ttyd-1.7.7`, `web-terminal-ttyd-1.7.7-1`, `-2`
+and on, each at the digest a pin file pins it at or else the one ghcr.io serves, reading each image's labels from its
+config blob (through the linux/amd64 entry when it is an index). The first tag whose image carries the build's tree
+is the build's, and #816's table acts on it, so it is never pushed over. When none does, the build goes to the first
+tag that is neither pinned nor on ghcr.io. So a workflow-only edit pushes nothing, the main promotion finds the tag
+staging's run pushed for the same source, and a new ttyd version's first build still gets the bare
+`web-terminal-ttyd-<v>`. A pinned tag passed on the way is kept on its pin, as #816 did for the one tag. The workflow
+now has a `concurrency` group, so two runs cannot take the same `<n>`. With `-` (keep-sample-app-tag.yml) the script
+runs `keep()` as before.
+
+**What changed.**
+- `scripts/ghcr_version_tag.py`: `SOURCE_TREE`, `Registry.labels()` (manifest, index, config blob, each checked
+  against its digest), `docker_labels()`, `ship()`; `main()` sends a local image to `ship()` and `-` to `keep()`.
+- `.github/workflows/build-web-terminal.yml`: a step that reads the tree, the label on the build, the concurrency
+  group, comments.
+- `verify/test_ghcr_version_tag.py` (offline): the fake registry serves config blobs, and nine `ship()` cases run
+  against it: a new version, a pinned tag of other source or of no label (the pinned `68004fb5` has none), `-1`
+  already carrying the source, the pinned tag carrying it, a moved pinned tag, `-1` pinned with `-2` of other source
+  (goes to `-3`), a build with no label, and a pinned digest the registry lacks. It also holds the workflow to the
+  label, the tree step and the concurrency group, checks that `main()` routes a local image to `ship()`, and its
+  pin check accepts a `-<n>` tag.
+- `verify/test_image_version_tags.py` (tools tier): `pinned()` takes a `-<n>` suffix for web-terminal, checks ttyd
+  against the version before it, and holds a pinned `-<n>` image to carrying a 40-hex source-tree label. The config
+  read is shared with the sample-app base check.
+
+**What the first run after this does.** `68004fb5` carries no source label, so the first build-web-terminal run once
+staging takes this change (it edits the workflow and the script) cannot match it, and pushes its build to
+`web-terminal-ttyd-1.7.7-1`, logging `pin its digest ... and sign it`. Nothing pins `-1`, so clusters keep `68004fb5`
+and `test_image_version_tags.py` stays on the pinned tag. Whoever signs `-1` decides whether to pin it. The main promotion's run then finds `-1` by its label and pushes nothing.
+
+**Live checks run (2026-11-04).** `Registry.labels()` run anonymously against ghcr.io: `web-terminal-ttyd-1.7.7`
+serves `sha256:68004fb5...`, its labels read through the index's linux/amd64 entry are `{}`, and
+`web-terminal-ttyd-1.7.7-1` answers 404. `python3 verify/test_image_version_tags.py` passes with the new `pinned()`.
+The cluster read (the web-terminal pods' image IDs on `watch-it-burn-community` and `watch-it-burn-private`) did not
+run: `runs/16834/clusters/kubeconfig` gives `permission denied`, the hecaton#508 problem. Nothing on either cluster
+was read or changed.
+
+**Not yet run on a cluster.** The build-web-terminal run that staging's promotion of this change starts must log
+`... web-terminal-ttyd-1.7.7-1 is the first free one` and `pushed ...-1`, and the main promotion's run must log
+`... -1 at sha256:... was built from source tree ...` with no push. The label check in `test_image_version_tags.py`
+runs once a `-<n>` tag is pinned.
+
+No dependency was added.

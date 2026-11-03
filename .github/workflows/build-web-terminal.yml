@@ -1,5 +1,5 @@
-# ABOUTME: Build the attendee web-terminal image (ttyd + kubectl) on GitHub's runners and push it to GHCR under ttyd's version,
-# ABOUTME: only when that tag is new (#816). Triggered on changes to images/web-terminal/** or by workflow_dispatch.
+# ABOUTME: Build the attendee web-terminal image (ttyd + kubectl) and push it to GHCR under ttyd's version, with a -<n> suffix
+# ABOUTME: for a rebuild of new source (#838), never over an existing tag (#816). Runs on images/web-terminal/** changes.
 name: build-web-terminal
 
 on:
@@ -14,6 +14,12 @@ on:
 permissions:
   contents: read
   packages: write
+
+# One build at a time: the push step takes the first free web-terminal-ttyd-<v>-<n>, and two runs at once could
+# both take the same one (#838).
+concurrency:
+  group: build-web-terminal
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -43,6 +49,11 @@ jobs:
           registry: ghcr.io
           username: peopleforrester
           password: ${{ secrets.GHCR_TOKEN }}
+      # The image is labelled with the git tree id of images/web-terminal, which changes exactly when a file under it
+      # does. The push step tells this build's source from each existing tag's by it (#838).
+      - name: Read the source tree of images/web-terminal
+        id: tree
+        run: echo "tree=$(git rev-parse HEAD:images/web-terminal)" >> "${GITHUB_OUTPUT}"
       # The tag names the software inside (#714), read from the image just built and never written down by hand:
       # web-terminal-ttyd-<the version its ttyd reports>. verify/test_image_version_tags.py holds the tag
       # gitops/ai-layer/resources.yaml pins against the same reading of the pinned digest.
@@ -52,6 +63,7 @@ jobs:
           context: images/web-terminal
           load: true
           tags: web-terminal:built
+          labels: io.github.peopleforrester.watch-it-burn.source-tree=${{ steps.tree.outputs.tree }}
       - name: Read ttyd's version from the built image
         id: version
         run: |
@@ -60,9 +72,11 @@ jobs:
           [ -n "${v}" ] || { echo "ttyd reported no version: ${out}" >&2; exit 1; }
           echo "tag=ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-${v}" >> "${GITHUB_OUTPUT}"
       # The build is not reproducible, so a push over the existing tag moves it off the digest
-      # gitops/ai-layer/resources.yaml pins and signs (#816). scripts/ghcr_version_tag.py pushes only a version tag
-      # ghcr.io does not have yet, and puts a pinned tag that has moved back on its pinned digest.
-      - name: Push a new version tag, or keep the pinned one on its digest
+      # gitops/ai-layer/resources.yaml pins and signs (#816). scripts/ghcr_version_tag.py pushes only to a tag
+      # ghcr.io does not have yet, and puts a pinned tag that has moved back on its pinned digest. TAG is the version
+      # tag; when a tag of that version already carries this build's source tree, the build is not pushed, and when
+      # none does, it goes to the first free one: web-terminal-ttyd-<v>, then web-terminal-ttyd-<v>-1, -2 (#838).
+      - name: Push new source to a free version tag, or keep the pinned one on its digest
         env:
           GHCR_USER: peopleforrester
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}

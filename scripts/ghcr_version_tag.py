@@ -1,5 +1,5 @@
-# ABOUTME: The web-terminal build's push step (#816), and sample-app's tag keeper (#828): a version tag the repo pins is
-# ABOUTME: put on its pinned digest, never pushed over, and a build is pushed only to a version tag ghcr.io lacks.
+# ABOUTME: The web-terminal build's push step (#816, #838), and sample-app's tag keeper (#828): a pinned version tag stays on
+# ABOUTME: its pinned digest, and a build of new source is pushed to a tag ghcr.io lacks, web-terminal-ttyd-<v>[-<n>].
 """Push a version tag once, and keep it on the digest the repo pins.
 
     GHCR_USER=... GHCR_TOKEN=... python3 scripts/ghcr_version_tag.py <local-image|-> <ghcr.io/owner/repo:tag> <pin-file>...
@@ -21,8 +21,26 @@ What it does, by what the pin files and ghcr.io say:
                                                    push in place, for its digest to be pinned and signed
 
 It exits 1 when the pin files pin the tag at more than one digest, when the pinned digest is not in the registry, or
-when the tag does not serve the pinned digest after the put. A change to what runs in the terminal under the same
-ttyd version is not shipped by this step: it needs a tag of its own, which is the tag scheme's question, not this one.
+when the tag does not serve the pinned digest after the put.
+
+A rebuild under the same version (#838). With only the table above, a change to images/web-terminal that kept ttyd at
+1.7.7 (kubectl, a package) was built and never pushed, since web-terminal-ttyd-1.7.7 already existed. So a build is
+shipped by its source, not only by its version. The workflow labels the image it builds with
+io.github.peopleforrester.watch-it-burn.source-tree, the git tree id of images/web-terminal, which changes exactly
+when a file under it does. Given a local image, the script reads that label from it and walks the version's tags in
+order (web-terminal-ttyd-1.7.7, then web-terminal-ttyd-1.7.7-1, -2 and on), each at the digest a pin file pins it at
+or else the one ghcr.io serves, until one is neither pinned nor on ghcr.io:
+
+  a tag's image carries the build's source tree    that tag is the build's, and the table above acts on it: the
+                                                   build is never pushed over it
+  no tag's image does                              the table acts on the first free tag, so the build is pushed
+                                                   there: web-terminal-ttyd-1.7.7 for a new ttyd version's first
+                                                   build, web-terminal-ttyd-1.7.7-<n> for its n-th rebuild
+
+A pinned tag passed on the way is kept on its pinned digest by the table's rows too. The suffix counts rebuilds; the
+version before it is still the one ttyd reports (#714), and verify/test_image_version_tags.py holds a pinned -<n> tag
+to the label. A workflow-only edit leaves the tree as it was, so it pushes nothing; the main promotion of a source
+staging already pushed finds staging's tag. The workflow runs one build at a time, so two runs cannot take one -<n>.
 
 A local image of "-" means there is no build (#828). .github/workflows/keep-sample-app-tag.yml runs the script that
 way for sample-app-nginx-<v>, which #814 pinned in backstage/k8s/templated-test-svc.yaml and images.lock at the
@@ -46,6 +64,8 @@ from typing import Callable
 ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
                     "application/vnd.docker.distribution.manifest.list.v2+json",
                     "application/vnd.docker.distribution.manifest.v2+json"))
+# The label the workflow's build sets to `git rev-parse HEAD:images/web-terminal` (#838).
+SOURCE_TREE = "io.github.peopleforrester.watch-it-burn.source-tree"
 
 
 class Refused(Exception):
@@ -79,11 +99,11 @@ class Registry:
         with urllib.request.urlopen(req, timeout=30) as r:
             self.token = json.load(r)["token"]
 
-    def _call(self, method: str, ref: str, body: bytes | None = None, ctype: str | None = None):
+    def _call(self, method: str, ref: str, body: bytes | None = None, ctype: str | None = None, kind: str = "manifests"):
         headers = {"Authorization": f"Bearer {self.token}", "Accept": ACCEPT}
         if ctype:
             headers["Content-Type"] = ctype
-        req = urllib.request.Request(f"{self.base}/v2/{self.repo}/manifests/{ref}", data=body, method=method,
+        req = urllib.request.Request(f"{self.base}/v2/{self.repo}/{kind}/{ref}", data=body, method=method,
                                      headers=headers)
         return urllib.request.urlopen(req, timeout=60)
 
@@ -114,10 +134,36 @@ class Registry:
         with self._call("PUT", tag, body, ctype):
             pass
 
+    def labels(self, digest: str) -> dict[str, str]:
+        """The labels of the linux/amd64 image at digest, an index or a single manifest, read from its config blob."""
+        m = self.manifest(digest)
+        if m is None:
+            raise Refused(f"the registry has no manifest at {digest}, so its labels cannot be read")
+        doc = json.loads(m[0])
+        if "manifests" in doc:
+            amd64 = [x["digest"] for x in doc["manifests"]
+                     if x.get("platform", {}).get("os") == "linux" and x["platform"].get("architecture") == "amd64"]
+            if len(amd64) != 1:
+                raise Refused(f"the index at {digest} has {len(amd64)} linux/amd64 images, not one")
+            return self.labels(amd64[0])
+        config = doc["config"]["digest"]
+        with self._call("GET", config, kind="blobs") as r:
+            blob = r.read()
+        if "sha256:" + hashlib.sha256(blob).hexdigest() != config:
+            raise Refused(f"the registry's config blob {config} does not hash to {config}")
+        # An image built with no LABEL at all has "Labels": null in its config.
+        return json.loads(blob).get("config", {}).get("Labels") or {}
+
 
 def docker_push(local: str, ref: str) -> None:
     subprocess.run(["docker", "tag", local, ref], check=True)
     subprocess.run(["docker", "push", ref], check=True)
+
+
+def docker_labels(local: str) -> dict[str, str]:
+    out = subprocess.run(["docker", "image", "inspect", "--format", "{{json .Config.Labels}}", local], check=True,
+                         capture_output=True, text=True).stdout
+    return json.loads(out) or {}
 
 
 def keep(local: str | None, ref: str, pin_files: list[str], registry: Registry,
@@ -151,6 +197,36 @@ def keep(local: str | None, ref: str, pin_files: list[str], registry: Registry,
     return f"pushed {ref}; pin its digest in gitops/ai-layer/resources.yaml and images.lock, and sign it"
 
 
+def ship(local: str, ref: str, pin_files: list[str], registry: Registry,
+         push: Callable[[str, str], None] = docker_push,
+         labels_of: Callable[[str], dict[str, str]] = docker_labels) -> str:
+    """Find the tag of ref's version that local's source tree was built under, or the first free one, and act on it
+    with keep(), as the docstring's #838 table says. Return the lines the workflow log prints."""
+    tree = labels_of(local).get(SOURCE_TREE)
+    if not tree:
+        raise Refused(f"{local} carries no {SOURCE_TREE} label, so its source cannot be told from a tag's: the "
+                      f"workflow's build sets it to the git tree id of the image's directory")
+    split(ref)
+    texts = {p: pathlib.Path(p).read_text(encoding="utf-8") for p in pin_files}
+    lines: list[str] = []
+    n = 0
+    while True:
+        candidate = ref if n == 0 else f"{ref}-{n}"
+        want = pinned(candidate, texts)
+        digest = want or registry.served(split(candidate)[2])
+        if digest is None:
+            lines.append(f"no tag of {ref} was built from source tree {tree}; {candidate} is the first free one")
+            break
+        if registry.labels(digest).get(SOURCE_TREE) == tree:
+            lines.append(f"{candidate} at {digest} was built from source tree {tree}")
+            break
+        if want is not None:
+            lines.append(keep(None, candidate, pin_files, registry, push))
+        n += 1
+    lines.append(keep(local, candidate, pin_files, registry, push))
+    return "\n".join(lines)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__.splitlines()[2].strip(), file=sys.stderr)
@@ -162,7 +238,8 @@ def main(argv: list[str]) -> int:
         return 1
     try:
         host, repo, _ = split(ref)
-        print(keep(local, ref, pin_files, Registry(f"https://{host}", repo, user, password)))
+        registry = Registry(f"https://{host}", repo, user, password)
+        print(ship(local, ref, pin_files, registry) if local else keep(None, ref, pin_files, registry))
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1

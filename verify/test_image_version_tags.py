@@ -8,7 +8,9 @@ that named no version (workshop-mcp, web-terminal, joker; sample-app and tool-pi
   watch-it-burn:workshop-mcp-mcp-<v>        the MCP Python SDK images/workshop-mcp/Dockerfile bakes in, read from
                                             its installed dist-info METADATA
   watch-it-burn:web-terminal-ttyd-<v>       ttyd, the terminal the pod serves (images/web-terminal/Dockerfile), read
-                                            from `ttyd --version` run on the binary taken out of the image
+                                            from `ttyd --version` run on the binary taken out of the image. A rebuild
+                                            of new source under the same ttyd is web-terminal-ttyd-<v>-<n> (#838):
+                                            its image carries the source-tree label the build workflow sets
   watch-it-burn:sample-app-nginx-<v>        the nginx serving Backstage's templated-test-svc (images/sample-app),
                                             read from the version string compiled into usr/sbin/nginx
   watch-it-burn:tool-pin-grpcio-<v>         the #480 spike's processor (images/tool-pin): grpcio, the one package
@@ -43,6 +45,8 @@ RESOURCES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"
 SAMPLE_SVC = (REPO / "backstage/k8s/templated-test-svc.yaml").read_text(encoding="utf-8")
 LOCK = (REPO / "images.lock").read_text(encoding="utf-8")
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
+# The label build-web-terminal.yml sets and scripts/ghcr_version_tag.py reads (#838).
+SOURCE_TREE = "io.github.peopleforrester.watch-it-burn.source-tree"
 WORKFLOW = (REPO / ".github/workflows/build-web-terminal.yml").read_text(encoding="utf-8")
 
 failures: list[str] = []
@@ -65,8 +69,8 @@ def get(package: str, tok: str, path: str):
     return urllib.request.urlopen(req, timeout=120)
 
 
-def amd64_layers(package: str, tok: str, digest: str) -> list[str]:
-    """The layer digests of the linux/amd64 image at digest, an index or a single manifest."""
+def amd64_manifest(package: str, tok: str, digest: str) -> dict:
+    """The manifest of the linux/amd64 image at digest, an index or a single manifest."""
     with get(package, tok, f"manifests/{digest}") as r:
         m = json.load(r)
     if "manifests" in m:
@@ -74,7 +78,19 @@ def amd64_layers(package: str, tok: str, digest: str) -> list[str]:
                  if x.get("platform", {}).get("os") == "linux" and x["platform"].get("architecture") == "amd64")
         with get(package, tok, f"manifests/{d}") as r:
             m = json.load(r)
-    return [layer["digest"] for layer in m["layers"]]
+    return m
+
+
+def amd64_layers(package: str, tok: str, digest: str) -> list[str]:
+    """The layer digests of the linux/amd64 image at digest, an index or a single manifest."""
+    return [layer["digest"] for layer in amd64_manifest(package, tok, digest)["layers"]]
+
+
+def image_config(package: str, digest: str) -> dict:
+    """The config blob (Env, Labels and the rest) of the linux/amd64 image at digest."""
+    tok = token(package)
+    with get(package, tok, f"blobs/{amd64_manifest(package, tok, digest)['config']['digest']}") as r:
+        return json.load(r)
 
 
 def find(package: str, digest: str, pattern: str) -> tuple[str, bytes] | None:
@@ -116,19 +132,22 @@ def named(image: str) -> set[str]:
     return out
 
 
-def pinned(prefix: str, where: str = "resources.yaml", text: str = RESOURCES) -> tuple[str, str] | None:
-    """The one (version, digest) the file where pins for watch-it-burn:<prefix><version>@sha256:..., which must be
-    the only watch-it-burn:<image> tag anything names."""
+def pinned(prefix: str, where: str = "resources.yaml", text: str = RESOURCES,
+           rebuild: bool = False) -> tuple[str, str, str] | None:
+    """The one (version, rebuild suffix, digest) the file where pins for watch-it-burn:<prefix><version>@sha256:...,
+    which must be the only watch-it-burn:<image> tag anything names. With rebuild, a -<n> suffix (#838) is taken."""
     image = prefix.split("-")[0] + "-" + prefix.split("-")[1]  # workshop-mcp, web-terminal, sample-app
-    found = set(re.findall(rf"ghcr\.io/{WIB}:{re.escape(prefix)}([0-9][0-9.]*)@(sha256:[0-9a-f]{{64}})", text))
+    suffix = "(-[1-9][0-9]*)?" if rebuild else "()"
+    found = set(re.findall(rf"ghcr\.io/{WIB}:{re.escape(prefix)}([0-9][0-9.]*[0-9]){suffix}@(sha256:[0-9a-f]{{64}})",
+                           text))
     check(f"{where} pins one {prefix}<version> digest ({sorted(found)})", len(found) == 1)
     if len(found) != 1:
         return None
-    version, digest = next(iter(found))
+    version, n, digest = next(iter(found))
     refs = named(image)
-    check(f"every reference to watch-it-burn:{image} names {prefix}{version} ({sorted(refs)})",
-          refs == {f"{WIB}:{prefix}{version}"})
-    return version, digest
+    check(f"every reference to watch-it-burn:{image} names {prefix}{version}{n} ({sorted(refs)})",
+          refs == {f"{WIB}:{prefix}{version}{n}"})
+    return version, n, digest
 
 
 def serves(ref: str, want: str | None) -> str | None:
@@ -150,7 +169,7 @@ except (urllib.error.URLError, OSError, KeyError, ValueError) as e:
 print("== workshop-mcp-mcp-<version>: the MCP SDK inside ==")
 pin = pinned("workshop-mcp-mcp-")
 if pin:
-    version, digest = pin
+    version, _, digest = pin
     serves(f"ghcr.io/{WIB}:workshop-mcp-mcp-{version}", digest)
     hit = find(WIB, digest, r"site-packages/mcp-[^/]+\.dist-info/METADATA$")
     meta = re.search(r"^Version: (\S+)$", hit[1].decode(errors="replace"), re.M) if hit else None
@@ -160,10 +179,16 @@ if pin:
     check(f"images/workshop-mcp/Dockerfile pins mcp=={version}", f"'mcp=={version}'" in dockerfile)
 
 print("== web-terminal-ttyd-<version>: the ttyd inside ==")
-pin = pinned("web-terminal-ttyd-")
+pin = pinned("web-terminal-ttyd-", rebuild=True)
 if pin:
-    version, digest = pin
-    serves(f"ghcr.io/{WIB}:web-terminal-ttyd-{version}", digest)
+    version, n, digest = pin
+    serves(f"ghcr.io/{WIB}:web-terminal-ttyd-{version}{n}", digest)
+    if n:
+        # A -<n> tag is a rebuild of new source under the same ttyd (#838): the build workflow labels its image with
+        # the source tree scripts/ghcr_version_tag.py told it apart by.
+        labels = image_config(WIB, digest).get("config", {}).get("Labels") or {}
+        check(f"the {n} rebuild's image carries a source-tree label ({sorted(labels)})",
+              re.fullmatch(r"[0-9a-f]{40}", labels.get(SOURCE_TREE, "")) is not None)
     hit = find(WIB, digest, r"^usr/local/bin/ttyd$")
     check(f"the image at {digest[:19]}... carries usr/local/bin/ttyd", hit is not None)
     if hit:
@@ -172,12 +197,13 @@ if pin:
         check(f"its ttyd reports {version}, the tag's ({out[:60]})", bool(got) and got.group(1) == version)
     check("the build workflow tags the image with the ttyd version it reads from the image it built",
           "--entrypoint /usr/local/bin/ttyd web-terminal:built --version" in WORKFLOW
-          and "watch-it-burn:web-terminal-ttyd-${v}" in WORKFLOW)
+          and "watch-it-burn:web-terminal-ttyd-${v}" in WORKFLOW
+          and f"labels: {SOURCE_TREE}=" in WORKFLOW)
 
 print("== sample-app-nginx-<version>: the nginx inside ==")
 pin = pinned("sample-app-nginx-", "backstage/k8s/templated-test-svc.yaml", SAMPLE_SVC)
 if pin:
-    version, digest = pin
+    version, _, digest = pin
     serves(f"ghcr.io/{WIB}:sample-app-nginx-{version}", digest)
     check(f"images.lock pins sample-app-nginx-{version} at the same digest",
           f"ghcr.io/{WIB}:sample-app-nginx-{version}@{digest} {digest} " in LOCK)
@@ -192,16 +218,7 @@ if pin:
     check("images/sample-app/Dockerfile builds on our nginx alpine copy by digest", base is not None)
     if base:
         # A rebuild keeps the tag only while its base carries the same nginx: the base's NGINX_VERSION says which.
-        tok = token(WIB)
-        with get(WIB, tok, f"manifests/{base.group(1)}") as r:
-            m = json.load(r)
-        if "manifests" in m:
-            d = next(x["digest"] for x in m["manifests"]
-                     if x.get("platform", {}).get("os") == "linux" and x["platform"].get("architecture") == "amd64")
-            with get(WIB, tok, f"manifests/{d}") as r:
-                m = json.load(r)
-        with get(WIB, tok, f"blobs/{m['config']['digest']}") as r:
-            env = json.load(r)["config"].get("Env", [])
+        env = image_config(WIB, base.group(1))["config"].get("Env", [])
         check(f"the Dockerfile's base carries nginx {version} too ({[e for e in env if e.startswith('NGINX_')]})",
               f"NGINX_VERSION={version}" in env)
 
