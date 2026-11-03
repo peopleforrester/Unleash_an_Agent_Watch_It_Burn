@@ -13228,3 +13228,15 @@ restored; `git status` shows only the test changed.
 egress NetworkPolicy. With `watch-it-burn-private` up,
 `CONTEXT=watch-it-burn-private challenges/c1-exfil-s3/fallback.kubectl.sh` must end `C1 PROVEN`. The next run on
 this issue runs it once staging's ai-layer has synced.
+
+**The suites (run 16812, at `8c625d1b`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 23m59s. The offline suite inside it ran 239 tests, all green, and `test_challenge_fallbacks.py`
+printed `PASS  the Night Before curls a beacon view`, `PASS  C1 reads the count from the beacon view the Night
+Before checks` and `PASS  C1 calls no URL on the retired provisioning.agenticburn.com`. It exits 1 on
+`test_image_version_tags.py` alone, with one red: `sample-app-nginx-1.27.5` answers 404, which is #814's. Run 16798
+before it was stopped as a loop for issuing the same two-minute wait-and-tail command over and over; this run waited
+in 9-minute bounded polls instead.
+
+**Live check blocked in run 16812.** This run's `clusters/kubeconfig` is mode 0640, owner and group `hecaton`, and
+`kubectl --context watch-it-burn-private -n agent get deploy workshop-mcp` failed with `permission denied`
+(hecaton#508), so the `C1 PROVEN` check named above is still not yet run on a cluster.
