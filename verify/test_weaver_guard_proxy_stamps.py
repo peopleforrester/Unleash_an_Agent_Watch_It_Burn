@@ -4,7 +4,7 @@
 lockstep with its set_attribute calls. guard-proxy-agenticburn#8 added `_stamp`, which sets attributes on the POST
 server span (span.witb.guard_proxy.http): session.id, OTel semconv, and witb.guard.decision, a custom enum. Neither
 was declared. This reads the stamps out of the pinned submodule's proxy.py and holds the registry to them offline;
-`weaver registry check` (.github/workflows/weaver-registry-check.yml) resolves the refs against semconv v1.37.0.
+`weaver registry check` (.github/workflows/weaver-registry-check.yml) resolves the refs against semconv v1.41.1 (#784).
 """
 from __future__ import annotations
 

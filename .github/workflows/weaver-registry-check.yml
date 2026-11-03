@@ -1,5 +1,5 @@
 # ABOUTME: CI gate for the OTel Weaver semconv registry (PRD #20 M6). Fails the build if the guard-proxy
-# ABOUTME: span contract drifts from upstream OpenTelemetry semantic conventions v1.37.0.
+# ABOUTME: span contract drifts from upstream OpenTelemetry semantic conventions v1.41.1 (#784).
 name: weaver-registry-check
 
 on:
@@ -38,7 +38,7 @@ jobs:
           install -m 0755 weaver-x86_64-unknown-linux-gnu/weaver /usr/local/bin/weaver
           weaver --version
 
-      - name: Check registry against OTel semconv v1.37.0
+      - name: Check registry against OTel semconv v1.41.1
         # Resolves every ref: in weaver/registry/guard-proxy-spans.yaml against the upstream registry
         # pinned in manifest.yaml. A renamed/removed upstream attribute or a typo'd ref fails here.
         run: weaver registry check --registry weaver/registry/

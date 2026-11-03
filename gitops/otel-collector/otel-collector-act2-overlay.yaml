@@ -1,49 +1,77 @@
-# ABOUTME: Re-leak-trap beat, Act 2 (PRD #22 M2). The OTTL transform that replaces the captured sanitize
-# ABOUTME: span content with [DEMO-REDACTED] before the Datadog export, so the leak is shown then fixed.
+# ABOUTME: Re-leak-trap beat, Act 2 (PRD #22 M2). The OTTL transform that replaces the conversation's content on every
+# ABOUTME: span with [DEMO-REDACTED] before any exporter runs, so the leak is shown then fixed.
 #
-# THE TWO-ACT BEAT (PRD #22): Act 1 (baseline `otel-collector.yaml` only) arms guard-proxy content capture
-# (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY) so the original prompt appears as the
-# `sanitize`/`chat` span's gen_ai.content.prompt EVENT (and the reply as gen_ai.content.completion) in
-# Datadog LLM Observability. That is the leak: observability itself became an exfil channel. Act 2 applies
-# this redaction at the Collector boundary, re-runs the beat, and Datadog now shows [DEMO-REDACTED]: the
-# secret never reaches the observability platform. NOTE: Datadog renders the INPUT/OUTPUT panels from the
-# span EVENTS, not from gen_ai.input.messages span attributes, so the redaction below operates in the
-# `spanevent` context on each event's "content" attribute.
+# THE TWO-ACT BEAT (PRD #22): Act 1 (the base collector config only) arms guard-proxy content capture
+# (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, any of SPAN_ONLY, EVENT_ONLY or SPAN_AND_EVENT) so the original
+# prompt appears in Datadog LLM Observability. That is the leak: observability itself became an exfil channel. Act 2
+# applies this redaction at the Collector boundary, re-runs the beat, and Datadog now shows [DEMO-REDACTED]: the
+# secret never reaches the observability platform.
 #
-# DEPLOYMENT RECONCILIATION (verify-at-build): the Collector is Helm-deployed via the ArgoCD Application in
-# `otel-collector.yaml` (config under spec.source.helm.valuesObject.config). It is NOT a raw Collector
-# manifest, so the instructor cannot `kubectl apply -f` a standalone config to toggle Act 2. Apply Act 2 by
-# ONE of:
-#   (a) GitOps toggle (recommended, reversible, audited): add the `transform/redact_sentinel` processor
-#       below to the otel-collector.yaml valuesObject `processors:` block, and add `transform/redact_sentinel`
-#       to the traces pipeline processors list, positioned LAST (after batch/resource, before export). Commit
-#       to flip to Act 2; revert the commit (or ArgoCD app rollback) to return to Act 1.
-#   (b) Live demo toggle: `kubectl -n monitoring edit` the rendered Collector ConfigMap to add the processor
-#       + pipeline entry, then restart the Collector. ArgoCD selfHeal reverts it (that IS the Act-1 reset).
+# WHERE THE CONTENT IS (#784). Since GenAI semconv v1.37 the conversation is in the gen_ai.input.messages and
+# gen_ai.output.messages span ATTRIBUTES, JSON strings, and that is where Datadog reads a span's input and output
+# first (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read 2026-11-03), with the
+# gen_ai.client.inference.operation.details event as its fallback. guard-proxy's proxy.py writes both attributes in
+# every capture mode and emits no event. Until #784 this file redacted the gen_ai.content.prompt and
+# gen_ai.content.completion events' "content" attribute, event names semconv dropped and nothing here emits, so Act 2
+# matched nothing and the prompt reached Datadog unredacted.
 #
-# This file is the canonical source of the redaction config; it is intentionally NOT wired into ArgoCD (so
-# Act 2 is never the default startup state, per the PRD decision: the base config is Act 1). It sits beside the
-# collector's value files, not in gitops/bootstrap/apps, which holds only the Applications the root chart renders
-# (#609); in the old gitops/apps directory every profile's exclude glob matched it without meaning to.
+# The prompt is not only on guard-proxy's spans. transform/adk_model_content copies it onto every kagent model call
+# (from gcp.vertex.agent.llm_request), and transform/adk_tool_content copies tool arguments and results under
+# gen_ai.tool.call.*. So Act 2 redacts the same keys as the burn profile's transform/scrub_pii (#647), on every span
+# and on every span event: the messages, the tool call's arguments and result, and the ADK attributes they are copied
+# from. verify/test_collector_act2_redaction.py holds the two lists equal, and
+# verify/test_collector_act2_redaction_e2e.py runs Act 2 through the real collector on every profile.
+#
+# The messages are replaced with a one-message envelope in the semconv shape whose text is [DEMO-REDACTED], not with
+# the bare string: Datadog parses these attributes as JSON, and the panel has to show the redaction, not a parse
+# failure. The other keys take the bare string. Replace, never delete: the key stays present, so Datadog shows that
+# the redaction happened. gen_ai.system_instructions (BurritoBot's own system prompt) and gen_ai.tool.definitions are
+# not attendee content and are left as they are.
+#
+# APPLYING IT. The Collector is Helm-deployed by an Argo CD Application (gitops/bootstrap/apps/otel-collector.yaml on
+# the admin and full profiles, otel-collector-burn.yaml on burn, otel-collector-attendee.yaml on attendee clusters),
+# and its config is the value files under gitops/otel-collector/ (values.yaml, then values-burn.yaml or
+# values-dual.yaml). Kyverno's block-argocd-drift refuses a direct edit of the rendered ConfigMap, so Act 2 goes
+# through Git (OBSERVABILITY-RUNBOOK.md, Challenge 3):
+#   1. add the `transform/redact_sentinel` processor below under `config.processors` in values.yaml;
+#   2. append `transform/redact_sentinel` to the END of the `traces` pipeline's processors list in the value file
+#      that states it for the cluster's profile: values.yaml for admin, full and attendee clusters (values-dual.yaml
+#      and the Datadog overlay restate only exporters), values-burn.yaml for burn (after transform/scrub_pii). Last, so that it runs
+#      after transform/adk_model_content and transform/adk_tool_content have made their copies, and before the
+#      exporters, forward/llmobs among them, so APM's copy and Agent Observability's copy (#746) both carry it.
+# Commit to flip to Act 2; revert the commit to return to Act 1.
+#
+# Neither KubeCon cluster runs Act 2 by default. watch-it-burn-community (burn) redacts its room's PII with
+# transform/scrub_pii in values-burn.yaml; watch-it-burn-private (admin) redacts nothing, by design (#647: the
+# presenters' cluster carries no attendee's text).
+#
+# This file is the canonical source of the redaction config; it is intentionally NOT wired into Argo CD (so Act 2 is
+# never the default startup state, per the PRD decision: the base config is Act 1). It sits beside the collector's
+# value files, not in gitops/bootstrap/apps, which holds only the Applications the root chart renders (#609).
 ---
-# The OTTL transform processor (paste into the Collector `processors:` block for Act 2).
 processors:
   transform/redact_sentinel:
     error_mode: ignore
     trace_statements:
-      # Content lives in gen_ai SPAN EVENTS (gen_ai.content.prompt / gen_ai.content.completion, each with a
-      # "content" body attribute) because that is what Datadog LLM Observability renders. Redact in the
-      # `spanevent` context on the event's "content" attribute; replace (not delete) so the event stays
-      # visible as redacted. (The guard-proxy sanitize/chat span is the only one carrying these events.)
+      - context: span
+        statements:
+          - 'set(attributes["gen_ai.input.messages"], "[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"content\":\"[DEMO-REDACTED]\"}]}]") where attributes["gen_ai.input.messages"] != nil'
+          - 'set(attributes["gen_ai.output.messages"], "[{\"role\":\"assistant\",\"parts\":[{\"type\":\"text\",\"content\":\"[DEMO-REDACTED]\"}],\"finish_reason\":\"stop\"}]") where attributes["gen_ai.output.messages"] != nil'
+          - 'set(attributes["gen_ai.tool.call.arguments"], "[DEMO-REDACTED]") where attributes["gen_ai.tool.call.arguments"] != nil'
+          - 'set(attributes["gen_ai.tool.call.result"], "[DEMO-REDACTED]") where attributes["gen_ai.tool.call.result"] != nil'
+          - 'set(attributes["gcp.vertex.agent.llm_request"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.llm_request"] != nil'
+          - 'set(attributes["gcp.vertex.agent.llm_response"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.llm_response"] != nil'
+          - 'set(attributes["gcp.vertex.agent.tool_call_args"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.tool_call_args"] != nil'
+          - 'set(attributes["gcp.vertex.agent.tool_response"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.tool_response"] != nil'
+      # Datadog's fallback, the gen_ai.client.inference.operation.details event, carries the messages as event
+      # attributes under the same names.
       - context: spanevent
         statements:
-          - set(attributes["content"], "[DEMO-REDACTED]") where name == "gen_ai.content.prompt"
-          - set(attributes["content"], "[DEMO-REDACTED]") where name == "gen_ai.content.completion"
-
-# The traces pipeline for Act 2 (transform/redact_sentinel added LAST, before the exporters run):
-# service:
-#   pipelines:
-#     traces:
-#       receivers: [otlp]
-#       processors: [memory_limiter, batch, resource, transform/redact_sentinel]
-#       exporters: [datadog, otlp/tempo, spanmetrics, datadog/connector, debug]
+          - 'set(attributes["gen_ai.input.messages"], "[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"content\":\"[DEMO-REDACTED]\"}]}]") where attributes["gen_ai.input.messages"] != nil'
+          - 'set(attributes["gen_ai.output.messages"], "[{\"role\":\"assistant\",\"parts\":[{\"type\":\"text\",\"content\":\"[DEMO-REDACTED]\"}],\"finish_reason\":\"stop\"}]") where attributes["gen_ai.output.messages"] != nil'
+          - 'set(attributes["gen_ai.tool.call.arguments"], "[DEMO-REDACTED]") where attributes["gen_ai.tool.call.arguments"] != nil'
+          - 'set(attributes["gen_ai.tool.call.result"], "[DEMO-REDACTED]") where attributes["gen_ai.tool.call.result"] != nil'
+          - 'set(attributes["gcp.vertex.agent.llm_request"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.llm_request"] != nil'
+          - 'set(attributes["gcp.vertex.agent.llm_response"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.llm_response"] != nil'
+          - 'set(attributes["gcp.vertex.agent.tool_call_args"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.tool_call_args"] != nil'
+          - 'set(attributes["gcp.vertex.agent.tool_response"], "[DEMO-REDACTED]") where attributes["gcp.vertex.agent.tool_response"] != nil'

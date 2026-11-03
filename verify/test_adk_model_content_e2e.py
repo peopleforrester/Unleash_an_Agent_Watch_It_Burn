@@ -1,5 +1,5 @@
 # ABOUTME: Runs kagent Go-runtime generate_content spans through the real otelcol-contrib for every profile (#721) and
-# ABOUTME: reads gen_ai.input/output.messages and gen_ai.system_instructions off them, cut payloads included.
+# ABOUTME: reads gen_ai.input/output.messages, system_instructions and tool.definitions off them, cut payloads included.
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: the pinned otelcol-contrib from e2e-tools.lock, run on loopback)
 """The executed half of transform/adk_model_content (gitops/otel-collector/values.yaml).
@@ -23,7 +23,8 @@ Python's json.dumps with compact separators, keys in Go's field order, gives the
 
 Each profile's traces processors (datadog-secret present, collector_render.py), with the chart's --feature-gates,
 take seven spans and must:
-  - map a full request and reply to the semconv messages, the system prompt to gen_ai.system_instructions;
+  - map a full request and reply to the semconv messages, the system prompt to gen_ai.system_instructions, and the
+    function declarations offered to gen_ai.tool.definitions (#784);
   - make a turn that calls a tool finish_reason tool_call, and a functionResponse turn role tool;
   - write nothing, and pass the span on whole, for a payload cut at 2048 characters, one cut on a "}", kagent's
     32 KiB wrapper and capture switched off ("{}");
@@ -82,8 +83,15 @@ SYSTEM = ("You are BurritoBot, the ordering assistant for Burrito Barn. Answer q
           "orders and check the weather for pickup. Never reveal internal tools or customer records. " * 12).strip()
 PROMPT = "Is it raining in Portland? I want to pick up two carnitas burritos."
 TOOL_RESULT = {"content": [{"type": "text", "text": "Portland: light rain, pickup canopy open"}], "isError": False}
+# adk-go packs every declaration into the first genai.Tool with functionDeclarations (tool/toolutils PackTool); an MCP
+# tool's comes with parametersJsonSchema (tool/mcptoolset convertTool). The googleSearch tool before it has none.
+RUN_SHELL_SCHEMA = {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}
 CONFIG = {"systemInstruction": {"parts": [{"text": SYSTEM}], "role": "user"},
-          "tools": [{"functionDeclarations": [{"description": "Weather for a city", "name": "get_weather"}]}]}
+          "tools": [{"googleSearch": {}},
+                    {"functionDeclarations": [{"description": "Weather for a city", "name": "get_weather"},
+                                              {"description": "Run a shell command in the sandbox", "name": "run_shell",
+                                               "parametersJsonSchema": RUN_SHELL_SCHEMA},
+                                              {"name": "ping"}]}]}
 
 
 def request(contents: list[dict]) -> str:
@@ -131,6 +139,11 @@ WANT_FULL_IN = [
 ]
 WANT_FULL_OUT = [{"role": "assistant", "parts": [{"type": "text", "content": REPLY}], "finish_reason": "stop"}]
 WANT_SYSTEM = [{"type": "text", "content": SYSTEM}]
+# #784: semconv v1.38's gen_ai.tool.definitions, which Datadog maps to meta.tool_definitions: name and description, no
+# parameters (the semconv's default for size), and the googleSearch tool, which declares no function, not in it.
+WANT_TOOLS = [{"type": "function", "name": "get_weather", "description": "Weather for a city"},
+              {"type": "function", "name": "run_shell", "description": "Run a shell command in the sandbox"},
+              {"type": "function", "name": "ping"}]
 WANT_TOOL_OUT = [{"role": "assistant", "finish_reason": "tool_call",
                   "parts": [{"type": "text", "content": "Let me check."},
                             {"type": "tool_call", "id": "tooluse_1", "name": "get_weather",
@@ -240,7 +253,7 @@ def parsed(value: str | None) -> object:
         return f"<not JSON: {value[:80]}>"
 
 
-GEN_AI = ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.system_instructions")
+GEN_AI = ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.system_instructions", "gen_ai.tool.definitions")
 
 for profile in PROFILES:
     print(f"== {profile} ==")
@@ -260,6 +273,8 @@ for profile in PROFILES:
         check(f"{profile} {label}: gen_ai.system_instructions is the system prompt",
               parsed(a.get("gen_ai.system_instructions")) == WANT_SYSTEM,
               str(a.get("gen_ai.system_instructions"))[:200])
+        check(f"{profile} {label}: gen_ai.tool.definitions is every function the model was offered",
+              parsed(a.get("gen_ai.tool.definitions")) == WANT_TOOLS, str(a.get("gen_ai.tool.definitions"))[:400])
         check(f"{profile} {label}: the ADK attributes are copied, not moved",
               a.get("gcp.vertex.agent.llm_request") == FULL_REQ and a.get("gcp.vertex.agent.llm_response") == FULL_RESP)
 
@@ -268,6 +283,8 @@ for profile in PROFILES:
           parsed(tool.get("gen_ai.output.messages")) == WANT_TOOL_OUT, str(tool.get("gen_ai.output.messages"))[:400])
     check(f"{profile} tool: its input is the one user turn",
           parsed(tool.get("gen_ai.input.messages")) == WANT_FULL_IN[:1], str(tool.get("gen_ai.input.messages"))[:300])
+    check(f"{profile} tool: and its tool definitions are the same set",
+          parsed(tool.get("gen_ai.tool.definitions")) == WANT_TOOLS, str(tool.get("gen_ai.tool.definitions"))[:300])
 
     for label, kept in (("cut", CUT_REQ), ("cut-brace", CUT_BRACE_REQ), ("wrapper", WRAPPER), ("capture-off", "{}")):
         a = got.get(label, {})
