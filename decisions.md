@@ -13185,3 +13185,46 @@ on `test_image_version_tags.py` alone, on two checks. One is the 404 above, whic
 ends. The other was this change's own: the second-tag case in `test_ghcr_version_tag.py` wrote out a
 `watch-it-burn:sample-app-nginx-9.9.9` reference, which `test_image_version_tags.py` holds to the pinned tag. The
 case now builds that reference from the pinned one, and `test_image_version_tags.py` run alone is down to the 404.
+
+## 2026-11-03 · #826 · C1 fallback reads the beacon count from the view the Night Before checks
+
+**What #826 asked.** Split from #720. The C1 fallback `challenges/c1-exfil-s3/fallback.kubectl.sh` once set
+`BEACON_VIEW="https://provisioning.agenticburn.com/beacon/view"`. That host was retired on 2026-10-29 (#651,
+`apex-agenticburn#44`) and now answers the apex router's unknown-host 404, so `curl -fsS` read no count, the
+"beacon view readable" check failed, and the script exited before its POST. The fix: the fallback's `BEACON_VIEW`
+must be the beacon-view URL the Night Before step of `facilitation/kubecon-na-2026-run-of-show.md` curls for a 200,
+and `verify/test_challenge_fallbacks.py` must read that Night Before URL from the run of show and fail when the
+fallback diverges from it or names any `https://provisioning.agenticburn.com` URL.
+
+**#651 already moved the fallback; this run ties the test to it.** When #826 was planned (run 16452),
+`draft-drift.sh` showed staging had not touched the fallback or the test. It has since: #651's draft landed as
+`d2264c1d` ("Show burritobot.co for the prompt wall, feedback form and C1 beacon, and retire..."), which moved the
+beacon and its view to `beacon.burritobot.co`. So on current staging the fallback already reads
+`BEACON_VIEW="https://beacon.burritobot.co/beacon/view"` and names no `provisioning.agenticburn.com` URL, and the
+Night Before step at line 913 curls `https://beacon.burritobot.co/beacon/view` for a 200. #651 landed first, so
+#826 follows the Night Before line, as the issue said whichever lands second must. The first acceptance criterion
+is met on staging with no further edit to the script, so this run makes none.
+
+**The test now reads the Night Before URL from the run of show.** Before this run,
+`verify/test_challenge_fallbacks.py` hard-coded `"view": "https://beacon.burritobot.co/beacon/view"` in its stub
+fixture and made no check tying the fallback's `BEACON_VIEW` to the run of show. This run adds, after the existing
+C1 beacon check, a regex that reads the Night Before view URL out of `facilitation/kubecon-na-2026-run-of-show.md`
+(`` `curl [^`\n]*?(https://\S+/beacon/view)` ``, one match, `https://beacon.burritobot.co/beacon/view`) and three
+checks: the Night Before curls a beacon view, C1 reads the count from that same view (`BEACON_VIEW="<the url>"` is
+in the fallback), and C1 names no `https://provisioning.agenticburn.com` URL. The stub fixture's `view` now serves
+that same `_view`, so a fallback whose `BEACON_VIEW` differs from the Night Before URL also fails the runtime
+"beacon view readable" check because the stub curl cannot resolve the diverging host. This is the change commit
+`6a0dbef` on `origin/agent/720-14845` made, remade fresh on the current burritobot.co layout.
+
+**The new checks fail against a regressed script (shown before the fix).** The fallback already reads the right
+URL on staging, so to show the new checks guard the regression this run temporarily set the fallback's
+`BEACON_VIEW` back to `https://provisioning.agenticburn.com/beacon/view` and ran the test. It printed
+`FAIL  C1 reads the count from the beacon view the Night Before checks`,
+`FAIL  C1 calls no URL on the retired provisioning.agenticburn.com`, and, at runtime,
+`FAIL  beacon view readable at https://provisioning.agenticburn.com/beacon/view: no count read`. The script was
+restored; `git status` shows only the test changed.
+
+**Not yet run on a cluster.** A run brings no cluster up and the live beat needs the deployed ai-layer and the
+egress NetworkPolicy. With `watch-it-burn-private` up,
+`CONTEXT=watch-it-burn-private challenges/c1-exfil-s3/fallback.kubectl.sh` must end `C1 PROVEN`. The next run on
+this issue runs it once staging's ai-layer has synced.
