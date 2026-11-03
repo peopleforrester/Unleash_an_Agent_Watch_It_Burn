@@ -11408,3 +11408,9 @@ check and listed all six parts as missing from #633's closest comment. With deci
 **Tests.** New: test_agent_obs_cause_comment. No existing test changed. PROGRESS.md has a #811 bullet.
 
 **Not yet run on a cluster.** Nothing is owed. The test needs the network only.
+
+**The suites (run 16656, at b7eee46).** `bash verify/run-tests.sh`, run as the first half of the E2E command,
+passed with 230 tests. `bash verify/run-e2e-tools.sh` ran 47 checks, and one failed. test_agent_obs_cause_comment
+passed in the tier and found the cause at issuecomment-6578827445. The failure was `test_image_version_tags.py`,
+failing only on ghcr.io serving `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c…` instead of the pinned
+`68004fb5…`. That is the red the #808 and #807 entries record, already in the base, and it does not involve this change.
