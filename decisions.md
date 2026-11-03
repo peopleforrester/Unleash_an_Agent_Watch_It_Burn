@@ -10059,3 +10059,114 @@ The Tempo leftovers on attendee are the same as in the ninth dispatch's entry.
 **Not yet run on a cluster.** The same as the ninth dispatch's entry. Point 1 also needs the Falco DaemonSet Ready on
 the mirror copy, with its falcoctl containers, which #714's own live check also reads. The admin half (point 3 and
 the admin half of point 4) needs a run whose user can read the kubeconfig.
+
+## 2026-11-02 · #644 · The load test's record file, and why the re-run waits on #450
+
+Michael's go of 2026-11-01 on #644 asks for the load replay again once #450 drops nginx's per-network limit. He
+wants two runs from one address through the public hostname: 500 sessions, and 150, the room he expects. Hecaton
+run 16392 found the re-run cannot happen yet. #450's per-person change is `74c9c2d`, on branch `agent/450-15018`.
+That run failed validation and has not landed. `gitops/ai-layer/console.conf` on both `origin/staging` and
+`origin/main` still carries `wib_chat_address` (120 a minute, burst 60). So no revision the public cluster can track
+has dropped it. A replay now would measure the per-network limit again, as the 2026-10-31 run did. That would spend
+about $1.50 to repeat a known result. The run also has no copy of the gitignored Portland harvest, and the cluster
+kubeconfig hecaton staged for it is not readable by the run's user.
+
+**What changed.** `facilitation/kubecon-na-2026-load-test.md` is new. Michael's criteria name its Results section.
+It holds the method, the limits before and after #450, the exact command and prediction for each run still owed,
+and the 2026-10-31 run's results with the causes known so far: 4 of the 15 HTTP 502s are guard-proxy's 120 s
+forward timeout (#750), and 11 have no known source. The predictions use `load_replay.py`'s own run-length model
+with the per-network term gone. Run A, 500 sessions: about 375 served for about $2.03. The 150-session run: at most
+450 served for about $2.43. Together that is inside the $10 budget.
+
+**Kept out on purpose.** `verify/load_replay.py`, its test and the run-of-show's Night Before step are unchanged.
+`74c9c2d` edits all three, and `deployed_limits()` reads `wib_chat_address` until it lands. Editing them here would
+conflict with that branch. Once #450 lands, the run-of-show step should give the 150-session command too.
+
+**Not yet run on a cluster.** Both runs, by the commands in the record file. They need #450 synced to
+watch-it-burn-community and a machine holding `.harvest/devopsdays-portland/prompts`. Each must end
+`LOAD REPLAY GREEN`, and its figures go in the record file's Results section and on #644.
+
+## 2026-11-02 · #715 · Re-dispatch after the merge: the change is on main, and the merge comment names its commit
+
+**No code changed.** Hecaton run 15909 is the second dispatch of #715. The first run's commit, `4f9f5c4`, is on
+both staging and main. At staging `80123c0` no tracked file under `gitops/` names `docker.io/library/nginx` outside a
+comment, and the five `gitops/bootstrap/apps/demo-app-*.yaml` still set
+`web={{ .Values.imageRegistry }}/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`.
+lab-platform's `deploy/watch-it-burn/images.tsv` row 15 still pins `web` at that digest, so nothing is repinned.
+
+**Criterion 3 is met by the dispatcher's merge comment.** The first run ended partial because it could not post the
+comment naming the commit. The dispatcher's merge comment on #715 (issuecomment 6542323206) reads "Merged
+`4f9f5c4875dc` into staging", and the SHA was not rewritten on promotion. lab-platform#335 is closed with no
+successor. lab-platform's `deploy/mirror/pulled.tsv` rows 105 to 109, and the note on `images.tsv` row 15
+that waits on this issue, can now be dropped; that is lab-platform's change, filed as a follow-up.
+
+**Not yet run on a cluster.** Unchanged from the 2026-10-31 #715 entry: five Ready demo-app pods on `web@sha256:73cd…`
+and a 200 from each party hostname, on an attendee or full cluster in a session with AWS access.
+On 2026-11-03 hecaton run 16424 was handed watch-it-burn-community and watch-it-burn-private, both of which run the
+five demo apps (every values-*.yaml profile lists them). It could not read them: the run's `clusters/kubeconfig` and
+`aws-credentials` are mode 640, group `hecaton`, and the run's user is not in that group, so kubectl failed with
+"permission denied" before reaching either cluster. The read-only pod check went to the run report's escalate list.
+
+**Tests at this entry.** `bash verify/run-tests.sh` passed. `bash verify/run-e2e-tools.sh` ran 40 checks and failed two,
+`test_datadog_log_services_render.py` and `test_enforce_floor.py`, both on one cause: GitHub answered 500 Internal
+Server Error for `falcosidekick-0.14.0.tgz` from falcosecurity/charts. Rerun alone with the tier's environment a few
+minutes later, when that URL answered 200, both passed. Hecaton run 15909 stalled waiting on the tier in the
+background, so run 15982 finished it. Run 16424, on staging `a29bb91`, passed `bash verify/run-tests.sh`. Its
+`bash verify/run-e2e-tools.sh` ran 41 checks and failed one, `test_dispatched_runs_cause_comment.py`, because GitHub
+answered its anonymous comment read with 403 rate limit exceeded. Rerun alone once the limit allowed, it passed.
+## 2026-11-02 · #783 · Re-dispatch: the fix and the check are on staging, and the live read-back is still owed
+
+**No code changed.** Hecaton run 16386 is the second dispatch of #783. Commits `67c956a` (the copy's own trace id),
+`c4c62bb` (`verify/agent_obs_flow.py`) and `878b077` (the entry above) have been on `origin/staging` since run 16035's
+merge, and the merge comment on #783 names the cause. This run was handed the `watch-it-burn-community` and
+`watch-it-burn-private` contexts, the accen-dev profile and the session env under its `clusters/` directory. It could
+read none of them: the files are owned `hecaton:hecaton` with mode 0640, and the run's user is not in group
+`hecaton`. `kubectl` refused the kubeconfig, sourcing the env failed, and `aws` had no accen-dev profile. So the
+collectors' sync revisions, the intake log and the `agent_obs_flow.py chat` read-back from the entry above did not
+run, and the cause is still an inference until they do.
+
+**Not yet run on a cluster.** The commands are the entry above's, unchanged: per cluster, read the `otel-collector`
+Application's sync revision (it must contain `67c956a`) and grep the agent DaemonSet's log for `llmobs`. Then
+`python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`, and its trace ids go
+in a comment on #783.
+
+**The E2E tools tier is red, and not from #783.** `bash verify/run-tests.sh` passed. `bash verify/run-e2e-tools.sh` failed one
+check, in `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:d6acd503bc20…`,
+not the `sha256:68004fb5ed2d…` that `gitops/ai-layer/resources.yaml` pins. The base commit 7cc4244 is on staging, and the
+`build-web-terminal` run of that commit (2026-11-02 17:51 UTC, a push run, because #714 edited the workflow file) rebuilt the
+image and pushed it over the same tag. Clusters pull by digest, so nothing running changed. The fix needs a ghcr.io
+write and the signing key (`verify/sign-images.sh`), which this run has neither of: point the tag back at the pinned
+digest, or pin the new digest and sign it. It belongs to #714, and the workflow will move the tag again on its next
+push run unless it stops overwriting a tag that already exists.
+
+## 2026-11-03 · #746 · Third re-dispatch: cluster access was handed over but could not be read, so the live look is still owed
+
+**No code changed.** The one-root copy (241f8e6) and #783's own trace id for it (67c956a) are on staging, and
+`verify/test_trace_shape_e2e.py` still pins the shape offline. Hecaton run 16420 is the first #746 dispatch given
+cluster access: an env file, a kubeconfig naming `watch-it-burn-community` and `watch-it-burn-private`, and accen-dev
+credentials under the run's `clusters/` directory. Those files are mode 640, group `hecaton`, and the run's user
+(`hecaton-s3-claude-certkraken`) is not in that group, so sourcing the env and every `kubectl` call failed with
+"permission denied", and `aws sts get-caller-identity` found no credentials. Nothing was read on a cluster or in Datadog.
+
+**The order of the owed look.** #783's fix changes what the look reads, so it goes first. The commands are the ones in
+the 2026-11-02 · #783 entry: on each cluster, the `otel-collector` Application's revision must contain 67c956a with
+the sync Succeeded, and the collector log must show no `llmobs` export error. Then
+`python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`. After that, send
+the HC-666 chat to each bot, as step 4 of the 2026-11-02 · #746 re-dispatch entry says, and read the four checks on
+its row in LLM Observability (`ml_app:burritobot`): one root row, the prompt and the reply on it, `read_support_ticket`
+and `deploy_app` under it, and a duration that covers the whole chat. A green `agent_obs_flow.py` with two roots or
+an empty root is #746's failure; a red one is #783's.
+
+**Not yet run on a cluster.** All of the above, on both clusters. A run whose user can read its `clusters/` files, or
+a session with accen-dev, runs it and records the trace ids here.
+
+**The suites, and a red that is not #746's.** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh`
+exits 1 on two checks, and `test_trace_shape_e2e.py` is not one of them. First, `test_challenge_fallbacks.py`'s C7 open
+run timed out at 120 s while other runs' suites shared the box (load average near 10). Alone, it passes. Second,
+`test_image_version_tags.py` fails: "ghcr.io serves ...:web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5ed2d...
+(it serves sha256:d6acd503...)". #714's `4a1a47f` edited `.github/workflows/build-web-terminal.yml`, so its staging
+push started build-web-terminal run 41495102677 (2026-11-02 17:51 UTC). That run rebuilt the image and pushed it over
+the same tag. Clusters still pull the pinned, signed digest, because resources.yaml pins tag@digest. The new digest
+carries no cosign signature, and `verify-image-signatures` requires one, so re-pinning it is not a fix. The tag has to
+point back at `68004fb5`, and the workflow must stop pushing over a tag that already exists, or the main promotion
+pushes over it again. Both are in run 16420's follow-up.
