@@ -10143,7 +10143,7 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
 4. After `./fleet.sh routes roster`, `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
    lists `busybox-1.38.0`, and a POST to it answers 403. A pod on attackme running that image pulls it.
 
-**Prose gate (run 16115).** Run 16077 failed the ai-isms gate: its detector reads the verb "lets" as the
-connective "let's". The five added lines that used it (PROJECT_STATE.md, decisions.md, the run-of-show,
+**Prose gate (run 16115).** Run 16077 failed the ai-isms gate: its detector reads the third-person verb from
+"to let" as the first-person-plural connective. The five added lines that used that verb (PROJECT_STATE.md, decisions.md, the run-of-show,
 KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
 behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.
