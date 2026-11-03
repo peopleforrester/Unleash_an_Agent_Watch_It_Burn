@@ -58,8 +58,9 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd ({sorted(tools)})",
-      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd"})
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and weaver "
+      f"({sorted(tools)})",
+      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd", "weaver"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -67,9 +68,9 @@ for name, row in tools.items():
     _, version, sha, url, _member = row
     check(f"{name}: a 64-hex SHA-256", re.fullmatch(r"[0-9a-f]{64}", sha) is not None, sha)
     check(f"{name}: an https URL naming {version}", url.startswith("https://") and version.lstrip("v") in url, url)
-    # ttyd's release names its Linux builds by architecture alone (ttyd.x86_64).
+    # ttyd's release names its Linux builds by architecture alone (ttyd.x86_64), weaver's by Rust target triple.
     check(f"{name}: a linux x86_64 artifact",
-          re.search(r"linux[_/-](amd64|x86_64)|/ttyd\.x86_64$", url, re.I) is not None, url)
+          re.search(r"linux[_/-](amd64|x86_64)|/ttyd\.x86_64$|x86_64-unknown-linux-gnu", url, re.I) is not None, url)
 
 # otelcol-contrib runs the PII scrub test (#647) on the collector the clusters run, so its pin is the image tag
 # every gitops/bootstrap/apps/otel-collector*.yaml file names (lab-platform's mirror tag is <version>-<digest>).
@@ -88,6 +89,15 @@ want = re.search(r"tsl0922/ttyd/releases/download/([0-9.]+)/ttyd\.",
                  (REPO / "images/web-terminal/Dockerfile").read_text())
 check(f"ttyd is the web-terminal image's version ({want.group(1) if want else None})",
       bool(want) and "ttyd" in tools and tools["ttyd"][1] == want.group(1))
+
+# weaver checks weaver/registry in the tier (#782) as .github/workflows/weaver-registry-check.yml does on GitHub, so
+# both run the same weaver: the workflow's version and SHA-256 are the lock's.
+workflow = (REPO / ".github/workflows/weaver-registry-check.yml").read_text()
+wf_version = re.search(r"^\s+WEAVER_VERSION: (\S+)", workflow, re.M)
+wf_sha = re.search(r"^\s+WEAVER_SHA256: ([0-9a-f]{64})", workflow, re.M)
+check("weaver is the version and SHA-256 weaver-registry-check.yml pins",
+      bool(wf_version and wf_sha) and "weaver" in tools
+      and tools["weaver"][1:3] == [wf_version.group(1), wf_sha.group(1)], str(tools.get("weaver")))
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
@@ -119,7 +129,8 @@ tier = [t for t in tests if re.search(r"^# E2E TIER: tools", t.read_text(), re.M
 names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
              "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
-             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_ttyd_ws_auth.py"):
+             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_ttyd_ws_auth.py",
+             "test_weaver_registry_check.py", "test_guard_proxy_go_otel.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()
@@ -189,6 +200,15 @@ def tgz(member: str, data: bytes) -> bytes:
     return buf.getvalue()
 
 
+def txz(member: str, data: bytes) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:xz") as tf:
+        info = tarfile.TarInfo(member)
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
 def zipped(member: str, data: bytes) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -204,6 +224,8 @@ FIXTURES = {
     "alpha-linux_x86_64.tar.gz": tgz("pkg/alpha", b"#!/bin/sh\necho alpha\n"),
     "beta_linux_amd64.zip": zipped("beta", b"#!/bin/sh\necho beta\n"),
     "gamma-linux-amd64": b"#!/bin/sh\necho gamma\n",
+    "epsilon-x86_64-unknown-linux-gnu.tar.xz": txz("epsilon-x86_64-unknown-linux-gnu/epsilon",
+                                                   b"#!/bin/sh\necho epsilon\n"),
 }
 # run-e2e.sh's seven tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
 SEVEN = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd")
@@ -217,6 +239,8 @@ GOOD_LOCK = (
     f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
     f"beta  v2 {sha(FIXTURES['beta_linux_amd64.zip'])} https://fixture.invalid/beta_linux_amd64.zip beta\n"
     f"gamma v3 {sha(FIXTURES['gamma-linux-amd64'])} https://fixture.invalid/gamma-linux-amd64 -\n"
+    f"epsilon v5 {sha(FIXTURES['epsilon-x86_64-unknown-linux-gnu.tar.xz'])} "
+    "https://fixture.invalid/epsilon-x86_64-unknown-linux-gnu.tar.xz epsilon-x86_64-unknown-linux-gnu/epsilon\n"
 )
 BAD_LOCK = (
     f"alpha v1 {'0' * 64} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
@@ -256,11 +280,12 @@ with tempfile.TemporaryDirectory() as t:
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
     check(f"a lock whose artifacts match installs every tool (exit {r.returncode})", r.returncode == 0,
           r.stdout + r.stderr)
-    for name, body in (("alpha", b"echo alpha"), ("beta", b"echo beta"), ("gamma", b"echo gamma")):
+    for name, body in (("alpha", b"echo alpha"), ("beta", b"echo beta"), ("gamma", b"echo gamma"),
+                       ("epsilon", b"echo epsilon")):
         b = vdir / ".tools" / "bin" / name
         check(f"{name} is in .tools/bin, executable, holding the archive's member",
               b.is_file() and os.access(b, os.X_OK) and body in b.read_bytes())
-    check("each artifact was downloaded once", len(curl_calls(tmp)) == 3, str(curl_calls(tmp)))
+    check("each artifact was downloaded once", len(curl_calls(tmp)) == 4, str(curl_calls(tmp)))
     first = len(curl_calls(tmp))
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
     check(f"a second run reuses the verified downloads and fetches nothing (exit {r.returncode})",
@@ -300,7 +325,7 @@ with tempfile.TemporaryDirectory() as t:
 print("== run-e2e-tools.sh stops before any test when it cannot have its tools ==")
 NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n'
 NODE22 = '#!/bin/sh\ncase "$1" in -p) echo 22 ;; --version) echo v22.11.0 ;; esac\n'
-PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n"}
+PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n", "xz": "#!/bin/sh\nexit 0\n"}
 
 
 def uv_listing(browsers: pathlib.Path, installed: bool) -> str:
@@ -414,7 +439,8 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
     check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and ttyd could not be fetched" in r.stderr,
+          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd and weaver could not be "
+          "fetched" in r.stderr,
           r.stderr)
     check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
     check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))
