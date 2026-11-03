@@ -16,7 +16,7 @@ uses), plus the Argo CD chart at the version and values infra/deploy-full-idp.sh
 image it finds to a row. A row covers a rendered reference when its ref is the reference; when its ref, with the
 root's `{{.Values.imageRegistry}}` filled in with the default, is the reference; or when the reference pins a digest
 and the row's digest is that same name@sha256 (a kustomize image name such as `llm-guard`, whose row records what it
-is set to). The rows' columns are test_images_lock.py's to judge, and save is mirror-images.sh's.
+is set to). The rows' columns are test_images_lock.py's to judge, and the save is test_images_saved.py's (#836).
 """
 from __future__ import annotations
 

@@ -13325,3 +13325,38 @@ the cluster up.
 verify/run-tests.sh`, ran 241 tests, all green, `test_datadog_pool_row.sh` among them, then "53 checks ran (the
 offline suite and 52 tier tests) in 24m44s" and "ALL E2E TOOLS TIER CHECKS GREEN". `shellcheck` is clean on the new
 script and its test. No dependency was added.
+## 2026-11-03 · #836 · A test holds #603's save: every row images.lock owes a tarball is dated and in the archive
+
+**Context.** #603 asks to record the digests of the images this workshop depends on and to save them, starting with
+laiyer/llm-guard-api:0.3.16. The digests are held by `verify/test_images_lock.py` and `verify/test_images_lock_render.py`,
+but no test checked the save: the first accepts `-` in the saved column, and all 70 rows that owe a tarball still
+carry it. Test review run 16745 filed this gap as #836.
+
+**The test, split by need.**
+- `verify/images_saved.py` is the judge. A row owes a save unless mirror-images.sh `save` skips it (a not-an-image:
+  row, or a build: row with digest `-`). A row is saved when its saved column is a date and the archive's
+  `manifest.tsv` has a line for its ref at its current digest (the part after the @ for a name@sha256 row), and that
+  line's file is in the archive and hashes to the file_sha256 it recorded. Matching on the current digest matters:
+  save keeps the old date in the saved column when a digest moves, so a date alone would vouch for a copy of an
+  image that was never saved.
+- `verify/test_images_saved.py` is `# SUITE: e2e`, not in the tools tier. It reads images.lock and the archive at
+  mirror-images.sh's `MIRROR_IMAGES_DEST`, default `~/repos/private/image-archive` on netcup, under michael's home,
+  which the gate host cannot read. It names laiyer/llm-guard-api:0.3.16 first, then every owed row, and fails with
+  the archive's path when the archive or its manifest is missing.
+- `verify/test_images_saved_judge.py` runs offline. It holds the judge to fixture archives: a real save, a name@sha256
+  row and one good line among stale ones pass. `-`, a bumped digest, a missing, empty or swapped file, an undated
+  line, a path outside the archive and a malformed manifest each fail. It also runs `test_images_saved.py` whole,
+  once on an absent archive (exit 1, path named, the llm-guard-api row failed by name) and once in a fixture repo
+  whose lock is fully saved (exit 0, until one tarball changes).
+
+The docstrings of the two images.lock tests now point at this test for the save.
+
+**Live check (run 16818).** `python3 verify/test_images_saved.py` on this tree exits 1. Its four failing checks are
+the archive directory, its manifest.tsv, laiyer/llm-guard-api:0.3.16 and "no row left unsaved (70 of 70)". That is
+the criterion as it stands: #603's save has not run. Through sources, `repo-ls private/image-archive` still answers
+"not a directory". This run cannot write under michael's home and has no Docker, so it cannot save.
+
+**Not yet run where it can pass.** As michael on netcup, in this repo on staging:
+`~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .`, then commit the dates it writes into
+images.lock and run `python3 verify/test_images_saved.py` there. That is #603's remaining step (llm-coding-workflow#372
+is the fleet-wide save). Until then the hand-run `bash verify/run-e2e.sh` fails on this test, as it should.

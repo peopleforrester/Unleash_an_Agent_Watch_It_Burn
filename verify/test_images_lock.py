@@ -13,7 +13,8 @@ This check finds references the way `mirror-images.sh refs` does (Dockerfile FRO
 tracked files, dropping what cannot be an image) and holds each to a row, and each row to the rule's columns:
 a known source kind, a build: path that exists, a sha256 digest or name@sha256 where one is due, a digest that
 agrees with the one pinned in the reference, and saved either a date or the - it carries before save runs. It
-does not require the date: that is the netcup step, and `mirror-images.sh check .` is the check that owes it.
+does not require the date: that is the netcup step, and test_images_saved.py (SUITE: e2e, #836) is the check that
+owes it, against the archive the save writes.
 The declared llm-guard-api row must also carry the digest VERSIONS.lock pins.
 """
 from __future__ import annotations
