@@ -11757,3 +11757,8 @@ decisions.md took the later entries by append. Of the files this change uses, on
 moved (#810's session-window monitor), and `read_keys` and `Datadog.call`, the two parts `agent_obs_flow.py` calls,
 are unchanged. No code differs from run 16661's commit. Run 16685's session files are mode 640, group `hecaton`, like
 the earlier runs', so the live run is still owed.
+The suites on 3787f6c, run 16685: `bash verify/run-e2e-tools.sh` ran the offline suite, 233 tests ending `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then 47 tier tests. One failed, `test_image_version_tags.py`, on two checks: the
+web-terminal tag CI pushed over (the same red as above), and `watch-it-burn:sample-app-nginx-1.27.5`, which ghcr.io
+answers 404 because #814's retag needs a ghcr.io write that #814 escalated. Neither touches anything this change does. The first attempt's log was in /tmp, which was cleared before the run read its
+result, so the suite ran a second time with its log under the run's own TMPDIR, and those are its results.
