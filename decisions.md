@@ -10676,6 +10676,7 @@ fix needs a ghcr.io write and the signing key and is in run 16420's follow-up. R
 the background with nothing polling it, so run 16549 ran it again and polled it to the end (about 25 minutes on a
 shared box).
 ## 2026-11-03 · #803 · The witch-name repin is guard-proxy 88b9b52, one pin for #803 and #744, and the gitlink is Michael's
+## 2026-11-03 · #803 · The witch-name repin is guard-proxy 88b9b52, one pin for #803 and #744
 
 **The pin.** `gitops/ai-layer/guard-proxy` moves from fb6e2bf to 88b9b52 (`88b9b5229312d785331237474b82bab1d5d31402`),
 on guard-proxy-agenticburn main, CI green in run 41348271248. It contains 6f2de73, guard-proxy-agenticburn#34: `/chat`
@@ -10694,20 +10695,18 @@ a1d391f) found fb6e2bf already carries it and left the pin, naming the 88b9b52 r
 (485ee26, run 15656) made exactly this repin and was refused for the gitlink. So one pin satisfies both: 88b9b52 holds
 #25's reply and #34's forwarding, and #744 needs no pin of its own.
 
-**Not in this commit: the gitlink.** Hecaton's forbidden gate refuses any gitlink change from a run (question 766,
-"Michael pins, a run does the rest"), so the move and the checksum bump are left for Michael. The exact commands are
-in run 16538's report. Until they land, `verify/test_chat_witch_name.py` fails at fb6e2bf, as it is meant to, on four
-checks: the pin contains 6f2de73, the agent receives two text parts, the second carries the name, and every name the
-storefront assigns is forwarded. `bash verify/run-tests.sh` is red on this branch for that test alone. In a scratch
-worktree with the gitlink at 88b9b52 and the checksum bumped, the test passes, and `bash verify/run-tests.sh` exits 0
-(227 tests), `test_chat_turn_cancel.py`, `test_c7_badge_grants.py`, `test_proxy_checksum.py` and `test_finale_cap.py`
-among them. There `bash verify/run-e2e-tools.sh` ran 45 checks and failed two, both already red on staging 9bbc835:
-- `test_image_version_tags.py` found `verify/test_tool_pin_live_check.py`'s stand-in Deployment (b28d5c1, #480) naming
-  `watch-it-burn:workshop-mcp@...` rather than the pinned tag. This commit gives the stand-in
-  `workshop-mcp-mcp-1.29.1@...`. The live-check round trip still passes, and the reference check now passes.
-- The same test's ghcr.io check: `web-terminal-ttyd-1.7.7` serves `sha256:0b72ecc7...`, not the pinned `68004fb5`,
-  because CI pushed over the tag. That is the red #746, #775 and #798 recorded on 2026-11-03. It is registry state,
-  and nothing here touches an image.
+**The gitlink is Michael's commit, 6d8505a.** Hecaton's forbidden gate refuses any gitlink change from a run
+(question 766, "Michael pins, a run does the rest"), so run 16538 wrote the test and this entry and left the move. Its
+commits failed validation because `verify/test_chat_witch_name.py` was red at fb6e2bf, as it was meant to be. Michael
+then landed 6d8505a on staging, which moves the gitlink to 88b9b52 and `checksum/proxy-py` to `5ef84f383407`. Run 16562
+ported run 16538's two commits onto 6d8505a unchanged except for this paragraph, and the test passes at the pin.
+While the pin was still at fb6e2bf, the test failed on four checks: the pin contains 6f2de73, the agent receives two
+text parts, the second carries the name, and every name the storefront assigns is forwarded.
+
+`verify/test_tool_pin_live_check.py` also changes here. Run 16538's scratch run at 88b9b52 found that
+`test_image_version_tags.py` failed on staging 9bbc835 because that file's stand-in Deployment (b28d5c1, #480) named
+`watch-it-burn:workshop-mcp@...` rather than the pinned tag. The stand-in now names `workshop-mcp-mcp-1.29.1@...`. The
+live-check round trip still passes, and so does the reference check.
 
 **What changed.**
 - `verify/test_chat_witch_name.py` (new, offline) checks that the pinned guard-proxy contains 6f2de73, as
