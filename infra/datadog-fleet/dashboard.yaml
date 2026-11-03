@@ -95,7 +95,7 @@ widgets:
               aggregator: sum
             - data_source: metrics
               name: cost
-              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
+              query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
           formulas:
             - formula: agent

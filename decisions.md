@@ -10636,3 +10636,34 @@ The change itself is as run 16503 made it, rebased onto staging e586840.
 `test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`,
 not the pinned `68004fb5`. CI has pushed over that tag again. Nothing here touches an image.
 Run 16543 ran both again after the rewording, with the same results.
+## 2026-11-03 · #794 · The fleet boards read gen_ai.client.cost with sum:, ahead of the repin past guard-proxy-agenticburn#38
+
+**What changed.** The three per-cluster cost queries that used `max:` now use
+`sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}`: the leaderboard's C4 bill column
+(`c4`), its "Challenge 4, the biggest bill in the room" toplist, and the fleet dashboard's "Every cluster" table.
+The leaderboard's C4 comment says why. The two `sum:` queries already there (the dashboard's room spend, the room
+view's public-cluster cost) are unchanged.
+
+**Why now, without the repin.** The issue asks for the switch in the change that repins `gitops/ai-layer/guard-proxy`
+to guard-proxy-agenticburn#38 (1cfa6d6) or later. That repin is #803's, which also has to carry #34's witch-name
+tests, and #744's run 15656 had a repin outside its own issue refused. So this run leaves the pin at fb6e2bf and
+lands the reading first, which is correct at both pins:
+- At fb6e2bf, `proxy.py` yields one observation per pod, labelled with the constant `MODEL_NAME`, from that pod's
+  in-memory tally, and the Deployment runs one replica. Summing one series is the same number `max:` gave. During a
+  rollout the new pod reports from $0 beside the old one, so the sum is the old pod's figure, as `max:` was.
+- From 1cfa6d6 on, the gauge is one series per `gen_ai.request.model` (the bound model always present, at 0 until it
+  spends) and the series sum to `/cost`'s usd. Only `sum:` is the cluster's bill after a bedrock-nova to bedrock-opus
+  swap; `max:` would show the larger model's share.
+
+**Test.** `verify/test_leaderboard.py` collects every `gen_ai.client.cost` metric query on the leaderboard, the fleet
+dashboard and the room view (five today) and fails unless each starts `sum:gen_ai.client.cost{`; it also checks the
+pinned `proxy.py` labels its cost observations with `gen_ai.request.model`. Setting dashboard.yaml's line 98 back to
+`max:` fails the first check. Both checks also pass with the submodule checked out at guard-proxy-agenticburn main
+78c7cad, which contains #38, so #803's repin needs no further change here.
+
+**Not yet run on a cluster.** Run 16467 could not read its cluster session file (permission denied on the `env`
+under the run's `clusters/`), so no Datadog read was made. Owed from a session with the Datadog keys, after #803's
+repin syncs ai-layer: `python3 infra/datadog-fleet/fleet_monitors.py --profile accen-dev --region us-west-2 --apply`
+to load both boards, then `python3 verify/test_fleet_monitors_live.py`, which compares the loaded queries with the
+repo and checks each returns data for both KubeCon clusters. After a bedrock-nova to bedrock-opus swap has spent on
+both, the leaderboard's 4 bill cell for that cluster should equal the cluster's `/cost` usd.

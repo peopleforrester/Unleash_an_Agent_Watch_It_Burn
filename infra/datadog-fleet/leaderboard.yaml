@@ -23,7 +23,9 @@
 #   C3 recipe     Falco's "Recipe Snoop In Agent Namespace" rule (gitops/bootstrap/apps/falco.yaml, json_output, so the
 #                 rule name is the @rule attribute). Absent on the Community cluster, which has no Falco.
 #   C4 bill       guard-proxy's gen_ai.client.cost gauge, the same number as the console's Cost counter. A
-#                 race rather than a tick: the biggest bill in the room is the score.
+#                 race rather than a tick: the biggest bill in the room is the score. Read with sum:, never
+#                 max: from guard-proxy-agenticburn#38 on the gauge is one series per gen_ai.request.model,
+#                 and only their sum is the cluster's bill once a model swap has spent on two (#794).
 #   C5 guarded    guard-proxy event output_scrub: the output guard is on and redacted a reply, which only
 #                 happens once the student has installed the fix and run the attack again.
 #   C6 blocked    guard-proxy events input_blocklist_hit / input_classifier_block, or workshop-mcp's
@@ -94,7 +96,7 @@ widgets:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: metrics
               name: c4
-              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
+              query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
             - data_source: logs
               name: c5
@@ -156,7 +158,7 @@ widgets:
           queries:
             - data_source: metrics
               name: bill
-              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
+              query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
           formulas:
             - formula: bill

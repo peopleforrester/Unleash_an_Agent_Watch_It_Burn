@@ -124,6 +124,16 @@ check("C3: Falco runs in the security namespace the query filters on",
 proxy = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
 check("C4: guard-proxy exports gen_ai.client.cost", '"gen_ai.client.cost"' in proxy
       and "gen_ai.client.cost" in queries.get("c4", {}).get("query", ""))
+# guard-proxy-agenticburn#38 splits the gauge into one series per gen_ai.request.model, which sum to the cluster's
+# /cost; max: would show only the biggest model's share after a model swap (#794). Every board that reads it, the
+# fleet dashboard and the room view included, sums it.
+room = fm.load_dashboard(REPO / "infra/datadog-room/room_view.yaml")
+cost_queries = [q for d in (board, fleet, room) for q in re.findall(r'"query":\s*"([^"]*gen_ai\.client\.cost[^"]*)"',
+                                                                    json.dumps(d))]
+check(f"C4: every gen_ai.client.cost query sums its series ({len(cost_queries)} queries)",
+      len(cost_queries) >= 5 and all(q.startswith("sum:gen_ai.client.cost{") for q in cost_queries))
+check("C4: the pinned guard-proxy labels each cost series with gen_ai.request.model",
+      re.search(r'Observation\([^)]*"gen_ai\.request\.model"', proxy) is not None)
 check("C5/C6: guard-proxy is a Deployment in the agent bundle", "guard-proxy" in deployments)
 check("C5: guard-proxy logs event output_scrub when the output guard redacts",
       'extra={"event": "output_scrub"}' in proxy and "@event:output_scrub" in search.get("c5", ""))
