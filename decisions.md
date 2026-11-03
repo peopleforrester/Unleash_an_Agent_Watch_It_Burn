@@ -8476,6 +8476,18 @@ differs from the `d6acd503…` those entries saw, so the tag has been pushed ove
 this change, which touches only this file. #770's offline checks, `test_ttyd_ws_auth.py` and
 `test_check_tls_shell_probe.sh`, pass in that run.
 
+**Run 16748, the re-dispatch after 16487's work merged as `abe60c6e1fd1`.** Same block, so the live test is still
+owed. This run's user is `hecaton-s2-claude-certkraken` (groups `hecaton-s2-claude-certkraken`, `hecaton-runs`,
+`hecaton-tools`), and its `clusters/` env, kubeconfig and AWS files are again mode 640, group `hecaton`. The cause is
+hecaton#508: hecaton's prepare step chmods `clusters/` to 0750, which clears the setgid bit the run directory
+passes down, so the files land in group `hecaton`. That issue is still open; its fix, run 16539's
+`agent/508-16539` at `35a091a7f945`, failed hecaton's validation and did not merge. At 18:55 UTC on 2026-11-03
+check-tls was green again, the same seven PASS lines with the cert valid 76 more days and the `tty` probe answering
+502. The live test failed the same four prerequisites on
+`open /var/lib/hecaton/runs/16748/clusters/kubeconfig: permission denied`, so it read no Secret and started no shell.
+A re-dispatch of #785 before hecaton#508 lands will hit this block again. The issue waits on hecaton#508, and the
+command above is still the one to run.
+
 ## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
 
 **Question 899:** Should the PR-gated apply path for the attendee fleet in #201 (a pull request runs a Terraform
