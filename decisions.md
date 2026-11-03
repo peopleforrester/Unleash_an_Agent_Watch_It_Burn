@@ -11380,3 +11380,31 @@ ran 231 tests, all green, `test_policy_spec.py` among them. `bash verify/run-e2e
 kustomize changes. The only red was `test_image_version_tags.py`: ghcr.io serves
 `watch-it-burn:web-terminal-ttyd-1.7.7` at sha256:0b72ecc7… instead of the pinned sha256:68004fb5…. That is the
 web-terminal digest red the #794 entry above records, and this change does not touch it. No dependency was added.
+## 2026-11-03 · #811 · A test for #783's "cause named in a comment" criterion
+
+Test review run 16093 found that nothing checked #783's first criterion, "The cause of Agent Observability receiving
+no BurritoBot spans since 2026-11-01 ~03:30 UTC is named in a comment on this issue." That is because the comment is
+on GitHub, not in the tree. The criterion holds: hecaton's run-report comment on #783 (issuecomment-6578827445) and its
+merge comment name the cause. #746's collector change (241f8e6) sent Agent Observability a copy of each trace under
+the original trace id and marked every APM span dd_llmobs_enabled false, and an explicit false on any span stops
+conversion of the whole trace.
+
+`verify/test_agent_obs_cause_comment.py` (tools tier, new) follows #659's `test_dispatched_runs_cause_comment.py`. It
+asks api.github.com for #783's comments, anonymously because the repo is public, and checks that one comment by
+hecatongithub[bot] or peopleforrester names every part of the cause: #746, the commit, the copy for Agent
+Observability, the original trace id, APM's spans marked dd_llmobs_enabled false, and the explicit false that vetoes
+the whole (or entire) trace. The commit comes from the "**The cause.**" paragraph of decisions.md's 2026-11-02 #783
+entry, so the comment and the record have to name the same change. The test also checks that the entry still says the
+copy kept the original trace id and quotes Datadog's veto, and that `transform/llmobs_one_root` in
+`gitops/otel-collector/values.yaml` still sets the copy's trace id from the SHA-256 of the original. When a check
+fails, it prints the closest comment and what that comment leaves out. It fails, with the reason, if GitHub does not
+answer or refuses the read, for example after the 60 anonymous requests an hour are used up. That is the same
+exposure #659's test has, and the two together spend two of the 60.
+
+**The test shows it can fail.** Two temporary copies were run and then deleted. Pointed at #633, it failed the cause
+check and listed all six parts as missing from #633's closest comment. With decisions.md's cause commit changed to
+0cef7b6, it failed the cause check on #783's comment for leaving out commit 0cef7b6.
+
+**Tests.** New: test_agent_obs_cause_comment. No existing test changed. PROGRESS.md has a #811 bullet.
+
+**Not yet run on a cluster.** Nothing is owed. The test needs the network only.
