@@ -362,14 +362,20 @@ rows = "".join("<td class=\"body\">%s</td>" % html.escape(b) for b in state["bea
 print('<div class="big" id="beacon-count" data-count="%d">%d</div>%s' % (n, n, rows))
 '''
 
-# A fake clock, so the C7 fallback's waits cost no real time: sleep advances it, `date +%s` reads it.
+# A fake clock, so the C7 fallback's waits cost no real time: sleep advances it, `date +%s` reads it. A run that
+# waits out a whole window (nothing it polls for ever comes) sets STUB_SLEEP_STEP, and each sleep then advances the
+# clock that many seconds, whatever it was asked: the script still waits its full window, in a few polls instead of
+# one every 3 s. Each poll starts about six processes, so 40 of them took past 120 s on a loaded host (#801).
 STUB_SLEEP = r'''#!/usr/bin/env python3
 import json, os, sys
 path = os.environ["STUB_STATE"]
 state = json.load(open(path))
-state["clock"] += float(sys.argv[1])
+state["sleeps"].append(float(sys.argv[1]))
+state["clock"] += float(os.environ["STUB_SLEEP_STEP"] or sys.argv[1])
 json.dump(state, open(path, "w"))
 '''
+SLEEP_STEP = 30
+POLL_SECONDS = 3  # the C7 fallback's POLL_SECONDS: what each sleep must still ask for
 STUB_DATE = r'''#!/usr/bin/env python3
 import json, os, sys
 if sys.argv[1:] == ["+%%s"]:
@@ -512,9 +518,10 @@ def with_evil(names):
     return tools
 
 
-def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, output=False):
+def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, output=False, step=None):
     """Runs one fallback against a fresh stub cluster, whose C7 rule starts as <rule>, its Agent tools as <tools>
-    (the committed ones by default) and its output guard as <output>. Returns (rc, output, log, state, tmpdir files)."""
+    (the committed ones by default) and its output guard as <output>, and whose clock moves <step> seconds a sleep
+    (what the sleep asks, by default). Returns (rc, output, log, state, tmpdir files)."""
     tools = AGENT_TOOLS if tools is None else tools
     served = sorted(next(t["mcpServer"].get("toolNames") or [] for t in tools if t["mcpServer"]["name"] == "evil-mcp"))
     work = SCRATCH / f"run-{len(list(SCRATCH.glob('run-*')))}"
@@ -536,11 +543,12 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, out
         "chats": 0, "deployments": [], "created_images": [], "created_manifests": [],
         "rule": rule, "served": rule, "rule_at": -1000, "clock": 0, "toggles": [], "gateway": [],
         "tools": tools, "patches": [], "pending": None, "patched_at": 0, "generation": 7, "served_tools": served,
-        "asks": [], "ticket_reads": []}))
+        "asks": [], "ticket_reads": [], "sleeps": []}))
     (work / "log").write_text("")
     env = {"PATH": f"{work / 'bin'}:{os.environ['PATH']}", "HOME": str(work), "TMPDIR": str(work / "tmpdir"),
            "STUB_LOG": str(work / "log"), "STUB_STATE": str(work / "state.json"),
-           "STUB_FIXTURE": str(work / "fixture.json"), "STUB_SCENARIO": scenario, "STUB_CONTEXT": CONTEXT}
+           "STUB_FIXTURE": str(work / "fixture.json"), "STUB_SCENARIO": scenario, "STUB_CONTEXT": CONTEXT,
+           "STUB_SLEEP_STEP": "" if step is None else str(step)}
     if with_context:
         env["CONTEXT"] = CONTEXT
     GATEWAY.update(state=str(work / "state.json"), scenario=scenario)
@@ -566,7 +574,7 @@ try:
               all("--context" in c and c[c.index("--context") + 1] == CONTEXT for c in log if c[:1] != ["curl"]))
         check(f"{beat} writes nothing to TMPDIR", not tmpfiles, tmpfiles)
 
-        rc_open, out_open, log_open, state_open, _ = run(script, argv, "open")
+        rc_open, out_open, log_open, state_open, _ = run(script, argv, "open", step=SLEEP_STEP)
         check(f"{beat} on an open cluster: exit 1 and FAIL lines",
               rc_open == 1 and "  FAIL  " in out_open and "NOT PROVEN" in out_open, out_open)
 
@@ -640,14 +648,25 @@ try:
                   "sentinel came back" in out_open, out_open)
             check("C7 on an open cluster still puts the rule back",
                   state_open["rule"] == C7_OPEN and state_open["toggles"][-1:] == ["guard-mcp-off"], state_open)
+            check(f"C7 polls every {POLL_SECONDS} s (readonly POLL_SECONDS={POLL_SECONDS})",
+                  f"readonly POLL_SECONDS={POLL_SECONDS}\n" in TEXT[C7] and state["sleeps"]
+                  and set(state["sleeps"] + state_open["sleeps"]) == {POLL_SECONDS},
+                  (state["sleeps"], state_open["sleeps"]))
+            # An open run's wall-clock is the processes each poll starts, so bounding its polls is what keeps it well
+            # inside run()'s timeout on a loaded host (#801): one call that leaks, then 120 / SLEEP_STEP + 1 that do.
+            reads = [g for g in state_open["gateway"] if g[1] == "tools/call"]
+            check(f"C7 on an open cluster waits out its 120 s window in at most {120 // SLEEP_STEP + 2} calls, "
+                  f"its clock moving {SLEEP_STEP} s a sleep", 2 <= len(reads) <= 120 // SLEEP_STEP + 2, state_open["gateway"])
             rc_n, out_n, _, state_n, _ = run(script, argv, "guarded", rule=C7_NARROWED)
             check("C7 on a cluster it found narrowed: PROVEN, and the rule is narrowed again after",
                   rc_n == 0 and "C7 PROVEN" in out_n and state_n["rule"] == C7_NARROWED
                   and state_n["toggles"] == ["guard-mcp-off", "guard-mcp-on", "guard-mcp-on"], out_n)
-            rc_d, out_d, _, state_d, _ = run(script, argv, "down")
+            rc_d, out_d, _, state_d, _ = run(script, argv, "down", step=SLEEP_STEP)
             check("C7 does not count a gateway that stops answering as a refusal",
                   rc_d == 1 and "did not answer" in out_d and "  PASS  with the rule narrowed" not in out_d
                   and state_d["rule"] == C7_OPEN, out_d)
+            check(f"C7 on a gateway that stops answering waits out its 120 s window in at most {120 // SLEEP_STEP} sleeps",
+                  len(state_d["sleeps"]) <= 120 // SLEEP_STEP, state_d["sleeps"])
             # A workshop cluster (lab-bootstrap's profile is not admin): the toolNames list, through the weather question (#545).
             rc_w, out_w, log_w, state_w, tmp_w = run(script, argv, "workshop")
             check("C7 on a workshop cluster: exit 0, PASS lines, no FAIL",
@@ -702,11 +721,14 @@ try:
             check("C7 on a workshop cluster does not count an agent that stops answering as the list",
                   rc_wd == 1 and "no answer" in out_wd and "  PASS  with the list narrowed" not in out_wd
                   and evil_names(state_wd) == EVIL_ALL, out_wd)
-            rc_wr, out_wr, _, state_wr, _ = run(script, argv, "workshop-norollout")
+            rc_wr, out_wr, _, state_wr, _ = run(script, argv, "workshop-norollout", step=SLEEP_STEP)
             check("C7 on a workshop cluster where kagent never rolls the agent: NOT PROVEN, no ask on the stale pod",
                   rc_wr == 1 and "  FAIL  kagent rolls deploy/workshop-agent for the new list" in out_wr
                   and all(a["served"] == EVIL_ALL and a["listed"] == EVIL_ALL for a in state_wr["asks"])
                   and evil_names(state_wr) == EVIL_ALL, out_wr)
+            check(f"C7 on a workshop cluster where kagent never rolls waits out its 180 s in at most {180 // SLEEP_STEP} "
+                  f"sleeps of {POLL_SECONDS} s", state_wr["sleeps"] and len(state_wr["sleeps"]) <= 180 // SLEEP_STEP
+                  and set(state_wr["sleeps"]) == {POLL_SECONDS}, state_wr["sleeps"])
             rc_wu, out_wu, _, state_wu, _ = run(script, argv, "workshop", tools=with_evil([]))
             check("C7 on a workshop cluster with an empty evil-mcp list (every tool): FAIL, list left alone",
                   rc_wu == 1 and "which neither toggle flag would put back" in out_wu and state_wu["patches"] == []

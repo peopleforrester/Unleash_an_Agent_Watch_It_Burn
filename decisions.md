@@ -10507,3 +10507,26 @@ profile; the exact commands are in the spike README's "Still open: the cluster c
 group `hecaton`, which the run's user is not in, so neither kubectl nor aws could read them. The issue's open parts are
 unchanged. They are kagent's discovery and the agent's list_tools seen through tool-pin, kagent's handling of the
 deny's JSON-RPC error, and then the badge decision, which goes in this file from the record.
+## 2026-11-03 · #801 · The C7 fallback's open runs wait out their windows in a few polls of the stub's fake clock
+
+**The flake.** Hecaton run 15924 ran `bash verify/run-e2e-tools.sh` with the host's load average near 18 on 16 cores.
+`verify/test_challenge_fallbacks.py` raised `subprocess.TimeoutExpired`: the C7 fallback,
+`challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`, ran past `run()`'s 120 s timeout on the stub's "open"
+cluster. The same file passed alone right after.
+
+**What the time went on.** No real waits were left: the stub's `sleep` and `date` already keep a fake clock. Timing
+each `run()` on this host (load about 6 to 9) put the open run at 9 s, the gateway-down run at 13 s and the
+kagent-never-rolls run at 7 s, against 2 s or less for each other run. Those three are the runs where nothing the
+script polls for ever comes, so it waits out its whole window, 120 s or 180 s, one poll per 3 s sleep: 40 to 60
+polls. Each poll starts about six processes: the stub kubectl, the MCP exchange it runs, the stub `date`, the
+script's `json_get` and the stub `sleep`. Under load process starts slow down, and 40 polls went past 120 s.
+
+**The fix, in the test only.** The fallback is unchanged, so what a presenter runs is what is tested. `run()` takes a
+`step`, and for those three runs the stub's `sleep` moves the fake clock 30 s, whatever it was asked. The script
+still waits its full window and prints "after 120 s"; it gets there in 4 to 6 polls. The stub records what each sleep
+asked. New checks hold the script to 3 s polls (`readonly POLL_SECONDS=3`, and every recorded sleep), and bound the
+polls in each of the three runs, so the process count is fixed and does not depend on load. Afterwards the three
+runs take about 2 s each, and the guarded runs are unchanged: their reload-delay check still uses the 3 s clock.
+Raising the timeout alone was ruled out, as the issue asks.
+
+**Not yet run on a cluster.** Nothing here touches a cluster, and nothing is owed on one.
