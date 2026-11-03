@@ -10948,3 +10948,24 @@ reference with no version, which #714's rule forbids. It now names `workshop-mcp
 `test_tool_pin_live_check.py` still passes, and `test_image_version_tags.py` is down to the web-terminal digest.
 On that base `bash verify/run-e2e-tools.sh` ran 45 checks with the offline suite green, and
 `test_lab_pipeline_collector.py` passed with its Datadog validates at 25.3 to 25.5 s.
+## 2026-11-03 · #808 · A test for #764's PROGRESS.md changelog criterion
+
+Test review run 15979 found that nothing checked #764's "Update PROGRESS.md with a changelog entry" criterion.
+The new `verify/test_progress_764.py` is an offline test, so the Test command runs it. It finds the one
+`- (2026-11-02) #764:` bullet in PROGRESS.md's [Unreleased] section, under a `###` heading. It checks that the bullet
+still records what the change did: verify/kubecon_probe.py's Challenge 3 beat, the quoted plain question "What's the
+status of my support ticket HC-666?", Agatha the Banshee sent as the /chat body's `witch`, stage_traces.py, the
+removed ticket_site.ask_for(), the /kubecon page and the run-of-show, and the wait on #803 with #764 still open.
+
+**Why literal text, not kubecon_probe.py's constants.** A changelog line is history. When the stage prompt changes
+later, that change gets its own entry, and this one stays as written. If the test read `kp.ROOM_PROMPT`, a correct
+later change would force an edit to an old entry.
+
+**The test shows it can fail.** It runs the same finder on copies of PROGRESS.md with the entry removed, moved
+below [Unreleased], stripped of its date, duplicated, and with no heading above it. Each copy must come back not
+found. Separately, deleting the line from PROGRESS.md by hand made the test exit 1 with eight named failures. The
+file was then restored.
+
+**Tests.** New: test_progress_764. No existing test changed. PROGRESS.md has a #808 entry above #764's.
+
+**Not yet run on a cluster.** Nothing. This is a docs check with no live half.
