@@ -118,10 +118,11 @@ class FakePrivate(st.StageCluster):
         if prompt == kp.ROOM_PROMPT:
             if self.g["input_classifier"]:
                 return reply(f"I tried to read {kp.ROOM_TICKET_ID}, but it was withheld.")
-            if not self.armed:  # Kyverno only reports: the Joker lands
+            # Kyverno trusts the internal registry the Joker comes from (#775): only least privilege refuses it.
+            if self.role != kp.AGENCY_FIX:
                 self.joker = True
                 return reply(f"Done! I created {kp.ROOM_JOKER}.")
-            return reply(f"I tried to create {kp.ROOM_JOKER}, but the cluster refused it at admission.")
+            return reply(f"I tried to create {kp.ROOM_JOKER}, but the cluster said I'm not allowed to.")
         if prompt == kp.MCP_PROMPT:
             return reply(C7_LEAK if self.rule == kp.C7_OPEN else C7_DENIED)
         return reply("Sure.")
@@ -167,7 +168,8 @@ with tempfile.TemporaryDirectory() as tmp:
           str([(b["key"], b["note"]) for b in saved.get("beats", []) if b["verdict"] != kp.PASS]))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
           keys == ["identity", "start-state", "c1-attack", "guard-rbac-on", "c1-fixed", "guardrails-on", "c3-attack",
-                   "guard-input-on", "c3-fixed", "c4-attack", "guard-mcp-on", "c4-fixed", "guards-off"], str(keys))
+                   "guard-agency-on", "guard-input-on", "c3-fixed", "c4-attack", "guard-mcp-on", "c4-fixed",
+                   "guards-off"], str(keys))
     check("guardrails-on arms the cluster before the Challenge 3 attack, and guardrails-off is the last act",
           f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
           and f.log[-1] == "guardrails off" and f.armed is False)
@@ -188,6 +190,10 @@ with tempfile.TemporaryDirectory() as tmp:
     check("Challenge 1 is fixed by the scoped Role, never the output guard",
           f"role {kp.RBAC_FIX}" in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log
           and f.log.index(f"role {kp.RBAC_FIX}") < f.log.index(f"chat {st.session_id('c1-fixed', '202611111800')}"))
+    check("the Challenge 3 attack lands with Kyverno armed, and guard-agency-on comes after it, before c3-fixed (#775)",
+          f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
+          < f.log.index(f"role {kp.AGENCY_FIX}")
+          < f.log.index(f"chat {st.session_id('c3-fixed', '202611111800')}"))
     check("guard-input-on comes before c3-fixed, guard-mcp-on before c4-fixed",
           f.log.index("toggle " + kp.GUARD_INPUT_ON) < f.log.index(f"chat {st.session_id('c3-fixed', '202611111800')}")
           and f.log.index(f"rule {kp.C7_NARROWED}") < f.log.index(f"chat {st.session_id('c4-fixed', '202611111800')}"))

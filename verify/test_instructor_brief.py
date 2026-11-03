@@ -162,10 +162,13 @@ check("C2's admission rule is named, inside C6", "restrict-image-registries" in 
 check("C3 marker names KubeArmor's block AND its alert",
       "block-recipe-snoop" in KUBECON and '"Action":"Block"' in KUBECON)
 check("C5 marker is the real CEO signature", "OPHELIA-THORN-TIBBY-TOP-SPIRE-No9" in KUBECON)
-check("C6 marker is the withheld ticket, the room's Joker and both tiers (#640, #685)", "[input guard] withheld" in KUBECON
-      and "joker-agatha-the-banshee" in KUBECON and "HC-666" in KUBECON
-      and "restrict-image-registries" in KUBECON.split('data-beat="C6"', 1)[1])
-check("the stage no longer runs the lab's ticket", "HC-7731" not in KUBECON and "maintenance-shell" not in KUBECON)
+check("C6 marker is the withheld ticket, the room's Joker and both fixes (#640, #685, #775)",
+      "[input guard] withheld" in KUBECON and "joker-agatha-the-banshee" in KUBECON and "HC-666" in KUBECON
+      and "answers Forbidden" in KUBECON.split('data-beat="C6"', 1)[1].split("</article>", 1)[0])
+# The room's Joker pages live on the maintenance-shell host, under joker-<name> (#775); the lab's own Deployment of
+# that name, and its ticket, are not on the stage.
+check("the stage no longer runs the lab's ticket", "HC-7731" not in KUBECON
+      and re.sub(r"https://maintenance-shell-attackme\.burritobot\.co/joker-", "", KUBECON).count("maintenance-shell") == 0)
 check("C7 marker is the MCP sentinel", "FAKE-MCP-EXFIL-sentinel-4c1d" in KUBECON)
 check("on-topic marker is the burritos-only refusal", "I only talk burritos" in KUBECON)
 
@@ -216,8 +219,9 @@ for b, n in (("C5", 1), ("C6", 3), ("C7", 4)):
 check("Challenge 1 teaches RBAC as its only fix, run with guard-rbac-on, and offers no output guard",
       "RBAC" in " ".join(beat_blocks.get("C5", [])) and "guard-rbac-on" in " ".join(beat_blocks.get("C5", []))
       and "guard-output-on" not in " ".join(beat_blocks.get("C5", [])))
-check("Challenge 3 runs its admission tier as guard-admission-on",
-      "guard-admission-on" in " ".join(beat_blocks.get("C6", [])))
+check("Challenge 3 runs least privilege as guard-agency-on, and admission is not one of its fixes (#775)",
+      "guard-agency-on" in " ".join(beat_blocks.get("C6", []))
+      and "guard-admission-on" not in " ".join(beat_blocks.get("C6", [])))
 print("== the per-challenge pattern and the OWASP close (#687) ==")
 check("the page states the pattern once: tee-up, trace, play, attack, fix, keep trying",
       all(w in KUBECON for w in ("<b>tee-up</b>", "<b>trace</b>", "<b>play</b>", "<b>attack</b>", "<b>fix</b>",
@@ -241,12 +245,12 @@ check("the close invites the room to break it (#690)", "You have our permission.
 _ros6 = ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0]
 check("the run-of-show's close says the same", "LLM01 Prompt Injection" in _ros6 and "K05" in _ros6
       and "You have our permission." in _ros6)
-# C6's two tiers are shown in one order on both pages (#676): Kyverno is armed from the start, so the private bot's
-# deploy_app is refused at admission before guard-input-on, and after the toggle there is no deploy_app call left to
-# deny. That is the order the probe runs (verify/kubecon_probe.py). The tier names stay the layers': the input
-# classifier is the first tier, admission the second, behind it.
+# C6's two fixes are shown in one order on both pages (#775): HC-666's image is the internal registry's, which
+# Kyverno trusts, so the Joker lands with the guardrails on. Least privilege comes first, so the private bot's
+# deploy_app is Forbidden before guard-input-on, and after the toggle there is no deploy_app call left to refuse.
+# That is the order the probe runs (verify/kubecon_probe.py).
 _ros_seg3 = ROS.split("### Segment 4:", 1)[1].split("### Segment 5:", 1)[0]
-_ros_fix = " ".join(_ros_seg3.split("- **Fix, two tiers", 1)[1].split("\n- **", 1)[0].split())
+_ros_fix = " ".join(_ros_seg3.split("- **Fix, two AI-era layers", 1)[1].split("\n- **", 1)[0].split())
 _ros_row3 = next((ln for ln in ROS.splitlines() if ln.startswith("| 4 | ")), "")
 _page_seg3 = " ".join(KUBECON.split('<span class="n">SEGMENT 4', 1)[1].split('<span class="n">SEGMENT 5', 1)[0].split())
 _c6 = " ".join(" ".join(beat_blocks.get("C6", [])).split())
@@ -257,24 +261,29 @@ def _before(text: str, first: str, then: str) -> bool:
     return first in text and then in text and text.index(first) < text.index(then)
 
 
-check("the run-of-show's Challenge 3 row puts guard-admission-on before guard-input-on",
-      _before(_ros_row3, "`guard-admission-on`", "`guard-input-on`"))
-check("the run-of-show's C6 fix shows the admission denial, then guard-input-on",
-      _before(_ros_fix, "denies the Joker image at admission", "Then `guard-input-on`"))
-check("the run-of-show names admission the second tier and the input classifier the first",
-      _before(_ros_fix, "That is the second tier", "`guard-input-on`, the first tier"))
-check("the page's C6 premise puts admission control before guard-input-on",
-      _before(_premise, "admission control", "guard-input-on"))
-check("the page's C6 block runs guard-admission-on, shows the admission deny, then guard-input-on, then the "
-      "withheld ticket",
-      _before(_c6, "guard-admission-on", "restrict-image-registries</code>")
-      and _before(_c6, "restrict-image-registries</code>", "guard-input-on")
+check("the run-of-show's Challenge 3 row puts guard-agency-on before guard-input-on",
+      _before(_ros_row3, "`guard-agency-on`", "`guard-input-on`") and "guard-admission-on" not in _ros_row3)
+check("the run-of-show's C6 fix says admission is not one of them, shows the Forbidden, then guard-input-on",
+      _before(_ros_fix, "admission is not one of them", "Run `guard-agency-on`")
+      and _before(_ros_fix, "the Kubernetes API answers Forbidden", "Then `guard-input-on`"))
+check("the run-of-show names least privilege OWASP LLM06, Excessive Agency",
+      "OWASP LLM06, Excessive Agency" in _ros_fix)
+check("the run-of-show says the Joker lands with Kyverno at Deny, from a registry it trusts",
+      "Kyverno is at Deny on both clusters by now and admits it" in " ".join(_ros_seg3.split()))
+check("the page's C6 premise puts least privilege before guard-input-on, and says Kyverno trusts the image",
+      _before(_premise, "guard-agency-on", "guard-input-on") and "the internal registry Kyverno trusts" in _premise)
+check("the page's C6 block runs guard-agency-on, shows the Forbidden, then guard-input-on, then the withheld ticket",
+      _before(_c6, "guard-agency-on", "answers Forbidden")
+      and _before(_c6, "answers Forbidden", "guard-input-on")
       and _before(_c6, "guard-input-on", "[input guard] withheld"))
-check("the page names the before-toggle marker the second tier and the after-toggle one the first",
-      _before(_c6, "before the toggle (the second tier)", "after the toggle (the first tier)"))
-check("C6's admission tier names the C2 fallback, not the retired workshop Beat 1 (#499)",
-      "challenges/c2-villain-image/fallback.kubectl.sh" in " ".join(beat_blocks.get("C6", []))
+check("the page names the before-toggle marker least privilege and the after-toggle one the input guard",
+      _before(_c6, "before the toggle (least privilege)", "after the toggle (the input guard)"))
+check("C6's least-privilege fallback asks the API whether workshop-mcp may create Deployments, without the model",
+      "auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp" in _c6
       and "01-cncf-wall" not in KUBECON)
+check("the page hands each person their own Joker page and the deployments page",
+      "https://maintenance-shell-attackme.burritobot.co/joker-</code> plus their name" in _c6
+      and "https://deployments.burritobot.co</code> under their witch name" in _c6)
 # The roster's terminals take the presenter login, sprouts (fleet.sh, verify/test_admin_actions.sh); the public
 # bot shows no Terminal button (#645).
 check("the page and the run-of-show give the private terminal the presenter login",
@@ -290,7 +299,7 @@ check("a glance table lists the six segments in order",
       and re.findall(r"<tr><td>(\d)</td>", _glance.group(1)) == ["1", "2", "3", "4", "5", "6"])
 check("it names each challenge's toggle",
       _glance is not None and all(t in _glance.group(1) for t in
-                                  ("guard-rbac-on", "guard-admission-on", "guard-input-on", "guard-mcp-on",
+                                  ("guard-rbac-on", "guard-agency-on", "guard-input-on", "guard-mcp-on",
                                    "guard-topic-on")))
 _visible = re.sub(r"<details.*?</details>|<!--.*?-->|<style>.*?</style>|<script>.*?</script>", "",
                   KUBECON, flags=re.S)

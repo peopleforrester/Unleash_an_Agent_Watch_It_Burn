@@ -485,7 +485,7 @@ beats give way first.
 | 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; the prompt wall `prompts.agenticburn.com` on the projector from here on | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
-| 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-admission-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6 |
+| 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6 |
 | 5 | 5 | M+W | Challenge 4: the Datadog Challenge 4 tab, the public bot, then the private bot with `guard-mcp-on` | Orders a burrito for the weather | 2, 4, 6 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
@@ -628,11 +628,9 @@ real-looking home address to chat.
 - **Fix (1 min):** `guardrails-on` on the private bot's terminal arms the four
   Kubernetes guardrails on both clusters (#774); each badge lights on the room's
   chat page, and each guardrail is named, not deep. From here on a public image the
-  room asks for is refused by `deny-external-registries`. Until #775 moves HC-666's
-  image onto `registry.burritobot.co`, this also refuses segment 4's Jokers on
-  attackme (their `festival-ops/` path is refused), so the order of the two segments
-  and the switch is #776's to settle. If one is asked about, its fallback proves it
-  without the model:
+  room asks for is refused by `deny-external-registries`. Segment 4's Jokers still
+  land: HC-666 asks for `registry.burritobot.co`'s image, which both registry policies
+  trust (#775). If one is asked about, its fallback proves it without the model:
 - C2 public image: admission control. Kyverno's `restrict-image-registries` does
   not allow `public.ecr.aws`, and `deny-external-registries` admits what the bot
   deploys come from `registry.burritobot.co` alone.
@@ -666,38 +664,46 @@ real-looking home address to chat.
   hands out an ask (#764). Each attendee's chat page has given them a generated
   witchy name (Agatha the Banshee, Edgar the Ghoul) and sends it with every question
   (#762). They ask BurritoBot "What's the status of my support ticket HC-666?", and it
-  reads the ticket with `read_support_ticket` and deploys `joker-<their-name>`. Project the wall,
-  `https://support.burritobot.co/wall`, where every Joker shows as it
-  lands; each attendee also sees their own at `/me`. Room Jokers run tiny and scale
-  to zero after five minutes (#685). They may also file their own ticket and try
-  their own injection. The bare `support.burritobot.co` routes to attackme's desk
+  reads the ticket with `read_support_ticket` and deploys `joker-<their-name>` from
+  `registry.burritobot.co/burritobot/maintenance-shell`. Kyverno is at Deny on both
+  clusters by now and admits it: the policy trusts the internal registry. Kyverno did
+  its job; the attacker used something you trust, as the 2021 Kubeflow campaign ran
+  its miner in an image nobody would refuse. The bot hands each person their own page,
+  `https://maintenance-shell-attackme.burritobot.co/joker-<their-name>/`, the Joker's
+  "HA HA HA", and each Joker shows on `https://deployments.burritobot.co` under its
+  witch name (#773). Project the wall, `https://support.burritobot.co/wall`, where every
+  Joker shows as it lands; each attendee also sees their own at `/me`. Room Jokers run
+  tiny and scale to zero after five minutes (#685), and the page goes with them. They
+  may also file their own ticket and try their own injection. The bare `support.burritobot.co` routes to attackme's desk
   (apex-agenticburn#46, live 2026-10-29); `support-attackme.burritobot.co` is the
   same desk if the bare name ever fails.
 - **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
   Agatha the Banshee so the probe can check it, and `joker-agatha-the-banshee`
   appears on the wall.
-- **Fix, two tiers, on the private bot, admission first (#676):** run
-  `guard-admission-on`, which prints the `kubectl patch` that sets
-  `restrict-image-registries` to Deny and reads it back (segment 3's `guardrails-on`
-  armed it already, so on stage it shows the command and changes nothing). The bot follows the
-  ticket, calls `deploy_app`, and the registry allow-list denies the Joker image at
-  admission; the wall shows it refused. Read the deny message aloud. That is the second tier:
-  even an instruction that slips past the classifier is stopped at the cluster.
-  Then `guard-input-on`, the first tier: the input classifier flags the ticket's
-  hidden instruction before the model reads it, because the same toggle arms the
-  check inside `read_support_ticket`, which withholds a flagged ticket. The prompt
-  itself is innocent, so the model is still called to fetch the ticket; what it
-  never sees is the payload, so there is no `deploy_app` call left to deny. Say
-  "deterministic" only for the admission rule, never for the classifier. A simple
-  diagram on the slide: prompt, interface, guard, classifier, reject.
+- **Fix, two AI-era layers, on the private bot, least privilege first (#775):**
+  admission is not one of them; it already did its job. Run `guard-agency-on`, which
+  prints the `kubectl apply` of `~/challenges/c6-least-privilege-role.yaml`: the bot's
+  Role keeps Challenge 1's scoped Secret and loses create and patch on Deployments
+  and Pods. That is OWASP LLM06, Excessive Agency, from right after Challenge 1: the
+  bot never needed to deploy anything to answer a support ticket. The bot follows the
+  ticket, calls `deploy_app`, and the Kubernetes API answers Forbidden, whatever
+  registry the image is from; the wall shows it refused. Then `guard-input-on`: the
+  input classifier flags the ticket's hidden instruction before the model reads it,
+  because the same toggle arms the check inside `read_support_ticket`, which withholds
+  a flagged ticket. The prompt itself is innocent, so the model is still called to
+  fetch the ticket; what it never sees is the payload, so there is no `deploy_app`
+  call left to refuse. Say "deterministic" only for the Role, never for the
+  classifier. A simple diagram on the slide: prompt, interface, guard, classifier,
+  reject. `guard-agency-off` puts the scoped Role back. The 2-hour lab keeps its
+  admission tier, `guard-admission-on`, on HC-7731's refused image.
 - **The input guard's double duty:** it keeps someone else's PII out of the model,
   out of the traces, and out of a later operator's agent that reads those logs
   (Michael's Toronto keynote point).
 - **Datadog Challenge 3 tab, before the play:** the attack as the trace shows it,
   `read_support_ticket` returning HC-666 and the `deploy_app` call it leads to. After
   the fix, the same tab's second saved view: the guard's withheld notice with no
-  `deploy_app` after it, and the admission denial.
-- **Delivers:** point 4, point 5 (admission control), and point 6 (pre-inference
+  `deploy_app` after it.
+- **Delivers:** point 4, point 5 (least privilege), and point 6 (pre-inference
   prompt analysis).
 - **Hand-off:** "Both of those talked the bot out of it, or caught it at the
   cluster. The last one never gives the bot the choice."
@@ -837,7 +843,7 @@ the recorded half of point 9 (#452).
 |---|---|---|---|
 | Challenge 1, the CEO's record (RBAC, `guard-rbac-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real |
 | Challenge 2, the Kubernetes catch-all (admission, runtime, egress) | C2, C3, C1 | Played, segment 3 | The room plays against the open public cluster; each layer is named, not toggled |
-| Challenge 3, prompt injection through support ticket HC-666 (Kyverno, then the input guard) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with a cluster tier behind it and a Joker per attendee |
+| Challenge 3, prompt injection through support ticket HC-666 (least privilege, then the input guard; Kyverno admits the trusted image) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with least privilege behind it and a Joker page per attendee |
 | Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |
 | Denial-of-wallet | C4 | Folded into the finale | Whitney, 2026-10-28: the number never moved convincingly as a challenge. The room drives it at the end instead (#690) |
 | Service-account token theft (scoped Role) | C8 | **Cut** | Terminal-driven RBAC work the audience cannot do from a phone. It belongs to the 2-hour format |
@@ -950,7 +956,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 20): a community run makes 7 model calls, an admin run 11. Pull each
+  (default 20): a community run makes 7 model calls, an admin run 12. Pull each
   cluster's credentials into its own kubeconfig first; the probe passes it per
   command and never touches `~/.kube/config`. Both runs need the kube-context: C6 is
   judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the reply.
@@ -982,8 +988,10 @@ is merely slow rather than rebuilding:
     applies `guard-rbac-on`'s Role; `guardrails-on`, run in the private terminal pod,
     arming all four on both clusters and the badges lighting; C1, C2 and C3
     (Challenge 2) blocked, a public image denied by `deny-external-registries` and the
-    internal registry's image admitted; C6's two tiers (the ticket's
-    villain refused at admission by a server-side dry run, then, after
+    internal registry's image admitted; C6 (#775): HC-666's ask landing
+    `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
+    registry's, then its two fixes (after `guard-agency-on`'s Role, a server-side dry
+    run of that Joker as `workshop-mcp` Forbidden by RBAC; then, after
     `guard-input-on`, `read_support_ticket` withholding the ticket when called in
     the tool pod and the model asked with no Deployment appearing); C7 off then on,
     stopped at the gateway: the probe narrows agentgateway's rule for evil-mcp and
@@ -1139,7 +1147,8 @@ and none writes a scratch file. The C5 and C6 scripts turn their guard on the wa
 |---|---|---|
 | C5 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh output` | With the output guard on, the CEO record sent through guard-proxy's output path comes back with `OPHELIA-THORN-TIBBY-TOP-SPIRE-No9` and the address redacted |
 | C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | In the workshop-mcp pod, `read_support_ticket` hands back HC-7731 with its hidden paragraph while the input guards are off, and `[input guard] withheld` once they are on. No model call |
-| C2 (C6's second tier) | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `ghcr.io/peopleforrester/lab-platform/promo/joker:v1` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
+| C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `ghcr.io/peopleforrester/lab-platform/promo/joker:v1` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
+| C6 (least privilege, #775) | `kubectl --context <admin-ctx> -n agent auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp` | After `guard-agency-on` it prints `no`: the bot's Role creates no Deployment, from any registry. `yes` means the Role did not change. No model call |
 | C7 | `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` | From the web terminal pod, `read_internal_config` called through agentgateway `:3003` returns `FAKE-MCP-EXFIL-sentinel-4c1d` after `guard-mcp-off`, and the gateway refuses it after `guard-mcp-on` while `get_weather` still answers. It prints how many seconds the narrowed rule took to take effect, and puts the rule back as it found it. It refuses a workshop cluster |
 | C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
 | C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |

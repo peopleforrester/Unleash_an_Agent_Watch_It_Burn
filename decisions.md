@@ -10147,3 +10147,88 @@ bring-up (`./fleet.sh instructors up all`, which bills the pair at about $24 a d
 "to let" as the first-person-plural connective. The five added lines that used that verb (PROJECT_STATE.md, decisions.md, the run-of-show,
 KUBECON-ABSTRACT-READINESS.md and kubecon_probe.py's docstring) now say "admits", "passes" or "grants" instead. No
 behavior changed; the branch is run 16077's, unchanged otherwise, on the same staging `878b077`.
+
+## 2026-11-03 · #775 · Challenge 3 keeps landing with Kyverno on: HC-666 asks for the internal registry's Joker, and least privilege is its fix
+
+**The spec.** Michael approved #775 as proposed on 2026-11-02 (issue comment 6565190035): HC-666's hidden paragraph
+asks for `registry.burritobot.co/burritobot/maintenance-shell`, which Kyverno admits because the policy trusts that
+registry; the payoff stays the Joker page, with a URL the bot hands over and the Joker on `deployments.burritobot.co`
+under the person's witch name; the two Joker-page lines that would be false are rewritten; Challenge 3's fix becomes
+the input guard and least privilege taking Deployments away from the bot (OWASP LLM06, Excessive Agency); and the
+2-hour workshop keeps working. #774 (the switch, the internal registry) landed on staging at `5c400e8` to `858ffaf`,
+so the wait recorded by runs 16043 and 16125 is over. Their drafts on `agent/775-16043` changed decisions.md alone;
+`verify/draft-drift.sh f64298d origin/staging` names only decisions.md, so nothing was cherry-picked. Their build map
+was re-checked against the current layout and followed where it still held; what differs is below.
+
+**What changed (hecaton run 16464).**
+- `gitops/ai-layer/ticket_site.py`: `ROOM_IMAGE`, `registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0`,
+  is the image HC-666's paragraph asks for, and its last sentence asks the bot to give the customer the web address
+  the deploy result names. `C6_IMAGE` and HC-7731, the 2-hour lab's, are unchanged.
+- The breakout's Joker is a second tag of the same image, `festival-ops/maintenance-shell:busybox-1.38.0-internal`:
+  `images/villains/build.sh joker-internal` lays `joker-web-internal/www/index.html` over joker-web's page. That page
+  keeps the persona and says it came from `registry.burritobot.co`, the registry the cluster trusts, and that an input
+  classifier or a bot that cannot create Deployments would have stopped it. The internal registry's seed copies it,
+  by digest `sha256:0dbe92d4...`, to `burritobot/maintenance-shell:busybox-1.38.0`; images.lock pins it.
+- Each room Joker has its own page, `https://maintenance-shell-<cluster>.burritobot.co/joker-<name>/`. `deploy_app`
+  gives a `joker-*` pod its Deployment's name as hostname under a new headless Service, `jokers`, and labels it
+  `burritobot.co/room-joker`; the console's maintenance-shell server proxies `/joker-<name>/` to
+  `joker-<name>.jokers.agent.svc.cluster.local:8080`, and `published_address` names that page in the deploy reply.
+  The deployments page needed nothing: `record_landing` already credits a `joker-<slug>` Deployment to its witch.
+- Least privilege: `c6-least-privilege-role.yaml` in the challenge-fixes ConfigMap is `c5-scoped-role.yaml` without
+  create or patch on Deployments and Pods. The terminal's `guard-agency-on` applies it and `guard-agency-off` puts
+  `c5-scoped-role.yaml` back, each printing its kubectl (both entrypoint copies, kept byte-identical).
+- workshop-mcp's reaper scales through `deployments/scale`, and every copy of the workshop-agent Role (shipped,
+  c8-broad, c8-scoped, c5-scoped and the new one) grants patch on it.
+- The KubeCon probe's admin run: `c6-admission` is replaced by `c6-lands` (HC-666 lands `joker-agatha-the-banshee` with
+  Kyverno at Deny, one model call), `guard-agency-on`, and `c6-forbidden` (a server-side dry run of that Joker as
+  workshop-mcp is Forbidden by RBAC). An admin run is 12 model calls. `stage_traces.py` seeds c3-attack as landing,
+  then flips guard-agency-on and guard-input-on before c3-fixed. The run-of-show, `/kubecon`, PROJECT_STATE.md,
+  KUBECON-ABSTRACT-READINESS.md and images/villains/README.md say the same.
+- Tests: `verify/test_joker_build_digest.py` (tools tier) rebuilds both Jokers with `build.sh` into crane's own
+  loopback registry and holds each to its images.lock digest and page; nine existing tests follow the new image,
+  beats, Role, reaper path and per-person page.
+
+**Decided here: one page per person.** The approval left shared or per-person to the builder, recommending
+per-person, with a check back to Michael if it added cost. It adds one static headless Service and one console
+location: no object per person, no new grant, no DNS row or certificate (the maintenance-shell host is already
+published). A shared URL would also have shown a person someone else's running Joker after their own was refused,
+which muddles the fix beat. So no question was needed.
+
+**Decided here: the breakout's Joker is its own tag, and its digest was pinned before its first push.** Rewriting
+joker-web's page would make the 2-hour workshop's Joker say admission passed it, which is false there: HC-7731's image
+is on the refused `festival-ops/` path. A second tag in the same public package needs no new package or visibility
+change. The build is reproducible: run with crane 0.22.1 into a loopback registry, `build.sh` rebuilt the published
+workshop Joker to its own digest, `d8dae795`, byte for byte, under umask 002 and 022. `build.sh`'s tar now sets the
+modes (`--mode='a+rX,ug+w,o-w'`, the modes the pushed layer has), so the digest no longer depends on the checkout's
+umask; the workshop digest did not move. crane 0.22.1 (go-containerregistry's latest release on 2026-11-03, its
+SHA-256 from the release's checksums.txt, checked that day) is a new pin in `verify/e2e-tools.lock`, because gzip
+output can differ between crane releases and the pin has to match what the push uses.
+
+**Decided here: least privilege takes patch as well as create, and keeps the reaper.** `deploy_app` applies with
+server-side apply, so for a Joker that already exists (every person who asked before the fix) the API checks patch,
+not create. A Role that dropped create alone would land those re-asks again. With patch gone, the reaper's merge patch
+on the Deployment would fail too and leave Jokers that landed just before the fix running, so it moved to the scale
+subresource, which every Role grants. ConfigMaps and Services keep their verbs: they run nothing.
+
+**The 2-hour workshop.** HC-7731, the festival-ops Joker and its digest, its page, `guard-admission-on` and the lab
+text are unchanged. What a workshop cluster now carries: the extra `deployments/scale` rule in the Role (C8's broad
+Role still matches the shipped one), the reaper's scale-subresource path, an empty `jokers` Service, the console's
+`/joker-<name>/` location, and the unused `guard-agency-on`/`guard-agency-off` commands. HC-666 is only taught at
+KubeCon, and its image is served only where the KubeCon private cluster runs the internal registry. Editing
+`images/web-terminal/entrypoint.sh` triggers `build-web-terminal.yml` on the staging push, as #774's edit did; the
+tag-overwrite problem that causes is run 16420's follow-up, not changed here.
+
+**Not yet run on a cluster.** In order, in a session with GHCR write access and then accen-dev access:
+1. Push the breakout's Joker once this is on staging, from a checkout of staging:
+   `bash verify/fetch-e2e-tools.sh && gh auth token | verify/.tools/bin/crane auth login ghcr.io -u peopleforrester --password-stdin && CRANE=verify/.tools/bin/crane bash images/villains/build.sh joker-internal`,
+   then `verify/.tools/bin/crane digest ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal`
+   must print `sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf`. Until then the internal
+   registry's seed cannot copy it, its pod never reads Ready, and HC-666's Jokers sit in ImagePullBackOff.
+2. On a KubeCon bring-up, `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` lists
+   `busybox-1.38.0`.
+3. `python3 verify/kubecon_probe.py community attackme.burritobot.co ...` and then `admin burritobot-private.burritobot.co ...`
+   end `KUBECON PROBE GREEN`; the admin run's `c6-lands`, `guard-agency-on` and `c6-forbidden` are the new beats.
+4. As a visitor, ask HC-666's status on the public bot after `guardrails-on`: the Joker lands, the reply names
+   `https://maintenance-shell-attackme.burritobot.co/joker-<name>/`, that page shows the breakout's text, and the
+   Joker is on `https://deployments.burritobot.co` under the visitor's witch name.
+5. `python3 verify/stage_traces.py seed burritobot-private.burritobot.co ...` ends `SEEDED GREEN`.

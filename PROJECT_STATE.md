@@ -28,8 +28,19 @@ off: profiles `kubecon-community` and `kubecon-private`, picked by event.sh's `W
 `guardrails-off` turns them off; `fleet.sh guardrails-link` links the pair, and `instructors up` runs it. Once on,
 `deny-external-registries` admits what BurritoBot deploys only from `registry.burritobot.co`, the internal registry
 on the private cluster. Not yet run on a cluster; the checks owed are in decisions.md, 2026-11-02 · #774. Open
-around it: #775 (HC-666's image onto the internal registry), #776 (where the switch sits in the run of show), and
-re-linking the switch after a standby promotion.
+around it: #776 (where the switch sits in the run of show) and re-linking the switch after a standby promotion.
+
+## Challenge 3 with Kyverno on (#775)
+
+HC-666 asks for `registry.burritobot.co/burritobot/maintenance-shell`, which both registry policies trust, so the room's
+Jokers still land once `guardrails-on` has Kyverno denying external registries. The internal registry seeds the
+breakout's own Joker build, `festival-ops/maintenance-shell:busybox-1.38.0-internal`, whose page says admission let it
+through; the workshop's Joker and HC-7731 are unchanged. Each Joker has its own page,
+`maintenance-shell-<cluster>/joker-<name>/`, which the bot hands over. Challenge 3's fix is `guard-agency-on` (a Role
+that creates no Deployment or Pod) and then `guard-input-on`. Owed: pushing the `-internal` tag
+(`CRANE=verify/.tools/bin/crane bash images/villains/build.sh joker-internal`, whose digest
+`verify/test_joker_build_digest.py` already holds), then the KubeCon probe on both clusters. Details in decisions.md,
+2026-11-03 · #775.
 
 ## KubeCon NA 2026 abstract readiness (#456)
 
