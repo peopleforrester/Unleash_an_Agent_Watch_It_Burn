@@ -11123,3 +11123,6 @@ had changed none of the code files this change touches, only PROGRESS.md and dec
 unchanged from run 16573's. Run 16637 again got permission denied on its cluster files
 (`/var/lib/hecaton/runs/16637/clusters/`, owned by group `hecaton`, which the run's user is not in), so the live
 `c6-lands` check above is still owed.
+Run 16637's `bash verify/run-e2e-tools.sh` at a438622, on staging 2efc223, exits 1. Its offline suite is green with
+229 tests. The tier ran 45 tests, and its one red is again `test_image_version_tags.py` on the pushed-over
+`web-terminal-ttyd-1.7.7` tag (#815).
