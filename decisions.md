@@ -12789,3 +12789,22 @@ to be smaller than that.
   on one, `test_image_version_tags.py`, for two reasons that were already on staging before this change: ghcr.io
   serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins `68004fb5...` (#797, #794), and
   `sample-app-nginx-1.27.5` returns 404 until #814's escalated push lands. Neither touches the mesh.
+- **Ported again in run 16776 (2026-11-03).** Run 16694 ended failed at validation, so its four commits never
+  reached staging. Its decisions.md entry carried a line the ai-isms gate reads as an antithesis ("agent is
+  PERMISSIVE" followed by the mode it replaced), and the file reads `major`. `verify/prior-drafts.sh 471` found
+  three paths staging had edited in place since the draft's base `382d570e` (LAB-TEXT.md, resources.yaml,
+  lab.html) and the decisions.md append. The four commits cherry-picked onto `12b31cd`. resources.yaml and
+  lab.html merged cleanly, LAB-TEXT.md was regenerated with `verify/export-lab-text.sh`, and decisions.md keeps
+  both sides. I reread the staging commits since `382d570e` that touch `gitops/ai-layer`: `c6086b25` (weaver
+  registry attributes), `d2264c1d` (the burritobot.co hosts) and `908a15f0` (the go-otel Component, which patches
+  guard-proxy's injection annotation and leaves its labels alone). None touches the mesh or the agent
+  NetworkPolicies. The one change from the draft is that line, reworded, and
+  `python3 verify/prose_gate.py <aiisms.py> origin/staging` passes on all 11 changed prose files.
+- **Suite results in run 16776.** The offline suite (`bash verify/run-tests.sh`, 235 tests, including `test_mesh.py`
+  and `test_mesh_enrollment.py`) is green. `bash verify/run-e2e-tools.sh` ran 51 checks in 22m58s and exited 1 on
+  one, `test_image_version_tags.py`, whose single failure is `sample-app-nginx-1.27.5` answering 404 on ghcr.io
+  (#814), already red on staging. The web-terminal digest red that run 16694 saw is gone.
+- **Live check still not run.** This run's `clusters/` files are again mode 0640, owner and group `hecaton`, and
+  every `kubectl --context watch-it-burn-private` call failed with `permission denied` (hecaton#508). Not yet run
+  on a cluster: `kubectl --context watch-it-burn-private get ns -L istio.io/dataplane-mode`, then, after promotion
+  and the Argo CD sync, `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py`.
