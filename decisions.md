@@ -10948,3 +10948,36 @@ reference with no version, which #714's rule forbids. It now names `workshop-mcp
 `test_tool_pin_live_check.py` still passes, and `test_image_version_tags.py` is down to the web-terminal digest.
 On that base `bash verify/run-e2e-tools.sh` ran 45 checks with the offline suite green, and
 `test_lab_pipeline_collector.py` passed with its Datadog validates at 25.3 to 25.5 s.
+## 2026-11-03 · #668 · lab-platform#351 merged the console's `web.yaml` fields, and the console waits on the image that carries them
+
+**Context.** Hecaton run 16581 is #668's fourth dispatch. The 2026-11-02 entry above left the console on nginx
+because `web.yaml` could not say four things `console.conf` does, and filed lab-platform#351 for them.
+`bash verify/prior-drafts.sh 668 origin/staging` printed NONE: every earlier draft is followed on staging by later
+#668 work, so nothing is ported.
+
+**What lab-platform did.** lab-platform#351's commit `955a264` is merged into lab-platform's staging. It adds every
+field that entry listed: `rate_header` and `N/m` rates on a route, per-route `errors` bodies, `forwarded_for`
+(`peer`, `append` or `inbound`) on routes and host rules, and on a host rule `methods`, `timeout`, `max_body`,
+`refuse`, its own `fallback` and `intercept: "false"`. It also changes two behaviours: a proxy timeout answers 504
+rather than 502, and `burst` follows nginx (one request plus `burst` more). #351 is still open, because publishing
+`web:v1` from that commit is a publish, which a run may not do; run 15929 escalated it. lab-platform#352, blocked by
+#351, records the new digest in lab-platform's `deploy/watch-it-burn/images.tsv` and comments here with the fields.
+
+**The image has not moved.** On 2026-11-03 an anonymous ghcr.io token read `web:v1` as
+`sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`, the digest the demo apps pin. Its config
+was created 2026-10-30 from lab-platform revision `1a16639`, before `955a264`. The tag list holds only that digest's
+signature and the two older ones (`74885296…` and `ddee00e2…`). So no published `web` image parses the new fields.
+
+**So the console still does not move.** Switching the Deployment needs a digest that does not exist yet. Writing
+`gitops/ai-layer/web.yaml` ahead of it would leave a second console config that nothing serves, while
+`console.conf` changed 12 times since 2026-10-28 (three on 2026-11-03 alone: #774, #775, #786). The ~15 tests would
+either leave the file that runs or guard both. The console's `web.yaml`, its mounts, `not-here.html`, the Deployment
+switch and the test move wait on lab-platform#352, which closes once the image is republished and its digest is
+known. lab-platform's worked `internal/webserve/testdata/console.web.yaml` is the starting point then; the copy in
+Michael's local checkout still reads as written from Unleashed `9ad5cd4`, so the run reads it from lab-platform's
+staging.
+
+**Not yet run on a cluster.** Unchanged from the entry above:
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` for the five party hosts, and
+`verify/test_console_no_toggle_live.py` once the console moves. This run's cluster kubeconfig and env files are not
+readable by its user (`permission denied`), so it ran neither.
