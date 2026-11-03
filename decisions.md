@@ -13609,3 +13609,8 @@ the jq check above, so the change does not refuse the secrets the clusters use.
 
 **Not yet run on a cluster:** that read, and a `fleet.sh ingest` of a live attendee cluster once the change is on
 staging, which `verify/fleet-labctl-import-scratch.sh` covers.
+
+**The suites (run 16827, at c3332e3f).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
+verify/run-tests.sh`, ran 242 tests, all green, `test_fleet_terminal_harvest.sh` among them with 77 passed. Then it
+printed "53 checks ran (the offline suite and 52 tier tests) in 24m55s" and "ALL E2E TOOLS TIER CHECKS GREEN". No
+dependency was added.
