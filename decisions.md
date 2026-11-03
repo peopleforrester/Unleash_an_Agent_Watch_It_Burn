@@ -12784,3 +12784,8 @@ to be smaller than that.
   python3 verify/test_mesh_live.py`, once the change is promoted and Argo CD has synced it, plus
   `kubectl --context watch-it-burn-private get ns -L istio.io/dataplane-mode` and
   `kubectl --context watch-it-burn-private -n agent get pods -L istio.io/dataplane-mode`.
+- **Suite results in run 16694.** On `c3bc78a`, the offline suite (`bash verify/run-tests.sh`, 233 tests, including
+  `test_mesh.py` and `test_mesh_enrollment.py`) was green. `bash verify/run-e2e-tools.sh` ran 48 checks and exited 1
+  on one, `test_image_version_tags.py`, for two reasons that were already on staging before this change: ghcr.io
+  serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins `68004fb5...` (#797, #794), and
+  `sample-app-nginx-1.27.5` returns 404 until #814's escalated push lands. Neither touches the mesh.
