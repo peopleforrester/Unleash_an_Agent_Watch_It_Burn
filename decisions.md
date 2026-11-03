@@ -10577,3 +10577,58 @@ resources.yaml pins `sha256:68004fb5...`. CI has pushed over that tag again, as 
 change does not touch it.
 
 No dependency was added.
+
+## 2026-11-03 · #789 · The live per-conversation check on watch-it-burn-community did not run: the run could not read its kubeconfig
+
+**What was asked.** #789 asks that `verify/test_audience_path_live.py` exit 0 against watch-it-burn-community
+(attackme), from a staging checkout that carries #786's per-conversation console.conf (`803b84e`), with ai-layer's
+sync status and revision recorded here and a comment on #644 naming that revision. Nothing in it touches the private
+cluster, and roll-console.sh is not run.
+
+**What this run found.** Staging at `1e66864` carries `803b84e`. `gitops/ai-layer/console.conf` there has the
+`wib_chat_session` zone (10 a minute, burst 9) on /chat and no `wib_chat_address` zone. Hecaton staged a kubeconfig,
+an env file and AWS credentials for this run under its `clusters/` directory, but the files are `hecaton:hecaton`
+0640 and the run's user is not in group hecaton, so every kubectl call fails before it reaches a cluster. Run 16392
+on #644 hit the same wall. Hecaton tracks it as peopleforrester/hecaton#507 and #508, and #508 (stage a run's
+cluster credentials readable by the run's own user) is open and being worked. The `accen-dev` AWS profile is not
+configured for this user either.
+
+The test, run as `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, stopped at its first
+kubectl call, before it sent any request to the cluster or its public host:
+
+    == prerequisites ==
+      FAIL  the cluster records its public host (cluster-identity public-host)
+            error: error loading config file "/var/lib/hecaton/runs/16548/clusters/kubeconfig": open /var/lib/hecaton/runs/16548/clusters/kubeconfig: permission denied
+
+    FAILED: 1 check(s)
+      - the cluster records its public host (cluster-identity public-host)
+
+It exited 1. No ai-layer sync status or revision was read, nothing was synced, and no request named the private
+cluster.
+
+**Not yet run on a cluster.** All of #789. A session with accen-dev runs these from a clone of this repo, and the
+escalation in this run's report carries the same commands:
+
+    K=/tmp/community.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name watch-it-burn-community --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *cluster/watch-it-burn-community ]] || exit 1
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd get application ai-layer \
+      -o jsonpath='{.status.sync.status} {.status.health.status} {.status.sync.revision}{"\n"}'
+    git fetch origin staging && git checkout --detach <that revision> && git merge-base --is-ancestor 803b84e HEAD
+    KUBECONFIG=$K CONTEXT="$CTX" python3 verify/test_audience_path_live.py
+
+ai-layer must read Synced Healthy at a staging revision that has `803b84e` as an ancestor. If it is behind, the one
+act allowed is a hard refresh of that one Application on that one cluster, after which its auto-sync takes the
+revision and the console pod rolls on the new ConfigMap hash:
+
+    KUBECONFIG=$K kubectl --context "$CTX" -n argocd annotate application ai-layer argocd.argoproj.io/refresh=hard --overwrite
+
+The test must end "All live audience-path checks passed." It spends about half a cent of Bedrock on one probe turn
+and about 90 of guard-proxy's 150 a minute for the cluster, so it is not run while the room is chatting. Then a
+comment on #644 says the per-conversation limit is live on attackme at that revision, and a new entry here records
+the test's output with the sync status and revision.
+
+**Tests at this entry.** `bash verify/run-tests.sh`; its result is in this run's report. This entry is the only
+change.
+
+No dependency was added.
