@@ -13090,3 +13090,11 @@ also price at `MODEL_TIER` until the repin lands and ai-layer syncs. The next ru
 4. Send one `/chat` turn once the agent pod has restarted. The reply's `cost_usd` and the growth of `/cost`'s `usd` equal input tokens x $0.001/1K plus output tokens x $0.005/1K, the Haiku row, not Nova's $0.0008/$0.0032.
 5. Patch `modelConfig` back to `bedrock-nova`, check `tier` reads `nova` again, and turn Kyverno back as found.
 No E2E test in `verify/run-e2e.sh` does this swap yet; O2b in the research note is the place for one.
+
+**The suites (run 16791, on 8995c63 with the submodule at 88b9b52).** `bash verify/run-e2e-tools.sh` ran 51 checks in
+22m33s and exits 1 on one, `test_image_version_tags.py`: `sample-app-nginx-1.27.5` answers 404 on ghcr.io, the red
+staging records under #814. Its offline suite ran 235 tests, all green. With the submodule checked out at 2cff90d in
+the working tree only, `test_model_pin_check.py`, `test_cost_counter.py`, `test_finale_cap.py`,
+`test_c7_badge_grants.py`, `test_recreation_spec_tier_swap.py`, `test_cost_tier_matches_model.py` and
+`test_load_replay.py` also pass, each reading that build as pricing at the bound model; `test_proxy_checksum.py` there
+wants the `19fbbe48283e` that Michael's repin commit sets.
