@@ -21,9 +21,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
 
 missing=()
-# curl, tar, unzip and sha256sum fetch and verify the tools; uv brings the Python pins; openssl mints the Kyverno
-# test's wrong key; jq runs test_ai_layer_rollout.py's filters; node runs the harnesses.
-for tool in python3 git curl tar unzip sha256sum uv node jq openssl; do
+# curl, tar, unzip and sha256sum fetch and verify the tools, and xz unpacks weaver's archive; uv brings the Python
+# pins; openssl mints the Kyverno test's wrong key; jq runs test_ai_layer_rollout.py's filters; node runs the harnesses.
+for tool in python3 git curl tar unzip sha256sum xz uv node jq openssl; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
 # The same Node major as run-e2e.sh and the Backstage image (#440).

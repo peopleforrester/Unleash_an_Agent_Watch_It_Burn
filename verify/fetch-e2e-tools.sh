@@ -48,6 +48,7 @@ fetch_one() { # name version sha256 url member
     case "${member}:${file}" in
         -:*)        cp "${file}" "${tmp}" ;;
         *:*.tar.gz) tar -xzOf "${file}" "${member}" >"${tmp}" ;;
+        *:*.tar.xz) tar -xJOf "${file}" "${member}" >"${tmp}" ;;
         *:*.zip)    unzip -p "${file}" "${member}" >"${tmp}" ;;
         *)          false ;;
     esac || {
