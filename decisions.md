@@ -12108,3 +12108,9 @@ counts into `spent` and puts them on no attribute. No issue there asks for it, b
 never filed, so this run's report files it again. This run's cluster files are again mode 0640, group `hecaton`, and
 its user (`hecaton-run-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`) cannot read them, so the
 KubeCon reads and the Datadog look above remain owed, as listed under "Not yet run on a cluster".
+*The suites on this port.* `bash verify/run-e2e-tools.sh` ran 50 checks (the offline suite and 49 tier tests) in
+24m25s and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves the web-terminal tag at another digest, and
+`sample-app-nginx-1.27.5` answers 404, the two reds staging already records (#796, #814). Its offline suite ran 236
+tests, all green, `test_collector_act2_redaction.py` and `test_genai_semconv_pin.py` among them. In the tier,
+`test_collector_act2_redaction_e2e.py`, `test_adk_model_content_e2e.py`, `test_trace_shape_e2e.py`,
+`test_collector_pii_scrub_e2e.py` and `test_collector_one_root_e2e.py` passed.
