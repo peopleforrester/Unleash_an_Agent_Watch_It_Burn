@@ -12066,3 +12066,38 @@ ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...` r
 `sha256:68004fb5...` (the tag CI pushed over, #815, #816, #823, #824), and `watch-it-burn:sample-app-nginx-1.27.5`
 returns HTTP 404 (#814). Nothing in this change touches an image. The live cluster checks did not run, for the
 session-read reason recorded above.
+## 2026-11-03 · #775 · Run 16733: the breakout Joker's tag is still not on ghcr.io, so HC-666's live checks still wait
+
+**Where #775 stands.** Run 16464's four commits (`3946e94` to `a8149c8`) are on staging, and
+`bash verify/prior-drafts.sh 775 origin/staging` prints NONE: runs 16464, 16486 and 16530 LANDED, and run 16043's
+draft, decisions.md only, is followed by that later work. So nothing was ported and no code changed in this run. What
+the 2026-11-03 #775 entry left owed is its "Not yet run on a cluster" list, and this run checked each item it could
+reach.
+
+**What this run checked, read-only, on 2026-11-03.**
+1. The push. ghcr.io's anonymous tags list for `peopleforrester/festival-ops/maintenance-shell` reads
+   `["busybox-1.38.0"]`, and a manifest HEAD on `busybox-1.38.0-internal` answers 404. The breakout's Joker is not
+   pushed. Until it is, the internal registry's seed (`gitops/internal-registry/internal-registry.yaml`, the line
+   pinning `sha256:0dbe92d4...`) has nothing to copy, and every HC-666 Joker sits in ImagePullBackOff. Pushing is an
+   image publication a dispatched run may not make, so the report escalates the command the earlier entry gives,
+   run from a fresh clone of staging so that no checkout of Michael's is touched.
+2. The registry's public name. `https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`,
+   `https://registry-burritobot-private.burritobot.co/v2/...` and `https://registry-attackme.burritobot.co/v2/...` each
+   get the apex router's "no route for this host" 404 page, and so does `https://deployments.burritobot.co/`. The
+   router has no row for these names yet. They are `fleet.sh`'s `bare_rows` and `WIB_REGISTRY_HOSTS` rows, which a
+   KubeCon bring-up publishes, so this check is owed on that bring-up, after the push.
+3. The page host. `https://maintenance-shell-attackme.burritobot.co/` and `/joker-test/` both answer 200 with the
+   console's "Nothing here yet" page, as they should with no room Joker running. `attackme.burritobot.co` serves
+   the chat page.
+4. Items 3 to 5 of the earlier list (the KubeCon probe on both clusters, a visitor's HC-666 ask after
+   `guardrails-on`, and `stage_traces.py seed`) need kubectl or the AWS session. This run's session files,
+   `clusters/kubeconfig`, `clusters/env` and the AWS files beside them, are mode 640 with group `hecaton`, and the
+   run's user (`hecaton-s7-claude-certkraken`) is not in that group, so `kubectl --context watch-it-burn-community`
+   fails with "permission denied" on the kubeconfig. That is hecaton's to fix (hecaton#508), as the #759 and #786
+   entries record for their runs. Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** The 2026-11-03 #775 entry's list, unchanged and in its order: the push (escalated),
+the registry's tags list on a KubeCon bring-up, both KubeCon probe runs ending `KUBECON PROBE GREEN`, the visitor's
+HC-666 ask, and `stage_traces.py seed` ending `SEEDED GREEN`.
+
+No dependency was added.
