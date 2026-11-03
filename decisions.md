@@ -11510,3 +11510,11 @@ The fix needs no cluster anyway: the clusters pull the image by digest, and the 
 `… serves its pin sha256:68004fb5… again`, and then `bash verify/run-e2e-tools.sh` must pass
 `test_image_version_tags.py`. The anonymous read is
 `verify/.tools/bin/crane digest ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7`.
+
+**Suite results (run 16679, at 79ae85e).** `bash verify/run-e2e-tools.sh` ran the offline suite, which was green
+with 233 tests, then 48 tier tests. It failed only `test_image_version_tags.py`, on two checks. The first was the
+moved tag, which only the post-promotion workflow run can fix. The second was caused by this change:
+the offline test spelled out `…:web-terminal-ttyd-9.9.9` as a literal, and that counted as a second whole reference to the
+web-terminal image. The test now builds that tag from the pinned one. After that fix, `test_web_terminal_push_guard.py`
+passed, and `test_image_version_tags.py` failed only the tag check (`it serves sha256:0b72ecc72c7c…`).
+`test_web_terminal_push_guard_registry.py` passed in the tier.

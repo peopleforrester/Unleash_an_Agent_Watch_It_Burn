@@ -31,7 +31,8 @@ WORKFLOW = yaml.safe_load((REPO / ".github/workflows/build-web-terminal.yml").re
 LOCK = (REPO / "images.lock").read_text(encoding="utf-8")
 TOOLS = (REPO / "verify/e2e-tools.lock").read_text(encoding="utf-8")
 TAG = "ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7"
-UNPINNED = "ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-9.9.9"
+# Built, not written whole: test_image_version_tags.py holds every whole web-terminal reference to the pinned tag.
+UNPINNED = TAG.replace("1.7.7", "9.9.9")
 OTHER = "sha256:" + "d" * 64
 BUILT = "sha256:" + "b" * 64
 failures: list[str] = []
