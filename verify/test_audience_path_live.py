@@ -1,17 +1,18 @@
 # ABOUTME: Live half of #450: through the apex router, the community cluster's /chat holds one conversation to 10 a
-# ABOUTME: minute and one network to its ceiling with readable refusals, and a guarded turn fits its timeout.
+# ABOUTME: minute with a readable refusal, sets no per-network limit, and a guarded turn fits its timeout.
 # SUITE: e2e
 """Needs kubectl, CONTEXT naming the community cluster (attackme) or any cluster running the console with a recorded
 public host, and the public internet. Every missing prerequisite is a failure, never a skip.
 
 verify/test_audience_path.py holds the limits and the timeout ladder in git. This holds the deployed cluster to
-them, from outside, through Railway's edge and the apex Caddy, which is the only way to see that nginx keys the
-network ceiling on the caller's real address (apex-agenticburn#40) and not on one address for every phone.
+them, from outside, through Railway's edge and the apex Caddy, which is the only way to see that a room on one
+venue NAT address is not held as one bucket: the limit is per conversation, and nothing in front of guard-proxy keys
+on the address (Michael's ruling of 2026-11-01, #450).
 
 What it spends. The limit checks send EMPTY prompts: nginx counts them, and guard-proxy answers them with a 400
-before any guard, the prompt feed or the model, so they cost nothing and appear nowhere. They do hold this
-machine's address at its ceiling for about half a minute, so do not run it from the venue network during the
-session. One timed turn sends the probe prompt, marked [[wib-probe]] so the instructor feed skips it: about
+before any guard, the prompt feed or the model, so they cost nothing and appear nowhere. They hold only their own
+throwaway conversations, so no network is held up by them; they do spend about 90 of guard-proxy's 150 a minute for
+the cluster, so do not run it while the room is chatting. One timed turn sends the probe prompt, marked [[wib-probe]] so the instructor feed skips it: about
 half a cent of Bedrock, and it counts on /cost until the counter is reset (run-of-show, "Reset the community bot").
 
 Usage: CONTEXT=<kube-context> python3 verify/test_audience_path_live.py
@@ -31,8 +32,15 @@ import urllib.error
 import urllib.request
 import uuid
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
+GIT_PROXY = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
+                 if isinstance(d, dict) and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+GIT_ENV = {e["name"]: e.get("value") for e in GIT_PROXY["spec"]["template"]["spec"]["containers"][0]["env"]}
+# More fresh conversations at once than the per-address zone's burst let through (61) before #450's 2026-11-01 ruling.
+ONE_ADDRESS = 80
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = "agent"
 PROBE = "[[wib-probe]] what proteins do you have?"
@@ -134,27 +142,29 @@ env = {}
 if r.returncode == 0:
     env = {e["name"]: e.get("value") for e in json.loads(r.stdout)["spec"]["template"]["spec"]["containers"][0]["env"]}
 per_call = float(env.get("PROXY_TIMEOUT") or 150)
-check(f"guard-proxy runs PROXY_TIMEOUT 45 (got {env.get('PROXY_TIMEOUT')})", env.get("PROXY_TIMEOUT") == "45",
-      r.stderr.strip()[:200])
+for name in ("PROXY_TIMEOUT", "TURN_TIMEOUT", "RATE_LIMIT_SESSION_RPM", "RATE_LIMIT_RPM", "COST_CAP_USD"):
+    check(f"guard-proxy runs git's {name} {GIT_ENV.get(name)} (got {env.get(name)})",
+          env.get(name) == GIT_ENV.get(name), r.stderr.strip()[:200])
 if failures:
     finish()
 
 print(f"== one conversation through https://{host} ==")
-s_burst, a_burst = burst_of("wib_chat_session"), burst_of("wib_chat_address")
+s_burst = burst_of("wib_chat_session")
 one = burst(host, [f"wib-verify-450-{uuid.uuid4().hex}"] * (s_burst + 3))
 check(f"{s_burst + 1} of {len(one)} at once get through, the rest are refused in a sentence",
       sum(map(passed, one)) == s_burst + 1 and sum(map(refused, one)) == 2,
       f"{[(s, b.get('reply', b)) for s, b, _ in one][-3:]}")
-time.sleep(65)  # let both buckets drain before the network check
+check("the refusal names 10 a minute per conversation and says to wait and send that again",
+      all("10 a minute per conversation" in b.get("reply", "") and "send that again" in b.get("reply", "")
+          for s, b, _ in one if refused((s, b, 0))))
 
 print(f"== one network, many conversations, through https://{host} ==")
-many = burst(host, [f"wib-verify-450-{uuid.uuid4().hex}" for _ in range(a_burst + 10)])
+many = burst(host, [f"wib-verify-450-{uuid.uuid4().hex}" for _ in range(ONE_ADDRESS)])
 got = sum(map(passed, many))
-# nginx's leaky bucket refills one slot every 60/rpm seconds while the burst is in flight, so allow a few.
-check(f"about {a_burst + 1} of {len(many)} fresh conversations get through from one address (got {got}), so nginx "
-      "keys on the caller and not on one address for every phone",
-      a_burst + 1 <= got <= a_burst + 4 and sum(map(refused, many)) == len(many) - got,
-      f"{[(s, b.get('reply', b)) for s, b, _ in many if not passed((s, b, 0)) and not refused((s, b, 0))][:3]}")
+check(f"all {len(many)} fresh conversations from one address get through nginx (got {got}), so a room on one "
+      "venue NAT address is not one bucket",
+      got == len(many),
+      f"{[(s, b.get('reply', b)) for s, b, _ in many if not passed((s, b, 0))][:3]}")
 time.sleep(65)
 
 print("== a guarded turn fits its per-call timeout ==")

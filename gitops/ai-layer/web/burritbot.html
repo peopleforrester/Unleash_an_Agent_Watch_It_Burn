@@ -655,8 +655,8 @@
     const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
-      // The session rides as a header too, so the console's nginx can hold one conversation to its 10 a minute
-      // before the per-network ceiling counts it (#450, console.conf).
+      // The session rides as a header too, so the console's nginx can hold one conversation to its 10 a minute,
+      // the room's only limit there: nothing keys on the network (#450, console.conf).
       const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-BurritoBot-Session':getSession()},body:JSON.stringify({prompt:v,session:getSession(),witch:WITCH_NAME})});
       t.remove();
       // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead

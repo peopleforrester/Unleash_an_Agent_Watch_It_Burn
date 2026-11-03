@@ -38,9 +38,10 @@ A replayed session sends 3 turns at least 15 s apart, so neither per-conversatio
 
 ## The runs still owed
 
-Both wait on #450's change (`74c9c2d`, the per-person chat limit) reaching staging and syncing to
-watch-it-burn-community. That change also moves `verify/load_replay.py` off the per-network zone, which it
-otherwise reads. Before sending, confirm that the live console no longer carries `wib_chat_address`.
+Both wait on #450's per-person chat limit reaching staging and syncing to watch-it-burn-community. Run 15018's
+draft of it (`b40c18a`, on `agent/450-15018`) never landed; #786 made it again on the current staging, and it moves
+`verify/load_replay.py` off the per-network zone too. Before sending, confirm that the live console no longer
+carries `wib_chat_address`.
 
 **Run A again: 500 sessions from one address, through the public hostname.**
 

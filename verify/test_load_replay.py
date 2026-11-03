@@ -182,9 +182,16 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
           lr.classify(200, KEYWORDS["CAPPED"][1]) == "cost_cap" and lr.classify(200, KEYWORDS["BUDGET"][1]) == "budget")
     check("PROBE_MARKER equals proxy.py's", f'PROBE_MARKER = "{lr.PROBE_MARKER}"' in _proxy)
     lim = lr.deployed_limits()
-    check("limits read from git: nginx 120/min per network, burst 60",
-          (lim["edge_network_rpm"], lim["edge_network_burst"]) == (120, 60), str(lim))
-    check("limits read from git: nginx 10/min per conversation", lim["edge_session_rpm"] == 10, str(lim))
+    check("limits read from git: nginx 10/min per conversation, burst 9",
+          (lim["edge_session_rpm"], lim["edge_session_burst"]) == (10, 9), str(lim))
+    # Since #450's ruling of 2026-11-01 nginx has no per-network zone, so the tool reads none and predicts none.
+    check("the tool reads only the per-conversation zone, none per network",
+          sorted(k for k in lim if k.startswith("edge_")) == ["edge_session_burst", "edge_session_rpm"]
+          and "wib_chat_address" not in pathlib.Path(lr.__file__).read_text(), str(lim))
+    _plan = lr.Plan(500, 3, 1500, 60.0, 15.0, 45.0, lr.USD_PER_CALL)
+    check("one address sending as 500 phones is held by the cluster window, not by an address bucket",
+          _plan.predicted_served(lim) == int(lim["proxy_cluster_rpm"] * _plan.minutes()),
+          str(_plan.predicted_served(lim)))
     check("limits read from git: guard-proxy 150/min cluster, 10/min session, $25 cap",
           (lim["proxy_cluster_rpm"], lim["proxy_session_rpm"], lim["cost_cap_usd"]) == (150, 10, 25.0), str(lim))
     check("client timeout outlasts nginx's 285s /chat read timeout",

@@ -10240,3 +10240,77 @@ recorded for #746 on 2026-11-03: `test_image_version_tags.py` finds ghcr.io serv
 that tag again after #774's staging push. Nothing here pushes an image. This change edits
 `images/web-terminal/entrypoint.sh` too (it must stay byte-identical to the copy the pod mounts), so its staging push
 starts `build-web-terminal.yml` once more; the fix for that workflow is run 16420's follow-up.
+## 2026-11-03 · #786 · /chat is limited per conversation only: console nginx's per-network zone is gone
+
+**The ruling.** Michael ruled on 2026-11-01 (#450, comment 6554358563) that the KubeCon chat limit is per person,
+not per network. In the #644 load run, console nginx's `wib_chat_address` zone (120 a minute, burst 60, keyed on the
+X-Forwarded-For the apex sends) refused 1,164 of 1,500 turns from one address. On venue Wi-Fi that zone is one bucket
+for a room of about 150.
+
+**What changed.** `gitops/ai-layer/console.conf` drops `wib_chat_address` and its `limit_req` on `/chat`. `/chat`
+applies only `wib_chat_session` (10 a minute, burst 9). The `@chat_slow_down` refusal is still a guarded 200 in the
+/chat shape, and now reads "Slow down, hungry traveler. BurritoBot takes 10 a minute per conversation. Wait a few
+seconds and send that again." The /chat ladder comment no longer counts six calls at PROXY_TIMEOUT 45: TURN_TIMEOUT
+270 has bounded the turn since #694, and each call gets PROXY_TIMEOUT or what is left of the turn. The page's
+session-header comment in `burritbot.html` says the same. `verify/load_replay.py` reads only the per-conversation
+zone, by name, and predicts served turns from it and guard-proxy's cluster window. The run-of-show's audience path
+table and Night Before load step, the readiness doc's row 9, PROJECT_STATE.md and the #644 load-test record now say
+there is no per-network limit. Unchanged: `resources.yaml` (RATE_LIMIT_RPM 150, RATE_LIMIT_SESSION_RPM 10,
+COST_CAP_USD 25, TURN_TIMEOUT 270, PROXY_TIMEOUT 120), the guard-proxy submodule pin (`fb6e2bf`), the `/prompts`
+route, and the ladder checks in `verify/test_audience_path.py`.
+
+**Each removed per-network check, and what replaces it (for the test review).**
+- `test_audience_path.py`, "the network zone keys on the apex's X-Forwarded-For, not nginx's peer (the NLB)":
+  replaced by "no limit_req_zone is keyed on a client address" (it reads `$remote_addr`, `$binary_remote_addr`,
+  `$http_x_forwarded_for` and real_ip keys) and "no limit_conn or limit_conn_zone".
+- `test_audience_path.py`, "the per-network ceiling is under the cluster window and holds ten phones": replaced by
+  "the conversation zone is 10 a minute with a burst of 9" and "guard-proxy keeps RATE_LIMIT_RPM 150,
+  RATE_LIMIT_SESSION_RPM 10 and COST_CAP_USD 25".
+- `test_audience_path.py`, "/chat applies the conversation zone, then the network zone": replaced by "/chat applies
+  the conversation zone and no other".
+- `test_audience_path.py`, the refusal check that wanted the network's 120 in the reply: now "a limit is a guarded
+  200 in the /chat shape", "the limit's sentence names 10 a minute per conversation and no network" and "the limit's
+  sentence says to wait and send that again".
+- `test_audience_path.py`, new for criterion 3: "nothing on /chat changes the request body" (no `proxy_set_body`,
+  `proxy_pass_request_body`, `client_max_body_size`, `sub_filter`, `rewrite`, njs, perl, `mirror` or `proxy_method` in
+  the /chat location, the default server or the http level), "/chat proxies to guard-proxy's own /chat" and "the
+  /prompts feed is still guard-proxy's own GET /prompts".
+- `test_load_replay.py`, "limits read from git: nginx 120/min per network, burst 60": replaced by "limits read from
+  git: nginx 10/min per conversation, burst 9", "the tool reads only the per-conversation zone, none per network" and
+  "one address sending as 500 phones is held by the cluster window, not by an address bucket" (the old model
+  predicted 360 served for the default plan, the new one 375).
+- `test_audience_path_live.py`, "about 61 of 70 fresh conversations get through from one address": replaced by "all
+  80 fresh conversations from one address get through nginx", 80 being more than the old zone's 61. New: "the refusal
+  names 10 a minute per conversation and says to wait and send that again". Its "guard-proxy runs PROXY_TIMEOUT 45"
+  could never pass since #694 set 120, so it now reads git's PROXY_TIMEOUT, TURN_TIMEOUT and the three limits from
+  `resources.yaml` and holds the deployment to them.
+
+**It fails on the console.conf it replaces.** Run against staging `bd6db62`'s console.conf, the new
+`test_audience_path.py` fails five checks: the conversation zone and no other, the burst of 9 on that zone, no
+address-keyed zone (it finds `$http_x_forwarded_for`), the 10-a-minute sentence with no network, and wait and send
+that again.
+
+**What differs from run 15018's draft.** The draft is `b40c18a` on `origin/agent/450-15018` (the #644 entry above
+calls it `74c9c2d`, which is not in this clone). `bash verify/draft-drift.sh origin/agent/450-15018 origin/staging`
+exits 1 with eight paths, console.conf, burritbot.html, load_replay.py and test_load_replay.py among them (#773 and
+#744 edited them since), so the change was made again on staging rather than cherry-picked. Against the draft:
+the ladder comment is corrected, where the draft left six calls at 45 s; the refusal check reads the words "10 a
+minute per conversation", not only the digits; the address-key check also catches `$binary_remote_addr` and real_ip
+keys, and the connection check also catches `limit_conn_zone`; the body check also reads the server and http levels
+and adds `proxy_method` and perl; the `/prompts` and `proxy_pass` checks are new; `deployed_limits()` reads
+`wib_chat_session` by name rather than every zone; the prediction check is new; the live test keeps its 65 s wait
+before the timed turn and says it spends about 90 of the cluster's 150 a minute; the run-of-show points at the
+150-session command, as the #644 entry asked once #450 landed; and the load-test record names this change.
+
+**How it reaches the clusters.** Nothing here touches a cluster. When the dispatcher promotes this to staging,
+watch-it-burn-private's own root, `lab-bootstrap`, which tracks staging with automated sync, takes it with no one
+acting, as watch-it-burn-community's does. kustomize's configMapGenerator hashes the `console-conf` name, so the new
+file rolls the console pod.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, after the
+ai-layer Application on that cluster has synced a staging revision carrying this change; it must end "All live
+audience-path checks passed." Then the #644 reruns in `facilitation/kubecon-na-2026-load-test.md`. This run was handed
+both contexts, but its `clusters/` files are mode 640, group `hecaton`, and its user is not in that group, so nothing
+was read.
+
+No dependency was added.
