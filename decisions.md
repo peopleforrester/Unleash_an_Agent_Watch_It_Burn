@@ -10492,7 +10492,18 @@ setup's policy step removed, the test fails.
 GitOps with its Service port and its port in `agentgateway-ingress`. `verify/test_chat_path_ingress.py` would then
 need the bind's callers. The spike README says so.
 
+**The stand-in, 2026-11-03.** In one full offline run `test_tool_pin_live_check.py` failed: setup stopped between the
+snapshot and the gateway patch. It passed alone, and in six parallel reruns of the old code. The likeliest cause is
+the stand-in itself. `kubectl create --dry-run | kubectl apply -f -` ran two shim processes that both rewrote the
+state file in place, so `apply` could read it half written. `create --dry-run` now touches no state, as in kubectl,
+and writes are atomic and only on a change. That exposed a real weakness in `restore`: it compared
+`agentgateway-ingress`'s rules and the Applications' auto-sync as raw JSON strings, so a change of key order alone
+read as a difference. Both are now compared with sorted keys. A failing run of the test now prints the script's own
+"live-check: failed at line N" line.
+
 **Not yet run on a cluster:** `live-check.sh run` on `watch-it-burn-community`, from a host with the accen-dev
-profile; the exact commands are in the spike README's "Still open: the cluster check". The issue's open parts are
+profile; the exact commands are in the spike README's "Still open: the cluster check". The 2026-11-03 run (hecaton
+16522) was given cluster access in `$HECATON_CLUSTER_ENV`, but its env, kubeconfig and AWS credentials are mode 640,
+group `hecaton`, which the run's user is not in, so neither kubectl nor aws could read them. The issue's open parts are
 unchanged. They are kagent's discovery and the agent's list_tools seen through tool-pin, kagent's handling of the
 deny's JSON-RPC error, and then the badge decision, which goes in this file from the record.
