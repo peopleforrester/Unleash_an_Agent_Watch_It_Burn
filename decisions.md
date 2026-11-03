@@ -11857,3 +11857,7 @@ and the run's user is not in that group), so no kubectl check ran.
 ./fleet.sh wall-check` from `infra/terraform/fleet/`, after which the retired kagent- and party-app hosts must get the
 router's 404; then an Argo CD sync of the console, `verify/test_service_hosts_live.py`, the Night Before `check-tls`
 line and the two `kubecon_probe.py` runs on the burritobot.co names.
+
+On this branch, `bash verify/run-e2e-tools.sh` ran 48 checks in 22m19s; the offline suite inside it ran 234 tests,
+all green. It exits 1 on `test_image_version_tags.py` alone, with the same two reds staging `382d570` records: the
+web-terminal tag CI pushed over, and ghcr.io's 404 for `sample-app-nginx-1.27.5` (#814). This change touches neither.
