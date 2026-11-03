@@ -1,0 +1,36 @@
+# ABOUTME: The Go guard-proxy's OTEL_* environment (#782): the OTel Operator's inject-sdk in place of inject-python.
+# ABOUTME: A kustomize Component, OFF until the Go cutover (#738) lists it under components: in ../kustomization.yaml.
+#
+# The Go build (guard-proxy-agenticburn#36, PRD #412 M5) exports OTLP over http/protobuf from the standard OTEL_*
+# variables, and sends nothing without an endpoint. Today the endpoint reaches proxy.py through the Operator's
+# inject-python annotation, which also mounts the Python SDK and sets PYTHONPATH: useless to a static Go binary.
+# inject-sdk injects the same Instrumentation's settings and no language agent (OTel Operator, sdk.go injectSdk):
+#   - OTEL_EXPORTER_OTLP_ENDPOINT from spec.exporter.endpoint, the collector's HTTP port 4318;
+#   - spec.env, which carries OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf. grpc stops the Go proxy at startup;
+#   - OTEL_RESOURCE_ATTRIBUTES (k8s.* merged into the pod's own), OTEL_PROPAGATORS and the sampler.
+# The Operator adds nothing a container already sets, so the pod's OTEL_SERVICE_NAME (burritobot, #265), its
+# resource attributes and OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, toggled live as today, still win.
+#
+# It names the Instrumentation, watch-it-burn-python, rather than "true": "true" picks the namespace's only
+# Instrumentation and fails admission-time injection when there are two. The CR keeps its name, which
+# otel-ordering-gate.yaml and the chart's instrumented list read; for the Go build only its exporter, env, propagators
+# and sampler apply, its python.image does not. The pod stays operator-injected, so lab-platform still restarts
+# guard-proxy once the Operator is ready (verify/test_bootstrap_chart.py).
+#
+# The annotation is REPLACED, not added: with two injection annotations and no container names the Operator injects
+# neither. Why a Component and not the Deployment itself: KubeCon (2026-11-12) runs proxy.py, whose spans need
+# inject-python, and the KubeCon clusters sync from staging. The cutover adds go-otel to `components:` in
+# ../kustomization.yaml in the same commit that swaps the image and command, beside go-spend-store (#751).
+# verify/test_guard_proxy_go_otel.py renders it and fails a guard-proxy that no longer runs proxy.py without it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# JSON 6902 ops: the annotation keys are path segments, with "/" escaped as "~1".
+patches:
+  - target: { group: apps, version: v1, kind: Deployment, name: guard-proxy }
+    patch: |-
+      - op: remove
+        path: /spec/template/metadata/annotations/instrumentation.opentelemetry.io~1inject-python
+      - op: add
+        path: /spec/template/metadata/annotations/instrumentation.opentelemetry.io~1inject-sdk
+        value: watch-it-burn-python
