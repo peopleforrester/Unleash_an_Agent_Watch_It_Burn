@@ -43,7 +43,10 @@ def load() -> dict:
 
 
 def save(st: dict) -> None:
-    STATE.write_text(json.dumps(st, indent=1, sort_keys=True))
+    # Atomic: live-check.sh pipes one kubectl into another, so a reader must never see a half-written file.
+    tmp = STATE.with_name(f"{STATE.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(st, indent=1, sort_keys=True))
+    os.replace(tmp, STATE)
 
 
 def key(ns: str, kind: str, name: str) -> str:
@@ -146,9 +149,19 @@ def main(argv: list[str]) -> int:
     if args[0] == "kustomize":
         sys.stdout.write(kustomize(args[1]))
         return 0
+    if args[:2] == ["create", "configmap"] and "--dry-run=client" in args:
+        # Client-side, as in kubectl: it runs alongside the `apply -f -` it feeds, so it must not touch the state.
+        data = {}
+        for a in args:
+            if a.startswith("--from-file="):
+                k, path = a[len("--from-file="):].split("=", 1)
+                data[k] = pathlib.Path(path).read_text()
+        sys.stdout.write(yaml.safe_dump({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": args[2]}, "data": data}))
+        return 0
     if opts.get("context") != os.environ["TP_CONTEXT"]:
         unsupported(f"call without --context {os.environ['TP_CONTEXT']}: {argv}")
     st = load()
+    unchanged = json.dumps(st, sort_keys=True)
     verb, rest = args[0], args[1:]
     out = ""
     flag = lambda f: rest[rest.index(f) + 1] if f in rest else None  # noqa: E731
@@ -231,13 +244,6 @@ def main(argv: list[str]) -> int:
         if kind == "RemoteMCPServer" and os.environ.get("TP_KAGENT_ROLLS") == "1":
             roll(st, "workshop-agent")
         out = f"{kind.lower()}/{name} patched\n"
-    elif verb == "create" and rest[0] == "configmap":
-        data = {}
-        for a in rest:
-            if a.startswith("--from-file="):
-                k, path = a[len("--from-file="):].split("=", 1)
-                data[k] = pathlib.Path(path).read_text()
-        out = yaml.safe_dump({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": rest[1]}, "data": data})
     elif verb == "apply":
         for doc in yaml.safe_load_all(sys.stdin.read()):
             if doc:
@@ -301,7 +307,8 @@ def main(argv: list[str]) -> int:
             unsupported(f"run {cmd}")
     else:
         unsupported(f"verb {argv}")
-    save(st)
+    if json.dumps(st, sort_keys=True) != unchanged:
+        save(st)
     sys.stdout.write(out)
     return 0
 

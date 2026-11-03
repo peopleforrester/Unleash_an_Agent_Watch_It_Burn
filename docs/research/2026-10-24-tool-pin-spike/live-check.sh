@@ -265,7 +265,8 @@ restore() {
     [[ -e "${STATE}/snapshot.done" ]] || die "no snapshot in ${STATE}; nothing to restore from"
     local app i fails=0
     bad() { echo "  FAIL  $1"; fails=$((fails + 1)); }
-    # expect <what> <is> <was>: the cluster now against the snapshot.
+    # expect <what> <is> <was>: the cluster now against the snapshot. JSON is compared with its keys sorted, so only a
+    # change of value counts, never a change of key order.
     expect() {
         if [[ "$2" == "$3" ]]; then echo "  ok    $1"; else bad "$1: is '${2:0:200}', was '${3:0:200}'"; fi
     }
@@ -310,8 +311,9 @@ restore() {
         "$(pyj 'o["data"]["config.yaml"]' <"${STATE}/gateway-config.json")"
     if [[ -e "${STATE}/gateway-ingress.json" ]]; then
         expect "agentgateway-ingress's rules" \
-            "$("${KCTL[@]}" get networkpolicy agentgateway-ingress -o json | pyj 'json.dumps({"spec": {"ingress": o["spec"].get("ingress", [])}})')" \
-            "$(cat "${STATE}/gateway-ingress.json")"
+            "$("${KCTL[@]}" get networkpolicy agentgateway-ingress -o json |
+                pyj 'json.dumps({"spec": {"ingress": o["spec"].get("ingress", [])}}, sort_keys=True)')" \
+            "$(pyj 'json.dumps(o, sort_keys=True)' <"${STATE}/gateway-ingress.json")"
     fi
     expect "the agentgateway Service's ports" \
         "$("${KCTL[@]}" get svc agentgateway -o jsonpath='{.spec.ports[*].name}')" "$(cat "${STATE}/svc-ports")"
@@ -328,8 +330,9 @@ restore() {
     expect "evil-mcp's Accepted condition" "$(accepted)" "${want}"
     for app in "${APPS[@]}"; do
         expect "${app}'s auto-sync" \
-            "$("${ARGO[@]}" get "${app}" -o json | pyj 'json.dumps({"spec": {"syncPolicy": {"automated": o["spec"].get("syncPolicy", {}).get("automated")}}})')" \
-            "$(cat "${STATE}/sync-$(slug "${app}").json")"
+            "$("${ARGO[@]}" get "${app}" -o json |
+                pyj 'json.dumps({"spec": {"syncPolicy": {"automated": o["spec"].get("syncPolicy", {}).get("automated")}}}, sort_keys=True)')" \
+            "$(pyj 'json.dumps(o, sort_keys=True)' <"${STATE}/sync-$(slug "${app}").json")"
         want="$(cat "${STATE}/status-$(slug "${app}")")"
         for _ in $(seq 30); do [[ "$(app_status "${app}")" == "${want}" ]] && break; sleep 10; done
         expect "${app}'s sync and health" "$(app_status "${app}")" "${want}"

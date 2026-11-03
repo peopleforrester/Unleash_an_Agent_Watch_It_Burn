@@ -143,7 +143,9 @@ with tempfile.TemporaryDirectory() as d:
     r = bed.live("run")
     out = r.stdout + r.stderr
     st = bed.st()
-    check("run exits 0" + ("" if r.returncode == 0 else f" (exit {r.returncode}; tail: {out[-600:]!r})"), r.returncode == 0)
+    # On a failure, the script's own "live-check: failed at line N" says where; the tail alone shows only the restore.
+    why = [line for line in out.splitlines() if line.startswith("live-check:")]
+    check("run exits 0" + ("" if r.returncode == 0 else f" (exit {r.returncode}; {why}; tail: {out[-300:]!r})"), r.returncode == 0)
     pinned_cfg = events_matching(st, 'patch ConfigMap/agentgateway-config {"data": {"config.yaml": ')
     to_pinned = events_matching(st, f'patch RemoteMCPServer/evil-mcp {{"spec": {{"url": "{PINNED}"}}}}')
     check("the pinned bind goes into the gateway config before evil-mcp is pointed at it",
