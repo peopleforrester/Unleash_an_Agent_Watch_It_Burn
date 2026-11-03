@@ -11737,3 +11737,15 @@ showed up in Agent Observability under its own session", and its two trace ids g
 403 names the permission the pair lacks (`llm_observability_read`), which #759's live read also waits on.
 
 No dependency was added.
+
+**The suites, and a second dispatch (run 16673).** Run 16661 committed `2a61a41` above and was stopped by hecaton
+for looping: it polled the E2E log with the same command over and over, and the loop rule ended it before it wrote
+its report. Run 16673 resumed on that commit with no code change, and polled with a command that names its own
+check number and elapsed time. `bash verify/run-e2e-tools.sh` on `2a61a41`: the offline suite (`run-tests.sh`) ran
+231 tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_agent_obs_flow.py` among them, and lists
+`test_agent_obs_flow_live.py` with the live suite. The tools tier ran 46 checks and exits 1 on one,
+`test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not
+the pinned `68004fb5`, the tag CI pushed over (#815, #816, #823, #824); nothing here touches an image. Run 16673's
+session files are mode 640, group `hecaton`, like run 16661's, so at 2026-11-03T15:40Z the live test again printed
+`FAIL: Datadog could not be read: ... The config profile (accen-dev) could not be found` and exited 1. The live run
+above is still owed.
