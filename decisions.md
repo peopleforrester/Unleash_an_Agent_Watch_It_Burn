@@ -11521,8 +11521,9 @@ and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and its spans and the cost gaug
 
 One part can be run before the cutover without changing a cluster: a server-side dry run of a pod carrying the
 annotation, which runs the Operator's webhook and shows what it injects, `kubectl --context watch-it-burn-private -n
-agent run otel-sdk-probe --image=busybox --restart=Never --dry-run=server -o yaml
---annotations=instrumentation.opentelemetry.io/inject-sdk=watch-it-burn-python`. The pod spec should show
+agent run otel-sdk-probe --image=<guard-proxy's pinned image from resources.yaml> --restart=Never --dry-run=server -o
+yaml --annotations=instrumentation.opentelemetry.io/inject-sdk=watch-it-burn-python`. guard-proxy's own image keeps
+Kyverno's external-registry rule (#774) from refusing the probe before the mutation shows. The pod spec should show
 `OTEL_EXPORTER_OTLP_ENDPOINT` on 4318 and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`, and no init container. Run 16462
 could not run it: the run's kubeconfig and cluster env (`/var/lib/hecaton/runs/16462/clusters/`) are mode 640, group
 `hecaton`, and the run's user is not in that group.
