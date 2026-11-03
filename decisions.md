@@ -11126,3 +11126,41 @@ unchanged from run 16573's. Run 16637 again got permission denied on its cluster
 Run 16637's `bash verify/run-e2e-tools.sh` at a438622, on staging 2efc223, exits 1. Its offline suite is green with
 229 tests. The tier ran 45 tests, and its one red is again `test_image_version_tags.py` on the pushed-over
 `web-terminal-ttyd-1.7.7` tag (#815).
+## 2026-11-03 · #807 · A live test runs the KubeCon probe's Challenge 3 beat on the public bot, by COMMUNITY_CONTEXT
+
+**What #807 asked.** Test review run 15979 found no test for #764's last criterion: `verify/kubecon_probe.py` matches
+the new flow for the Challenge 3 beat and passes against the live public bot. The probe was only ever run by hand.
+
+**What changed.**
+- `verify/test_kubecon_c3_live.py` (new, `# SUITE: e2e`). It runs two of the probe's community beats, `identity` and
+  `c6-lands`, taken from `kp.COMMUNITY` by key, not copied, so whatever the probe's Challenge 3 beat does is what runs.
+  Around them it checks, against the cluster COMMUNITY_CONTEXT names:
+  - the context's cluster-identity public host is one of the probe's COMMUNITY_HOSTS (the live public bot);
+  - guard-proxy's pod template carries git's `checksum/proxy-py` and has rolled out, so the bot runs the proxy.py that
+    forwards the `witch` (#803). When it does not, the beat is not run, so a stale bot costs no model call;
+  - both beats PASS, on exactly one model call;
+  - the one `/chat` body the probe built is `{"prompt": "What's the status of my support ticket HC-666?\n\n[[wib-probe]]",
+    "witch": "Agatha the Banshee"}`, the room's plain question with the stage name, as the chat page sends it;
+  - the ask landed no `joker-burritobot` (the nameless Joker of 2026-11-01), and the probe left no
+    `joker-agatha-the-banshee` behind. A `joker-burritobot` is deleted only when this run's ask made it.
+- `verify/test_kubecon_c3_live_checks.py` (new, offline). It runs the live test's `run_checks` against a fake public
+  cluster. A healthy fake passes. Each way the criterion can stop holding fails it: guard-proxy dropping the name, an
+  old or not-rolled-out checksum (no model call then), the probe going back to a copied ask, the probe sending no name,
+  Kyverno refusing the Joker, and a context that is not the public cluster (nothing else read).
+- `verify/run-e2e.sh` requires COMMUNITY_CONTEXT and checks it reachable, beside CONTEXT. AGENTS.md's run-e2e.sh
+  paragraph names it, which `verify/test_gate_commands.py` holds.
+
+**Why COMMUNITY_CONTEXT and not CONTEXT.** run-e2e.sh's CONTEXT is a fresh attendee cluster, and the probe's community
+role refuses any host but attackme. Reading CONTEXT would fail every attendee build. The public cluster is a second
+cluster, so it gets its own required name, the way DRIFT_PROFILE and ATTENDEE_CLUSTER did for #205. It is not in the
+cluster-free tier (run-e2e-tools.sh): it needs the cluster, and it spends about half a cent of Bedrock.
+
+**Prior drafts.** `bash verify/prior-drafts.sh 807 origin/staging` printed NONE, and #807 has no comments.
+
+**Not yet run on a cluster.** Run 16574's cluster session files (`clusters/kubeconfig` and `clusters/env`) were
+unreadable (permission denied), as run 16467's were, so the live test was not run. Owed from a session with accen-dev,
+after ai-layer on the community cluster has synced 6d8505a's repin, and not while the private probe is running:
+`COMMUNITY_CONTEXT=watch-it-burn-community KUBECONFIG=<isolated file> python3 verify/test_kubecon_c3_live.py`, ending
+"All live Challenge 3 probe checks passed." That run is #764's last criterion.
+
+No dependency was added.

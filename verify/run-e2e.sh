@@ -3,7 +3,12 @@
 # ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, Backstage's footprint and Playwright.
 #
 # Usage: CONTEXT=<kube-context> IAM_PIPELINE_PROFILE=<aws-profile> IAM_PIPELINE_REGION=<region> \
-#            DRIFT_PROFILE=<aws-profile> ATTENDEE_CLUSTER=<cluster> [NAMESPACE=agent] bash verify/run-e2e.sh
+#            DRIFT_PROFILE=<aws-profile> ATTENDEE_CLUSTER=<cluster> COMMUNITY_CONTEXT=<kube-context> \
+#            [NAMESPACE=agent] bash verify/run-e2e.sh
+#
+# The KubeCon probe's Challenge 3 beat (test_kubecon_c3_live.py, #807) runs on the live public bot, not the attendee
+# cluster, so it needs COMMUNITY_CONTEXT, the kube-context of the community cluster (attackme). It spends one model
+# call there and removes the Joker it lands.
 #
 # The AWS-plane drift check (test_drift_aws_live.py, #205) needs DRIFT_PROFILE, an operator profile in
 # WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied, and ATTENDEE_CLUSTER, a cluster in that
@@ -73,6 +78,12 @@ if [[ -z "${CONTEXT:-}" ]]; then
 elif [[ "${tools_ready}" -eq 1 ]] \
     && ! kubectl --context "${CONTEXT}" --request-timeout=15s get --raw /readyz >/dev/null 2>&1; then
     missing+=("cluster for context '${CONTEXT}' is not reachable (kubectl --context ${CONTEXT} get --raw /readyz failed)")
+fi
+if [[ -z "${COMMUNITY_CONTEXT:-}" ]]; then
+    missing+=("COMMUNITY_CONTEXT is not set: name the kube-context of the community cluster (attackme) the KubeCon probe's Challenge 3 beat runs on (test_kubecon_c3_live.py)")
+elif [[ "${tools_ready}" -eq 1 ]] \
+    && ! kubectl --context "${COMMUNITY_CONTEXT}" --request-timeout=15s get --raw /readyz >/dev/null 2>&1; then
+    missing+=("community cluster for context '${COMMUNITY_CONTEXT}' is not reachable (kubectl --context ${COMMUNITY_CONTEXT} get --raw /readyz failed)")
 fi
 if [[ "${#missing[@]}" -gt 0 ]]; then
     printf 'E2E SUITE CANNOT RUN; this is a failure, not a skip:\n' >&2
