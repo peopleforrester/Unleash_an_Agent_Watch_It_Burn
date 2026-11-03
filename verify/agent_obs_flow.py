@@ -19,6 +19,11 @@ spans API for ml_app:burritobot spans on that cluster from the moment the chat w
 Datadog documents a 3 to 5 minute delay). Any span counts: the question is whether anything arrives. It prints the
 trace ids it found, which is the read-back a fix is judged on.
 
+chat --own-session (#813) asks the harder question: did this chat itself show up? It looks only for spans tagged with
+the chat's own session_id on that cluster, so a room busy with other chats cannot make it GREEN. When spans from the
+cluster arrive but none carry the session, the RED says so: the flow runs and the session tag is what is missing.
+verify/test_agent_obs_flow_live.py runs it on both bots in the live E2E suite.
+
 watch spends nothing. It reads APM's newest BurritoBot span at least --lag minutes old (default 10, past the ingestion
 delay) and asks Agent Observability for any ml_app:burritobot span from two minutes before it. APM with a span and
 Agent Observability with none is #783's symptom, and is RED. No APM span in the window is RED too: there is nothing to
@@ -74,15 +79,20 @@ def ms(t: dt.datetime) -> int:
     return int(t.timestamp() * 1000)
 
 
-def llmobs_path(start: dt.datetime, cluster: str | None, limit: int = 100) -> str:
+def llmobs_path(start: dt.datetime, cluster: str | None, limit: int = 100, session: str = "") -> str:
     params = {"filter[from]": str(ms(start)), "filter[to]": "now", "filter[ml_app]": ML_APP, "page[limit]": str(limit)}
-    if cluster:
-        params["filter[query]"] = f"k8s.cluster.name:{cluster}"
+    query = " ".join(([f"k8s.cluster.name:{cluster}"] if cluster else []) + ([f"session_id:{session}"] if session else []))
+    if query:
+        params["filter[query]"] = query
     return "/api/v2/llm-obs/v1/spans/events?" + urllib.parse.urlencode(params)
 
 
-def llmobs_spans(dd, start: dt.datetime, cluster: str | None) -> list[dict]:
-    return dd.call("GET", llmobs_path(start, cluster)).get("data") or []
+def llmobs_spans(dd, start: dt.datetime, cluster: str | None, session: str = "") -> list[dict]:
+    return dd.call("GET", llmobs_path(start, cluster, session=session)).get("data") or []
+
+
+def carries(span: dict, session: str) -> bool:
+    return f"session_id:{session}" in ((span.get("attributes") or {}).get("tags") or [])
 
 
 def trace_ids(spans: list[dict]) -> list[str]:
@@ -109,7 +119,9 @@ def utcnow() -> dt.datetime:
 
 def check_chat(dd, host: str, stamp: str, wait_s: float, poll_s: float, timeout: float,
                chat: Callable[[str, dict, float], dict] = send_chat, now: Callable[[], dt.datetime] = utcnow,
-               sleep: Callable[[float], None] = time.sleep) -> tuple[bool, str]:
+               sleep: Callable[[float], None] = time.sleep, *, own_session: bool = False) -> tuple[bool, str]:
+    """GREEN when ml_app:burritobot spans from the bot's cluster arrive after the chat; with own_session, only when
+    spans carrying the chat's own session arrive (#813), so another visitor's chat cannot stand in for this one."""
     cluster = cluster_for(host)
     session = f"wib-aoflow-{cluster}-{stamp}"
     sent = now()
@@ -122,18 +134,37 @@ def check_chat(dd, host: str, stamp: str, wait_s: float, poll_s: float, timeout:
     log.info("  %s: chat sent at %s, session %s; waiting up to %ds for %s in Agent Observability",
              host, sent.strftime("%H:%M:%SZ"), session, wait_s, cluster)
     deadline = time.monotonic() + wait_s
+    since = sent - dt.timedelta(seconds=SKEW_S)
     while True:
-        spans = llmobs_spans(dd, sent - dt.timedelta(seconds=SKEW_S), cluster)
-        if spans:
-            mine = [s for s in spans if f"session_id:{session}" in ((s.get("attributes") or {}).get("tags") or [])]
-            return True, (f"{host}: {len(spans)} ml_app:{ML_APP} span(s) on {cluster} since the chat, traces "
-                          f"{', '.join(trace_ids(spans)) or '(no trace_id in the response)'}"
-                          + (f"; {len(mine)} carry its session {session}" if mine else ""))
+        if own_session:
+            # The query asks for the session, and the tag is checked again here, so a query Datadog widened can
+            # never pass another chat's spans off as this one's.
+            mine = [s for s in llmobs_spans(dd, since, cluster, session) if carries(s, session)]
+            if mine:
+                return True, (f"{host}: the chat's own session {session} is in Agent Observability: {len(mine)} "
+                              f"ml_app:{ML_APP} span(s) on {cluster}, traces "
+                              f"{', '.join(trace_ids(mine)) or '(no trace_id in the response)'}")
+        else:
+            spans = llmobs_spans(dd, since, cluster)
+            if spans:
+                mine = [s for s in spans if carries(s, session)]
+                return True, (f"{host}: {len(spans)} ml_app:{ML_APP} span(s) on {cluster} since the chat, traces "
+                              f"{', '.join(trace_ids(spans)) or '(no trace_id in the response)'}"
+                              + (f"; {len(mine)} carry its session {session}" if mine else ""))
         if time.monotonic() >= deadline:
-            return False, (f"{host}: AGENT OBSERVABILITY RECEIVED NOTHING from {cluster}. One chat at "
-                           f"{sent.strftime('%Y-%m-%d %H:%M:%SZ')} was answered, and no ml_app:{ML_APP} span on "
-                           f"{cluster} arrived in {wait_s:.0f}s. {RED_HINT}")
+            break
         sleep(poll_s)
+    if own_session:
+        others = llmobs_spans(dd, since, cluster)
+        if others:
+            return False, (f"{host}: THE CHAT'S OWN SPANS NEVER ARRIVED from {cluster}. One chat at "
+                           f"{sent.strftime('%Y-%m-%d %H:%M:%SZ')} under session {session} was answered, and in "
+                           f"{wait_s:.0f}s Agent Observability got {len(others)} ml_app:{ML_APP} span(s) from "
+                           f"{cluster} (traces {', '.join(trace_ids(others)[:5]) or '?'}) but none tagged "
+                           f"session_id:{session}. The flow runs; the chat's session.id is not reaching its spans.")
+    return False, (f"{host}: AGENT OBSERVABILITY RECEIVED NOTHING from {cluster}. One chat at "
+                   f"{sent.strftime('%Y-%m-%d %H:%M:%SZ')} was answered, and no ml_app:{ML_APP} span on "
+                   f"{cluster} arrived in {wait_s:.0f}s. {RED_HINT}")
 
 
 def apm_newest(dd, hours: int, lag_min: int, env: str) -> dt.datetime | None:
@@ -173,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--wait", type=int, default=600, help="seconds to wait for the spans (default 600)")
     c.add_argument("--poll", type=float, default=30.0)
     c.add_argument("--timeout", type=float, default=120.0, help="the /chat call's timeout")
+    c.add_argument("--own-session", action="store_true",
+                   help="GREEN only when spans tagged with the chat's own session arrive, not any span (#813)")
     w = sub.add_parser("watch", help="APM's newest BurritoBot span must be in Agent Observability too (no model call)")
     w.add_argument("--hours", type=int, default=12, help="how far back APM is read (default 12)")
     w.add_argument("--lag", type=int, default=10, help="minutes APM's span must be old, past ingestion (default 10)")
@@ -193,7 +226,8 @@ def main(argv: list[str] | None = None) -> int:
     dd = datadog(args.profile, args.region)
     if args.cmd == "chat":
         stamp = utcnow().strftime("%Y%m%d%H%M%S")
-        results = [check_chat(dd, h, stamp, args.wait, args.poll, args.timeout) for h in hosts]
+        results = [check_chat(dd, h, stamp, args.wait, args.poll, args.timeout, own_session=args.own_session)
+                   for h in hosts]
     else:
         results = [check_watch(dd, args.hours, args.lag, args.env)]
     for good, note in results:

@@ -11691,3 +11691,49 @@ another, and changes no code. Hecaton had already rebased the branch onto `2b3c7
 On `2b3c7df`, `bash verify/run-e2e-tools.sh` ran 45 checks. Its offline suite was green (228 tests), and it exited 1
 on one check: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins
 `68004fb5...`, the red recorded above. The workshop-mcp tag check passes.
+## 2026-11-03 · #813 · A live test reads a fresh chat on each KubeCon cluster back from Agent Observability, by its own session
+
+**What #813 asks.** Test review run 16093 found that #783's criterion "a fresh chat on each cluster shows up in Agent
+Observability, read back through the Datadog API" was held only by `verify/test_agent_obs_flow.py`, which runs
+`verify/agent_obs_flow.py` against a fake Datadog. No test read a real chat back. No earlier draft of #813 exists
+(`verify/prior-drafts.sh 813 origin/staging` prints NONE, and the issue has no comments).
+
+**The live test** (`verify/test_agent_obs_flow_live.py`, `# SUITE: e2e`, so `run-e2e.sh` runs it and `run-tests.sh`
+lists it with the live suite). It runs `agent_obs_flow.py chat --own-session` on both KubeCon bots
+(attackme.burritobot.co on burritobot-public, burritobot-private.burritobot.co on burritobot-private), reading the read
+pair in `watch-it-burn/datadog` as `WIB_DEFAULT_ACCOUNT` (default accen-dev) in `WIB_REGION`, as
+`test_dd_traces_live.py` does. It passes only when both chats' own spans are read back, and prints their trace ids.
+No aws CLI, an unreadable secret, a Datadog refusal, a bot that does not answer, a cluster that sends nothing and a
+cluster whose spans lack the chat's session each fail it with the reason. It spends two model calls, about a cent.
+
+**Why `--own-session`, new in `agent_obs_flow.py`.** `chat` without it is GREEN on any `ml_app:burritobot` span from
+the cluster since the chat, which answers #783's question (is anything arriving?) but not this criterion's (did this
+chat show up?): during a run-through another visitor's chat would pass it. With `--own-session`, `check_chat` asks the
+spans API for `k8s.cluster.name:<cluster> session_id:<the chat's session>` and checks the `session_id:` tag on each
+span again, so a widened query cannot pass another session's spans off. When spans from the cluster arrive but none
+carry the session, the RED says `THE CHAT'S OWN SPANS NEVER ARRIVED` and names the other trace ids, which separates a
+missing session tag from #783's `RECEIVED NOTHING`. The flag is keyword-only, so `chat` without it, `watch`, and the
+run-of-show's Night Before command behave as before. The session tag is the one `verify/stage_traces.py` already
+reads (`session_id:<session>` on each span's tags), from the `session` the /chat body carries; it has not been read
+live yet either, and if the live test's first run reports spans without it, that is the finding, not a test to loosen.
+
+**Offline** (`verify/test_agent_obs_flow.py`, its fake now parsing both query terms). New cases: each chat's own
+session is asked for on its own cluster and read back by its own trace ids and not another visitor's; another
+session's spans on the cluster are RED with the session named; a Datadog that ignores the session term is still RED;
+nothing at all is #783's RED; without the flag any span is still GREEN; and through `main`, exit 1 with one chat
+missing and exit 0 with both. Forcing `check_chat` to ignore `own_session` fails six of the new checks, and dropping
+the second tag check fails the widened-query case (both confirmed on a temporary edit, restored).
+
+**The live run did not happen: the session files could not be read.** Run 16661's `clusters/env`, `aws-config`,
+`aws-credentials` and `kubeconfig` are mode 640, group `hecaton`, and the run's user (`hecaton-s6-claude-certkraken`,
+groups `hecaton-runs` and `hecaton-tools`) is not in it, so `. "$HECATON_CLUSTER_ENV"` is "Permission denied", as for
+runs 16420, 16574, 16647 and 16653 (hecaton#508). At 2026-11-03T13:59Z `python3 verify/test_agent_obs_flow_live.py`
+printed `FAIL: Datadog could not be read: cannot read watch-it-burn/datadog as profile accen-dev in us-west-2: aws:
+[ERROR]: The config profile (accen-dev) could not be found` and exited 1, which is the loud failure it is written to give.
+
+**Not yet run on a cluster.** From a run whose session files it can read: `. "$HECATON_CLUSTER_ENV" && python3
+verify/test_agent_obs_flow_live.py`. It must end "A fresh chat on burritobot-public and on burritobot-private each
+showed up in Agent Observability under its own session", and its two trace ids go in a comment on #783 and #813. A
+403 names the permission the pair lacks (`llm_observability_read`), which #759's live read also waits on.
+
+No dependency was added.
