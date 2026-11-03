@@ -14,8 +14,9 @@ directory and every profile's values file exist, `gitops/apps/` does not, and th
 
 #796 added two more. Run 9604 failed hecaton's ai-isms gate on the repo's nickname, a hype verb to the scanner, in
 a file that already read `major`. Run 15816's E2E command outran the 20 minutes it was given in the background, and
-`pgrep` by name found other runs' copies of the same scripts. The section's third and fourth items name the words
-and the pre-check, `verify/prose_gate.py`, and how the E2E command is waited on; this checks both say so.
+`pgrep` by name found other runs' copies of the same scripts; run 16484, the first attempt at #796, then stalled
+waiting for the job's exit notice. The section's third and fourth items name the words and the pre-check,
+`verify/prose_gate.py`, and how the E2E command is waited on in bounded steps; this checks both say so.
 """
 from __future__ import annotations
 
@@ -108,6 +109,13 @@ check("an item says how the E2E command is waited on", bool(e2e))
 check("it gives the limit as 3600000 ms", "3600000 ms" in e2e)
 check("it names run 15816 and the 20 minutes", "run 15816" in e2e and "20 minutes" in e2e)
 check("it says not to watch it with pgrep", "`pgrep`" in e2e and "other runs on the host" in e2e)
+wait = """`timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`"""
+check("it gives the bounded foreground wait on the run's own log", wait in e2e)
+check("the wait stays under the shell tool's 10-minute foreground limit", "timeout 540 " in wait)
+check("the log it waits on gets the exit line the wait greps for",
+      """`bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`""" in e2e)
+check("it says not to end the turn waiting, naming the stall and run 16484",
+      "Do not end the turn" in e2e and "stalled" in e2e and "run 16484" in e2e)
 tools = (REPO / "verify" / "run-e2e-tools.sh").read_text(encoding="utf-8")
 check("the verdict lines it names are the ones run-e2e-tools.sh prints",
       "checks ran" in tools and "ALL E2E TOOLS TIER CHECKS GREEN" in tools and "`checks ran`" in e2e

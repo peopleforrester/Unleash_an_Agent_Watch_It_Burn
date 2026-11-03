@@ -10170,7 +10170,7 @@ Hecaton's insights found two more runs that lost time to the environment. There 
   own scanner over the working tree, against the merge base, and names each file, label and added line it would
   fail. It takes the scanner by path rather than copying its patterns, so the two cannot drift; it exits 2 when the
   path holds no scanner. The fourth says to give the E2E command a background limit of 3600000 ms, wait for the job's
-  exit notice and read its last lines, and never `pgrep` by name. `run-e2e-tools.sh` now prints how long it took on
+  exit notice and read its last lines, and never `pgrep` by name. (Run 16533 replaced that wait; see below.) `run-e2e-tools.sh` now prints how long it took on
   its `checks ran` line, so the next limit is set from a reading. The pre-check's first use was this entry: its
   draft named the `_` character by a word that is also on the hype-verb list, and the script named the line.
 - **Tests.** `verify/test_prose_gate.py` (offline) drives the script in a scratch repo with a stand-in scanner,
@@ -10181,5 +10181,14 @@ Hecaton's insights found two more runs that lost time to the environment. There 
   holds the two new items.
 - **The cause comment.** The criterion asks for the cause on #796 in a comment. This run cannot write to GitHub;
   the dispatcher posts the run's report on the issue, and the report's summary names both causes.
+
+**Run 16533: the first attempt stalled on the advice it wrote.** Run 16484 did as its fourth item said: it started
+the E2E command in the background and ended its turn to wait for the exit notice. Hecaton stopped it as stalled after
+900 seconds with no activity, and its one other way to watch, the Monitor tool, was denied for want of an approval no
+run can give. So item 4 now has the run write the job's output and exit code to a log of its own and wait in the
+foreground in calls of nine minutes, `timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`,
+repeated after each 124. That stays under the shell tool's 10-minute foreground limit, and each call keeps the run
+active. It says not to end the turn to wait, and `verify/test_dispatched_runs.py` holds the command and that warning.
+Run 16533 waited on its own E2E run that way.
 
 **Not yet run on a cluster.** No cluster is needed; nothing here deploys.

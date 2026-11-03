@@ -129,9 +129,14 @@ below and run 9672 to the second (#633). Runs 9604 and 15816 lost theirs to the 
    `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`: it reads
    the working tree against staging with the gate's own scanner, names each file, label and added line the gate
    would fail, and exits 1 on any.
-4. **The E2E command runs in the background with an hour's limit, and its own exit is the signal.**
-   `bash verify/run-e2e-tools.sh` takes over 20 minutes on the shared host, longer than the shell tool's default
-   limit and the 20 minutes run 15816 gave it. Start it as a background job with a limit of 3600000 ms, wait for the
-   notice that the job exited, and read its verdict from the job's own output: the `checks ran` line and
-   `ALL E2E TOOLS TIER CHECKS GREEN`. Do not watch it with `pgrep` or `pkill` by script name: other runs on the host
-   run the same scripts from their own worktrees, so a name match finds their processes, not this run's.
+4. **The E2E command runs in the background with an hour's limit, and the run waits on its own log in steps.**
+   `bash verify/run-e2e-tools.sh` takes over 20 minutes on the shared host, longer than the shell tool's 10-minute
+   foreground limit and the 20 minutes run 15816 gave its background job. Start it as a background job with a limit
+   of 3600000 ms, writing to a log of this run's own:
+   `bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`. Then wait in the foreground, nine minutes
+   a call: `timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`, again after each 124, until
+   it returns 0. Do not end the turn to wait for the job's exit notice, and do not reach for Monitor, which needs an
+   approval a run cannot get: a run silent for 15 minutes is stopped as stalled, as run 16484 was on this issue. Read
+   the verdict from the log: the `checks ran` line, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Do not watch it
+   with `pgrep` or `pkill` by script name: other runs on the host run the same scripts from their own worktrees, so
+   a name match finds their processes, not this run's.
