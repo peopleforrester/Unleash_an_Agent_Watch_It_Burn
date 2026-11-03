@@ -140,6 +140,44 @@ def deploys(profile: str, app_file: str) -> bool:
     return name in app_names(profile)
 
 
+# The Kyverno CEL kinds (#206): what a profile's admission policies are on the cluster.
+KYVERNO_POLICY_KINDS = ("ValidatingPolicy", "ImageValidatingPolicy")
+
+
+def source_files(source: dict) -> list[pathlib.Path]:
+    """The repo files an Application source of this repo hands Argo CD: a directory source's include, else the
+    directory's Kustomization resources, else its *.yaml (recursed when the source says so)."""
+    base = REPO / source["path"]
+    directory = source.get("directory") or {}
+    if directory.get("include"):
+        return sorted(base.glob(directory["include"]))
+    kustomization = base / "Kustomization"
+    if not directory and kustomization.is_file():
+        return [base / r for r in yaml.safe_load(kustomization.read_text(encoding="utf-8"))["resources"]]
+    return sorted(base.glob("**/*.yaml" if directory.get("recurse") else "*.yaml"))
+
+
+def kyverno_policies(profile: str) -> dict[str, dict[str, str]]:
+    """The Kyverno CEL policies a profile installs (#467): {kind: {policy name: the Application that syncs it}}.
+
+    Read from each listed app's sources of this repo, so a profile that takes one policy file alone
+    (kubecon-community's kyverno-registry-policy, #774) or adds a directory (kyverno-breakout) counts what it syncs."""
+    found: dict[str, dict[str, str]] = {k: {} for k in KYVERNO_POLICY_KINDS}
+    for name in app_names(profile):
+        for app in yaml.safe_load_all((APPS / f"{name}.yaml").read_text(encoding="utf-8")):
+            if not app or app.get("kind") != "Application":
+                continue
+            spec = app["spec"]
+            for source in ([spec["source"]] if spec.get("source") else spec.get("sources") or []):
+                if source.get("repoURL") != REPO_URL or "path" not in source:
+                    continue
+                for f in source_files(source):
+                    for doc in yaml.safe_load_all(f.read_text(encoding="utf-8")):
+                        if doc and doc.get("kind") in found:
+                            found[doc["kind"]][doc["metadata"]["name"]] = name
+    return found
+
+
 def is_template(path: pathlib.Path) -> bool:
     """A Helm template of the chart: Go template text, not YAML, so YAML-reading sweeps leave it out."""
     return TEMPLATES in path.resolve().parents
