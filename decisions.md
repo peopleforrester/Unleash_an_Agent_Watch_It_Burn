@@ -13123,3 +13123,9 @@ left as it is: it still answers 200, and it is not the router-health probe the i
 200; `https://provisioning.agenticburn.com/` answered 404. `bash infra/terraform/fleet/fleet.sh router-check` printed
 PASS for both hosts and "router-check: the router serves exactly the roster". No cluster was changed, and nothing in
 this change needs a cluster to run.
+
+**The suites.** `bash verify/run-e2e-tools.sh` ran the offline suite first: 241 tests, "ALL OFFLINE RENDER-GATE TESTS
+GREEN", `test_gotchas_router_probe.py` among them, so the Test command passes. Run on the base doc, the new test
+failed its two checks, naming `https://provisioning.agenticburn.com/` against `https://start.burritobot.co/roster.json`.
+The tools tier ran 52 tests in 24m28s and exited 1 on one, `test_image_version_tags.py`: ghcr.io answers 404 for
+`watch-it-burn:sample-app-nginx-1.27.5`, the #814 tag the #812 entries above record. This change touches no image.
