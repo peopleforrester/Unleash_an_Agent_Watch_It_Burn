@@ -1,8 +1,8 @@
 # ABOUTME: Weaver span-group contract for the guard-proxy spans (PRD #20 M6 / #22 M1, M3).
-# ABOUTME: The HTTP SERVER hop and the gen_ai "sanitize" INTERNAL span, ref'd to OTel semconv v1.37.0.
+# ABOUTME: The HTTP SERVER hop, the gen_ai "sanitize" and "chat" INTERNAL spans, ref'd to OTel semconv v1.41.1.
 #
 # This is the source of truth for what guard-proxy/proxy.py emits. `weaver registry check` resolves every
-# ref against the pinned upstream registry (manifest.yaml -> otel v1.37.0); a typo or a renamed upstream
+# ref against the pinned upstream registry (manifest.yaml -> otel v1.41.1); a typo or a renamed upstream
 # attribute fails the check in CI. `weaver live-check` (docs/weaver-live-check.md) then compares real
 # telemetry from the running proxy against this same contract. Keep these groups in lockstep with the
 # set_attribute(...) and _stamp(...) calls in proxy.py; verify/test_weaver_guard_proxy_stamps.py holds the
@@ -122,6 +122,50 @@ groups:
           The forwarded prompt, emitted as a JSON string. Equal to gen_ai.input.messages because the proxy
           forwards unchanged. Same opt-in content-capture gating as the input messages.
 
+  # --- The storefront turn's model-call wrapper: /chat's "chat" INTERNAL span (proxy.py _handle_chat). ---
+  #
+  # Datadog's Agent Observability maps gen_ai.operation.name "chat" to an llm span and reads its token counts from
+  # gen_ai.usage.input_tokens / gen_ai.usage.output_tokens (docs.datadoghq.com/llm_observability/instrumentation/
+  # otel_instrumentation, read 2026-11-03). Those two are the GenAI attributes #784 adopts on guard-proxy; they are in
+  # semconv v1.37 and v1.41.1 alike. The pinned proxy.py (fb6e2bf) does not set them yet; the guard-proxy-agenticburn
+  # change #784 asks for does, from kagent_usage_metadata, and a repin brings it here. Agent Observability's copy
+  # (#746) drops this span (filter/llmobs_one_root in gitops/otel-collector/values.yaml), so the counts are APM's to
+  # show and never add to kagent's generate_content counts, which are the ones Agent Observability prices.
+  - id: span.witb.guard_proxy.chat
+    type: span
+    span_kind: internal
+    stability: development
+    brief: >-
+      The guard-proxy `chat` INTERNAL span the storefront's POST /chat wraps around the forward to the agent. It
+      carries the student's prompt and the bot's final reply, and the turn's token counts.
+    attributes:
+      - ref: gen_ai.operation.name
+        requirement_level: required
+        note: Fixed to the "chat" enum member, so Datadog classifies the span as an llm span.
+      - ref: gen_ai.request.model
+        requirement_level: required
+        note: The Bedrock model id the agent calls (MODEL_NAME, or the tier's full id).
+      - ref: gen_ai.provider.name
+        requirement_level: recommended
+        note: >-
+          aws.bedrock. Stamped by the collector's transform/set_genai_provider on every span with an operation
+          name, not by proxy.py.
+      - ref: gen_ai.input.messages
+        requirement_level: opt_in
+        note: The student's prompt as one user message, JSON. Same content-capture gating as the sanitize span.
+      - ref: gen_ai.output.messages
+        requirement_level: opt_in
+        note: The bot's final reply as one assistant message, JSON. Same content-capture gating.
+      - ref: gen_ai.usage.input_tokens
+        requirement_level: recommended
+        note: >-
+          The turn's input tokens, summed from the agent's kagent_usage_metadata (promptTokenCount). Absent on the
+          pinned proxy.py (fb6e2bf) until the guard-proxy-agenticburn change #784 asks for is repinned.
+      - ref: gen_ai.usage.output_tokens
+        requirement_level: recommended
+        note: >-
+          The turn's output tokens (candidatesTokenCount), as above.
+
   # --- The outbound CLIENT hop. guard-proxy -> agentgateway (the next hop fronting the kagent agent). ---
   #
   # Emitted by proxy.py inside the forward call (PRD #27 M2). peer.service names the downstream node so the
@@ -153,4 +197,6 @@ groups:
         note: >-
           The logical name of the downstream service ("agentgateway" in the target topology). This is the
           Service Map edge signal; defined in the upstream OTel semconv registry (resolved via the
-          manifest.yaml dependency), no local definition needed.
+          manifest.yaml dependency), no local definition needed. Deprecated from semconv v1.38 (renamed to
+          service.peer.name) and kept on purpose: Datadog's service map reads peer.service, and Datadog documents
+          no mapping for service.peer.name (#784).

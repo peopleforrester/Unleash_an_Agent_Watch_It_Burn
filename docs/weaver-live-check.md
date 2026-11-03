@@ -1,12 +1,13 @@
 # Weaver: the guard-proxy span contract (PRD #20 M6)
 
-The guard-proxy emits two spans (PRD #22 M1): an HTTP `SERVER` span for the inbound hop and a
-gen_ai `sanitize` `INTERNAL` span for the guard decision. `weaver/registry/` is the machine-checkable
-contract for those spans, pinned to OpenTelemetry semantic conventions **v1.37.0**. Two checks use it:
+The guard-proxy's spans: an HTTP `SERVER` span for the inbound hop and a gen_ai `sanitize` `INTERNAL`
+span for the guard decision (PRD #22 M1), the storefront's gen_ai `chat` `INTERNAL` span around the
+forward (#784), and the `agent.forward` `CLIENT` hop (PRD #27 M2). `weaver/registry/` is the machine-checkable
+contract for those spans, pinned to OpenTelemetry semantic conventions **v1.41.1** (v1.37.0 until #784). Two checks use it:
 
 | Check | What it proves | When it runs |
 |---|---|---|
-| `weaver registry check` | The contract itself is well-formed and every `ref:` resolves against upstream semconv v1.37.0. Catches a typo'd or renamed attribute. | CI, on any change under `weaver/` (`.github/workflows/weaver-registry-check.yml`). |
+| `weaver registry check` | The contract itself is well-formed and every `ref:` resolves against upstream semconv v1.41.1. Catches a typo'd or renamed attribute. | CI, on any change under `weaver/` (`.github/workflows/weaver-registry-check.yml`). |
 | `weaver registry live-check` | The spans the **running** proxy actually emits match the contract. Catches drift between `proxy.py` and the registry. | Manually, against live telemetry from a deployed cluster. |
 
 ## Toolchain
@@ -31,7 +32,7 @@ weaver --version
 weaver registry check --registry weaver/registry/
 ```
 
-This resolves `weaver/registry/manifest.yaml` (which pins the upstream registry to the v1.37.0 tag
+This resolves `weaver/registry/manifest.yaml` (which pins the upstream registry to the v1.41.1 tag
 archive) and validates `weaver/registry/guard-proxy-spans.yaml`. Every `ref:` in the span groups must
 name a real upstream attribute. A clean run prints `No after_resolution policy violation` and exits 0.
 The check needs network access to fetch the pinned semconv archive on the first run; weaver caches it
