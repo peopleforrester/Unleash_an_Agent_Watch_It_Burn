@@ -10628,7 +10628,15 @@ and about 90 of guard-proxy's 150 a minute for the cluster, so it is not run whi
 comment on #644 says the per-conversation limit is live on attackme at that revision, and a new entry here records
 the test's output with the sync status and revision.
 
-**Tests at this entry.** `bash verify/run-tests.sh`; its result is in this run's report. This entry is the only
-change.
+**A fixture with an untagged image.** `bash verify/run-e2e-tools.sh` failed `test_image_version_tags.py` on two
+checks. One is the moved `web-terminal-ttyd-1.7.7` digest the #787 entry above records (#815). The other is new since
+that entry: `verify/test_tool_pin_live_check.py` line 78, added by `b28d5c1` (#480), names
+`watch-it-burn:workshop-mcp@sha256:9a26` in a fake cluster's evil-mcp-shim Deployment, and the tag check wants every
+reference to that image to name `workshop-mcp-mcp-1.29.1`. The fixture now names that tag. The string is only compared
+with itself as found, so `test_tool_pin_live_check.py` still passes.
+
+**Tests at this entry.** `bash verify/run-tests.sh` exits 0 (226 tests). `bash verify/run-e2e-tools.sh` ran 45 checks
+and failed only `test_image_version_tags.py`. After the fixture fix, that file's one failing check is the
+web-terminal digest: ghcr.io serves `sha256:0b72ecc7...` and resources.yaml pins `sha256:68004fb5...` (#815).
 
 No dependency was added.
