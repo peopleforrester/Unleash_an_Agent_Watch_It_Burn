@@ -11179,4 +11179,10 @@ calls, and a new case (a Joker landing with no ticket read first) fails `c6-land
 (hecaton#508). The live command above is still owed. The probe runs from the checkout, so #806's change needs no
 sync; only the guard-proxy repin has to be live on the community cluster.
 
+**The suites (run 16647, on 807b4ef).** `bash verify/run-tests.sh` exits 0 with 230 tests. `bash verify/run-e2e-tools.sh`
+ran 46 checks and exits 1 on two. One is `test_image_version_tags.py`, the web-terminal tag CI pushed over (above).
+The other is `test_weather_feed_e2e.py`, whose deployed-get_weather check got an HTTP 503 from the live weather
+service while its two live-feed checks before it passed. Run alone straight after, it passed every check, so the 503
+was the outside service. Nothing here touches the weather feed.
+
 No dependency was added.
