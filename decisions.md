@@ -13360,3 +13360,7 @@ the criterion as it stands: #603's save has not run. Through sources, `repo-ls p
 `~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .`, then commit the dates it writes into
 images.lock and run `python3 verify/test_images_saved.py` there. That is #603's remaining step (llm-coding-workflow#372
 is the fleet-wide save). Until then the hand-run `bash verify/run-e2e.sh` fails on this test, as it should.
+
+**The suites (run 16818).** On 59304af9, `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52 tier
+tests) in 25m38s and ended `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 242 tests, all green,
+`test_images_saved_judge.py` among them, and listed `test_images_saved.py` under the E2E suite.
