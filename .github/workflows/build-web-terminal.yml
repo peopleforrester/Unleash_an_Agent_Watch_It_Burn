@@ -1,5 +1,6 @@
-# ABOUTME: Build and push the attendee web-terminal image (ttyd + kubectl) to GHCR on GitHub's runners, tagged with ttyd's version.
-# ABOUTME: Triggered on changes to images/web-terminal/** or manually via workflow_dispatch.
+# ABOUTME: Build the attendee web-terminal image (ttyd + kubectl) on GitHub's runners and push it to GHCR under ttyd's version,
+# ABOUTME: only when that tag does not exist yet; a tag moved off its images.lock pin is put back on it (#815).
+# Triggered on changes to images/web-terminal/** or this file, or manually via workflow_dispatch.
 name: build-web-terminal
 
 on:
@@ -58,8 +59,51 @@ jobs:
           v="$(printf '%s\n' "${out}" | sed -nE 's/^ttyd version ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
           [ -n "${v}" ] || { echo "ttyd reported no version: ${out}" >&2; exit 1; }
           echo "tag=ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-${v}" >> "${GITHUB_OUTPUT}"
-      - name: Push
+      # A pinned tag never moves (#815). The build is not reproducible, so every run used to push a new digest under
+      # the same web-terminal-ttyd-<v> tag, and after #714's edit to this file the tag served an unsigned digest
+      # nothing pinned. Now the tag is pushed only when ghcr.io has no such tag. When it has one, the build is not
+      # pushed; if the tag no longer serves the digest images.lock pins for it, crane re-points it at that pinned,
+      # signed digest (a manifest PUT of the pinned bytes, so the digest is unchanged). A tag that exists with no
+      # pin, or a registry answer that is not "no such manifest", fails the job. crane is the go-containerregistry
+      # release verify/e2e-tools.lock pins, checked against the same SHA-256; verify/test_web_terminal_push_guard.py
+      # runs this step's script against a stub crane and docker and holds the pin to the lock.
+      - name: Install crane
+        env:
+          CRANE_URL: https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz
+          CRANE_SHA256: 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0
         run: |
-          docker tag web-terminal:built "${{ steps.version.outputs.tag }}"
-          docker push "${{ steps.version.outputs.tag }}"
-          echo "pushed ${{ steps.version.outputs.tag }}; pin its digest in gitops/ai-layer/resources.yaml and sign it"
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/crane.tar.gz" "${CRANE_URL}"
+          echo "${CRANE_SHA256}  ${RUNNER_TEMP}/crane.tar.gz" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf "${RUNNER_TEMP}/crane.tar.gz" -C "${RUNNER_TEMP}/bin" crane
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+      - name: Push, never over a tag that exists
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          pin="$(awk -v ref="${TAG}@" 'index($1, ref) == 1 { print $2 }' images.lock)"
+          if served="$(crane digest "${TAG}" 2>&1)"; then
+            if [ -z "${pin}" ]; then
+              echo "::error::${TAG} exists at ${served} and images.lock pins nothing for it; refusing to overwrite it"
+              exit 1
+            fi
+            if [ "${served}" = "${pin}" ]; then
+              echo "${TAG} already serves its pin ${pin}; not overwritten"
+            else
+              echo "${TAG} serves ${served}, not its pin ${pin}; re-pointing it at the pin"
+              crane tag "${TAG%:*}@${pin}" "${TAG##*:}"
+              now="$(crane digest "${TAG}")"
+              [ "${now}" = "${pin}" ] || { echo "::error::${TAG} serves ${now} after re-pointing, not ${pin}"; exit 1; }
+              echo "${TAG} serves its pin ${pin} again"
+            fi
+            echo "::warning::this build was not pushed: ${TAG} is taken. A changed web-terminal image with the same ttyd needs a tag of its own."
+            exit 0
+          fi
+          case "${served}" in
+            *MANIFEST_UNKNOWN*|*NAME_UNKNOWN*) ;;
+            *) echo "::error::could not read ${TAG} from ghcr.io: ${served}"; exit 1 ;;
+          esac
+          docker tag web-terminal:built "${TAG}"
+          docker push "${TAG}"
+          echo "pushed ${TAG} at $(crane digest "${TAG}"); pin its digest in gitops/ai-layer/resources.yaml and images.lock and sign it"

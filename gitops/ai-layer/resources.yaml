@@ -902,7 +902,7 @@ spec:
       containers:
         - name: ttyd
           image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf # built from images/web-terminal/
-          imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
+          imagePullPolicy: Always # pinned by digest, so Always only re-checks it; the tag never moves (#815)
           ports:
             - { name: ttyd, containerPort: 7681 }
             - { name: ide, containerPort: 8443 }      # code-server, proxied at /ide/
