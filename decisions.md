@@ -10732,3 +10732,47 @@ nothing here touches an image. The workshop-mcp reference check in the same test
 `5ef84f383407`. Then on the public storefront an HC-666 chat lands `joker-<visitor slug>`, not `joker-burritobot`, and
 the wall shows the visitor's name (#762's live check). No E2E test sends a named `/chat` to a live cluster;
 `verify/test_storefront_witch_name_e2e.py` covers the page's side only.
+## 2026-11-03 · #805 · A gate for #714's pull side: nothing this repo or a chart hands a cluster pulls from Docker Hub
+
+**Context.** Test reviews 15958 and 16131 found that no test checks #714's criterion, "Remove every Docker Hub
+reference: build, pull and name images from ghcr.io only". Nothing swept the repo, and test_enforce_floor's image
+check leaves chart apps out. `verify/test_no_docker_hub.py` did not exist: #714's entries above defer it until
+lab-platform#353 copies three build bases to ghcr.io. #805 has no earlier draft (`verify/prior-drafts.sh 805` printed
+NONE). The test reuses the first #714 draft's design (`origin/agent/714-12873`), rebuilt on today's layout.
+On 2026-11-03, an anonymous token request for each of lab-platform's `mirror/library/busybox`, `debian` and `node`
+still got HTTP 403, so those copies are not there yet.
+
+**What holds today, and is now gated.** Every image a cluster pulls comes from ghcr.io, or from public.ecr.aws for
+Challenge 2's PUBLIC_IMAGES (#773). Two new tests hold that:
+- `verify/test_no_docker_hub.py` (offline). It reads every image field in tracked files outside the dated records:
+  YAML `image:` keys, Helm `registry`/`repository`/`tag` maps, Application `values:` strings, shell `--image` flags
+  and `NAME_IMAGE=` assignments, and Python `NAME_IMAGE` strings and `NAME_IMAGES` dict values. It fails on any one
+  that names a Docker Hub host or no registry at all. A name that kustomize replaces is excused only under the
+  directory that replaces it (llm-guard in ai-layer, postgres in backstage, web in each demo app), and images.lock's
+  not-an-image placeholders are excused too. It also runs a `git grep` for Docker Hub's hostnames over everything
+  outside images/, images.lock, verify/ and the records, and finds only workshop-mcp's two refusal lines (REFUSED).
+- `verify/test_no_docker_hub_render.py` (tools tier). The root renders each of the 40 apps/ files alone, then the
+  test renders each source as Argo CD would: 18 chart sources with the root's values, kustomizations with
+  kustomize.images, and directories as their files. It fails on any image field, or any container args, env or
+  command string, that is a Docker Hub pull. Helm test hooks are left out because Argo CD does not run them. Without
+  that exclusion, falcosidekick's curlimages/curl and otel-operator's three busybox:latest test Pods fail.
+- `verify/docker_hub.py` holds the judgement and the image-field walk that both tests use.
+
+Checked by mutation, each reverted. Each of these fails by name: a bare nginx in games/villain-apps, a bare curl as
+beat-02.sh's CURL_IMAGE, a registry-less C6_IMAGE in ticket_site.py, a docker.io comment in infra/deploy-full-idp.sh,
+and an edit to workshop-mcp's `_DOCKER_HUB` line, which also makes the REFUSED list stale. Falco's registry set to ""
+in apps/falco.yaml makes the render test fail on `DaemonSet/falco`.
+
+**Not in this change, and why.** #714's build side is not done, so no test can hold it green. Five places still use
+Docker Hub: Dockerfile FROM lines (web-terminal's `debian:bookworm-slim` and Backstage's node base), build.sh's
+`JOKER_BASE`, the Backstage README's buildah base, their images.lock rows, and the two tests that read the Joker's
+busybox from registry-1.docker.io. All of them wait on lab-platform#353's copies. A list of them in the test would be
+a known-open list, which the test rules forbid. So the new test's scope stops at them, and its docstring says so.
+When #714 moves those bases, it adds Dockerfile FROM lines to check 1 and drops images/, images.lock and verify/
+from check 2's exclusions. verify/'s refusal lines then join REFUSED.
+
+**Tests.** New: test_no_docker_hub, test_no_docker_hub_render. No existing test changed.
+
+**Not yet run on a cluster.** This is #714's live check, unchanged. On a fresh attendee cluster, run
+`kubectl --context "$CONTEXT" get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u`. No line may be a Docker
+Hub image, including the images an operator has compiled in (the Datadog agent's), which no render shows.
