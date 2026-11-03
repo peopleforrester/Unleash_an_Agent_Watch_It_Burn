@@ -11453,3 +11453,60 @@ permission denied`. So it is still unknown whether the application key in `watch
 **Not yet run.** The first run whose session files it can read runs `. "$HECATON_CLUSTER_ENV" && python3
 verify/test_dd_traces_live.py`. Until hecaton#508 is deployed, another dispatch of #759 hits this same wall, so this
 run's report holds the issue on hecaton#508.
+
+## 2026-11-03 · #815 · The web-terminal build never pushes over a tag that exists, and puts a moved tag back on its pin
+
+**What was wrong.** `.github/workflows/build-web-terminal.yml` ran on every push to staging or main that touched
+`images/web-terminal/**` or the workflow, rebuilt the image, and ran `docker push` under the same
+`web-terminal-ttyd-<v>` tag. The build is not reproducible, so every run moved the tag. On 2026-11-03 at about 15:45Z,
+read anonymously with crane 0.22.1, the tag served `sha256:0b72ecc72c7c…` (it had moved again since the issue
+named d6acd503). Nothing has a cosign signature for either digest: `sha256-d6acd503….sig` answers MANIFEST_UNKNOWN.
+The pinned `sha256:68004fb5ed2d…` is still on ghcr.io as an OCI index, and its signature tag
+`sha256-68004fb5….sig` is there (`sha256:7988737740b2…`). `gh run list --workflow build-web-terminal.yml` shows
+three runs on 2026-11-02 and 2026-11-03 after #714 (17:51Z, 01:46Z and 03:10Z), each of which moved the tag.
+
+**Decided: put the tag back on the signed pin, rather than sign a rebuild and repin.** Of the issue's two options,
+re-pointing the tag at 68004fb5 needs no signing key and leaves resources.yaml and images.lock as they are. Signing
+a rebuild would mean a new digest, a new signature and a repin in three places, for a build that changed nothing.
+This run cannot push to ghcr.io (governance forbids it, and it has no write credential), so the workflow does the
+restore itself. Its new push step reads the tag with `crane digest` first:
+
+- no such tag (crane's answer carries MANIFEST_UNKNOWN or NAME_UNKNOWN): push the build, as before;
+- the tag serves images.lock's pin for it: push nothing;
+- the tag serves another digest: push nothing, run `crane tag <repo>@<pin> <tag>`, read the tag back, and fail if
+  it is not the pin. `crane tag` PUTs the manifest bytes it read by digest, so the tag points at the same index;
+- the tag exists and images.lock pins nothing for it, or crane gives any other error: fail the job, push nothing.
+
+When the tag is taken, the job ends with a warning that the build was not pushed. So a changed image with the same
+ttyd is not published by this workflow any more. It needs a tag of its own, and the tag scheme (#714) has no slot
+for that yet. That is a choice for the next Dockerfile change that needs it, not for this fix.
+
+crane is installed from e2e-tools.lock's go-containerregistry 0.22.1 URL and checked against the same SHA-256.
+No new dependency. docker/login-action already writes the docker config crane reads its login from.
+
+Promoting this branch changes the workflow file, so the push to staging runs the workflow. That run is the one
+that puts the tag back on 68004fb5. Until it runs, `test_image_version_tags.py` stays red on the tag, as it was in
+the base.
+
+**workshop-mcp.** No workflow builds it. There is no `build-workshop-mcp.yml` in this repo or in its git history,
+so nothing can move its tag on a push. On 2026-11-03 its tag `workshop-mcp-mcp-1.29.1` served its pin
+`sha256:9a26c18cbfa5…`, and its signature tag is present.
+
+**Tests.** `verify/test_web_terminal_push_guard.py` (offline) takes the push step's script out of the workflow and
+runs it with a stub crane and docker for each of the five cases. It also holds the crane install to e2e-tools.lock.
+`verify/test_web_terminal_push_guard_registry.py` (E2E tools tier) runs the same script with the real pinned crane
+against `crane registry serve` on loopback. It checks that crane's answer for a missing tag carries MANIFEST_UNKNOWN,
+that a missing tag is pushed, and that a moved tag goes back to its pinned OCI index at the same digest. Both passed
+on their own.
+
+**Live check.** Run at 15:51Z: `. "$HECATON_CLUSTER_ENV"` printed
+`/var/lib/hecaton/runs/16679/clusters/env: Permission denied`, and
+`kubectl --context watch-it-burn-community get pods -A -l app.kubernetes.io/name=web-terminal` printed
+`open /var/lib/hecaton/runs/16679/clusters/kubeconfig: permission denied`. The session files are `hecaton:hecaton`
+0640, and this run's user, `hecaton-s6-claude-certkraken`, is not in group `hecaton`. This is hecaton#508 again.
+The fix needs no cluster anyway: the clusters pull the image by digest, and the digest did not change.
+
+**Not yet run.** After promotion, the build-web-terminal run on staging must print
+`… serves its pin sha256:68004fb5… again`, and then `bash verify/run-e2e-tools.sh` must pass
+`test_image_version_tags.py`. The anonymous read is
+`verify/.tools/bin/crane digest ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7`.
