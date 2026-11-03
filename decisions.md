@@ -12749,7 +12749,7 @@ to be smaller than that.
   arrives on HBONE port 15008. `gitops/ai-layer/chat-path-ingress.yaml` (#552) admits only app ports into
   agentgateway and workshop-agent, so enrolling them would cut the chat path. `apps` ingress has the same
   problem on the admin profile. Either can be enrolled later with a 15008 rule.
-- **agent is PERMISSIVE, not STRICT.** `security/istio/peer-authentication.yaml` sets PERMISSIVE because the
+- **agent's mTLS mode is PERMISSIVE.** `security/istio/peer-authentication.yaml` sets PERMISSIVE because the
   console's ip-target NLB, the beat scripts and the agent's tool pod reach the enrolled pods from outside the
   mesh, and STRICT would refuse them. Between the two enrolled pods, traffic is still mutual TLS. The apps
   STRICT policy applied to nothing and was removed.
