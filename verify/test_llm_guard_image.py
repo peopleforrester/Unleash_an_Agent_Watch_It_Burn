@@ -9,7 +9,7 @@ rebuild with the same model path. The container still names the kustomize image 
 gitops/bootstrap/apps/ai-layer.yaml sets it, so that return is one entry. cpu.5 is a public watch-it-burn image, so the
 entry names ghcr.io literally rather than the root's imageRegistry, which is lab-platform's (#622). These checks hold
 the reference and its digest, that the placeholder names this container alone (kustomize matches on the name), and
-the contract cpu.5 was built for (images/llm-guard/Dockerfile at 31962f2): one worker, the scanners ConfigMap at
+the contract cpu.5 was built for (llm-guard-cpu-offline's Dockerfile at 31962f2): one worker, the scanners ConfigMap at
 /home/user/app/config, AUTH_TOKEN, uid 1000, port 8000, /healthz and the two model directories. NETWORK_BOUNDARY,
 which only lab-platform's entrypoint reads, stays for the return. test_bootstrap_chart_render.py builds the bundle as
 Argo CD does and checks the image the Deployment ends up with.

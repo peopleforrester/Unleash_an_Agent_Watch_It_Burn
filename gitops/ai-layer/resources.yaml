@@ -191,7 +191,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          # llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5 (#719, question 1041), built from images/llm-guard at
+          # llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5 (#719, question 1041), built from llm-guard-cpu-offline
           # 31962f2: CPU-only torch, the vendored API source (src/ verbatim), OpenTelemetry past GHSA-xcq7-p3pf-p88h,
           # and two classifiers baked in with HF offline, prompt-injection at /home/user/models/prompt-injection
           # (Hub revision 90c9989b, #241, #414) and BanTopics' zero-shot model at /home/user/models/zero-shot
