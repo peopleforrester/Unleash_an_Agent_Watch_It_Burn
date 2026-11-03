@@ -14785,3 +14785,59 @@ fails with "permission denied", and so does sourcing `$HECATON_CLUSTER_ENV` (hec
 **The suites (run 16935, at `580e592b`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier
 tests) in 24m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 248 tests, all
 green, `test_chat_witch_name.py` among them.
+## 2026-11-03 · #791 · The brief's Phase 1 Datadog beat carries the prompt recipe in today's names
+
+Beat "3. Find their attack in Datadog, live" in `gitops/ai-layer/web/brief.html` said to find a student's prompt in
+Datadog and not how. It now gives #337's recipe (Michael's question and the 2026-09-08 answer in #337's body) in the
+names the platform uses today. Saving the view in Datadog is the next child of #337, not this change.
+
+- **The org.** Whitney's Datadog sandbox org, the one both presenters sign in to (#629).
+- **The query.** `ml_app:burritobot k8s.cluster.name:burritobot-public`, typed, and as the link
+  `https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-public`. It is the room
+  view `verify/stage_traces.py` prints (#648), built the same way (`llmobs_url`), so the stage and the beat find the
+  same rows. The beat names the saved view **Every prompt**: open it, or the link, or type the query; the rehearsal
+  note says to save it under that name before the session.
+- **The column.** CONTENT, whose INPUT is the student's words: each turn is one row, rooted at guard-proxy's `POST /chat`
+  (service `burritobot`, #746 and #783's one-root copy). The beat says the Community cluster's collector writes
+  `[EMAIL]`, `[CARD]`, `[SSN]` and `[PHONE]` in place of those (#647).
+- **The system-prompt rows.** A warning names `service:burritobot-agent` and the `generate_content` rows in the span
+  list: kagent and its model calls, whose input is BurritoBot's system prompt (#721 copies it there).
+- **Other clusters.** Swap the cluster term: `burritobot-private` (the presenters' bot), `burritobot-private-michael`
+  (an `-admin` cluster), `burritobot-attendee-007` (an attendee's), the names `infra/datadog-cluster-identity.sh` writes.
+- **What it is not.** Datadog runs a minute or two behind; there is no control to put one prompt on the room screen,
+  and the projector's feed is the prompt wall at `prompts.burritobot.co` (#309, #651; it and `prompts.agenticburn.com`
+  both answered `/healthz` with the same two clusters on 2026-11-03); the prompts are kept only as long as the org keeps
+  them, and the Community cluster's are purged from Whitney's org after the session (#647's teardown step).
+
+**What differs from #337.** #337's recipe filtered `service:burritobot` and `kube_cluster_name:` with EKS names
+(`watch-it-burn-community`, `watch-it-burn-attendee-007`) in the Portland trial org
+`devops-days-portland-090826-001`. Today the org is Whitney's, LLM Observability spans are filtered by `ml_app:burritobot`
+and their cluster tag is `k8s.cluster.name` under Datadog's names (#629), as `stage_traces.py` and
+`verify/agent_obs_flow.py` read them. #337's "trial orgs with expiry dates" became "as long as the org keeps them",
+since the purge, not an expiry, is what ends the Community cluster's prompts now.
+
+**What differs from the 12987 draft** (`origin/agent/337-12987`, never merged). `verify/draft-drift.sh` named all three
+of its files as since edited on staging, so the change was written again on staging rather than cherry-picked. The
+draft's query was `service:burritobot kube_cluster_name:burritobot-public`, its link carried that query, and its wall
+was `prompts.agenticburn.com`; here the query, link and wall are today's. Its test held the names to string literals;
+here the test imports `stage_traces.py` for the ML app, the room and presenter cluster names and the link builder, and
+reads the identity script's case arms, so either file changing breaks the beat's check. The warning adds the
+`generate_content` rows, which exist under the one-root copy and did not in the draft's shape. Left out: the draft's
+note on Michael's Gmail sign-in and Google consent, which belongs to saving the view (the next child), and its claim
+that Datadog's API cannot save the view, which this run did not check.
+
+**Held offline.** `verify/test_instructor_brief.py` has 22 new checks in the showcase beat: the query, the link (as
+`stage_traces.llmobs_url` builds it, and its `query` parameter equal to the typed query), the org, the saved view, the
+column, the warning, the per-cluster names against the identity script, the three gaps, the wall, the scrub's
+placeholders against `gitops/otel-collector/values-burn.yaml`, and no `kube_cluster_name` or `service:burritobot` query
+left. Against the brief before this change, 16 of them fail.
+
+**Not yet run on a cluster.** This run's `clusters/` env file was unreadable (permission denied), so nothing was read
+in Datadog. Signed in to Whitney's sandbox org:
+1. The link fills in the query: open the brief's link and confirm Agent Observability's search bar holds
+   `ml_app:burritobot k8s.cluster.name:burritobot-public` and the list is filtered by it.
+2. guard-proxy's root span carries the query's cluster tag: send a Community chat
+   (`python3 verify/agent_obs_flow.py chat --profile accen-dev` sends one and finds its spans by that tag), then open
+   its row and confirm the root span itself (`POST /chat`, service `burritobot`) carries
+   `k8s.cluster.name:burritobot-public`, and that the CONTENT column's INPUT is the chat's prompt.
+3. The `service:burritobot-agent` and `generate_content` rows show the system prompt in their input, as the warning says.

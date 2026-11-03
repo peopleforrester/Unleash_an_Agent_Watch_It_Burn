@@ -100,8 +100,34 @@
     <div class="beat">
       <h3>3. Find their attack in Datadog, live</h3>
       <div class="who">Both &middot; the moment the observability half earns its place</div>
-      <div class="expect">Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> on the shared org. Ask who got it to work and is happy to be named, then find their prompt on screen.</div>
-      <div class="note">Rehearse this. Searching a live list in front of a room is the part that goes wrong, and it is worth having found one prompt by name before the session starts.</div>
+      <div class="expect">Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> on the shared org, which is Whitney's Datadog sandbox org, the one both presenters sign in to (#629). Ask who got it to work and is happy to be named, then find their prompt on screen.</div>
+      <!-- The recipe (#337, #791). Every BurritoBot span lands in Whitney's sandbox org under ml_app burritobot, and
+           k8s.cluster.name is Datadog's name for the cluster, written by infra/datadog-cluster-identity.sh, not the EKS
+           name. The query is the room view verify/stage_traces.py prints (#648), so the stage and this beat find the
+           same rows. Each turn is one row whose root is guard-proxy's POST /chat (service burritobot), carrying the
+           student's words; kagent's spans (service burritobot-agent) hang under it, and its generate_content model
+           calls carry the system prompt (#721). verify/test_instructor_brief.py holds the names to both files. -->
+      <div class="control"><b>The recipe.</b> Open the saved view <b>Every prompt</b>. If it is not there yet, open
+      <a href="https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-public" target="_blank" rel="noopener">the query as a link</a>,
+      which fills it in, or type it: <code>ml_app:burritobot k8s.cluster.name:burritobot-public</code>. The list then has
+      one row per chat on the Community cluster, newest first, and the <b>CONTENT</b> column shows each one's
+      <b>INPUT</b> and <b>OUTPUT</b>. INPUT is the student's own words, except that the Community cluster's collector
+      writes e-mails, card numbers, SSNs and phone numbers as <code>[EMAIL]</code>, <code>[CARD]</code>,
+      <code>[SSN]</code> and <code>[PHONE]</code> before they leave (#647).</div>
+      <div class="warn">Not <code>service:burritobot-agent</code>, and not the <code>generate_content</code> rows in the
+      span list. Those are kagent and its model calls, whose input is BurritoBot's system prompt, so every row shows
+      the same wall of instructions and the student's question is nowhere in the preview.</div>
+      <div class="note">Other clusters: swap the cluster term. <code>k8s.cluster.name:burritobot-private</code> is the
+      presenters' private bot, <code>k8s.cluster.name:burritobot-private-michael</code> an <code>-admin</code> cluster,
+      and <code>k8s.cluster.name:burritobot-attendee-007</code> an attendee's. Drop it for every cluster at once.
+      Datadog's names are not the EKS names: <code>watch-it-burn-community</code> is <code>burritobot-public</code>.</div>
+      <div class="note">What it is not. <b>Not live:</b> Datadog runs a minute or two behind, so ask for the name, then
+      look. <b>Not projectable:</b> there is no control to put one prompt on the room screen, so the room sees the
+      Datadog list and whatever else is on it. The feed made for the projector is the prompt wall,
+      <a href="https://prompts.burritobot.co" target="_blank" rel="noopener"><code>prompts.burritobot.co</code></a>.
+      <b>Not durable:</b> the prompts are kept only as long as the org keeps them, and the Community cluster's are
+      purged from Whitney's org after the session (#647), so copy out any prompt worth keeping on the day.</div>
+      <div class="note">Rehearse this. Searching a live list in front of a room is the part that goes wrong, and it is worth having found one prompt by name before the session starts. Before the session, signed in to Whitney's org, type the query above and save it as a view named <b>Every prompt</b>, so on stage it is one click rather than a query typed in front of the room.</div>
       <div class="warn">Before moving on, tell them to <b>close the Community BurritoBot tab</b>. From here they have their own, and acting on the shared one is the confusion that follows people all session.</div>
     </div>
   </section>
