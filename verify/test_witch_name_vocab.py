@@ -13,6 +13,7 @@ import ast
 import pathlib
 import re
 import sys
+from html.parser import HTMLParser
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PY = (REPO / "gitops/ai-layer/ticket_site.py").read_text(encoding="utf-8")
@@ -60,17 +61,56 @@ print("== the visitor's name reaches the bot without the visitor typing it ==")
 check("each /chat call carries the witch name in its body",
       "witch:WITCH_NAME" in PAGE and re.search(r"body:JSON\.stringify\(\{prompt:v,session:getSession\(\),witch:WITCH_NAME\}\)", PAGE) is not None)
 
-print("== the re-roll button is label-only (#762) ==")
-m = re.search(r'<button[^>]*id="newwitch"[^>]*>([^<]*)</button>', PAGE)
-btn_tag = re.search(r'<button[^>]*id="newwitch"[^>]*>', PAGE)
-check("the button exists", m is not None)
-check("its label is exactly 'Get a new witch name'", (m.group(1) if m else "") == "Get a new witch name")
-check("it has no title attribute (no tooltip or explanation)",
-      btn_tag is not None and "title=" not in btn_tag.group(0))
-check("it has no aria-label (the label is the only text)",
-      btn_tag is not None and "aria-label" not in btn_tag.group(0))
-check("clicking it re-rolls and replaces the cookie",
-      "WITCH_NAME=randWitch(); setWitchCookie(WITCH_NAME);" in PAGE)
+print("== the re-roll button is label-only, anywhere on the page (#762, #802) ==")
+
+
+class Markup(HTMLParser):
+    """Every start tag's attributes, and the text and child tags inside the id="newwitch" element."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tags: list[tuple[str, dict]] = []
+        self.inside, self.text, self.children = False, "", []
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: v or "" for k, v in attrs}
+        self.tags.append((tag, a))
+        if self.inside:
+            self.children.append(tag)
+        if a.get("id") == "newwitch":
+            self.inside = True
+
+    def handle_endtag(self, tag):
+        if self.inside and tag == "button":
+            self.inside = False
+
+    def handle_data(self, data):
+        if self.inside:
+            self.text += data
+
+
+mk = Markup()
+mk.feed(PAGE)
+buttons = [(t, a) for t, a in mk.tags if a.get("id") == "newwitch"]
+check("the page has exactly one id=\"newwitch\" element, a button", [t for t, _ in buttons] == ["button"])
+check("its attributes are only type, class, id and hidden: no title, aria-label, aria-description or data-tip",
+      bool(buttons) and set(buttons[0][1]) == {"type", "class", "id", "hidden"})
+check("its only text is exactly 'Get a new witch name', with nothing nested in it",
+      mk.text == "Get a new witch name" and mk.children == [])
+pointers = [(t, a) for t, a in mk.tags for k, v in a.items()
+            if (k in ("for", "list", "popovertarget", "interestfor", "commandfor") or k.startswith("aria-"))
+            and "newwitch" in v.split()]
+check("no label, aria-describedby, aria-labelledby, aria-details or popover points at it", pointers == [])
+css_rules = re.findall(r"([^{}]*newwitch[^{}]*)\{([^}]*)\}", PAGE.split("<script", 1)[0])
+check("its CSS adds no text: no ::before, ::after or content", bool(css_rules) and all(
+      "::" not in sel and ":before" not in sel and ":after" not in sel and "content" not in body
+      for sel, body in css_rules))
+script = PAGE[PAGE.find("(function witchName(){"):]
+uses = set(re.findall(r"\bbtn\.(\w+)", script))
+check("the script only shows it and listens for its click: no title, label or text set on it",
+      uses == {"hidden", "addEventListener"} and PAGE.count("'newwitch'") == 1)
+check("clicking it re-rolls to another name and replaces the cookie",
+      "WITCH_NAME=otherWitch(WITCH_NAME); setWitchCookie(WITCH_NAME);" in PAGE)
 
 print()
 if failures:

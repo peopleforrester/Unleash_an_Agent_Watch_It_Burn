@@ -14867,3 +14867,37 @@ that line now says "on beat 3". The word stays only in the test's Python, which 
 tests) in 24m23s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it, `run-tests.sh`,
 ran 248 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_instructor_brief.py` among them.
 `test_image_version_tags.py`, the check that held run 16454 red, passes since #815.
+## 2026-11-03 · #802 · The chat page's witch name, cookie and re-roll button proven against the real desk; a re-roll never repeats the name
+
+`verify/test_storefront_witch_name_e2e.py` (E2E TIER: tools) now keeps `ticket_site.py` running on localhost for the
+whole test and runs the page's witch-name block and its real `send()` in a node vm. The vm's `document.cookie` is a
+cookie store that behaves as a browser's does for these cookies: keyed by name, domain and path, a Domain the page is
+not under is dropped, and a host is sent only the cookies whose domain it is under. The desk's own Set-Cookie seeds
+it, and the Cookie header that store would send `support-attackme.burritobot.co` goes back to the desk's `/me`. So a
+cookie the page wrote host-only, on the wrong domain or beside the desk's (rather than replacing it) fails the test,
+where the old harness, which replaced the whole cookie string on each write, could not tell.
+
+The new checks: a first visit with no cookie shows a plain-text name (no href, target or rel; only `textContent` and
+`hidden` ever written), writes one wib_witch on `.burritobot.co` that `name_from_slug()` accepts, and the desk's
+`/me` then shows that name and sets no cookie of its own. The test clicks "Get a new witch name" (three clicks from
+a first visit, one from the desk's own name, two with `Math.random` pinned). After each click the header shows a
+different vocabulary name, the browser holds exactly one wib_witch on `.burritobot.co` with the new slug, `/me`
+shows the new name, and the next `/chat` body's `witch` is the new name. The page never writes anything on the
+button but `hidden`. The existing valid-cookie case still checks the name is shown unchanged and the cookie kept.
+`verify/test_witch_name_vocab.py` (Test command) now parses the markup: one `id="newwitch"` button, attributes only
+type, class, id and hidden, text exactly "Get a new witch name" with nothing nested, no label, aria-* or popover
+pointing at it, no CSS ::before/::after or content on it, and the script touches only `btn.hidden` and its click.
+
+**A defect the test found, fixed in the page.** The click handler called `randWitch()`, which can return the
+current name: one click in 768 left the header, the cookie and the desk on the same name. With `Math.random`
+pinned the test fails on the old handler. The page now calls `otherWitch(WITCH_NAME)`, which picks uniformly
+among the other 767 names. The test sweeps it from every one of the 768 names over every draw: each other name is
+reached once and the old one never. Mutation runs: the old handler, a dropped skip, a host-only or wrong-domain
+cookie, and a title in the markup or set from the script each fail the tests; the e2e passed 20 runs in a row.
+
+The header link stays gone (#763); nothing here adds one, and the plain-text checks would fail if it came back.
+
+**Not yet run on a cluster:** the same flow in a real browser on a fleet cluster: `bash verify/run-e2e.sh` with
+CONTEXT on an attendee cluster runs `verify/browser-smoke.py`, which loads the chat page but does not click the
+button. A session with AWS access confirms by hand on `attackme.burritobot.co` that a click changes the header and
+that `support-attackme.burritobot.co/me` then shows the new name.
