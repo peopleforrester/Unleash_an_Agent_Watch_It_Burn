@@ -11657,3 +11657,13 @@ red on run 16473's base was `test_image_version_tags.py`: ghcr.io serves `web-te
 record. Nothing here touches an image.
 
 **Not yet run on a cluster:** nothing; both changed tests are offline or in the tools tier.
+
+**Resumed again in run 16557, on staging `4bec41f`.** Run 16526 ended failed at validation, so its three commits did
+not land. Its report listed them as 7b1cc13, 1f3f737 and 3629b6f, but the branch kept in hecaton's mirror holds them as
+d8d6b63, 21617c9 and 3f9519e. This run takes them with `git cherry-pick` as `verify/prior-drafts.sh 797 origin/staging`
+says (CLEAN, with the decisions.md APPEND keeping staging's entries first), and its report lists the SHAs on this
+branch. Michael posted the cause on #797 from run 16526's report, so the first criterion is met on the issue. Since
+run 16526, #801 (`e1ba2a9`) fixed the C7 fallback timeout this entry records as not fixed. It found no stopped clock:
+the gateway-down run waits out its whole window, one poll per 3 s step of the fake clock, about six process starts a
+poll, and under load those polls went past 120 s. The test now steps that clock 30 s in those runs. The follow-up
+named above is therefore not filed; #801 closed it.
