@@ -108,7 +108,8 @@ A run that hecaton dispatches starts from the current `staging` on its own `agen
 two clusters that are up and an AWS session for them, it never brings a cluster up or down, and its governance
 forbids deploying. Hecaton run 9654 lost its time to the first point below and run 9672 to the second (#633). Runs
 9277 and 15763 lost theirs redoing work an earlier run had done that never reached staging, the third point, and a
-stalled wait on the E2E command is the fourth (#798).
+stalled wait on the E2E command is the fourth (#798). Run 15816 lost its time to the fourth as well, and run 9604
+to the fifth (#796).
 
 1. **A run checks live on the two clusters that are up, and brings none up or down.** Since Michael's ruling of
    2026-11-02 (hecaton#496, #809), every run gets, in its run directory, a 12-hour session for the `accen-dev` AWS
@@ -155,6 +156,26 @@ stalled wait on the E2E command is the fourth (#798).
    first. Then start the command in the background with its output in a log, and keep reading the log in the
    foreground (`tail -n 5 <log>` every few minutes) until it ends; never end the turn to wait for its completion
    notice. The E2E command runs `run-tests.sh` first, so it also answers the Test command.
+   The background job's limit is 3600000 ms: run 15816 gave it 20 minutes and it was cut off, and its
+   `checks ran` line prints how long it took (22m58s in run 16533). Write the output and the exit code to a log of
+   this run's own: `bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`. A bounded foreground wait
+   is `timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`, under the shell tool's
+   10-minute foreground limit, run again after each 124 with a `tail -n 5` of the log between. Monitor needs an
+   approval a run cannot get, so do not reach for it; run 16484 on #796 ended its turn to wait instead and was
+   stopped as stalled. Read the verdict from the log: the `checks ran` line, `ALL E2E TOOLS TIER CHECKS GREEN` and
+   `exit=0`. Do not watch the job with `pgrep` or `pkill` by script name: other runs on the host run the same
+   scripts from their own worktrees, so a name match finds their processes, not this run's.
+5. **Prose is put through the ai-isms gate before it is committed.** Hecaton's ai-isms gate reads every changed
+   `.md`, `.mdx` and `.html` file here, since a talk repo's Markdown is public prose. It fails a change that adds an
+   em-dash, or that adds a hype word or connective filler to a file that then reads `major`. decisions.md,
+   PROJECT_STATE.md and PROGRESS.md already read `major`, so one word in a run's record fails the run. Two words
+   recur: the talk's own verb (`Unleash`, and the nickname `Unleashed`) is on the hype-verb list, and the
+   third-person verb `lets` is read as `let's` (run 16077 failed on the second). Write the repo as
+   `Unleash_an_Agent_Watch_It_Burn` or put the word in backticks, which the gate strips, and say "allows" or
+   "admits" for the verb. Then run
+   `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`: it reads
+   the working tree against staging with the gate's own scanner, names each file, label and added line the gate
+   would fail, and exits 1 on any.
 
 ## Tests own their inputs
 

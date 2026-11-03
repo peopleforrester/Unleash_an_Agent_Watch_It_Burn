@@ -11691,3 +11691,52 @@ another, and changes no code. Hecaton had already rebased the branch onto `2b3c7
 On `2b3c7df`, `bash verify/run-e2e-tools.sh` ran 45 checks. Its offline suite was green (228 tests), and it exited 1
 on one check: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins
 `68004fb5...`, the red recorded above. The workshop-mcp tag check passes.
+
+## 2026-11-03 · #796 · Two more frictions for dispatched runs: the prose gate's words, and waiting on the E2E command
+
+Hecaton's insights found two more runs that lost time to the environment. Run 16484 drafted the fix and run 16533
+resumed it; it did not land (run 16533 ended failed, rebase-conflict). Run 16555 ported it onto staging `4bec41f`.
+
+- **Run 9604: the repo's own name failed the ai-isms gate.** Hecaton's gate (`gate_ai_isms`, with the scanner
+  ported from check-ai-isms to `hecaton/run/aiisms.py`) reads every changed `.md`, `.mdx` and `.html` file, since
+  hecaton's governance makes all Markdown public prose in a talk repo. A change fails when it adds a dash, or adds a
+  pattern hit to a file that then reads `major`. Read with that scanner on staging `858ffaf`, decisions.md (about
+  120,000 prose words), PROJECT_STATE.md and PROGRESS.md all read `major`, so one hit anywhere in a run's record is a
+  failure. The hype-verb pattern matches `unleash` in every form, which covers the talk's title and the `Unleashed`
+  nickname. The repo slug `Unleash_an_Agent_Watch_It_Burn` does not match, because `_` is a word character to the
+  pattern's word boundary, and inline code is stripped before the scan. The same gate failed runs 14794 and 14817
+  (#548) on their decisions.md entry, and run 16077 (#774) on the verb `lets`.
+- **Run 15816: the E2E command outran its background limit.** `bash verify/run-e2e-tools.sh` took over 20 minutes on
+  the shared host (22m58s in run 16533), and the run gave its background job 20. Watching it with `pgrep` by script
+  name found the same scripts running from other runs' worktrees, so it could not tell its own job's state.
+- **Run 16484: the first attempt stalled on the advice it wrote.** Its draft said to wait for the background job's
+  exit notice; the run ended its turn to do so and hecaton stopped it as stalled after 900 silent seconds. The
+  Monitor tool, its one other way to watch, was denied for want of an approval no run can give. Run 16533 replaced
+  that wait with a bounded foreground one on the run's own log.
+- **The fix.** AGENTS.md's "Dispatched runs (hecaton)" section. Its fourth item gets the E2E specifics: a background
+  limit of 3600000 ms, output and exit code written to the run's own log
+  (`bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`), a foreground wait of nine minutes a call,
+  `timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`, repeated after each 124 and under
+  the shell tool's 10-minute foreground limit, no Monitor, and no `pgrep` or `pkill` by name. A new fifth item
+  names the gate's words, says to write the slug or use backticks, and gives the pre-check:
+  `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging` runs the
+  gate's own logic with the gate's own scanner over the working tree, against the merge base, and names each file,
+  label and added line it would fail. It takes the scanner by path rather than copying its patterns, so the two
+  cannot drift; it exits 2 when the path holds no scanner. `run-e2e-tools.sh` now prints how long it took on its
+  `checks ran` line, so the next limit is set from a reading.
+- **What differs from the draft.** Staging gained #798's third and fourth items while the draft was out: work that
+  never landed is reused, and a long command is polled in the foreground. The draft's own fourth item, on waiting for
+  the E2E command, said what #798's fourth item says, so its specifics went into that item, not a second one; the
+  draft's prose item became the fifth. `verify/test_dispatched_runs.py` holds the merged item under the
+  #798 heading and the prose item under its own. `verify/prose_gate.py`, its fixture and `verify/test_prose_gate.py`
+  are the draft's, unchanged. The `run-e2e-tools.sh` line was applied by hand, since staging had since added
+  `CRANE` to the tier's environment (3946e94).
+- **Tests.** `verify/test_prose_gate.py` (offline) drives the script in a scratch repo with a stand-in scanner,
+  `verify/fixtures/prose-gate/fake_aiisms.py`, which has the real one's interface: an added hype word fails with its
+  line, the slug and backticks pass, committed and untracked files are read, a hit moved between files passes, an
+  exempt file is skipped and a newly exempt one held, staging moving on does not count against the branch, and a
+  missing scanner, a wrong module, an unknown ref and a missing argument exit 2. `verify/test_dispatched_runs.py`
+  holds the two items.
+- **The cause comment.** Michael's comment on #796 names both causes and the fix, so the first criterion is met.
+
+**Not yet run on a cluster.** No cluster is needed; nothing here deploys.

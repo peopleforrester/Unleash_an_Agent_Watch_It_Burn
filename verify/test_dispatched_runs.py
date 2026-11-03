@@ -1,7 +1,8 @@
 # ABOUTME: AGENTS.md tells a dispatched run it checks live on its two clusters but brings none up (#633, #809), checks
 # ABOUTME: an earlier draft with verify/draft-drift.sh, and its app-layout bullet names paths that exist and are gone.
-# ABOUTME: It also finds unlanded drafts with verify/prior-drafts.sh, reuses them, and polls the E2E command (#798).
-"""Holds the two frictions #633 removed, as AGENTS.md states them.
+# ABOUTME: It also finds unlanded drafts with verify/prior-drafts.sh, reuses them, and polls the E2E command (#798),
+# ABOUTME: with an hour's limit and a bounded wait on its own log, and pre-checks prose with prose_gate.py (#796).
+"""Holds the frictions #633, #798 and #796 removed, as AGENTS.md states them.
 
 Two hecaton runs lost their time to the environment. Run 9654 (#610) was dispatched on a bring-up that a run cannot
 do: it had no cluster and no AWS profile and may not deploy, while AGENTS.md's cadence rules say to provision a
@@ -22,6 +23,12 @@ Two more runs lost their work to context that did not carry over (#798). Run 927
 9249 had committed, which failed only the prose gate; run 15763 (#205) redid a draft 125 commits behind staging
 after the attempt before it stalled waiting silently on a background E2E run. The section's third and fourth items
 say to find and reuse such a draft with `verify/prior-drafts.sh` and to poll a long command in the foreground.
+
+#796 added two more. Run 15816's E2E command outran the 20 minutes it was given in the background, and `pgrep` by
+name found other runs' copies of the same scripts; run 16484, the first attempt at #796, then stalled waiting for
+the job's exit notice. The fourth item now gives the limit, the run's own log and a bounded wait on it. Run 9604
+failed hecaton's ai-isms gate on the repo's nickname, a hype verb to the scanner, in a file that already read
+`major`; the fifth item names the words and the pre-check, `verify/prose_gate.py`.
 """
 from __future__ import annotations
 
@@ -158,6 +165,36 @@ check("it says never to end the turn on the completion notice", "never end the t
 runner = (REPO / "verify" / "run-e2e-tools.sh").read_text(encoding="utf-8")
 check("the E2E command does run run-tests.sh, as the item says",
       "run-tests.sh" in poll and 'bash "${SCRIPT_DIR}/run-tests.sh"' in runner)
+check("the intro names runs 15816 and 9604 and #796",
+      "Run 15816" in runs_flat and "run 9604 to the fifth (#796)" in runs_flat)
+check("it gives the background limit as 3600000 ms", "3600000 ms" in poll)
+check("it names run 15816 and the 20 minutes it gave the job", "run 15816 gave it 20 minutes" in poll)
+log = """`bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`"""
+check("the log it names gets the exit line", log in poll)
+wait = """`timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`"""
+check("it gives the bounded foreground wait on that log", wait in poll)
+check("the wait stays under the shell tool's 10-minute foreground limit",
+      "timeout 540 " in wait and "10-minute foreground limit" in poll)
+check("it names run 16484's stall and rules out Monitor", "run 16484" in poll and "stalled" in poll
+      and "Monitor" in poll)
+check("it says not to watch the job with pgrep", "`pgrep`" in poll and "other runs on the host" in poll)
+check("the verdict lines it names are the ones run-e2e-tools.sh prints",
+      "checks ran" in runner and "ALL E2E TOOLS TIER CHECKS GREEN" in runner and "`checks ran`" in poll
+      and "`ALL E2E TOOLS TIER CHECKS GREEN`" in poll and "`exit=0`" in poll)
+check("run-e2e-tools.sh prints how long it took", "SECONDS / 60" in runner)
+
+print("== prose is put through the ai-isms gate before it is committed (#796) ==")
+prose = item(runs, "Prose is put through the ai-isms gate")
+check("an item says prose is put through the ai-isms gate", bool(prose))
+check("it names the talk's verb and the nickname in backticks", "`Unleash`" in prose and "`Unleashed`" in prose)
+check("it names `lets`, read as `let's`", "`lets` is read as `let's`" in prose)
+check("it names the records that already read major",
+      all(f in prose for f in ("decisions.md", "PROJECT_STATE.md", "PROGRESS.md")))
+cmd = "python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging"
+check(f"it gives the command `{cmd}`", f"`{cmd}`" in prose)
+check("verify/prose_gate.py exists", (REPO / "verify" / "prose_gate.py").is_file())
+check("verify/test_prose_gate.py tests it",
+      "prose_gate.py" in (REPO / "verify" / "test_prose_gate.py").read_text(encoding="utf-8"))
 
 print("== the app-layout bullet is true of the tree ==")
 where = section(agents, "Where things live")
