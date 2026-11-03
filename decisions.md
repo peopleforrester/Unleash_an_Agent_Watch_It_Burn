@@ -11419,3 +11419,6 @@ failing only on ghcr.io serving `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7
 41c0b9c stopped on PROGRESS.md: #759's bullet and this one were both inserted at the top of [Unreleased]'s Added list.
 Both are kept, #811's above #759's. decisions.md took the later entries by append, and nothing the test reads changed:
 `gitops/otel-collector/values.yaml` and the #783 entry are as they were at 5d0a620. No code differs from run 16656's draft.
+On the rebased branch (run 16668, at bfb7a2c), `bash verify/run-tests.sh` passed with 232 tests, and
+`bash verify/run-e2e-tools.sh` ran 48 checks and failed only `test_image_version_tags.py`, on the same
+`web-terminal-ttyd-1.7.7` digest red the #608 entry records on staging. test_agent_obs_cause_comment passed in the tier.
