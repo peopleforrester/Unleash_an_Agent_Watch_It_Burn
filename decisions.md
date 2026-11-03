@@ -10611,4 +10611,13 @@ out, so host load does not explain it. The script's waits run on the stub clock,
 advancing: if the `date` stub ever printed nothing, `WAITED` would go negative and `wait_for` would never return.
 The cause is not found, so per rule 3 a follow-up carries the failing output.
 
+**Resumed in run 16526, rebased onto staging `e586840`.** Run 16473 stalled. It ended its turn to wait for the E2E
+command's completion notice, and hecaton stopped it after 15 minutes with no output. #798's point 4 in AGENTS.md,
+which landed on staging meanwhile, already covers that cause, so this run adds nothing for it and polls the log in the
+foreground instead. #798 appended to AGENTS.md and decisions.md at the same places this branch does. The rebase keeps
+both: #798's points 3 and 4 and then this section, and #798's entries and then this one. The E2E tools tier's one
+red on run 16473's base was `test_image_version_tags.py`: ghcr.io serves `web-terminal-ttyd-1.7.7` at
+`sha256:0b72ecc7...`, not the pinned `68004fb5...`, because CI pushed over that tag, as the #798 and #786 entries
+record. Nothing here touches an image.
+
 **Not yet run on a cluster:** nothing; both changed tests are offline or in the tools tier.
