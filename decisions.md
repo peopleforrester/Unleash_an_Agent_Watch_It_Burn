@@ -12266,3 +12266,29 @@ resolves the chat and cost groups and the `aws.bedrock` member. `test_guard_prox
 exits 1 on one check, the red already recorded at `c25c221`: `test_image_version_tags.py` finds ghcr.io serving
 `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where the pin is `68004fb5`. Nothing here builds or
 pushes an image. This run's cluster files were again mode 640, group `hecaton`, so the dry run above is still owed.
+
+## 2026-11-03 · #782 · Run 16671 ports run 16582's draft onto staging `b4cad81`, unchanged
+
+**What was ported.** `bash verify/prior-drafts.sh 782 origin/staging` named run 16582's branch
+`agent/782-16582` as the draft to start from: seven commits outside staging, cut from staging `04455a2`, verdict
+CLEAN with a decisions.md APPEND. Run 16579's draft (`08c8a4e`) is already inside it, and run 16462's
+(`agent/782-15696`) is what run 16582 ported. All seven commits were cherry-picked in order onto `b4cad81`. The only
+conflict was decisions.md, where staging had appended #811's entries and the draft its #782 entries: both are kept,
+staging's first. No code, manifest or test differs from the draft. The issue's comment says only that run 16660 (the
+resume of run 16582) "ended failed (validation)". Its report listed the commits it made on `c25c221` (`8842a19` and
+the rest), but the branch hecaton kept holds them rebased onto `04455a2` with other hashes (`031e65f` and the rest),
+so the report's commit list did not match its branch. This run does not rebase after the suites run, and its report
+lists `git rev-list b4cad81..HEAD`.
+
+**The suites, on this branch.** `bash verify/run-tests.sh` passed: 233 tests, "ALL OFFLINE RENDER-GATE TESTS GREEN".
+`bash verify/run-e2e-tools.sh` ran 50 checks (the offline suite and 49 tier tests) and exited 1 on one,
+`test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where
+the pin is `68004fb5`. That red is on staging already, under #794, and nothing here touches it.
+`test_weaver_registry_check.py` passed every check, including the `metric.witb.guard_proxy.cost` gauge in USD and
+`aws.bedrock` as a `gen_ai.provider.name` member, and `test_guard_proxy_go_otel.py` passed.
+
+**Not yet run on a cluster.** The inject-sdk server-side dry run with CPU and memory limits that the entry above
+spells out. This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` (`/var/lib/hecaton/runs/16671/clusters/`) are mode
+640, owner and group `hecaton`, and the run's user (`hecaton-s3-claude-certkraken`, groups `hecaton-runs` and
+`hecaton-tools`) cannot read them, so it is in this run's escalate (hecaton#508). It creates nothing. The Go
+guard-proxy's live spans and cost gauge still wait on the #738 cutover listing go-otel.
