@@ -11886,3 +11886,9 @@ can read the accen-dev credentials and the kubeconfig holding the community cont
 The three cautions in the entry above still hold. It builds watch-it-burn-attendee-001. CLAUDE.md's "Dispatched
 runs" rule 1 says a run does not bring clusters up, but this run's governance allows a run to create and tear down
 a cluster its tests need, and the session tears the cluster down on every exit.
+
+**Suite results in run 16703, on bc3dac2.** `bash verify/run-e2e-tools.sh` ran 48 checks: the offline suite and 47
+tier tests. The offline suite was green with 234 tests, including `verify/test_live_e2e_session.sh` at 41 checks. The
+tier exited 1 on one check, `test_image_version_tags.py`, which this change does not touch. It found two problems.
+ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7…`, but the pin is `68004fb5…`, the same red that #797's
+run 16678 recorded. ghcr.io also answers 404 for `sample-app-nginx-1.27.5`, the retag that #814 escalated.
