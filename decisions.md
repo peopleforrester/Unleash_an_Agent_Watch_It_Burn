@@ -14897,8 +14897,27 @@ cookie, and a title in the markup or set from the script each fail the tests; th
 
 The header link stays gone (#763); nothing here adds one, and the plain-text checks would fail if it came back.
 
-**Not yet run on a cluster:** the same flow in a real browser on a fleet cluster. No live E2E test clicks the
-button (`verify/run-e2e.sh` has none, and `verify/browser-smoke.py` does not touch the witch name). A session with
-AWS access opens `https://attackme.burritobot.co/` with no cookies, notes the header's name, opens
-`https://support-attackme.burritobot.co/me` and sees the same name, clicks "Get a new witch name", and sees `/me`
-show the new name after a reload.
+**Ported by run 16675 from run 16537's draft (`agent/802-16537`).** Run 16537 failed validation only because
+`bash verify/run-e2e-tools.sh` exited 1 on the `web-terminal-ttyd-1.7.7` digest red, which is not from this change
+(#815). Its two #802 commits were cherry-picked onto staging b4cad81 unchanged, and this entry was kept after
+staging's by append. Its third commit was dropped: it pinned #480's stand-in shim in
+`verify/test_tool_pin_live_check.py` to `workshop-mcp-mcp-1.29.1`, and staging's 8b0a3a0 (#803) had already made
+that same fix.
+
+**Live check (run 16675, 2026-11-03).** `https://attackme.burritobot.co/` serves exactly staging's `burritbot.html`,
+with the old `randWitch()` handler, because this change has not been promoted yet. The real desk at
+`https://support-attackme.burritobot.co/me` answers from Railway (`server: railway-hikari`), not from either
+cluster. This branch's witch-name block ran in node with no cookie, and its button was then clicked twice. Each
+cookie the page wrote was sent to the live desk's `/me`:
+
+    step 0 (first visit): header='Percival the Witch' cookie='wib_witch=percival-the-witch; Path=/; Max-Age=172800; SameSite=Lax; Domain=.burritobot.co' name_from_slug='Percival the Witch' live /me='Percival the Witch' live Set-Cookie='' -> PASS
+    step 1 (click 1): header='Hazel the Djinn' cookie='wib_witch=hazel-the-djinn; ...' name_from_slug='Hazel the Djinn' live /me='Hazel the Djinn' live Set-Cookie='' -> PASS
+    step 2 (click 2): header='Percival the Siren' cookie='wib_witch=percival-the-siren; ...' name_from_slug='Percival the Siren' live /me='Percival the Siren' live Set-Cookie='' -> PASS
+
+So the live desk accepts every name the page writes and sets no cookie of its own.
+
+**Not yet run on a cluster:** the same flow in a real browser, once this change is promoted. No live E2E test
+clicks the button (`verify/run-e2e.sh` has none, and `verify/browser-smoke.py` does not touch the witch name), and
+this host has no browser. The check: open `https://attackme.burritobot.co/` with no cookies and confirm the page
+source calls `otherWitch(WITCH_NAME)`. Note the header's name, open `https://support-attackme.burritobot.co/me` and
+see the same name. Click "Get a new witch name", and see `/me` show the new name after a reload.
