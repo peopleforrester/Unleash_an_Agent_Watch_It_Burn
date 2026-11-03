@@ -10667,3 +10667,11 @@ repin syncs ai-layer: `python3 infra/datadog-fleet/fleet_monitors.py --profile a
 to load both boards, then `python3 verify/test_fleet_monitors_live.py`, which compares the loaded queries with the
 repo and checks each returns data for both KubeCon clusters. After a bedrock-nova to bedrock-opus swap has spent on
 both, the leaderboard's 4 bill cell for that cluster should equal the cluster's `/cost` usd.
+
+**The suites (run 16549).** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh` ran 44 checks and
+failed one, `test_image_version_tags.py`: ghcr.io now serves `watch-it-burn:web-terminal-ttyd-1.7.7` at
+`sha256:0b72ecc72c7c…`, not the pinned `sha256:68004fb5ed2d…`. This is the red #783's and #746's re-dispatches recorded
+above (then at `d6acd503…`, so the workflow has pushed over the tag again since). Nothing in #794 touches an image; the
+fix needs a ghcr.io write and the signing key and is in run 16420's follow-up. Run 16467 stalled waiting on the tier in
+the background with nothing polling it, so run 16549 ran it again and polled it to the end (about 25 minutes on a
+shared box).
