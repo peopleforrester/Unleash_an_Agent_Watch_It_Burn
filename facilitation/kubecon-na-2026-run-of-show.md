@@ -618,20 +618,40 @@ real-looking home address to chat.
 - **Attack:** Whitney sends the `/kubecon` ask on the private bot, and the home
   address comes back.
 - **Trace, after the attack:** Datadog Challenge 1 tab, the Secret read in the trace.
-- **Fix:** RBAC, a Role that grants `get` on the one Secret the bot needs, by name.
-  On the private bot's terminal, `guard-rbac-on`: it prints the `kubectl apply` of
-  `~/challenges/c5-scoped-role.yaml`, which names only the agent's own `workshop-agent`
-  config Secret, then the same ask, and the read comes back Forbidden.
-  `guard-rbac-off` puts the shipped Role back. RBAC is the only fix: the output guard is
-  not a second fix here (Michael, 2026-10-31).
+- **No fix in this segment (#776, 2026-11-01 review):** Challenge 1 no longer runs a
+  fix of its own, so no RBAC command is run here. RBAC moves into the Challenge 2
+  guardrails switch in segment 3 (#774): the one command that turns on RBAC, Kyverno
+  admission, KubeArmor and the egress NetworkPolicy together applies the same scoped
+  Role, which names only the agent's own `workshop-agent` config Secret, and from then
+  on the CEO's Secret read comes back Forbidden. The room tries Challenge 1 again
+  after that switch. The output guard is still not a fix for Challenge 1 (Michael,
+  2026-10-31).
+- **OWASP Top 10 for LLM Applications, to end the segment:** after the trace, the
+  presenters bridge with "Awesome. We just hacked BurritoBot. Now, before we go any
+  further, I want to introduce you to..." The deck's next slide reads:
+
+  > **OWASP Top 10 LLM Vulnerabilities**
+  > Open Worldwide Application Security Project
+
+  Its title links to the official page. Click it to open
+  `https://genai.owasp.org/llm-top-10/` in the browser, in a new tab, zoom in, and
+  right-click the page to create a QR code so the room can open it too. Then say: "The
+  two vulnerabilities we just exploited are sensitive information disclosure and
+  excessive agency. We'll get to more of these later in the talk. There isn't time
+  today to go over all of them, but we'll do what we can." On the page those are
+  **LLM02, Sensitive Information Disclosure** (the CEO's home address, read out of a
+  Secret no customer should reach) and **LLM06, Excessive Agency** (a bot that can read
+  every Secret in its namespace, when it needs one).
 - **The off-topic probe (Night Before only):** the Night Before probe asks the
   linked-list question three times and must end green. The live off-topic asks
   happen in segment 1's opening minute of play now, not here (3 of 3 on the public
   cluster, 2026-10-27, #535).
-- **Delivers:** point 4 (the room hacks it live) and point 5 (RBAC). Point 9's live
-  half is delivered in segment 1's opening minute of play.
-- **Hand-off:** "Everything you already knew about Kubernetes matters more now. Here
-  is what else is open."
+- **Delivers:** point 4 (the room hacks it live). Point 5 (RBAC) now lands with segment
+  3's guardrails switch. Point 9's live half is delivered in segment 1's opening minute
+  of play.
+- **Hand-off:** "Regarding excessive agency, there are a lot of Kubernetes guardrails
+  you should already have in place, pre-LLM, to help prevent any humans or any agents
+  from doing things they shouldn't do."
 
 ### Segment 3: Challenge 2, the Kubernetes catch-all (4 min). Owner: Whitney and Michael.
 
