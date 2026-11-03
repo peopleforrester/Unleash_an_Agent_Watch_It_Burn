@@ -12808,3 +12808,34 @@ to be smaller than that.
   every `kubectl --context watch-it-burn-private` call failed with `permission denied` (hecaton#508). Not yet run
   on a cluster: `kubectl --context watch-it-burn-private get ns -L istio.io/dataplane-mode`, then, after promotion
   and the Argo CD sync, `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py`.
+
+## 2026-11-03 · #824 · web-terminal-ttyd-1.7.7 is back on its signed digest; #816's change did the issue's work
+
+**What #824 asked.** Put `watch-it-burn:web-terminal-ttyd-1.7.7` back on the signed `sha256:68004fb5...`, make
+`build-web-terminal.yml` stop pushing over a version tag that already exists, and rerun
+`verify/test_image_version_tags.py`. `bash verify/prior-drafts.sh 824 origin/staging` printed NONE: no earlier draft.
+
+**Already on staging.** #816 (`e33a0fe5`) made the workflow's push step `scripts/ghcr_version_tag.py`, which pushes
+the build only under a tag ghcr.io lacks and puts a pinned tag that has moved back on its pinned digest. That covers
+the issue's second step, and its first runs in CI with the workflow's `GHCR_TOKEN`, so this run makes no code change
+and no ghcr.io write. What this run did was check that the restore happened and that the digest is the signed one.
+
+**Live checks run (run 16781, 2026-11-03).**
+- build-web-terminal run 41710562776 (staging push of `933fffb1`, 20:13 UTC) concluded success, and its push step
+  logged `...web-terminal-ttyd-1.7.7 served sha256:cb00c5b7e716...; it is back on the pinned
+  sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf, and the build is not pushed`.
+- An anonymous HEAD of the tag on ghcr.io answers 200 with `docker-content-digest: sha256:68004fb5...`.
+- `python3 verify/test_image_version_tags.py` now passes
+  `ghcr.io serves ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5ed2d..., anonymously`.
+  It still exits 1 on one check, `sample-app-nginx-1.27.5` answering 404, which is #814's and not this issue's.
+- The signature: the `sha256-68004fb5....sig` manifest's one layer is a cosign simple-signing payload naming
+  `docker-manifest-digest` `sha256:68004fb5...`, and its `dev.cosignproject.cosign/signature` annotation verifies
+  over that payload with `openssl dgst -sha256 -verify policies/cosign/watch-it-burn.pub` ("Verified OK"). That key
+  is the one `policies/kyverno/verify-image-signatures.yaml` carries, so Kyverno admits the tag's digest again.
+- The cluster reads did not run: `clusters/kubeconfig` and `clusters/env` in this run's directory are mode 640, owner
+  and group `hecaton`, and this run's user is not in that group, so `kubectl --context watch-it-burn-community` (and
+  `-private`) fails with "permission denied". That is hecaton#508's to fix, as in run 16758. Clusters pull the image
+  by digest, so the tag's move never reached them.
+
+**Not yet run on a cluster.** The build-web-terminal run that main's promotion of #816 starts must log
+`serves the pinned`, with no put and no push.
