@@ -64,7 +64,7 @@ From her Google Doc comments (Michael handles the substantive replies; these are
 - **Partner-cluster breaking:** lower priority (restore burden); kept only as a possible LAST challenge.
 - **Considered CNCF adds:** Harbor + image signing -> an image-verification Kyverno policy added
   (`policies/kyverno/verify-image-signatures.yaml`); NetworkPolicy / Falco / ESO already present.
-  **Istio service mesh (ambient, STRICT mTLS) now BUILT** (`gitops/bootstrap/apps/istio.yaml` + `security/istio/`,
+  **Istio service mesh (ambient) now BUILT; since #471 it enrolls the console and guard-proxy, PERMISSIVE mTLS** (`gitops/bootstrap/apps/istio.yaml` + `security/istio/`,
   pinned 1.30.4); its mTLS certs are SPIFFE identities, so it also delivers the SPIFFE identity layer
   (standalone SPIRE stays narrated per the research spike).
 

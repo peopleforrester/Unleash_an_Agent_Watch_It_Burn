@@ -20,7 +20,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - [x] NetworkPolicy default-deny + egress allowlist (no internet -> S3 blocked); [~] VPC CIDR + Bedrock endpoint
 - [x] PID limit nodeadm config (podPidsLimit); [x] delivery via Terraform cloudinit_pre_nodeadm NodeConfig on AL2023
   (the only true inline fork-bomb block; Tetragon/KubeArmor confirmed NOT to replace it, the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`))
-- [x] Istio ambient + STRICT mTLS (= SPIFFE identity); [~] ztunnel footprint on t3.large
+- [x] Istio ambient, PERMISSIVE mTLS on the console-to-guard-proxy hop, the only pods enrolled (#471) (= SPIFFE identity); [~] ztunnel footprint on t3.large
 - [x] External Secrets Operator, cert-manager, Backstage; [~] ESO store backing, certs live
 - [~] **Harbor** registry (cosign sign-and-push + verify-image-signatures Enforce are wired and scoped
   to harbor.agenticburn.com; standing up the Harbor instance itself is the live-cluster step)

@@ -11815,3 +11815,19 @@ to be smaller than that.
   `CONTEXT=<ctx> python3 verify/test_mesh_live.py`, plus the existing chat beats (`verify/run-all.sh`) and
   `verify/test_console_no_toggle_live.py`, which go through the console and guard-proxy. Install time and app
   count do not change: the five Istio apps stay.
+- **Ported in run 16694 (2026-11-03).** Run 7101's two commits never reached staging. `verify/prior-drafts.sh 471`
+  found six paths that staging had edited in place since the draft's base, `bc00203`, plus the decisions.md append.
+  Both commits cherry-picked onto `6408699`. The lab.html, links.html, run-of-show, recreation-spec and
+  resources.yaml hunks merged cleanly. `challenges/LAB-TEXT.md` was regenerated from the ported lab.html, not
+  merged. I reread the drifting staging commits (the guard-proxy repin, the Backstage run-of-show rows, the registry
+  rule, the sponsor footer, the workshop-mcp version names) and none of them touches the mesh. On staging, the
+  console's `platform-console-egress` and `agent-allow-intra-namespace` both allow any port, so HBONE 15008 from the
+  console to guard-proxy is allowed, and no Ingress policy selects either pod. This run differs from the draft in
+  one way: it also corrects the two STRICT claims the draft missed, in `docs/TECH-STATUS.md` and
+  `docs/BUILD-PLAN.md`.
+- **Live check still not run.** The session files in this run's `clusters/` directory (kubeconfig, aws-credentials,
+  env) are mode 0640 with owner and group `hecaton`, and the run's user is not in that group, so every `kubectl`
+  call failed with `permission denied` (hecaton#508). Not yet run on a cluster: `CONTEXT=watch-it-burn-private
+  python3 verify/test_mesh_live.py`, once the change is promoted and Argo CD has synced it, plus
+  `kubectl --context watch-it-burn-private get ns -L istio.io/dataplane-mode` and
+  `kubectl --context watch-it-burn-private -n agent get pods -L istio.io/dataplane-mode`.
