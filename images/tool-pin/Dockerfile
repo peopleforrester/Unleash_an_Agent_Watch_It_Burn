@@ -2,8 +2,8 @@
 # ABOUTME: grpcio is baked in so the pod needs no egress at start, same reason as images/workshop-mcp.
 #
 # Built by hand, like the workshop-mcp image, and only for the spike's live check:
-#   docker build -t ghcr.io/peopleforrester/watch-it-burn:tool-pin images/tool-pin
-#   docker push ghcr.io/peopleforrester/watch-it-burn:tool-pin
+#   docker build -t ghcr.io/peopleforrester/watch-it-burn:tool-pin-grpcio-1.84.1 images/tool-pin
+#   docker push ghcr.io/peopleforrester/watch-it-burn:tool-pin-grpcio-1.84.1
 # then sign it (policies/cosign/README.md) or verify-image-signatures denies the pod.
 # Our ghcr.io copy, by digest, not Docker Hub's python:3.12-slim (#714).
 FROM ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e

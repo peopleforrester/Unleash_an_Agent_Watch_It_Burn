@@ -1,18 +1,24 @@
-# ABOUTME: A tag names the version of the software inside (#714): reads mcp from workshop-mcp, ttyd from web-terminal
-# ABOUTME: and busybox from C6's Joker, out of the images on ghcr.io, and checks each tag serves the pinned digest.
+# ABOUTME: A tag names the version of the software inside (#714, #814): reads mcp, ttyd, nginx and busybox out of
+# ABOUTME: workshop-mcp, web-terminal, sample-app and C6's Joker on ghcr.io, and checks each tag serves the pinned digest.
 # SUITE: e2e (needs the network: ghcr.io is asked, with no credential, for each image)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it, #572)
-"""Michael, 2026-10-30, on #714: a tag must match the version of the software inside. Three of our images had tags
-that named no version (workshop-mcp, web-terminal, joker). They are now:
+"""Michael, 2026-10-30, on #714: a tag must match the version of the software inside. Five of our images had tags
+that named no version (workshop-mcp, web-terminal, joker; sample-app and tool-pin, #814). They are now:
 
   watch-it-burn:workshop-mcp-mcp-<v>        the MCP Python SDK images/workshop-mcp/Dockerfile bakes in, read from
                                             its installed dist-info METADATA
   watch-it-burn:web-terminal-ttyd-<v>       ttyd, the terminal the pod serves (images/web-terminal/Dockerfile), read
                                             from `ttyd --version` run on the binary taken out of the image
+  watch-it-burn:sample-app-nginx-<v>        the nginx serving Backstage's templated-test-svc (images/sample-app),
+                                            read from the version string compiled into usr/sbin/nginx
+  watch-it-burn:tool-pin-grpcio-<v>         the #480 spike's processor (images/tool-pin): grpcio, the one package
+                                            its Dockerfile adds to python. Never pushed, so there is no image to
+                                            read: the tag is held to the Dockerfile's pin and to ghcr.io's 404
   festival-ops/maintenance-shell:busybox-<v>  C6's Joker (images/villains/build.sh), read from its own busybox
 
-The first two are read at the digest gitops/ai-layer/resources.yaml pins, so what is checked is what a cluster runs,
-and every reference in the repo must name that one tag. The Joker is read at whatever its tag serves, since
+The first two are read at the digest gitops/ai-layer/resources.yaml pins, and sample-app at the one
+backstage/k8s/templated-test-svc.yaml pins, so what is checked is what a cluster runs, and every reference in the
+repo must name that one tag. The Joker is read at whatever its tag serves, since
 HC-7731's ticket names it by tag. Each tag must serve, anonymously, the digest the repo pins: that is what a node
 with no pull secret gets. lab-platform's own tags are its #330.
 """
@@ -34,6 +40,8 @@ from ghcr_pull import ACCEPT, served_digest  # noqa: E402
 
 WIB = "peopleforrester/watch-it-burn"
 RESOURCES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+SAMPLE_SVC = (REPO / "backstage/k8s/templated-test-svc.yaml").read_text(encoding="utf-8")
+LOCK = (REPO / "images.lock").read_text(encoding="utf-8")
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
 WORKFLOW = (REPO / ".github/workflows/build-web-terminal.yml").read_text(encoding="utf-8")
 
@@ -96,24 +104,30 @@ def run_version(binary: bytes, name: str, args: list[str]) -> str:
         return (p.stdout + p.stderr).strip()
 
 
-def pinned(prefix: str) -> tuple[str, str] | None:
-    """The one (version, digest) the repo pins for watch-it-burn:<prefix><version>@sha256:..., which must be the only
-    watch-it-burn:<image> tag anything names."""
-    image = prefix.split("-")[0] + "-" + prefix.split("-")[1]  # workshop-mcp, web-terminal
-    named = set()
+def named(image: str) -> set[str]:
+    """Every whole watch-it-burn:<image>... reference in the repo's files, the dated records left out."""
+    out = set()
     for p in sorted(REPO.rglob("*")):
         if p.is_file() and p.suffix in (".yaml", ".yml", ".sh", ".py", ".md", ".lock") and ".tools" not in p.parts \
                 and "transcripts" not in p.parts and p.name not in ("decisions.md", "DECISION-LOG.md"):
             # A whole reference only: a template such as web-terminal-ttyd-${v} or -<v> is not one.
-            named |= set(re.findall(rf"{re.escape(WIB)}:{re.escape(image)}[\w.-]*(?=[@\s`'\")]|$)",
-                                    p.read_text(encoding="utf-8", errors="replace"), re.M))
-    found = set(re.findall(rf"ghcr\.io/{WIB}:{re.escape(prefix)}([0-9][0-9.]*)@(sha256:[0-9a-f]{{64}})", RESOURCES))
-    check(f"resources.yaml pins one {prefix}<version> digest ({sorted(found)})", len(found) == 1)
+            out |= set(re.findall(rf"{re.escape(WIB)}:{re.escape(image)}[\w.-]*(?=[@\s`'\")]|$)",
+                                  p.read_text(encoding="utf-8", errors="replace"), re.M))
+    return out
+
+
+def pinned(prefix: str, where: str = "resources.yaml", text: str = RESOURCES) -> tuple[str, str] | None:
+    """The one (version, digest) the file where pins for watch-it-burn:<prefix><version>@sha256:..., which must be
+    the only watch-it-burn:<image> tag anything names."""
+    image = prefix.split("-")[0] + "-" + prefix.split("-")[1]  # workshop-mcp, web-terminal, sample-app
+    found = set(re.findall(rf"ghcr\.io/{WIB}:{re.escape(prefix)}([0-9][0-9.]*)@(sha256:[0-9a-f]{{64}})", text))
+    check(f"{where} pins one {prefix}<version> digest ({sorted(found)})", len(found) == 1)
     if len(found) != 1:
         return None
     version, digest = next(iter(found))
-    check(f"every reference to watch-it-burn:{image} names {prefix}{version} ({sorted(named)})",
-          named == {f"{WIB}:{prefix}{version}"})
+    refs = named(image)
+    check(f"every reference to watch-it-burn:{image} names {prefix}{version} ({sorted(refs)})",
+          refs == {f"{WIB}:{prefix}{version}"})
     return version, digest
 
 
@@ -159,6 +173,56 @@ if pin:
     check("the build workflow tags the image with the ttyd version it reads from the image it built",
           "--entrypoint /usr/local/bin/ttyd web-terminal:built --version" in WORKFLOW
           and "watch-it-burn:web-terminal-ttyd-${v}" in WORKFLOW)
+
+print("== sample-app-nginx-<version>: the nginx inside ==")
+pin = pinned("sample-app-nginx-", "backstage/k8s/templated-test-svc.yaml", SAMPLE_SVC)
+if pin:
+    version, digest = pin
+    serves(f"ghcr.io/{WIB}:sample-app-nginx-{version}", digest)
+    check(f"images.lock pins sample-app-nginx-{version} at the same digest",
+          f"ghcr.io/{WIB}:sample-app-nginx-{version}@{digest} {digest} " in LOCK)
+    hit = find(WIB, digest, r"^usr/sbin/nginx$")
+    check(f"the image at {digest[:19]}... carries usr/sbin/nginx", hit is not None)
+    if hit:
+        # nginx -v prints "nginx version: nginx/<v>" from this string; the binary is musl's, so it is read, not run.
+        got = set(re.findall(rb"nginx/(\d+\.\d+\.\d+)\x00", hit[1]))
+        check(f"its nginx is {version}, the tag's ({sorted(g.decode() for g in got)})", got == {version.encode()})
+    base = re.search(rf"^FROM ghcr\.io/{WIB}:nginx-[0-9.]+-alpine@(sha256:[0-9a-f]{{64}})$",
+                     (REPO / "images/sample-app/Dockerfile").read_text(encoding="utf-8"), re.M)
+    check("images/sample-app/Dockerfile builds on our nginx alpine copy by digest", base is not None)
+    if base:
+        # A rebuild keeps the tag only while its base carries the same nginx: the base's NGINX_VERSION says which.
+        tok = token(WIB)
+        with get(WIB, tok, f"manifests/{base.group(1)}") as r:
+            m = json.load(r)
+        if "manifests" in m:
+            d = next(x["digest"] for x in m["manifests"]
+                     if x.get("platform", {}).get("os") == "linux" and x["platform"].get("architecture") == "amd64")
+            with get(WIB, tok, f"manifests/{d}") as r:
+                m = json.load(r)
+        with get(WIB, tok, f"blobs/{m['config']['digest']}") as r:
+            env = json.load(r)["config"].get("Env", [])
+        check(f"the Dockerfile's base carries nginx {version} too ({[e for e in env if e.startswith('NGINX_')]})",
+              f"NGINX_VERSION={version}" in env)
+
+print("== tool-pin-grpcio-<version>: the grpcio its Dockerfile installs ==")
+row = re.findall(rf"^ghcr\.io/{WIB}:tool-pin-grpcio-([0-9][0-9.]*) - build:images/tool-pin -$", LOCK, re.M)
+check(f"images.lock has one tool-pin-grpcio-<version> row, built here with no digest ({row})", len(row) == 1)
+if len(row) == 1:
+    version = row[0]
+    refs = named("tool-pin")
+    check(f"every reference to watch-it-burn:tool-pin names tool-pin-grpcio-{version} ({sorted(refs)})",
+          refs == {f"{WIB}:tool-pin-grpcio-{version}"})
+    dockerfile = (REPO / "images/tool-pin/Dockerfile").read_text(encoding="utf-8")
+    check(f"images/tool-pin/Dockerfile installs grpcio=={version} and builds and pushes that tag",
+          f"'grpcio=={version}'" in dockerfile
+          and f"docker build -t ghcr.io/{WIB}:tool-pin-grpcio-{version} images/tool-pin" in dockerfile
+          and f"docker push ghcr.io/{WIB}:tool-pin-grpcio-{version}" in dockerfile)
+    # The row's "-" digest says it was never pushed. Once it is, its digest goes in images.lock, and this test
+    # reads grpcio's dist-info out of it the way it reads mcp's out of workshop-mcp.
+    got, why = served_digest(f"ghcr.io/{WIB}:tool-pin-grpcio-{version}")
+    check(f"ghcr.io has no tool-pin-grpcio-{version}, as the row's - digest says", got is None
+          and why == "manifest: HTTP 404 Not Found", why or f"it serves {got}: pin it in images.lock and read it")
 
 print("== maintenance-shell:busybox-<version>: the BusyBox C6's Joker runs on ==")
 m = re.search(r'^JOKER_REF="(ghcr\.io/(peopleforrester/festival-ops/maintenance-shell):busybox-([0-9.]+))"$', BUILD, re.M)

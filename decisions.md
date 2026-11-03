@@ -11542,3 +11542,60 @@ thing is not). The sentences that matched, in this entry and in a test label, no
 suite, which this tier does not include, and is not run here: its AWS profile is not readable from this run (hecaton#508).
 
 No dependency was added.
+## 2026-11-03 · #814 · sample-app and tool-pin tags name the version inside: nginx 1.27.5 and grpcio 1.84.1
+
+**Context.** Michael's 2026-10-30 comment on #714 says a tag must match the version of the software inside. #714
+retagged workshop-mcp and web-terminal, and its 2026-11-02 entry left `watch-it-burn:sample-app` and `:tool-pin` as a
+follow-up, which is this issue. Hecaton run 16674 is its first dispatch: `verify/prior-drafts.sh 814 origin/staging`
+printed NONE, and the issue has no comments.
+
+**What the images hold, read on 2026-11-03.**
+- **sample-app** (`sha256:556e176d…`, an index with one linux/amd64 image, `e99ce5df…`). Its main software is nginx.
+  The version string compiled into `usr/sbin/nginx`, which `nginx -v` prints, is `nginx/1.27.5`, and the image's
+  config has `NGINX_VERSION=1.27.5`. So the tag is `sample-app-nginx-1.27.5`. The image was built on 2026-06-22 from
+  Docker Hub's `nginx:1.27-alpine`, before #714 moved `images/sample-app/Dockerfile` to our
+  `watch-it-burn:nginx-1.27-alpine` copy. That copy carries nginx 1.27.5 too, so a rebuild keeps the tag's version.
+  The copy is nginx's unprivileged image, though (USER 101, docker-nginx-unprivileged), so a rebuild would not be the
+  same image. Nothing rebuilds sample-app now, and this change does not.
+- **tool-pin** has no image: ghcr.io answers 404 for `watch-it-burn:tool-pin`, as the #603 and #480 entries record, and
+  the spike's live check runs `tool_pin.py` from a ConfigMap. With nothing to read on ghcr.io and no digest to
+  `crane tag`, the image was built here from `images/tool-pin` (podman 29.9.2 through the docker CLI, local tag
+  `localhost/tool-pin-814:built`, never pushed). In it, `python -c "import grpc; print(grpc.__version__)"` printed
+  `1.84.1` on Python 3.12.13. Its main software, other than our own `tool_pin.py`, is grpcio, the one package its
+  Dockerfile adds to python, the way workshop-mcp's tag names the mcp SDK. So the tag is `tool-pin-grpcio-1.84.1`.
+
+**What changed.**
+- `backstage/k8s/templated-test-svc.yaml` and `images.lock` pin `watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176d…`,
+  the same digest. The images.lock row for tool-pin is `watch-it-burn:tool-pin-grpcio-1.84.1 - build:images/tool-pin -`,
+  and `images/tool-pin/Dockerfile`'s build and push commands name that tag. The prose references in the spike's
+  README and tool-pin.yaml, in test_tool_pin.py's comment and in test_image_pins.py's probe line name the new tags.
+- `verify/test_image_version_tags.py` gets two sections. The sample-app section takes the digest
+  templated-test-svc.yaml pins and checks that images.lock pins the same one and that every reference names that
+  one tag. It then checks that ghcr.io serves the tag at that digest anonymously, reads nginx's version string out of
+  `usr/sbin/nginx` in the pinned image, and checks that the Dockerfile's base has the same `NGINX_VERSION`. The binary is
+  built against musl, so the test reads it instead of running it. The tool-pin section checks that images.lock has
+  exactly one `tool-pin-grpcio-<v>` `build:` row with no digest, that every reference names that tag, and that the
+  Dockerfile installs `grpcio==<v>` and builds and pushes that tag. It also checks that ghcr.io answers exactly 404
+  for the tag, because the row's `-` digest says the image was never pushed. If someone pushes it, that check fails
+  and says to pin the digest. The test cannot read grpcio out of an image that was never published, so this is
+  the most it can hold. `pinned()` now takes the file that pins the digest, and its reference scan is a separate
+  `named()`.
+- Checked by mutation: with the Dockerfile's push line set back to `watch-it-burn:tool-pin`, the tool-pin
+  Dockerfile check fails.
+
+**Not done here: the ghcr.io write.** Governance forbids a run from pushing, and `crane tag` is a ghcr.io write, so
+the report escalates it. Until it runs, test_image_version_tags fails one more check:
+`ghcr.io serves …:sample-app-nginx-1.27.5 at the pinned sha256:556e176dd1ac…` (HTTP 404). The escalated command,
+run from a checkout of staging with GHCR write access:
+
+    bash verify/fetch-e2e-tools.sh && gh auth token | verify/.tools/bin/crane auth login ghcr.io -u peopleforrester --password-stdin \
+      && verify/.tools/bin/crane tag ghcr.io/peopleforrester/watch-it-burn@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sample-app-nginx-1.27.5 \
+      && verify/.tools/bin/crane digest ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5
+
+The last command must print `sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24`. The old
+`sample-app` tag stays on ghcr.io and is left alone; nothing in the repo names it any more. tool-pin needs no write.
+
+**Not yet run on a cluster.** Backstage's templated-test-svc pulls `sample-app-nginx-1.27.5` by digest, so it pulls
+the same bytes as before, and its pod can start before the tag exists. Once the change is on a cluster, run
+`kubectl --context watch-it-burn-private get deploy -A -o jsonpath='{..image}' | tr ' ' '\n' | grep sample-app`.
+It is owed only where the Backstage manifest is applied.

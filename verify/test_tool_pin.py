@@ -303,8 +303,8 @@ except SystemExit:
     check("extend refuses a config that already has the pinned bind", True)
 
 print("== tool-pin runs with no image of its own ==")
-# watch-it-burn:tool-pin was never pushed, so the live check runs tool_pin.py from a ConfigMap on the python mirror
-# guard-proxy already runs, with grpcio installed by hash in an init container.
+# watch-it-burn:tool-pin-grpcio-1.84.1 was never pushed, so the live check runs tool_pin.py from a ConfigMap on the
+# python mirror guard-proxy already runs, with grpcio installed by hash in an init container.
 pin_docs = [d for d in yaml.safe_load_all((SPIKE / "tool-pin.yaml").read_text(encoding="utf-8")) if d]
 pod = next(d for d in pin_docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]
 resources = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")

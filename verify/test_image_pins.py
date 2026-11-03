@@ -49,7 +49,7 @@ def refs():
 
 
 print("== the matcher fires on an unpinned reference ==")
-_probe = "          image: ghcr.io/peopleforrester/watch-it-burn:sample-app # verify-at-build: pin @sha256"
+_probe = "          image: ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5 # verify-at-build: pin @sha256"
 _code = _probe.split("#", 1)[0]
 _m = IMAGE_LINE.match(_code)
 check("a tag-only reference with '@sha256' in its COMMENT is seen as unpinned",

@@ -226,7 +226,7 @@ On any difference it exits 1 and keeps the snapshot, so `live-check.sh restore` 
 `verify/test_tool_pin_live_check.py` runs all of this against a stateful kubectl stand-in, including a failure in
 the middle of the run and a gateway that refuses the config.
 
-**tool-pin without its own image.** `watch-it-burn:tool-pin` was never pushed. The pod runs `tool_pin.py` from a
+**tool-pin without its own image.** `watch-it-burn:tool-pin-grpcio-1.84.1` was never pushed. The pod runs `tool_pin.py` from a
 `tool-pin-src` ConfigMap that `setup` makes from `images/tool-pin/tool_pin.py` and `requirements.txt`, on the
 python:3.12-slim mirror guard-proxy already runs. An init container installs grpcio by hash, which needs egress to
 PyPI once (the community cluster has no NetworkPolicy; on the private cluster the agent namespace's default-deny would
