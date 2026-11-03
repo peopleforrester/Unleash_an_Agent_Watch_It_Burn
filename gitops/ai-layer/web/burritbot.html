@@ -795,6 +795,13 @@
     return WITCH_FIRST[Math.floor(Math.random()*WITCH_FIRST.length)]+" the "+
            WITCH_CREATURES[Math.floor(Math.random()*WITCH_CREATURES.length)];
   }
+  // A re-roll picks among the other 767 names, so "Get a new witch name" never hands back the same one (#802).
+  function otherWitch(old){
+    var C=WITCH_CREATURES.length, p=(old||"").split(" the "), f=WITCH_FIRST.indexOf(p[0]), c=WITCH_CREATURES.indexOf(p[1]);
+    var i=Math.floor(Math.random()*(WITCH_FIRST.length*C-1));
+    if(f>=0 && c>=0 && i>=f*C+c) i++;
+    return WITCH_FIRST[Math.floor(i/C)]+" the "+WITCH_CREATURES[i%C];
+  }
   function setWitchCookie(name){
     var host=location.hostname||"";
     var domain=/\.burritobot\.co$/.test(host) ? "; Domain=.burritobot.co" : "";
@@ -814,7 +821,7 @@
       btn.hidden=false;
       // Re-roll: a new name, cookie replaced on .burritobot.co. Jokers already deployed under the old name keep it.
       btn.addEventListener('click',function(){
-        WITCH_NAME=randWitch(); setWitchCookie(WITCH_NAME);
+        WITCH_NAME=otherWitch(WITCH_NAME); setWitchCookie(WITCH_NAME);
         el.textContent='\uD83E\uDDD9 You are '+WITCH_NAME;
         checkMyDeployments();
       });
