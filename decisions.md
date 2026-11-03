@@ -11165,4 +11165,18 @@ after ai-layer on the community cluster has synced 6d8505a's repin, and not whil
 
 **The suites (run 16574, on 6c283e3).** `bash verify/run-tests.sh` exits 0 with 228 tests, `test_kubecon_c3_live_checks.py` and `test_gate_commands.py` among them, and lists `test_kubecon_c3_live.py` with the live suite. `bash verify/run-e2e-tools.sh` ran 45 checks and exits 1 on one, `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the pinned `68004fb5`. That is the tag CI pushed over, open as #815, #816, #823 and #824; nothing here touches an image.
 
+**Resumed by run 16647.** Run 16574's commits failed hecaton's rebase on a PROGRESS.md insert-insert conflict: #808's
+and #806's bullets went in at the top of `### Added` where #807's did. Run 16647 rebased onto staging e519319 and kept
+all three bullets. AGENTS.md's run-e2e.sh paragraph had also changed (#809's sentence on dispatched runs), so it now
+carries both that sentence and COMMUNITY_CONTEXT. #806 (42a9e8b) had meanwhile changed the probe's `c6-lands`: it now
+also reads workshop-mcp's audit log (`kubectl logs deploy/workshop-mcp -c shim --since-time=...`) and passes only on
+read_support_ticket(HC-666), then deploy_app of the Joker. The live test runs that beat unchanged, so it now checks
+the chain too. The offline fake raised on the new log read. It now logs a `pre` line for each tool the fake bot
+calls, and a new case (a Joker landing with no ticket read first) fails `c6-lands`.
+
+**Not run on a cluster, again.** Run 16647's `clusters/env` and `clusters/kubeconfig` are mode 640, owned by group
+`hecaton`, and this run's user is not in that group, so both reads are permission denied. That is hecaton's to fix
+(hecaton#508). The live command above is still owed. The probe runs from the checkout, so #806's change needs no
+sync; only the guard-proxy repin has to be live on the community cluster.
+
 No dependency was added.

@@ -6,7 +6,8 @@ and the public internet. Every missing prerequisite is a failure, never a skip.
 
 verify/kubecon_probe.py is run by hand on the Night Before. This runs two of its community beats, unchanged:
 `identity` (the kube-context and https://<host> are the same cluster) and `c6-lands` (Challenge 3: HC-666 lands
-joker-<stage name> with Kyverno off). It does not copy the beats, so a change to the probe's Challenge 3 flow is
+joker-<stage name> with Kyverno off, and workshop-mcp's audit log shows read_support_ticket on HC-666 and then
+deploy_app of that Joker, #806). It does not copy the beats, so a change to the probe's Challenge 3 flow is
 what runs here. Around them it holds the live cluster to the flow #764 moved the beat to:
 
 - the guard-proxy pod template carries git's checksum/proxy-py and has rolled out, so the bot runs the proxy.py that
