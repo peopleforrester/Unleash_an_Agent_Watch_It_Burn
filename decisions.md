@@ -13557,3 +13557,11 @@ there by later #720 work. The draft's one commit changes four files, and staging
 
 So nothing is ported, and the draft branch is not to be promoted: cherry-picked, it would move the fallback back to
 an `agenticburn.com` URL the test refuses. This entry is the only change.
+
+**The suites and a read-only probe (run 16828, at `a814a613`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the
+offline suite and 52 tier tests) in 23m06s. The offline suite ended `ALL OFFLINE RENDER-GATE TESTS GREEN`. The tier
+exited 1 on `test_iam_policy_structural.py` alone: `terraform init` could not download `hashicorp/cloudinit v2.4.1`
+because releases.hashicorp.com reset the connection. Rerun alone with the tier's environment and pinned tools, it
+exited 0 with 0 failures. Read-only probes: `https://beacon.burritobot.co/beacon/view` answered 200, the Railway
+host's `/healthz` 200, and `https://provisioning.agenticburn.com/beacon/view` 404. No cluster was read or changed;
+nothing in this entry needs one.
