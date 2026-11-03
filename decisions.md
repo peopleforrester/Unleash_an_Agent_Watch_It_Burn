@@ -12693,3 +12693,25 @@ KubeCon reads and the Datadog look above remain owed, as listed under "Not yet r
 tests, all green, `test_collector_act2_redaction.py` and `test_genai_semconv_pin.py` among them. In the tier,
 `test_collector_act2_redaction_e2e.py`, `test_adk_model_content_e2e.py`, `test_trace_shape_e2e.py`,
 `test_collector_pii_scrub_e2e.py` and `test_collector_one_root_e2e.py` passed.
+
+**Re-dispatch, run 16777.** Run 16747's four commits never reached staging: the run ended failed (rebase-conflict),
+because #782 (c6086b25) edited the same three files while it ran. `verify/prior-drafts.sh 784 origin/staging` named
+16747 the draft to start from, with three in-place drift lines and the decisions.md append, so this run cherry-picked
+its four commits onto staging 12b31cd and merged the three files by hand.
+- *The chat span group.* #782 had already declared `span.witb.guard_proxy.chat` from proxy.py's `/chat` handler, and
+  the draft declared a second group with the same id. The registry keeps #782's group, its notes and its attribute
+  list (no `gen_ai.provider.name`, which proxy.py does not set on that span), and adds the draft's two token counts to
+  it, `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`, both recommended. The draft's comment on why
+  Agent Observability never adds those counts moved onto that group. The egress group keeps #782's `error.type` and
+  takes the draft's note on keeping `peer.service`.
+- *The doc and #782's tests.* `docs/weaver-live-check.md` keeps #782's text with the pin read as v1.41.1.
+  `verify/test_weaver_registry_check.py` reads the pin as v1.41.1 and now also requires the chat group to resolve
+  with both token counts, and `verify/test_weaver_guard_proxy_spans.py` names v1.41.1 in its docstring.
+- *The pin.* The guard-proxy gitlink is now 88b9b52 (Michael's 6d8505a, #803 and #744). Its proxy.py, like
+  guard-proxy-agenticburn's main at 2cff90d, sums each forward's counts into `spent` through `chat_usage_tokens` and
+  sets no `gen_ai.usage.*` attribute; no branch of that repo sets one. The registry notes name 88b9b52. The Go build
+  generates its attribute keys from this registry (`scripts/gen-semconv.sh`), so its next regeneration has both keys.
+  No issue in guard-proxy-agenticburn asks for the change yet, so this run's report files it again.
+- *Clusters.* This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` are again mode 0640, group `hecaton`, and its user
+  (`hecaton-s3-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`) cannot read them (hecaton#508), so the
+  KubeCon reads and the Datadog look stay under "Not yet run on a cluster" above.
