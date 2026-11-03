@@ -11,9 +11,10 @@ on the address (Michael's ruling of 2026-11-01, #450).
 
 What it spends. The limit checks send EMPTY prompts: nginx counts them, and guard-proxy answers them with a 400
 before any guard, the prompt feed or the model, so they cost nothing and appear nowhere. They hold only their own
-throwaway conversations, so no network is held up by them; they do spend about 90 of guard-proxy's 150 a minute for
-the cluster, so do not run it while the room is chatting. One timed turn sends the probe prompt, marked [[wib-probe]] so the instructor feed skips it: about
-half a cent of Bedrock, and it counts on /cost until the counter is reset (run-of-show, "Reset the community bot").
+throwaway conversations and never the caller's address, so this can run from any network, the venue's included.
+They do spend about 90 of guard-proxy's 150 a minute for the cluster, so do not run it while the room is chatting.
+One timed turn sends the probe prompt, marked [[wib-probe]] so the instructor feed skips it: about half a cent of
+Bedrock, and it counts on /cost until the counter is reset (run-of-show, "Reset the community bot").
 
 Usage: CONTEXT=<kube-context> python3 verify/test_audience_path_live.py
 """
@@ -39,6 +40,7 @@ CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
 GIT_PROXY = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
                  if isinstance(d, dict) and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
 GIT_ENV = {e["name"]: e.get("value") for e in GIT_PROXY["spec"]["template"]["spec"]["containers"][0]["env"]}
+LIVE_ENV = ("PROXY_TIMEOUT", "TURN_TIMEOUT", "RATE_LIMIT_SESSION_RPM", "RATE_LIMIT_RPM", "COST_CAP_USD")
 # More fresh conversations at once than the per-address zone's burst let through (61) before #450's 2026-11-01 ruling.
 ONE_ADDRESS = 80
 CONTEXT = os.environ.get("CONTEXT", "")
@@ -93,12 +95,18 @@ def chat(host: str, prompt: str, session: str | None, timeout: float = 30) -> tu
 
 
 def burst(host: str, sessions: list[str | None]) -> list[tuple[int, dict, float]]:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+    # One thread a request, so all of them are in flight at once and nginx's bucket has no time to refill.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sessions)) as pool:
         return list(pool.map(lambda s: chat(host, "", s), sessions))
 
 
 def refused(r: tuple[int, dict, float]) -> bool:
     return r[0] == 200 and r[1].get("guarded") is True and SLOW_DOWN in r[1].get("reply", "")
+
+
+def says_wait_and_resend(r: tuple[int, dict, float]) -> bool:
+    reply = r[1].get("reply", "")
+    return "wait" in reply.lower() and "send that again" in reply
 
 
 def passed(r: tuple[int, dict, float]) -> bool:
@@ -142,28 +150,32 @@ env = {}
 if r.returncode == 0:
     env = {e["name"]: e.get("value") for e in json.loads(r.stdout)["spec"]["template"]["spec"]["containers"][0]["env"]}
 per_call = float(env.get("PROXY_TIMEOUT") or 150)
-for name in ("PROXY_TIMEOUT", "TURN_TIMEOUT", "RATE_LIMIT_SESSION_RPM", "RATE_LIMIT_RPM", "COST_CAP_USD"):
+for name in LIVE_ENV:
+    # Both sides must hold a value: a name missing from git and from the cluster would otherwise match as None.
     check(f"guard-proxy runs git's {name} {GIT_ENV.get(name)} (got {env.get(name)})",
-          env.get(name) == GIT_ENV.get(name), r.stderr.strip()[:200])
+          GIT_ENV.get(name) is not None and env.get(name) == GIT_ENV.get(name),
+          "resources.yaml sets no value for it" if GIT_ENV.get(name) is None else r.stderr.strip()[:200])
+s_burst = burst_of("wib_chat_session")
+check(f"git's console.conf gives /chat the wib_chat_session zone with a burst (burst={s_burst})", s_burst > 0)
 if failures:
     finish()
 
 print(f"== one conversation through https://{host} ==")
-s_burst = burst_of("wib_chat_session")
 one = burst(host, [f"wib-verify-450-{uuid.uuid4().hex}"] * (s_burst + 3))
-check(f"{s_burst + 1} of {len(one)} at once get through, the rest are refused in a sentence",
+check(f"{s_burst + 1} of {len(one)} at once get through, the other 2 are refused in a sentence",
       sum(map(passed, one)) == s_burst + 1 and sum(map(refused, one)) == 2,
       f"{[(s, b.get('reply', b)) for s, b, _ in one][-3:]}")
-check("the refusal names 10 a minute per conversation and says to wait and send that again",
-      all("10 a minute per conversation" in b.get("reply", "") and "send that again" in b.get("reply", "")
-          for s, b, _ in one if refused((s, b, 0))))
+check("every refusal names 10 a minute per conversation and says to wait and send that again",
+      all("10 a minute per conversation" in r[1].get("reply", "") and says_wait_and_resend(r)
+          for r in one if refused(r)),
+      f"{[r[1].get('reply') for r in one if refused(r)][:1]}")
 
 print(f"== one network, many conversations, through https://{host} ==")
 many = burst(host, [f"wib-verify-450-{uuid.uuid4().hex}" for _ in range(ONE_ADDRESS)])
-got = sum(map(passed, many))
-check(f"all {len(many)} fresh conversations from one address get through nginx (got {got}), so a room on one "
-      "venue NAT address is not one bucket",
-      got == len(many),
+got, held = sum(map(passed, many)), sum(map(refused, many))
+check(f"all {len(many)} fresh conversations sent at once from one address get through nginx (got {got}, nginx "
+      f"refused {held}), so a room on one venue NAT address is not one bucket",
+      got == len(many) and held == 0,
       f"{[(s, b.get('reply', b)) for s, b, _ in many if not passed((s, b, 0))][:3]}")
 time.sleep(65)
 

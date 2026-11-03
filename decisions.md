@@ -10537,3 +10537,38 @@ Its offline suite, `run-tests.sh`, is green (225 tests), and `test_challenge_fal
 exits 1 on one check: the red already recorded for #746, #775 and #798, where `test_image_version_tags.py` finds
 ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` and not the pinned `68004fb5`,
 because CI pushed over that tag. Nothing here touches an image.
+
+## 2026-11-03 · #787 · The live audience-path test holds the per-conversation limit and git's guard-proxy settings
+
+**Where it started.** #786 (`803b84e`) already rewrote most of `verify/test_audience_path_live.py` for Michael's
+2026-11-01 ruling on #450: it reads no `wib_chat_address`, sends 80 fresh conversations from one address, and holds
+guard-proxy's PROXY_TIMEOUT, TURN_TIMEOUT, RATE_LIMIT_SESSION_RPM, RATE_LIMIT_RPM and COST_CAP_USD to
+`gitops/ai-layer/resources.yaml` (today 120, 270, 10, 150 and 25). This run closes what was left of #787 on top of it.
+
+**What changed.**
+- The docstring says the empty prompts hold only throwaway conversations and never the caller's address, so the test
+  can run from any network, the venue's included. It still says the run spends about 90 of guard-proxy's 150 a minute
+  for the cluster, so it is not run while the room is chatting.
+- `burst()` opens one thread per request, where it opened 16, so the 80 conversations are all in flight at once and
+  nginx's bucket has no time to refill between rounds.
+- The 80-conversation check also counts nginx's refusals and passes only when all 80 reach guard-proxy and nginx
+  refused none.
+- The one-conversation refusal check reads every refusal for "wait" and "send that again", where it read only "send
+  that again", and still wants "10 a minute per conversation". Its first check still wants exactly burst + 1 through
+  and the other 2 refused.
+- Each guard-proxy setting fails when resources.yaml has no value for it, since a name missing from git and from the
+  cluster would otherwise match as None. The conversation zone's burst must parse from git's console.conf as more
+  than 0 before any request is sent.
+
+**Run 15018's draft.** `bash verify/draft-drift.sh origin/agent/450-15018 origin/staging` exits 1 with ten paths,
+this test among them (#786 edited it). The draft (`b40c18a`) is not reused. Its refusal check read only the word
+"again", and it dropped the 65 s wait before the timed turn, which this file keeps so the cluster window drains first.
+
+**Checked offline.** `python3 -m py_compile verify/test_audience_path_live.py` passes. Without CONTEXT, without
+kubectl on PATH, and with a context that cannot be read, the test prints a FAIL line and exits 1 each time.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, after the
+ai-layer Application on that cluster has synced a staging revision carrying #786; it must end "All live
+audience-path checks passed." That live run is its own child of #450.
+
+No dependency was added.
