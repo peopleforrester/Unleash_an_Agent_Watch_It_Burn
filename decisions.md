@@ -11271,4 +11271,44 @@ and lists `test_dd_traces_live.py` with the live suite. The tools tier ran 46 ch
 `test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the
 pinned `68004fb5`. That is the tag CI pushed over, open as #815, #816, #823 and #824; nothing here touches an image.
 
+## 2026-11-03 · #485 · The run-of-show's monitors apply carries the KubeCon session window (run 16650, porting run 15625)
+
+**Why.** #485's work is the live apply of the fleet monitors to Whitney's sandbox org, then `--check`, `--data` and a
+look at the fleet dashboard. Run 15625's draft (56f2add, on `agent/485-15625`) never reached staging: run 15781
+ended in a rebase conflict. That draft closed one gap in the apply's own instructions. The KubeCon run-of-show gave
+`fleet.sh monitors --apply` with no `--session`, both in the "Datadog sandbox org" row and in the Night Before
+item. With no window the loader mutes the no-traces monitor indefinitely, so an apply copied from the run-of-show
+would leave that monitor silent through the session it exists for.
+
+**What changed, and how it differs from the draft.** `verify/draft-drift.sh` found two in-place edits since the
+draft's base, d849d67. For `facilitation/kubecon-na-2026-run-of-show.md`, 803b84e (#786) edited other lines, and
+the draft's two hunks applied unchanged. Both places now give `--session 2026-11-12T20:50Z/2026-11-12T21:20Z`, the
+30-minute slot from the start the run-of-show states under "Bring-up and teardown commands" (conference-knowledge
+`kubecon-na-2026`), and the Night Before item adds #706's `--data` check. `verify/test_fleet_monitors.py` gets the
+draft's checks unchanged: every `monitors --apply` in the run-of-show carries a `--session` that `parse_session`
+accepts, and it is that 30-minute slot. For `verify/test_american_english_gate.py`, the draft's other half (moving
+the American English checker run to an E2E test) is dropped. Staging's 076d7be (#745) made the same move ten
+minutes earlier, as `test_american_english_published.py`, so the draft's `test_american_english_tree.py` would
+have duplicated it. No metric or tag name changed, because none has been measured on the live org yet.
+
+**Why the live apply did not run here.** There were two reasons. First, this run could not read its own session. In
+`/var/lib/hecaton/runs/16650/clusters`, `env`, `kubeconfig`, `aws-config` and `aws-credentials` are
+`hecaton:hecaton` mode 0640, and the run's user (`hecaton-run-claude-certkraken`) is not in group `hecaton`. So
+`. "$HECATON_CLUSTER_ENV"` printed "Permission denied", `aws sts get-caller-identity` printed "Unable to locate
+credentials", and `kubectl --context watch-it-burn-community get ns` printed "open
+.../clusters/kubeconfig: permission denied". That is hecaton's fault (hecaton#508). Second, even with the session,
+`--apply` needs `WIB_FLEET_MONITORS_APP_KEY`, an unscoped application key that can write in Whitney's sandbox org.
+The pair in `watch-it-burn/datadog` is read-only (#629), and the coordinator note on #759 (2026-11-03) still
+describes it as a read pair. No write key is recorded anywhere in this repo. `--data` cannot stand in for the
+apply either, because it reads the applied monitors' group states.
+
+**Not yet run on a cluster.** With both clusters up and shipping, someone signed in to Whitney's sandbox org
+issues an unscoped application key. Michael has Admin there (#759). Then a session with `accen-dev` runs these
+from the repo root: `WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session
+2026-11-12T20:50Z/2026-11-12T21:20Z`, then `infra/terraform/fleet/fleet.sh monitors --check`, then one /chat on
+each bot, then `infra/terraform/fleet/fleet.sh monitors --data --cluster burritobot-public --cluster
+burritobot-private`, then `verify/test_fleet_monitors_live.py`. The fleet dashboard URL the apply prints must show
+every column filled for both clusters. A blank column means a wrong name, fixed in `infra/datadog-fleet/` and
+`verify/test_fleet_monitors.py` together.
+
 No dependency was added.
