@@ -10030,3 +10030,14 @@ an empty root is #746's failure; a red one is #783's.
 
 **Not yet run on a cluster.** All of the above, on both clusters. A run whose user can read its `clusters/` files, or
 a session with accen-dev, runs it and records the trace ids here.
+
+**The suites, and a red that is not #746's.** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh`
+exits 1 on two checks, and `test_trace_shape_e2e.py` is not one of them. First, `test_challenge_fallbacks.py`'s C7 open
+run timed out at 120 s while other runs' suites shared the box (load average near 10). Alone, it passes. Second,
+`test_image_version_tags.py` fails: "ghcr.io serves ...:web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5ed2d...
+(it serves sha256:d6acd503...)". #714's `4a1a47f` edited `.github/workflows/build-web-terminal.yml`, so its staging
+push started build-web-terminal run 41495102677 (2026-11-02 17:51 UTC). That run rebuilt the image and pushed it over
+the same tag. Clusters still pull the pinned, signed digest, because resources.yaml pins tag@digest. The new digest
+carries no cosign signature, and `verify-image-signatures` requires one, so re-pinning it is not a fix. The tag has to
+point back at `68004fb5`, and the workflow must stop pushing over a tag that already exists, or the main promotion
+pushes over it again. Both are in run 16420's follow-up.
