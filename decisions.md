@@ -11817,3 +11817,43 @@ a session with the accen-dev profile runs, from `infra/terraform/fleet/`:
 `routes roster` must not refuse, and the retired hosts must then get the router's 404. Then the Night Before list's
 `check-tls` line, the beacon-view curl and the two `kubecon_probe.py` runs, on the burritobot.co names.
 `verify/test_service_hosts_live.py` covers the kept service hosts.
+
+## 2026-11-03 · #651 · run 16718 ports run 15834's draft onto staging 382d570
+
+Run 15949 finished run 15834's #651 draft and then failed promotion on a rebase conflict, so none of it reached
+staging. `verify/prior-drafts.sh 651 origin/staging` started this run from `origin/agent/651-15834`, 139 staging
+commits behind, every drift an edit in place. The three commits were cherry-picked; the entry above is the draft's
+own. What differs from it:
+
+- **Three conflicts, resolved on staging's text.** The run-of-show's Challenge 2 beat and `kubecon.html`'s header
+  were rewritten by #773, #774 and #775 after the draft. Staging's wording stays and only the beacon moves to
+  `https://beacon.burritobot.co/beacon`, so the Deployments link on /kubecon stays. In `fleet.sh`, staging's
+  `WIB_VILLAIN_HOSTS` (now with deployments) and the internal registry's `WIB_REGISTRY_HOSTS` and bare
+  `registry.burritobot.co` row stay; the draft's `WIB_SERVICE_HOSTS="grafana argocd backstage"` and
+  `WIB_RETIRED_SERVICE_HOSTS` go in beside them.
+- **The roster table's count moved.** With deployments and registry added on staging, a roster run publishes 33 hosts
+  (two clusters, a console and seven service hosts each on both domains, plus the registry's bare name), not the
+  draft's 24. `verify/test_fleet_routes_roster.sh` now builds its pre-retirement fixture from fleet.sh's own lists,
+  checks that `WIB_RETIRED_SERVICE_HOSTS` is there before it reads it, and holds the drop at 57 to 33: six retired
+  prefixes off each cluster on each domain.
+- **One viewer surface staging added after the draft.** `challenges/PROMPT-CATALOG.md`'s Challenge 3 entry printed
+  `maintenance-shell-<cluster>.agenticburn.com`; `deploy_app`'s reply names the burritobot.co twin, so the catalogue
+  now does too.
+- The lab text was exported again from the merged `lab.html` rather than cherry-picked.
+- harbor: `restrict-image-registries` still lists `harbor.agenticburn.com/` among the registries it allows. Allowing
+  a registry pulls nothing, and nothing in the repo pulls from it, so retiring harbor needs no change here.
+
+**Checked live, read-only curl, 2026-11-03.** Every kept host answers on both domains with a certificate that
+verifies (`ssl_verify_result` 0): attackme, burritobot-private, start (and `/roster.json`, which names
+`attackme.burritobot.co` and `burritobot-private.burritobot.co`), prompts (and `/healthz`), feedback (and `/quick`),
+rounds (302), grafana- (200, or 302 to the login) and argocd- on both clusters, backstage-attackme, and the beacon
+view on `beacon.burritobot.co` and `agenticburn.com`. provisioning, walkthrough, monitoring, mystery, harbor, bare
+backstage, standalone grafana and argocd, s, x, round1 and michael-admin get the router's 404 on both domains.
+kagent-attackme, unicorn-attackme and hedgehog-burritobot-private still answer 200 on both, because the live routes
+table predates this change. The run could not read its kubeconfig or AWS session files (group `hecaton`, mode 0640,
+and the run's user is not in that group), so no kubectl check ran.
+
+**Not yet run on a cluster.** Once this is promoted: `./fleet.sh routes roster && ./fleet.sh router-check &&
+./fleet.sh wall-check` from `infra/terraform/fleet/`, after which the retired kagent- and party-app hosts must get the
+router's 404; then an Argo CD sync of the console, `verify/test_service_hosts_live.py`, the Night Before `check-tls`
+line and the two `kubecon_probe.py` runs on the burritobot.co names.

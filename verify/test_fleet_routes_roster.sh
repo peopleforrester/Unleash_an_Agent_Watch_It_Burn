@@ -108,22 +108,29 @@ check "it names the roster host it would drop" 'grep -q -- "- burritobot-private
 check "and leaves the table as it was" 'diff -q <(printf "%s" "${old}") "${T}/apex/routes.map" >/dev/null'
 
 echo "== the service hosts #651 retired leave the table without reading as a shrink =="
-# The table live before #651 step 4: both clusters with all nine service prefixes and the two C6 hosts, on both domains.
+# The table live before #651 step 4: both clusters with all nine service prefixes and every C6 and registry host
+# fleet.sh carries today, on both domains, and the registry's bare name.
+RETIRED="$(sed -n 's/^readonly WIB_RETIRED_SERVICE_HOSTS="\(.*\)"$/\1/p' "${FLEET}")"
+[[ -n "${RETIRED}" ]] || { echo "  FAIL  no readonly WIB_RETIRED_SERVICE_HOSTS line in ${FLEET}"; exit 1; }
 live=$'# old\n'
 for d in burritobot.co agenticburn.com; do
   for h in attackme burritobot-private; do
     live+="${h}.${d}  old:443"$'\n'
-    for s in grafana argocd kagent backstage hedgehog wombat unicorn spider mantis-shrimp maintenance-shell support; do
+    for s in ${SERVICES} ${RETIRED}; do
       live+="${s}-${h}.${d}  old:443"$'\n'
     done
   done
 done
+live+="registry.burritobot.co  old:443"$'\n'
+NLIVE="$(awk '!/^#/ && NF' <<<"${live}" | wc -l)"
+NWANT="$(expected | wc -l)"
 fixture "${live}"
 out="$(routes roster)"
 check "it is not refused" '[[ "${out}" == *rc=0* ]] && ! grep -q REFUSING "${T}/log"'
 check "the table is the roster with Grafana, Argo CD and Backstage as its only service hosts" \
   'diff <(table_hosts) <(expected) >/dev/null && ! grep -qE "^(kagent|hedgehog|wombat|unicorn|spider|mantis-shrimp)-" "${T}/apex/routes.map"'
-check "that is twenty-four hosts, down from forty-eight" '[[ "$(table_hosts | wc -l)" -eq 24 ]]'
+check "that is ${NWANT} hosts, down from ${NLIVE}: six retired prefixes off each cluster on each domain" \
+  '[[ "$(table_hosts | wc -l)" -eq "${NWANT}" && $(( NLIVE - NWANT )) -eq 24 ]]'
 
 echo "== a burritobot.co host that would go missing is refused like an agenticburn.com one =="
 fixture "${live}"
