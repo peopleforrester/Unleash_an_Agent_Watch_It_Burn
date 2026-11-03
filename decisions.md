@@ -10848,3 +10848,62 @@ and failed only `test_image_version_tags.py`. After the fixture fix, that file's
 web-terminal digest: ghcr.io serves `sha256:0b72ecc7...` and resources.yaml pins `sha256:68004fb5...` (#815).
 
 No dependency was added.
+
+## 2026-11-03 · #789 · The per-conversation limit is live on watch-it-burn-community at 6d8505a, and the audience-path check passes
+
+**What ran.** Escalation 753 (run 16563) ran the commands the entry above gives, on tanjiro-wsl2 with AWS_PROFILE
+accen-dev, kubeconfig `/tmp/community.kubeconfig` and context
+`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-community`. Every command named that one cluster. None named
+the private cluster, nothing was synced or refreshed, and roll-console.sh was not run. Its full report is the
+2026-11-03 06:17 UTC comment on #789.
+
+**ai-layer on watch-it-burn-community.** The first read gave `Synced Healthy 6d8505a8298a984df7bc17a3e4c31f47d6b1b0ed`.
+`803b84e` (#786's per-conversation console.conf) is an ancestor of `6d8505a`, so no refresh was needed. The test ran
+from a detached worktree at `6d8505a`. Just before it ran, ai-layer read `Synced Healthy
+82e1dd24329090fcbded070aee20d5efa52ea2f5`. `git diff 6d8505a 82e1dd2` touches decisions.md, infra/datadog-fleet and
+verify/test_leaderboard.py and nothing under gitops/ai-layer, so the result holds at `82e1dd2` as well.
+
+**Two changes from the escalated commands.** The worktree cleanup (`rm -rf /tmp/wib-789`) was dropped: the path did
+not exist, and the fleet wrapper refuses a removal. The first test run exited 1 at `import yaml`, before any request,
+because tanjiro's system python3 3.13.5 has no PyYAML. The rerun was
+`uv run --no-project --with pyyaml python3 verify/test_audience_path_live.py`, which installs nothing into the system
+python.
+
+**The output.**
+
+    == prerequisites ==
+      PASS  the cluster records its public host (cluster-identity public-host)
+    == the cluster runs this commit's audience path ==
+      PASS  the console's nginx runs git's console.conf
+      PASS  guard-proxy runs git's PROXY_TIMEOUT 120 (got 120)
+      PASS  guard-proxy runs git's TURN_TIMEOUT 270 (got 270)
+      PASS  guard-proxy runs git's RATE_LIMIT_SESSION_RPM 10 (got 10)
+      PASS  guard-proxy runs git's RATE_LIMIT_RPM 150 (got 150)
+      PASS  guard-proxy runs git's COST_CAP_USD 25 (got 25)
+      PASS  git's console.conf gives /chat the wib_chat_session zone with a burst (burst=9)
+    == one conversation through https://attackme.agenticburn.com ==
+      PASS  10 of 12 at once get through, the other 2 are refused in a sentence
+      PASS  every refusal names 10 a minute per conversation and says to wait and send that again
+    == one network, many conversations, through https://attackme.agenticburn.com ==
+      PASS  all 80 fresh conversations sent at once from one address get through nginx (got 80, nginx refused 0), so a room on one venue NAT address is not one bucket
+    == a guarded turn fits its per-call timeout ==
+      one probe turn took 2.1s against PROXY_TIMEOUT 120s per call
+      PASS  the probe turn is answered
+      PASS  it took under half of PROXY_TIMEOUT, so a retry still fits (2.1s < 60s)
+
+    All live audience-path checks passed.
+    exit=0
+
+**#644.** The same escalation commented on #644 (2026-11-03 06:18 UTC) that the per-conversation limit is live on
+attackme at `6d8505a`, with `82e1dd2` changing nothing under gitops/ai-layer. #644's 500-user replay, which Michael
+approved on 2026-11-01 for after this limit landed, no longer waits on #789.
+
+**Still owed.** The probe turn counts on the community bot's `/cost` until its counter is reset (run-of-show, "Reset
+the community bot"). The worktree `/tmp/wib-789` is still on tanjiro. Run 16566 had no readable cluster credentials
+(the staged files are again `hecaton:hecaton` 0640, hecaton#508), so it did not rerun the check. This entry, ported
+with run 16548's two commits above, is the record.
+
+**Tests at this entry.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`; the results are in run
+16566's report.
+
+No dependency was added.
