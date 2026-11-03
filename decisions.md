@@ -11311,4 +11311,10 @@ burritobot-private`, then `verify/test_fleet_monitors_live.py`. The fleet dashbo
 every column filled for both clusters. A blank column means a wrong name, fixed in `infra/datadog-fleet/` and
 `verify/test_fleet_monitors.py` together.
 
+**The suites (run 16650, on fdb4a85).** `bash verify/run-e2e-tools.sh` ran its offline suite green ("ALL OFFLINE
+RENDER-GATE TESTS GREEN", `verify/test_fleet_monitors.py` among them with every run-of-show apply check passing),
+then 46 checks, and exits 1 on one: `test_image_version_tags.py`. ghcr.io serves
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the pinned `sha256:68004fb5ed2d...`. That is
+the tag CI pushed over (#815), which staging's own entries already record, and nothing here touches it.
+
 No dependency was added.
