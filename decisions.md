@@ -12839,3 +12839,8 @@ and no ghcr.io write. What this run did was check that the restore happened and 
 
 **Not yet run on a cluster.** The build-web-terminal run that main's promotion of #816 starts must log
 `serves the pinned`, with no put and no push.
+
+**The suites (run 16781, at `c160e3e4`).** `bash verify/run-e2e-tools.sh` ran 51 checks (the offline suite and 50
+tier tests) in 23m49s. The offline suite inside it ran 236 tests, all green. It exits 1 on
+`test_image_version_tags.py` alone, with one red: `sample-app-nginx-1.27.5` answers 404, which is #814's. Its
+web-terminal check passes.
