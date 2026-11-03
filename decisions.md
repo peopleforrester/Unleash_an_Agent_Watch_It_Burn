@@ -10776,3 +10776,12 @@ from check 2's exclusions. verify/'s refusal lines then join REFUSED.
 **Not yet run on a cluster.** This is #714's live check, unchanged. On a fresh attendee cluster, run
 `kubectl --context "$CONTEXT" get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u`. No line may be a Docker
 Hub image, including the images an operator has compiled in (the Datadog agent's), which no render shows.
+
+**The suites (run 16565).** `bash verify/run-tests.sh` passed: 227 tests, the new offline gate included.
+`bash verify/run-e2e-tools.sh` ran 46 checks and one failed, `test_image_version_tags.py`, for two reasons that were
+already in the base. First, ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c…`, not the
+pinned `68004fb5…`. That is #794's recorded red, which needs a ghcr.io write and is in run 16420's follow-up. Second,
+the stand-in Deployment in `verify/test_tool_pin_live_check.py` (from b28d5c1) still named the old untagged
+`watch-it-burn:workshop-mcp`. This run renames that string to `workshop-mcp-mcp-1.29.1`, and with that the only
+failure left is the digest. Both test_tool_pin_live_check and test_image_version_tags were re-run after the change.
+The new test_no_docker_hub_render passed in the tier, with 18 chart sources rendered.
