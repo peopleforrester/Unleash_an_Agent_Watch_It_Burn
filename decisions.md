@@ -11861,3 +11861,63 @@ line and the two `kubecon_probe.py` runs on the burritobot.co names.
 On this branch, `bash verify/run-e2e-tools.sh` ran 48 checks in 22m19s; the offline suite inside it ran 234 tests,
 all green. It exits 1 on `test_image_version_tags.py` alone, with the same two reds staging `382d570` records: the
 web-terminal tag CI pushed over, and ghcr.io's 404 for `sample-app-nginx-1.27.5` (#814). This change touches neither.
+## 2026-11-03 · #655 · fleet.sh's labctl import row, run through lab-platform's own labctl on a test event: all five points hold
+
+Hecaton run 16719. The run's cluster handover was unreadable again (`clusters/env` and `kubeconfig` are mode 0640,
+group `hecaton`, and the run's user is not in it: hecaton#508, still open), so neither cluster was reached. The
+check #655 asks for did not need one. It asks what labctl does with the row fleet.sh sends, so this run built
+lab-platform's `labctl` and `migrate` from its main at `4fc24e6c4c84` (fetched with `gh api .../tarball`), applied
+its 24 migrations to a scratch Postgres 18, recorded `burn@2.1.0` through the same `store.RegisterLab` call
+`labctl event up`'s register-lab step makes (managed_cluster on workshop), and created the test event
+`labctl create-event agenticburn burn@2.1.0 wib-655-test 5 4` with `DATABASE_URL` at that database. The real
+`fleet.sh ingest watch-it-burn-attendee-001` and `fleet.sh ingest-instructors` then ran against it. Only the cluster
+reads before the import were stand-ins: the console NLB, the AWS key file and the terminal Secret, shaped as
+`verify/test_fleet_terminal_harvest.sh` shapes them.
+
+What labctl printed:
+
+    ingested: watch-it-burn-attendee-001
+      imported into agenticburn/wib-655-test: 1 added, 0 updated, 0 unchanged
+    ingested: watch-it-burn-community (role=instructor)
+      imported into agenticburn/wib-655-test: 1 added, 0 updated, 0 unchanged
+    ingested: watch-it-burn-private (role=instructor)
+      imported into agenticburn/wib-655-test: 1 added, 0 updated, 0 unchanged
+    $ labctl status agenticburn wib-655-test
+    ready         1 of 5 expected
+    held out      0 reserved for one address, 2 instructor (not claimable from the pool)
+    $ labctl pool --customer agenticburn --event wib-655-test
+    watch-it-burn-attendee-001,claimable,us-west-2,,
+    watch-it-burn-community,instructor,us-west-2,,
+    watch-it-burn-private,instructor,us-west-2,,
+
+- **(1) A blank role is an attendee.** The attendee row went in `ready` and is claimable. `claim_environment`, the
+  function the claim page calls (`internal/store/store.go`), gave it to the first of three addresses and nothing to
+  the other two, so the two roster rows, `held`, are not claimable.
+- **(2) The quoting reads.** The attendee was sent the terminal password `p,a"ss`, and the stored `access` holds it
+  byte for byte, beside `terminal_user` `agentic`.
+- **(3) Every column is known.** No import was refused. `terminal_user`, `terminal_password` and the Datadog fields
+  are in `access`, and the role decided `ready` against `held`.
+- **(4) The exit code is the verdict.** With `WIB_EVENT=no-such-event`, labctl exits 1 with `labctl: store: no event
+  "no-such-event" for customer "agenticburn"`, and fleet.sh retries three times, exits 1 and records
+  `ingest:watch-it-burn-attendee-001`.
+- **(5) Re-import keeps the claim.** After the claim, `fleet.sh ingest watch-it-burn-attendee-001` logged `0 added,
+  1 updated`, and `fleet.sh ingest pool` re-ingested the three rows `labctl pool` lists, each `0 added, 1 updated`.
+  The attendee stayed `claimed` by the same address, its new terminal password was merged in, and the roster rows
+  stayed `held`.
+
+**Added.** `verify/fleet-labctl-import-scratch.sh` repeats all of it from a lab-platform commit (default
+`4fc24e6c4c84`) in about 35 seconds and exits 1 on any failed check; its run here printed `ALL #655 IMPORT CHECKS
+GREEN`. It is run by hand, in neither tier, because it needs `gh` access to the private lab-platform repo, `go`
+and the Postgres server binaries, which the gate host does not have. fleet.sh is unchanged.
+
+**Question 961.** Its attendee cluster was to serve this check and #532's `ingest pool` run. This check no longer
+needs it. #532's run on a built pool is that issue's own.
+
+**Seen on the way.** An `aws` that answers the Datadog pool secret with empty output and exit 0 makes `jq
+--argjson a ''` fail in `ingest_one`, and `set -e` ends fleet.sh with exit 2 and no message, before the line that
+guards against an empty resolver result. Real `aws` exits non-zero on a missing secret, which turns into `[]`, so
+only a secret holding text that is not JSON reaches this. Filed as a follow-up.
+
+**Not covered.** lab-platform's production database was not used; this run has no `DATABASE_URL` for it, and the
+deployed control plane may lag main `4fc24e6c4c84`. The cluster reads are covered by
+`verify/test_fleet_terminal_harvest.sh`, not here.
