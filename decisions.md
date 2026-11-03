@@ -8464,6 +8464,18 @@ run whose user can read its `clusters/` files or by a session with the presenter
 terminal websocket auth checks passed." with exactly one "started process" added to ttyd's log, the positive
 control's. Paste its output here. check-tls is done and need not run again for #785.
 
+**Run 16487, the resume after run 16446 stalled.** Run 16446 stopped on a 900-second stall: it ended its turn to
+wait for the test suites in the background, and nothing woke it. Run 16487 ran both checks again at 03:13 UTC with
+the same results. check-tls was green with the same seven PASS lines, the `tty` probe again answering 502. The live
+test failed the same four prerequisites, because this run's `clusters/` files are also mode 640, group `hecaton`.
+
+**The suites.** `bash verify/run-tests.sh` exits 0. `bash verify/run-e2e-tools.sh` exits 1 on one check, the one the
+#783 and #746 re-dispatch entries below record: `test_image_version_tags.py` finds ghcr.io serving
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c…`, not the pinned `sha256:68004fb5ed2d…`. The digest
+differs from the `d6acd503…` those entries saw, so the tag has been pushed over again since. That belongs to #714, not to
+this change, which touches only this file. #770's offline checks, `test_ttyd_ws_auth.py` and
+`test_check_tls_shell_probe.sh`, pass in that run.
+
 ## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
 
 **Question 899:** Should the PR-gated apply path for the attendee fleet in #201 (a pull request runs a Terraform
