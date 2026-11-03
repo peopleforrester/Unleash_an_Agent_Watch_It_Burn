@@ -10631,7 +10631,8 @@ and it fails cleanly, with the new detail, when only its collector is frozen for
 entry's sentences as connective filler. Run 16543 reworded those sentences and the matching comment in the test.
 The change itself is as run 16503 made it, rebased onto staging e586840.
 
-**The suites.** `bash verify/run-tests.sh` exits 0 (224 tests). `bash verify/run-e2e-tools.sh` ran 45 checks, and
+**The suites.** `bash verify/run-tests.sh` exits 0 (224 tests; 225 on run 16543's rebased branch). `bash verify/run-e2e-tools.sh` ran 45 checks, and
 `verify/test_trace_shape_e2e.py` passed in it. It exits 1 on one check, the red already recorded for #746 and #775:
 `test_image_version_tags.py` finds ghcr.io serving `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`,
 not the pinned `68004fb5`. CI has pushed over that tag again. Nothing here touches an image.
+Run 16543 ran both again after the rewording, with the same results.
