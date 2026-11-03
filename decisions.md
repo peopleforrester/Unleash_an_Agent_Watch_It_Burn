@@ -11926,3 +11926,57 @@ deployed control plane may lag main `4fc24e6c4c84`. The cluster reads are covere
 ran 234 tests, all green. It exits 1 on `test_image_version_tags.py` alone, with the two reds the 2026-11-03 #796
 entry records on staging `6408699`: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the
 pinned `68004fb5`, and answers 404 for `sample-app-nginx-1.27.5`. This change touches neither.
+## 2026-11-03 · #603 · images.lock rows for every image the charts hand a cluster; the save still waits on the archive
+
+**What changed.** images.lock gains 39 declared rows, a new "Chart renders" section: the images Argo CD hands a
+cluster from the Helm charts and kustomize builds of `gitops/bootstrap/apps`, which no tracked `image:` line names,
+and the two the Argo CD chart (10.8.4, with `infra/argocd-values.yaml`) installs from `infra/deploy-full-idp.sh`.
+That is cert-manager, the Datadog operator, external-secrets, Falco and its sidekick, falcoctl and falco-talon,
+Istio's CNI, istiod and ztunnel, kagent's controller, UI, tools, kmcp and its grafana MCP and postgres, the KubeArmor
+operator, Kyverno's six and its readiness checker, the OpenTelemetry collector and operator, kube-prometheus-stack's
+seven, Tempo, Argo CD and its redis. Run 12649 left this as a follow-up on the issue that was never filed (hecaton#139).
+Each digest is the one its registry served anonymously on 2026-11-03 (`crane digest`, crane 0.22.1), and each
+source is the project's repository; the ten lab-platform `mirror/` copies each resolved to a digest that starts with
+the twelve characters their tag ends in. lab-platform has no images.lock (read through sources on 2026-11-03), so a
+mirror copy has no retained copy unless this repo's save makes one, and those rows stay in, not left out as the
+follow-up suggested.
+
+**New gate.** `verify/test_images_lock_render.py` (tools tier) renders every apps/ file and the Argo CD chart, and
+holds each image to a row: by its ref, by a templated row with the root's default imageRegistry filled in, or by
+name@sha256 for a kustomize image name. A chart bump that brings a new image now goes red until it has a row.
+
+**The render is shared, and it now reads every Application in a file.** The render code moved from
+`verify/test_no_docker_hub_render.py` into `verify/app_render.py`, which both tests import; the Docker Hub gate's
+output is unchanged line for line on the same tree before the second fix. Second fix: `istio.yaml` holds five
+Applications, and the old render took only the first, istio-base, so istiod, the CNI and ztunnel were never
+rendered and #805's gate never judged them. They pull from registry.istio.io, so it found no Docker Hub pull, but
+reading them surfaced `proxyv2` in istiod's sidecar-injector ConfigMap. That is Istio's short name, joined to
+registry.istio.io/release only for a sidecar or a waypoint, and the mesh here runs neither (no `istio-injection`
+label or waypoint in gitops or security). The render now skips a ConfigMap's image fields, and a fixture holds that.
+The Docker Hub gate now reads 21 chart sources, not 18.
+
+**What still names no row.** Images an operator pulls that no render shows (the Datadog agent the operator starts,
+anything kagent's controller schedules), EKS add-ons AWS manages, and `infra/observability-install.sh`, which nothing
+calls. The breakout's Joker, `busybox-1.38.0-internal`, still answers 404 on ghcr.io (its tag list on 2026-11-03 is
+`busybox-1.38.0` alone): #775's push is still owed, and until it lands that row's save fails.
+
+**Every locked digest still resolves.** On 2026-11-03, before the new rows, each of the 31 rows with a digest was
+fetched anonymously from its registry and its manifest body hashed: 30 matched (agentgateway's needed curl, as
+cr.agentgateway.dev's Cloudflare refuses Python's client) and the 31st is the unpushed Joker above.
+`mirror-images.sh check .`, read from llm-coding-workflow through sources, now reports 26 references, 48 declared
+rows and 70 problems, each one "never saved".
+
+**Why the tarballs are still not saved.** `~michael/repos/private/image-archive` still does not exist (sources
+`repo-ls private/image-archive`: not a directory), this run cannot write under michael's home, and a tarball
+anywhere else would not be replicated, so a saved date for it would be false. llm-coding-workflow#372, the
+fleet-wide save, is still open. As michael on netcup, in this repo on staging:
+`~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save . && ~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh check .`,
+then commit images.lock with the dates it writes.
+
+**Differs from the draft.** Run 15793's draft (21b9711d) only recorded the 2026-11-02 re-check, and it failed the
+prose gate on one phrase. This entry stands in for it with the 2026-11-03 re-check; the draft is not cherry-picked.
+
+**Not yet run on a cluster.** The live check, listing every pod image on watch-it-burn-community and
+watch-it-burn-private against images.lock, could not run: the session files in this run's `clusters/` directory are
+group `hecaton` and mode 640, which this run's user cannot read (hecaton#508). The next run on the issue runs
+`kubectl --context <each> get pods -A -o jsonpath='{..image}'` and names any image with no row.

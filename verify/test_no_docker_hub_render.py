@@ -9,7 +9,7 @@ chart, not here, so a file sweep cannot see them, and test_enforce_floor's regis
 chart bump that brings a docker.io/ image, or a bare one, would pass every offline test and be pulled anonymously
 from Docker Hub on the first node of a fresh cluster.
 
-This asks Helm and kustomize what each app hands Argo CD. Each apps/ file is rendered alone by the root, with
+This asks Helm and kustomize what each app hands Argo CD, through verify/app_render.py. Each apps/ file is rendered alone by the root, with
 imageRegistry at its default, and each of the Application's sources is then rendered as Argo CD would: an
 upstream or in-repo chart with the root's helm values, a kustomization with the Application's kustomize.images, a
 directory as its files. In what comes out, it judges every image field (pod specs, and custom resources such as
@@ -17,6 +17,8 @@ KubeArmorConfig and Prometheus that hold an image for an operator to run) and ev
 and command hand a program, so an operator flag naming docker.io is caught too.
 
 A Helm test hook (helm.sh/hook: test) is left out: Argo CD does not run Helm test hooks, so nothing pulls its image.
+A ConfigMap's image fields are left out too: istiod's injector names `proxyv2`, which it joins to its hub only for a
+sidecar or a waypoint. Every Application of an apps/ file is read, so istio.yaml's istiod, CNI and ztunnel are (#603).
 Images an operator has compiled in, such as the Datadog agent's, appear in no render; the live check in decisions.md
 (#714, Not yet run on a cluster) lists what a cluster actually pulls. test_no_docker_hub.py holds the files here.
 """
@@ -26,13 +28,10 @@ import pathlib
 import shutil
 import subprocess
 import sys
-import tempfile
-
-import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import APPS, CHART, REPO, kustomize_images, set_image  # noqa: E402
-from docker_hub import docker_hub, image_fields, names_hub  # noqa: E402
+from app_render import Renderer, load_all, pulled_images, test_hook  # noqa: E402
+from docker_hub import docker_hub, names_hub  # noqa: E402
 
 failures: list[str] = []
 
@@ -52,20 +51,7 @@ if not HELM or not KUBECTL:
 version = subprocess.run([HELM, "version", "--short"], capture_output=True, text=True).stdout.strip()
 check(f"helm is the pinned v4.2.1 ({version})", version.startswith("v4.2.1"))
 
-COMMIT = "0123456789abcdef0123456789abcdef01234567"
-WORK = pathlib.Path(tempfile.mkdtemp(prefix="no-docker-hub-"))
 CONTAINER_LISTS = ("containers", "initContainers", "ephemeralContainers")
-pulled: dict[tuple[str, str, str], pathlib.Path] = {}
-
-
-def load_all(text: str) -> list:
-    """Charts emit tags the safe loader rejects; only the shape matters here."""
-    return [d for d in yaml.load_all(text, Loader=yaml.BaseLoader) if d]
-
-
-def test_hook(doc) -> bool:
-    hooks = ((doc.get("metadata") or {}).get("annotations") or {}).get("helm.sh/hook", "")
-    return "test" in [h.strip() for h in hooks.split(",")] or "test-success" in hooks or "test-failure" in hooks
 
 
 def container_strings(node, where: str = ""):
@@ -95,86 +81,11 @@ def hub_refs(docs: list, images: list) -> list[str]:
     """What in these rendered documents pulls from Docker Hub, each as kind/name: where: reference."""
     bad = []
     for d in docs:
-        if not isinstance(d, dict) or test_hook(d):
-            continue
-        obj = f"{d.get('kind')}/{(d.get('metadata') or {}).get('name')}"
-        for where, ref in image_fields(d):
-            ref = set_image(ref, images)
-            if docker_hub(ref):
-                bad.append(f"{obj}: {where}: {ref}")
-        bad += [f"{obj}: {where}: {s[:120]}" for where, s in container_strings(d) if names_hub(s)]
+        bad += [f"{obj}: {where}: {ref}" for obj, where, ref in pulled_images([d], images) if docker_hub(ref)]
+        if isinstance(d, dict) and not test_hook(d):
+            obj = f"{d.get('kind')}/{(d.get('metadata') or {}).get('name')}"
+            bad += [f"{obj}: {where}: {s[:120]}" for where, s in container_strings(d) if names_hub(s)]
     return bad
-
-
-def root_render(name: str) -> dict | None:
-    r = subprocess.run([HELM, "template", "lab-bootstrap", str(CHART), "--set", f"revision={COMMIT}",
-                        "--set", f"apps={{{name}}}"], capture_output=True, text=True)
-    check(f"{name}: the root renders it alone", r.returncode == 0, r.stderr.strip()[:200])
-    if r.returncode:
-        return None
-    return next((d for d in yaml.safe_load_all(r.stdout) if d and d.get("kind") == "Application"), None)
-
-
-def upstream_chart(src: dict) -> pathlib.Path | str:
-    """The app's chart, pulled once into WORK; on failure, Helm's error."""
-    key = (src["repoURL"], src["chart"], str(src["targetRevision"]))
-    if key not in pulled:
-        repo, chart, ver = key
-        dest = WORK / f"{chart}-{len(pulled)}"
-        ref = ([f"oci://{repo.removeprefix('oci://').rstrip('/')}/{chart}"] if not repo.startswith("http")
-               else [chart, "--repo", repo])
-        r = subprocess.run([HELM, "pull", *ref, "--version", ver, "--untar", "--untardir", str(dest)],
-                           capture_output=True, text=True)
-        if r.returncode:
-            return r.stderr.strip()[:200]
-        pulled[key] = dest / chart
-    return pulled[key]
-
-
-def helm_render(name: str, app: dict, src: dict, chart: pathlib.Path, n: int) -> list | None:
-    helm = src.get("helm") or {}
-    args = []
-    for vf in helm.get("valueFiles", []):
-        args += ["-f", str(REPO / vf.removeprefix("$values/"))]
-    for key in ("values", "valuesObject"):
-        if helm.get(key) is not None:
-            f = WORK / f"{name}-{n}-{key}.yaml"
-            f.write_text(helm[key] if isinstance(helm[key], str) else yaml.safe_dump(helm[key]), encoding="utf-8")
-            args += ["-f", str(f)]
-    r = subprocess.run([HELM, "template", helm.get("releaseName", app["metadata"]["name"]), str(chart),
-                        "-n", app["spec"]["destination"]["namespace"], "--include-crds", *args],
-                       capture_output=True, text=True)
-    check(f"{name}: chart {src.get('chart') or src['path']} renders with the root's values", r.returncode == 0,
-          r.stderr.strip()[:300])
-    return load_all(r.stdout) if r.returncode == 0 else None
-
-
-def source_docs(name: str, app: dict, src: dict, n: int) -> list | None:
-    """One source of the Application, as the documents Argo CD would apply; None (and a FAIL) if it cannot be."""
-    if "chart" in src:
-        chart = upstream_chart(src)
-        if not isinstance(chart, pathlib.Path):
-            check(f"{name}: chart {src['chart']} {src['targetRevision']} is fetched", False, chart)
-            return None
-        return helm_render(name, app, src, chart, n)
-    if "path" not in src:
-        return []  # a $values ref source: it holds value files, which the chart source reads
-    path = REPO / src["path"]
-    if (path / "Chart.yaml").exists():
-        return helm_render(name, app, src, path, n)
-    if (path / "kustomization.yaml").exists():
-        r = subprocess.run([KUBECTL, "kustomize", str(path)], capture_output=True, text=True)
-        check(f"{name}: {src['path']} builds with kustomize", r.returncode == 0, r.stderr.strip()[:300])
-        return load_all(r.stdout) if r.returncode == 0 else None
-    files = sorted(path.rglob("*.yaml") if (src.get("directory") or {}).get("recurse") else path.glob("*.yaml"))
-    docs = []
-    for f in files:
-        try:
-            docs += load_all(f.read_text(encoding="utf-8"))
-        except yaml.YAMLError as e:
-            check(f"{name}: {f.relative_to(REPO)} parses", False, str(e)[:200])
-            return None
-    return docs
 
 
 print("== the judgement, on documents shaped like a render ==")
@@ -215,30 +126,26 @@ check("a bare image, an operator flag, an env image and a custom resource's imag
     "KubeArmorConfig/cr: spec.kubearmorImage.image: kubearmor/kubearmor:stable"], str(found))
 check("a kustomize.images entry is judged as Argo CD deploys it, not as named",
       hub_refs(FIXTURE[:1], [{"name": "nginx", "newName": "ghcr.io/x/nginx", "newTag": "1.27"}]) == [])
+INJECTOR = load_all("""
+kind: ConfigMap
+metadata: {name: istio-sidecar-injector}
+data: {values: '{"global": {"hub": "registry.istio.io/release", "proxy": {"image": "proxyv2"}}}'}
+""")
+check("a ConfigMap's values string is data, not a pull (istiod's injector names proxyv2)", hub_refs(INJECTOR, []) == [])
 
-apps = sorted(p.stem for p in APPS.glob("*.yaml"))
+renderer = Renderer(HELM, KUBECTL, check)
+apps = renderer.apps()
 print(f"== every source of every Application, {len(apps)} apps/ files ==")
-charts = 0
 for name in apps:
-    app = root_render(name)
-    if app is None:
+    rendered = renderer.app(name)
+    if rendered is None:
         continue
-    spec = app["spec"]
-    images = kustomize_images(app)
-    bad: list[str] = []
-    for n, src in enumerate([spec["source"]] if "source" in spec else spec["sources"]):
-        docs = source_docs(name, app, src, n)
-        if docs is None:
-            bad = None
-            break
-        charts += "chart" in src or ("path" in src and (REPO / src["path"] / "Chart.yaml").exists())
-        bad += hub_refs(docs, images)
-    if bad is not None:
-        check(f"{name}: nothing it renders pulls from Docker Hub", not bad, "\n      ".join([""] + bad[:20]))
+    bad = [b for images, docs in rendered for b in hub_refs(docs, images)]
+    check(f"{name}: nothing it renders pulls from Docker Hub", not bad, "\n      ".join([""] + bad[:20]))
 # Fifteen apps/ files source a chart today; a reading far below that means the chart sources stopped being read.
-check(f"the chart sources are read ({charts} rendered)", charts >= 15)
+check(f"the chart sources are read ({renderer.charts} rendered)", renderer.charts >= 15)
 
-shutil.rmtree(WORK, ignore_errors=True)
+renderer.close()
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

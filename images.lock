@@ -64,3 +64,48 @@ public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4
 public.ecr.aws/docker/library/httpd:2.4-alpine@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c upstream:https://github.com/docker-library/httpd -
 public.ecr.aws/docker/library/redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 upstream:https://github.com/docker-library/redis -
 public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 upstream:https://github.com/alexwhen/docker-2048 -
+# Chart renders (#603): the images Argo CD hands a cluster from the Helm charts and kustomize builds of
+# gitops/bootstrap/apps, which no tracked image: line names, and the two the Argo CD chart infra/deploy-full-idp.sh
+# installs. A ghcr.io/peopleforrester/lab-platform/mirror/ row is lab-platform's copy of a Docker Hub image (#714), at
+# the digest its tag ends in; lab-platform keeps no images.lock, so this repo's save is its retained copy. Each
+# digest is the one its registry served anonymously on 2026-11-03, read with crane 0.22.1.
+# verify/test_images_lock_render.py renders them and holds each to a row here.
+quay.io/jetstack/cert-manager-cainjector:v1.21.2 sha256:c85268c64f2e0e76684bf5fe8906caff34b82523561c6affe0fae3546bd87562 upstream:https://github.com/cert-manager/cert-manager -
+quay.io/jetstack/cert-manager-controller:v1.21.2 sha256:70f532fd9cfde0b09d55687200942399d89838bc2d5d5b45152eb799a15912b8 upstream:https://github.com/cert-manager/cert-manager -
+quay.io/jetstack/cert-manager-webhook:v1.21.2 sha256:a60e2dac46dbb8a7f3df95c54ce941012f54c2fe022f0ee55aaa1ab40ed957ae upstream:https://github.com/cert-manager/cert-manager -
+quay.io/jetstack/cert-manager-startupapicheck:v1.21.2 sha256:46e75b6866359ffb5d82624f41e3ed1c70b2994982702ced547ce5edb418a8f5 upstream:https://github.com/cert-manager/cert-manager -
+registry.datadoghq.com/operator:1.30.0 sha256:9e0fe59c86ea1b8c0bb46d2e07d1c16db89a421b6da39f59ab009d04b1cf6715 upstream:https://github.com/DataDog/datadog-operator -
+ghcr.io/external-secrets/external-secrets:v2.10.0 sha256:814117b0fd6d121b03e8ba3b6db1cecbe7449a354fc0fc9c4faf73a37aa221b1 upstream:https://github.com/external-secrets/external-secrets -
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco:0.45.1-dc34bb8e231e sha256:dc34bb8e231e1afda8eefcf9467992a3912b5b6aed5151d49b4a0544369a9048 upstream:https://github.com/falcosecurity/falco -
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcoctl:0.14.2-d9d2591057eb sha256:d9d2591057eb514b1fbfb57ebf5ae52f3e938e4797dec1b8f7ce422dace81d83 upstream:https://github.com/falcosecurity/falcoctl -
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco-talon:0.3.0-0a06b6a5e9f0 sha256:0a06b6a5e9f0e45d4ccdcf4c7a8c5ac4156e728f81ffd0122cb6675e3b525b40 upstream:https://github.com/falcosecurity/falco-talon -
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcosidekick:2.32.0-399d95934a67 sha256:399d95934a67b1c6b57d3e1f678694b3407f89f878e8fd072dba51968fa9745f upstream:https://github.com/falcosecurity/falcosidekick -
+registry.istio.io/release/install-cni:1.30.4-distroless sha256:6ad7297afb961a333df27636c247a415bc8c51b0f08879c0bff26eeaea2322a8 upstream:https://github.com/istio/istio -
+registry.istio.io/release/pilot:1.30.4-distroless sha256:fe77533a5524e41e2381a262a89e965d590a547a2d867a6e1dfa68b2bd438dd3 upstream:https://github.com/istio/istio -
+registry.istio.io/release/ztunnel:1.30.4 sha256:090ca2d66460f0ce78b062380b9b9c7e3a8e1e678057f55cf3397eb28e5df6e9 upstream:https://github.com/istio/ztunnel -
+ghcr.io/peopleforrester/lab-platform/mirror/mcp/grafana:latest-208f8ea16064 sha256:208f8ea16064060f92e9960b2f060f5e37af5abda3ec14c1a8ebbc4d5cc8c718 upstream:https://github.com/grafana/mcp-grafana -
+ghcr.io/kagent-dev/kagent/tools:0.2.1 sha256:50b431281d3e32666f27a292962fd486aabaac157083a844d037c12137e353aa upstream:https://github.com/kagent-dev/tools -
+ghcr.io/kagent-dev/kmcp/controller:0.3.0 sha256:86ab878da25a639358aad18933c6b99e06a7ac34a801dc17fd657db0f28cee28 upstream:https://github.com/kagent-dev/kmcp -
+ghcr.io/kagent-dev/kagent/controller:0.10.1 sha256:878a55478c1727e048d38154158aae41aa701149c6660f78696fe682c7495146 upstream:https://github.com/kagent-dev/kagent -
+ghcr.io/peopleforrester/lab-platform/mirror/library/postgres:18.6-alpine3.23-dd504ba15d33 sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres -
+ghcr.io/kagent-dev/kagent/ui:0.10.1 sha256:2c4de55d3ffea5b960a41d667e3cd6b59d64d8da4d6d3ccf528fcd17e6fec4a0 upstream:https://github.com/kagent-dev/kagent -
+ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-operator:v1.7.4-84626528c4d6 sha256:84626528c4d6e6a11ba7082f0b87eb15bb73bb9b14b3b600a79f3c7dffe6e67a upstream:https://github.com/kubearmor/KubeArmor -
+reg.kyverno.io/kyverno/kyvernopre:v1.19.1 sha256:c25c47461f06f2845a48c319ae86fbbc1730a7b9ed5b701889c9dc1f9ee94b09 upstream:https://github.com/kyverno/kyverno -
+reg.kyverno.io/kyverno/kyverno:v1.19.1 sha256:b31d8511ae5fd6010e2a01ea72ebae08eb82fa51d91af14a1d9fe989949b4edb upstream:https://github.com/kyverno/kyverno -
+reg.kyverno.io/kyverno/background-controller:v1.19.1 sha256:8f1e9143373a27578cafc2d28d2c66ba0926c63b4c77e63de8d2fdd4a122859f upstream:https://github.com/kyverno/kyverno -
+reg.kyverno.io/kyverno/cleanup-controller:v1.19.1 sha256:67a48e62a8d8f8120c86914ff822b90017c54054c7b64ef8a1555645e9d9761e upstream:https://github.com/kyverno/kyverno -
+reg.kyverno.io/kyverno/reports-controller:v1.19.1 sha256:c0eee97b9b44a0dd35805d56b358fa52548480f79d4944602b9609538eccd64c upstream:https://github.com/kyverno/kyverno -
+reg.kyverno.io/kyverno/kyverno-cli:v1.19.1 sha256:ced7b2be0b04250cabfe695f15307f69eb715fe23234816388af4f3812915b2a upstream:https://github.com/kyverno/kyverno -
+ghcr.io/kyverno/readiness-checker:v1.19.1 sha256:31bb42ce7f5b2e27c1cf633aeff4f0cad1f5bb63761e2cb09f0e25cdd26572bf upstream:https://github.com/kyverno/kyverno -
+ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921 sha256:5b66b0dc6921f2a439cf50b942ccb9e2a4375f136239a9fdf709ef33e4bfc668 upstream:https://github.com/open-telemetry/opentelemetry-collector-releases -
+ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator:0.158.0 sha256:d4789a6537fdbc69929dc9227900511224b2fe8e5a0938e604cc8ca56b07336e upstream:https://github.com/open-telemetry/opentelemetry-operator -
+quay.io/prometheus/node-exporter:v1.12.1-distroless sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106 upstream:https://github.com/prometheus/node_exporter -
+quay.io/kiwigrid/k8s-sidecar:2.11.2 sha256:2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6 upstream:https://github.com/kiwigrid/k8s-sidecar -
+ghcr.io/peopleforrester/lab-platform/mirror/grafana/grafana:13.2.2-distroless-ada1141b386c sha256:ada1141b386c443192521bfed414c62209428361111f1505988930adf9dee751 upstream:https://github.com/grafana/grafana -
+registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0 sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b upstream:https://github.com/kubernetes/kube-state-metrics -
+quay.io/prometheus-operator/prometheus-operator:v0.94.0 sha256:cf153f64d6c38113fceb2cda7642365ea887f71edd7888f054e43e54cf177e55 upstream:https://github.com/prometheus-operator/prometheus-operator -
+quay.io/prometheus/prometheus:v3.14.0-distroless sha256:50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a upstream:https://github.com/prometheus/prometheus -
+ghcr.io/jkroepke/kube-webhook-certgen:1.8.8 sha256:cd85a621724cd9043a5b46a784578fa159437712f920166389fce830554e1c44 upstream:https://github.com/jkroepke/kube-webhook-certgen -
+ghcr.io/peopleforrester/lab-platform/mirror/grafana/tempo:3.0.3-05321ebf1f19 sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c upstream:https://github.com/grafana/tempo -
+quay.io/argoproj/argocd:v3.5.2 sha256:e2aadfae709d904e87f46ba4aa49601d827b3022db22cd4d03aae816a2e7097b upstream:https://github.com/argoproj/argo-cd -
+ecr-public.aws.com/docker/library/redis:8.6.4-alpine sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763 upstream:https://github.com/redis/docker-library-redis -
