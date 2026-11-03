@@ -155,3 +155,21 @@ stalled wait on the E2E command is the fourth (#798).
    first. Then start the command in the background with its output in a log, and keep reading the log in the
    foreground (`tail -n 5 <log>` every few minutes) until it ends; never end the turn to wait for its completion
    notice. The E2E command runs `run-tests.sh` first, so it also answers the Test command.
+
+## Tests own their inputs
+
+Two runs lost time to a test whose result hung on something the test did not own (#797). Run 9643 (#612) reworded
+row 8's readiness cell in the run-of-show, and the deck export's test, which edited that file on the literal
+`| **At risk.**`, broke; the run put the old label back to suit the test. Run 15808 (#583) saw the E2E tier go red on
+a check that a randomly drawn witch name did not contain "rude", which "Prudence" does, one draw in 32.
+
+1. **Find the tests that read the words before you reword them.** Run
+   `git grep -nF '<the exact words you are changing>' -- verify scripts` first. A test or script that reads those
+   words changes in the same commit as the text. Correct text is never reverted to suit a test.
+2. **An anchor a test edits or splits on is checked first.** A test that builds a case by replacing or cutting repo
+   text on a literal checks the literal is there and, when it is not, exits naming the literal and the file, so a
+   reworded anchor reads as that and not as a broken check further on.
+3. **Randomness is pinned or enumerated.** A test seeds the code's random source, stubs `Math.random`, or tries every
+   value the code can pick, and each check holds for every one of them. `verify/test_storefront_witch_name_e2e.py`
+   pins every draw and tries all 32 first names. A test that fails once and passes on a rerun is broken, not flaky,
+   and the run that sees it fixes it.
