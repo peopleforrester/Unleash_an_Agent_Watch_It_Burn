@@ -10932,3 +10932,10 @@ Checked by hand with a stand-in `otelcol-contrib` whose `validate` sleeps, and t
 copy: all seven configs FAIL by name, the run exits 1 in 15 s, and no stand-in process is left running.
 
 **Not yet run on a cluster.** Nothing here touches a cluster; the test is in the tools tier.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (224 tests), with both new checks in `test_e2e_tools_tier.py`
+passing. `bash verify/run-e2e-tools.sh` ran 45 checks with the load average about 11 on 16 cores, and
+`test_lab_pipeline_collector.py` passed all 19, its four Datadog validates taking 25.4 to 26.4 s. The tier exits 1
+on one check, the red already recorded for #746 and #775: `test_image_version_tags.py` finds ghcr.io serving
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the pinned `68004fb5`, because CI pushed over
+that tag again. Nothing here builds or pushes an image; the workflow fix is run 16420's follow-up.
