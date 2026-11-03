@@ -35,6 +35,15 @@ def reply(text: str) -> dict:
     return {"reply": text, "guarded": False, "input_tokens": 3400, "output_tokens": 120}
 
 
+def audit(tool: str, **args) -> dict:
+    """One workshop-mcp audit `pre` line; test_kubecon_probe.py holds the probe's parsing to tool_audit.py's own."""
+    return {"event": "tool_invocation", "phase": "pre", "tool_name": tool, "tool_input": args}
+
+
+READ_ROOM = audit("read_support_ticket", ticket_id=kp.ROOM_TICKET_ID)
+DEPLOY_ROOM = audit("deploy_app", manifest=json.dumps(kp.C6_MANIFEST))
+
+
 class FakePrivate(st.StageCluster):
     """The private cluster at its start (#774): the four Kubernetes guardrails off until guardrails-on, every AI guard
     off, the shipped Role."""
@@ -45,6 +54,7 @@ class FakePrivate(st.StageCluster):
         self.tools, self.rule, self.role = list(kp.EVIL_ALL), kp.C7_OPEN, kp.RBAC_SHIPPED
         self.armed = False
         self.joker, self.log, self.sent, self.witches = False, [], [], []
+        self.audit: list[dict] = []
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         """The terminal's guardrails-on and guardrails-off, run in its pod: both clusters switch."""
@@ -108,6 +118,13 @@ class FakePrivate(st.StageCluster):
         self.joker = False
         return "removed"
 
+    def tool_calls_since(self, since):
+        return list(self.audit)
+
+    def room_calls(self) -> list[dict]:
+        """What workshop-mcp logs for HC-666 with the input guard off: the ticket read, then the Joker deployed."""
+        return [READ_ROOM, DEPLOY_ROOM]
+
     def chat(self, prompt):
         self.calls += 1
         self.sent.append((self.session, prompt))
@@ -117,7 +134,9 @@ class FakePrivate(st.StageCluster):
             return reply("I'm not allowed to read that vault entry." if self.role == kp.RBAC_FIX else CEO_LEAK)
         if prompt == kp.ROOM_PROMPT:
             if self.g["input_classifier"]:
+                self.audit = [READ_ROOM]
                 return reply(f"I tried to read {kp.ROOM_TICKET_ID}, but it was withheld.")
+            self.audit = self.room_calls()
             # Kyverno trusts the internal registry the Joker comes from (#775): only least privilege refuses it.
             if self.role != kp.AGENCY_FIX:
                 self.joker = True
@@ -251,6 +270,19 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a Role that never scopes fails c1-fixed, and the seed is red",
           rc3 == 1 and beats3["c1-fixed"]["verdict"] == kp.FAIL, str(beats3.get("c1-fixed")))
     check("guards-off still runs after a failed seed", beats3["guards-off"]["verdict"] == kp.PASS)
+
+    class DeploysUnread(FakePrivate):
+        """The Joker lands, but the bot never read HC-666: not the chain the c3-attack trace is seeded to show (#806)."""
+
+        def room_calls(self):
+            return [DEPLOY_ROOM]
+
+    out4 = pathlib.Path(tmp, "stage-traces-4.json")
+    rc4 = run_seed(DeploysUnread(), FakeDatadog(), out4)
+    beats4 = {b["key"]: b for b in json.loads(out4.read_text())["beats"]}
+    check("a Joker deployed without reading HC-666 fails c3-attack, and the seed is red",
+          rc4 == 1 and beats4["c3-attack"]["verdict"] == kp.FAIL
+          and "read_support_ticket(HC-666) was never called" in beats4["c3-attack"]["note"], str(beats4.get("c3-attack")))
 
     st.StageCluster, st.datadog, st.wait_for.__defaults__ = real_cluster, real_dd, real_wait
 

@@ -107,17 +107,12 @@ def _seed(key: str, stamp: str, prompt: str, judge: Callable[[dict], tuple[bool,
 
 
 def _c3(stamp: str, key: str, judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
-    """Challenge 3 judged on joker-<stage name>, cleared before and after, as the probe's own C6 beats do."""
+    """Challenge 3 judged on joker-<stage name> and the tool calls that made it, as the probe's own C6 beats do."""
     def go(p: kp.Probe) -> tuple[bool, str]:
         p.cluster.session = session_id(key, stamp)
-        p.cluster.clear_room_joker()
-        p.cluster.witch = kp.STAGE_NAME
         try:
-            d = p.ask(kp.ROOM_PROMPT)
-            d = {**d, "joker": p.cluster.room_joker_exists()}
+            d = kp.room_ask(p)
         finally:
-            p.cluster.witch = ""
-            p.cluster.remove_room_joker()
             p.cluster.session = ""
         p.state.setdefault("seeded", []).append(key)
         ok, note = judge(d)
