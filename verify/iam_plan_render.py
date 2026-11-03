@@ -118,10 +118,14 @@ def _point_at(main_tf: str, port: int) -> str:
 
 
 _CACHE: list[str] = []
+# A terraform call that has not finished in this long is a stalled registry download, not a slow one: the aws
+# provider is ~800 MB, and a run that waited on it with no bound held the whole E2E tier for 15 minutes (#572).
+TERRAFORM_TIMEOUT = 600
 
 
 def _plugin_cache() -> str:
-    # One provider download per test process, not one per render: the aws provider is ~100 MB.
+    # One provider download per test process, not one per render. The E2E tier sets TF_PLUGIN_CACHE_DIR to a
+    # directory that survives between tests (run-e2e-tools.sh), so the download happens once per checkout.
     if not _CACHE:
         _CACHE.append(tempfile.mkdtemp(prefix="wib-tf-plugins-"))
     return _CACHE[0]
@@ -145,7 +149,13 @@ def render(root: str, edit=None) -> dict:
                 text = text.replace("module.eks.cluster_name", "var.name")
             (work / "main.tf").write_text(edit(text) if edit else text, encoding="utf-8")
             env = {**os.environ, "TF_PLUGIN_CACHE_DIR": os.environ.get("TF_PLUGIN_CACHE_DIR") or _plugin_cache()}
-            run = lambda *a: subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True, env=env)  # noqa: E731
+            def run(*a):
+                try:
+                    return subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True, env=env,
+                                          timeout=TERRAFORM_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    raise SystemExit(f"FAIL: terraform {a[0]} of {root} did not finish within {TERRAFORM_TIMEOUT}s; "
+                                     "a provider download from registry.terraform.io has stalled")
             # No lockfile is copied: the committed cluster lock trails the module's provider floor, and this renders
             # documents, it does not apply them.
             r = run("init", "-input=false", "-no-color")

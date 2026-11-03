@@ -685,6 +685,10 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       public /cost and fail unless the counter is \$0 over 0 requests. The fresh process
                       also starts the COST_CAP_USD window, the per-session budgets, the rate window and
                       the projected feed empty, and its guards from the repo's env.
+                      A Go guard-proxy (SPEND_STORE_PATH set, #738) keeps its spend on a volume, so for it
+                      reset-bot pauses Argo CD's ai-layer reconcile, scales guard-proxy to 0, runs \`guard-proxy
+                      reset-spend\` from the proxy's own image against the store, prints the line naming what it
+                      cleared, scales back and resumes Argo CD (#778).
     guardrails-link [<community>[@<region>] <private>[@<region>]]
                       Link the KubeCon pair's guardrails switch (#774): write each cluster's endpoint, CA and
                       guardrails-switch token into the OTHER one's guardrails-switch/guardrails-peer Secret, so
@@ -4647,6 +4651,7 @@ readonly TERMINAL_POD_SELECTOR="app.kubernetes.io/name=web-terminal"
 readonly GUARD_PROXY_POD_SELECTOR="app.kubernetes.io/name=guard-proxy"
 readonly RESTART_WAIT="${WIB_RESTART_WAIT:-180}"              # seconds for a replacement pod to go Ready
 readonly RESTART_INTERVAL="${WIB_RESTART_INTERVAL:-5}"
+readonly RESET_SPEND_WAIT="${WIB_RESET_SPEND_WAIT:-300}"      # seconds for the reset pod, which waits on the volume to move
 readonly ACTIONS_POLL="${WIB_ACTIONS_POLL:-10}"               # seconds between queue polls
 readonly ACTIONS_HEALTH_EVERY="${WIB_ACTIONS_HEALTH_EVERY:-300}"  # seconds between health reports
 # The queue's action names are the fleet.sh verbs they run. Nothing outside this list is ever executed,
@@ -4668,7 +4673,7 @@ admin_kubeconfig() {
 # Delete the pods a selector names and wait for a Ready replacement. Non-zero, saying why, when nothing
 # matched or nothing new came back Ready inside RESTART_WAIT: a restart nobody saw finish is not done.
 restart_pods() {
-    local name="$1" kcfg="$2" ctx="$3" ns="$4" sel="$5" olds=() waited=0 ready
+    local name="$1" kcfg="$2" ctx="$3" ns="$4" sel="$5" olds=()
     read -ra olds <<<"$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" get pods -l "${sel}" \
         -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
     [[ "${#olds[@]}" -gt 0 ]] || { log "  ${name}: no pod matches ${sel} in ${ns}"; return 1; }
@@ -4676,6 +4681,14 @@ restart_pods() {
     if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" delete pod "${olds[@]}" --wait=false >/dev/null 2>&1; then
         log "  ${name}: the delete was refused"; return 1
     fi
+    wait_ready_pod "${name}" "${kcfg}" "${ctx}" "${ns}" "${sel}" "${olds[@]}"
+}
+
+# Wait for a Ready pod the selector names that is none of the listed old pods and is not terminating.
+wait_ready_pod() {   # name kcfg ctx ns selector [old pod...]
+    local name="$1" kcfg="$2" ctx="$3" ns="$4" sel="$5" waited=0 ready
+    shift 5
+    local olds=("$@")
     while [[ "${waited}" -lt "${RESTART_WAIT}" ]]; do
         ready="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" get pods -l "${sel}" -o json 2>/dev/null \
             | python3 -c '
@@ -4704,7 +4717,8 @@ restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTO
 # pod delete, like the others above, so Argo CD's spec is untouched and the drift policy has nothing to
 # refuse. A restart is not taken as proof: the counter is read back from the public /cost the room sees,
 # and anything but $0 over 0 requests inside RESTART_WAIT fails (the old pod can answer for a moment
-# while it terminates).
+# while it terminates). That is proxy.py. The Go build keeps the spend on a volume, which a new process
+# reopens, so reset_bot_one runs reset_spend_store for it instead (#778, below).
 # What the bot itself deployed (deploy_app applies as field manager workshop-mcp): the room's Jokers, a rehearsal's
 # villains, the load replay's leftovers (promo-mascot and two loyalty-rewards Deployments on 2026-10-31). The
 # reset clears them so the room opens on a clean cluster and an empty Joker wall. An object Argo CD also manages
@@ -4727,10 +4741,143 @@ for o in json.loads(sys.stdin.read() or "{}").get("items", []):
     log "  ${name}: cleared ${n} object(s) the bot deployed"
 }
 
+# The Go guard-proxy (#738) keeps its spend tally, each session's spend and the runtime cost cap in a bbolt
+# file at SPEND_STORE_PATH on a PersistentVolumeClaim (go-spend-store, #751), so a pod delete no longer clears
+# them. `guard-proxy reset-spend --store PATH` (guard-proxy-agenticburn#33) does, and refuses a store the
+# proxy holds, so the proxy has to be stopped first (#778). reset_spend_pod reads the live guard-proxy
+# Deployment on stdin and prints the one-shot Pod that runs it: the proxy's own image (the signed,
+# digest-pinned one the cluster already admitted), its pod and container security context, its resources
+# and scheduling, and only the store's volume, mounted where the proxy mounts it. It prints nothing for a
+# guard-proxy without SPEND_STORE_PATH, which is proxy.py with its spend in memory, and fails, saying why,
+# for a store the reset pod could not reach.
+readonly ARGOCD_CONTROLLER_SA="system:serviceaccount:argocd:argocd-application-controller"
+readonly RESET_SPEND_POD="guard-proxy-reset-spend"
+reset_spend_pod() {
+    python3 -c '
+import json, sys
+dep = json.loads(sys.stdin.read() or "{}")
+spec = dep.get("spec", {}).get("template", {}).get("spec", {})
+proxy = next((c for c in spec.get("containers") or [] if c.get("name") == "proxy"), None)
+if proxy is None:
+    sys.exit("the guard-proxy Deployment has no proxy container")
+store = next((e.get("value") for e in proxy.get("env") or [] if e.get("name") == "SPEND_STORE_PATH"), None)
+if store is None:
+    sys.exit(0)
+mounts = [m for m in proxy.get("volumeMounts") or []
+          if not m.get("readOnly") and store.startswith(m["mountPath"].rstrip("/") + "/")]
+if not mounts:
+    sys.exit(f"SPEND_STORE_PATH {store} is on no read-write volume of the proxy container")
+mount = max(mounts, key=lambda m: len(m["mountPath"]))
+volume = next((v for v in spec.get("volumes") or [] if v.get("name") == mount["name"]), {})
+if "persistentVolumeClaim" not in volume:
+    sys.exit("SPEND_STORE_PATH %s is on volume %s, which is not a PersistentVolumeClaim" % (store, mount["name"]))
+command = proxy.get("command")
+# The reset runs as `<binary> reset-spend --store PATH`. A command that carries its own arguments would put
+# them before reset-spend, so it is refused.
+if command is not None and len(command) != 1:
+    sys.exit(f"the proxy command {command} is not the guard-proxy binary alone")
+container = {"name": "reset-spend", "image": proxy["image"], "args": ["reset-spend", "--store", store],
+             "volumeMounts": [{"name": mount["name"], "mountPath": mount["mountPath"]}]}
+if command is not None:
+    container["command"] = command
+for k in ("imagePullPolicy", "resources", "securityContext"):
+    if k in proxy:
+        container[k] = proxy[k]
+pod = {"restartPolicy": "Never", "automountServiceAccountToken": False, "containers": [container], "volumes": [volume]}
+for k in ("securityContext", "imagePullSecrets", "nodeSelector", "affinity", "tolerations", "priorityClassName"):
+    if k in spec:
+        pod[k] = spec[k]
+print(json.dumps({"apiVersion": "v1", "kind": "Pod",
+                  "metadata": {"name": sys.argv[1], "labels": {"app.kubernetes.io/name": sys.argv[1]}},
+                  "spec": pod}))' "${RESET_SPEND_POD}"
+}
+
+# Stop guard-proxy, run reset-spend against its store, print what it cleared, and start guard-proxy again (#778).
+# Argo CD's selfHeal would put the Deployment's replicas back to 1 within seconds of the scale to 0, and the new
+# proxy and the reset pod would then race for the store's flock. So ai-layer's reconcile is paused for the reset
+# with Argo CD's skip-reconcile annotation, which the lab-bootstrap root leaves alone (it is not in git), and is
+# resumed whatever happens after it is set. Both scales run as the Argo CD controller, the principal the
+# block-argocd-drift policy admits, as repair_env_order's patch does.
+reset_spend_store() {
+    local name="$1" kcfg="$2" ctx="$3" pod="$4" replicas="$5" rc=0 phase="" waited=0 left out line
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n argocd annotate application ai-layer \
+            argocd.argoproj.io/skip-reconcile=true --overwrite >/dev/null 2>&1; then
+        log "  ${name}: could not pause Argo CD's ai-layer reconcile; guard-proxy left running"; return 1
+    fi
+    log "  ${name}: paused Argo CD's ai-layer reconcile; scaling guard-proxy to 0 so its store is free"
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent scale deployment guard-proxy --replicas=0 \
+            --as="${ARGOCD_CONTROLLER_SA}" >/dev/null 2>&1; then
+        log "  ${name}: the scale to 0 was refused"; rc=1
+    fi
+    # The old pod holds the store's flock until it exits, and the volume until it is gone.
+    while [[ "${rc}" -eq 0 ]]; do
+        left="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get pods -l "${GUARD_PROXY_POD_SELECTOR}" \
+            -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)" || left="unreadable"
+        [[ -z "${left}" ]] && break
+        if [[ "${waited}" -ge "${RESTART_WAIT}" ]]; then
+            log "  ${name}: guard-proxy still has ${left} after ${RESTART_WAIT}s"; rc=1; break
+        fi
+        sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+    done
+    if [[ "${rc}" -eq 0 ]]; then
+        # A reset pod an interrupted run left behind would hold the name, or the store.
+        KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent delete pod "${RESET_SPEND_POD}" --ignore-not-found \
+            --wait=true --timeout="${RESET_SPEND_WAIT}s" >/dev/null 2>&1 || true
+        if ! printf '%s' "${pod}" | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create -f - >/dev/null 2>&1; then
+            log "  ${name}: the reset pod ${RESET_SPEND_POD} was refused"; rc=1
+        fi
+    fi
+    if [[ "${rc}" -eq 0 ]]; then
+        waited=0
+        while :; do
+            phase="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get pod "${RESET_SPEND_POD}" \
+                -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+            [[ "${phase}" == Succeeded || "${phase}" == Failed ]] && break
+            [[ "${waited}" -ge "${RESET_SPEND_WAIT}" ]] && break
+            sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+        done
+        # The command's own output names what was cleared, or why it refused.
+        out="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent logs "pod/${RESET_SPEND_POD}" 2>/dev/null || true)"
+        while IFS= read -r line; do [[ -n "${line}" ]] && log "  ${name}: ${line}"; done <<<"${out}"
+        if [[ "${phase}" != Succeeded ]]; then
+            log "  ${name}: reset-spend did not succeed (pod phase ${phase:-unknown} after ${waited}s)"
+            rc=1
+        fi
+        KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent delete pod "${RESET_SPEND_POD}" --ignore-not-found \
+            --wait=true --timeout="${RESET_SPEND_WAIT}s" >/dev/null 2>&1 \
+            || { log "  ${name}: could not delete ${RESET_SPEND_POD}, which may still hold the store"; rc=1; }
+    fi
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent scale deployment guard-proxy --replicas="${replicas}" \
+            --as="${ARGOCD_CONTROLLER_SA}" >/dev/null 2>&1; then
+        log "  ${name}: COULD NOT SCALE guard-proxy BACK TO ${replicas}; the chat is down until it is"; rc=1
+    fi
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n argocd annotate application ai-layer \
+            argocd.argoproj.io/skip-reconcile- >/dev/null 2>&1; then
+        log "  ${name}: COULD NOT RESUME Argo CD's ai-layer reconcile. Resume it by hand:"
+        log "    kubectl --context ${ctx} -n argocd annotate application ai-layer argocd.argoproj.io/skip-reconcile-"
+        rc=1
+    else
+        log "  ${name}: resumed Argo CD's ai-layer reconcile"
+    fi
+    [[ "${rc}" -eq 0 ]] || return 1
+    wait_ready_pod "${name}" "${kcfg}" "${ctx}" agent "${GUARD_PROXY_POD_SELECTOR}"
+}
+
 reset_bot_one() {
-    local name="$1" kcfg="$2" ctx="$3" host url body verdict waited=0
+    local name="$1" kcfg="$2" ctx="$3" dep pod replicas host url body verdict waited=0
     clear_bot_workloads "${name}" "${kcfg}" "${ctx}" || return 1
-    restart_pods "${name}" "${kcfg}" "${ctx}" agent "${GUARD_PROXY_POD_SELECTOR}" || return 1
+    dep="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get deployment guard-proxy -o json 2>/dev/null)" \
+        || { log "  ${name}: could not read the guard-proxy Deployment"; return 1; }
+    # On success the builder writes only the Pod to stdout; on failure only its reason.
+    pod="$(reset_spend_pod <<<"${dep}" 2>&1)" \
+        || { log "  ${name}: cannot reset guard-proxy's spend store: ${pod}"; return 1; }
+    if [[ -n "${pod}" ]]; then
+        # Back to what it ran, and at least one: a guard-proxy found at 0 is a chat that was already down.
+        replicas="$(python3 -c 'import json, sys; print(max(int(json.load(sys.stdin)["spec"].get("replicas", 1)), 1))' <<<"${dep}")"
+        reset_spend_store "${name}" "${kcfg}" "${ctx}" "${pod}" "${replicas}" || return 1
+    else
+        restart_pods "${name}" "${kcfg}" "${ctx}" agent "${GUARD_PROXY_POD_SELECTOR}" || return 1
+    fi
     # The room reads the counter on the burritobot.co twin (#651), so that is the one read back.
     host="$(public_host_for "${name}" | twin_rows)"; url="https://${host}/cost"
     while :; do

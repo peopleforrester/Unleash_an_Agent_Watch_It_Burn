@@ -11,6 +11,8 @@ import os, pathlib, shutil, subprocess, sys, tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 ROOTS = ["infra/terraform/aws/cluster", "infra/terraform/aws/network", "infra/terraform/aws/audit", "infra/org/boundary",
          "infra/terraform/dashboards"]
+# Each root downloads its providers afresh, the aws one ~800 MB: a healthy init fits well inside this bound (#572).
+INIT_TIMEOUT = 600
 failures = []
 
 
@@ -35,8 +37,13 @@ for root in ROOTS:
         work = pathlib.Path(tmp)
         for f in list(src.glob("*.tf")) + [src / ".terraform.lock.hcl"]:
             shutil.copy2(f, work / f.name)
-        r = subprocess.run([exe, "init", "-lockfile=readonly", "-backend=false", "-input=false", "-no-color"],
-                           cwd=work, env=env, capture_output=True, text=True)
+        # Bounded: a registry download that stalls fails this check loudly instead of holding the E2E tier (#572).
+        try:
+            r = subprocess.run([exe, "init", "-lockfile=readonly", "-backend=false", "-input=false", "-no-color"],
+                               cwd=work, env=env, capture_output=True, text=True, timeout=INIT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            check(f"{root}: fresh init finishes within {INIT_TIMEOUT}s", False, "timed out: a provider download stalled")
+            continue
         check("fresh init succeeds against the committed lock", r.returncode == 0, (r.stdout + r.stderr)[-2000:])
         check("the lock is unchanged by init",
               (work / ".terraform.lock.hcl").read_bytes() == (src / ".terraform.lock.hcl").read_bytes())

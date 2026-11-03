@@ -87,6 +87,19 @@ touched, so the app stays Synced and self-heal has nothing to revert. It then re
 to the repo's values (all off), but the C7 tool allow-list and gateway rule live
 outside guard-proxy, and only `guards-off` puts them back.
 
+**After the Go cutover (#738, #778), the reset is the same command and does more.** The Go
+guard-proxy keeps the counter, each session's spend and the runtime cost cap in a file on the
+`guard-proxy-spend` volume, and the volume outlives the pod, so a pod delete no longer clears
+them. Every run on one bring-up reuses that volume. When the live guard-proxy has
+`SPEND_STORE_PATH` set, `reset-bot` pauses Argo CD's reconcile of ai-layer, scales guard-proxy
+to 0, runs one `guard-proxy reset-spend` pod from the proxy's own signed image against the
+store, prints its line (`reset-spend: cleared $… over N requests (… tokens), N sessions, and …
+from /var/lib/guard-proxy/spend.db`), scales guard-proxy back to 1 and resumes Argo CD. The chat
+is down for that minute or two, so it runs before the room arrives. It ends with the same `/cost`
+read at zero. If it fails, it says which step, and it scales back and
+resumes Argo CD before it exits. If it says it could not resume Argo CD, run the
+`kubectl ... annotate application ai-layer argocd.argoproj.io/skip-reconcile-` line it prints.
+
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
 | Date | not yet run | not yet run | not yet run |
@@ -1202,10 +1215,12 @@ is merely slow rather than rebuilding:
   sighting found that such a turn's trace never reached Datadog. Record all three
   readings on #750.
 - [ ] **Reset the community bot, last (#539).** The probe, the phone check and any
-  rehearsal all spend on attackme, and guard-proxy keeps that spend in memory. Once
+  rehearsal all spend on attackme, and guard-proxy keeps that spend in memory (the Go
+  build keeps it on its volume: see "After the Go cutover" in the run-through record). Once
   nothing else will touch attackme before the session, from `infra/terraform/fleet/`:
   `./fleet.sh reset-bot watch-it-burn-community`. It restarts guard-proxy by a pod
-  delete, which Argo CD does not revert, and must end `counter at zero` on
+  delete, which Argo CD does not revert (on the Go build it runs `reset-spend` and
+  prints what it cleared), and must end `counter at zero` on
   `https://attackme.burritobot.co/cost`, so the room's counter opens at `$0.0000`
   with the whole $25 `COST_CAP_USD` window ahead of it. Anything else, run it again;
   if it still does not read zero, read the guard-proxy pod's logs before the day.
