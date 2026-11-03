@@ -1,8 +1,14 @@
 # ABOUTME: Live half of the Kyverno CEL migration (#206, #467): the policies Argo CD installs, the Beat-1/C2
 # ABOUTME: toggle holding against selfHeal, the C2 refusal and report text, and signed images behind the C1 seal.
 # SUITE: e2e
-"""Needs kubectl, jq and CONTEXT naming a fresh full-profile or attendee cluster. Every missing prerequisite
-is a failure with the reason, never a skip.
+"""Needs kubectl, jq and CONTEXT naming a cluster whose profile installs restrict-image-registries: attendee, full,
+admin, or the KubeCon pair (watch-it-burn-community, watch-it-burn-private). Every missing prerequisite is a failure
+with the reason, never a skip.
+
+What the cluster must hold is its profile's, read from the root Application lab-bootstrap's lab-platform/profile
+label (the label the web terminal reads, #774) and bootstrap_chart.kyverno_policies (#467): eleven on attendee and
+full, twelve on kubecon-private (kyverno-breakout adds deny-external-registries), two on kubecon-community
+(restrict-image-registries alone through kyverno-registry-policy, and deny-external-registries).
 
 Why (#467). test_kyverno_cel_policies.py proves each CEL expression with the Kyverno CLI on fixture requests.
 What it cannot show is the cluster: that Argo CD pruned the old ClusterPolicy objects, that the engine took
@@ -12,13 +18,16 @@ the words the room sees, the refusal and the lab's PolicyReport line, are the wo
 
 In order, against CONTEXT:
   1. no kyverno.io ClusterPolicy is left;
-  2. the ValidatingPolicies and ImageValidatingPolicies on the cluster are exactly the ones in
-     policies/kyverno/ and policies/floor/, each READY;
-  3. the kyverno-policies and minimal-floor Applications are Synced and Healthy;
+  2. the ValidatingPolicies and ImageValidatingPolicies on the cluster are exactly the ones the profile's
+     Applications sync, each READY;
+  3. each Application that syncs them (kyverno-policies and minimal-floor, or kubecon-community's
+     kyverno-registry-policy and kyverno-breakout) is Synced and Healthy;
   4. with restrict-image-registries in Audit, the lab's villain Deployment is admitted, and the lab's own
      policyreport jq (read from challenges/LAB-TEXT.md) prints the line the lab shows;
   5. toggle-kyverno-enforce.sh flips both policies to Deny, and they stay Deny through a hard refresh of
-     kyverno-policies while the Application stays Synced;
+     kyverno-policies while the Application stays Synced. On kubecon-community, which has no
+     require-resource-limits for the script to flip, restrict-image-registries is patched to Deny as guardrails-on
+     patches it, and kyverno-registry-policy is the Application refreshed;
   6. the C2 villain Deployment, as agent-sa, is refused with 'Policy restrict-image-registries failed: ...';
   7. with the Challenge 1 NetworkPolicies on the agent namespace, a Deployment of our signed image admits
      and its Pod runs.
@@ -44,16 +53,16 @@ import uuid
 
 import yaml
 
+from bootstrap_chart import kyverno_policies, values_path
 from kubecon_probe import C2_CHECK, C2_MANIFEST
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-POLICY_FILES = sorted((REPO / "policies/kyverno").glob("*.yaml")) + sorted((REPO / "policies/floor").glob("*.yaml"))
 REG_FILE = REPO / "policies/kyverno/restrict-image-registries.yaml"
 LAB = REPO / "challenges/LAB-TEXT.md"
 TOGGLE = REPO / "challenges/01-cncf-wall/toggle-kyverno-enforce.sh"
 RESOURCES = REPO / "gitops/ai-layer/resources.yaml"
 TOGGLED = ("require-resource-limits", "restrict-image-registries")
-APPS = ("kyverno-policies", "minimal-floor")
+PROFILE_LABEL = "lab-platform/profile"
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
 # The reports controller rescans every 30s (gitops/bootstrap/apps/kyverno.yaml); four rescans covers a busy controller.
@@ -129,12 +138,25 @@ if failures:
     finish()
 check(f"namespace {NS} exists", kjson("get", "namespace", NS) is not None)
 
-# The repo's side, read once: what the cluster must hold, and what the lab tells the room it will see.
-want: dict[str, set[str]] = {"ValidatingPolicy": set(), "ImageValidatingPolicy": set()}
-for f in POLICY_FILES:
-    for d in yaml.safe_load_all(f.read_text()):
-        if d and d.get("kind") in want:
-            want[d["kind"]].add(d["metadata"]["name"])
+# Which profile this cluster is, from its own root: the policies it must hold are that profile's.
+root = kjson("-n", "argocd", "get", "applications.argoproj.io/lab-bootstrap") or {}
+profile = ((root.get("metadata") or {}).get("labels") or {}).get(PROFILE_LABEL, "")
+check(f"the root Application lab-bootstrap carries a {PROFILE_LABEL} label", bool(profile),
+      "no lab-bootstrap in argocd, or it has no profile label")
+if profile:
+    check(f"profile {profile!r} has a values file in the chart", values_path(profile).is_file(),
+          f"no {values_path(profile).relative_to(REPO)}")
+if failures:
+    finish()
+owner = kyverno_policies(profile)  # {kind: {policy: the Application that syncs it}}
+want: dict[str, set[str]] = {kind: set(names) for kind, names in owner.items()}
+synced_by = {p: app for names in owner.values() for p, app in names.items()}
+check(f"profile {profile} installs restrict-image-registries (steps 4 to 6 need the C2 wall)",
+      "restrict-image-registries" in want["ValidatingPolicy"], f"it installs {sorted(synced_by)}")
+toggled = tuple(p for p in TOGGLED if p in want["ValidatingPolicy"])
+toggle_apps = sorted({synced_by[p] for p in toggled})
+
+# The repo's side, read once: what the lab tells the room it will see.
 reg_msg = " ".join(next(v["message"] for v in yaml.safe_load(REG_FILE.read_text())["spec"]["validations"]).split())
 lab = LAB.read_text()
 m = re.search(r"kubectl -n agent get policyreport -o json \| jq -r '([^']+)' \| sort -u", lab)
@@ -165,11 +187,10 @@ for kind, plural in (("ValidatingPolicy", "validatingpolicies"), ("ImageValidati
     for name in sorted(want[kind] & set(have)):
         status = (have[name].get("status") or {}).get("conditionStatus") or {}
         check(f"{kind} {name} is READY", status.get("ready") is True, json.dumps(status.get("conditions")))
-check("eleven policies in all", sum(len(v) for v in want.values()) == 11,
-      f"the repo holds {sum(len(v) for v in want.values())}; update this check with the reason if that changed")
+print(f"  ({sum(len(v) for v in want.values())} policies on profile {profile})")
 
 print("== 3. the Applications settle with no drift ==")
-for name in APPS:
+for name in sorted(set(synced_by.values())):
     sync, health = app_state(name)
     check(f"Application {name} is Synced and Healthy", (sync, health) == ("Synced", "Healthy"),
           f"sync={sync} health={health}")
@@ -179,7 +200,7 @@ if failures:
 RUN = uuid.uuid4().hex[:6]
 RUN_LABEL = f"wib.test/run={RUN}"
 LABELS = {"wib.test/run": RUN}
-original = {p: actions(p) for p in TOGGLED}
+original = {p: actions(p) for p in toggled}
 applied_c1 = ""
 
 
@@ -227,26 +248,36 @@ try:
     check(f"the lab's policyreport jq prints {line[:70]!r}...", line in printed, f"it printed {printed}")
     kubectl("-n", "agent", "delete", "deployment", f"promo-mascot-{RUN}", "--ignore-not-found", "--wait=false")
 
-    print("== 5. toggle-kyverno-enforce.sh flips to Deny, and selfHeal leaves it there ==")
-    t = subprocess.run(["bash", str(TOGGLE)], env={**os.environ, "CONTEXT": CONTEXT}, capture_output=True,
-                       text=True, timeout=120)
-    check("toggle-kyverno-enforce.sh exits 0", t.returncode == 0, out(t))
-    for p in TOGGLED:
+    if toggled == TOGGLED:
+        print("== 5. toggle-kyverno-enforce.sh flips to Deny, and selfHeal leaves it there ==")
+        t = subprocess.run(["bash", str(TOGGLE)], env={**os.environ, "CONTEXT": CONTEXT}, capture_output=True,
+                           text=True, timeout=120)
+        check("toggle-kyverno-enforce.sh exits 0", t.returncode == 0, out(t))
+    else:
+        # kubecon-community: no require-resource-limits, so the script would stop on it. guardrails-on patches
+        # restrict-image-registries' validationActions itself (gitops/ai-layer/web-terminal/entrypoint.sh).
+        print(f"== 5. {', '.join(toggled)} patched to Deny as guardrails-on does, and selfHeal leaves it there ==")
+        for p in toggled:
+            r = set_actions(p, ["Deny"])
+            check(f"{p} patched to [Deny]", r.returncode == 0, out(r))
+    for p in toggled:
         check(f"{p} is [Deny] after the toggle", actions(p) == ["Deny"], f"got {actions(p)}")
-    r = kubectl("-n", "argocd", "annotate", "applications.argoproj.io/kyverno-policies",
-                "argocd.argoproj.io/refresh=hard", "--overwrite")
-    check("kyverno-policies hard refresh requested", r.returncode == 0, out(r))
-    seen: dict[str, set[str]] = {p: set() for p in TOGGLED}
+    for app in toggle_apps:
+        r = kubectl("-n", "argocd", "annotate", f"applications.argoproj.io/{app}",
+                    "argocd.argoproj.io/refresh=hard", "--overwrite")
+        check(f"{app} hard refresh requested", r.returncode == 0, out(r))
+    seen: dict[str, set[str]] = {p: set() for p in toggled}
     deadline = time.monotonic() + HOLD_S
     while time.monotonic() < deadline:
-        for p in TOGGLED:
+        for p in toggled:
             seen[p].add(json.dumps(actions(p)))
         time.sleep(10)
-    for p in TOGGLED:
+    for p in toggled:
         check(f"{p} stayed [Deny] for {HOLD_S}s after the refresh (ignoreDifferences holds)",
               seen[p] == {json.dumps(["Deny"])}, f"saw {sorted(seen[p])}")
-    sync, health = app_state("kyverno-policies")
-    check("kyverno-policies is still Synced with the flip live", sync == "Synced", f"sync={sync} health={health}")
+    for app in toggle_apps:
+        sync, health = app_state(app)
+        check(f"{app} is still Synced with the flip live", sync == "Synced", f"sync={sync} health={health}")
 
     print("== 6. C2: the villain is refused, by name ==")
     r = kubectl(*C2_CHECK, stdin=json.dumps(C2_MANIFEST))

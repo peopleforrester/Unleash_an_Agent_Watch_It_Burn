@@ -11691,3 +11691,60 @@ another, and changes no code. Hecaton had already rebased the branch onto `2b3c7
 On `2b3c7df`, `bash verify/run-e2e-tools.sh` ran 45 checks. Its offline suite was green (228 tests), and it exited 1
 on one check: ghcr.io serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins
 `68004fb5...`, the red recorded above. The workshop-mcp tag check passes.
+
+## 2026-11-03 · #467 · The live Kyverno CEL check reads the cluster's profile, so it fits the KubeCon pair; the live run is still owed
+
+**What this run did.** Run 16704 started from staging `6408699`. `verify/prior-drafts.sh 467 origin/staging` printed
+NONE: all eight earlier drafts of #467 are in staging. The issue's remaining work is the live run on the two clusters
+a dispatched run has, watch-it-burn-community and watch-it-burn-private. Those two run the KubeCon profiles from
+#774, and `verify/test_kyverno_cel_live.py` could not have passed on either of them as written. It expected every
+policy in `policies/kyverno` and `policies/floor`, eleven in all, and the Applications kyverno-policies and
+minimal-floor. kubecon-community installs two policies: restrict-image-registries alone, through
+kyverno-registry-policy, and deny-external-registries, through kyverno-breakout. It has no kyverno-policies and no
+minimal-floor. kubecon-private installs twelve, the eleven plus deny-external-registries. The issue's "the same
+ten" was the count before #606 added restrict-agent-spawned-workloads.
+
+**The change.** `verify/bootstrap_chart.py` gains `kyverno_policies(profile)`. It reads each app the profile's
+values file lists, follows each source of this repo to its files (a directory include, else the directory's
+Kustomization resources, else its `*.yaml`), and returns each ValidatingPolicy and ImageValidatingPolicy with the
+Application that syncs it. The live check reads the cluster's profile from its root Application, the
+`lab-platform/profile` label on lab-bootstrap. That is the label `infra/deploy-full-idp.sh` sets and the web
+terminal reads. The check then holds the cluster to that profile's set and that set's Applications, and it fails
+with the reason when the label is missing or names no values file. Step 5 runs `toggle-kyverno-enforce.sh` where both
+of its policies are installed. On kubecon-community, which has no require-resource-limits, the script would stop on
+that policy, so the check patches restrict-image-registries to Deny itself, as guardrails-on does. It hard-refreshes
+kyverno-registry-policy, the Application that owns that policy there. The fixed count of eleven is gone. The new
+offline test `verify/test_kyverno_profile_policies.py` holds the sets: eleven for attendee and full, those eleven plus
+deny-external-registries for kubecon-private, exactly the two for kubecon-community, and none for burn. It also holds
+that deploy-full-idp.sh labels each root with its profile. Run with a stand-in kubectl that serves a kubecon-community
+cluster, the live check passed its prerequisites and steps 1 to 3 against the two policies and their two
+Applications, and took the direct patch at step 5.
+
+**Why the live run did not happen.** The session files were unreadable again. In
+`/var/lib/hecaton/runs/16704/clusters`, the files `env`, `kubeconfig`, `aws-config` and `aws-credentials` are
+`hecaton:hecaton` mode 0640, and `bin/` is 0750. The run's user, `hecaton-s8-claude-certkraken`, is not in group
+`hecaton`. Run 16387 on this issue and runs 16574 to 16670 on other issues hit the same failure, and hecaton#508,
+the fix, is still open. At 2026-11-03T17:38:11Z this run ran:
+
+    . "$HECATON_CLUSTER_ENV"
+    kubectl --context watch-it-burn-community get clusterpolicy
+    kubectl --context watch-it-burn-private get clusterpolicy
+
+They printed:
+
+    /bin/bash: line 1: /var/lib/hecaton/runs/16704/clusters/env: Permission denied
+    error: error loading config file "/var/lib/hecaton/runs/16704/clusters/kubeconfig": open /var/lib/hecaton/runs/16704/clusters/kubeconfig: permission denied
+
+**Not yet run on a cluster.** The first run on #467 that can read its session files runs, on each cluster:
+
+    kubectl --context watch-it-burn-community get clusterpolicy
+    kubectl --context watch-it-burn-community get validatingpolicy,imagevalidatingpolicy
+    CONTEXT=watch-it-burn-community python3 verify/test_kyverno_cel_live.py
+    kubectl --context watch-it-burn-private get clusterpolicy
+    kubectl --context watch-it-burn-private get validatingpolicy,imagevalidatingpolicy
+    CONTEXT=watch-it-burn-private python3 verify/test_kyverno_cel_live.py
+
+and then `bash verify/run-e2e.sh` on watch-it-burn-private, with COMMUNITY_CONTEXT=watch-it-burn-community. On
+watch-it-burn-community, the first command should print nothing, and the second should list two policies, both
+READY. On watch-it-burn-private, the first should print nothing, and the second should list twelve, all READY. The
+live check puts back each policy's validationActions as it found them and removes what it created.
