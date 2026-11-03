@@ -12560,3 +12560,7 @@ which `run-tests.sh` and `run-e2e-tools.sh` count as a failure like any non-zero
 counter (`hecaton/run/skipmarks.py`) now finds no marker in any test file this branch changes; the test file had 2
 at the base and has 0 now. Run 16764's session files have the same permissions as run 16717's (group `hecaton`, mode
 0640, so `. "$HECATON_CLUSTER_ENV"` printed `Permission denied`), so the live checks above are still owed (hecaton#508).
+On 1b576cb, `bash verify/run-e2e-tools.sh` ran 49 checks in 23m22s. The offline suite ran 235 tests, all green, and
+the tier exits 1 on `test_image_version_tags.py` alone, on the same two ghcr.io reds as before (the web-terminal tag
+at another digest, and the 404 for `sample-app-nginx-1.27.5`, #814), which this change does not touch.
+`test_input_pii_guard_llm_guard.py` passed again.
