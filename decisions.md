@@ -8486,7 +8486,10 @@ check-tls was green again, the same seven PASS lines with the cert valid 76 more
 502. The live test failed the same four prerequisites on
 `open /var/lib/hecaton/runs/16748/clusters/kubeconfig: permission denied`, so it read no Secret and started no shell.
 A re-dispatch of #785 before hecaton#508 lands will hit this block again. The issue waits on hecaton#508, and the
-command above is still the one to run.
+command above is still the one to run. In this run `bash verify/run-e2e-tools.sh` ran 49 checks in 23m45s and
+exits 1 on `test_image_version_tags.py` alone; the offline suite inside it passes. ghcr.io now serves
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7e716…`, a third digest after `d6acd503…` and
+`0b72ecc7…`, against the pinned `sha256:68004fb5ed2d…`. That tag overwrite is #714's, not this change's.
 
 ## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
 
