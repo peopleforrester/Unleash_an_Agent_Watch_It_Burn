@@ -13678,3 +13678,43 @@ No dependency was added.
 **The suites (run 16834, on `ded328a4`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 24m21s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests,
 all green, `verify/test_ghcr_version_tag.py` among them, and `test_image_version_tags.py` passes in the tier.
+
+## 2026-11-04 · #839 · A test holds #784's token counts on guard-proxy's chat span, and it stays red until the repin
+
+**What #839 asks.** Test review run 16790 found that nothing checks the token-count part of #784: that guard-proxy's
+`/chat` `chat` span carries `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`. `verify/test_genai_semconv_pin.py`
+holds only that the registry declares both as recommended, a level that admits their absence.
+
+**The test.** `verify/test_chat_span_token_counts.py` (offline) runs the pinned proxy.py in its own process with a fake
+kagent and a recording stand-in for the OpenTelemetry API, since the stock image carries no SDK and neither does the
+offline suite. It checks that the pin contains guard-proxy-agenticburn#49 (96d16214, the commit that sets both counts),
+and then four turns: a plain `/chat` turn, whose `chat` span must carry the counts kagent reported and the storefront
+is sent; a reasoning-only reply retried once, whose span must carry the sum of both forwards; a reply with no usage,
+whose span must carry 0 and 0; and an A2A `message/send`. On every turn no span but `chat` may carry a count, so the
+`POST /chat` root, `agent.forward`, `POST /` and `sanitize` stay without one, as #784's entry requires.
+
+**Red at the pin, by design.** Staging pins guard-proxy at 88b9b52, which sums the counts into `spent` and sets
+neither attribute. The test fails there on seven checks: the pin check and the six count checks. With the submodule's
+working tree at guard-proxy-agenticburn main (c2eb4cf2), every behavioral check passes and only the pin check fails,
+because the gitlink in HEAD still reads 88b9b52. Two hand mutations of c2eb4cf2's proxy.py were also run: one that
+also writes the input count onto the `POST /chat` root fails the three "no span but chat" checks, and one that keeps
+only the last forward's counts fails the retry's sum check. A run cannot move the gitlink (question 766, "Michael pins,
+a run does the rest"), so this run's report puts the repin in escalate and the test stays red until that commit.
+
+**The repin it needs.** #793's escalate asks for 2cff90d, which predates 96d16214, so that pin alone would leave this
+test red. The repin should go to c2eb4cf2 (guard-proxy-agenticburn main on 2026-11-04), which carries 2cff90d too,
+with `checksum/proxy-py` in `gitops/ai-layer/resources.yaml` set to `ba8d8e2b789f`. With the submodule's working
+tree at c2eb4cf2, `bash verify/run-tests.sh` ran 244 tests and failed three: this test's pin check, the checksum (which
+the repin commit sets), and `verify/test_weaver_guard_proxy_spans.py`, whose gauge check read the spend as
+`_cost["usd"]`. guard-proxy-agenticburn#38 (1cfa6d6) yields one series per model, so that check now reads any first
+argument and requires a single `yield Observation(`. It passes at 88b9b52 and at c2eb4cf2. The tools tier was not run
+at c2eb4cf2.
+
+**The registry note.** `weaver/registry/guard-proxy-spans.yaml`'s note on `gen_ai.usage.input_tokens` now names
+guard-proxy-agenticburn#49 (96d16214) as the change and this test as what holds the pin to it.
+
+**Not yet run on a cluster.** This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` are mode 640, group `hecaton`, and
+its user (`hecaton-s6-claude-certkraken`) cannot read them (hecaton#508), so the read of which proxy.py the clusters
+run failed with `permission denied` and changed nothing. After the repin syncs, #784's step 3 is the live check: the
+APM `chat` span on each KubeCon cluster carries both counts, and the Agent Observability total equals the sum of the
+`generate_content` rows.
