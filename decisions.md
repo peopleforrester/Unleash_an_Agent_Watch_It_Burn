@@ -13320,3 +13320,8 @@ session runs it and puts what it printed here.
 
 **Not yet run on a cluster:** question 961's eight steps above, with steps 0 and 7 run by the session that brings
 the cluster up.
+
+**The suites (run 16813, at 67eecb9).** `bash verify/run-e2e-tools.sh` exited 0: its offline stage, `bash
+verify/run-tests.sh`, ran 241 tests, all green, `test_datadog_pool_row.sh` among them, then "53 checks ran (the
+offline suite and 52 tier tests) in 24m44s" and "ALL E2E TOOLS TIER CHECKS GREEN". `shellcheck` is clean on the new
+script and its test. No dependency was added.
