@@ -10939,3 +10939,12 @@ passing. `bash verify/run-e2e-tools.sh` ran 45 checks with the load average abou
 on one check, the red already recorded for #746 and #775: `test_image_version_tags.py` finds ghcr.io serving
 `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where the pin is `68004fb5`, because CI pushed
 over that tag again. Nothing here builds or pushes an image; the workflow fix is run 16420's follow-up.
+
+**Second attempt, after the rebase onto staging at `9bbc835`.** The prose gate read one antithesis in this entry,
+so the heading and the digest sentence above now state each claim on its own, as do the two test comments. The tier
+run on the new base found a second FAIL in `test_image_version_tags.py`: the stand-in pod image in
+`verify/test_tool_pin_live_check.py`, added by `b28d5c1` (#480), named `watch-it-burn:workshop-mcp@sha256:9a26`, a
+reference with no version, which #714's rule forbids. It now names `workshop-mcp-mcp-1.29.1`, the pinned tag;
+`test_tool_pin_live_check.py` still passes, and `test_image_version_tags.py` is down to the web-terminal digest.
+On that base `bash verify/run-e2e-tools.sh` ran 45 checks with the offline suite green, and
+`test_lab_pipeline_collector.py` passed with its Datadog validates at 25.3 to 25.5 s.
