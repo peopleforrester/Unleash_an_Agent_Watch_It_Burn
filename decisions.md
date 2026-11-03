@@ -12034,9 +12034,10 @@ and still says it runs `aws sts get-caller-identity` (`facilitation/kubecon-na-2
 `docs/RUN-OF-SHOW-2026-08.md`, `gitops/ai-layer/web/kubecon.html`, `gitops/ai-layer/web/brief.html`) is
 Michael's voice and is filed as a follow-up of #717 rather than rewritten here.
 
-**Why the live re-run did not run here: the session could not be read.** Run 16720 was handed AWS profile
-accen-dev and the contexts watch-it-burn-community and watch-it-burn-private in `$KUBECONFIG`, with
-`$HECATON_CLUSTER_ENV` to source. Each file under `/var/lib/hecaton/runs/16720/clusters/` (env, kubeconfig,
+**Why the live re-run did not run here: the session could not be read.** Run 16720 and its resume run 16731
+were handed AWS profile accen-dev and the contexts watch-it-burn-community and watch-it-burn-private in
+`$KUBECONFIG`, with `$HECATON_CLUSTER_ENV` to source. Each file under
+`/var/lib/hecaton/runs/16731/clusters/` (env, kubeconfig,
 aws-config, aws-credentials, bin/) is owned `hecaton:hecaton` at mode 0640 or 0750. The run's user,
 `hecaton-s6-claude-certkraken` (uid 147), is in the groups `hecaton-s6-claude-certkraken`, `hecaton-runs`
 and `hecaton-tools`, not `hecaton`. So `. "$HECATON_CLUSTER_ENV"` is "Permission denied", `kubectl
@@ -12056,3 +12057,12 @@ written for a fresh attendee cluster runs on one of the two clusters that are up
 `IMDS: BLOCKED`, and `. "$HECATON_CLUSTER_ENV" && CONTEXT=watch-it-burn-community python3
 verify/test_bedrock_profile_live.py` to confirm Pod Identity and Bedrock still answer at hop limit 2. A pass
 of all three closes #717.
+
+**The suites (run 16731, on dbb85126).** `bash verify/run-e2e-tools.sh` ran its offline suite green (234
+tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, so the Test command `bash verify/run-tests.sh` passes with
+`test_imds_credential_theft.py` among them), then the tools tier; 48 checks ran in 22m50s and it exits 1 on
+one, `test_image_version_tags.py`. Its two reds are the image-tag drift staging's own entries already record:
+ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7...` rather than the pinned
+`sha256:68004fb5...` (the tag CI pushed over, #815, #816, #823, #824), and `watch-it-burn:sample-app-nginx-1.27.5`
+returns HTTP 404 (#814). Nothing in this change touches an image. The live cluster checks did not run, for the
+session-read reason recorded above.
