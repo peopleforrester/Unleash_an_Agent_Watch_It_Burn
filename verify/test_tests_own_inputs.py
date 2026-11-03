@@ -76,6 +76,8 @@ rand = item(body, "Randomness is pinned or enumerated")
 check("an item says a test pins or enumerates randomness and each check holds for every value",
       "stubs `Math.random`" in rand and "holds for every one of them" in rand)
 check("it says a test that passes on a rerun is broken, not flaky", "broken, not flaky" in rand)
+check("it says the run fixes it, or files an issue with the failing output when it cannot find the cause",
+      "The run that sees it fixes it" in rand and "files an issue with the failing output" in rand)
 check("it cites the witch-name test, which exists", "`verify/test_storefront_witch_name_e2e.py`" in rand
       and WITCH.is_file())
 witch = WITCH.read_text(encoding="utf-8") if WITCH.is_file() else ""
