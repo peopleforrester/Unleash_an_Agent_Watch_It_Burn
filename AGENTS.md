@@ -155,5 +155,5 @@ a check that a randomly drawn witch name did not contain "rude", which "Prudence
    reworded anchor reads as that and not as a broken check further on.
 3. **Randomness is pinned or enumerated.** A test seeds the code's random source, stubs `Math.random`, or tries every
    value the code can pick, and each check holds for every one of them. `verify/test_storefront_witch_name_e2e.py`
-   pins every draw and tries all 32 first names. A test that fails once and passes on a rerun is broken, not flaky,
-   and the run that sees it fixes it.
+   pins every draw and tries all 32 first names. A test that fails once and passes on a rerun is broken, not flaky.
+   The run that sees it fixes it, or, when the run cannot find the cause, files an issue with the failing output.

@@ -10603,4 +10603,12 @@ the witch-name test reads, and checks that the harness has no fallback to the re
 `.replace` on a literal, and several are allowed to find nothing (an exemption comment that may be absent), so a
 scan would flag correct code. The rule is in AGENTS.md and the test that broke is fixed.
 
+**Seen in this run, not fixed: a one-off hang in `verify/test_challenge_fallbacks.py`.** The first full offline
+run failed it: the C7 fallback's "down" case, `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` against the
+stub gateway that stops answering, hit the harness's 120 s `subprocess.run` timeout. That case takes 9.5 s alone,
+about 11 s with eight copies of the test running at once, and at most 23.7 s over 20 more runs, none of which timed
+out, so host load does not explain it. The script's waits run on the stub clock, so a hang means that clock stopped
+advancing: if the `date` stub ever printed nothing, `WAITED` would go negative and `wait_for` would never return.
+The cause is not found, so per rule 3 a follow-up carries the failing output.
+
 **Not yet run on a cluster:** nothing; both changed tests are offline or in the tools tier.
