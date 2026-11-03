@@ -10204,3 +10204,10 @@ in Datadog. Signed in to Whitney's sandbox org:
    its row and confirm the root span itself (`POST /chat`, service `burritobot`) carries
    `k8s.cluster.name:burritobot-public`, and that the CONTENT column's INPUT is the chat's prompt.
 3. The `service:burritobot-agent` and `generate_content` rows show the system prompt in their input, as the warning says.
+
+**The suites.** `bash verify/run-tests.sh` exits 0 (223 tests). `bash verify/run-e2e-tools.sh` exits 1 on two checks,
+neither from this change. Its offline-suite step failed `test_challenge_fallbacks.py`'s "tmp/ is left as it was found"
+because this run had `run-tests.sh` going at the same time in the same checkout; alone, the offline suite is green. And
+`test_image_version_tags.py` fails as on the base commit: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at
+`sha256:d6acd503bc20…`, not the pinned `sha256:68004fb5ed2d…`, the build-web-terminal push recorded in the 2026-11-03
+#783 and #746 entries. That needs a ghcr.io write and the signing key, and is #815's (filed again as #816, #823, #824).
