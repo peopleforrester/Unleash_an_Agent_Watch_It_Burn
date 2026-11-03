@@ -12602,8 +12602,8 @@ It also warns that exporting the same model calls twice counts their tokens twic
 stack emits them: proxy.py writes the two message attributes in every capture mode and emits no event. So Act 2
 redacted nothing. `transform/redact_sentinel` now replaces, on every span and on every span event (the details event
 is Datadog's fallback), the same keys that burn's `transform/scrub_pii` keeps for its scrub. Those are the messages,
-`gen_ai.tool.call.arguments` and `.result`, and the `gcp.vertex.agent.*` keys they are copied from. The scope is every
-span, not only guard-proxy's: `transform/adk_model_content` copies the prompt onto every kagent model call. The
+`gen_ai.tool.call.arguments` and `.result`, and the `gcp.vertex.agent.*` keys they are copied from. The scope covers every
+span, guard-proxy's and the rest: `transform/adk_model_content` copies the prompt onto every kagent model call. The
 messages become one message in the semconv shape whose text is `[DEMO-REDACTED]`, so Datadog's panel still parses
 them. The other keys become the bare string. The overlay's steps now name where the config lives (`values.yaml`,
 `values-burn.yaml` on burn), and it goes last in the traces processors, after the ADK copies and before every
@@ -12676,3 +12676,14 @@ serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:d6acd503bc20…`, not 
 belongs to #714 and needs a ghcr.io write. Every #784 check in the tier passed: `test_collector_act2_redaction_e2e.py`,
 `test_adk_model_content_e2e.py`, `test_trace_shape_e2e.py`, `test_collector_pii_scrub_e2e.py` and
 `test_collector_one_root_e2e.py`. `weaver registry check` (0.24.2, sha-verified) passed on the v1.41.1 pin.
+
+**Re-dispatch, run 16747.** Run 16441's two commits never reached staging: the run ended failed (validation). Its
+branch, cut from staging at 858ffafb, is 97 commits behind, and `verify/draft-drift.sh` read it CLEAN with a
+decisions.md append, so both commits were cherry-picked and the conflict kept both sides. The prose gate failed
+this entry on one antithesis in the redaction paragraph (`The scope is every span, not only guard-proxy's`), which
+now reads "The scope covers every span, guard-proxy's and the rest". That is the only change from the draft's text.
+guard-proxy-agenticburn's main (2cff90d, 2026-11-03) still sets no `gen_ai.usage.*` on the `chat` span; it sums the
+counts into `spent` and puts them on no attribute. No issue there asks for it, because run 16441's follow-up was
+never filed, so this run's report files it again. This run's cluster files are again mode 0640, group `hecaton`, and
+its user (`hecaton-run-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`) cannot read them, so the
+KubeCon reads and the Datadog look above remain owed, as listed under "Not yet run on a cluster".
