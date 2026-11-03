@@ -10660,8 +10660,15 @@ a1d391f) found fb6e2bf already carries it and left the pin, naming the 88b9b52 r
 in run 16538's report. Until they land, `verify/test_chat_witch_name.py` fails at fb6e2bf, as it is meant to, on four
 checks: the pin contains 6f2de73, the agent receives two text parts, the second carries the name, and every name the
 storefront assigns is forwarded. `bash verify/run-tests.sh` is red on this branch for that test alone. In a scratch
-worktree with the gitlink at 88b9b52 and the checksum bumped, the test passes, and so does the whole offline suite
-(see the run's report for the counts).
+worktree with the gitlink at 88b9b52 and the checksum bumped, the test passes, and `bash verify/run-tests.sh` exits 0
+(227 tests), `test_chat_turn_cancel.py`, `test_c7_badge_grants.py`, `test_proxy_checksum.py` and `test_finale_cap.py`
+among them. There `bash verify/run-e2e-tools.sh` ran 45 checks and failed two, both already red on staging 9bbc835:
+- `test_image_version_tags.py` found `verify/test_tool_pin_live_check.py`'s stand-in Deployment (b28d5c1, #480) naming
+  `watch-it-burn:workshop-mcp@...` rather than the pinned tag. This commit gives the stand-in
+  `workshop-mcp-mcp-1.29.1@...`. The live-check round trip still passes, and the reference check now passes.
+- The same test's ghcr.io check: `web-terminal-ttyd-1.7.7` serves `sha256:0b72ecc7...`, not the pinned `68004fb5`,
+  because CI pushed over the tag. That is the red #746, #775 and #798 recorded on 2026-11-03. It is registry state,
+  and nothing here touches an image.
 
 **What changed.**
 - `verify/test_chat_witch_name.py` (new, offline) checks that the pinned guard-proxy contains 6f2de73, as
