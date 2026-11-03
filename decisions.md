@@ -11748,3 +11748,10 @@ and then `bash verify/run-e2e.sh` on watch-it-burn-private, with COMMUNITY_CONTE
 watch-it-burn-community, the first command should print nothing, and the second should list two policies, both
 READY. On watch-it-burn-private, the first should print nothing, and the second should list twelve, all READY. The
 live check puts back each policy's validationActions as it found them and removes what it created.
+
+**The suites in run 16704, on `a07f9d2`.** `bash verify/run-e2e-tools.sh` ran 48 checks, the offline suite and 47
+tier tests. Its offline suite was green (234 tests, `verify/test_kyverno_profile_policies.py` among them). It exited
+1 on one test, `test_image_version_tags.py`, with two failed checks that do not involve Kyverno. First, ghcr.io
+serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins `68004fb5...`, the red the #797,
+#798 and #801 entries record. Second, ghcr.io answers 404 for `sample-app-nginx-1.27.5`, the tag #814 renamed to
+and whose push that entry escalates.
