@@ -11599,3 +11599,16 @@ The last command must print `sha256:556e176dd1ac742009bddf70407cb92c84214179a6f4
 the same bytes as before, and its pod can start before the tag exists. Once the change is on a cluster, run
 `kubectl --context watch-it-burn-private get deploy -A -o jsonpath='{..image}' | tr ' ' '\n' | grep sample-app`.
 It is owed only where the Backstage manifest is applied.
+
+**The suites (run 16674, at 89ad1c6).** `bash verify/run-e2e-tools.sh` ran `bash verify/run-tests.sh` first, which
+passed with 232 tests. Then the tools tier ran 48 checks and failed one, `test_image_version_tags.py`, on two checks.
+The first is ghcr.io serving `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7…` instead of the pinned `68004fb5…`, the
+red already in the base (#794). The second is `sample-app-nginx-1.27.5`'s 404, which ends when the escalated
+`crane tag` runs. Every other check in the test passed, the nginx and tool-pin ones included.
+
+**The live check could not run.** The run's `$KUBECONFIG` (`/var/lib/hecaton/runs/16674/clusters/kubeconfig`) and its
+AWS files are mode 0640, owned by group `hecaton`, and the run's user (hecaton-s4-claude-certkraken, in groups
+hecaton-runs and hecaton-tools) is not in that group. So `kubectl --context watch-it-burn-community get pods -A` and
+the same command on watch-it-burn-private both failed with "permission denied". This is the same fault the
+2026-11-02 #544 entry records, and it is hecaton's to fix (hecaton#508). The read the change owes is a look at the
+pods only: the digest is unchanged, so nothing new is pulled.
