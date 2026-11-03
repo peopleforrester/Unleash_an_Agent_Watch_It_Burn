@@ -13674,3 +13674,7 @@ was read or changed.
 runs once a `-<n>` tag is pinned.
 
 No dependency was added.
+
+**The suites (run 16834, on `ded328a4`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 24m21s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests,
+all green, `verify/test_ghcr_version_tag.py` among them, and `test_image_version_tags.py` passes in the tier.
