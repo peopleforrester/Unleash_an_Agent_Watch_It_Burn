@@ -12543,3 +12543,10 @@ restarts on the checksum), the same command must end `REFUSES 5 OF 5`. Then, on 
 retention filter and `seed`, whose `c3-pii` read-back is the first live test of whether the read-only key may search
 APM spans and whether `@session.id` is the facet Trace Explorer finds the root span by; then Whitney saves the printed
 links as views, and `check` runs the morning of.
+
+**Suite results, run 16717.** On 7847a10, `bash verify/run-e2e-tools.sh` ran 49 checks (the offline suite and 48 tier
+tests) in 22m39s. The offline suite ran 235 tests, all green, `test_stage_traces.py` and `test_input_pii_guard.py`
+among them, and the tier's `test_input_pii_guard_llm_guard.py` printed "The deployed Regex input scanner refuses the
+five PII prompts and passes the workshop's own text". It exits 1 on `test_image_version_tags.py` alone, with the two
+reds staging 382d570 already records in #796's entry and that this change does not touch: the web-terminal tag
+ghcr.io now serves at another digest, and the 404 for `sample-app-nginx-1.27.5` (#814).
