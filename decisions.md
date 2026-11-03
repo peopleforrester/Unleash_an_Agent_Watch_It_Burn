@@ -11265,4 +11265,10 @@ permission it names is the one the pair lacks, and only then is a new read-only 
 new" criterion was written for the draft's route; under the coordinator's note the pair is the one runs were handed on
 2026-11-02, and no key was created, rotated or revoked by this run.
 
+**The suites (run 16653, on 92a8d00).** `bash verify/run-tests.sh`, run as the first half of `bash
+verify/run-e2e-tools.sh`, ran 231 tests and ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces.py` among them,
+and lists `test_dd_traces_live.py` with the live suite. The tools tier ran 46 checks and exits 1 on one,
+`test_image_version_tags.py`: ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...`, not the
+pinned `68004fb5`. That is the tag CI pushed over, open as #815, #816, #823 and #824; nothing here touches an image.
+
 No dependency was added.
