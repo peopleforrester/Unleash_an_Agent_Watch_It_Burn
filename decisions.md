@@ -13001,3 +13001,19 @@ where the pin is `68004fb5`, and answers 404 for `sample-app-nginx-1.27.5`. `tes
 check, "get_weather opens with the live reading for the city": the deployed tool answered "weather service
 unavailable: HTTP Error 503" for Salt Lake City, an outage of the weather service it calls, while the same test's
 direct feed checks passed. The prose gate passed on the three changed files.
+
+## 2026-11-03 · #818 · Run 16786 rebases run 16765's change onto staging `53b2c9c`, keeping #648's PII trace
+
+**Why run 16765 did not land.** Hecaton's rebase onto staging `53b2c9c` stopped on two edit-edit regions of
+`facilitation/kubecon-na-2026-run-of-show.md`. Staging commit `5710655` (#648, the input guard refusing PII) had
+edited the same lines after run 16765's base `12b31cd`: it extended segment 4's "Datadog Challenge 3 tab, before
+the play" bullet with a third saved view, `c3-pii` in Trace Explorer, and it rewrote the Night Before seeding step's
+opening sentence ("Each challenge opens on its trace") to add the PII seed, seven `/chat` requests.
+
+**How each region was resolved.** Segment 4: staging's longer "double duty" bullet is kept whole, the old
+"before the play" bullet is dropped, and the moved "Datadog Challenge 3 tab, after the attack" bullet, between the
+attack and the fix, now ends with staging's `c3-pii` sentence word for word, so the tab shows the same three views as
+on staging. The Night Before step: staging's text is kept, with only its opening clause changed from "opens on its
+trace" to "shows its trace after the presenters' attack and again after its fix". Nothing else in the draft
+differs. No test or script reads either changed passage; `verify/stage_traces.py`'s docstring, now line 15, still
+says "opens on its trace", the followup run 16765 named.
