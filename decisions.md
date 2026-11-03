@@ -11529,3 +11529,13 @@ It creates nothing.
 lists go-otel (`verify/test_datadog_service_map.py` and `docs/weaver-live-check.md`'s `weaver registry live-check`).
 
 No dependency was added beyond the draft's weaver pin, which is the version CI already used.
+
+**The suites, run 16660 (the resume of run 16582).** Run 16582 stopped while it waited on the tools tier. It ran the
+same poll command over and over, and hecaton's loop guard ended the run on the repeats. The resume started the tier
+again and polled with a command that changed each time. The commits above were all made before the tier started.
+`bash verify/run-tests.sh` exits 0 (230 tests). `bash verify/run-e2e-tools.sh` ran 48 checks, the offline suite and
+47 tier tests. `test_weaver_registry_check.py` passed all its checks: weaver 0.24.2 passes `registry check` and
+resolves the chat and cost groups and the `aws.bedrock` member. `test_guard_proxy_go_otel.py` also passed. The tier
+exits 1 on one check, the red already recorded at `c25c221`: `test_image_version_tags.py` finds ghcr.io serving
+`watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where the pin is `68004fb5`. Nothing here builds or
+pushes an image. This run's cluster files were again mode 640, group `hecaton`, so the dry run above is still owed.
