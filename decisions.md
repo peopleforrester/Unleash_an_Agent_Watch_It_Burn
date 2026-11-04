@@ -15301,3 +15301,28 @@ names' Deployments are scaled to zero after 300 s and stay, as every room Joker 
 **The suites (run 16959, at `a55d4363`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m11s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests, `test_deploy_app_reapply_422.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #616 · M7 is the delivery on 2026-11-12; two offline tests stop reaching the live KubeCon pair
+
+**M7.** Issue #616 is milestone M7, "Delivered", of the spec talks/burritobot/001: the KubeCon NA 2026 breakout
+with Whitney Lee runs live on Thursday 2026-11-12. Today is 2026-11-04, so no run can do it yet. The run of show
+still holds the date (`facilitation/kubecon-na-2026-run-of-show.md`, the Delivered row). The issue waits until
+2026-11-13, when a run looks for proof the session ran and closes it with the reading for `kubecon-na-burritobot`.
+
+**What the run found instead.** The offline suite stalled in `verify/test_presenter_student_retired.sh`. Its check
+that `instructors up` never builds a `-student` cluster runs `cmd_instructors up` under event.sh's default
+`WIB_ROSTER_PROFILES=kubecon`. With no selector, or with `both` or `all`, that ends in `cmd_guardrails_link` (#774),
+which the check did not stub. On a dispatched run the `aws` on PATH carries the run's live session, so
+`admin_kubeconfig` wrote real kubeconfigs for watch-it-burn-community and watch-it-burn-private, and
+`guardrails_peer_kubeconfig` polled each for its switch token, 30 tries ten seconds apart, per direction, per call.
+The check had run over 20 minutes when the run stopped it. Neither cluster has the `guardrails-switch` namespace
+yet (read with `kubectl get ns guardrails-switch` on both contexts), so the poll found no token and wrote nothing.
+Once that app syncs, the same check would have written `guardrails-peer` secrets onto both live clusters from the
+offline suite. `run_with_tail` in `verify/test_fleet_apply_failure_exit.sh` runs `instructors up all` the same way.
+
+**Change.** Both stub `cmd_guardrails_link`, as `test_fleet_exit_codes.sh`, `test_cluster_roles.sh` and
+`test_fleet_converge_repairs.sh` already did. Neither test asserts anything about the link: what they read
+(`PROVISION_SPEC`'s names, the exit code with a failed apply) is decided before it. Each now runs in about a second.
+Nothing in fleet.sh changes.
+
+**Left on the cluster.** Nothing: the stopped check wrote nothing to either cluster, and the run made no live change.

@@ -66,7 +66,8 @@ run_process() { # $1: the ERE of clusters whose apply fails
 }
 
 # The same build with the tail running: bootstrap, the console-LB wait, routes and the acceptance pass are
-# stubbed to succeed, as the walkthrough did when it found nothing to walk. The build and its terraform
+# stubbed to succeed, as the walkthrough did when it found nothing to walk. The KubeCon guardrails link is
+# stubbed too: unstubbed it reaches the live pair through the caller's aws session (#616, run 16967). The build and its terraform
 # failures are still the real ones.
 run_with_tail() { # $1: the ERE of clusters whose apply fails
     fresh
@@ -77,6 +78,7 @@ run_with_tail() { # $1: the ERE of clusters whose apply fails
         cmd_routes() { echo "routes ran"; }
         converge_one() { :; }
         cmd_verify() { echo "verify ran"; return 0; }
+        cmd_guardrails_link() { :; }
         cmd_instructors up all
     ' ) >"${T}/out" 2>&1
     # Taken outside: fleet.sh runs under set -e, so a non-zero return ends the shell before any echo.
