@@ -15145,3 +15145,7 @@ guard-proxy's checksum annotation and the Deployments with kubectl):
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py`. A phone was not used: the
 curl above sends the body the chat page builds (`burritbot.html`, the `/chat` fetch), which
 `verify/test_chat_witch_name.py` holds.
+
+**The suites (run 16943, at `6939f4c5`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 24m22s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it,
+`run-tests.sh`, ran 249 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
