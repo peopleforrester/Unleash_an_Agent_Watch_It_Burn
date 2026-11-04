@@ -15396,3 +15396,22 @@ because staging had appended to it. This entry replaces the draft's entry: the d
 **Not yet run on a cluster.** Nothing #583 needs. `fleet.sh converge` on the two clusters still owes the pin's own
 end-to-end path with the fleet states, from a session that has them. It should log no change, since the values
 already match.
+
+**Found on the way: an offline test that reached the live clusters.** `verify/test_presenter_student_retired.sh`
+runs `instructors up` on a sourced fleet.sh with only the provisioning stubbed. On a host with AWS credentials and a
+kubeconfig, which hecaton's cluster runs now have, the rest of `instructors up` ran for real: `guardrails-link` and
+`arm_infra_guardrails` wrote kubeconfigs for both KubeCon clusters, and the offline suite hung in its Kyverno waits.
+That happened in this run and in four other runs on the same host (16962, 16963, 16965 and 16967). At 21:18:38Z one
+of them patched watch-it-burn-private's `restrict-image-registries` from Audit to Deny. Git ships Audit, Argo CD last
+wrote the field on 11-03, and #774 says the KubeCon pair starts with that guardrail off. This run put it back to
+Audit at 21:39:30Z, as the Argo controller, with a JSON-patch test that it still read Deny. Nothing else changed: a
+sweep of Secrets, ConfigMaps, Deployments, policies, namespaces, Applications and ModelConfigs on both clusters found
+no other non-controller write between 21:17Z and 21:35Z. The test now puts failing shims for aws, kubectl, eksctl,
+terraform and helm first on PATH and takes the AWS credentials and kubeconfig out of its env. With this run's live
+credentials sourced, it passes 34 of 34 in 2s.
+
+**The suites.** The first offline run failed. It had to kill that hung test, and `test_docs_current.py` and
+`test_round_names_retired.py` read a decisions.md copy this run had left in `tmp/hecaton/`. Both pass once the
+copy was removed. `bash verify/run-e2e-tools.sh` then ran with the fixed test: its offline suite ran 253 tests and
+printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, and the tier printed `54 checks ran (the offline suite and 53 tier
+tests) in 25m33s` and `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
