@@ -14692,3 +14692,7 @@ kubectl could not open the kubeconfig (hecaton#508). The read-only check meant h
 watch-it-burn-private ...` must end `KUBECON PROBE GREEN` with `c5-on` passing after `guardrails-on`; then
 `python3 verify/stage_traces.py seed burritobot-private.burritobot.co --context watch-it-burn-private ...` must end
 `SEEDED GREEN` with `c1-fixed` passing. Both are the Night Before steps and spend Bedrock calls.
+
+**The suites (run 16897, at `62593b23`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage,
+`bash verify/run-tests.sh`, ran 247 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "54 checks
+ran (the offline suite and 53 tier tests) in 24m04s" and "ALL E2E TOOLS TIER CHECKS GREEN".
