@@ -135,7 +135,8 @@ def swapped_manifests(model_config):
 
 def run_offline_half(manifests):
     """model_pin_check.main() on these manifests with no aws on PATH: it judges the pin and its pricing, prints
-    that, then stops with exit 2 before the first Bedrock call. The stdout is the offline verdict."""
+    that, then returns its missing-tool code (2) before the first Bedrock call. The stdout is the offline verdict.
+    The code is model_pin_check's own, read here as proof the offline half finished; this test never skips on it."""
     out, err = io.StringIO(), io.StringIO()
     saved_cm, saved_path = mpc.committed_manifests, os.environ.get("PATH", "")
     with tempfile.TemporaryDirectory() as empty:

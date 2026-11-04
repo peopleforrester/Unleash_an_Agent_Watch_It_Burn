@@ -14274,3 +14274,10 @@ No dependency was added.
 **The suites (run 16869, on `6d8a4dea`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 25m10s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 245 tests,
 all green, `verify/test_guard_proxy_pin_bound_pricing.py` among them.
+
+**Run 16876: the skip-markers gate.** Run 16869 failed hecaton's skip-markers gate. The gate counts any non-comment
+line matching `exit 2`, and the `run_offline_half` docstring in the new test said `model_pin_check.main()` "stops with
+exit 2" at the missing aws CLI. That line described the code model_pin_check returns. The test
+checks that code (`rc == 2`) as proof the offline half finished, and it skips nothing. Run 16876 reworded the
+docstring to "returns its missing-tool code (2)", which the gate's pattern does not match. The checks are unchanged,
+and the gate's own `count()` reads zero markers in the file.
