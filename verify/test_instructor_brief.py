@@ -115,11 +115,29 @@ check("and the student lab does NOT carry it", "Challenge 6 and Challenge 7" not
 print("== the KubeCon brief has one block per shown beat, each copy-ready ==")
 KUBECON = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
 ROS = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
+TERMINAL = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
+# The literals this file cuts the page and the run-of-show on (#797): a reworded anchor names itself here, rather
+# than reading as a broken check further down.
+_ANCHORS = ([("kubecon.html", KUBECON, f'<span class="n">SEGMENT {n}') for n in range(1, 7)]
+            + [("kubecon.html", KUBECON, '<p class="note">Every challenge runs one pattern:')]
+            + [("the run-of-show", ROS, f"### Segment {n}:") for n in range(1, 7)]
+            + [("the run-of-show", ROS, "## The segments, in order (30 minutes)"),
+               ("the run-of-show", ROS, "| # | Min |")])
+_missing = [f"{where}: {lit!r}" for where, text, lit in _ANCHORS if lit not in text]
+if _missing:
+    print("FAILED: an anchor this test cuts on is gone: " + "; ".join(_missing))
+    sys.exit(1)
 
 # The no-provisioning check reads the page BODY, with its source comments and <script> removed: the comments
 # explain WHY provisioning content is kept off (so they name it on purpose), and the copy helper's own
 # comment mentions the student lab it shares a contract with. Neither is anything a presenter sees.
 _body = re.sub(r"<!--.*?-->", "", KUBECON, flags=re.S)
+
+
+def _before(text: str, first: str, then: str) -> bool:
+    return first in text and then in text and text.index(first) < text.index(then)
+
+
 _body = re.sub(r"<script>.*?</script>", "", _body, flags=re.S)
 
 # Every shown beat is a <article class="beat" data-beat="..." data-segment="...">. Collect the blocks per
@@ -146,10 +164,11 @@ for b in SHOWN_BEATS:
               'class="prompt"' in blk and 'class="cp"' in blk)
         check(f"{b} block {i} has a success marker", 'class="marker"' in blk)
 
-# The toggles, where one applies, on the private terminal, each inside its beat's block (C5, C6 and C7 in
-# segments 2, 4 and 5; the on-topic guard in segment 6). C1, C2, C3 and the off-topic beat have no live toggle on
-# purpose: the Kubernetes controls start armed on the private cluster and the public cluster is wide open.
-BEAT_TOGGLE = {"C6": "guard-input-on", "C5": "guard-rbac-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
+# The toggles, where one applies, on the private terminal, each inside its beat's block: guardrails-on in segment 3's
+# switch beat (#774), C6 and C7 in segments 4 and 5, the on-topic guard in segment 6. C5 has none since the 2026-11-01
+# review (#776): Challenge 1 runs no fix of its own, and its RBAC arms with segment 3's switch. C1, C2, C3 and the
+# off-topic beat have no toggle of their own either: the switch arms all four Kubernetes guardrails at once.
+BEAT_TOGGLE = {"guardrails": "guardrails-on", "C6": "guard-input-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
 for b, cmd in BEAT_TOGGLE.items():
     in_a_block = any(f'class="toggle"' in blk and cmd in blk for blk in beat_blocks.get(b, []))
     check(f"{b} carries its toggle ({cmd}) inside the beat block", in_a_block)
@@ -196,14 +215,19 @@ check("the run-of-show's table has six segments that sum to 30 minutes",
       [n for n, _ in ros_segments] == [1, 2, 3, 4, 5, 6] and sum(m for _, m in ros_segments) == 30)
 check(f"the page has the same segments, in order, with the same minutes (page {page_segments})",
       page_segments == ros_segments)
-check("Challenge 1 (C5) is segment 2, Challenge 2 (C1 C2 C3) segment 3, Challenge 3 (C6) segment 4, "
-      "Challenge 4 (C7) segment 5, the on-topic guard segment 6",
-      [beat_segment.get(b) for b in ("C5", "C2", "C3", "C1", "C6", "C7", "on-topic")]
-      == ["2", "3", "3", "3", "4", "5", "6"])
+check("Challenge 1 (C5) is segment 2, Challenge 2 (C1 C2 C3 and the guardrails switch) segment 3, Challenge 3 (C6) "
+      "segment 4, Challenge 4 (C7) segment 5, the on-topic guard segment 6",
+      [beat_segment.get(b) for b in ("C5", "C2", "C3", "C1", "guardrails", "C6", "C7", "on-topic")]
+      == ["2", "3", "3", "3", "3", "4", "5", "6"])
+# The live off-topic asks moved to segment 1's opening minute of play (#819), so they are not in segment 2.
+check("the off-topic beat is in segment 1, as the run-of-show's segment 2 says",
+      beat_segment.get("off-topic") == "1"
+      and "The live off-topic asks happen in segment 1's opening minute of play now" in " ".join(ROS.split()))
 _order = [m.group(1) for m in re.finditer(r'<article class="beat"\s+data-beat="([^"]+)"', KUBECON)]
-check("the challenges appear in the order shown: C5, then C2 C3 C1, then C6, then C7",
-      all(b in _order for b in ("C5", "C1", "C6", "C7"))
-      and _order.index("C5") < _order.index("C1") < _order.index("C6") < _order.index("C7"))
+check("the challenges appear in the order shown: C5, then C2 C3 C1, then the switch, then C6, then C7",
+      all(b in _order for b in ("C5", "C1", "guardrails", "C6", "C7"))
+      and _order.index("C5") < _order.index("C1") < _order.index("guardrails") < _order.index("C6")
+      < _order.index("C7"))
 _titles = re.findall(r'<span class="n">SEGMENT \d · \d+ min</span> ([^<]+)</h2>', KUBECON)
 check("the headings number the challenges Challenge 1 to 4, in order",
       [h.split(":")[0] for h in _titles if h.startswith("Challenge")] == [f"Challenge {n}" for n in (1, 2, 3, 4)],
@@ -215,10 +239,25 @@ for b, n in (("C5", 1), ("C6", 3), ("C7", 4)):
     check(f"{b} is played on the public bot and fixed on the private bot",
           "public bot" in blk and "private bot" in blk)
     check(f"{b} names its Datadog tab as Challenge {n}", f"Datadog Challenge {n} tab" in blk)
-# Michael, 2026-10-31: RBAC is Challenge 1's only fix, run as guard-rbac-on; the output guard is not a second fix.
-check("Challenge 1 teaches RBAC as its only fix, run with guard-rbac-on, and offers no output guard",
-      "RBAC" in " ".join(beat_blocks.get("C5", [])) and "guard-rbac-on" in " ".join(beat_blocks.get("C5", []))
-      and "guard-output-on" not in " ".join(beat_blocks.get("C5", [])))
+# The 2026-11-01 review (#776): Challenge 1 runs no fix of its own; RBAC arms with segment 3's guardrails-on (#774).
+# The output guard is still not a fix for it (Michael, 2026-10-31).
+_c5 = " ".join(" ".join(beat_blocks.get("C5", [])).split())
+check("Challenge 1 runs no fix: no toggle in its block, no guard-rbac-on, and no output guard",
+      'class="toggle"' not in _c5 and "guard-rbac-on" not in _c5 and "guard-output-on" not in _c5)
+check("Challenge 1 says there is no fix here and that RBAC arms with Challenge 2's guardrails-on",
+      "No fix here (#776)" in _c5 and "RBAC arms with Challenge 2's <code>guardrails-on</code>" in _c5)
+check("the stage no longer runs guard-rbac-on anywhere on the page", "guard-rbac-on" not in KUBECON)
+check("Challenge 1 ends on the OWASP Top 10 for LLMs, naming LLM02 and LLM06, as the run-of-show's segment 2 does",
+      'href="https://genai.owasp.org/llm-top-10/"' in _c5 and "<b>LLM02</b> Sensitive Information Disclosure" in _c5
+      and "<b>LLM06</b> Excessive Agency" in _c5 and "genai.owasp.org/llm-top-10/" in ROS)
+# Each challenge's trace comes right after the presenters' live attack and before its fix (#818).
+for b, n, fix in (("C5", 1, None), ("C6", 3, "guard-agency-on"), ("C7", 4, "guard-mcp-on")):
+    blk = " ".join(" ".join(beat_blocks.get(b, [])).split())
+    tab = f"Datadog Challenge {n} tab, after the attack"
+    check(f"{b}'s private-bot attack marker comes before its trace, Datadog Challenge {n} tab, after the attack",
+          _before(blk, "Success marker, private bot (", tab))
+    if fix:
+        check(f"{b}'s trace comes before its fix, {fix}", _before(blk, tab, fix))
 check("Challenge 3 runs least privilege as guard-agency-on, and admission is not one of its fixes (#775)",
       "guard-agency-on" in " ".join(beat_blocks.get("C6", []))
       and "guard-admission-on" not in " ".join(beat_blocks.get("C6", [])))
@@ -261,6 +300,42 @@ check("Challenge 1's cut-table row runs no fix in segment 2, has RBAC arrive wit
 check("Challenge 2's cut-table row has guardrails-on turn on all four layers, not name them untoggled (#847)",
       "`guardrails-on`" in _cut2 and all(w in _cut2 for w in ("RBAC", "Kyverno", "KubeArmor", "NetworkPolicy"))
       and "not toggled" not in _cut2)
+
+print("== Challenge 2 starts with the four Kubernetes guardrails off and ends on guardrails-on (#774, #821) ==")
+_seg3 = " ".join(KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0].split())
+_ros_s3 = " ".join(ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0].split())
+_sw = " ".join(" ".join(beat_blocks.get("guardrails", [])).split())
+check("the page no longer says the Kubernetes controls are armed from the start",
+      "armed from the start" not in KUBECON and "every Kubernetes control armed" not in KUBECON)
+check("the setup says both clusters start with the four Kubernetes guardrails off, as the run-of-show does",
+      "Both clusters start with the four Kubernetes guardrails" in " ".join(KUBECON.split())
+      and "Both clusters start with the four Kubernetes guardrails present and off" in _ros_s3)
+for b in ("C2", "C3", "C1"):
+    blk = " ".join(" ".join(beat_blocks.get(b, [])).split())
+    check(f"{b}'s marker lands on either bot before the switch and is stopped after guardrails-on",
+          _before(blk, "Before the switch, on either bot", "After <code>guardrails-on</code>"))
+check("Whitney's attack and its trace come after the three asks and before the switch, and name #843",
+      _before(_seg3, 'data-beat="C1"', "Whitney's attack, then its trace")
+      and _before(_seg3, "Whitney's attack, then its trace", 'data-beat="guardrails"') and "(#843)" in _seg3
+      and "#843" in ROS)
+check("the switch beat runs guardrails-on, ends on its own last line, and the room retries Challenges 1 and 2",
+      'class="toggle"' in _sw and "guardrails-on" in _sw and 'class="marker"' in _sw and 'class="fallback"' in _sw
+      and "all four Kubernetes guardrails are on." in _sw and "the room retries Challenges 1 and 2" in _sw
+      and "all four Kubernetes guardrails are $st." in TERMINAL)
+check("the run-of-show's segment 3 runs the same switch and names it guardrails-on",
+      "> **Kubernetes guardrails on**" in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
+      and "That command is `guardrails-on`" in _ros_s3)
+check("the switch's RBAC fallback reads the Role, which names the one Secret",
+      "-n agent get role workshop-agent -o yaml" in _sw)
+_handoffs = re.findall(r'<p class="note"><b>Hand-off:</b> (.*?)</p>', KUBECON, re.S)
+for n, line in ((2, "Regarding excessive agency, there are a lot of Kubernetes guardrails you should already have"),
+                (3, "Those were the bot doing what it was asked. Next, the bot doing what a stranger asked.")):
+    sec = " ".join(KUBECON.split(f'<span class="n">SEGMENT {n}', 1)[1].split(f'<span class="n">SEGMENT {n + 1}', 1)[0]
+                   .split())
+    ros_sec = " ".join(ROS.split(f"### Segment {n}:", 1)[1].split(f"### Segment {n + 1}:", 1)[0].split())
+    check(f"segment {n}'s hand-off is the run-of-show's", line in sec and line in ros_sec)
+
+print("== the OWASP close (#687, #842, #849) ==")
 _seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
 _llm = ("LLM01</b> Prompt Injection", "LLM02</b> Sensitive Information Disclosure", "LLM03</b> Supply Chain",
         "LLM04 Data and Model Poisoning", "LLM05 Improper Output Handling", "LLM06</b> Excessive Agency",
@@ -300,10 +375,6 @@ _c6 = " ".join(" ".join(beat_blocks.get("C6", [])).split())
 _premise = _page_seg3.split('<p class="premise">', 1)[1].split("</p>", 1)[0] if '<p class="premise">' in _page_seg3 else ""
 
 
-def _before(text: str, first: str, then: str) -> bool:
-    return first in text and then in text and text.index(first) < text.index(then)
-
-
 check("the run-of-show's Challenge 3 row puts guard-agency-on before guard-input-on",
       _before(_ros_row3, "`guard-agency-on`", "`guard-input-on`") and "guard-admission-on" not in _ros_row3)
 check("the run-of-show's C6 fix says admission is not one of them, shows the Forbidden, then guard-input-on",
@@ -340,10 +411,14 @@ _glance = re.search(r'<table class="glance">(.*?)</table>', KUBECON, re.S)
 check("a glance table lists the six segments in order",
       _glance is not None
       and re.findall(r"<tr><td>(\d)</td>", _glance.group(1)) == ["1", "2", "3", "4", "5", "6"])
-check("it names each challenge's toggle",
+check("it names each challenge's toggle, and Challenge 1 has none",
       _glance is not None and all(t in _glance.group(1) for t in
-                                  ("guard-rbac-on", "guard-agency-on", "guard-input-on", "guard-mcp-on",
-                                   "guard-topic-on")))
+                                  ("guardrails-on", "guard-agency-on", "guard-input-on", "guard-mcp-on",
+                                   "guard-topic-on"))
+      and "guard-rbac-on" not in _glance.group(1) and "none: no fix here" in _glance.group(1))
+_glance_min = [(int(n), int(m)) for n, m in re.findall(r"<tr><td>(\d)</td><td>(\d+)</td>", _glance.group(1))] \
+    if _glance else []
+check(f"its minutes are the run-of-show's (glance {_glance_min})", _glance_min == ros_segments)
 _visible = re.sub(r"<details.*?</details>|<!--.*?-->|<style>.*?</style>|<script>.*?</script>", "",
                   KUBECON, flags=re.S)
 check("every fallback is folded", '<div class="fallback">' in KUBECON
@@ -354,9 +429,12 @@ check("every prompt and toggle stays visible",
       KUBECON.count('<div class="prompt"') == _visible.count('<div class="prompt"')
       and KUBECON.count('<div class="toggle"') == _visible.count('<div class="toggle"'))
 # 2,100 since #773: Challenge 2's ask is the 2026-11-01 Tron prompt and its follow-up, word for word (83 words,
-# where the promo-mascot prompt was 41), and its marker was cut to one line to make room.
-check("the visible page is under 2,100 words",
-      len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split()) < 2100)
+# where the promo-mascot prompt was 41), and its marker was cut to one line to make room. 2,300 since #844: the
+# 2026-11-01 flow adds a visible cue per challenge for the presenters' attack and its trace, Challenge 1's close on
+# the OWASP page, Challenge 2's before-and-after markers and its guardrails-on switch beat; the story, notes and
+# fallbacks added with them are folded.
+_words = len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split())
+check(f"the visible page is under 2,300 words ({_words})", _words < 2300)
 
 print("== the run-of-show links the page ==")
 check("the run-of-show drives from /kubecon", "/kubecon" in ROS)

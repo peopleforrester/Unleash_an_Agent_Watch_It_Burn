@@ -14427,3 +14427,61 @@ suite and 52 tier tests) in 24m30s" and "ALL E2E TOOLS TIER CHECKS GREEN".
 tools tier ran. They touch none of this change's files except PROGRESS.md and decisions.md, where git merged both
 sides with no conflict, so the branch was rebased onto 5088a28b and `bash verify/run-tests.sh` run once more: 246 tests ran, all green
 ("ALL OFFLINE RENDER-GATE TESTS GREEN"). The tools tier was not run a third time; its last green run is the one above.
+
+## 2026-11-04 · #844 · The /kubecon page follows the run-of-show's 2026-11-01 flow: the trace after the attack, no Challenge 1 fix, `guardrails-on` in Challenge 2
+
+**The spec.** #844 asks for `gitops/ai-layer/web/kubecon.html` and its tests to follow the run-of-show's segments 2
+to 5 as #776's children left them (#818 the trace after the live attack, #819 the prompt wall at set moments, #820 no
+fix in Challenge 1, #821 segment 3 rebuilt around #774's `guardrails-on`, #822 the tables). #822 changed only the
+page's two minute chips. `verify/prior-drafts.sh 844 origin/staging` printed NONE and the issue's comments name no
+earlier commits, so nothing was reused.
+
+**The page.** The pattern note keeps #848's words (challenge slide, hint, attack, trace, fix, keeps trying) and adds
+that Challenge 1 has no fix of its own. The glance table's row 2 reads "none: no fix here", row 3 names `guardrails-on` on both clusters,
+and its minutes for rows 2 and 3 (still 6 and 4 after #822) now read 5 and 5. The setup box says both clusters start
+with the four Kubernetes guardrails present and off, that `guardrails-on` in Challenge 2 arms them on both, and that
+the night before runs `guards-off` and `guardrails-off`; its Datadog note says the trace comes right after each live
+attack and that Challenge 2 has no seed yet (#843). Segment 2 takes the two-step tee-up, Whitney's attack on the
+private bot with its own marker, the Challenge 1 tab after it, "No fix here (#776)", and the close on the OWASP Top 10
+for LLM Applications naming LLM02 and LLM06; `guard-rbac-on`, its marker and its fallback leave the page, and the
+Role check moves to segment 3's switch. The off-topic beat moves to segment 1, where the run-of-show's segment 2
+says the live off-topic asks now happen. Segment 3's story follows the six steps; the C2, C3 and C1 markers read
+"before the switch, on either bot" and "after `guardrails-on`"; a control names Whitney's attack and its trace; and
+a new beat, `data-beat="guardrails"`, carries the `guardrails-on` toggle, the line it ends on ("all four Kubernetes
+guardrails are on.", from `_guardrails` in `gitops/ai-layer/web-terminal/entrypoint.sh`), the room's retry and its
+fallbacks (`fleet.sh guardrails-link`, rerun, the Role read). Segments 4 and 5 gain a private-bot attack marker with
+the Datadog tab "after the attack" ahead of the fix, and their after-fix markers name the tab's second view. The
+hand-offs for segments 2 and 3 are the run-of-show's. The footer names `guardrails-on` / `guardrails-off` and drops
+`guard-rbac-on`, which the stage no longer runs; the Night Before probe still applies its Role (`verify/kubecon_probe.py`),
+which this change leaves alone.
+
+**The run-of-show is not changed here.** Run 16863's draft also rewrote the two stale rows of "Challenges shown
+live, and challenges cut" and the page's pattern line. Staging did both first, as #847 (`9ddb3e93`) and #848
+(`54272c2a`), and run 16863 failed its rebase on those regions (run 16888 picked it up). Run 16888 took staging's
+rows and pattern line, and the test checks #847 and #848 wrote for them, and dropped the draft's own versions.
+
+**The tests.** `verify/test_instructor_brief.py` drops "Challenge 1 teaches RBAC as its only fix, run with
+guard-rbac-on" (#848 had already replaced "the trace comes before the room plays") and checks instead: no toggle, no `guard-rbac-on` and no output guard in Challenge 1, its "No fix
+here" line and its OWASP close; for C5, C6 and C7, the private-bot attack marker before the "after the attack" trace,
+and the trace before the fix; segment 3's start state, its before-and-after markers, Whitney's attack before the
+switch, and the switch beat's toggle, marker and fallback, its last line read from the terminal script; the off-topic
+beat in segment 1; the glance table's toggles and minutes against the run-of-show's; segments 2 and 3's hand-offs.
+The literals it cuts the page and the run-of-show on are checked first and named when missing (#797). Against the
+staging page, 26 of the draft's checks failed; against this one, all pass.
+
+**The word limit moves from 2,100 to 2,300.** The visible page (folds, comments, style and script removed) was 2,018
+words at the draft's base and 2,238 after it; on staging `c2636687` with #848's longer pattern line it is counted
+again in run 16888's record below. Each challenge gains a visible cue for the presenters' attack and its trace, Challenge 1 its
+OWASP close, and Challenge 2 its before-and-after markers and the switch beat; the stories, notes and fallbacks that
+came with them are folded, and the visible lines were cut once to fit. The test's comment says why, as #773's did.
+
+**Live check (run 16863): not run.** `/var/lib/hecaton/runs/16863/clusters/env` and `clusters/kubeconfig` are mode
+0640, owner and group `hecaton`, and this run's user, `hecaton-s4-claude-certkraken`, is not in that group: sourcing
+the env printed "Permission denied" (hecaton#508, as in runs 16840 and 16851). The check would have read the console
+ConfigMap's `kubecon.html` on both clusters, still the staging page, and run `guardrails-on` then `guardrails-off` in
+the private terminal to see its last line.
+
+**Not yet run on a cluster:** once this is promoted and Argo CD syncs ai-layer, `/kubecon` on
+`burritobot-private.burritobot.co` shows segment 2 with no toggle, segment 3 with the `guardrails-on` beat, and the
+iPad sheet (`/kubecon?sheet=1`) with the off-topic asks under segment 1; `verify/test_kubecon_prompt_sheet_e2e.py`
+holds the sheet offline.
