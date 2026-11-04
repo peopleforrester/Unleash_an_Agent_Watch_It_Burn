@@ -15333,3 +15333,7 @@ under 2 seconds, 35 checks passing.
 
 **Left on the clusters.** Nothing. Neither cluster has a `guardrails-switch` namespace (`kubectl get ns`, both
 contexts, 2026-11-04), so no token was found and the link wrote no `guardrails-peer` Secret.
+
+**The suites (run 16968, at `050efe09`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m38s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
+tests, `test_presenter_student_retired.sh` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
