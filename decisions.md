@@ -14052,3 +14052,27 @@ with numbered commands of up to nine minutes each.
 live half (the script's instance-identity-document output seen on `watch-it-burn-community` at hop
 limit 2, and `IMDS: BLOCKED` on a fresh attendee cluster) is already tracked under "Not yet run on a
 cluster" in `challenges/imds-node-creds/FACILITATOR.md` and is unchanged by this run.
+
+## 2026-11-04 · fix · #837 · the gate's red test was the guard-proxy repin, and the suites now read the pinned submodule
+
+Run 16845 ended failed at hecaton's tests gate: `bash verify/run-tests.sh` failed `test_weaver_guard_proxy_spans.py`
+with exit 1, although that run's own suite had gone green. The prose change for #837 was not the cause. The test fails
+on the staging base, a65f748d, with the draft's commits left out. That commit repinned guard-proxy to c2eb4cf2, which
+brings guard-proxy-agenticburn#38: the cost gauge now yields one `Observation(usd, {...})` per model instead of a single
+`Observation(_cost["usd"], {...})`. The test found the attribute dict with a regex on the `_cost["usd"]` literal, so it
+found nothing and failed three checks. The registry was already right: `metric.witb.guard_proxy.cost` declares exactly
+`gen_ai.request.model` and `gen_ai.provider.name`, which both shapes observe.
+
+- The test fix is staging's, not this run's. Run 16854 wrote its own fix to the regex, but abeb41b9 (#839) fixed the
+  same regex on staging first, to read the attribute dict of the one `yield Observation(<value>, {...})`. The two
+  collided when hecaton rebased run 16854, and it ended failed (rebase-conflict). Run 16870 rebased the branch onto
+  staging, took staging's version of the test and dropped its own. All of the test's checks pass against c2eb4cf2.
+- Why 16845 saw green: run 16832 committed the draft at 00:09 +0100, before the repin (01:06 +0100), and 16845 took
+  over that workspace. `verify/ensure-submodules.sh` checked out a submodule only when it was uninitialised (`-` in
+  `git submodule status`), not when it sat at another commit (`+`), so most likely the suite read the old proxy.py.
+  The script now also moves a `+` submodule to its pin. `verify/test_ensure_submodules.sh` builds a local superproject
+  and checks three cases: a submodule moved off its pin is put back, a fresh clone gets its submodule, and a
+  submodule at its pin is left alone. It fails 1 check against the old script and passes against the new one.
+
+The draft's two commits (839dca3d, 70462af9 on `origin/agent/837-16832`) were cherry-picked unchanged:
+`verify/draft-drift.sh` said staging had touched none of their six paths.
