@@ -14317,3 +14317,7 @@ Regex the 2-hour lab still uses, so it stays as is. `judge_c7_chained` is read b
 **Not yet run on a cluster.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
 watch-it-burn-private`, whose `c7-off` beat now fails a redacted reply. It spends model calls and flips the guards,
 and nothing in this change alters what reaches the cluster, so the next admin probe run covers it.
+
+**The suites (run 16882, on `19a6573c`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 25m05s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`; the offline suite inside it ran 245 tests
+and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
