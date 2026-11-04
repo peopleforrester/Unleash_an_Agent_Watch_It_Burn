@@ -15673,3 +15673,7 @@ unchanged; this entry is the only change.
 
 **Not yet run on a cluster.** Nothing for this entry: every check above ran on watch-it-burn-private. The proxy.py
 comment reaches the cluster with the pin move.
+
+**The suites (run 17099, at `eb63fd61` on staging `949fbd17`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the
+offline suite and 53 tier tests) in 26m37s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite
+inside it ran 251 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
