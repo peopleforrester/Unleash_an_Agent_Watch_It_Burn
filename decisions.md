@@ -14713,3 +14713,43 @@ already passed from outside on both clusters under both domains. Nothing is now 
 pod's in-cluster call to `guard-proxy:8080/toggle` stays open on purpose, as the issue says: it is the mesh challenge
 candidate in `docs/research/2026-10-24-istio-ambient-evaluation.md` section 2.1, and closing it is Michael's call,
 not part of #520.
+
+## 2026-11-04 · #815 · web-terminal-ttyd-1.7.7 is on its signed pin, and a test holds every workflow to the tag script
+
+**What #815 asked.** Put `watch-it-burn:web-terminal-ttyd-1.7.7` back on a signed, pinned digest (re-sign and repin
+the rebuilt `d6acd503`, or put `68004fb5` back on the tag), make the build refuse to push over an existing
+web-terminal-ttyd-<v> tag, and check build-workshop-mcp the same way.
+
+**Already on staging.** `bash verify/prior-drafts.sh 815 origin/staging` printed NONE: run 16679's draft
+(`origin/agent/815-16679`, which ended on a rebase conflict) is followed on staging by later work that does what it did.
+#816 (`e33a0fe5`) made the workflow's push step `scripts/ghcr_version_tag.py`, which pushes a build only to a tag ghcr.io
+lacks and puts a pinned tag that moved back on its pin. #824 (run 16781) checked that CI put the tag back on
+`68004fb5` and that its signature verifies. #838 (`63ca0ccf`) sends a rebuild of new source under the same ttyd to
+`web-terminal-ttyd-<v>-<n>`. So no draft is ported, no digest is re-signed and no pin moves: the pins in `images.lock`
+and `gitops/ai-layer/resources.yaml` stay `sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf`.
+
+**What this run adds.** `verify/test_workflow_registry_writes.py` (offline). `test_ghcr_version_tag.py` holds the two
+workflows that call the script. This one reads every step of every file in `.github/workflows` and fails on any other
+registry write: build-push-action or bake-action with `push` not false or a registry output, `docker push`,
+`docker build --push`, `imagetools create`, crane, skopeo, oras, regctl, podman or buildah writes, a push action, or a
+reusable workflow it cannot read. A workflow that holds `packages: write` or `GHCR_TOKEN` must call the script. The
+checker is first run on fifteen sample workflows the test writes itself, one per write, and on a load-only build that
+must pass. The issue's build-workshop-mcp has no workflow in this repo: `workshop-mcp-mcp-1.29.1` is pushed by hand,
+so no CI run can move it. If a workflow for it is added, this test fails until its push goes through the script.
+
+**Live checks run (run 16932, 2026-11-04).**
+- An anonymous HEAD of `watch-it-burn:web-terminal-ttyd-1.7.7` on ghcr.io answers 200 with `docker-content-digest:
+  sha256:68004fb5...`, the pin. `workshop-mcp-mcp-1.29.1` answers `sha256:9a26c18c...`, its pin.
+- The signature: the `sha256-68004fb5....sig` manifest's layer is the cosign payload naming `docker-manifest-digest`
+  `sha256:68004fb5...`, and its `dev.cosignproject.cosign/signature` annotation checks against that payload with
+  `openssl dgst -sha256 -verify policies/cosign/watch-it-burn.pub` ("Verified OK"), the key
+  `policies/kyverno/verify-image-signatures.yaml` carries.
+- ghcr.io's tag list has `web-terminal-ttyd-1.7.7-1` next to `web-terminal-ttyd-1.7.7`: that is #838's next free tag
+  for new source, and the pinned tag did not move. The last five build-web-terminal runs (staging and main, up to run
+  41756193908 on 2026-11-04 01:45 UTC) concluded success. Their logs were not read: this run's `gh` refuses `--log`.
+- The cluster reads did not run: `clusters/kubeconfig` in this run's directory is mode 640, owner and group `hecaton`,
+  and this run's user is not in that group, so `kubectl --context watch-it-burn-community` (and `-private`) fails with
+  "permission denied" (hecaton#508). Clusters pull the image by digest, so the tag's move never reached them.
+
+**Not yet run on a cluster.** Nothing this change adds runs on a cluster. The pod image read on both clusters
+(`kubectl get pods -A` for web-terminal containers, imageID `@sha256:68004fb5...`) waits on hecaton#508.
