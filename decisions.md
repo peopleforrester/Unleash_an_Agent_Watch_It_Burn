@@ -14826,14 +14826,14 @@ reads the identity script's case arms, so either file changing breaks the beat's
 note on Michael's Gmail sign-in and Google consent, which belongs to saving the view (the next child), and its claim
 that Datadog's API cannot save the view, which this run did not check.
 
-**Held offline.** `verify/test_instructor_brief.py` has 22 new checks in the showcase beat: the query, the link (as
+**Held offline.** `verify/test_instructor_brief.py` has 22 new checks on beat 3: the query, the link (as
 `stage_traces.llmobs_url` builds it, and its `query` parameter equal to the typed query), the org, the saved view, the
 column, the warning, the per-cluster names against the identity script, the three gaps, the wall, the scrub's
 placeholders against `gitops/otel-collector/values-burn.yaml`, and no `kube_cluster_name` or `service:burritobot` query
 left. Against the brief before this change, 16 of them fail.
 
-**Not yet run on a cluster.** This run's `clusters/` env file was unreadable (permission denied), so nothing was read
-in Datadog. Signed in to Whitney's sandbox org:
+**Not yet run on a cluster.** Neither run 16454 nor run 16933 could read its `clusters/` session (see the port note
+below), so nothing was read in Datadog. Signed in to Whitney's sandbox org:
 1. The link fills in the query: open the brief's link and confirm Agent Observability's search bar holds
    `ml_app:burritobot k8s.cluster.name:burritobot-public` and the list is filtered by it.
 2. guard-proxy's root span carries the query's cluster tag: send a Community chat
@@ -14841,3 +14841,24 @@ in Datadog. Signed in to Whitney's sandbox org:
    its row and confirm the root span itself (`POST /chat`, service `burritobot`) carries
    `k8s.cluster.name:burritobot-public`, and that the CONTENT column's INPUT is the chat's prompt.
 3. The `service:burritobot-agent` and `generate_content` rows show the system prompt in their input, as the warning says.
+
+**Ported by run 16933 onto staging `137dc650`.** Run 16454 wrote the entry above and the change on staging `858ffafb`; it
+ended failed (validation) with the E2E tools tier red on `test_image_version_tags.py`, the moved web-terminal tag, which
+#815 has since fixed on staging. `verify/prior-drafts.sh 791 origin/staging` named its commit `7b5c89c1` as the draft to
+start from, with two edits in place: `f4065986` (#837) reworded the brief's Challenge 8 cloud-sibling beat, and
+`30cf2e68` (#853) added a K02 check to the OWASP close in `verify/test_instructor_brief.py`. Neither touches beat 3 or
+its checks, so the commit was cherry-picked unchanged, with decisions.md kept as both sides' appends. On staging
+`137dc650`, `verify/stage_traces.py` still sets `ML_APP = "burritobot"`, `ROOM_CLUSTER = "burritobot-public"` and
+`PRESENTER_CLUSTER = "burritobot-private"`, and `infra/datadog-cluster-identity.sh` keeps the case arms the test reads.
+`python3 verify/test_instructor_brief.py` passes, and with the brief put back to `137dc650`'s, 16 checks fail, the same
+16 run 16454 counted. This run's record of the suites follows in its own entry.
+
+The live check was tried again and could not run: `$HECATON_CLUSTER_ENV`, `aws-credentials` and `$KUBECONFIG` under
+`/var/lib/hecaton/runs/16933/clusters/` are mode 640, owner and group `hecaton`, and this run's user
+(`hecaton-run-claude-certkraken`) is not in that group, so sourcing the env file failed with permission denied and the
+Datadog key in Secrets Manager could not be read. That is hecaton#508's fault, named in the run's report. What needs no
+session was read: on 2026-11-04 at 17:09 UTC `https://prompts.burritobot.co/healthz` answered 200, `ok: true`, with
+`attackme` and `burritobot-private` both enabled and `ok`, 500 entries, so the beat's projector feed is up.
+The prose gate (`verify/prose_gate.py` with hecaton's scanner) fails run 16454's entry on one word, `showcase` in its
+"Held offline" line, which the gate lists as an LLM-favorite verb that decisions.md, already reading `major`, cannot add;
+that line now says "on beat 3". The word stays only in the test's Python, which the gate does not read.
