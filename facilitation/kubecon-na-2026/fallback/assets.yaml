@@ -66,7 +66,7 @@ screenshots:
   - segment: 3
     file: screenshots/03-5-ceo-forbidden.png
     caption: "After the switch, Challenge 1 again: the scoped Role keeps the CEO's record out of reach."
-    capture: { chat: ceo-gift-basket, cluster: private, toggle: guardrails-on, controls: { infra.rbac_scoped: true } }
+    capture: { chat: ceo-gift-basket, cluster: private, toggle: guard-rbac-on, controls: { infra.rbac_scoped: true } }
   - segment: 4
     file: screenshots/04-1-hc666-joker.png
     caption: "Challenge 3: an innocent ticket question, and the ticket's hidden paragraph deploys a Joker."
