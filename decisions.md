@@ -15538,3 +15538,138 @@ The one red was `test_dispatched_runs_cause_comment.py`: GitHub answered its ano
 HTTP 403, "0 anonymous requests left this hour", since every run on the host shares the one anonymous quota. Run
 again alone once the quota had refilled, the test passed all its checks. A follow-up asks for that read to use a
 token, so the host's other runs cannot turn it red.
+## 2026-11-04 · #382 · The agent subtree hangs from one root on watch-it-burn-private: the collector was dropping the hop, and its fix is live
+
+**Which of the three causes.** The third: the collector dropped the spans. The config is live on the pod, and the
+gateway exports without error. The cause was found and fixed in the repo before this run, by #320 (decisions.md
+2026-10-30, "One interaction is one root again") and by 3ef036a6 and e0452cbc (#703, #709, 2026-10-30).
+`filter/drop_noise` cut the chain in three places, each rule added for its own noise: every gateway span except
+`tools/call` (#265), every burritobot-agent HTTP verb (#286), and every `a2a.*` span (#264). So the parent the
+2026-09-08 measurement could not find was most likely not agentgateway's. a2a-sdk's request handler span, then the
+parent of ADK's `invocation`, was dropped by the third rule, with the agent's own server span and the gateway's span
+above it gone too. The issue's reading, that the gateway mints a span and never exports it, does not hold: the
+gateway exported it and the collector threw it away. What this run adds is the live evidence below, read on
+watch-it-burn-private (Datadog names it `burritobot-private`) at staging `7210cbb8`, which Argo CD reports synced on
+`ai-layer`, `ai-layer-otel` and `lab-bootstrap`.
+
+**Cause 1, config not live on the pod: ruled out.** The pod mounts ConfigMap `agent/agentgateway-config` at
+`/etc/agentgateway` and runs `-f /etc/agentgateway/config.yaml`. The image has no shell or `cat`, so the running
+config was read from the gateway's admin port.
+
+    kubectl --context watch-it-burn-private -n agent port-forward pod/agentgateway-b49f45688-vlkvv 25000:15000
+    curl -s localhost:25000/config_dump   # .config.tracing
+    {"endpoint": "http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318",
+     "headers": {}, "protocol": "http", "fields": {"remove": [], "add": {}},
+     "random_sampling": "true", "client_sampling": null, "path": "/v1/traces"}
+
+The live ConfigMap's `config.yaml` compared equal to the one in `gitops/ai-layer/agentgateway.yaml` (a Python
+compare of the two strings printed `True`). Image `cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aaf...`,
+pod started 2026-11-04T21:14:26Z, 0 restarts.
+
+**Cause 2, export failing: ruled out.**
+
+    kubectl --context watch-it-burn-private -n agent logs agentgateway-b49f45688-vlkvv -c agentgateway \
+      | grep -ciE "otlp.*(error|fail)|export.*(error|fail)|opentelemetry.*(error|fail)"
+    0
+
+The log's only tracing lines are the startup echo of the endpoint and five copies of
+`warn types::local config.tracing is deprecated; migrate to frontendPolicies.tracing`, a follow-up below. The
+collector refuses nothing, and logged no error or warning in the hour before the check:
+
+    kubectl --context watch-it-burn-private -n monitoring port-forward pod/otel-collector-opentelemetry-collector-agent-cjf7r 28888:8888
+    curl -s localhost:28888/metrics | grep -E '^otelcol_(receiver_accepted_spans|receiver_refused_spans|processor_filter|exporter_sent_spans)'
+    otelcol_exporter_sent_spans{exporter="datadog"} 457
+    otelcol_exporter_sent_spans{exporter="debug"} 577
+    otelcol_exporter_sent_spans{exporter="otlp_grpc/tempo",...} 457
+    otelcol_exporter_sent_spans{exporter="otlp_http/llmobs",...} 120
+    otelcol_processor_filter_spans_filtered{filter="filter/drop_noise"} 32072
+    otelcol_processor_filter_spans_filtered{filter="filter/llmobs_one_root"} 337
+    otelcol_receiver_accepted_spans{receiver="otlp",transport="http"} 32529
+    otelcol_receiver_refused_spans{receiver="otlp",transport="http"} 0
+
+The collector's own counters are not split by service. The split comes from the `span_metrics` connector, which
+counts what leaves the traces pipeline after `filter/drop_noise`, read from Prometheus over the hour before
+21:50Z:
+
+    kubectl --context watch-it-burn-private -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 29090:9090
+    query: sum by (service_name, span_name, span_kind) (increase(traces_span_metrics_calls_total{service_name=~"burritobot.*"}[1h]))
+    burritobot-gateway | POST /*                                        | SPAN_KIND_SERVER | 86.5
+    burritobot-gateway | POST workshop-agent.agent.svc.cluster.local:8080 | SPAN_KIND_CLIENT | 86.5
+    burritobot-agent   | POST /                                         | SPAN_KIND_SERVER | 86.5
+    burritobot-agent   | invocation                                     | SPAN_KIND_INTERNAL | 13.2
+    burritobot-gateway | tools/call                                     | SPAN_KIND_SERVER | 21.4
+
+Every A2A hop's gateway server span, gateway client span and agent server span passes the filter in step.
+
+**Cause 3, the collector dropping it: the cause, fixed and live.** The live ConfigMap
+`monitoring/otel-collector-opentelemetry-collector-agent` carries the gateway rule with both exemptions, as
+`gitops/otel-collector/values.yaml` has it:
+
+    IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$")
+      and not IsMatch(name, "^tools/call") and not attributes["server.port"] == 3000
+      and not attributes["agentgateway.outbound.subtype"] == "Http"
+
+`verify/test_collector_one_root_e2e.py` (tools tier) reproduces the orphan against the rules before #320 and passes
+on these.
+
+**One interaction, from Tempo.** `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passed every check
+on trace `431c6b673e964041ae829f36c94fb4d0`: one root, guard-proxy's POST /chat; the gateway's A2A span in it; the
+agent's server span under the gateway's outbound span; `invocation` under the agent's server span; no a2a-sdk span.
+
+**One interaction, from Datadog.** A one-shot pod (`verify/probe_pod.py`'s manifest, deleted after) sent "What is
+the weather in Portland Oregon right now?" to guard-proxy's /chat at 2026-11-04T21:45:16Z with no traceparent; HTTP
+200 at 21:45:21Z. Its trace is `f812bac9eb130031ec1bcab88912b999`, found with `POST /api/v2/spans/events/search`,
+query `service:burritobot kube_cluster_name:burritobot-private` over 21:45 to 21:46, then read whole with query
+`trace_id:f812bac9eb130031ec1bcab88912b999` (keys from `watch-it-burn/datadog`, read by
+`fleet_monitors.read_keys`). 38 spans, all `kube_cluster_name:burritobot-private`, one with `parent_id` 0, and no
+span names a parent that is absent. The chain from `invocation` to the root, each line span id, parent, service,
+operation and resource:
+
+    10378512556121357911 parent=9552193761110598583  burritobot-agent   Internal            invocation
+    9552193761110598583  parent=1050386436959867708  burritobot-agent   http.server.request POST  (kind server)
+    1050386436959867708  parent=5641787522775155451  burritobot-gateway http.client.request POST  (kind client, agentgateway.outbound.subtype Http, pod agentgateway-b49f45688-vlkvv)
+    5641787522775155451  parent=6539690554994746129  burritobot-gateway http.server.request POST  (kind server, server.port 3000, pod agentgateway-b49f45688-vlkvv)
+    6539690554994746129  parent=410736044417202455   burritobot         http.client.request POST  (guard-proxy)
+    410736044417202455   parent=16154966240781944036 burritobot         http.client.request POST  (guard-proxy)
+    16154966240781944036 parent=254549191282896349   burritobot         Internal            chat
+    254549191282896349   parent=0                    burritobot         http.server.request POST  (guard-proxy, the root)
+
+`invocation` names the agent's server span, which names the span agentgateway exported for its call to the agent.
+Under `invocation`: `invoke_agent workshop_agent`, two `generate_content` calls, and `execute_tool (merged)` with
+`execute_tool get_weather` and `execute_tool read_internal_config` beneath it, each walked to the same root. The
+other six guard-proxy POSTs in the trace each have their own gateway server span, gateway client span and agent
+server span, all under the root. The same turn also shows as trace `aecc9f7b686c6a5a1611e7ca97bf7134`, 8 spans, one
+root: that is Agent Observability's copy (#746), with `invocation` straight under guard-proxy's span by design.
+
+**The proxy.py comment is in guard-proxy-agenticburn, not here.** The outer-span comment and the do_POST comment
+above it (which calls agentgateway upstream of the proxy) are in that repo's `proxy.py`, at the pinned `c2eb4cf`,
+which is also its main. By #521 a pin must be a commit a branch of its remote holds, and no run can push there, so
+the patch goes to that repo as a follow-up issue, as #646's did. It says the proxy's own SERVER span, opened in
+do_POST, is the root, and that agentgateway sits downstream. It compiles, and changes only comments. A run on #382
+or on the follow-up moves the pin once it is pushed.
+
+**Why the earlier attempts on #382 did not land.** This run cannot read hecaton's records of them: the issue's
+comments carry no "Not merged" line, and `verify/prior-drafts.sh 382 origin/staging` found no draft branch. What the
+repo does show: #382 needed Datadog and a live cluster, which this repo had no org for until 2026-10-30 (decisions.md,
+"Datadog org pool"), and runs had no cluster session until Michael's ruling of 2026-11-02 (#809). Its fourth
+criterion needs a change in another repo that no run can push. A run before 2026-11-02 could meet none of the three
+live criteria, and no run can meet the fourth inside this repo.
+
+**Follow-ups.** (1) The proxy.py patch, in guard-proxy-agenticburn. (2) agentgateway v1.7.0 warns that
+`config.tracing` is deprecated in favour of `frontendPolicies.tracing`. If a later version removes the old key, the
+gateway exports nothing and the agent subtree is orphaned again with no error, so the move belongs with the next
+gateway bump, checked with `verify/one_root_probe.py`. The header comment in `agentgateway.yaml` already names
+`frontendPolicies.tracing` as the key in use, which the file does not do.
+
+**An offline test reached the live pair; staging had already stubbed it.** Run 16984's first
+`bash verify/run-e2e-tools.sh` sat for over 30 minutes in `verify/test_presenter_student_retired.sh`, whose `spec()`
+ran `cmd_instructors up` into `cmd_guardrails_link` against the live pair through the run's AWS session. It was
+reading `guardrails-switch/guardrails-switch-token` on watch-it-burn-private. Neither cluster has a
+`guardrails-switch` namespace (`kubectl get ns guardrails-switch` answers NotFound on both), so no peer Secret was
+written and both clusters are as found. Run 16984 stubbed the link in its own commit, but #616 (run 16967) and
+#421 had made the same fix on staging, and #421 also stubs the cloud tools and fails on any cloud call. That
+commit collided with theirs on rebase and failed the run. This run (17099) dropped it and keeps staging's test
+unchanged; this entry is the only change.
+
+**Not yet run on a cluster.** Nothing for this entry: every check above ran on watch-it-burn-private. The proxy.py
+comment reaches the cluster with the pin move.
