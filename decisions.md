@@ -13724,6 +13724,7 @@ its user (`hecaton-s7-claude-certkraken`) cannot read them (hecaton#508). So the
 is the live check: the APM `chat` span on each KubeCon cluster carries both counts, and the Agent Observability total
 equals the sum of the `generate_content` rows.
 ## 2026-11-03 · #704 · Third dispatch: the live run moves to watch-it-burn-private, and this run could not read the cluster session
+## 2026-11-04 · #704 · Runs 16409 and 16851 could not read their cluster session; the cold build goes on a fresh cluster again, with watch-it-burn-private as the fallback
 
 **Context.** Run 16409 is #704's third dispatch. Question 1049 asked for the go to build a t3.2xlarge cluster. The
 coordinator answered it under Michael's standing rule (2026-11-02: "two clusters up that you can use for any and all
@@ -13731,17 +13732,28 @@ tests"): run the live check on watch-it-burn-community or watch-it-burn-private,
 tear down a cluster. A step that would build an attendee cluster runs on one of the two instead. That replaces steps
 1, 2 and 6 of the 2026-11-02 sheet above, which build and destroy watch-it-burn-attendee-099.
 
-**This run reached neither cluster.** The session hecaton set up for it is unreadable by the run's own user. The
+**Neither run reached a cluster.** The session hecaton set up for each run is unreadable by the run's own user. The
 files `env`, `kubeconfig`, `aws-config` and `aws-credentials`, and the `bin/` directory under
-`/var/lib/hecaton/runs/16409/clusters/` are owner `hecaton`, group `hecaton`, mode 0640 (0750 for `bin/`). The run
-runs as uid 146, `hecaton-s5-claude-certkraken`, in groups 150, 1001 and 1002, not in `hecaton`. The directory itself
+`/var/lib/hecaton/runs/16409/clusters/` and again under `/var/lib/hecaton/runs/16851/clusters/` (2026-11-04) are
+owner `hecaton`, group `hecaton`, mode 0640 (0750 for `bin/`). Both runs ran as uid 146, `hecaton-s5-claude-certkraken`,
+in groups 150, 1001 and 1002, not in `hecaton`. The directory itself
 is group `hecaton-s5-claude-certkraken`, so the files look meant for that group too. As a result,
 `. "$HECATON_CLUSTER_ENV"` fails with `Permission denied`, `kubectl config get-contexts` fails with `open
 .../clusters/kubeconfig: permission denied`, and `aws sts get-caller-identity --profile accen-dev` says the profile
 cannot be found. Nothing was run against a cluster, and the vllm entry stays at `measured: false`. The report
 escalates the permission fix.
 
-**Which of the two, and why watch-it-burn-private.** Both are one t3.2xlarge node each: roster.tsv leaves their
+**Run 16851's grant puts the fresh cluster back.** Run 16851 is a re-dispatch of 16409, which stalled while it waited
+in silence on `verify/run-e2e-tools.sh`. Its grant is wider than question 1049's answer: it may "create and tear
+down any other cluster your tests need", and must never delete watch-it-burn-community or watch-it-burn-private. That
+allows what the issue asks for, a cold build on a fresh t3.2xlarge. So the first choice is the 2026-11-02 sheet
+above, unchanged: `WIB_NO_BOOTSTRAP=1 ./fleet.sh up watch-it-burn-attendee-099`, the isolated kubeconfig, the timed
+`CONTEXT="$CTX" ... bash infra/deploy-full-idp.sh local-inference`, `verify/local-inference-live.py`, the vllm
+entry, and then `./fleet.sh down watch-it-burn-attendee-099` and `./cleanup-log-groups.sh --delete`. That gives
+`build_seconds` as a real cold build of the whole profile. Run 16409's sheet for watch-it-burn-private, below,
+stays as the fallback for a run whose grant forbids building a cluster. It measures vLLM's own cold cost only.
+
+**The fallback: which of the two, and why watch-it-burn-private.** Both are one t3.2xlarge node each: roster.tsv leaves their
 instance_type column empty, so they get the cluster module's `["t3.2xlarge"]` with min, max and desired size 1. That
 is the node the issue names. watch-it-burn-community is the burn cluster behind attackme.agenticburn.com, which must
 have no guardrails. local-inference is full's list, so re-profiling community would put every guardrail on the
@@ -13761,7 +13773,7 @@ So `build_seconds` is that time, read from `verify/local-inference-live.py`'s "f
 re-profile's wall-clock goes into `known`, named as a re-profile. A cold build of the whole local-inference profile
 stays unmeasured until a cluster is built for something else and the profile can ride on it.
 
-**Not yet run on a cluster.** The sheet, re-cut for watch-it-burn-private. Run it from the repo root, with the
+**Not yet run on a cluster.** The fresh-cluster sheet above comes first. The fallback, re-cut for watch-it-burn-private: Run it from the repo root, with the
 session sourced, every command naming its context, and nothing built or torn down:
 
 1. `CTX=watch-it-burn-private; kubectl --context "$CTX" -n argocd get application lab-bootstrap -o jsonpath='{.metadata.labels.lab-platform/profile}'`
