@@ -22,9 +22,21 @@ printf '%s\n' "watch-it-burn-community|community|||-1|burn|" \
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
 
+# No cloud access, on any host. `instructors up` below stubs only the provisioning, so on a host with AWS
+# credentials and a kubeconfig the rest of it (bootstrap, arming the guardrails, guardrails-link) reached the live
+# KubeCon clusters: hecaton run 16964 found it writing their kubeconfigs and waiting in arm_infra_guardrails for a
+# Kyverno policy to flip (#583). Every cloud CLI is a shim that fails, and the credentials are out of the env.
+mkdir -p "${T}/bin"
+for tool in aws kubectl eksctl terraform helm; do
+  printf '#!/usr/bin/env bash\necho "%s: no cloud access in this test" >&2\nexit 1\n' "${tool}" >"${T}/bin/${tool}"
+  chmod +x "${T}/bin/${tool}"
+done
+NOCLOUD=(env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
+         -u HECATON_CLUSTER_ENV AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null
+         KUBECONFIG="${T}/no-kubeconfig" PATH="${T}/bin:${PATH}")
 # Run one expression against a sourced fleet.sh, with state in a temp dir and no cloud access. QROSTER
 # points it at a fixture roster instead of the real one.
-q() { ( cd "$(dirname "${FLEET}")" && WIB_STATE_DIR="${T}/states" WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
+q() { ( cd "$(dirname "${FLEET}")" && "${NOCLOUD[@]}" WIB_STATE_DIR="${T}/states" WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
         bash -c "source '${FLEET}' >/dev/null 2>&1; load_roster; $1" 2>/dev/null ); }
 # Comments explain the retired class in prose; assertions about behaviour read the code only.
 code() { grep -vE '^[[:space:]]*#' "$1"; }
@@ -42,7 +54,7 @@ check "fleet.sh code never builds a <owner>-student name or host" \
 up() { q "_provision_spec_fleet() { shift 2; printf '%s\n' \"\$@\"; }; require_tools() { :; }; cmd_up $1"; }
 check "up refuses a presenter student name" '[[ -z "$(up watch-it-burn-alpha-student)" ]]'
 check "and says why, pointing at the claim flow" \
-  'grep -qi "claim" <<<"$( cd "$(dirname "${FLEET}")" && bash -c "source \"${FLEET}\" >/dev/null 2>&1
+  'grep -qi "claim" <<<"$( cd "$(dirname "${FLEET}")" && "${NOCLOUD[@]}" bash -c "source \"${FLEET}\" >/dev/null 2>&1
        _provision_spec_fleet() { :; }; cmd_up watch-it-burn-beta-student" 2>&1 )"'
 check "up refuses a roster name too: those are built by instructors up" '[[ -z "$(up watch-it-burn-private)" ]]'
 check "up still provisions attendee pool clusters by count" \
