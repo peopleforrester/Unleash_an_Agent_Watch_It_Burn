@@ -14508,3 +14508,26 @@ sleep (two 429s then an answer; a Retry-After of 3 and of 3600; five 429s; a 404
 `bash verify/run-tests.sh`, ran 245 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), the new retry test among
 them. Then it printed "53 checks ran (the offline suite and 52 tier tests) in 24m57s" and "ALL E2E TOOLS TIER CHECKS
 GREEN".
+
+## 2026-11-04 · #844 · run 16888 rebases run 16863's draft onto staging `c2636687`
+
+**Why run 16863 did not land.** Its rebase onto staging `34be4c18` stopped on one region each in
+`facilitation/kubecon-na-2026-run-of-show.md` and `verify/test_instructor_brief.py`. While it ran, #847 (`9ddb3e93`)
+rewrote the same two cut-table rows and #848 (`54272c2a`) rewrote the page's pattern line and its checks, so both
+sides had edited the same lines for the same reason.
+
+**How it is resolved.** The run-of-show is staging's, untouched by #844 now. The pattern line is #848's, with the
+draft's one sentence "Challenge 1 has no fix of its own: its RBAC arms with Challenge 2's switch." added after it; its
+bold steps are unchanged, so #848's check holds. In the test, #847's and #848's checks stay and the draft's duplicates
+of them go; the draft's segment 3, switch, hand-off, Challenge 1 and attack-before-trace checks are kept, under their
+own heading, with the OWASP close checks after them under theirs. #842's and #849's LLM06 checks pass on the merged
+page, segment 4's "(OWASP LLM06, Excessive Agency)" included. The retry fix and its offline test applied with no
+conflict. The visible page is 2,271 words, under the test's 2,300.
+
+**Live check (run 16888): not run.** `/var/lib/hecaton/runs/16888/clusters/env` is mode 0640, owner and group
+`hecaton`, and sourcing it printed "Permission denied" (hecaton#508). The "Not yet run on a cluster" line in the
+first #844 entry stands.
+
+**The suites (run 16888, at `09974a8f`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage ran 246 tests, all
+green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "54 checks ran (the offline suite and 53 tier tests) in
+24m41s" and "ALL E2E TOOLS TIER CHECKS GREEN".
