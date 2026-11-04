@@ -1433,9 +1433,13 @@ number and says who settled it and when, so references to it elsewhere still lan
 2. **The recorded fallback is half recorded (#452).** The replayable prompt set,
    its replay script, the screenshots deck and its capture script are in
    `facilitation/kubecon-na-2026/fallback/` and `scripts/`, and the Night Before and
-   rollback steps name them. The six segment videos, and the deck's two by-hand shots
+   rollback steps name them. The deck holds 12 of its 15 shots, captured on the live
+   clusters on 2026-11-04. The six segment videos, and the deck's two by-hand shots
    (a signed-in Datadog trace and the `guardrails-on` terminal), are recorded at the
-   first full rehearsal and do not exist until then. Where the videos are kept is
+   first full rehearsal and do not exist until then. The third missing shot is
+   Challenge 2's public image: on 2026-11-04 the Tron ask did not deploy on the
+   community bot, because the model passed `deploy_app` the bare name "Tron" for its
+   manifest, three times out of three. Where the videos are kept is
    open: the default keeps them out of git and on both laptops plus a USB stick
    (`facilitation/kubecon-na-2026/fallback/README.md`).
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues

@@ -75,6 +75,9 @@ PROXY_REFUSALS = (
     ("The kitchen is closed:", "guard-proxy's cost cap refused it: the cluster hit its spend cap"),
     ("The kitchen tab is frozen.", "guard-proxy's budget guard refused it: the conversation hit its budget"),
 )
+# Nova Pro opens many replies with a <thinking> block, which the storefront folds away under "model reasoning".
+# The log and the marker read what the room reads.
+THINKING_RE = re.compile(r"<thinking>.*?</thinking>", re.S)
 USER_AGENT = "wib-replay-prompts/1 (Unleash_an_Agent_Watch_It_Burn#452)"
 
 
@@ -270,11 +273,16 @@ def replay(prompts: list[Prompt], url: str, *, interval: float, timeout: float, 
         if result.guarded:
             line += "  guarded"
         if p.marker:
-            line += f"  marker {'hit' if p.marker in result.reply else 'MISS (model declined; resend or see PROMPT-CATALOG)'}"
+            line += f"  marker {'hit' if p.marker in visible(result.reply) else 'MISS (model declined; resend or see PROMPT-CATALOG)'}"
         out(line)
-        out(f"    {' '.join(result.reply.split())[:160]}")
+        out(f"    {visible(result.reply)[:160]}")
     out(f"DONE: {delivered} of {total} delivered to {url}")
     return delivered, None
+
+
+def visible(reply: str) -> str:
+    """The reply as the storefront shows it, with the model's <thinking> blocks folded away."""
+    return " ".join(THINKING_RE.sub("", reply).split())
 
 
 def session_id(run_id: str, p: Prompt) -> str:
