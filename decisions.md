@@ -14781,3 +14781,7 @@ fails with "permission denied", and so does sourcing `$HECATON_CLUSTER_ENV` (hec
 `watch-it-burn-community` and `watch-it-burn-private`, the guard-proxy pod's `checksum/proxy-py` annotation reads
 `ba8d8e2b789f`. Then, on the public storefront, an HC-666 chat lands `joker-<visitor slug>`, not `joker-burritobot`
 (#762's live check).
+
+**The suites (run 16935, at `580e592b`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier
+tests) in 24m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 248 tests, all
+green, `test_chat_witch_name.py` among them.
