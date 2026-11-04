@@ -104,7 +104,7 @@ class _NoSpan(_Span):
 _ids = itertools.count(1)
 _current: contextvars.ContextVar = contextvars.ContextVar("span", default=None)
 SPANS: list[_Span] = []
-_spans_lock = threading.Lock()
+_spans_lock = threading.Condition()
 
 
 @contextlib.contextmanager
@@ -117,6 +117,7 @@ def _start(name, context=None, kind=None):
         _current.reset(token)
         with _spans_lock:
             SPANS.append(span)
+            _spans_lock.notify_all()
 
 
 otel = types.ModuleType("opentelemetry")
@@ -216,7 +217,12 @@ def turn(script: list[tuple[str, tuple[int, int] | None]], path: str = "/chat") 
         status, reply = post("/", {"jsonrpc": "2.0", "id": f"a2a-839-{n}", "method": "message/send",
                                    "params": {"message": {"kind": "message", "role": "user", "messageId": f"m-{n}",
                                                           "parts": [{"kind": "text", "text": PROMPT}]}}})
+    # A span is recorded when it ends, and proxy.py ends the chat span and the root after the reply is written, so
+    # the visitor can hold the reply before either is recorded (one turn in six, #842). Wait for this turn's root,
+    # the last span to end; a root that never ends leaves the turn's checks to fail on what was recorded.
+    root = "POST /chat" if path == "/chat" else "POST /"
     with _spans_lock:
+        _spans_lock.wait_for(lambda: any(s.name == root and s.parent is None for s in SPANS[start:]), timeout=10)
         return status, reply, SPANS[start:]
 
 

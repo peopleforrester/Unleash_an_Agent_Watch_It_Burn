@@ -13916,6 +13916,15 @@ table (`attendee.html` at `bc9209f1`, from rounds-agenticburn#47) maps LLM06 to 
 counts (Challenge 4's unvetted MCP server). That difference is older than this issue and lies in the deck repo; it is
 left to the close's review, which should settle one mapping for both.
 
+**A race in #839's test, fixed here.** The first `bash verify/run-e2e-tools.sh` of this run went red on
+`verify/test_chat_span_token_counts.py` alone; run again by hand it failed 1 time in 6. Its OpenTelemetry stand-in
+records a span when the span ends, and proxy.py ends the `chat` span and the `POST /chat` root after it has written
+the reply. So the visitor could hold the reply before either span was recorded: the turn's checks then saw no `chat`
+span, and the next turn picked up the late one (`set (2000, 110)` on the no-usage turn). `turn()` now waits, on a
+condition the stand-in notifies, until the turn's root span (`POST /chat`, or `POST /` for A2A) is recorded, which
+ends last, for up to 10 s. With a 0.3 s sleep put in before each span is recorded, the old test fails 8 checks and the
+new one passes. Without the sleep the new one passed 30 runs out of 30.
+
 **Live check.** None: the change is talk text and a static page, with nothing a cluster runs differently until Argo CD
 syncs the page. **Not yet run on a cluster:** once the page syncs, `/kubecon` on each KubeCon cluster shows segment 6's
 LLM06 line as "Challenges 1 to 4".
