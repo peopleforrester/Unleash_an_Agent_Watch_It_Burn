@@ -15352,3 +15352,7 @@ talks-knowledge's decisions.md for its #92 (`deleted-my-cluster` 3, `agenticburn
 milestone is not done.
 
 **Left on the cluster.** Nothing: the run made no live check, since M9 changes no platform.
+
+**The suites (run 16998, at `37ad1133`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m10s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`.
