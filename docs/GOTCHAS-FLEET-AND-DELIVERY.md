@@ -187,6 +187,19 @@ on lab-bootstrap and ai-layer, remove `/status/operationState` from ai-layer, wr
 ai-layer's syncOptions and no resources, and when it has applied, restore `automated: {prune: true, selfHeal: true}`
 on both. Then `fleet.sh converge` should print the rolled-out line.
 
+**A sync written to `.operation` always carries the Application's syncOptions (#583).** Argo CD v3.5.2's controller
+reads `RespectIgnoreDifferences`, `ServerSideApply` and the rest from the operation alone (`controller/sync.go`
+SyncAppState). Auto-sync, `argocd app sync` and the UI copy `.spec.syncPolicy.syncOptions` in; a `kubectl patch` of
+`{"operation":{"sync":{...}}}` has only what it writes. One without `RespectIgnoreDifferences` gives every ignored
+field git's value: agentgateway's `BEDROCK_NOVA_MODEL` and the Bedrock ModelConfigs go back to the untagged system
+id, and guard-proxy's toggles reset. That happened on both KubeCon clusters on 2026-11-01 at 16:36Z and 16:44Z,
+during the by-hand sync of the chat batch, which ran the recipe above. agentgateway's ReplicaSets date the change to
+those seconds, and the next live Bedrock test found `us.amazon.nova-pro-v1:0`. Write the operation with
+`fleet.sh sync <application> <cluster...>`, which copies the app's own options and refuses an app with an operation
+still pending. In the recipe above, run it in place of writing `/operation` by hand. fleet.sh `repair_failed_syncs`
+and `roll-console.sh` wrote bare operations too until #583. After any sync you are unsure of, `fleet.sh converge`
+puts the Bedrock pin back.
+
 **Changing one of the nine on a running cluster** (verified fleet-wide 2026-08-30 rolling MODEL_TIER=nova):
 
 1. `kubectl -n agent set env deploy/guard-proxy <VAR>=<value>` on the cluster, for a VAR the Deployment already has.

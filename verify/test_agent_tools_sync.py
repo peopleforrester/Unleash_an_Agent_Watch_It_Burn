@@ -554,6 +554,53 @@ check("a commit that only reorders guard-proxy's env: the sync keeps the live or
 fixed = synced_target(moved, reorder(got, MOVED_ENV), proxy_ignores)
 check("and repair_env_order puts that right too", names(fixed) == MOVED_ENV and not out_of_sync(moved, fixed, proxy_ignores))
 
+print("== agentgateway's Bedrock pin through a sync, and the operation a script asks for (#583) ==")
+# Run 15801 (2026-11-02) found agentgateway's BEDROCK_NOVA_MODEL back at git's system id on watch-it-burn-community,
+# where the 2026-10-31 run had read the cluster's application profile ARN. ai-layer ignores that entry and syncs with
+# RespectIgnoreDifferences, so its own syncs keep the ARN. But Argo CD v3.5.2 reads the option from the sync OPERATION
+# (controller/sync.go SyncAppState: syncOp.SyncOptions.HasOption("RespectIgnoreDifferences=true")). Auto-sync and the
+# API server copy .spec.syncPolicy.syncOptions into it; an operation patched straight onto the Application has only
+# what the patch gives it. The by-hand sync of 2026-11-01 16:36Z wrote one without the option (agentgateway's
+# ReplicaSets date the change to it on both clusters), and fleet.sh repair_failed_syncs and roll-console.sh patched
+# bare ones too. Both scripts and `fleet.sh sync` now write sync_operation_of's operation, the app's own options.
+GW = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text(encoding="utf-8"))
+          if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "agentgateway")
+ARN = "arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/5l72jg8rnz71"
+
+
+def gw_model(obj: dict) -> str | None:
+    c = next(c for c in obj["spec"]["template"]["spec"]["containers"] if c["name"] == "agentgateway")
+    return next((e.get("value") for e in c.get("env") or [] if e["name"] == "BEDROCK_NOVA_MODEL"), None)
+
+
+pinned = copy.deepcopy(GW)
+pinned["metadata"].update({"namespace": "agent", "uid": "a9e7", "resourceVersion": "912", "generation": 4})
+next(e for c in pinned["spec"]["template"]["spec"]["containers"] if c["name"] == "agentgateway"
+     for e in c["env"] if e["name"] == "BEDROCK_NOVA_MODEL")["value"] = ARN
+check("git commits agentgateway's BEDROCK_NOVA_MODEL as the system id, the value run 15801 read live",
+      gw_model(GW) == "us.amazon.nova-pro-v1:0", str(gw_model(GW)))
+FLEET = REPO / "infra/terraform/fleet/fleet.sh"
+for profile in profiles():
+    if "ai-layer" not in app_names(profile):
+        continue
+    ai_p = rendered("ai-layer.yaml", profile)
+    gw_ignores = ignores(ai_p, "apps", "Deployment", "agentgateway")
+    check(f"{profile}: the pinned gateway reads Synced, so selfHeal alone never touches it",
+          not out_of_sync(GW, pinned, gw_ignores))
+    check(f"{profile}: #583: a sync run WITHOUT RespectIgnoreDifferences applies git's system id over the ARN",
+          gw_model(sync_applies(GW, pinned, gw_ignores, False)) == gw_model(GW))
+    run = subprocess.run(["bash", "-c", 'source "$1" >/dev/null 2>&1; sync_operation_of "$2"', "_", str(FLEET),
+                          json.dumps(ai_p)], cwd=FLEET.parent, capture_output=True, text=True, timeout=60)
+    try:
+        op = json.loads(run.stdout)["operation"]["sync"]
+    except (ValueError, KeyError, TypeError):
+        op = None
+    check(f"{profile}: fleet.sh's re-sync of ai-layer (sync_operation_of) carries ai-layer's own sync options",
+          op is not None and op.get("syncOptions") == sync_options(ai_p), run.stdout + run.stderr)
+    respect = op is not None and "RespectIgnoreDifferences=true" in (op.get("syncOptions") or [])
+    check(f"{profile}: so that sync keeps the cluster's ARN on agentgateway",
+          gw_model(sync_applies(GW, pinned, gw_ignores, respect)) == ARN)
+
 print("== no Application freezes a list on sync that converge cannot put right ==")
 # A JSON merge patch replaces an array whole, so on a resource outside Argo CD's scheme (a CRD: a dotted group not
 # under k8s.io) an ignore that reaches INTO an array element freezes the whole array, and nothing but deleting the

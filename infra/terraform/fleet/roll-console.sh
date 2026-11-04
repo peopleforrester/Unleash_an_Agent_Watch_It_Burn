@@ -35,9 +35,14 @@ for c in $(AWS_PROFILE=$PROFILE aws eks list-clusters --region $REGION --query '
     # auto-sync left the ConfigMap un-updated inside the 200s marker window on several clusters
     # (2026-09-04), so the pod was never cycled and served stale config. An explicit sync operation
     # makes the ConfigMap update promptly and deterministically, which is what the marker wait needs.
+    # The operation carries ai-layer's own sync options (#583). Argo CD's controller reads RespectIgnoreDifferences
+    # from the operation alone, so a bare {"sync":{...}} would apply git's system id over agentgateway's pinned
+    # BEDROCK_NOVA_MODEL and the Bedrock ModelConfigs' ARNs, and reset guard-proxy's live toggles.
     "${K[@]}" -n argocd annotate app ai-layer argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1
+    OPTS="$("${K[@]}" -n argocd get app ai-layer -o json 2>/dev/null | jq -c '.spec.syncPolicy.syncOptions // empty')"
+    if [[ -z "$OPTS" ]]; then echo "  $c: could not read ai-layer's sync options, NOT syncing"; failed=$((failed+1)); continue; fi
     "${K[@]}" -n argocd patch app ai-layer --type merge \
-        -p '{"operation":{"sync":{"revision":"staging"}}}' >/dev/null 2>&1
+        -p "$(jq -cn --argjson o "$OPTS" '{operation: {sync: {revision: "staging", syncOptions: $o}}}')" >/dev/null 2>&1
     if [[ -n "$MARKER" ]]; then
         ok=0
         for _ in $(seq 1 40); do   # up to ~200s

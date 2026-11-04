@@ -695,6 +695,11 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       guardrails-on in either terminal arms the four Kubernetes guardrails on both. Defaults to
                       watch-it-burn-community and watch-it-burn-private in WIB_REGION. 'instructors up' runs it
                       when event.sh's WIB_ROSTER_PROFILES is kubecon. Each link is checked from this host first.
+    sync <application> <name...>
+                      Sync one Argo CD Application by hand, with the app's own sync options, prune and retry, as
+                      its automated sync would, and wait for the result. Never write .operation by hand: Argo CD
+                      reads RespectIgnoreDifferences from the operation alone, and a sync without it put git's
+                      Bedrock system id back over each cluster's tagged profile ARN (#583).
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -1004,15 +1009,32 @@ verify_one() {
 # dependency was down (otel-operator behind cert-manager's webhook, 2026-09-06) stays Failed forever.
 # Creating the operation is what the CLI's 'app sync' does; this does the same for OutOfSync apps whose
 # last operation ended in Failed or Error and nothing is running.
+#
+# The operation carries the app's own sync options, prune setting and retry, as its automated sync's does (#583).
+# Argo CD v3.5.2's controller reads RespectIgnoreDifferences, ServerSideApply and the rest from the operation alone
+# (controller/sync.go SyncAppState); only auto-sync and the API server copy them in from .spec.syncPolicy. The bare
+# `{"sync":{"prune":true}}` this used to write would run ai-layer without RespectIgnoreDifferences, applying git's
+# system id over agentgateway's pinned BEDROCK_NOVA_MODEL and the Bedrock ModelConfigs' ARNs after
+# pin_bedrock_profiles had already looked, and resetting guard-proxy's toggles and the other ignored fields. A
+# by-hand sync without the option did exactly that on both KubeCon clusters on 2026-11-01 (cmd_sync below).
+# lab-platform's converge (resyncOf) makes the same operation as this; `fleet.sh sync` writes it by hand.
+sync_operation_of() { # $1 an Application as JSON, $2 who asks (default fleet-converge); prints the merge patch that
+    jq -c --arg by "${2:-fleet-converge}" '(.spec.syncPolicy // {}) as $p
+        | {operation: ({initiatedBy: {username: $by},
+                        sync: ({prune: ($p.automated.prune // false)}
+                               + (if ($p.syncOptions // []) | length > 0 then {syncOptions: $p.syncOptions} else {} end))}
+                       + (if $p.retry then {retry: $p.retry} else {} end))}' <<<"$1"
+}
 repair_failed_syncs() {
-    local name="$1" kcfg="$2" apps a
+    local name="$1" kcfg="$2" apps app a
     apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)" || return 0
-    while read -r a; do
-        [[ -n "${a}" ]] || continue
+    while read -r app; do
+        [[ -n "${app}" ]] || continue
+        a="$(jq -r '.metadata.name' <<<"${app}")"
         log "  ${name}: re-triggering sync of ${a} (last operation failed, revision unchanged)"
         KUBECONFIG="${kcfg}" kubectl -n argocd patch application "${a}" --type merge \
-            -p '{"operation":{"initiatedBy":{"username":"fleet-converge"},"sync":{"prune":true}}}' >/dev/null 2>&1 || true
-    done < <(jq -r '.items[] | select(.status.sync.status=="OutOfSync" and (.status.operationState.phase=="Failed" or .status.operationState.phase=="Error") and (.operation == null)) | .metadata.name' <<<"${apps}" 2>/dev/null)
+            -p "$(sync_operation_of "${app}")" >/dev/null 2>&1 || true
+    done < <(jq -c '.items[] | select(.status.sync.status=="OutOfSync" and (.status.operationState.phase=="Failed" or .status.operationState.phase=="Error") and (.operation == null))' <<<"${apps}" 2>/dev/null)
 }
 
 # The OTel operator's pod webhook fails OPEN (mpod.kb.io failurePolicy Ignore): a pod created before the
@@ -4978,6 +5000,43 @@ cmd_restart_console()   { _admin_each restart-console restart_console_one "$@"; 
 cmd_reset_bot()         { _admin_each reset-bot reset_bot_one "$@"; }
 cmd_terminal_password() { _admin_each terminal-password terminal_password_one "$@"; }
 
+# Sync one Argo CD Application by hand, as its own automated sync would (#583). On 2026-11-01 a by-hand sync of
+# ai-layer on both KubeCon clusters wrote an operation without RespectIgnoreDifferences. Argo CD reads that option
+# from the operation alone, so the sync applied git's system id over agentgateway's BEDROCK_NOVA_MODEL and every
+# Bedrock ModelConfig's ARN, and the next run's live Bedrock test found us.amazon.nova-pro-v1:0. This writes
+# sync_operation_of's operation (the app's own prune, syncOptions and retry), refuses an app that already has one
+# pending (a merge patch would fold into it, the #679 trap), and waits for the result.
+readonly SYNC_WAIT="${WIB_SYNC_WAIT:-300}" SYNC_POLL="${WIB_SYNC_POLL:-5}"
+sync_app_one() {
+    local name="$1" kcfg="$2" ctx="$3" app="${SYNC_APP}" json before state deadline
+    json="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n argocd get application "${app}" -o json 2>/dev/null)" \
+        || { log "  ${name}: no Application ${app}"; return 1; }
+    if [[ "$(jq -r '.operation != null' <<<"${json}")" == true ]]; then
+        log "  ${name}: ${app} already has an operation pending; a second would merge into it, so it is not synced"
+        return 1
+    fi
+    before="$(jq -r '.status.operationState.startedAt // ""' <<<"${json}")"
+    log "  ${name}: syncing ${app} with its own options: $(jq -c '.spec.syncPolicy.syncOptions // []' <<<"${json}")"
+    KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n argocd patch application "${app}" --type merge \
+        -p "$(sync_operation_of "${json}" fleet-sync)" >/dev/null 2>&1 || { log "  ${name}: the sync was refused"; return 1; }
+    deadline=$((SECONDS + SYNC_WAIT))
+    while :; do
+        state="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n argocd get application "${app}" -o json 2>/dev/null \
+            | jq -r --arg b "${before}" '.status.operationState // {} | select((.startedAt // "") != $b)
+                | select(.phase == "Succeeded" or .phase == "Failed" or .phase == "Error") | "\(.phase) \(.message // "")"')"
+        [[ -z "${state}" ]] || break
+        if [[ "${SECONDS}" -ge "${deadline}" ]]; then log "  ${name}: ${app}'s sync did not finish in ${SYNC_WAIT}s"; return 1; fi
+        sleep "${SYNC_POLL}"
+    done
+    log "  ${name}: ${app} sync ${state}"
+    [[ "${state}" == Succeeded* ]]
+}
+cmd_sync() {
+    [[ $# -ge 2 ]] || { log "usage: sync <application> <name...>"; exit 2; }
+    SYNC_APP="$1"; shift
+    _admin_each sync sync_app_one "$@"
+}
+
 # --- the KubeCon guardrails switch (#774) ----------------------------------------------------------------------
 # guardrails-on in either KubeCon cluster's terminal arms the four Kubernetes guardrails on both (Michael's spec on
 # #774, 2026-11-01). The terminal reaches its own cluster with its own ServiceAccount and the other one with the
@@ -5321,6 +5380,7 @@ main() {
         health) cmd_health "$@" ;;
         converge) cmd_converge "$@" ;;
         restart-agent) cmd_restart_agent "$@" ;;
+        sync) cmd_sync "$@" ;;
         restart-console) cmd_restart_console "$@" ;;
         reset-bot) cmd_reset_bot "$@" ;;
         guardrails-link) cmd_guardrails_link "$@" ;;

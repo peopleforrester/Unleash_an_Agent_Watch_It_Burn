@@ -15330,3 +15330,69 @@ Nothing in fleet.sh changes.
 **The suites (run 16967, at `75e8461d`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-04 · #583 · Bedrock takes the escaped ARN through agentgateway; the system id came from a by-hand sync without RespectIgnoreDifferences
+
+**The live result.** `verify/test_gateway_bedrock_tagged_live.py` passed on both KubeCon clusters on 2026-11-04,
+run by hecaton run 16964 (exit 0, every check green). On watch-it-burn-community, agentgateway's `BEDROCK_NOVA_MODEL`
+read `arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/5l72jg8rnz71`. On watch-it-burn-private it
+read `.../application-inference-profile/88hce5o0zw45`. Every Ready gateway pod ran with that value, and the 5-token
+chat completion through agentgateway :3002 got a 200 from Bedrock with a choice in the reply. So agentgateway v1.7.0's
+`%2F`-escaped ARN path signs and calls correctly, and #583's question is answered.
+
+**What wrote the system id.** The coordinator's elevated run 15801 found `us.amazon.nova-pro-v1:0` there on
+2026-11-02. On both clusters this run found the gateway env and all four Bedrock ModelConfigs back at git's system
+ids. The clusters date the change:
+- agentgateway's ReplicaSets keep each pod template. On community, revisions 2 to 5 (2026-10-28 to 11-01 03:11Z)
+  carry the ARN, and revision 6, created 2026-11-01T16:36:53Z, carries the system id. On private, revisions 2 to 4
+  carry the ARN, and revision 5, created 16:44:03Z, carries the system id.
+- ai-layer's managedFields show a `kubectl-patch` of `spec.syncPolicy.automated` at 16:36:49Z on community and
+  16:43:55Z on private. That is the last step of the by-hand recipe in `docs/GOTCHAS-FLEET-AND-DELIVERY.md`: turn
+  automated off, write `/operation`, turn it back on. The 2026-11-01 entry "Live rollout and verification of the
+  chat batch on the two up clusters" (committed 16:45Z) records that sync of ai-layer to 7452788 on both.
+- On the Deployment, `argocd-controller` took the `BEDROCK_NOVA_MODEL` value under server-side apply, and the
+  pin's own manager (`kubectl-set`) lost it while keeping `BEDROCK_REGION`, whose value did not change. Under
+  server-side apply with Force, a manager loses a field only to a different value.
+
+So that sync ran with ServerSideApply and without RespectIgnoreDifferences. Argo CD v3.5.2's controller reads that
+option from the operation alone (`controller/sync.go` SyncAppState). Auto-sync (`controller/appcontroller.go`) and
+the API server (`server/application/application.go` Sync) copy `.spec.syncPolicy.syncOptions` into the operation; a
+`kubectl patch` of `.operation` has only what it writes. No converge has run on either cluster since, so nothing put
+the pin back: the pin's last write is 2026-11-01T03:11Z. The run-15801 hypotheses are ruled out. #679's
+`repair_env_order` keeps values. The chart values carry no Bedrock id. Converge did not run in that window.
+
+**The fix.**
+- `fleet.sh sync <application> <cluster...>` is the by-hand sync. It writes `sync_operation_of`'s operation (the
+  app's own prune, syncOptions and retry, initiated by `fleet-sync`), refuses an app with an operation already
+  pending (a merge patch would fold into it, the #679 trap), and waits for the result. The gotcha now names it in
+  place of writing `/operation` by hand.
+- `fleet.sh repair_failed_syncs` used to write a bare `{"sync":{"prune":true}}`, and `roll-console.sh` a bare
+  `{"sync":{"revision":"staging"}}`. Both now carry the app's options, as lab-platform's converge (`resyncOf`)
+  already does. roll-console.sh does not sync a cluster whose ai-layer options it cannot read. One behaviour
+  change: an app with no automated policy is re-synced with prune off rather than on. Every Application in
+  `gitops/bootstrap/apps/` has `automated.prune: true`, so nothing changes for them.
+
+**Put back on both clusters.** This host has no fleet states, so `fleet.sh converge` could not pin. The pin was made
+with fleet.sh's own `_set_bedrock_model`, the function `pin_bedrock_profiles` calls, from a sourced fleet.sh. Each
+cluster had its own minified kubeconfig, and its context was checked first. The ARNs came from `aws bedrock
+list-inference-profiles --type-equals APPLICATION`, the profile named `<cluster>-<tier>`, and each was checked
+against the system id's foundation model. The nova ARNs are the same ones the ReplicaSet history shows. Then
+`fleet.sh sync ai-layer watch-it-burn-community watch-it-burn-private` ran live: both syncs Succeeded with ai-layer's
+four options, and afterwards the gateway env and all four ModelConfigs still read the ARNs.
+
+**Tests.** `verify/test_agent_tools_sync.py` runs agentgateway's Deployment through the Argo CD port on every
+profile. A pinned gateway reads Synced. A sync without RespectIgnoreDifferences applies the system id. The rendered
+ai-layer's `sync_operation_of` operation carries its own options, and that sync keeps the ARN.
+`verify/test_fleet_converge_repairs.sh` checks the exact patch `repair_failed_syncs` writes. The new
+`verify/test_fleet_sync.sh` covers the verb: its operation, a Failed sync, a sync that never starts, a pending
+operation, a missing app, and the wiring. The new `verify/test_roll_console.sh` covers roll-console.sh's patch, and
+that it refuses a cluster whose options it cannot read. With the old scripts put back, the new converge and
+roll-console checks fail.
+
+**Draft port.** Run 16062 wrote the script and test half against base 9e7070d and stalled before committing. This
+run fast-forwarded the branch to staging `7210cbb8` (290 commits on) and reapplied it. Only decisions.md conflicted,
+because staging had appended to it. This entry replaces the draft's entry: the draft named converge's
+`repair_failed_syncs` as the likely writer, and the clusters show the by-hand sync was.
+
+**Not yet run on a cluster.** Nothing #583 needs. `fleet.sh converge` on the two clusters still owes the pin's own
+end-to-end path with the fleet states, from a session that has them. It should log no change, since the values
+already match.
