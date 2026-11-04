@@ -15721,3 +15721,60 @@ tests under the guard, `test_offline_suite_no_cloud.sh` among them (24 passed), 
 TESTS GREEN`, and no test called a stubbed tool.
 
 **Not yet run on a cluster.** Nothing: the guard runs on the host, and the live check above is all it needs.
+
+## 2026-11-04 · #112 · The privileged-pod / hostPath escape challenge is designed in docs/research, and the gap is confirmed live; the build waits for the next event
+
+**Design, plus the live half a run can do.** #112 asks for a challenge in which the agent uses the `create` RBAC it
+already holds (workshop-agent Role, `gitops/ai-layer/resources.yaml:38`: create on `deployments`, `pods`,
+`configmaps`, `services` in `agent`) to launch a privileged pod that mounts host root at `/host` and reads the node,
+refused at admission once the control is armed. Michael deferred the build on 2026-09-07 (`deferred-barcelona`,
+Question 575) and kept the design work open; on #447 he set that the Barcelona challenges wait until 2026-11-13. The
+design is at `docs/research/2026-11-02-privileged-pod-hostpath-escape.md`, in the shape #723 used for #116 and #130
+used for its exercises. No lab text, slide, run of show or deploy config changed. It maps to OWASP Agentic ASI03 and
+ASI05.
+
+- **Ported from run 15709.** That run wrote the same design note (commit ebb7f8c on `agent/112-15709`) but ended
+  failed at validation, so nothing landed. `bash verify/prior-drafts.sh 112 origin/staging` returned the draft CLEAN
+  (only `decisions.md` APPENDed on both sides), so this run carries the note forward on the current layout, adds the
+  live findings below, and writes this fresh entry rather than replanting the draft's past-dated one.
+- **What the design found.** The issue's premise that we can reuse `policies/kyverno/disallow-privileged.yaml` as it
+  stands does not hold. That policy is scoped to namespace `apps` (the agent creates in `agent`), checks only
+  `privileged` (not `hostPath`, `hostPID` or `hostNetwork`), and ships `validationActions: [Deny]` already (the
+  issue's "currently Audit" wording is the pre-#206 ClusterPolicy state). Its `Deny` is what refuses the Beat-3 clown
+  file in `apps`, and a `ValidatingPolicy` has one `validationActions` for the whole policy, so it cannot be `Deny`
+  for `apps` and `Audit` for `agent` at once. `restrict-agent-spawned-workloads` (#490) does match `agent` and the
+  agent's own identities at `Deny`, but validates only the pod's ServiceAccount, its labels and its Secret
+  references, not the escape fields. So the control is a separate agent-scoped policy (`disallow-host-escape`), not an
+  edit to either.
+- **Confirmed live (2026-11-04), the piece prior runs could not reach.** This run held an AWS session and kubectl
+  access to `watch-it-burn-community` and `watch-it-burn-private`. Every write was a `kubectl apply
+  --dry-run=server` under `--as=system:serviceaccount:agent:agent-sa`, which runs the full admission chain without
+  persisting anything; nothing was created, changed or deleted, and both clusters were left as found. `agent` carries
+  no PSA label on either cluster. On the community cluster the escape pod (privileged + hostPath `/` + hostPID) was
+  admitted (`created (server dry run)`, exit 0); the cluster serves no ValidatingPolicy CRD. On the private cluster
+  the first dry-run was refused by `require-resource-limits` (Deny, cluster-wide), not by any escape-shape rule; with
+  resource limits added so the escape shape was the only variable, the same pod was admitted (exit 0), with
+  `disallow-privileged` (Deny, `apps`-scoped) and `restrict-agent-spawned-workloads` (Deny, agent-scoped) both
+  enforcing and neither refusing it. The gap is structural; which guardrails are armed does not change it.
+- **Why the scope is the agent namespace and never the whole cluster.** The currency review records that `disallow-privileged` "must not be armed
+  as written; it would deny nine platform DaemonSets". Those privileged/hostPath DaemonSets (Falco, KubeArmor, the
+  Datadog node agent, the CNI) live in `security`, `monitoring`, `datadog` and `kube-system`, never in `agent` or
+  `apps`, so scoping the escape policy to `agent` is exactly what keeps it safe. No platform pod in `agent` uses any
+  of the four fields on 916b016e; the build re-confirms that.
+- **PSA posture.** The issue also asks for Pod Security Admission `restricted` on the agent namespace. The note
+  recommends against enforcing it namespace-wide: `agent` holds the platform's own pods (workshop-agent,
+  workshop-mcp, evil-mcp-shim, guard-proxy, the console and web terminal), several of which do not meet `restricted`,
+  and PSA cannot tell the attack pod from them since both are created in `agent`. A shape-based Kyverno deny can, and
+  it names the policy in the refusal, which PSA does not. If a second layer is wanted, label `agent` `warn:
+  restricted` (non-blocking) and leave enforce to Kyverno.
+- **The arming flip.** Kyverno autogen (default on, #206) carries the deny to the Deployment form that `deploy_app`
+  and `apply_optimization` produce. The policy ships `Audit` so the attack succeeds unarmed, and gets its own arming
+  step (`toggle-host-escape-enforce.sh`, like Challenge 3's authz toggle) plus an ArgoCD `ignoreDifferences` entry,
+  rather than joining the C2 CNCF-wall toggle; on the KubeCon pair the live analog of that flip is `guardrails-on`
+  (#774). It pairs with Challenge 8 (#111) as one kill chain: steal the token, then use the permissions it grants to
+  escape the container.
+
+**Not yet run on a cluster:** the armed direction, because the policy does not exist yet. The note's "Validation owed
+on a cluster" section names the checks (armed refuses at admission with `disallow-host-escape` named, the Deployment
+keeps no pods, no regression to the platform's own `agent` pods or the `apps` clown-file refusal) a session with AWS
+access runs on a cluster once the build lands, on or after 2026-11-13.
