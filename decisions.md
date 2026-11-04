@@ -13792,3 +13792,56 @@ session sourced, every command naming its context, and nothing built or torn dow
    check `kubectl --context "$CTX" -n argocd get applications`. Every Application must be Synced and Healthy,
    `kubearmor-policies` and `network-policies` among them, and `vllm-qwen3` must be gone. Step 1 must now print
    `admin`.
+
+## 2026-11-04 · #822 · The run-of-show's segments table takes the 2026-11-01 flow: segment 2 runs 5 minutes and segment 3 runs 5
+
+**The spec.** #822 is the last of #776's children (the slide-by-slide review of 2026-11-01, deck side
+rounds-agenticburn#58). #818 moved each trace after the live attack, #819 put the prompt wall at set moments, #820
+took Challenge 1's own fix out of segment 2 and ended it on the OWASP Top 10 for LLMs, and #821 rebuilt segment 3
+around the `guardrails-on` switch (#774). This change brings the tables that follow from those bodies into line.
+`verify/prior-drafts.sh 822 origin/staging` printed NONE and the issue has no comments, so nothing earlier was reused.
+
+**The new split.** Segment 2 goes from 6 minutes to 5 and segment 3 from 4 to 5; segments 1, 4, 5 and 6 keep 3, 7, 5
+and 5, so the slot is still 30 minutes and the demo, segments 2 to 5, still 22. Segment 2 gives up its RBAC fix but
+keeps its tee-up, its 3 minutes of play, Whitney's attack, its trace and the OWASP page, so one minute is what it
+frees. Segment 3 gains the switch slide and four per-guardrail slides on top of its two pre-AI slides, its call to
+action, its 3 minutes of play, an attack and a trace: at 4 minutes that left one minute for all of it. Each
+challenge's play time is unchanged (3, 3, 3 and 2 minutes, Whitney's rule that without the play time there is no
+hands-on). The run-through record's targets now read 5:00 for segments 2 and 3, and the two segment headings say
+"(5 min)".
+
+**The segments table.** The "On screen" cells for segments 2 to 5 now follow each body in order: the challenge
+slide and the public bot with the prompt wall optional during play, the presenters' live attack on the private
+bot, then its trace, then the fix. Segment 2's says "no fix here" and ends on the OWASP page naming LLM02 and LLM06.
+Segment 3's quotes the deck's slide lines and marks the switch "depending on #774"; segment 4's marks Kyverno's
+Deny, which comes from that switch, the same way, and segment 3's "The room" cell marks the room's second try.
+Segment 1's cell already matched its body after #819 and is unchanged. The "Abstract points" column follows the
+abstract points table: 5 leaves segment 2 for segment 3, 7 is added to segments 2 to 5 since each now shows a
+trace, and 9 leaves segment 2, whose body already says point 9's live half is in segment 1, as row 9 does.
+
+**The abstract points table and the readiness file.** Row 5 now gives segment 3, where RBAC, Kyverno admission,
+KubeArmor and the egress NetworkPolicy are switched on together, and segment 4 for least privilege. Row 7 gives
+segments 2 to 5, each trace right after its live attack, and names #843 (no Challenge 2 seed in
+`verify/stage_traces.py` yet). `docs/KUBECON-ABSTRACT-READINESS.md` rows 5 and 7 say the same. Row 5 moves from
+PARTIAL to READY: it was PARTIAL on 2026-10-29 because only one Kubernetes layer was shown, and after an LLM-specific
+one, which left it to #456 whether a reworded bar would do. With the switch, four layers are shown turning on in
+segment 3 before segment 4's input guard, the first LLM-specific layer (segment 2 has no output guard now), so the
+bar "shown before the LLM-specific layer" is met as written and #774's code is on staging. The verdict now reads 7
+READY, 2 PARTIAL, 0 MISSING, and the record has a 2026-11-04 line. The readiness file's opening paragraph still
+describes the 2026-10-28 plan; it is outside rows 5 and 7 and is left for a follow-up.
+
+**One file outside #776's list.** `verify/test_instructor_brief.py` holds the `/kubecon` page's segment chips
+(`SEGMENT n · m min` in `gitops/ai-layer/web/kubecon.html`) equal to the run-of-show table's minutes, so moving the
+minutes without the page fails the offline suite, and the page would show the presenters the old timing. The two
+chips now read 5 min; nothing else on the page changed. That is two numbers outside the four files the issue names,
+taken because the alternative is a red suite or a page that disagrees with the run-of-show. The rest of the page
+still runs the 2026-10-31 flow (trace before play, `guard-rbac-on` in Challenge 1), which its tests hold; bringing it
+to the 2026-11-01 flow is a separate change.
+
+**Live check (run 16840): not run.** The run's `clusters/env` and `clusters/kubeconfig` are mode 0640, owner and
+group `hecaton`, and the run's user, `hecaton-run-claude-certkraken`, is not in that group: sourcing the env printed
+"Permission denied" and kubectl could not open the kubeconfig (hecaton#508). The read would have been the console
+ConfigMap's `kubecon.html` on both clusters, still showing 6 and 4 minutes before promotion.
+
+**Not yet run on a cluster:** once this is promoted and Argo CD syncs ai-layer, `/kubecon` on
+`burritobot-private.burritobot.co` shows "SEGMENT 2 · 5 min" and "SEGMENT 3 · 5 min".

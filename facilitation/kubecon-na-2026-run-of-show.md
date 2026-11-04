@@ -110,8 +110,8 @@ resumes Argo CD before it exits. If it says it could not resume Argo CD, run the
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
-| Segment 2 (target 6:00) | | | |
-| Segment 3 (target 4:00) | | | |
+| Segment 2 (target 5:00) | | | |
+| Segment 3 (target 5:00) | | | |
 | Segment 4 (target 7:00) | | | |
 | Segment 5 (target 5:00) | | | |
 | Segment 6 (target 5:00) | | | |
@@ -505,15 +505,18 @@ beats give way first.
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; during the opening minute of play, a switch to the prompt wall `prompts.burritobot.co` while Whitney also plays on the admin bot, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
-| 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
-| 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
-| 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6 |
-| 5 | 5 | M+W | Challenge 4: the Datadog Challenge 4 tab, the public bot, then the private bot with `guard-mcp-on` | Orders a burrito for the weather | 2, 4, 6 |
+| 2 | 5 | M+W | Challenge 1: the two-step tee-up, the challenge slide and the public bot, the prompt wall optional during play; Whitney's live attack on the private bot, then its trace on the Datadog Challenge 1 tab (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
+| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "Everything you already knew about Kubernetes security", "BurritoBot has none of these things", the three-attack call to action and three minutes of play on the public bot, the prompt wall optional and the beacon view in its own tab; Whitney's live attack on the private bot, then its trace; then, depending on #774, "Kubernetes guardrails on": `guardrails-on` on the private bot's terminal arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters, and one slide per guardrail follows | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
+| 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, the prompt wall optional during play; Kyverno, at Deny since segment 3's switch (#774), admits the Joker from the internal registry; the presenters' live attack on the private bot, then its trace on the Datadog Challenge 3 tab; then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6, 7 |
+| 5 | 5 | M+W | Challenge 4: the public bot, the prompt wall optional during play; Michael's live attack on the private bot, then its trace on the Datadog Challenge 4 tab; then `guard-mcp-on` on the private bot | Orders a burrito for the weather | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
 trace walk-through any more: each challenge shows its own trace after the presenters'
-attack. If the clock is
+attack. Since the 2026-11-01 review (#776) segment 2 runs 5 minutes, one fewer, because
+Challenge 1 no longer runs a fix of its own, and segment 3 runs 5, one more, for the
+guardrails switch and its four slides (#774). Each challenge keeps its play time:
+3 minutes for Challenges 1, 2 and 3, and 2 for Challenge 4. If the clock is
 behind after segment 5, shorten the OWASP slide to its two headings and keep the break-it
 line.
 
@@ -609,7 +612,7 @@ The opening order:
 - **Hand-off to Whitney:** "It is wide open right now. Here is the first thing to
   try."
 
-### Segment 2: Challenge 1, the CEO's secret (6 min). Owner: Michael and Whitney.
+### Segment 2: Challenge 1, the CEO's secret (5 min). Owner: Michael and Whitney.
 
 A Kubernetes problem with a Kubernetes fix, and the opener because the bot prints a
 real-looking home address to chat.
@@ -666,7 +669,7 @@ real-looking home address to chat.
   you should already have in place, pre-LLM, to help prevent any humans or any agents
   from doing things they shouldn't do."
 
-### Segment 3: Challenge 2, the Kubernetes catch-all (4 min). Owner: Whitney and Michael.
+### Segment 3: Challenge 2, the Kubernetes catch-all (5 min). Owner: Whitney and Michael.
 
 Six steps, in the deck's order (#776, #821). The quoted slide lines are the deck's own
 words (rounds-agenticburn#58).
@@ -941,9 +944,9 @@ saying the same thing.
 | 2 | Connected to an under-protected MCP server | 5 (Challenge 4) | Yes |
 | 3 | Deployed on a full IDP | 3, by voice | Named, not toured: the catch-all plays against the open public cluster and names each layer |
 | 4 | Starts wide open, the audience hacks it live | 2 to 5 (public bot, phones) | Yes |
-| 5 | The Kubernetes security layers you should already have | 2 (RBAC, said), 3 (admission, runtime, egress, named), 4 (Kyverno admission, shown) | One shown, the rest named |
+| 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-on` from #774, then one slide each), 4 (least privilege, `guard-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named on its own slide |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
-| 7 | Good GenAI observability practices | 2, 4, 5 (a Datadog tab per challenge) | Yes once the traces are pre-seeded (#648); the Grafana view carries it without Datadog (#500) |
+| 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); Challenge 2 has no seed yet (#843), so segment 3 shows its live trace in the `burritobot-private` tab; the Grafana view carries it without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes for asks with a listed word; a paraphrase is not promised (llm-guard-cpu-offline#2) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
 
