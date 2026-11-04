@@ -15371,3 +15371,8 @@ AWS session in the test's environment, each of the three unfiltered selectors ("
 link's token loop, about 11 minutes each, so the offline suite ran past the background job's hour twice. The test
 now stubs `cmd_guardrails_link` beside `_provision_spec_fleet`, and runs its 34 checks in about 3 seconds. Nothing it
 asserts reads the link.
+
+**The suites (run 16962, at `62524287`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests) in 26m12s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
+tests, `test_replay_prompts.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier ran
+`test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
