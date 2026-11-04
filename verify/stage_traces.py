@@ -12,8 +12,8 @@
     # the next morning: every seeded trace is still in LLM Observability
     python3 verify/stage_traces.py check --profile accen-dev
 
-Each challenge opens on its trace, before the room plays (Michael, 2026-10-31), so every challenge is seeded twice:
-the attack as it lands, and the same ask after the fix. Challenge 3 adds the input guard's double duty Whitney asked
+Each challenge shows its trace after the presenters' attack and again after its fix (the 2026-11-01 slide-by-slide
+review, #776 and #818), so every challenge is seeded twice: the attack as it lands, and the same ask after the fix. Challenge 3 adds the input guard's double duty Whitney asked
 for on the 2026-10-29 call: someone else's PII refused before the model, so it never reaches the model or the trace.
 Seven /chat requests, six of them model calls, in presentation order:
 

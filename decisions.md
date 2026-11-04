@@ -13865,3 +13865,18 @@ run-of-show's segments.
 stand as they are, the two chips included, and #822's last criterion counts the page edit as within scope. The rest
 of the `/kubecon` page still follows the 2026-10-31 flow; moving it to the 2026-11-01 flow stays a separate change,
 proposed as a follow-up in run 16840's report.
+## 2026-11-04 · #840 · `verify/stage_traces.py`'s docstring follows #818's trace order
+
+**What changed.** The docstring's opening sentence on the seeding, line 15, said "Each challenge opens on its trace,
+before the room plays (Michael, 2026-10-31)". #818 moved each challenge's Datadog trace to after the presenters' live
+attack in `facilitation/kubecon-na-2026-run-of-show.md` (the 2026-11-01 slide-by-slide review, #776) and left this
+line as a followup. It now says each challenge shows its trace after the presenters' attack and again after its fix,
+the same words as the run-of-show's Night Before seeding step. The seeding is unchanged: two seeds per challenge,
+seven `/chat` requests in presentation order. No code changed.
+
+**Tests that read the words.** `git grep` over `verify` and `scripts` for "opens on its trace" and "before the room
+plays" found only this docstring and `verify/test_instructor_brief.py`, whose check reads the `/kubecon` page's pattern
+line, not this file. That page (`gitops/ai-layer/web/kubecon.html`) still lists the trace before the play; it is
+named as a followup, since this issue is the docstring alone.
+
+**Live check.** None applies: a docstring moves nothing on either cluster, and nothing is owed on a cluster for it.
