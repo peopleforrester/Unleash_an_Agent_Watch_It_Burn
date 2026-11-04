@@ -231,8 +231,21 @@ check("the trace comes before the room plays (Michael, 2026-10-31)", _pat.find("
 check("the KubeCon opening carries no deleted-cluster story (#740)",
       "deleted-cluster" not in KUBECON and "Cold open" not in KUBECON
       and "deleted-cluster hook" not in ROS and "### Segment 1: Opening" in ROS)
-check("Challenge 1's row in the run-of-show names guard-rbac-on, not an optional output guard (#739)",
-      "output guard optional" not in ROS and "`guard-rbac-on`; no output guard" in ROS)
+# Since the 2026-11-01 review (#776, #820, #821) segment 2 runs no fix, and segment 3's guardrails-on (#774) turns
+# all four Kubernetes layers on together, RBAC among them. The cut table's rows follow that flow (#847).
+_CUT_ROW_ANCHORS = ("| Challenge 1, the CEO's record (", "| Challenge 2, the Kubernetes catch-all (")
+_cut_rows = {a: next((ln for ln in ROS.splitlines() if ln.startswith(a)), None) for a in _CUT_ROW_ANCHORS}
+for _a, _row in _cut_rows.items():
+    if _row is None:
+        sys.exit(f"anchor {_a!r} is not a row in facilitation/kubecon-na-2026-run-of-show.md: reword the test with it")
+_cut1, _cut2 = (_cut_rows[a] for a in _CUT_ROW_ANCHORS)
+check("Challenge 1's cut-table row runs no fix in segment 2, has RBAC arrive with guardrails-on, and offers no "
+      "output guard (#739, #847)",
+      "output guard optional" not in ROS and "no fix in segment 2" in _cut1 and "`guardrails-on`" in _cut1
+      and "no output guard" in _cut1 and "guard-rbac-on" not in _cut1)
+check("Challenge 2's cut-table row has guardrails-on turn on all four layers, not name them untoggled (#847)",
+      "`guardrails-on`" in _cut2 and all(w in _cut2 for w in ("RBAC", "Kyverno", "KubeArmor", "NetworkPolicy"))
+      and "not toggled" not in _cut2)
 _seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
 _llm = ("LLM01</b> Prompt Injection", "LLM02</b> Sensitive Information Disclosure", "LLM03</b> Supply Chain",
         "LLM04 Data and Model Poisoning", "LLM05 Improper Output Handling", "LLM06</b> Excessive Agency",

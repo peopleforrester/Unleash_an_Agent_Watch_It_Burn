@@ -13966,3 +13966,28 @@ follow-up.
 **The suites (run 16864, at 5ab77bf).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
 verify/run-tests.sh`, ran 244 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"). Then it printed "53 checks
 ran (the offline suite and 52 tier tests) in 25m49s" and "ALL E2E TOOLS TIER CHECKS GREEN". No dependency was added.
+## 2026-11-04 · #847 · The run-of-show's "Challenges shown live, and challenges cut" table follows segments 2 and 3
+
+**What changed.** In `facilitation/kubecon-na-2026-run-of-show.md`, the table's Challenge 1 row still named RBAC
+with `guard-rbac-on` as its fix, and the Challenge 2 row said each layer was "named, not toggled". Both followed the
+2026-10-31 flow. Since the 2026-11-01 review (#776, with #820 and #821), segment 2 runs no fix and ends on the OWASP
+Top 10 for LLM Applications, and segment 3's `guardrails-on` (#774) turns RBAC, Kyverno admission, KubeArmor and the
+egress NetworkPolicy on together for both clusters. The Challenge 1 row now says there is no fix in segment 2, RBAC
+arrives with segment 3's `guardrails-on`, and there is still no output guard; the room tries it again after the
+switch and the Secret read comes back Forbidden. The Challenge 2 row now lists all four layers, is "Played and
+fixed, segment 3", and says the switch stops the room's Challenge 1 and 2 attacks before one slide per guardrail.
+The other rows are unchanged.
+
+**Tests that read the words.** `git grep -nF` over `verify` and `scripts` for each cell's text found one reader:
+`verify/test_instructor_brief.py` checked the run-of-show held "`guard-rbac-on`; no output guard" (#739). That
+check now finds the two rows by their opening words, exits naming the anchor and the file when either is missing,
+and checks the Challenge 1 row says no fix in segment 2, names `guardrails-on` and no output guard, and does not
+name `guard-rbac-on`, and that the Challenge 2 row names `guardrails-on` and all four layers and not "not toggled".
+Both checks fail on the old rows and pass on the new ones.
+
+**Left alone.** The Night Before probe paragraph still says the probe applies `guard-rbac-on`'s Role; that is what
+`verify/kubecon_probe.py` does, not a stage step, so it is outside this table. The `/kubecon` page still runs
+`guard-rbac-on` in Challenge 1; #844 covers it.
+
+**Live check.** None applies: a run-of-show table row moves nothing on either cluster, and nothing is owed on a
+cluster for it.

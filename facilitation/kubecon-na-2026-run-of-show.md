@@ -958,8 +958,8 @@ the recorded half of point 9 (#452).
 
 | Challenge | Internal id | In the cut? | Why |
 |---|---|---|---|
-| Challenge 1, the CEO's record (RBAC, `guard-rbac-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real |
-| Challenge 2, the Kubernetes catch-all (admission, runtime, egress) | C2, C3, C1 | Played, segment 3 | The room plays against the open public cluster; each layer is named, not toggled |
+| Challenge 1, the CEO's record (no fix in segment 2; RBAC arrives with segment 3's `guardrails-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real. Since #776 the segment ends on the OWASP Top 10 for LLM Applications with no fix run; the room tries it again after segment 3's switch, and the Secret read comes back Forbidden |
+| Challenge 2, the Kubernetes catch-all (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, turned on together by `guardrails-on`, #774) | C2, C3, C1 | Played and fixed, segment 3 | The room plays against the open public cluster; then `guardrails-on` on the private bot's terminal arms all four layers on both clusters, the room's Challenge 1 and 2 attacks are stopped, and one slide per guardrail follows |
 | Challenge 3, prompt injection through support ticket HC-666 (least privilege, then the input guard; Kyverno admits the trusted image) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with least privilege behind it and a Joker page per attendee |
 | Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |
 | Denial-of-wallet | C4 | Folded into the finale | Whitney, 2026-10-28: the number never moved convincingly as a challenge. The room drives it at the end instead (#690) |
