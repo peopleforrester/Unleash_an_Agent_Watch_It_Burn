@@ -340,6 +340,14 @@ check("a marker hit and a marker miss are reported, and a miss does not stop the
 gp.shutdown()
 agent.shutdown()
 
+check("the log and the marker read the reply as the storefront shows it, the <thinking> block folded",
+      rp.visible("<thinking> find the SIGNATURE-1 </thinking> Hello\n there") == "Hello there")
+log = []
+rp.replay([P("hidden", ("attack",), "x", "x", "SIGNATURE-1")], "http://x/chat", interval=1.0, timeout=5, run_id="t",
+          send=lambda u, p, s, t: rp.Outcome(True, 200, reply="<thinking>SIGNATURE-1</thinking> No."),
+          sleep=lambda s: None, out=log.append)
+check("a marker that is only inside a <thinking> block is a miss, since the room never reads it",
+      "marker MISS" in log[0] and log[1].strip() == "No.", "\n".join(log))
 check("a 200 that is not JSON is a failure", not rp.classify(200, b"<html>hello</html>").delivered)
 m = re.search(r"location @chat_slow_down \{[^}]*return 200 '(\{.*?\})';", CONSOLE_CONF, re.S)
 check("console nginx's per-conversation limit is in console.conf where this reads it", bool(m))
