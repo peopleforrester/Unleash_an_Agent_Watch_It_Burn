@@ -48,7 +48,11 @@ check "up refuses a roster name too: those are built by instructors up" '[[ -z "
 check "up still provisions attendee pool clusters by count" \
   '[[ "$(up 2 | sort | tr "\n" " ")" == "watch-it-burn-attendee-001 watch-it-burn-attendee-002 " ]]'
 check "and by name" '[[ "$(up watch-it-burn-attendee-007)" == watch-it-burn-attendee-007 ]]'
+# instructors up links the KubeCon pair's guardrails switch once the whole roster is built (#774). Stubbed like
+# provisioning: unstubbed, each of the three unfiltered selectors waits out guardrails-link's token loop against
+# clusters it cannot reach, about 11 minutes each on a host with no AWS session (run 16962, #452).
 spec() { q "_provision_spec_fleet() { :; }; print_bootstrap_hints() { :; }; require_tools() { :; }
+            cmd_guardrails_link() { :; }
             cmd_instructors up $1 >/dev/null 2>&1; printf '%s\n' \"\${!PROVISION_SPEC[@]}\""; }
 check "instructors up never builds a -student cluster, for any selector" \
   '( for r in "${ROSTER}" "${FIX}"; do for s in "" both all community admin alpha beta; do

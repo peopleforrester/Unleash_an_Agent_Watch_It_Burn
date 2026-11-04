@@ -15363,3 +15363,11 @@ built on, so most of it was made again on the current layout:
 **Not yet done:** the six videos and shots 02-2 and 03-4, made at the first full rehearsal, and the replay over a
 presenter's phone hotspot, which is the Night Before's. `verify/test_fallback_deck_e2e.py` (tools tier) opens the
 deck from disk with the network cut off and steps through every slide.
+
+**A test fix the suite needed (run 16962).** `verify/test_presenter_student_retired.sh` runs `cmd_instructors up`
+with provisioning stubbed. Since #774, `instructors up` then links the KubeCon pair's guardrails switch
+(`cmd_guardrails_link`) whenever the whole roster is selected, and the test did not stub it. On this host, with no
+AWS session in the test's environment, each of the three unfiltered selectors ("", `both`, `all`) waited out the
+link's token loop, about 11 minutes each, so the offline suite ran past the background job's hour twice. The test
+now stubs `cmd_guardrails_link` beside `_provision_spec_fleet`, and runs its 34 checks in about 3 seconds. Nothing it
+asserts reads the link.
