@@ -14485,3 +14485,21 @@ the private terminal to see its last line.
 `burritobot-private.burritobot.co` shows segment 2 with no toggle, segment 3 with the `guardrails-on` beat, and the
 iPad sheet (`/kubecon?sheet=1`) with the off-topic asks under segment 1; `verify/test_kubecon_prompt_sheet_e2e.py`
 holds the sheet offline.
+
+## 2026-11-04 · #844 · The tools tier's public-image test retries a 429 from public.ecr.aws
+
+**What happened.** Run 16863's first `bash verify/run-e2e-tools.sh` (at `f4b28e3f`) ran 244 offline tests green and
+then printed "53 checks ran (the offline suite and 52 tier tests) in 26m41s" with one failure:
+`test_public_images_served.py`, "busybox: sha256:a46257e06c82... answers an anonymous pull (HTTPError: HTTP Error 429:
+Too Many Requests)". Run again on its own a minute later, it passed. The repo's rule is that a test that fails once
+and passes on a rerun is broken, so this run fixes it rather than calling it flaky.
+
+**The cause.** ECR Public answers an anonymous client about once a second per source address. The test already waits
+1.2 s before each of its own requests, but other runs on this host run the same suites from the same address, so a
+request paced here can still meet a 429 that someone else spent. Busybox was the first manifest after the token.
+
+**The fix.** `fetch` and `blob` read through one helper, `opened()`, which retries an HTTP 429 only: after its
+Retry-After (at most 30 s), or 2, 4, 8 and 16 s, five tries in all. Any other error, or a fifth 429, still fails the
+check, so a registry that stopped serving a digest still reads red. `verify/test_public_images_retry.py` is the offline
+half: it lifts `opened()` and `RETRIES_ON_429` out of the file by name and runs them against a stubbed urlopen and
+sleep (two 429s then an answer; a Retry-After of 3 and of 3600; five 429s; a 404). No dependency was added.

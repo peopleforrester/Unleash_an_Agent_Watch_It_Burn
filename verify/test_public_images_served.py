@@ -57,13 +57,33 @@ def paced() -> None:
     time.sleep(1.2)
 
 
+# The once-a-second budget is per source address, and this host runs other runs' suites from the same address, so a
+# request paced here can still meet a 429 spent by someone else (run 16863: busybox's first manifest, then green on a
+# rerun). A 429 says wait, not no: it is retried after Retry-After (at most 30 s), or 2, 4, 8 and 16 seconds,
+# five tries in all.
+# Any other error, or a sixth 429, still fails the check.
+RETRIES_ON_429 = 4
+
+
+def opened(req: urllib.request.Request) -> bytes:
+    for attempt in range(RETRIES_ON_429 + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == RETRIES_ON_429:
+                raise
+            wait = e.headers.get("Retry-After", "") if e.headers else ""
+            time.sleep(min(int(wait), 30) if wait.isdigit() else 2 ** (attempt + 1))
+    raise AssertionError("unreachable")
+
+
 def fetch(tok: str, repo: str, ref: str, accept: str = ACCEPT) -> tuple[str, dict]:
     paced()
     req = urllib.request.Request(f"https://public.ecr.aws/v2/{repo}/manifests/{ref}",
                                  headers={"Authorization": f"Bearer {tok}", "Accept": accept})
     # The digest is the sha256 of the bytes served, computed here: ECR Public sends no Docker-Content-Digest on a GET.
-    with urllib.request.urlopen(req, timeout=30) as r:
-        raw = r.read()
+    raw = opened(req)
     return "sha256:" + hashlib.sha256(raw).hexdigest(), json.loads(raw)
 
 
@@ -71,8 +91,7 @@ def blob(tok: str, repo: str, digest: str) -> dict:
     paced()
     req = urllib.request.Request(f"https://public.ecr.aws/v2/{repo}/blobs/{digest}",
                                  headers={"Authorization": f"Bearer {tok}"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
+    return json.loads(opened(req))
 
 
 try:
