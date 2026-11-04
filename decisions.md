@@ -14081,3 +14081,9 @@ The draft's two commits (839dca3d, 70462af9 on `origin/agent/837-16832`) were ch
 offline suite (244 tests, `test_ensure_submodules.sh` the new one, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then 53
 checks (the offline suite and 52 tier tests) in 25m11s, ending `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No live
 cluster check is owed: the change is presenter prose, one test's regex and the submodule step of the test runners.
+
+**The suites after the rebase (run 16870, on 9f17f9d7, rebased onto staging c5b624e6).** `bash verify/run-e2e-tools.sh` ran
+the offline suite (245 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then 53 checks (the offline suite and 52 tier
+tests) in 25m10s, ending `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The four narrative files still name the
+instance-identity document and none says get-caller-identity after staging's own edits to the run-of-show and
+/kubecon page.
