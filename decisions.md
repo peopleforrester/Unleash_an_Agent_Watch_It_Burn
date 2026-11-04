@@ -14042,7 +14042,11 @@ missing anchor and does not masquerade as a broken pivot check (Tests own their 
 red) and green after the rewording.
 
 **Suite results.** `python3 verify/test_imds_credential_theft.py` exits 0 (all checks, including the
-new #837 block). Full `bash verify/run-e2e-tools.sh` results recorded below once the run completes.
+new #837 block). On 0408991d, run 16845's `bash verify/run-e2e-tools.sh` ran the offline suite (243
+tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then 53 checks (the offline suite and 52 tier tests) in
+24m44s, ending `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. Run 16832 wrote the change and was stopped by
+the loop detector while it polled that suite with one identical command over and over; run 16845 polled
+with numbered commands of up to nine minutes each.
 
 **Not yet run on a cluster.** This is prose only; no live check is owed by the change. The pre-existing
 live half (the script's instance-identity-document output seen on `watch-it-burn-community` at hop
