@@ -14961,3 +14961,57 @@ unchanged.
 tier tests) in 24m34s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it, which is
 `bash verify/run-tests.sh`, ran 248 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
 `test_storefront_witch_name_e2e.py`, `test_witch_name_vocab.py` and `test_tests_own_inputs.py` passed among them.
+
+## 2026-11-04 · #792 · The Every prompt view is not saved yet: this run could not reach Whitney's org, and the browser acts are escalated
+
+**What #792 asks.** Save the brief's room-view query, `ml_app:burritobot k8s.cluster.name:burritobot-public` (beat 3 of
+`gitops/ai-layer/web/brief.html`, #791), as a view named **Every prompt** in LLM Observability in Whitney's sandbox
+org, then open the brief's link
+`https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-public` there and check
+that it fills in the query and lists BurritoBot turns with the student's words in the CONTENT column. The route, per
+Michael on #337 (2026-10-30), is a browser act in his Chrome on Tanjiro; his answer of 2026-11-01 to escalation 397
+("Why does this need Michael?") stands, so nothing here asks him.
+
+**What this run (hecaton run 16939) could reach, on 2026-11-04.** Nothing in Datadog.
+- The session files under `/var/lib/hecaton/runs/16939/clusters/` (`env`, `aws-config`, `aws-credentials`,
+  `kubeconfig`, and `bin/`) are mode 640 or 750, owner and group `hecaton`, and this run's user
+  (`hecaton-s4-claude-certkraken`, groups `hecaton-s4-claude-certkraken`, `hecaton-runs`, `hecaton-tools`) is not in
+  group `hecaton`. `cat "$HECATON_CLUSTER_ENV"` printed "Permission denied" and `aws sts get-caller-identity --profile
+  accen-dev` printed "The config profile (accen-dev) could not be found". That is hecaton#508, as for runs 16454,
+  16650, 16653 and 16933.
+- Even with the session, the pair in `watch-it-burn/datadog` is read-only (#629, #759), and no Datadog API that saves
+  an LLM Observability view is recorded here or was found this run (Datadog's LLM Observability query docs, searched
+  2026-11-04, describe the Trace Explorer's query syntax and no saved-view endpoint). Saving the view is a press in the
+  web UI.
+- This run has no browser of its own. `hec` has no browser verb; the browser route is the report's `escalate` list,
+  which drives Michael's Chrome on Tanjiro with the verbs read, screenshot, download, click and fill.
+
+**What was escalated, and why only reads.** Two browser acts on the brief's link: a `read` (the page text) and a
+`screenshot`. Together they answer criterion 2 as far as a first look can (does the link land signed in, does the
+search bar hold the query, do BurritoBot turns list with words in CONTENT) and show the page's own controls for
+saving a view and whether a view named Every prompt already exists. No click or fill was escalated: this run has
+never seen the page, so any selector would be a guess, and a wrong press in Whitney's org could change something
+that is not BurritoBot's, which #629 forbids. The next run on #792 writes the click and fill acts for saving from
+what the read and the screenshot show. If the read shows Datadog's sign-in page, the Chrome has no session in
+Whitney's org, as run 12987 found; that sign-in is the one act that is Michael's (the governance's own-login class).
+
+**The run of show does not say the view is already saved.** #792's body allows for the run of show's Night Before to
+record the room view as saved. Its "Datadog sandbox org" row (`facilitation/kubecon-na-2026-run-of-show.md`, line 52)
+lists "the room view is saved (#665)" as a task due by 2026-11-08, not as done, so it is no evidence that Every prompt
+exists.
+
+**Nothing in the org was created, edited or deleted** by this run: it made no call to Datadog at all.
+
+**Not yet run on a cluster,** the #791 entry's three checks, named again, plus #792's own:
+1. Save the view: in LLM Observability's trace list, signed in to Whitney's sandbox org, open the brief's link, save
+   the query as a view named Every prompt, reload, and record the view's URL and the page text in this file.
+2. The link fills in the query: the search bar holds `ml_app:burritobot k8s.cluster.name:burritobot-public` and the
+   list is filtered by it.
+3. guard-proxy's root span carries the query's cluster tag: after one Community chat (`python3
+   verify/agent_obs_flow.py chat --profile accen-dev`), its row's root span (`POST /chat`, service `burritobot`)
+   carries `k8s.cluster.name:burritobot-public`, and the CONTENT column's INPUT is the chat's prompt.
+4. The `service:burritobot-agent` and `generate_content` rows show the system prompt in their input, as the brief's
+   warning says.
+Checks 2 to 4 are reads; with a readable session, `python3 verify/dd_traces.py --profile accen-dev --minutes 1440
+--traces 1` answers check 3 from the API. The brief and `verify/test_instructor_brief.py` are unchanged: nothing the
+org showed contradicts them, because nothing was shown.
