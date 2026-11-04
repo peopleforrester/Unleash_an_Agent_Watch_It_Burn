@@ -11,8 +11,9 @@
 # them, so nobody in a fifty-person room is publicly stuck on Challenge 1 (the feedback form makes the same
 # call, feedback-agenticburn#6). The claim mapping stays behind the provisioning service's token-gated roster.
 #
-# What each column reads, so a renamed field is found here and not on the day. Every log query is filtered
-# to the fleet's clusters and grouped by kube_cluster_name, like the fleet dashboard's metric queries.
+# What each column reads, so a renamed field is found here and not on the day. Every log and span query is
+# filtered to the fleet's clusters and grouped by kube_cluster_name, like the fleet dashboard's metric queries.
+# Each one was run against Whitney's sandbox org on 2026-11-04 (#489); decisions.md has what each returned.
 #   C1 exfil      workshop-mcp's tool audit line (gitops/ai-layer/tool_audit.py, event tool_invocation): a
 #                 run_shell call whose command names the beacon. It marks the call reaching the tool, which
 #                 is the attack landing on an unpatched cluster; the provisioning service's /beacon/view
@@ -20,14 +21,22 @@
 #   C2 villain    any log line from a villain image (images/villains/README.md), by short_image: the villain
 #                 is running on that cluster. Matched by name because the platform's own images share the
 #                 peopleforrester owner (ghcr.io/peopleforrester/watch-it-burn), so a wildcard would not do.
-#   C3 recipe     Falco's "Recipe Snoop In Agent Namespace" rule (gitops/bootstrap/apps/falco.yaml, json_output, so the
-#                 rule name is the @rule attribute). Absent on the Community cluster, which has no Falco.
+#   C3 recipe     Falco's "Recipe Snoop In Agent Namespace" rule (gitops/bootstrap/apps/falco.yaml), counted by
+#                 the falco.rules.matches.count metric the Agent's falco check scrapes, where the rule is the
+#                 rule_name tag, lowercased with underscores. Not Falco's log line: its JSON carries a hostname
+#                 field, Datadog takes that as the log's host, and the bare node name it names is not the Agent's
+#                 host (<node>-<cluster>), so the line arrives with no kube_cluster_name and could never be
+#                 grouped by cluster (#489). Absent on the Community cluster, which has no Falco.
 #   C4 bill       guard-proxy's gen_ai.client.cost gauge, the same number as the console's Cost counter. A
 #                 race rather than a tick: the biggest bill in the room is the score. Read with sum:, never
 #                 max: from guard-proxy-agenticburn#38 on the gauge is one series per gen_ai.request.model,
 #                 and only their sum is the cluster's bill once a model swap has spent on two (#794).
-#   C5 guarded    guard-proxy event output_scrub: the output guard is on and redacted a reply, which only
-#                 happens once the student has installed the fix and run the attack again.
+#   C5 guarded    guard-proxy's /chat span stamped witb.guard.decision output_redacted: the output guard is on
+#                 and redacted a reply, which only happens once the student has installed the fix and run the
+#                 attack again. A span and not a log line, because /chat, the path the storefront and the lab
+#                 use, redacts without logging: only the A2A passthrough logs event output_scrub. Spans are
+#                 kept by Datadog's retention, which keeps most of these but not every one, so a cluster
+#                 that re-ran the attack several times shows green (#489).
 #   C6 blocked    guard-proxy events input_blocklist_hit / input_classifier_block, or workshop-mcp's
 #                 ticket_withheld: the input guard is on and refused a prompt or withheld the fetched ticket
 #                 (#640: C6's payload arrives through read_support_ticket, which guard-proxy never sees), the
@@ -86,24 +95,19 @@ widgets:
                 query: "kube_cluster_name:burritobot-* kube_namespace:agent short_image:(promo-mascot OR festival-promo OR loyalty-rewards OR joker OR gargamel OR skeletor OR mumm-ra OR shredder OR cobra-commander OR megatron)"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
-            - data_source: logs
+            - data_source: metrics
               name: c3
-              indexes: ["*"]
-              compute: { aggregation: count }
-              search:
-                query: "kube_cluster_name:burritobot-* kube_namespace:security @rule:\"Recipe Snoop In Agent Namespace\""
-              group_by:
-                - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
+              query: "sum:falco.rules.matches.count{kube_cluster_name:burritobot-*,rule_name:recipe_snoop_in_agent_namespace} by {kube_cluster_name}.as_count()"
+              aggregator: sum
             - data_source: metrics
               name: c4
               query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
-            - data_source: logs
+            - data_source: spans
               name: c5
-              indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy @event:output_scrub"
+                query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy @witb.guard.decision:output_redacted"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: logs

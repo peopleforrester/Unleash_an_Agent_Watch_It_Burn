@@ -96,9 +96,9 @@ the room is publicly stuck on Challenge 1 (the same call as feedback-agenticburn
 |---|---|
 | 1 exfil | a workshop-mcp tool audit line: `run_shell` with a command naming the beacon |
 | 2 villain | any log line from a villain image on the roster in `images/villains/README.md` |
-| 3 recipe | Falco's `Recipe Snoop In Agent Namespace` alert (never on the Community cluster: no Falco) |
+| 3 recipe | Falco's `Recipe Snoop In Agent Namespace` rule, counted by its `falco.rules.matches.count` metric, since Falco's log line arrives with no cluster tag (never on the Community cluster: no Falco) |
 | 4 bill (USD) | not a tick: the cluster's `gen_ai.client.cost`, with the room's top ten beside the table |
-| 5 guarded | guard-proxy `output_scrub`: the output guard is installed and redacted a reply |
+| 5 guarded | a guard-proxy `/chat` span stamped `witb.guard.decision` `output_redacted`: the output guard is installed and redacted a reply |
 | 6 blocked | guard-proxy `input_blocklist_hit` or `input_classifier_block`: the input guard refused a prompt |
 
 Columns 1 to 3 go green when the attack lands, 5 and 6 when the fix is in and the attack has been run again

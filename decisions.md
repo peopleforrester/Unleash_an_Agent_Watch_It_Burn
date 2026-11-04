@@ -15437,3 +15437,71 @@ or `docs/research/` between `7210cbb8` and `916b016e`, so run 16963's Backstage 
 **Checks.** The decision is recorded in this file. The live checks listed under "Platform support" were read-only. The offline suite and the tools tier are recorded in the next commit, as earlier entries do.
 
 **The suites (run 17027, at `2ab82eca`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier tests) in 27m07s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it printed `ALL OFFLINE RENDER-GATE TESTS GREEN` (log line 13216). The log has one `FAIL` line, at line 14368: `datadog-secret fields: app-key(empty)` in `security`. It is the output of a negative fixture. The next check in the same test, "real kubectl render, app-key empty in security: exits non-zero and reports it empty", prints PASS, so the script behaves as intended. The log is `/var/lib/hecaton/runs/17027/e2e-tools.log`.
+
+## 2026-11-04 · #489 · The leaderboard's queries against real data: columns 3 and 5 could never fill, and now read signals that carry the cluster
+
+**What ran.** This run had the cluster session (`. "$HECATON_CLUSTER_ENV"`, AWS profile accen-dev, us-west-2) and
+read the pair in Secrets Manager `watch-it-burn/datadog`. That pair reaches Whitney's sandbox org (`Datadog`,
+datadoghq.com), where both KubeCon clusters ship as `kube_cluster_name` `burritobot-private` and
+`burritobot-public`. Its application key is scoped read-only: it answers 403 on its own key list, as #629 says.
+So the leaderboard is still not in the org. `fleet_monitors.py --check` printed MISSING for all seven monitors, the
+fleet dashboard and the challenge leaderboard. The apply is #485's, with `WIB_FLEET_MONITORS_APP_KEY`. Instead, the
+run sent each leaderboard query to the same scalar query API the ops view uses (`/api/v2/query/scalar`), and the
+logs queries to the logs aggregate API, over 4 hours, 7 days and 15 days. Nobody walked challenges 1 to 6 for it;
+the counts are what the room's and the runs' own use of both clusters left.
+
+**What each column returned, before this change (7 days).**
+- online: 1 for both clusters.
+- 1 exfil, `@tool_input.command:*beacon*`: 4 on private, 275 on public (33 in the last 4 hours). The attribute works.
+- 2 villain, `short_image:(...)`: 24485 on public. The tag works.
+- 3 recipe, `@rule:"Recipe Snoop In Agent Namespace"` in `kube_namespace:security`: nothing, ever. Grouping `@rule:*`
+  by `kube_cluster_name` over 15 days gave no bucket at all, against about 2 million Falco lines in the index. A
+  Falco line carries `hostname` in its JSON. Datadog takes that as the log's host, so the host becomes the bare node
+  name `ip-10-0-90-162.us-west-2.compute.internal`, which has no host tags (`/api/v1/tags/hosts` answers `[]`).
+  The Agent's host is `ip-10-0-90-162.us-west-2.compute.internal-burritobot-private`, and that host carries
+  `kube_cluster_name`, `cluster_name`, `kube_node`, `kube_distribution` and `orch_cluster_id`. A falcosidekick line
+  in the same namespace has all five. So no Falco line has ever been countable by cluster.
+- 4 bill: 0.04 on private, 0.69 on public. The gauge works.
+- 5 guarded, `@event:output_scrub`: nothing, ever, on either cluster. Grouped by `@event`, guard-proxy's lines over
+  15 days are forward_error, input_classifier_block, price_tier, task_cancel, thinking_only_retry,
+  thinking_only_surfaced and topic_guard_block. In the pinned guard-proxy (c2eb4cf), `/chat` redacts at
+  `proxy.py:1690` and only stamps `witb.guard.decision` `output_redacted` on its server span; the `output_scrub`
+  log line is in `_scrub_response`, the A2A passthrough, which the storefront and the lab do not use. The spans do
+  arrive: 16 `output_redacted` spans on burritobot-private over 15 days, each tagged `kube_cluster_name`.
+- 6 blocked: 27 on private (2 in the last 4 hours). The events work.
+
+**The join works.** One scalar request holding all seven queries, metrics and logs and spans together, came back
+as one row per `kube_cluster_name` with each column aligned. That is the engine query_table uses. The widget itself
+needs the apply to be seen.
+
+**Change.**
+- Column 3 reads `sum:falco.rules.matches.count{kube_cluster_name:burritobot-*,rule_name:recipe_snoop_in_agent_namespace}
+  by {kube_cluster_name}.as_count()`, summed over the window. The Agent's `falco` check (the pod annotation in
+  `gitops/bootstrap/apps/falco.yaml`) scrapes that metric with `kube_cluster_name` on it and the rule in
+  `rule_name`, lowercased and with each space as `_`. Live, the same query for `exec_into_pod_detected` gave 67 on private
+  over 7 days, against 99 log lines over 15 days, and `unexpected_outbound_from_workshop_agent_pod` gave 15.
+- Column 5 reads guard-proxy's spans, `@witb.guard.decision:output_redacted`, grouped by `kube_cluster_name`. Live,
+  12 on private over 7 days and 16 over 15. Spans are kept by Datadog's retention and not all of them are: the org's
+  only enabled filter is the error default, and of the topic guard's 41 log lines over 15 days, 37 spans were kept.
+  A cluster that has re-run the attack a few times shows green. A log line on `/chat` would be complete, and that
+  is guard-proxy's change to make, filed as a follow-up. The room view's guard count reads the same missing line.
+- `fleet_monitors.validate_dashboard` holds spans queries to the same "grouped by kube_cluster_name" rule as logs
+  queries (`EVENT_SOURCES`).
+- `verify/test_leaderboard.py`: column 3 is held to the rule's `rule_name` tag, the falco check annotation, the
+  chart's metrics toggle and a summed count, and no column may read Falco's log line. Column 5 is held to the
+  `_stamp` call in the pinned proxy.py and a spans query on it. The email check now needs a local part before the
+  `@`, because `@witb.guard.decision` is an attribute and not an address. Against the old leaderboard.yaml, six
+  checks fail.
+
+**Not yet run on a cluster.**
+- The apply, which is #485's: `WIB_FLEET_MONITORS_APP_KEY=<key> fleet.sh monitors --apply --session
+  2026-11-12T20:50Z/2026-11-12T21:20Z`, then `fleet.sh monitors --check` and `verify/test_fleet_monitors_live.py`,
+  then a look at the leaderboard in TV mode for blank cells.
+- Column 3 filled. `recipe_snoop_in_agent_namespace` has no series in the org yet. On burritobot-private
+  KubeArmor's `block-recipe-snoop` is armed (`kubectl --context watch-it-burn-private get ksp -A`, 53 minutes old
+  when read), so the read is denied and Falco's `open_read` rule stays quiet; the community cluster has no Falco.
+  The run left the policy alone, because something on the pair had just armed it. The column fills on a cluster
+  where the C3 read succeeds with Falco running: an attendee cluster before the student applies the policy.
+
+**Left on the cluster.** Nothing. Every call was a read: the Secrets Manager read, Datadog queries, and
+`kubectl get` on both contexts.

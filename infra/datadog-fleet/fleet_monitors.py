@@ -240,8 +240,13 @@ def validate_signal(where: str, m: dict, flt: str) -> list[str]:
     return problems
 
 
+# The dashboard data sources whose queries are a search plus a group_by (logs, and the leaderboard's /chat spans,
+# #489), as opposed to a metric query that carries its grouping in `by {...}`.
+EVENT_SOURCES = ("logs", "spans")
+
+
 def query_text(q: dict) -> str:
-    """The filter string of a dashboard query: a metric query carries it in `query`, a logs query in
+    """The filter string of a dashboard query: a metric query carries it in `query`, a logs or spans query in
     `search.query`."""
     if q.get("data_source", "metrics") == "metrics":
         return q.get("query", "")
@@ -262,8 +267,8 @@ def validate_dashboard(dash: dict, cluster_filter: str) -> list[str]:
             for q in r.get("queries") or []:
                 if cluster_filter and cluster_filter not in query_text(q):
                     problems.append(f"dashboard widget {i} query {q.get('name')}: not filtered to {cluster_filter}")
-                if q.get("data_source") == "logs" and GROUP_BY not in {g.get("facet") for g in q.get("group_by") or []}:
-                    problems.append(f"dashboard widget {i} query {q.get('name')}: logs query is not grouped by {GROUP_BY}")
+                if q.get("data_source") in EVENT_SOURCES and GROUP_BY not in {g.get("facet") for g in q.get("group_by") or []}:
+                    problems.append(f"dashboard widget {i} query {q.get('name')}: {q.get('data_source')} query is not grouped by {GROUP_BY}")
             for f in r.get("formulas") or []:
                 refs = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", f.get("formula", ""))) - {"count_not_null"}
                 if not refs <= names:

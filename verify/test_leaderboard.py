@@ -50,9 +50,11 @@ print("== a projector view: one table, a row per cluster, rows that stay put =="
 check("one per-cluster table", len(tables) == 1)
 check("every metric query is one row per kube_cluster_name",
       all(q["query"].count("by {kube_cluster_name}") == 1 for q in queries.values() if q["data_source"] == "metrics"))
-check("every logs query is grouped by kube_cluster_name and nothing else",
+check("every logs and spans query is grouped by kube_cluster_name and nothing else",
       all([g["facet"] for g in q["group_by"]] == ["kube_cluster_name"]
-          for q in queries.values() if q["data_source"] == "logs"))
+          for q in queries.values() if q["data_source"] in fm.EVENT_SOURCES))
+check("every query is metrics, logs or spans", {q["data_source"] for q in queries.values()}
+      <= {"metrics", *fm.EVENT_SOURCES})
 check("every reporting cluster has a row, scored or not (the agent heartbeat anchors the join)",
       "datadog.agent.running" in queries.get("online", {}).get("query", ""))
 check("rows are sorted by cluster name, so nobody's row jumps when somebody scores",
@@ -63,7 +65,7 @@ check(f"columns for challenges 1 to 6 ({aliases})",
       [a.split()[0] for a in aliases[1:]] == ["1", "2", "3", "4", "5", "6"])
 for name in ("c1", "c2", "c3", "c5", "c6"):
     fmts = formulas.get(name, {}).get("conditional_formats", [])
-    check(f"{name}: a done cell is green with the log count hidden",
+    check(f"{name}: a done cell is green with the count hidden",
           fmts == [{"comparator": ">=", "value": 1, "palette": "white_on_green", "hide_value": True}])
 check("challenges 7 and 8 are not columns, and the board says why",
       not any(a.split()[0] in ("7", "8") for a in aliases) and "7 and 8 are not on the board" in note)
@@ -71,10 +73,11 @@ check("challenges 7 and 8 are not columns, and the board says why",
 print("== cluster names, never people ==")
 text = json.dumps(board)
 check("no query or label names a person (no claim fields, no email)",
-      not re.search(r"claimed_by|claimed_at|email|@[a-z0-9.-]+\.[a-z]{2,}\b", text, re.I))
+      # An address has a local part before its @; a Datadog attribute (@witb.guard.decision) follows a space.
+      not re.search(r"claimed_by|claimed_at|email|[\w.+-]@[a-z0-9.-]+\.[a-z]{2,}\b", text, re.I))
 groups = set()
 for q in queries.values():
-    if q["data_source"] == "logs":
+    if q["data_source"] in fm.EVENT_SOURCES:
         groups |= {g["facet"] for g in q["group_by"]}
     else:
         groups |= set(re.findall(r"by \{([^}]*)\}", q["query"]))
@@ -114,12 +117,27 @@ check("C2: no platform image shares a short name with a villain, so a running pl
       not (short & roster))
 
 falco = (REPO / "gitops/bootstrap/apps/falco.yaml").read_text()
-check("C3: Falco has the rule the query names", "- rule: Recipe Snoop In Agent Namespace" in falco
-      and '@rule:"Recipe Snoop In Agent Namespace"' in search.get("c3", ""))
-check("C3: Falco logs JSON, so the rule name is an attribute", "json_output: true" in falco)
-check("C3: Falco runs in the security namespace the query filters on",
-      re.search(r"destination:\s*\n(?:\s+\w+:.*\n)*?\s+namespace: security", falco) is not None
-      and "kube_namespace:security" in search.get("c3", ""))
+RECIPE_RULE = "Recipe Snoop In Agent Namespace"
+c3 = queries.get("c3", {})
+# The Agent's falco check tags falco.rules.matches.count with the rule, lowercased and with its spaces as
+# underscores, as Datadog writes every tag value: "Exec Into Pod Detected" arrives as exec_into_pod_detected (#489).
+recipe_tag = "rule_name:" + RECIPE_RULE.lower().replace(" ", "_")
+check("C3: Falco has the rule the query names", f"- rule: {RECIPE_RULE}" in falco
+      and recipe_tag in c3.get("query", ""))
+check("C3: the Agent's falco check scrapes Falco's metrics endpoint, which the chart's metrics toggle turns on",
+      re.search(r"ad\.datadoghq\.com/falco\.checks:[^\n]*\n\s*\{\"falco\":\{\"instances\":\[\{\"openmetrics_endpoint\":"
+                r"\"http://%%host%%:8765/metrics\"", falco) is not None
+      and re.search(r"\n        metrics:\n          enabled: true\n", falco) is not None)
+check("C3: it counts the rule's matches over the window, a metric query summed as a count",
+      c3.get("data_source") == "metrics" and c3.get("aggregator") == "sum"
+      and c3.get("query", "").startswith("sum:falco.rules.matches.count{")
+      and c3.get("query", "").endswith("by {kube_cluster_name}.as_count()"))
+# Falco's JSON line carries a hostname field, which Datadog takes as the log's host. The bare node name it gives is
+# not the Agent's host (<node>-<cluster>), so the line arrives without the host's kube_cluster_name and no query
+# grouped by cluster ever counts it (seen in Whitney's sandbox org, 2026-11-04, #489).
+check("C3: no column reads Falco's log line, which arrives with no kube_cluster_name",
+      "json_output: true" in falco
+      and not any("@rule:" in t or "kube_namespace:security" in t or "source:falco" in t for t in search.values()))
 
 proxy = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
 check("C4: guard-proxy exports gen_ai.client.cost", '"gen_ai.client.cost"' in proxy
@@ -135,8 +153,14 @@ check(f"C4: every gen_ai.client.cost query sums its series ({len(cost_queries)} 
 check("C4: the pinned guard-proxy labels each cost series with gen_ai.request.model",
       re.search(r'Observation\([^)]*"gen_ai\.request\.model"', proxy) is not None)
 check("C5/C6: guard-proxy is a Deployment in the agent bundle", "guard-proxy" in deployments)
-check("C5: guard-proxy logs event output_scrub when the output guard redacts",
-      'extra={"event": "output_scrub"}' in proxy and "@event:output_scrub" in search.get("c5", ""))
+# /chat, the storefront's and the lab's path, redacts without a log line: only the A2A passthrough logs output_scrub.
+# What /chat does write is the guard's decision on its server span (#489).
+check("C5: guard-proxy's /chat stamps output_redacted on its span when the output guard redacts",
+      'self._stamp("witb.guard.decision", "output_redacted")' in proxy
+      and '"_server_span"' in proxy.split("def _stamp(", 1)[-1].split("\n    def ", 1)[0])
+check("C5: the column reads that stamp from guard-proxy's spans",
+      queries.get("c5", {}).get("data_source") == "spans"
+      and "kube_deployment:guard-proxy @witb.guard.decision:output_redacted" in search.get("c5", ""))
 check("C6: guard-proxy logs both input-guard refusals",
       # The classifier's line also names the scanners that flagged (guard-proxy-agenticburn#17, #684).
       'extra={"event": "input_blocklist_hit"}' in proxy
@@ -154,9 +178,13 @@ def broken(name, **over):
     q = next(q for w in b["widgets"] for r in w["definition"].get("requests", []) for q in r["queries"] if q["name"] == name)
     q.update(over)
     return fm.validate_dashboard(b, FILTER)
-check("a logs query not filtered to the fleet", any("not filtered" in p for p in broken("c3", search={"query": "@rule:x"})))
+check("a logs query not filtered to the fleet", any("not filtered" in p for p in broken("c1", search={"query": "@event:x"})))
 check("a logs query not grouped by cluster",
-      any("not grouped" in p for p in broken("c5", group_by=[{"facet": "host", "limit": 500}])))
+      any("not grouped" in p for p in broken("c6", group_by=[{"facet": "host", "limit": 500}])))
+check("a spans query not grouped by cluster",
+      any("spans query is not grouped" in p for p in broken("c5", group_by=[{"facet": "host", "limit": 500}])))
+check("a metric query not filtered to the fleet",
+      any("not filtered" in p for p in broken("c3", query="sum:falco.rules.matches.count{*} by {kube_cluster_name}.as_count()")))
 
 print()
 if failures:
