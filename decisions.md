@@ -15370,3 +15370,28 @@ build tooling.
 suite, 1 test) and `yarn build:backend`, all exit 0. `bash docs/research/2026-10-30-argo-sync-replay/replay.sh`
 printed `All argo-sync-replay scenarios match.` with 25 PASS and no FAIL both before the Go bumps and after them.
 The live check was the read-only Argo CD image read above; this change alters nothing on a cluster.
+
+## 2026-11-04 · #421 · test_presenter_student_retired.sh ran guardrails-link against the live KubeCon pair
+
+The offline suite stalled in run 16963 on `verify/test_presenter_student_retired.sh`. Its `spec` helper runs
+`cmd_instructors up` for the selectors "", both and all, and event.sh defaults `WIB_ROSTER_PROFILES` to kubecon, so
+each of those ends in `cmd_guardrails_link`. The test's comment said "no cloud access", but a hecaton run has a live
+KUBECONFIG and an AWS session for watch-it-burn-community and watch-it-burn-private (since #809). So the test took
+the real `aws eks update-kubeconfig` for watch-it-burn-community and polled its `guardrails-switch` token Secret 30
+times, 10 s apart, on every such call: about an hour in all, which is past hecaton's 15-minute stall limit for a
+run that prints nothing. Neither cluster has a `guardrails-switch` namespace (read with `kubectl get secret -n
+guardrails-switch` on both, 2026-11-04), so nothing was written. Had the token been there, the test would have
+applied `guardrails-peer` Secrets on both clusters.
+
+Run 16967 (#616, the entry above) found the same stall at the same time and landed first: it stubs
+`cmd_guardrails_link` in this test's `spec` and in `test_fleet_apply_failure_exit.sh`. This run's first attempt
+stubbed the same line, so hecaton's rebase hit a conflict on it and nothing landed. The resumed run (17025) keeps
+#616's stub and comment as they are, and adds only what #616 does not have: a backstop for the next call nobody has
+found. The test now runs fleet.sh with KUBECONFIG, HECATON_CLUSTER_ENV and the AWS variables unset, and with aws,
+kubectl, eksctl, terraform and helm on PATH replaced by stubs that log the call and exit 1. A new last check fails,
+printing each call, when any stub was called. With #616's `cmd_guardrails_link` stub taken out, that check fails and
+names the three `aws eks update-kubeconfig` calls; with it, all 35 checks pass in about 1.5 s.
+
+The other offline tests that source fleet.sh are not given the same backstop here. #616 found
+`test_fleet_exit_codes.sh`, `test_cluster_roles.sh` and `test_fleet_converge_repairs.sh` already stub the link;
+whether any other one reaches the cloud is a follow-up.
