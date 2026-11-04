@@ -14862,3 +14862,8 @@ session was read: on 2026-11-04 at 17:09 UTC `https://prompts.burritobot.co/heal
 The prose gate (`verify/prose_gate.py` with hecaton's scanner) fails run 16454's entry on one word, `showcase` in its
 "Held offline" line, which the gate lists as an LLM-favorite verb that decisions.md, already reading `major`, cannot add;
 that line now says "on beat 3". The word stays only in the test's Python, which the gate does not read.
+
+**The suites (run 16933, at `67a900cf`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier
+tests) in 24m23s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it, `run-tests.sh`,
+ran 248 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_instructor_brief.py` among them.
+`test_image_version_tags.py`, the check that held run 16454 red, passes since #815.
