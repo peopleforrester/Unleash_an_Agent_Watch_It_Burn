@@ -15334,7 +15334,7 @@ it against the two clusters that are up, with no bring-up. Hecaton run 16965 did
 
 **The reading.** M1 is met: both clusters came up from fleet.sh and have carried rehearsals since, M2's cold read
 (#611) and M6's two timed run-throughs (#615), both closed. The 5 admin-probe failures are #774's rollout, which its
-own entry (2026-11-02 · #774) lists as not yet run on a cluster, not part of the bring-up. Moving the live pair onto
+own entry (2026-11-02 · #774) lists as not yet run on a cluster. The bring-up itself is done. Moving the live pair onto
 the KubeCon profiles redeploys the bootstrap root, which a run does not do, so it goes to a follow-up. M1's Moves
 column names `kubecon-na-burritobot`, the date KR "BurritoBot breakout with Whitney Lee and its demo platform
 ready, in line with the accepted abstract", due 2026-11-08. It is read the way talks-knowledge read `kubecon-na-cnu`
