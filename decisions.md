@@ -13707,6 +13707,13 @@ are left as they are: they test model_pin_check's judges for both builds, and th
 c2eb4cf2. With `priced_tier()` in model_pin_check.py changed to return MODEL_TIER alone it fails 15 checks; the file
 was restored.
 
+**The repin had turned the offline suite red.** `verify/test_weaver_guard_proxy_spans.py` found the cost gauge's
+observation by the literal `yield Observation(_cost["usd"], {`. c2eb4cf2 carries guard-proxy-agenticburn#38
+(1cfa6d6), which observes one series per model as `yield Observation(usd, {` over the per-model split
+`_cost_by_model`, so the test failed three checks on staging from a65f748d on. The test now takes either form, and
+for the per-model one also requires the split it reads from. The attributes (`gen_ai.request.model`,
+`gen_ai.provider.name` as `"aws.bedrock"`) and the gauge's checks are unchanged.
+
 **Live check.** Not run: `runs/16852/clusters/kubeconfig` and `clusters/env` give `permission denied`, the
 hecaton#508 problem. Nothing on either cluster was read or changed.
 
