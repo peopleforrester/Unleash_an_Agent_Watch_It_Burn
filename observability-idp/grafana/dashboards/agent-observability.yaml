@@ -5,17 +5,22 @@
 #   default is "prometheus"); the Tempo datasource uid is pinned to "tempo" in prometheus.yaml.
 #
 # THE SEGMENT 5 PANELS (#500, #675). The KubeCon run-of-show's segment 5, the trace walk-through, shows, for the
-# beats just run on the private cluster, the C5 reply that came back redacted, the C6 injection blocked at zero
-# tokens, and the C7 call that never reached read_internal_config, in the order the challenges run. Datadog
+# beats just run on the private cluster, the C5 read of the CEO's Secret (the record before guardrails-on, Forbidden
+# after it), the C6 ticket the input guard withheld, and the C7 call that never reached read_internal_config, in the
+# order the challenges run. Datadog
 # Agent Observability is the primary surface; these panels are the fallback when no Datadog org pool is live,
 # and they read only Tempo, which the collector feeds with or without a Datadog key
 # (gitops/otel-collector/values.yaml). Open at
 # https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs.
 #
 # Each query keys on what guard-proxy and kagent actually put on the spans (gitops/ai-layer/guard-proxy/proxy.py):
-#   C5  guard-proxy sets the ROOT span's gen_ai.output.messages to the reply the user got, after the output
-#       guard, so a redacted reply carries llm-guard's [REDACTED] (or the hard-block text). The chat child
-#       span keeps the model's own reply, which is the before/after.
+#   C5  Challenge 1. The bot reads the CEO's record with workshop-mcp's get_vault_entry, and the collector copies
+#       the tool's arguments and result onto its execute_tool span as gen_ai.tool.call.arguments and
+#       gen_ai.tool.call.result. The panel lists every /chat turn with an execute_tool get_vault_entry on
+#       ceo-personal-record under it. Before segment 3's guardrails-on the result carries the record; after it the
+#       scoped Role (c5-scoped-role.yaml) names only the workshop-agent Secret, and the result reads "error reading
+#       vault entry 'ceo-personal-record' (HTTP 403)", the API server's Forbidden. Since the 2026-11-01 review
+#       (#776) Challenge 1 runs no output guard, so the panel no longer looks for a redacted reply (#852).
 #   C6  guard-proxy stamps witb.guard.decision on the /chat root with the guard that decided the turn (#559).
 #       C6 lists input_blocklist and input_classifier, the two input guards, which answer before the chat
 #       child span and its agent.forward exist: no model call, zero input tokens. The rate limit, the budget
@@ -108,14 +113,14 @@ data:
         {
           "id": 7,
           "type": "table",
-          "title": "C5: the reply came back redacted. /chat replies the output guard rewrote",
-          "description": "The root span's gen_ai.output.messages is what the user received. Open the trace: the chat span under it holds what the model said before the output guard.",
+          "title": "C5: the CEO's Secret read. get_vault_entry on ceo-personal-record, the record before guardrails-on, Forbidden after",
+          "description": "Challenge 1. Every /chat turn whose agent called get_vault_entry on ceo-personal-record, newest first. Open the trace and read the execute_tool get_vault_entry span's gen_ai.tool.call.result: before segment 3's guardrails-on it carries the CEO's record, and after it the read comes back HTTP 403, Forbidden by the scoped Role.",
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" && span.gen_ai.output.messages =~ \".*(REDACTED|blocked by the output guardrail).*\" }" }
+              "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" } >> { name = \"execute_tool get_vault_entry\" && span.gen_ai.tool.call.arguments =~ \".*ceo-personal-record.*\" }" }
           ]
         },
         {

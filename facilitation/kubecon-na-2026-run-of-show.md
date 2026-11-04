@@ -562,9 +562,12 @@ BurritoBot browser session (guard-proxy's `session.id`, #559); leave it on All, 
 Reset starts a new session and only the presenters use BurritoBot on the private
 cluster. The panels carry the internal ids:
 
-- **C5:** Challenge 1, the reply that came back redacted. Open it: the top span
-  carries the reply the user got, with `[REDACTED]`; the `chat` span under it
-  carries what the model said before the output guard.
+- **C5:** Challenge 1, the CEO's Secret read. The panel lists every turn whose
+  agent called `get_vault_entry` on `ceo-personal-record`. Open one and read the
+  `execute_tool get_vault_entry` span's result: Whitney's segment 2 attack carries
+  the CEO's record, and the room's retry after segment 3's `guardrails-on` reads
+  `HTTP 403`, Forbidden by the scoped Role. Challenge 1 runs no output guard since
+  #776, so there is no redacted reply to look for (#852).
 - **C6:** Challenge 3, the HC-666 ask sent after `guard-input-on`. The prompt is
   innocent, so the model is called and there are input tokens: open the trace and
   `read_support_ticket` returns the guard's withheld notice, with no `deploy_app`

@@ -14321,3 +14321,40 @@ and nothing in this change alters what reaches the cluster, so the next admin pr
 **The suites (run 16882, on `19a6573c`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 25m05s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`; the offline suite inside it ran 245 tests
 and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-04 · #852 · The Grafana C5 panel lists the CEO's Secret read, not a redacted reply
+
+**What changed.** The run-of-show's "The trace view without Datadog" (#500) described the Grafana C5 panel as
+"Challenge 1, the reply that came back redacted", with the `chat` span holding what the model said before the output
+guard, and the panel in `observability-idp/grafana/dashboards/agent-observability.yaml` matched the /chat root's
+`gen_ai.output.messages` on `REDACTED` or the hard-block text. Since the 2026-11-01 review (#776) Challenge 1 runs no
+output guard; its fix is RBAC in segment 3's `guardrails-on` (#774), which applies `c5-scoped-role.yaml`. So on stage
+that panel listed nothing. It now lists every /chat turn with an `execute_tool get_vault_entry` span whose
+`gen_ai.tool.call.arguments` names `ceo-personal-record`, newest first. It has the same `{root} >> {tool span}` form
+as the C6 query. The tool's result on that span tells the two apart: Whitney's segment 2 attack carries the record,
+and the room's retry after `guardrails-on` reads "error reading vault entry 'ceo-personal-record' (HTTP 403)", the
+API server's Forbidden. One panel covers both, because segment 2 shows the attack's trace and segment 3's retry is
+the proof the RBAC slide points at. The panel's title and description, the dashboard's header comment and the
+run-of-show note say the same.
+
+**Tests that read the words.** `git grep -nF` over `verify` and `scripts` for "came back redacted" and "C5 reply"
+found one reader, `verify/test_trace_walkthrough_view.py`. Its C5 block checked the old query on the output guard.
+It now checks the new query exactly, that it no longer names the redaction or `gen_ai.output.messages`, that the
+collector copies tool arguments into `gen_ai.tool.call.arguments`, that `get_vault_entry` reads a Secret by name and
+returns the HTTP status when refused, that `guardrails-on`'s RBAC step applies `c5-scoped-role.yaml`, and that this
+Role's only Secret rule names `workshop-agent`. The content-capture check stays, now titled for C7, the one beat
+still matching on a message. A new run-of-show check holds the C5 note to `get_vault_entry`, `ceo-personal-record`,
+`guardrails-on`, `HTTP 403` and Forbidden, with no `[REDACTED]`. Four checks fail on the old dashboard and note, and
+all pass on the new ones.
+
+**Left alone.** The dashboard's header and description still call the beats "segment 5" from the plan before #687.
+Not part of this issue; nothing reads it on stage.
+
+**Live check (run 16883): not run.** `. "$HECATON_CLUSTER_ENV"` printed "Permission denied" on
+`/var/lib/hecaton/runs/16883/clusters/env`, and kubectl could not open `$KUBECONFIG` for the same reason
+(hecaton#508), so neither cluster's Tempo could be asked for a real `get_vault_entry` span. No Tempo binary is in
+`verify/e2e-tools.lock`, so the query was not run offline either.
+
+**Not yet run on a cluster:** once this reaches the private cluster through Argo CD, open
+`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs` after a Challenge 1 ask with the shipped Role and
+one after `guardrails-on`. The C5 panel should list both turns, and the second one's `execute_tool get_vault_entry`
+result should read `HTTP 403`. Leave the guardrails as they were found.

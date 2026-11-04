@@ -2,8 +2,9 @@
 # ABOUTME: beat (C5, C6, C7), and to the run-of-show: the segment its row is titled for, the beats' order, the URL.
 """Why this exists (#500, #675).
 
-The trace walk-through shows that each guardrail did its job, for the beats just run: the C5 reply that came back
-redacted, the C6 injection blocked at zero tokens, the C7 call that never reached read_internal_config. Datadog
+The trace walk-through shows that each guardrail did its job, for the beats just run: the C5 read of the CEO's Secret
+(the record before guardrails-on, Forbidden after it, #852), the C6 ticket the input guard withheld, the C7 call that
+never reached read_internal_config. Datadog
 Agent Observability is the primary surface and needs a Datadog org pool (#454); without one the run-of-show
 falls back to a Grafana view on the private cluster, which reads Tempo.
 
@@ -130,25 +131,42 @@ check("it stamps the session before any guard answers, so a blocked turn carries
 check("the storefront sends its session with every /chat",
       re.search(r"session:\s*getSession\(\)", (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")) is not None)
 
-print("== C5: the root span carries the reply the user got ==")
+print("== C5: Challenge 1's read of the CEO's Secret, the record before guardrails-on and Forbidden after (#852) ==")
 q5 = query(beat["C5"])
-check("C5 matches the root's gen_ai.output.messages on the redaction marker",
-      "span.gen_ai.output.messages =~" in q5 and "REDACTED" in q5 and "blocked by the output guardrail" in q5)
-# Since guard-proxy-agenticburn#21 the scrub also takes the turn deadline: output_scrub(reply, deadline).
-scrub_at = chat.index("output_scrub(reply")
-root_out = chat.index('_root_span.set_attribute("gen_ai.output.messages"')
-check("guard-proxy sets the root's output AFTER the output guard rewrote the reply", root_out > scrub_at)
-check("the chat child span keeps the model's own reply (set before the guard)",
-      chat.index('chat_span.set_attribute("gen_ai.output.messages"') < scrub_at)
-check("guard-proxy's hard-block reply is the text C5 matches", '"[blocked by the output guardrail]"' in chat)
+# Since the 2026-11-01 review (#776) Challenge 1 runs no output guard: its fix is RBAC, in segment 3's guardrails-on.
+# So the panel lists the get_vault_entry calls on the CEO's Secret, and the tool's result says which side of the
+# switch each one ran on. A query on the output guard's [REDACTED] would list nothing on stage.
+ROOT5 = '{ resource.service.name = "burritobot" && span.url.path = "/chat" && span.session.id =~ "$session" }'
+check("C5 is a /chat root with an execute_tool get_vault_entry on ceo-personal-record under it",
+      q5 == f'{ROOT5} >> {{ name = "execute_tool get_vault_entry" && span.gen_ai.tool.call.arguments =~ ".*ceo-personal-record.*" }}')
+check("C5 no longer looks for a reply the output guard rewrote",
+      "REDACTED" not in q5 and "output guardrail" not in q5 and "gen_ai.output.messages" not in q5)
+check("the C5 panel's title and description name the Forbidden read, not a redacted reply",
+      "Forbidden" in beat["C5"]["title"] and "redacted" not in beat["C5"]["title"]
+      and "HTTP 403" in beat["C5"]["description"] and "output guard" not in beat["C5"]["description"])
+check("the collector copies a tool's arguments into gen_ai.tool.call.arguments, the attribute C5 matches",
+      'set(attributes["gen_ai.tool.call.arguments"], attributes["gcp.vertex.agent.tool_call_args"])'
+      in (REPO / "gitops/otel-collector/values.yaml").read_text(encoding="utf-8"))
+check("get_vault_entry is the tool that reads a Secret by name", "def get_vault_entry(name: str" in MCP
+      and '_req("GET", f"/api/v1/namespaces/{ns}/secrets/{name}")' in MCP)
+check("a refused read returns the HTTP status, so the Forbidden one reads HTTP 403",
+      'return f"error reading vault entry {name!r} (HTTP {code}): {body[:300]}"' in MCP)
 res = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
-check("llm-guard's output Regex scanner redacts (it writes [REDACTED])", re.search(r"type: Regex[\s\S]*?redact: true", res) is not None)
+term = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text(encoding="utf-8")
+check("guardrails-on's RBAC step applies c5-scoped-role.yaml",
+      'on:rbac)       c=("$@" apply -f "$HOME/challenges/c5-scoped-role.yaml")' in term)
+scoped = res[res.index("  c5-scoped-role.yaml: |"):]
+scoped = yaml.safe_load(scoped[scoped.index("apiVersion:"):scoped.index("\n  c6-least-privilege-role.yaml:")]
+               .replace("\n    ", "\n"))
+secret_rules = [r for r in scoped["rules"] if "secrets" in r.get("resources", [])]
+check("the scoped Role reads only the workshop-agent Secret, so the CEO's read is Forbidden",
+      [r.get("resourceNames") for r in secret_rules] == [["workshop-agent"]])
 # guard-proxy writes the message attributes itself whenever its mode is any capturing one (EVENT_ONLY included),
 # so the check is the deployed mode against the set proxy.py accepts, on the guard-proxy Deployment.
 gp = next(d for d in yaml.safe_load_all(res) if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
 gp_env = {e["name"]: e.get("value") for c in gp["spec"]["template"]["spec"]["containers"] for e in c.get("env") or []}
 accepted = re.search(r"_CAPTURE_CONTENT = _CAPTURE_MODE in \(([^)]*)\)", PROXY)
-check("guard-proxy captures message content, so C5 and C7 have messages to match",
+check("guard-proxy captures message content, so C7 has the prompt to match",
       accepted is not None and f'"{gp_env.get("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT")}"' in accepted.group(1))
 
 print("== C7: the weather-tool ask, with and without read_internal_config under it ==")
@@ -187,6 +205,11 @@ check("the C6 beat is the HC-666 turn: the model is called, the ticket comes bac
       and "`read_support_ticket` returns the guard's withheld notice" in seg and "no `deploy_app`" in seg
       and "Grafana C6 panel lists exactly these turns (#709)" in seg)
 check("it walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
+c5_note = seg[seg.index("**C5:**"):seg.index("**C6:**")] if "**C5:**" in seg and "**C6:**" in seg else ""
+check("the C5 beat is the CEO's Secret read: the record in segment 2, Forbidden after guardrails-on (#852)",
+      "`get_vault_entry`" in c5_note and "`ceo-personal-record`" in c5_note and "`guardrails-on`" in c5_note
+      and "`HTTP 403`" in c5_note and "Forbidden" in c5_note
+      and "came back redacted" not in c5_note and "`[REDACTED]`" not in c5_note)
 check("it names the session picker", "**Session**" in seg)
 check("it no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)
 
