@@ -13925,6 +13925,11 @@ condition the stand-in notifies, until the turn's root span (`POST /chat`, or `P
 ends last, for up to 10 s. With a 0.3 s sleep put in before each span is recorded, the old test fails 8 checks and the
 new one passes. Without the sleep the new one passed 30 runs out of 30.
 
+**The suites (run 16858, on `ef4fac8f`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52 tier
+tests) in 25m09s, printed `ALL E2E TOOLS TIER CHECKS GREEN` and exited 0.
+
 **Live check.** None: the change is talk text and a static page, with nothing a cluster runs differently until Argo CD
-syncs the page. **Not yet run on a cluster:** once the page syncs, `/kubecon` on each KubeCon cluster shows segment 6's
+syncs the page. This run's `$KUBECONFIG` is mode 640, group `hecaton`, and its user (`hecaton-s5-claude-certkraken`)
+cannot read it (hecaton#508): `kubectl --context watch-it-burn-community get ingress -A` failed with `permission denied`
+and changed nothing. **Not yet run on a cluster:** once the page syncs, `/kubecon` on each KubeCon cluster shows segment 6's
 LLM06 line as "Challenges 1 to 4".
