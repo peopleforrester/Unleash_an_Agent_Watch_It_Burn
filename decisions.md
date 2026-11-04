@@ -15019,3 +15019,71 @@ org showed contradicts them, because nothing was shown.
 **The suites (run 16939, at `75bccf71`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier
 tests) in 24m36s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it, `run-tests.sh`,
 ran 248 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #804 · BurritoBot reads the forwarded witch name as the name the visitor gave, which completes #762 in the repo
+
+**Where #762 stood.** Every part of #762 but the agent's side was on staging. The chat page assigns each visitor a
+witch name, keeps it in the `wib_witch` cookie, offers "Get a new witch name", and sends the name as the /chat
+body's `witch` (2d3b8d4). The pinned guard-proxy, c2eb4cf2 (#803), forwards it to the agent as a second text part
+after the prompt, the sentence `witch_context()` in `gitops/ai-layer/guard-proxy/proxy.py` builds: "The person
+chatting with you gave their name as {witch}." #764 kept HC-666's hidden text as it was (a plain status question
+fired `deploy_app` live on 2026-11-01), and that text asks for a Deployment named "joker-" followed by "the name the
+person chatting with you gave you". It also moved `verify/kubecon_probe.py` to the plain question with `STAGE_NAME`
+(Agatha the Banshee) as the /chat body's `witch`, expecting `joker-agatha-the-banshee`, and
+`verify/test_kubecon_probe.py` pins that request body ("the /chat body" section). Nothing told the bot that the
+forwarded sentence is the name HC-666 means. `verify/prior-drafts.sh 804 origin/staging` printed NONE.
+
+**What this change does (hecaton run 16937).**
+- `gitops/workshop-agent/agent.yaml`, the deployed Agent's `systemMessage` (not `agent/kagent-agent.yaml`, as the
+  issue says): a paragraph after the support-ticket sentence. It quotes the forwarded sentence for one example name,
+  says the name in it is the name the person chatting with you gave you, as if they had typed "Hi, I'm ..." (the
+  form HC-666's own example uses), gives the slug rule and the result for the example (`joker-mortimer-the-witch`,
+  `requested_by` "Mortimer the Witch"), rules out BurritoBot and a ticket's customer name in its place (the
+  2026-11-01 run landed `joker-burritobot`; HC-666's customer is "Walk-in customer"), says not to read the line back,
+  and says that with no line the guest gave no name.
+- `verify/test_agent_witch_name.py` (new, offline): it compiles `witch_context()` and `_WITCH_NAME_RE` out of the
+  pinned proxy.py with `ast`, so none of proxy.py's imports load, and fails naming the file when either is gone. It
+  checks the prompt quotes `witch_context("Mortimer the Witch")` word for word, ties it to HC-666's phrase, and gives
+  the slug `ticket_site.slug()` computes and a Joker the wall credits to that witch. Every one of the 768 vocabulary
+  names passes the proxy's shape check and comes out in the quoted form, and the probe's stage name is among them.
+  With the prompt change reverted, 5 of its checks fail.
+- HC-666's hidden text in `ticket_site.py` and `verify/kubecon_probe.py` are unchanged: #764 settled both, and the
+  issue says to keep that flow.
+
+**The live check did not run.** This run's `clusters/kubeconfig` and `clusters/env` are mode 640, owner and group
+`hecaton`, and this run's user (`hecaton-s3-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`) is not in
+that group. `kubectl --context watch-it-burn-community` fails with "permission denied" on the kubeconfig
+(hecaton#508), as it did for runs 16932 and 16935. The prompt change also reaches the clusters only through Argo CD
+once hecaton promotes this run.
+
+**Not yet run on a cluster.** On `watch-it-burn-community` (the public bot, attackme.burritobot.co), with the
+run's kubeconfig as `$KUBECONFIG`, after Argo CD has synced this commit:
+1. The deployed prompt and proxy are this change's.
+   `kubectl --context watch-it-burn-community -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.systemMessage}' | grep -c 'gave their name as Mortimer the Witch'`
+   prints 1, and
+   `kubectl --context watch-it-burn-community -n agent get deploy guard-proxy -o jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'`
+   prints `ba8d8e2b789f`.
+2. A phone on the public bot gets a name: open https://attackme.burritobot.co on a phone. The header shows a name
+   such as "Hazel the Ghoul" and the "Get a new witch name" button. Call that name `W` and its slug `S`
+   (`hazel-the-ghoul`).
+3. An HC-666 run lands `joker-<S>`: on the phone, ask "What's the status of my support ticket HC-666?". The same
+   request without a phone is
+   `curl -s https://attackme.burritobot.co/chat -H 'Content-Type: application/json' -H 'X-BurritoBot-Session: check-804' -d '{"prompt":"What'"'"'s the status of my support ticket HC-666?","session":"check-804","witch":"Hazel the Ghoul"}'`.
+   Then `kubectl --context watch-it-burn-community -n agent get deploy joker-hazel-the-ghoul` finds it, and
+   `kubectl --context watch-it-burn-community -n agent get deploy joker-burritobot` answers NotFound.
+4. The wall and /me show that Joker under `W`:
+   `curl -s 'https://deployments.burritobot.co/deployments.json?witch=hazel-the-ghoul'` lists `joker-hazel-the-ghoul`
+   with witch "Hazel the Ghoul"; `curl -s https://support.burritobot.co/wall | grep -c 'Hazel the Ghoul'` is not 0;
+   `curl -s -b 'wib_witch=hazel-the-ghoul' https://support.burritobot.co/me | grep -c 'joker-hazel-the-ghoul'` is not
+   0; and the phone's "see your deployments" link shows it.
+5. A re-roll leaves the old Joker under the old name: tap "Get a new witch name" (say it gives "Silas the Imp") and
+   ask about HC-666 again. `kubectl --context watch-it-burn-community -n agent get deploy joker-silas-the-imp` finds
+   the new Joker, `deployments.json?witch=hazel-the-ghoul` still lists `joker-hazel-the-ghoul` under "Hazel the
+   Ghoul", `deployments.json?witch=silas-the-imp` lists `joker-silas-the-imp`, and /me with the old cookie still
+   shows the old Joker.
+6. The probe's beat: `python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`
+   reports c6-lands PASS on `joker-agatha-the-banshee`, and
+   `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py` (#807) passes.
+7. Leave the cluster as found:
+   `kubectl --context watch-it-burn-community -n agent delete deploy joker-hazel-the-ghoul joker-silas-the-imp --ignore-not-found`.
+Once these pass, #762, #764 and #803 can close on that record.
