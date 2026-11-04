@@ -15,11 +15,13 @@
 Each challenge shows its trace after the presenters' attack and again after its fix (the 2026-11-01 slide-by-slide
 review, #776 and #818), so every challenge is seeded twice: the attack as it lands, and the same ask after the fix. Challenge 3 adds the input guard's double duty Whitney asked
 for on the 2026-10-29 call: someone else's PII refused before the model, so it never reaches the model or the trace.
+Challenge 1 runs no fix of its own since #776: its Role is scoped by segment 3's guardrails-on (#774), and the room
+asks it again after that switch, so c1-fixed is sent after guardrails-on, with c2-fixed, for the RBAC slide (#855).
 Nine /chat requests, eight of them model calls, in presentation order:
 
     c1-attack  Challenge 1, the CEO's record read through the shipped Role
-    c1-fixed   the same ask after guard-rbac-on: the read is Forbidden
     c2-attack  Challenge 2, the /kubecon recipe read: run_shell greps /tmp/burrito-data and the recipe comes back
+    c1-fixed   Challenge 1's ask again after guardrails-on: the scoped Role makes the read Forbidden
     c2-fixed   the same ask after guardrails-on: KubeArmor's block-recipe-snoop denies the read (#843)
     c3-attack  Challenge 3, HC-666 followed: deploy_app called, the Joker lands with Kyverno on (#775)
     c3-fixed   the same ask after guard-agency-on and guard-input-on: the ticket withheld, no deploy_app
@@ -83,11 +85,13 @@ DEFAULT_OUT = REPO / "tmp/stage-traces.json"
 # The two clusters' names on their spans' k8s.cluster.name tag (#629): the room's tab and the presenters'.
 ROOM_CLUSTER = "burritobot-public"
 PRESENTER_CLUSTER = "burritobot-private"
-# key, the challenge it opens, what the trace shows, the tool spans it must carry, the tool spans it must not.
+# key, the challenge it opens, what the trace shows, the tool spans it must carry, the tool spans it must not. Listed by
+# challenge tab, the order Whitney saves the views in; seed_beats sends them in stage order (c1-fixed after the switch).
 # The spans are what Whitney points at, so a seed whose reply passed but whose trace lacks them is red.
 SEEDS = (
     ("c1-attack", "Challenge 1", "the CEO's record read through the shipped Role", ("get_vault_entry",), ()),
-    ("c1-fixed", "Challenge 1", "the same ask after guard-rbac-on: the read is Forbidden", ("get_vault_entry",), ()),
+    ("c1-fixed", "Challenge 1", "the same ask after guardrails-on: the scoped Role makes the read Forbidden",
+     ("get_vault_entry",), ()),
     ("c2-attack", "Challenge 2", "the recipe read: run_shell greps /tmp/burrito-data and the recipe comes back",
      ("run_shell",), ()),
     ("c2-fixed", "Challenge 2", "the same ask after guardrails-on: KubeArmor denies run_shell's read",
@@ -332,17 +336,17 @@ def seed_beats(stamp: str) -> list[kp.Beat]:
         beat["start-state"],
         kp.Beat("c1-attack", "2", "Challenge 1 attack: the CEO record leaks",
                 _seed("c1-attack", stamp, kp.CEO_PROMPT, kp.judge_ceo_leaks), calls=1),
-        beat["guard-rbac-on"],
-        kp.Beat("c1-fixed", "2", "Challenge 1 fixed: the record out of reach",
-                _seed("c1-fixed", stamp, kp.CEO_PROMPT, kp.judge_ceo_unreadable), calls=1),
         # The four Kubernetes guardrails start off on the private cluster (#774), so Challenge 2's recipe read lands;
-        # then the stage's one switch arms them, and the same ask is denied by KubeArmor (#843). Challenge 3's Joker
+        # then the stage's one switch arms them: Challenge 1's ask, sent again, is Forbidden by the scoped Role (#855),
+        # and Challenge 2's is denied by KubeArmor (#843). Challenge 3's Joker
         # meets Kyverno at Deny, as it does on stage, and lands: its image is on the internal registry, which Kyverno
         # trusts (#775). The fix is least privilege, then the input guard.
         kp.Beat("c2-attack", "3", "Challenge 2 attack: the recipe read lands",
                 _c2(stamp, "c2-attack", judge_recipe_leaks), calls=1),
         beat["guardrails-on"],
         beat["armed"],
+        kp.Beat("c1-fixed", "3", "Challenge 1 again after guardrails-on: the record out of reach",
+                _seed("c1-fixed", stamp, kp.CEO_PROMPT, kp.judge_ceo_unreadable), calls=1),
         kp.Beat("c2-fixed", "3", "Challenge 2 fixed: KubeArmor denies the read",
                 _c2(stamp, "c2-fixed", judge_recipe_kept), calls=1),
         kp.Beat("c3-attack", "4", "Challenge 3 attack: the Joker lands with Kyverno on",

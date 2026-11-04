@@ -249,15 +249,15 @@ with tempfile.TemporaryDirectory() as tmp:
     check("it exits 0 and every beat passes", rc == 0 and all(b["verdict"] == kp.PASS for b in saved.get("beats", [])),
           str([(b["key"], b["note"]) for b in saved.get("beats", []) if b["verdict"] != kp.PASS]))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
-          keys == ["identity", "start-state", "c1-attack", "guard-rbac-on", "c1-fixed", "c2-attack", "guardrails-on",
-                   "armed", "c2-fixed", "c3-attack", "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",
+          keys == ["identity", "start-state", "c1-attack", "c2-attack", "guardrails-on", "armed", "c1-fixed",
+                   "c2-fixed", "c3-attack", "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",
                    "guards-off"], str(keys))
     check("guardrails-on arms the cluster before the Challenge 3 attack, and guardrails-off is the last act",
           f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
           and f.log[-1] == "guardrails off" and f.armed is False)
     check("nine /chat requests, eight of them model calls", f.calls == 9, str(f.calls))
     sessions = [s for s, _ in f.sent]
-    order = ["c1-attack", "c1-fixed", "c2-attack", "c2-fixed", "c3-attack", "c3-fixed", "c3-pii", "c4-attack", "c4-fixed"]
+    order = ["c1-attack", "c2-attack", "c1-fixed", "c2-fixed", "c3-attack", "c3-fixed", "c3-pii", "c4-attack", "c4-fixed"]
     check("each seed is its own session, named for the seed and the stamp",
           sessions == [st.session_id(k, "202611111800") for k in order], str(sessions))
     check("Challenge 2 is the /kubecon page's recipe read, sent before guardrails-on and again after it (#843)",
@@ -287,9 +287,10 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a seed's /chat body carries its session and the witch together",
           f.chat_body("q") == {"prompt": "q", "witch": kp.STAGE_NAME, "session": "s1"}, str(f.chat_body("q")))
     f.session, f.witch = "", ""
-    check("Challenge 1 is fixed by the scoped Role, never the output guard",
-          f"role {kp.RBAC_FIX}" in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log
-          and f.log.index(f"role {kp.RBAC_FIX}") < f.log.index(f"chat {st.session_id('c1-fixed', '202611111800')}"))
+    check("Challenge 1 is fixed by guardrails-on's scoped Role, never guard-rbac-on or the output guard (#855)",
+          f"role {kp.RBAC_FIX}" not in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log
+          and f.log.index(f"chat {st.session_id('c1-attack', '202611111800')}") < f.log.index("guardrails on")
+          < f.log.index(f"chat {st.session_id('c1-fixed', '202611111800')}"), str(f.log))
     check("the Challenge 3 attack lands with Kyverno armed, and guard-agency-on comes after it, before c3-fixed (#775)",
           f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
           < f.log.index(f"role {kp.AGENCY_FIX}")
@@ -300,8 +301,13 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the cluster ends as guards-off leaves it: AI guards off, gateway open, rogue tools back, shipped Role",
           not any(f.g.values()) and f.rule == kp.C7_OPEN and f.tools == kp.EVIL_ALL and f.role == kp.RBAC_SHIPPED)
     views = saved.get("views", [])
-    check("it writes one view per seed in presentation order, then the room's and the presenters'",
-          [v["key"] for v in views] == order + ["room", "presenters"], str([v["key"] for v in views]))
+    # The views are listed by challenge tab, the order Whitney saves them in: c1-fixed, sent after guardrails-on with
+    # c2-fixed (#855), still sits on Challenge 1's tab beside c1-attack.
+    tabs = ["c1-attack", "c1-fixed", "c2-attack", "c2-fixed", *order[4:]]
+    check("it writes one view per seed in challenge-tab order, then the room's and the presenters'",
+          [v["key"] for v in views] == tabs + ["room", "presenters"], str([v["key"] for v in views]))
+    check("the c1-fixed view says it is the ask after guardrails-on",
+          "after guardrails-on" in next((v["shows"] for v in views if v["key"] == "c1-fixed"), ""), str(views[:2]))
     check("each model seed's view queries its session in LLM Observability",
           all(v["query"] == f"session_id:{v['session']}" and "/llm/traces?" in v["url"]
               and "ml_app%3Aburritobot" in v["url"] for v in views if v["session"] and v["key"] != "c3-pii"))
@@ -394,14 +400,17 @@ with tempfile.TemporaryDirectory() as tmp:
     print("== a seed that does not land ==")
 
     class RoleStaysBroad(FakePrivate):
-        def apply_fix(self, name):
-            self.log.append(f"role {name}")
-            return 0, "unchanged\n"
+        """A guardrails-on that arms the other three guardrails and leaves the shipped Role."""
+
+        def kubectl_rc(self, *args, timeout=90, stdin=None):
+            out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+            self.role = kp.RBAC_SHIPPED
+            return out
 
     out3 = pathlib.Path(tmp, "stage-traces-3.json")
     rc3 = run_seed(RoleStaysBroad(), FakeDatadog(), out3)
     beats3 = {b["key"]: b for b in json.loads(out3.read_text())["beats"]}
-    check("a Role that never scopes fails c1-fixed, and the seed is red",
+    check("a Role guardrails-on never scopes fails c1-fixed, and the seed is red",
           rc3 == 1 and beats3["c1-fixed"]["verdict"] == kp.FAIL, str(beats3.get("c1-fixed")))
     check("guards-off still runs after a failed seed", beats3["guards-off"]["verdict"] == kp.PASS)
 

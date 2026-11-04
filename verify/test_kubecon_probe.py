@@ -947,19 +947,20 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "gateway", "c5-off", "guard-rbac-on", "c5-on", "guardrails-on", "armed",
-        "badges-lit", "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guard-agency-on", "c6-forbidden",
+want = ["identity", "start-state", "badges", "gateway", "c5-off", "guardrails-on", "armed", "badges-lit", "c5-on",
+        "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guard-agency-on", "c6-forbidden",
         "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
         "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2",
         "guards-off"]
 check("the beats run in stage order (Challenge 1 to 4: C5, C1 C2 C3, C6, C7; the on-topic guard; guards-off)",
       keys == want, str(keys))
-# The segment each beat reports is the run-of-show's (#687): Challenge 1 (C5) in 2, Challenge 2 (C1 C2 C3) in 3,
-# Challenge 3 (C6) in 4, Challenge 4 (C7) in 5, the on-topic guard in 6.
+# The segment each beat reports is the run-of-show's (#687): Challenge 1 (C5) in 2, and its retry after the switch in 3
+# (#855), Challenge 2 (C1 C2 C3) in 3, Challenge 3 (C6) in 4, Challenge 4 (C7) in 5, the on-topic guard in 6.
 seg = {r["key"]: r["segment"] for r in res}
 check("each challenge reports its run-of-show segment",
-      [seg[k] for k in ("c5-on", "c6-lands", "c6-forbidden", "c6-on", "c7-on", "c1", "c2", "c3", "guard-topic-on")]
-      == ["2", "4", "4", "4", "5", "3", "3", "3", "6"], str(seg))
+      [seg[k] for k in ("c5-off", "c5-on", "c6-lands", "c6-forbidden", "c6-on", "c7-on", "c1", "c2", "c3",
+                        "guard-topic-on")]
+      == ["2", "3", "4", "4", "4", "5", "3", "3", "3", "6"], str(seg))
 check("no admin beat reports a segment the 30-minute run-of-show does not have",
       {r["segment"] for r in res} <= {"-", "2", "3", "4", "5", "6", "end"}, str(seg))
 check("a full admin run spends 12 model calls", f.calls == 12, str(f.calls))
@@ -984,25 +985,49 @@ check("guards-off is the last thing done to the cluster, puts the shipped Role b
                                                                               f"tools {kp.EVIL_ALL}",
                                                                               f"role {kp.RBAC_SHIPPED}",
                                                                               "guardrails off"])
-check("guardrails-on runs once, after Challenge 1's RBAC fix and before Challenge 2's checks",
-      f.log.count("guardrails on") == 1 and keys.index("guardrails-on") == keys.index("c5-on") + 1
-      and keys.index("guardrails-on") < keys.index("c1"))
+check("guardrails-on runs once, after Challenge 1's attack and before its retry and Challenge 2's checks (#855)",
+      f.log.count("guardrails on") == 1 and keys.index("c5-off") < keys.index("guardrails-on")
+      < keys.index("c5-on") < keys.index("c1"))
 check("the cluster ends with the four Kubernetes guardrails off", f.armed is False and f.role == kp.RBAC_SHIPPED)
 check("the probe runs the terminal's own commands, in its ttyd container",
       kp.GUARDRAILS_ON[-1] == "/home/student/guardrails-on" and kp.GUARDRAILS_OFF[-1] == "/home/student/guardrails-off"
       and kp.TERMINAL_EXEC[kp.TERMINAL_EXEC.index("exec") + 1:kp.TERMINAL_EXEC.index("--")]
       == ["deploy/web-terminal", "-c", "ttyd"] and "_guardrails on" in helper("guardrails-on") and "_guardrails off" in helper("guardrails-off"))
-# Challenge 1's fix is RBAC (Michael, 2026-10-31): the probe applies the terminal's own file, then the same ask
-# must come back with no part of the record. The output guard is never turned on for it.
-check("Challenge 1 is fixed by guard-rbac-on, never by the output guard",
-      f"role {kp.RBAC_FIX}" in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log)
-check("guard-rbac-on is the terminal's file", kp.RBAC_FIX in helper("guard-rbac-on")
+# Challenge 1's fix is RBAC (Michael, 2026-10-31), and since #776 the stage runs no fix of its own for it: segment 3's
+# guardrails-on scopes the Role (#774), then the same ask must come back with no part of the record (#855). The probe
+# never applies the scoped Role itself, and the output guard is never turned on for it.
+_ceo = [i for i, e in enumerate(f.log) if e == f"chat {kp.CEO_PROMPT[:30]}"]
+check("Challenge 1 is fixed by guardrails-on's RBAC, never by guard-rbac-on or the output guard (#855)",
+      len(_ceo) == 2 and _ceo[0] < f.log.index("guardrails on") < _ceo[1]
+      and f"role {kp.RBAC_FIX}" not in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log, str(f.log))
+check("no admin beat is the 2-hour lab's guard-rbac-on", "guard-rbac-on" not in keys and not hasattr(kp, "_rbac_on"))
+check("guardrails-on's RBAC is the terminal's scoped Role, guardrails-off's the shipped one",
+      re.search(r'on:rbac\)\s+c=\("\$@" apply -f "\$HOME/challenges/' + re.escape(kp.RBAC_FIX) + '"', terminal)
+      and re.search(r'off:rbac\)\s+c=\("\$@" apply -f "\$HOME/challenges/' + re.escape(kp.RBAC_SHIPPED) + '"',
+                    terminal))
+check("guard-rbac-on, the 2-hour lab's, applies the same file", kp.RBAC_FIX in helper("guard-rbac-on")
       and kp.RBAC_SHIPPED in helper("guard-rbac-off"))
 check("the probe applies the same bytes the terminal mounts",
       kp.challenge_fix(kp.RBAC_FIX).startswith("# The CEO's record fix")
       and "resourceNames: [\"workshop-agent\"]" in kp.challenge_fix(kp.RBAC_FIX))
 check("an admin cluster whose Role stays broad fails c5-on",
       not passes(kp.judge_ceo_unreadable(chat(CEO_LEAK))) and passes(kp.judge_ceo_unreadable(chat("Forbidden."))))
+
+
+class SwitchLeavesRoleBroad(Fake):
+    """A guardrails-on that arms Kyverno, KubeArmor and egress but leaves the shipped Role: the CEO record still reads."""
+
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
+        out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
+        if "deploy/web-terminal" in args:
+            self.role = kp.RBAC_SHIPPED
+        return out
+
+
+res = {r["key"]: r for r in run_admin(SwitchLeavesRoleBroad())}
+check("a guardrails-on that leaves the Role broad fails armed and Challenge 1's retry (#855)",
+      res["armed"]["verdict"] == kp.FAIL and res["c5-on"]["verdict"] == kp.FAIL
+      and "STILL LEAKED" in res["c5-on"]["note"], str([res["armed"], res["c5-on"]]))
 
 
 
@@ -1392,6 +1417,9 @@ check("Night Before runs the probe on the private cluster the presenters share",
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
 check("Night Before counts the community run's 7 model calls and the admin run's 12",
       "a community run makes 7 model calls, an admin run 12" in nb)
+check("Night Before runs no guard-rbac-on: Challenge 1's retry comes after guardrails-on, probe and seed alike (#855)",
+      "guard-rbac-on" not in nb and "C5 asked again and out of reach" in nb
+      and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-on`" in nb)
 
 print("== the stage promises what the probe proves (#530) ==")
 beat2 = re.sub(r"\s+", " ", brief.split("<h3>2. A reason it likes</h3>", 1)[1].split('<div class="note">', 1)[0])

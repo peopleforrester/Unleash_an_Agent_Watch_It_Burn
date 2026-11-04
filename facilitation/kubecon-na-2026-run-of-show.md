@@ -740,6 +740,9 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
    - RBAC: agent-sa's Role reads one Secret by name, the agent's own `workshop-agent`
      config Secret, so the CEO's record is out of reach. It has no fallback script;
      the room's own Challenge 1 ask, coming back Forbidden after step 5, is the proof.
+     If the room's retry is not on screen, the Datadog Challenge 1 tab's `c1-fixed`
+     view is the same ask after the switch: `get_vault_entry` is still in the trace,
+     its result Forbidden, and the record is not in the reply (#855).
    - C2 public image: Kyverno admission. Kyverno's `restrict-image-registries` does
      not allow `public.ecr.aws`, and `deny-external-registries` admits what the bot
      deploys from `registry.burritobot.co` alone.
@@ -1113,9 +1116,10 @@ is merely slow rather than rebuilding:
     before flipping anything); the start state (every AI guard off; the four
     Kubernetes guardrails present and off, #774); the `/controls` badges agree with
     the cluster; then the challenges in stage order, with the guards turned on
-    cumulatively as segments 2 to 5 do: C5 leaking, then out of reach once the probe
-    applies `guard-rbac-on`'s Role; `guardrails-on`, run in the private terminal pod,
-    arming all four on both clusters and the badges lighting; C1, C2 and C3
+    cumulatively as segments 2 to 5 do: C5 leaking, with no fix run in segment 2 (#776);
+    `guardrails-on`, run in the private terminal pod, arming all four on both clusters
+    and the badges lighting; C5 asked again and out of reach, since the switch's RBAC
+    scoped the Role (#855); C1, C2 and C3
     (Challenge 2) blocked, a public image denied by `deny-external-registries` and the
     internal registry's image admitted; C6 (#775): HC-666's ask landing
     `joker-agatha-the-banshee` with Kyverno at Deny, since its image is the internal
@@ -1148,7 +1152,10 @@ is merely slow rather than rebuilding:
   refused by the input guard: nine `/chat` requests (eight model calls; the PII one
   spends no tokens), in presentation order, with the probe's own guard flips and its
   `guards-off` at the end. Challenge 2's pair is the `/kubecon` recipe read, sent
-  before `guardrails-on` and again after it (#843).
+  before `guardrails-on` and again after it (#843). Challenge 1 runs no fix of its own
+  (#776), so its second seed, `c1-fixed`, is the CEO ask sent again after
+  `guardrails-on`, beside `c2-fixed`: the Secret read Forbidden by the switch's scoped
+  Role (#855).
 
   First, what the input guard refuses. No model call, nothing toggled; it asks
   guard-proxy's own input stages, in its pod, about a card, an SSN, an e-mail, a

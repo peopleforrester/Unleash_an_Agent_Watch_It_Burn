@@ -14651,3 +14651,44 @@ longer says "segment 5" and that its tags read `guardrail-beats`. The panels and
 exited 0. Its offline stage, `bash verify/run-tests.sh`, ran 246 tests, all green ("ALL OFFLINE RENDER-GATE TESTS
 GREEN"). Then it printed "54 checks ran (the offline suite and 53 tier tests) in 24m23s" and "ALL E2E TOOLS TIER
 CHECKS GREEN". No dependency was added.
+## 2026-11-04 · #855 · Challenge 1's retry comes after `guardrails-on` in the probe and the seed
+
+**What was out of step.** Since the 2026-11-01 review (#776) and #844, Challenge 1 runs no fix of its own on stage: its
+Role is scoped by segment 3's `guardrails-on` (#774), and the room asks it again after the switch. The Night Before
+admin probe (`verify/kubecon_probe.py`) still ran a `guard-rbac-on` beat in segment 2 with a `c5-on` check after it,
+and the trace seed (`verify/stage_traces.py`) still sent `c1-fixed` after `guard-rbac-on`.
+
+**Decided.** The probe proves Challenge 1's Forbidden after `guardrails-on`, and the `c1-fixed` seed moves after the
+switch rather than going.
+
+- Probe: the `guard-rbac-on` beat and its `_rbac_on` function are gone. `c5-on` runs in segment 3, after
+  `guardrails-on`, `armed` and `badges-lit` and before Challenge 2's `c1`, so it is the room's retry. The admin run
+  still makes 12 model calls. The probe never applies `c5-scoped-role.yaml` itself now; `armed` reads the Role the
+  switch applied, and `guards-off` still puts the shipped Role back.
+- Seed: `c1-fixed` is sent after `guardrails-on` and `armed`, before `c2-fixed`, so the send order is `c1-attack`,
+  `c2-attack`, the switch, `c1-fixed`, `c2-fixed`, then Challenges 3 and 4 as before. Nine `/chat` requests, eight
+  model calls, unchanged. The views file keeps its challenge-tab order (`c1-attack`, `c1-fixed`, `c2-attack`, ...),
+  the order Whitney saves them in, so her saved-view list in the run-of-show is unchanged.
+- Why keep `c1-fixed`: the RBAC slide in segment 3 step 6 has no fallback script; its proof is the room's own retry.
+  A seeded trace of that retry costs one model call and gives the slide the same backup `c2-fixed` gives the
+  KubeArmor slide. The run-of-show's RBAC bullet now names it.
+- The Grafana C5 text in "The trace view without Datadog (#500)" was already brought in line by #852 (`9044e40f`):
+  it reads the record before `guardrails-on` and `HTTP 403` after, with no redacted reply. Nothing changed there.
+- Run-of-show: the Night Before admin-probe paragraph no longer says the probe applies `guard-rbac-on`'s Role, and
+  the seeding step says `c1-fixed` is the CEO ask sent again after `guardrails-on`.
+
+**Tests.** `verify/test_kubecon_probe.py` holds the new admin beat list and segments, checks that `guardrails-on`
+comes between Challenge 1's two CEO asks and the probe applies no Role of its own, that the terminal's `on:rbac` and
+`off:rbac` apply `c5-scoped-role.yaml` and `c8-broad-role.yaml`, that a `guardrails-on` that leaves the Role broad fails
+`armed` and `c5-on`, and that the Night Before text names no `guard-rbac-on`. `verify/test_stage_traces.py` holds the
+new send order, the views' tab order, and that a `guardrails-on` that never scopes the Role fails `c1-fixed`.
+
+**Live check (run 16897): not run.** `/var/lib/hecaton/runs/16897/clusters/env` and `kubeconfig` are mode 0640, owner
+and group `hecaton`, and this run's user is not in that group: sourcing the env printed "Permission denied" and
+kubectl could not open the kubeconfig (hecaton#508). The read-only check meant here was the private terminal's
+`~/.guardlib` `on:rbac` line and the live `workshop-agent` Role.
+
+**Not yet run on a cluster.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private ...` must end `KUBECON PROBE GREEN` with `c5-on` passing after `guardrails-on`; then
+`python3 verify/stage_traces.py seed burritobot-private.burritobot.co --context watch-it-burn-private ...` must end
+`SEEDED GREEN` with `c1-fixed` passing. Both are the Night Before steps and spend Bedrock calls.
