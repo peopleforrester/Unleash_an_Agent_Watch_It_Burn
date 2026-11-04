@@ -14875,7 +14875,7 @@ cookie store that behaves as a browser's does for these cookies: keyed by name, 
 not under is dropped, and a host is sent only the cookies whose domain it is under. The desk's own Set-Cookie seeds
 it, and the Cookie header that store would send `support-attackme.burritobot.co` goes back to the desk's `/me`. So a
 cookie the page wrote host-only, on the wrong domain or beside the desk's (rather than replacing it) fails the test,
-where the old harness, which replaced the whole cookie string on each write, could not tell.
+where the old node script, which replaced the whole cookie string on each write, could not tell.
 
 The new checks: a first visit with no cookie shows a plain-text name (no href, target or rel; only `textContent` and
 `hidden` ever written), writes one wib_witch on `.burritobot.co` that `name_from_slug()` accepts, and the desk's
@@ -14928,3 +14928,19 @@ with 232 tests and printed ALL OFFLINE RENDER-GATE TESTS GREEN. `bash verify/run
 ghcr.io serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:0b72ecc72c7c...`, not the pinned
 `sha256:68004fb5ed2d...`. That is the tag CI pushed over, already red on staging b4cad81 and open as #815. Nothing
 in this change touches an image.
+
+**Ported by run 16934 from run 16675's draft (`agent/802-16675`), onto staging `137dc650`.** Run 16675 failed
+validation only on the `web-terminal-ttyd-1.7.7` digest red, which #815 has since fixed on staging (`3f6fe04f`). Its
+four commits were cherry-picked. Two paths conflicted. decisions.md was an append on both sides, and both entries are
+kept, staging's first. `verify/test_storefront_witch_name_e2e.py` was rewritten in place by #797 (`c3251c07`) after
+the draft was cut, to pin every `Math.random` draw. In the draft's node script, four cases still drew from the real
+`Math.random`, which the "Tests own their inputs" rule 3 in AGENTS.md forbids. So the ported test keeps the draft's
+cookie store, desk round trips and button clicks, and takes #797's design for randomness. Every case hands the page
+a stub `Math` whose draws are pinned, and the stub throws when the page draws more than its case pinned. A new check
+fails a case that drew fewer. The cases with a valid cookie pin none. The replaced-cookie case runs once per first
+name, all 32, and each replacement must also be the name the desk's `/me` shows. The re-roll cases now check the
+exact name each pinned draw picks. `reroll_fresh` clicks to the first name, the last name and one in between.
+`reroll_pinned`'s second click lands on the current name's own index, so `otherWitch()` must step over it. The sweep
+over all 768 names stays. `verify/test_tests_own_inputs.py` passes on the result. Mutation runs on the port: the old
+`randWitch()` handler fails the test (it draws two values where a click pins one), and a `btn.title` set from the
+script fails both this test and `verify/test_witch_name_vocab.py`.
