@@ -14944,3 +14944,20 @@ exact name each pinned draw picks. `reroll_fresh` clicks to the first name, the 
 over all 768 names stays. `verify/test_tests_own_inputs.py` passes on the result. Mutation runs on the port: the old
 `randWitch()` handler fails the test (it draws two values where a click pins one), and a `btn.title` set from the
 script fails both this test and `verify/test_witch_name_vocab.py`.
+
+**Live check (run 16934, 2026-11-04).** `https://attackme.burritobot.co/` still serves staging's page, with no
+`otherWitch` in its source, because this change has not been promoted. This branch's witch-name block ran in node with
+no cookie, and its button was then clicked twice. Each cookie it wrote went to the live desk at
+`https://support-attackme.burritobot.co/me` (`server: railway-hikari`):
+
+    step 0 (first visit): header='Agatha the Mummy' cookie='wib_witch=agatha-the-mummy; Path=/; Max-Age=172800; SameSite=Lax; Domain=.burritobot.co' name_from_slug='Agatha the Mummy' live /me='Agatha the Mummy' Set-Cookie='' -> PASS
+    step 1 (click 1): header='Victoria the Ogre' cookie='wib_witch=victoria-the-ogre; ...' live /me='Victoria the Ogre' Set-Cookie='' -> PASS
+    step 2 (click 2): header='Walter the Cyclops' cookie='wib_witch=walter-the-cyclops; ...' live /me='Walter the Cyclops' Set-Cookie='' -> PASS
+
+**Not yet run on a cluster:** the real-browser click named above, once this change is promoted. The steps are
+unchanged.
+
+**The suites (run 16934, on `c88e9b62`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 24m34s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it, which is
+`bash verify/run-tests.sh`, ran 248 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+`test_storefront_witch_name_e2e.py`, `test_witch_name_vocab.py` and `test_tests_own_inputs.py` passed among them.
