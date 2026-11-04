@@ -1,11 +1,12 @@
-# ABOUTME: Drives verify/stage_traces.py's pii, seed and check against a fake private cluster and a fake Datadog: seven
+# ABOUTME: Drives verify/stage_traces.py's pii, seed and check against a fake private cluster and a fake Datadog: nine
 # ABOUTME: seeds in presentation order, each on its own session with no probe marker, then guards-off.
 """#648: the stage opens each challenge on its pre-seeded trace (Michael, 2026-10-31). The seed must run the attack
-and the fix for Challenge 1, 3 and 4 the way the stage does, with the KubeCon probe's own guard flips, put each one
+and the fix for Challenges 1 to 4 the way the stage does, with the KubeCon probe's own guard flips, put each one
 in a session of its own so Datadog can find it, leave the cluster as guards-off leaves it, and go red when a trace
 never reaches Datadog. Challenge 3 adds someone else's PII refused by the input guard (Whitney, 2026-10-29): it is
 sent only after guard-proxy's own input stages say they refuse it, and its trace must hold none of the PII.
-`pii` measures that guard with no model call and must end REFUSES 5 OF 5."""
+`pii` measures that guard with no model call and must end REFUSES 5 OF 5. Challenge 2 is seeded with the /kubecon recipe
+read, before guardrails-on and after it (#843), and both seeds need run_shell's grep in workshop-mcp's audit log."""
 from __future__ import annotations
 
 import json
@@ -46,6 +47,9 @@ def audit(tool: str, **args) -> dict:
 
 READ_ROOM = audit("read_support_ticket", ticket_id=kp.ROOM_TICKET_ID)
 DEPLOY_ROOM = audit("deploy_app", manifest=json.dumps(kp.C6_MANIFEST))
+RECIPE_GREP = audit("run_shell", command="grep -ri -A3 recipe /tmp/burrito-data")
+RECIPE_LEAK = f"Found it! /tmp/burrito-data/secret-recipe.txt: {kp.RECIPE_MARK}: two cups of bat spit, then whisk."
+RECIPE_DENIED = "I ran the search, but the system said: grep: /tmp/burrito-data/secret-recipe.txt: Permission denied"
 
 
 class FakePrivate(st.StageCluster):
@@ -138,6 +142,10 @@ class FakePrivate(st.StageCluster):
     def tool_calls_since(self, since):
         return list(self.audit)
 
+    def recipe_ask(self) -> tuple[list[dict], str]:
+        """Challenge 2's recipe read: run_shell's grep, which KubeArmor denies once guardrails-on has run."""
+        return [RECIPE_GREP], RECIPE_DENIED if self.armed else RECIPE_LEAK
+
     def room_calls(self) -> list[dict]:
         """What workshop-mcp logs for HC-666 with the input guard off: the ticket read, then the Joker deployed."""
         return [READ_ROOM, DEPLOY_ROOM]
@@ -159,6 +167,9 @@ class FakePrivate(st.StageCluster):
                 self.joker = True
                 return reply(f"Done! I created {kp.ROOM_JOKER}.")
             return reply(f"I tried to create {kp.ROOM_JOKER}, but the cluster said I'm not allowed to.")
+        if prompt == st.RECIPE_PROMPT:
+            self.audit, text = self.recipe_ask()
+            return reply(text)
         if prompt == kp.MCP_PROMPT:
             return reply(C7_LEAK if self.rule == kp.C7_OPEN else C7_DENIED)
         if prompt == st.PII_PROMPT and self.g["input_classifier"] and self.pii_guard:
@@ -176,6 +187,7 @@ PII = re.compile(next(s for s in _scanners["input_scanners"] if s["type"] == "Re
 
 # The tool spans each seed's trace carries on a well-behaved cluster.
 TRACE_TOOLS = {"c1-attack": ["get_vault_entry"], "c1-fixed": ["get_vault_entry"],
+               "c2-attack": ["run_shell"], "c2-fixed": ["run_shell"],
                "c3-attack": ["read_support_ticket", "deploy_app"], "c3-fixed": ["read_support_ticket"],
                "c4-attack": ["get_weather", "read_internal_config"], "c4-fixed": ["get_weather"]}
 
@@ -237,17 +249,28 @@ with tempfile.TemporaryDirectory() as tmp:
     check("it exits 0 and every beat passes", rc == 0 and all(b["verdict"] == kp.PASS for b in saved.get("beats", [])),
           str([(b["key"], b["note"]) for b in saved.get("beats", []) if b["verdict"] != kp.PASS]))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
-          keys == ["identity", "start-state", "c1-attack", "guard-rbac-on", "c1-fixed", "guardrails-on", "c3-attack",
-                   "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",
+          keys == ["identity", "start-state", "c1-attack", "guard-rbac-on", "c1-fixed", "c2-attack", "guardrails-on",
+                   "armed", "c2-fixed", "c3-attack", "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",
                    "guards-off"], str(keys))
     check("guardrails-on arms the cluster before the Challenge 3 attack, and guardrails-off is the last act",
           f.log.index("guardrails on") < f.log.index(f"chat {st.session_id('c3-attack', '202611111800')}")
           and f.log[-1] == "guardrails off" and f.armed is False)
-    check("seven /chat requests, six of them model calls", f.calls == 7, str(f.calls))
+    check("nine /chat requests, eight of them model calls", f.calls == 9, str(f.calls))
     sessions = [s for s, _ in f.sent]
-    order = ["c1-attack", "c1-fixed", "c3-attack", "c3-fixed", "c3-pii", "c4-attack", "c4-fixed"]
+    order = ["c1-attack", "c1-fixed", "c2-attack", "c2-fixed", "c3-attack", "c3-fixed", "c3-pii", "c4-attack", "c4-fixed"]
     check("each seed is its own session, named for the seed and the stamp",
           sessions == [st.session_id(k, "202611111800") for k in order], str(sessions))
+    check("Challenge 2 is the /kubecon page's recipe read, sent before guardrails-on and again after it (#843)",
+          [s for s, p in f.sent if p == st.RECIPE_PROMPT]
+          == [st.session_id("c2-attack", "202611111800"), st.session_id("c2-fixed", "202611111800")]
+          and f.log.index(f"chat {st.session_id('c2-attack', '202611111800')}") < f.log.index("guardrails on")
+          < f.log.index(f"chat {st.session_id('c2-fixed', '202611111800')}")
+          and "grep -ri -A3 recipe /tmp/burrito-data" in st.RECIPE_PROMPT, str(f.log))
+    beats = {b["key"]: b for b in saved.get("beats", [])}
+    check("the Challenge 2 seeds name the recipe coming back, then staying out",
+          "carries" in beats.get("c2-attack", {}).get("note", "")
+          and "stayed out of the reply" in beats.get("c2-fixed", {}).get("note", ""),
+          str([beats.get("c2-attack"), beats.get("c2-fixed")]))
     check("c3-pii sends the PII prompt, with the input guard on",
           (st.session_id("c3-pii", "202611111800"), st.PII_PROMPT) in f.sent
           and f.log.index("toggle " + kp.GUARD_INPUT_ON) < f.log.index(f"chat {st.session_id('c3-pii', '202611111800')}"))
@@ -291,13 +314,16 @@ with tempfile.TemporaryDirectory() as tmp:
           [v["query"] for v in views if not v["session"]]
           == ["k8s.cluster.name:burritobot-public", "k8s.cluster.name:burritobot-private"])
     check("every seed's trace carries the tool spans it must, and the PII trace none of the PII",
-          len(saved.get("spans", {})) == 7
+          len(saved.get("spans", {})) == 9
           and not any("missing" in n or n == "no spans" for n in saved.get("spans", {}).values())
           and "none of the PII" in saved.get("spans", {}).get(st.session_id("c3-pii", "202611111800"), ""),
           str(saved.get("spans")))
     check("each seed names the tool spans Whitney points at",
           {v["key"]: v.get("must") for v in views if v["session"]}["c3-attack"] == ["read_support_ticket", "deploy_app"]
-          and {v["key"]: v.get("must_not") for v in views if v["session"]}["c3-fixed"] == ["deploy_app"])
+          and {v["key"]: v.get("must_not") for v in views if v["session"]}["c3-fixed"] == ["deploy_app"]
+          and {v["key"]: (v.get("must"), v.get("challenge")) for v in views if v["session"]}["c2-attack"]
+          == (["run_shell"], "Challenge 2")
+          and {v["key"]: v.get("must") for v in views if v["session"]}["c2-fixed"] == ["run_shell"])
 
     print("== check, the next morning ==")
     st.datadog = lambda profile, region: (FakeDatadog(), "datadoghq.com")  # noqa: E731
@@ -320,6 +346,11 @@ with tempfile.TemporaryDirectory() as tmp:
     out4 = pathlib.Path(tmp, "stage-traces-4.json")
     check("seed is red when the Challenge 3 attack trace has no deploy_app span",
           run_seed(FakePrivate(), FakeDatadog(tools=no_deploy), out4) == 1)
+    no_shell = {**TRACE_TOOLS, "c2-attack": []}
+    out11 = pathlib.Path(tmp, "stage-traces-11.json")
+    check("seed is red when the Challenge 2 attack trace has no run_shell span",
+          run_seed(FakePrivate(), FakeDatadog(tools=no_shell), out11) == 1
+          and "missing ['run_shell']" in json.loads(out11.read_text())["spans"][st.session_id("c2-attack", "202611111800")])
     leaked = {**TRACE_TOOLS, "c3-fixed": ["read_support_ticket", "deploy_app"]}
     out5 = pathlib.Path(tmp, "stage-traces-5.json")
     check("seed is red when the Challenge 3 fixed trace still calls deploy_app",
@@ -348,7 +379,7 @@ with tempfile.TemporaryDirectory() as tmp:
     spans10 = json.loads(out10.read_text())["spans"] if out10.exists() else {}
     check("a key that cannot search APM fails the PII view alone, and the views file is still written",
           rc10 == 1 and "403" in spans10.get(st.session_id("c3-pii", "202611111800"), "")
-          and sum("none of the PII" not in v and "spans, with" in v for v in spans10.values()) == 6, str(spans10))
+          and sum("none of the PII" not in v and "spans, with" in v for v in spans10.values()) == 8, str(spans10))
     no_guard = FakePrivate(pii_guard=False)
     out9 = pathlib.Path(tmp, "stage-traces-9.json")
     rc9 = run_seed(no_guard, FakeDatadog(), out9)
@@ -386,6 +417,32 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a Joker deployed without reading HC-666 fails c3-attack, and the seed is red",
           rc4 == 1 and beats4["c3-attack"]["verdict"] == kp.FAIL
           and "read_support_ticket(HC-666) was never called" in beats4["c3-attack"]["note"], str(beats4.get("c3-attack")))
+
+    class Narrates(FakePrivate):
+        """The reply names the recipe, but no run_shell ran: no span for Whitney to point at."""
+
+        def recipe_ask(self):
+            return [], RECIPE_LEAK
+
+    out12 = pathlib.Path(tmp, "stage-traces-12.json")
+    rc12 = run_seed(Narrates(), FakeDatadog(), out12)
+    beats12 = {b["key"]: b for b in json.loads(out12.read_text())["beats"]}
+    check("a recipe in the reply with no run_shell call fails c2-attack, and the seed is red",
+          rc12 == 1 and beats12["c2-attack"]["verdict"] == kp.FAIL
+          and "run_shell never read /tmp/burrito-data" in beats12["c2-attack"]["note"], str(beats12.get("c2-attack")))
+
+    class KubeArmorOpen(FakePrivate):
+        """guardrails-on runs, but the read still lands: block-recipe-snoop is not blocking."""
+
+        def recipe_ask(self):
+            return [RECIPE_GREP], RECIPE_LEAK
+
+    out13 = pathlib.Path(tmp, "stage-traces-13.json")
+    rc13 = run_seed(KubeArmorOpen(), FakeDatadog(), out13)
+    beats13 = {b["key"]: b for b in json.loads(out13.read_text())["beats"]}
+    check("the recipe coming back after guardrails-on fails c2-fixed, and the seed is red",
+          rc13 == 1 and beats13["c2-attack"]["verdict"] == kp.PASS and beats13["c2-fixed"]["verdict"] == kp.FAIL
+          and "THE RECIPE CAME BACK" in beats13["c2-fixed"]["note"], str(beats13.get("c2-fixed")))
 
     st.StageCluster, st.datadog, st.wait_for.__defaults__ = real_cluster, real_dd, real_wait
 
@@ -455,6 +512,22 @@ class Elsewhere(FakePrivate):
 e = Elsewhere()
 rc, lines = run_pii(e)
 check("pii on a context that is not the named cluster exits 1 and asks nothing", rc == 1 and not e.asked, str(lines))
+
+print("== the Challenge 2 prompt is read off the /kubecon page ==")
+with tempfile.TemporaryDirectory() as tmp:
+    page = pathlib.Path(tmp, "kubecon.html")
+    page.write_text('<article class="beat" data-beat="C2"><div class="prompt">x<button></button></div></article>')
+    try:
+        st.kubecon_prompt("C3", page)
+        raised = ""
+    except RuntimeError as e:
+        raised = str(e)
+    check("a page with no C3 beat raises, naming the anchor and the file",
+          'data-beat="C3"' in raised and "kubecon.html" in raised, raised)
+    page.write_text('<article class="beat" data-beat="C3">\n  <div class="prompt" onclick="cp(this)">Read &amp; tell\n'
+                    '   me  back.<button class="cp">copy</button></div></article>')
+    check("a beat's first prompt comes back unescaped, whitespace collapsed",
+          st.kubecon_prompt("C3", page) == "Read & tell me back.", st.kubecon_prompt("C3", page))
 
 print("== it refuses what it must not touch ==")
 check("no --context: status 2", st.main(["seed", HOST, "--profile", "accen-dev"]) == 2)

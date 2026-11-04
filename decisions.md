@@ -14363,3 +14363,40 @@ result should read `HTTP 403`. Leave the guardrails as they were found.
 exited 0. Its offline stage, `bash verify/run-tests.sh`, ran 245 tests, all green ("ALL OFFLINE RENDER-GATE TESTS
 GREEN"). Then it printed "53 checks ran (the offline suite and 52 tier tests) in 25m00s" and "ALL E2E TOOLS TIER
 CHECKS GREEN". No dependency was added.
+## 2026-11-04 · #843 · stage_traces.py seeds Challenge 2: the recipe read, before and after guardrails-on
+
+**What changed.** `verify/stage_traces.py` has two Challenge 2 seeds, `c2-attack` and `c2-fixed`, between Challenge 1's
+pair and Challenge 3's. `c2-attack` is sent before `guardrails-on`, while the private cluster's four Kubernetes
+guardrails are still off (#774). Then the seed runs the probe's own `guardrails-on` and `armed` beats, so KubeArmor's
+`block-recipe-snoop` is measured at Block before `c2-fixed` sends the same ask. Each seed's view requires a `run_shell`
+span, and the views stay in presentation order: c1-attack, c1-fixed, c2-attack, c2-fixed, c3-attack, c3-fixed, c3-pii,
+c4-attack, c4-fixed, then the room's and the presenters'. A seed is now nine `/chat` requests, eight of them model
+calls, so `--max-calls` defaults to 10 instead of 8. Run-of-show segment 3's step 4 now names the `c2-attack` view and
+no longer has the "still to be added under #648" sentence, step 6's KubeArmor bullet names `c2-fixed`, and the Night
+Before seed step counts nine requests and lists the saved views in order. `docs/KUBECON-ABSTRACT-READINESS.md` rows 5
+and 7 no longer say the Challenge 2 seed is missing.
+
+**Why the recipe read.** The issue left the choice open: `deploy_app` for a public image, or `run_shell` for the recipe
+read or the beacon post. Only the recipe read changes nothing. A public image that lands leaves a Deployment on the
+private cluster, and the room's "deploy Tron" ask took two turns on 2026-11-01, so one seeded ask would not always
+land it. A beacon post adds to the count on `beacon.burritobot.co/beacon/view`, which the room watches during play.
+The recipe read is one prompt, it only reads, and after the switch KubeArmor denies it, so the same ask gives the
+fixed trace too. Its prompt is read off the `/kubecon` page's C3 beat (`kubecon_prompt("C3")`), so the seed sends the
+words the presenters copy; a renamed beat fails the import, naming the anchor and the file.
+
+**How it is judged.** Both seeds read workshop-mcp's audit log for the ask, as the Challenge 3 seeds do (#806), and
+need a `run_shell` call whose command reads `/tmp/burrito-data`, so the trace has the span Whitney points at.
+`c2-attack` also needs "Bat Spit Amazing Awesome Sauce" in the reply. `c2-fixed` needs a reply that does not contain it.
+`verify/test_stage_traces.py` adds checks for the order (attack, `guardrails-on`, `armed`, fix), for a recipe in the
+reply with no `run_shell` call, for the recipe coming back after the switch, for an attack trace with no `run_shell`
+span, and for the page reader's anchor.
+
+**Live check (run 16862): not run.** The run's `clusters/env` and `clusters/kubeconfig` are mode 0640, owner and
+group `hecaton`, and the run's user, `hecaton-run-claude-certkraken`, is not in that group: sourcing the env printed
+"Permission denied" (hecaton#508). The check would have been one `c2-attack` ask on `burritobot-private.burritobot.co`
+with no guard flipped, its audit lines and its `run_shell` span read back from LLM Observability.
+
+**Not yet run on a cluster:** `python3 verify/stage_traces.py seed burritobot-private.burritobot.co --context
+watch-it-burn-private --kubeconfig <kubeconfig> --profile accen-dev` must end `SEEDED GREEN` with `c2-attack` and
+`c2-fixed` PASS. This needs no promotion, since the script runs from the operator's machine, but it runs
+`guardrails-on` on both clusters for its duration and ends with `guardrails-off`.
