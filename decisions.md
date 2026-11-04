@@ -14358,3 +14358,8 @@ Not part of this issue; nothing reads it on stage.
 `https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs` after a Challenge 1 ask with the shipped Role and
 one after `guardrails-on`. The C5 panel should list both turns, and the second one's `execute_tool get_vault_entry`
 result should read `HTTP 403`. Leave the guardrails as they were found.
+
+**The suites (run 16883, at `2865fdc`, submodules checked out at their pins).** `bash verify/run-e2e-tools.sh`
+exited 0. Its offline stage, `bash verify/run-tests.sh`, ran 245 tests, all green ("ALL OFFLINE RENDER-GATE TESTS
+GREEN"). Then it printed "53 checks ran (the offline suite and 52 tier tests) in 25m00s" and "ALL E2E TOOLS TIER
+CHECKS GREEN". No dependency was added.
