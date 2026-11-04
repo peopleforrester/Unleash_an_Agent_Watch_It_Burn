@@ -857,7 +857,7 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
   `https://genai.owasp.org/llm-top-10/` gives it (read 2026-10-29), with what the
   talk covered marked: LLM01 Prompt Injection (Challenge 3, and Challenge 4 through a
   tool), LLM02 Sensitive Information Disclosure (Challenge 1), LLM03 Supply Chain
-  (Challenge 4's unvetted MCP server), LLM06 Excessive Agency (Challenges 2 to 4),
+  (Challenge 4's unvetted MCP server), LLM06 Excessive Agency (Challenges 1 to 4),
   LLM10 Unbounded Consumption (the finale). The rest are further reading: LLM04 Data
   and Model Poisoning, LLM05 Improper Output Handling, LLM07 System Prompt Leakage,
   LLM08 Vector and Embedding Weaknesses, LLM09 Misinformation. The mapping to the

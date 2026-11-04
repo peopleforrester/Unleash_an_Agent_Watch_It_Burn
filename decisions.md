@@ -13894,3 +13894,28 @@ fails its three gauge checks. Run 16857 rebased the branch onto staging `7b958e7
 pinned submodule, and the test passes. `bash verify/run-e2e-tools.sh` then ran 53 checks (the offline suite and 52
 tier tests) in 24m27s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`; the offline suite inside it ran 244
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-04 · #842 · Segment 6's OWASP close maps LLM06 Excessive Agency to Challenges 1 to 4
+
+**What #842 asks.** Since #820, segment 2 of `facilitation/kubecon-na-2026-run-of-show.md` names LLM02 Sensitive
+Information Disclosure and LLM06 Excessive Agency as the two items the room exploited in Challenge 1, as the deck's
+slide 13 (rounds-agenticburn#58) says. Segment 6's OWASP close still mapped LLM06 to "Challenges 2 to 4". The issue
+asks for "Challenges 1 to 4", or what the reviewed close says.
+
+**What changed.** Segment 6 of the run-of-show and the segment 6 block of the presenter page,
+`gitops/ai-layer/web/kubecon.html`, both carried the old mapping; both now read "LLM06 Excessive Agency (Challenges 1
+to 4)". The page was changed too, since it is the copy the presenters drive from and a fix to one alone would leave the
+two out of step. `verify/test_instructor_brief.py` gains two checks: segment 2 names LLM06 (#820), and the close on
+both pages maps LLM06 to Challenges 1 to 4 with no "Challenges 2 to 4" left. With the two content files put back to
+staging and the test kept, the second check fails and the test exits 1.
+
+**The deck's close is not reviewed yet.** rounds-agenticburn#58 rebuilt the opening, Challenge 1 and Challenge 2 and
+left every slide from the guardrails slide on as it was, the close among them, "still being reviewed". No later deck
+issue reviews the close (read 2026-11-04). So the issue's default, "Challenges 1 to 4", is used. The deck's own OWASP
+table (`attendee.html` at `bc9209f1`, from rounds-agenticburn#47) maps LLM06 to "Challenges 1, 2" and LLM01 to
+"Challenges 3, 4". It already lists Challenge 1 under LLM06, but it leaves out Challenges 3 and 4, which the run-of-show
+counts (Challenge 4's unvetted MCP server). That difference is older than this issue and lies in the deck repo; it is
+left to the close's review, which should settle one mapping for both.
+
+**Live check.** None: the change is talk text and a static page, with nothing a cluster runs differently until Argo CD
+syncs the page. **Not yet run on a cluster:** once the page syncs, `/kubecon` on each KubeCon cluster shows segment 6's
+LLM06 line as "Challenges 1 to 4".

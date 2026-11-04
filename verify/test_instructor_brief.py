@@ -245,6 +245,15 @@ check("the close invites the room to break it (#690)", "You have our permission.
 _ros6 = ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0]
 check("the run-of-show's close says the same", "LLM01 Prompt Injection" in _ros6 and "K05" in _ros6
       and "You have our permission." in _ros6)
+# Segment 2 names LLM06 as exploited in Challenge 1 (#820, deck slide 13), so the close maps LLM06 from Challenge 1
+# on, on both pages (#842).
+_ros2 = ROS.split("### Segment 2:", 1)[1].split("### Segment 3:", 1)[0]
+check("segment 2 names LLM06, Excessive Agency, as what Challenge 1 exploited (#820)",
+      "**LLM06, Excessive Agency**" in _ros2)
+check("so the close maps LLM06 to Challenges 1 to 4 in the run-of-show and on the page (#842)",
+      "LLM06 Excessive Agency (Challenges 1 to 4)" in " ".join(_ros6.split())
+      and "LLM06</b> Excessive Agency (Challenges 1 to 4)" in " ".join(_seg6.split())
+      and "Challenges 2 to 4" not in _ros6 and "Challenges 2 to 4" not in _seg6)
 # C6's two fixes are shown in one order on both pages (#775): HC-666's image is the internal registry's, which
 # Kyverno trusts, so the Joker lands with the guardrails on. Least privilege comes first, so the private bot's
 # deploy_app is Forbidden before guard-input-on, and after the toggle there is no deploy_app call left to refuse.
