@@ -14552,3 +14552,10 @@ and `. "$HECATON_CLUSTER_ENV"` gave `Permission denied` (hecaton#508). Nothing o
 **Not yet run on a cluster.** Once Argo CD syncs this change, open `/kubecon` on the community cluster and read
 segment 6's OWASP Kubernetes card: it should say "K02 Overly Permissive Authorization (Challenges 1 and 3)" and
 "K04 Cluster Level Policy Enforcement (Challenge 2)".
+
+**The suites (run 16890, on `55edf8c3`, staging 5088a28b plus this issue's commit).** `bash verify/run-e2e-tools.sh`
+ran 54 checks (the offline suite and 53 tier tests) in 24m51s. The offline suite inside it ran 246 tests, all green,
+`verify/test_instructor_brief.py` among them. One tier test failed: `test_injection_classifier.py` exited 1 because
+uv's fetch of `https://download.pytorch.org/whl/cpu/tiktoken/` got `503 Service Unavailable` three times, so the
+classifier never ran. Run alone a few minutes later, with the tier's environment, it exits 0: the deployed
+PromptInjection config refuses Challenge 6 and passes the menu. This change touches no file that test reads.
