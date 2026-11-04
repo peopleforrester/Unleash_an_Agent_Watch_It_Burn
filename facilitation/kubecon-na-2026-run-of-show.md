@@ -872,9 +872,11 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
   challenges is ours; say so if asked. Whitney may say where an item sits on the list.
 - **OWASP Kubernetes Top 10, 2025 (30 s):** `https://kubernetes-top10.owasp.org/`.
   With these in place most of today's attacks stop downstream: K02 Overly Permissive
-  Authorization Configurations and K03 Secrets Management Failures (Challenge 1), K04
-  Lack of Cluster Level Policy Enforcement (Challenges 2 and 3), K05 Missing Network
-  Segmentation Controls (Challenge 2), K10 Inadequate Logging and Monitoring.
+  Authorization Configurations (Challenges 1 and 3) and K03 Secrets Management Failures
+  (Challenge 1), K04 Lack of Cluster Level Policy Enforcement (Challenge 2), K05 Missing
+  Network Segmentation Controls (Challenge 2), K10 Inadequate Logging and Monitoring.
+  Challenge 3 sits under K02, not K04: since #775 Kyverno admits its Joker from the
+  internal registry, and what stops it is `guard-agency-on`'s least-privilege Role.
 - **The ASI beat, the blast radius leaving the cluster (optional, 1 min, #113/#716):**
   the two lists above stop at the cluster edge. The OWASP Agentic Security Initiative's
   **ASI03, Identity and Privilege Abuse** is the moment a container compromise becomes a

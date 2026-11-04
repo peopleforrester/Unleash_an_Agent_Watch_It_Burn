@@ -14531,3 +14531,24 @@ first #844 entry stands.
 **The suites (run 16888, at `09974a8f`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage ran 246 tests, all
 green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "54 checks ran (the offline suite and 53 tier tests) in
 24m41s" and "ALL E2E TOOLS TIER CHECKS GREEN".
+
+## 2026-11-04: the KubeCon close files Challenge 3 under K02, not K04 (#853, run 16890)
+
+Since #775, Kyverno admits Challenge 3's Joker because it trusts the internal registry, and what stops it is least
+privilege: `guard-agency-on` applies `c6-least-privilege-role.yaml` and `deploy_app` comes back Forbidden. That is
+OWASP Kubernetes K02, Overly Permissive Authorization Configurations, not K04, Lack of Cluster Level Policy
+Enforcement. Segment 6 of `facilitation/kubecon-na-2026-run-of-show.md` and the segment 6 Kubernetes card of
+`gitops/ai-layer/web/kubecon.html` still read K04 for Challenges 2 and 3. Both now read K02 for Challenges 1 and 3
+and K04 for Challenge 2 alone, the issue's wording, which is what the rounds.agenticburn.com deck reads since
+rounds-agenticburn 2077c3a. The run-of-show adds one sentence saying why Challenge 3 moved. The page keeps its
+shorter item names. `verify/test_instructor_brief.py` gains a check that both pages carry the new mapping and
+neither says "Challenges 2 and 3"; it fails on the old text and passes on the new.
+
+No prior draft existed (`verify/prior-drafts.sh 853 origin/staging` printed NONE). No dependency was added.
+
+**Live check.** Not run: run 16890's `clusters/env` and `clusters/kubeconfig` are mode 0640, owned by `hecaton`,
+and `. "$HECATON_CLUSTER_ENV"` gave `Permission denied` (hecaton#508). Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** Once Argo CD syncs this change, open `/kubecon` on the community cluster and read
+segment 6's OWASP Kubernetes card: it should say "K02 Overly Permissive Authorization (Challenges 1 and 3)" and
+"K04 Cluster Level Policy Enforcement (Challenge 2)".

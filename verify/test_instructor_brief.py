@@ -344,6 +344,17 @@ _llm = ("LLM01</b> Prompt Injection", "LLM02</b> Sensitive Information Disclosur
 check("the close carries all ten 2025 OWASP LLM items, by their names on genai.owasp.org",
       all(x in " ".join(_seg6.split()) for x in _llm))
 check("and the OWASP Kubernetes Top 10 is named", "OWASP Kubernetes Top 10" in _seg6 and "K04" in _seg6)
+# Since #775 Kyverno admits Challenge 3's Joker and least privilege stops it, so the close files Challenge 3 under K02,
+# authorization, and K04, admission, under Challenge 2 alone, on both pages, as the rounds deck does (#853).
+_seg6_flat = " ".join(_seg6.split())
+_ros6_k = " ".join(ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0].split())
+check("the close files Challenge 3 under K02 and K04 under Challenge 2 alone, on the page and in the run-of-show "
+      "(#853)",
+      "K02 Overly Permissive Authorization (Challenges 1 and 3)" in _seg6_flat
+      and "K04 Cluster Level Policy Enforcement (Challenge 2)," in _seg6_flat
+      and "K02 Overly Permissive Authorization Configurations (Challenges 1 and 3)" in _ros6_k
+      and "K04 Lack of Cluster Level Policy Enforcement (Challenge 2)," in _ros6_k
+      and "Challenges 2 and 3" not in _seg6_flat and "Challenges 2 and 3" not in _ros6_k)
 check("the close invites the room to break it (#690)", "You have our permission." in " ".join(_seg6.split()))
 _ros6 = ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0]
 check("the run-of-show's close says the same", "LLM01 Prompt Injection" in _ros6 and "K05" in _ros6
