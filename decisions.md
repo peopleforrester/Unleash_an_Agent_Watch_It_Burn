@@ -13995,3 +13995,21 @@ cluster for it.
 **The suites (run 16867, on `829160d8`, submodules checked out at their pins).** `bash verify/run-e2e-tools.sh`
 ran 53 checks (the offline suite and 52 tier tests) in 26m49s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`.
 The offline suite inside it ran 244 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #846 · the heavy gate's red at `a65f748d` is already fixed on staging
+
+**What failed.** The heavy gate ran `bash verify/run-e2e-tools.sh` on staging `a65f748d`, which repins guard-proxy
+to `c2eb4cf2`, and its offline stage exited 1. The failing test was `verify/test_weaver_guard_proxy_spans.py`: at
+`c2eb4cf2` guard-proxy observes the cost gauge in a shape the test could not read, so its three gauge checks failed
+(the #840 entry above records the same failure on run 16846's rebase). Staging's `abeb41b9` (#839), which came after
+`a65f748d`, reads the observation at either pin.
+
+**What this run changed.** No code. The base, staging `2d0675ce`, already holds `abeb41b9`, so the fix is there and
+nothing was left to write.
+
+**The suites (run 16866, on `2d0675ce`, guard-proxy checked out at `c2eb4cf2`).** `bash verify/run-tests.sh` ran
+244 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. `bash verify/run-e2e-tools.sh` then ran 53 checks (the
+offline suite and 52 tier tests) in 26m34s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`;
+`test_weaver_guard_proxy_spans.py` passed inside it.
+
+**Live check.** None applies: no change moves anything on either cluster.
