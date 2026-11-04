@@ -15087,3 +15087,7 @@ run's kubeconfig as `$KUBECONFIG`, after Argo CD has synced this commit:
 7. Leave the cluster as found:
    `kubectl --context watch-it-burn-community -n agent delete deploy joker-hazel-the-ghoul joker-silas-the-imp --ignore-not-found`.
 Once these pass, #762, #764 and #803 can close on that record.
+
+**The suites (run 16937, at `0dc9cd18`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 24m55s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 249
+tests, all green, `test_agent_witch_name.py` among them.
