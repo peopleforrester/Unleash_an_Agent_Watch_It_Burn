@@ -1,5 +1,5 @@
 # ABOUTME: Offline checks for verify/load_replay.py (#644): runs the tool as a command against a local fake /chat and
-# ABOUTME: /cost on loopback at 500 users, and holds its refusal texts and limits to proxy.py and console.conf.
+# ABOUTME: /cost on loopback at 500 users, and holds its refusal texts and limits to the pinned guard-proxy and console.conf.
 """Holds the load replay to its contract without a cluster, a model or any money.
 
 The fake server answers each prompt by a keyword the fixture harvest put in it, with the bodies the deployed
@@ -9,6 +9,7 @@ tallies what it answered, and the tool's JSON report must agree with that tally 
 """
 from __future__ import annotations
 
+import ast
 import json
 import pathlib
 import re
@@ -26,6 +27,7 @@ import load_replay as lr  # noqa: E402
 
 TOOL = HERE / "load_replay.py"
 PROXY = REPO / "gitops/ai-layer/guard-proxy/proxy.py"
+GO_CHAT = REPO / "gitops/ai-layer/guard-proxy/internal/server/chat.go"
 CONSOLE = REPO / "gitops/ai-layer/console.conf"
 SECRET = "FIXTURE-TEXT-7f3a"  # in every fixture prompt; must never reach a report
 
@@ -43,15 +45,95 @@ _conf = CONSOLE.read_text()
 _slow = re.search(r"location @chat_slow_down \{.*?return 200 '(.*?)';", _conf, re.S)
 NGINX_SLOW_DOWN = json.loads(_slow.group(1)) if _slow else {}
 _proxy = PROXY.read_text()
+_go_chat = GO_CHAT.read_text()
+
+
+def anchor_missing(what: str, path: pathlib.Path) -> None:
+    """A reworded or moved anchor in the pinned guard-proxy reads as that, not as a broken check further on."""
+    print(f"  FAIL  {what} is not in {path.relative_to(REPO)}; the rate-limit reply checks read it there")
+    sys.exit(1)
+
+
+def proxy_limit_replies(source: str, limits: dict) -> dict[str, str]:
+    """proxy.py's /chat per-conversation and per-cluster rate-limit replies as _chat_turn sends them: the "reply" of
+    the _send under `if session_rate_limited(session):` and `if rate_limited():`, read from the syntax tree so the
+    implicit string concatenation is joined, with {RATE_LIMIT_SESSION_RPM} and {RATE_LIMIT_RPM} filled in from the
+    deployed env."""
+    rpm = {"RATE_LIMIT_SESSION_RPM": limits["proxy_session_rpm"], "RATE_LIMIT_RPM": limits["proxy_cluster_rpm"]}
+    turn = next((n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.FunctionDef) and n.name == "_chat_turn"),
+                None)
+    if turn is None:
+        anchor_missing("def _chat_turn", PROXY)
+
+    def render(value: ast.expr) -> str:
+        parts = value.values if isinstance(value, ast.JoinedStr) else [value]
+        out = ""
+        for part in parts:
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                out += part.value
+            elif (isinstance(part, ast.FormattedValue) and isinstance(part.value, ast.Name)
+                  and part.value.id in rpm and part.format_spec is None and part.conversion == -1):
+                out += str(rpm[part.value.id])
+            else:
+                anchor_missing(f"a reply built from text and {sorted(rpm)} alone (found {ast.unparse(part)})", PROXY)
+        return out
+
+    replies: dict[str, str] = {}
+    for node in ast.walk(turn):
+        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Call) and isinstance(node.test.func, ast.Name)):
+            continue
+        key = {"session_rate_limited": "session", "rate_limited": "cluster"}.get(node.test.func.id)
+        if key is None or key in replies:
+            continue
+        for call in (c for stmt in node.body for c in ast.walk(stmt)):
+            if (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == "_send"
+                    and len(call.args) == 2 and isinstance(call.args[1], ast.Dict)):
+                for k, v in zip(call.args[1].keys, call.args[1].values):
+                    if isinstance(k, ast.Constant) and k.value == "reply":
+                        replies[key] = render(v)
+    for key, test in (("session", "if session_rate_limited(session):"), ("cluster", "if rate_limited():")):
+        if key not in replies:
+            anchor_missing(f'a self._send(200, {{"reply": ...}}) under `{test}` in _chat_turn', PROXY)
+    return replies
+
+
+def go_limit_replies(source: str, limits: dict) -> dict[str, str]:
+    """The Go build's same two replies: the fmt.Sprintf under `if s.limiter.Session(session) {` and
+    `if s.limiter.Cluster() {` in internal/server/chat.go, with its one %d filled in from the deployed env."""
+    replies: dict[str, str] = {}
+    for key, guard, getter, n in (("session", "s.limiter.Session(session)", "s.limiter.SessionRPM()",
+                                   limits["proxy_session_rpm"]),
+                                  ("cluster", "s.limiter.Cluster()", "s.limiter.ClusterRPM()",
+                                   limits["proxy_cluster_rpm"])):
+        block = re.search(r"if " + re.escape(guard) + r" \{\n(.*?)\n\t\}", source, re.S)
+        if block is None:
+            anchor_missing(f"`if {guard} {{`", GO_CHAT)
+        fmt = re.search(r'fmt\.Sprintf\("((?:[^"\\]|\\.)*)", ' + re.escape(getter) + r"\)", block.group(1))
+        if fmt is None or fmt.group(1).count("%") != 1 or "%d" not in fmt.group(1):
+            anchor_missing(f'fmt.Sprintf("... %d ...", {getter}) under `if {guard} {{`', GO_CHAT)
+        replies[key] = json.loads(f'"{fmt.group(1)}"').replace("%d", str(n))
+    return replies
+
+
+def says_wait_and_send_again(reply: str) -> bool:
+    """Michael's 2026-11-01 criterion for every refused turn: the reply tells the phone to wait and send again."""
+    return (re.search(r"\bwait\b", reply, re.I) is not None
+            and re.search(r"\bsend\b.*\bagain\b", reply, re.I | re.S) is not None)
+
+
+LIMITS = lr.deployed_limits()
+PY_LIMIT = proxy_limit_replies(_proxy, LIMITS)
+GO_LIMIT = go_limit_replies(_go_chat, LIMITS)
 
 KEYWORDS = {
     # keyword: (status, body, the outcome the tool must report)
     "SERVE": (200, {"reply": "Pick a base: Black-Bog Rice.", "guarded": False,
                     "input_tokens": 100, "output_tokens": 40}, "served"),
     "EDGE": (200, NGINX_SLOW_DOWN, "edge_limit"),
-    "SESSION": (200, {"reply": "Slow down, hungry traveler. (10/min per conversation.)", "guarded": True,
+    # guard-proxy's two rate-limit replies, exactly as the pinned proxy.py sends them at the deployed limits.
+    "SESSION": (200, {"reply": PY_LIMIT["session"], "guarded": True,
                       "input_tokens": 0, "output_tokens": 0}, "session_limit"),
-    "CLUSTER": (200, {"reply": "Slow down, hungry traveler. (150/min cap on this cluster.)", "guarded": True,
+    "CLUSTER": (200, {"reply": PY_LIMIT["cluster"], "guarded": True,
                       "input_tokens": 0, "output_tokens": 0}, "cluster_limit"),
     "CAPPED": (200, {"reply": "The kitchen is closed: this cluster hit its $25.00 spend cap, so BurritoBot isn't "
                               "sending anything else to the model for anyone. A blocked request costs nothing.",
@@ -176,8 +258,34 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
     check("the tool reads nginx's refusal as edge_limit",
           lr.classify(200, NGINX_SLOW_DOWN) == "edge_limit", str(NGINX_SLOW_DOWN))
     check("EDGE_LIMIT_TEXT is in console.conf's refusal", lr.EDGE_LIMIT_TEXT in NGINX_SLOW_DOWN.get("reply", ""))
-    for name in ("SESSION_LIMIT_TEXT", "CLUSTER_LIMIT_TEXT", "COST_CAP_TEXT", "BUDGET_TEXT"):
+    for name in ("COST_CAP_TEXT", "BUDGET_TEXT"):
         check(f"{name} is in guard-proxy's /chat reply (proxy.py)", getattr(lr, name) in _proxy)
+
+    print("\n== guard-proxy's rate-limit replies tell a phone to wait and send again (#790) ==")
+    # The judge itself, on the wording before guard-proxy-agenticburn#43 and on the wording since.
+    check("the judge refuses the pre-#43 reply, which only names the limit",
+          not says_wait_and_send_again("Slow down, hungry traveler. (10/min per conversation.)"))
+    check("the judge accepts a reply that says to wait and send that again",
+          says_wait_and_send_again("Slow down. Wait a few seconds and send that again."))
+    for build, replies in (("proxy.py", PY_LIMIT), ("internal/server/chat.go", GO_LIMIT)):
+        for key, rpm_key in (("session", "proxy_session_rpm"), ("cluster", "proxy_cluster_rpm")):
+            reply = replies[key]
+            check(f"{build}'s per-{'conversation' if key == 'session' else 'cluster'} reply says to wait and send "
+                  "again", says_wait_and_send_again(reply), reply)
+            check(f"{build}'s {key} reply names the deployed {LIMITS[rpm_key]}/min", f"({LIMITS[rpm_key]}/min " in reply,
+                  reply)
+    check("proxy.py and the Go build send the same two rate-limit replies", PY_LIMIT == GO_LIMIT,
+          f"{PY_LIMIT} != {GO_LIMIT}")
+    check("SESSION_LIMIT_TEXT is in the per-conversation reply only",
+          lr.SESSION_LIMIT_TEXT in PY_LIMIT["session"] and lr.SESSION_LIMIT_TEXT not in PY_LIMIT["cluster"],
+          f"{lr.SESSION_LIMIT_TEXT!r} vs {PY_LIMIT}")
+    check("CLUSTER_LIMIT_TEXT is in the per-cluster reply only",
+          lr.CLUSTER_LIMIT_TEXT in PY_LIMIT["cluster"] and lr.CLUSTER_LIMIT_TEXT not in PY_LIMIT["session"],
+          f"{lr.CLUSTER_LIMIT_TEXT!r} vs {PY_LIMIT}")
+    for build, replies in (("proxy.py", PY_LIMIT), ("internal/server/chat.go", GO_LIMIT)):
+        check(f"the tool reads {build}'s two rate-limit replies as session_limit and cluster_limit",
+              lr.classify(200, {"reply": replies["session"], "guarded": True}) == "session_limit"
+              and lr.classify(200, {"reply": replies["cluster"], "guarded": True}) == "cluster_limit", str(replies))
     check("the cluster's cost cap and a conversation's budget are told apart (guard-proxy-agenticburn#25)",
           lr.classify(200, KEYWORDS["CAPPED"][1]) == "cost_cap" and lr.classify(200, KEYWORDS["BUDGET"][1]) == "budget")
     check("PROBE_MARKER equals proxy.py's", f'PROBE_MARKER = "{lr.PROBE_MARKER}"' in _proxy)

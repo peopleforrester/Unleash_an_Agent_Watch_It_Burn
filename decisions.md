@@ -14559,3 +14559,60 @@ ran 54 checks (the offline suite and 53 tier tests) in 24m51s. The offline suite
 uv's fetch of `https://download.pytorch.org/whl/cpu/tiktoken/` got `503 Service Unavailable` three times, so the
 classifier never ran. Run alone a few minutes later, with the tier's environment, it exits 0: the deployed
 PromptInjection config refuses Challenge 6 and passes the menu. This change touches no file that test reads.
+
+## 2026-11-04 · #790 · guard-proxy's two rate-limit replies say to wait and send again, and a test holds the pin to it
+
+**Context.** Michael's criterion of 2026-11-01 asks every refused /chat turn to tell the phone to wait and send
+again. guard-proxy's per-conversation and per-cluster rate-limit replies only named the limit. An earlier run's report on
+#790 found no rewording on guard-proxy-agenticburn main and asked for one there. guard-proxy-agenticburn#43 landed it
+as 82b7daf (2026-11-03): in proxy.py's `_chat_turn` and in `internal/server/chat.go`, both replies now read "Slow
+down, hungry traveler. (N/min per conversation.) Wait a few seconds and send that again." and "Slow down, hungry
+traveler. (N/min cap on this cluster.) Wait a few seconds and send that again.", and `conformance/test_spend.py`
+asserts both. The cost-cap reply ("The kitchen is closed") still offers no retry, as guard-proxy-agenticburn#25
+decided.
+
+**The pin.** Michael's a65f748d (#839, #793, #784) moved `gitops/ai-layer/guard-proxy` from 88b9b52 to c2eb4cf2,
+guard-proxy-agenticburn main's head, which descends from 82b7daf, with `checksum/proxy-py` `ba8d8e2b789f` (the
+sha256 of c2eb4cf2's proxy.py, checked again in this run). So this repo already deploys the reworded replies, and this
+run moves no gitlink; question 766 ("Michael pins, a run does the rest") stands. Delivery is still the proxy.py
+ConfigMap; once #738 retires it for the Go image, the same test reads the Go build's replies, which it checks too.
+
+**What else that re-pin brought in from guard-proxy-agenticburn**, 88b9b52..c2eb4cf2, besides #43:
+- #37 (c8ac56e): each request is priced at the tier of the `workshop-agent` Agent's bound ModelConfig, read at most
+  every 5 seconds, with `MODEL_TIER` as the start-up default (this repo's #793 and #841).
+- #38 (1cfa6d6): `gen_ai.request.model` on spans and the cost gauge name the bound model, one cost series per model.
+- #40 (236a857) and #42 (57551d4): the conformance and Go entry-point tests bind their own ports; test-only.
+- #45 (d97f02c): every semconv name is generated from this repo's weaver registry, and `extra.go` is gone.
+- #46 (22c6233), #47 (cc37bee), #48 (4f246ff): the /chat `agent.forward` span carries `url.full` and
+  `http.response.status_code`, and proxy.py marks it failed when the forward fails.
+- #49 (96d1621): `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` on the /chat chat span (#784, #839).
+- #50 (c2eb4cf): a README line, and the project-state records of each of the above (156d448 among them).
+
+**This change.** `verify/load_replay.py`'s SESSION_LIMIT_TEXT and CLUSTER_LIMIT_TEXT are now the end of each reply
+as c2eb4cf2 sends it, "/min per conversation.) Wait a few seconds and send that again." and "/min cap on this
+cluster.) Wait a few seconds and send that again.", so the replay still tells the two apart. `verify/test_load_replay.py`
+no longer matches them as substrings of proxy.py's text, which the new two-line string literal would split. It reads
+the two replies out of the pinned build instead: from proxy.py's syntax tree (the `self._send` reply under
+`if session_rate_limited(session):` and `if rate_limited():` in `_chat_turn`, joined and filled in with the deployed
+RATE_LIMIT_SESSION_RPM and RATE_LIMIT_RPM), and from chat.go (the `fmt.Sprintf` under `if s.limiter.Session(session)`
+and `if s.limiter.Cluster()`). It fails if any of the four replies stops saying "wait" and "send ... again", if they
+stop naming the deployed 10/min and 150/min, if proxy.py and the Go build send different replies, or if the replay
+stops reading them as session_limit and cluster_limit. Its fake /chat now answers with those extracted replies, not
+hand-copied ones. When an anchor it reads by is gone, it exits naming the anchor and the file.
+
+**How it was shown to fail.** Each run against the submodule with one hand edit, then restored: the retry sentence
+cut from proxy.py's cluster reply (6 checks fail), cut from chat.go's session reply (3 fail), replaced by "Try later."
+in chat.go's cluster reply (3 fail); the submodule checked out at 57551d4, the commit before #43 (10 fail); and
+`session_rate_limited` renamed in proxy.py (exit 1 naming the missing anchor). The submodule is back at c2eb4cf2.
+
+**Live check.** Not run, and the issue needs none: this run's `clusters/env` and `clusters/kubeconfig` are mode
+0640, owned by `hecaton`, and this run's user is `hecaton-s3-claude-certkraken`, so `. "$HECATON_CLUSTER_ENV"` and
+kubectl gave `Permission denied` (hecaton#508). Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** No live test reads guard-proxy's own rate-limit reply:
+`verify/test_audience_path_live.py` reads only the console nginx's refusal, which already said to wait and send that
+again. The owed read is on either cluster: `kubectl --context watch-it-burn-community -n agent get cm -o json` and
+the `guard-proxy-src-*` ConfigMap's `proxy.py` holds "Wait a few seconds and send that again." twice and hashes to
+`ba8d8e2b789f`.
+
+No dependency was added.

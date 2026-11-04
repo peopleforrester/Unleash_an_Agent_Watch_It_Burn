@@ -29,6 +29,14 @@ prices each request at the `workshop-agent` Agent's bound `bedrock-<tier>` Model
 the nova-to-haiku swap on a cluster, with `/cost`'s tier and Haiku-rate spend checked. Details in decisions.md,
 2026-11-03 · #793 and 2026-11-04 · #841.
 
+## guard-proxy's rate-limit replies say to wait and send again (#790)
+
+Done in git. The c2eb4cf2 pin carries guard-proxy-agenticburn#43 (82b7daf): both /chat rate-limit replies, in
+proxy.py and the Go build, end "Wait a few seconds and send that again." `verify/load_replay.py` tells them apart by
+those endings, and `verify/test_load_replay.py` reads the replies out of the pinned build and fails if either stops
+saying to wait and send again. Owed: a read of the deployed `guard-proxy-src` ConfigMap on a cluster. Details in
+decisions.md, 2026-11-04 · #790.
+
 ## KubeCon guardrails switch (#774)
 
 Both KubeCon clusters now build with the four Kubernetes guardrails (RBAC, Kyverno, KubeArmor, egress) present and

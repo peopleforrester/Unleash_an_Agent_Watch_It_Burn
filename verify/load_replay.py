@@ -68,10 +68,12 @@ TIMEOUT_S = 320.0
 MAX_PROMPT_CHARS = 8000
 
 # Outcomes, by what the phone would see. The refusal texts are guard-proxy's and the console nginx's own
-# (proxy.py _chat_turn and console.conf @chat_slow_down); verify/test_load_replay.py holds them to the source.
+# (proxy.py _chat_turn, internal/server/chat.go in its Go build, and console.conf @chat_slow_down);
+# verify/test_load_replay.py holds them to the pinned source. Since guard-proxy-agenticburn#43 (82b7daf) both
+# guard-proxy rate-limit replies end by telling the phone to wait and send that again (#790).
 EDGE_LIMIT_TEXT = "a minute per conversation. Wait"     # console.conf @chat_slow_down
-SESSION_LIMIT_TEXT = "/min per conversation.)"           # proxy.py, RATE_LIMIT_SESSION_RPM
-CLUSTER_LIMIT_TEXT = "/min cap on this cluster.)"        # proxy.py, RATE_LIMIT_RPM
+SESSION_LIMIT_TEXT = "/min per conversation.) Wait a few seconds and send that again."  # RATE_LIMIT_SESSION_RPM
+CLUSTER_LIMIT_TEXT = "/min cap on this cluster.) Wait a few seconds and send that again."  # RATE_LIMIT_RPM
 COST_CAP_TEXT = "The kitchen is closed: this cluster hit"  # proxy.py, COST_CAP_USD (guard-proxy-agenticburn#25)
 BUDGET_TEXT = "The kitchen tab is frozen."               # proxy.py, the C4 per-conversation budget guard
 OUTCOMES = ("served", "edge_limit", "session_limit", "cluster_limit", "cost_cap", "budget", "guarded", "empty",
