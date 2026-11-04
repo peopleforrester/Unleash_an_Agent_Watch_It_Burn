@@ -760,6 +760,74 @@ def _mend_workload(obj: dict, name: str) -> None:
     meta["labels"] = {**labels, **selector.get("matchLabels", {})}
 
 
+# What was left of HC-666's failures once deploy_app read every shape above (#856, run 16959, 2026-11-04): of 19 asks on
+# the public bot, three were refused with a 422 at least once, each a re-apply of a joker-<name> that was already on the
+# cluster, while every manifest the bot showed was a Deployment the API server takes. A Deployment's selector cannot
+# change once it exists (the API server answers 422, "field is immutable"), and the model picks its labels afresh on
+# each ask, so a re-apply now keeps the live selector. A room Joker the API server still refuses with a 422 is applied
+# once more as the plain Joker the ticket asks for: its name, the model's image, one replica.
+_LABEL_NAME = re.compile(r"^([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?$")
+_LABEL_PREFIX = re.compile(r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$")
+
+
+def _valid_label(key, value) -> bool:
+    """Whether the API server takes this label: a name of up to 63 characters with an optional DNS prefix, and a value
+    of up to 63 characters of the same alphabet."""
+    if not isinstance(key, str) or not isinstance(value, str):
+        return False
+    prefix, _, label = key.rpartition("/")
+    return bool(label) and bool(_LABEL_NAME.match(label)) and (not prefix or bool(_LABEL_PREFIX.match(prefix))) \
+        and bool(_LABEL_NAME.match(value))
+
+
+def _keep_live_selector(obj: dict, base: str, ns: str, plural: str, name: str) -> None:
+    """Give a re-applied workload the selector it already has on the cluster, and its template that selector's labels."""
+    code, body = _req("GET", f"{base}/namespaces/{ns}/{plural}/{name}")
+    if code != 200:
+        return
+    try:
+        live = json.loads(body)
+    except ValueError:
+        return
+    live_spec = live.get("spec") if isinstance(live, dict) else None
+    selector = live_spec.get("selector") if isinstance(live_spec, dict) else None
+    match = selector.get("matchLabels") if isinstance(selector, dict) else None
+    if not isinstance(match, dict) or not match or selector.get("matchExpressions"):
+        return
+    spec, tmpl = obj.get("spec"), (obj.get("spec") or {}).get("template")
+    if not isinstance(spec, dict) or not isinstance(tmpl, dict) or not isinstance(tmpl.get("metadata"), dict):
+        return
+    spec["selector"] = {"matchLabels": dict(match)}
+    labels = tmpl["metadata"].get("labels") if isinstance(tmpl["metadata"].get("labels"), dict) else {}
+    tmpl["metadata"]["labels"] = {**labels, **match}
+
+
+def _plain_room_joker(obj: dict, name: str) -> dict | None:
+    """The room Joker HC-666 asks for and nothing else: the Deployment's name, its first container's image and the
+    selector's valid labels (else app: <name>), with the stamps every room Joker gets. None when it names no image."""
+    image = _first_image(obj).strip()
+    if not image:
+        return None
+    selector = (obj.get("spec") or {}).get("selector") or {}
+    match = selector.get("matchLabels") if isinstance(selector.get("matchLabels"), dict) else {}
+    match = {k: v for k, v in match.items() if _valid_label(k, v)} or {"app": name}
+    plain = {"apiVersion": "apps/v1", "kind": "Deployment",
+             "metadata": {"name": name, "namespace": obj["metadata"]["namespace"]},
+             "spec": {"replicas": 1, "selector": {"matchLabels": match},
+                      "template": {"metadata": {"labels": dict(match)},
+                                   "spec": {"containers": [{"name": name, "image": image}]}}}}
+    _default_limits(plain)
+    _shrink_room_joker(plain, name)
+    _name_room_joker(plain, name)
+    _stamp_workload(plain, name)
+    return plain
+
+
+def _refused_as_invalid(code: int, body: str) -> bool:
+    """A 422 from the API server's own validation, not an admission webhook's denial, which is the lesson."""
+    return code == 422 and "admission webhook" not in body
+
+
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults. For a common public app, "
                       "the image can be just its name: " + ", ".join(PUBLIC_IMAGES) + "; the cantina pulls that "
@@ -802,8 +870,18 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     base, plural = _resource_for(api_version, kind)
     if not plural:
         _refuse(f"{kind}/{name}", f"unknown resource for apiVersion={api_version} kind={kind}")
+    if kind in _TEMPLATED_KINDS:
+        _keep_live_selector(obj, base, ns, plural, name)
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
+    if _refused_as_invalid(code, body) and kind == "Deployment" and room_joker_page(name):
+        plain = _plain_room_joker(obj, name)
+        if plain is not None:
+            print(f"{name} refused as written (HTTP {code}): {_status_message(body)[:300]}; applying the plain Joker",
+                  flush=True)
+            code, body = _req("PATCH", path, body=json.dumps(plain), content_type="application/apply-patch+yaml")
+            if code in (200, 201):
+                obj = plain
     _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}",
             image=_first_image(obj), requested_by=requested_by)
     if code in (200, 201) and ((room and kind in SCALED_KINDS)

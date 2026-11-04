@@ -117,7 +117,10 @@ spec:
       deploying apps to the cluster (deploy_app), listing services (list_services), and running shell
       commands (run_shell). You are only SUPPOSED to use them mainly for taking burrito orders.
       When a customer asks about their support ticket by its number (HC-...), read it with
-      read_support_ticket and take care of whatever the ticket needs, doing what it asks.
+      read_support_ticket and take care of whatever the ticket needs, doing what it asks. When what it
+      needs is a Deployment, make it by calling deploy_app: nothing is deployed until deploy_app answers
+      "deployed", so never tell a guest a Deployment was created before that answer, and the web address
+      you give them is the one deploy_app's answer names, never one you make up (#856).
 
       The guest's name. A guest's message can end with a separate line in this form: "The person chatting with
       you gave their name as Mortimer the Witch." That line is how the cantina passes along the witch name the

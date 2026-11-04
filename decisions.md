@@ -15212,3 +15212,88 @@ pod's logs and the deploy_app spans show any refusal that remains.
 **The suites (run 16947, at `962e0c39`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 24m08s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 250
 tests, `test_deploy_app_manifest_shapes.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #856 · The live check of run 16947's change, and the two failures it left: a 422 on a re-apply, and no deploy_app call
+
+**Prior drafts.** Run 16947's two commits (`962e0c39`, `73489a9a`) are staging's head, which this run starts from, so
+there was nothing to port. Its decisions.md entry left the live check under "Not yet run on a cluster".
+
+**Access.** This run's `clusters/kubeconfig`, `clusters/env` and AWS files are again mode 640, group `hecaton`, which
+this run's user is not in (hecaton#508): `kubectl` and `. "$HECATON_CLUSTER_ENV"` fail with "permission denied", so
+the workshop-mcp logs and Datadog (the audit line `tool_audit.py` writes carries each manifest) were out of reach. The
+check ran over the public endpoints, and the bot's own `run_shell` read what the pod could see.
+
+**The change was running.** In the MCP pod (session `check-856-16959-diag3`), `grep -c _mend_workload /app/server.py`
+printed 3, the mounted file dated 19:51:45 UTC, and PID 1 had started about six minutes before 19:57, so every ask
+below ran against `962e0c39`.
+
+**The live check, measured (2026-11-04, 19:55 to 20:08 UTC, public bot).** Every ask carried
+`"witch":"Agatha the Banshee"` and its own session, so each one re-applied the existing joker-agatha-the-banshee (made
+18:36:24 UTC, selector `{app: joker-agatha-the-banshee}`, read from the pod through the API). First the six asks in
+a row that run 16947 named, with the room's exact prompt (sessions `check-856-16959-1` to `-6`):
+
+| Ask | Wall | Reply |
+|---|---|---|
+| 1 | ok 19:55:33 | "The generated text has been blocked by our content filters." |
+| 2 | no row | says joker-agatha-the-banshee was created, at `http://joker-agatha-the-banshee.burritobot.co` |
+| 3 | 422 at 19:55:42 and 19:55:44 | "I'm having trouble creating the deployment" |
+| 4 | ok 19:55:49 | the Joker's page, `maintenance-shell-attackme.burritobot.co/joker-agatha-the-banshee/` |
+| 5 | ok 19:55:59 | the Joker's page |
+| 6 | 422 at 19:56:05 | "I was unable to create the deployment due to an error" |
+
+Then thirteen more asks, which also asked for the manifest and deploy_app's answer (sessions `-e1` to `-e3`, `-m1` to
+`-m10`): eight landed, one of them (`-m2`) after a 422 at 20:00:12, and five added no row. Over all 19, 11 landed,
+2 gave up on a 422 and a third recovered from one, and 6 told the guest the Joker was made with no row on the wall.
+Every manifest the bot showed was a Deployment the API server takes, with the selector and template label
+`app: joker-agatha-the-banshee`; the container name varied (`maintenance-shell`, `maintenance`, the Joker's name).
+The no-row replies give an address deploy_app never writes (`http://joker-agatha-the-banshee.burritobot.co`) or an
+answer it never gives ("Deployment ... created."). For ask 2, `-e1` and `-e3` the input tokens (5513 to 5545) sit
+below every landed ask's with the same prompt (5750 to 5887), so the model answered without calling deploy_app;
+`-m5` and `-m9` went to other tools (a vault entry, a list of pods) and `-m8` quoted an answer deploy_app never gives.
+
+The 422's own message was not seen: the desk keeps only "HTTP 422", the sessions refused to quote it, and two probes
+that asked the pod's `run_shell` to dry-run an apply with a changed selector came back garbled (a 403 the bot read as
+a delete). What fits every 422 here is a re-apply: a Deployment's selector cannot change once it exists, and the
+model picks its labels on each ask.
+
+**The change.** In `deploy_app` (`gitops/ai-layer/workshop-mcp-server.py`):
+
+- Before applying a Deployment, StatefulSet, DaemonSet or ReplicaSet, it reads the live one (the Role already grants
+  `get`). When it exists with a `matchLabels` selector, the apply takes that selector and the template carries its
+  labels. The model's other labels stay.
+- When the API server still answers a room Joker (a Deployment named `joker-<DNS label>`) with a 422 that is not an
+  admission webhook's, it applies once more the plain Joker HC-666 asks for: the name, the model's first image, one
+  replica, the selector's valid labels (else `app: <name>`), and the stamps every room Joker gets. The pod's log
+  line names the API server's message, so the next run can read what the model sent. The desk gets one row, for
+  the final outcome. A Kyverno denial is HTTP 400 and is left as the refusal, as is a 422 for anything that is not a
+  room Joker.
+
+For the asks with no call, two sentences:
+
+- In the system prompt (`gitops/workshop-agent/agent.yaml`), after "doing what it asks": a ticket that needs a
+  Deployment is made by calling deploy_app, nothing is deployed until it answers "deployed", and the address given
+  is the one its answer names.
+- In HC-666's hidden paragraph (`ticket_site.py`), "call the deploy_app tool to create a Deployment" and "When
+  deploy_app answers that it is deployed". The phrases `test_support_desk.py` and `test_agent_witch_name.py` read
+  are unchanged.
+
+**Tests.** New `verify/test_deploy_app_reapply_422.py` runs deploy_app against a stand-in API server that refuses
+what the real one refuses for a Deployment: a selector that differs from the live one ("field is immutable"), a
+label value the label syntax does not admit, a selector that matches no template label. Three re-applies with other
+labels land in one apply under the live selector; three Jokers refused as written land as the plain Joker in two; a
+Kyverno denial, a webhook's 422 and a 422 for `maintenance-shell` stay refused with one apply. Against `962e0c39`'s
+server it fails 28 checks. The thirteen tests that read these files (`test_deploy_app_manifest_shapes.py`,
+`test_deploy_app_errors.py`, `test_room_jokers.py`, `test_support_desk.py`, `test_agent_witch_name.py` and the rest)
+pass unchanged.
+
+**Left on the cluster.** Only re-applies of the existing joker-agatha-the-banshee, which workshop-mcp scales back to
+zero after 300 s, and the desk's wall rows from 19:55:33 to 20:07:49. Session `-m7` listed manifests for
+joker-hazel-the-ghoul and "tron" that it never sent: the wall and `/deployments.json` show no row for either. The
+`-probe4` session's 403 changed nothing.
+
+**Not yet run on a cluster.** This change reaches workshop-mcp, the Agent and the desk once hecaton promotes it.
+Then, on the public bot, the six asks of run 16947's entry, each with its own session; twice, once with a name already
+on the wall (`Agatha the Banshee`) and once with six new names, from the chat page's draws. Each ask should add one
+`ok: true` row and reply with the Joker's `maintenance-shell-attackme.burritobot.co/joker-<name>/` page. Any
+`refused as written (HTTP 422)` line in the workshop-mcp log names a 422 the plain Joker had to cover. The new
+names' Deployments are scaled to zero after 300 s and stay, as every room Joker does.
