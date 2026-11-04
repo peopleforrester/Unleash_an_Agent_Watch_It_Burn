@@ -14418,3 +14418,7 @@ challenge table (f4065986), and stage_traces.py's docstring (17a17178). Each is 
 lines, and git merged them with no conflict. The `/kubecon` page's C3 beat, which the seed reads its prompt from,
 is unchanged on staging. The live check was not run in this run either: `clusters/env` is again mode 0640 with group
 `hecaton`, and sourcing it printed "Permission denied" (hecaton#508).
+
+**The suites (run 16878, at 6b9bf73d, on staging's eee084d0).** `bash verify/run-e2e-tools.sh` exited 0. Its offline
+stage ran 245 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "53 checks ran (the offline
+suite and 52 tier tests) in 24m30s" and "ALL E2E TOOLS TIER CHECKS GREEN".
