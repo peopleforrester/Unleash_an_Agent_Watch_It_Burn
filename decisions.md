@@ -14281,3 +14281,9 @@ exit 2" at the missing aws CLI. That line described the code model_pin_check ret
 checks that code (`rc == 2`) as proof the offline half finished, and it skips nothing. Run 16876 reworded the
 docstring to "returns its missing-tool code (2)", which the gate's pattern does not match. The checks are unchanged,
 and the gate's own `count()` reads zero markers in the file.
+
+**The suites (run 16876, on `77ae9dbd`, staging 34be4c18 plus this issue's commits).** `bash verify/run-e2e-tools.sh` ran 53
+checks (the offline suite and 52 tier tests) in 24m17s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline
+suite inside it ran 245 tests, all green, `verify/test_guard_proxy_pin_bound_pricing.py` among them. The live check
+did not run: run 16876's `clusters/env` and `clusters/kubeconfig` are again mode 0640, owned by `hecaton`, and
+`. "$HECATON_CLUSTER_ENV"` gave `Permission denied` (hecaton#508). Nothing on either cluster was read or changed.
