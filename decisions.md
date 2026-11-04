@@ -15301,3 +15301,35 @@ names' Deployments are scaled to zero after 300 s and stay, as every room Joker 
 **The suites (run 16959, at `a55d4363`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m11s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests, `test_deploy_app_reapply_422.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #617 · Where spec 001 M8, the campaign, stands, and an offline test that reached the live clusters
+
+**M8.** Spec 001 (personal-knowledge `specs/talks/burritobot/001`) M8 asks, by 2026-12-12, for at least two
+articles, a clip on YouTube and as native LinkedIn video, and this repo public after the public-repo checks, with
+mrf-engagement-orchestrator doing the posting. Read on 2026-11-04, run 16968:
+
+- The repo is public: `gh repo view` reads `PUBLIC`. A scan of HEAD for AWS access keys, private key blocks, GitHub,
+  Slack and Anthropic tokens found one match, the render placeholder `AKIALOCALRENDERONLY0` in
+  `verify/iam_plan_render.py`, which is no key. The README's KubeCon pointer (#693) is in.
+- The campaign is mrf-engagement-orchestrator's entry `burritobot` (its #413, on its staging,
+  `docs/strategy/talk-campaigns/burritobot.md`). Its articles are the #58 standalone and the talk-day thesis, both
+  drafted and waiting on Michael, and the recap, due 2026-11-17, which is not drafted before the delivery on
+  2026-11-12. The plan reads "0 of 2 articles published".
+- The clips are its `data/talk_clips.yaml` rows `kubecon-na-burritobot-1` (2026-12-02) and `-2` (2026-12-16), cut
+  from the CNCF upload of the session, expected by 2026-11-26.
+
+Nothing in this repo is left for M8. It cannot close before the first clip is posted on 2026-12-02, so the run
+reports it partial, waiting on that date.
+
+**The test.** The offline suite stalled on `verify/test_presenter_student_retired.sh`. Its `spec()` runs
+`cmd_instructors up` with no role filter, and since #774 that ends on `cmd_guardrails_link` whenever
+`WIB_ROSTER_PROFILES` is `kubecon`, the default in `event.sh`. A dispatched run's shell carries a live `KUBECONFIG`
+and AWS session, so the link wrote kubeconfigs for watch-it-burn-community and watch-it-burn-private and polled each
+for its `guardrails-switch-token` for 300 seconds a side, for each of six selectors: over an hour. The file said its
+helper had no cloud access; it now has none. `q()` runs with failing `aws`, `kubectl` and `terraform` shims first on
+the PATH and with `KUBECONFIG` and the AWS profile variables unset, and `spec()` stubs `cmd_guardrails_link` as
+`test_cluster_roles.sh` does. A new check confirms the shims are what the sourced fleet.sh finds. The file now runs in
+under 2 seconds, 35 checks passing.
+
+**Left on the clusters.** Nothing. Neither cluster has a `guardrails-switch` namespace (`kubectl get ns`, both
+contexts, 2026-11-04), so no token was found and the link wrote no `guardrails-peer` Secret.

@@ -23,9 +23,22 @@ fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
 
 # Run one expression against a sourced fleet.sh, with state in a temp dir and no cloud access. QROSTER
-# points it at a fixture roster instead of the real one.
-q() { ( cd "$(dirname "${FLEET}")" && WIB_STATE_DIR="${T}/states" WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
+# points it at a fixture roster instead of the real one. No cloud access is made true here, not assumed:
+# aws, kubectl and terraform are shims that fail, and KUBECONFIG and the AWS session are unset. A dispatched
+# run's shell carries a live KUBECONFIG and AWS session, and `instructors up` with no role filter goes on to
+# guardrails-link the KubeCon pair, which reached the two live clusters and polled each for a token for
+# 300 seconds a side, so this file stalled the offline suite (run 16968, #617).
+mkdir -p "${T}/bin"
+for tool in aws kubectl terraform; do
+    printf '#!/usr/bin/env bash\necho "offline test: no %s" >&2\nexit 1\n' "${tool}" >"${T}/bin/${tool}"
+    chmod +x "${T}/bin/${tool}"
+done
+q() { ( cd "$(dirname "${FLEET}")" && env -u KUBECONFIG -u AWS_PROFILE -u AWS_DEFAULT_PROFILE \
+        -u AWS_SHARED_CREDENTIALS_FILE -u AWS_CONFIG_FILE PATH="${T}/bin:${PATH}" \
+        WIB_STATE_DIR="${T}/states" WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
         bash -c "source '${FLEET}' >/dev/null 2>&1; load_roster; $1" 2>/dev/null ); }
+check "the sourced fleet.sh reaches no cloud: its aws and kubectl are this test's failing shims" \
+  '[[ "$(q "command -v aws")" == "${T}/bin/aws" && "$(q "command -v kubectl")" == "${T}/bin/kubectl" ]]'
 # Comments explain the retired class in prose; assertions about behaviour read the code only.
 code() { grep -vE '^[[:space:]]*#' "$1"; }
 FLEET_CODE="$(code "${FLEET}")"
@@ -48,8 +61,10 @@ check "up refuses a roster name too: those are built by instructors up" '[[ -z "
 check "up still provisions attendee pool clusters by count" \
   '[[ "$(up 2 | sort | tr "\n" " ")" == "watch-it-burn-attendee-001 watch-it-burn-attendee-002 " ]]'
 check "and by name" '[[ "$(up watch-it-burn-attendee-007)" == watch-it-burn-attendee-007 ]]'
+# The build and the KubeCon pair's guardrails link are stubbed, as test_cluster_roles.sh does: only the spec
+# the selector builds is read.
 spec() { q "_provision_spec_fleet() { :; }; print_bootstrap_hints() { :; }; require_tools() { :; }
-            cmd_instructors up $1 >/dev/null 2>&1; printf '%s\n' \"\${!PROVISION_SPEC[@]}\""; }
+            cmd_guardrails_link() { :; }; cmd_instructors up $1 >/dev/null 2>&1; printf '%s\n' \"\${!PROVISION_SPEC[@]}\""; }
 check "instructors up never builds a -student cluster, for any selector" \
   '( for r in "${ROSTER}" "${FIX}"; do for s in "" both all community admin alpha beta; do
        QROSTER="$r" spec "$s" | grep -q -- "-student$" && exit 1; done; done; exit 0 )'
