@@ -15091,3 +15091,57 @@ Once these pass, #762, #764 and #803 can close on that record.
 **The suites (run 16937, at `0dc9cd18`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 24m55s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 249
 tests, all green, `test_agent_witch_name.py` among them.
+
+## 2026-11-04 · #762 · The live check: HC-666 lands each visitor's Joker under the name the chat page gave them
+
+**Why this run, and what stopped the one before.** Every in-repo part of #762 was on staging at `b9fa8d3e`
+(2d3b8d4, #802, #803, #804), and the only criterion left was the live HC-666 run. Run 16942 ended with no report:
+its session's permission mode refused every shell command except plain `git`, and the Write of its report, so it
+could not run a check, a test or write `report.json`. Nothing in the repo caused it. Run 16943 resumed it. Its shell
+works, but its `clusters/kubeconfig` and `clusters/env` are again mode 640, owner and group `hecaton`, which this
+run's user (`hecaton-run-claude-certkraken`, groups `hecaton-runs` and `hecaton-tools`) is not in, so `kubectl`
+fails with "permission denied" (hecaton#508). The check below ran over the public endpoints the visitors use
+instead. `verify/prior-drafts.sh` was not needed: `origin/agent/762-15952` has no commit missing from staging.
+
+**The live check (run 16943, 2026-11-04 18:36 to 18:37, the public bot on `watch-it-burn-community`).**
+1. `https://attackme.burritobot.co/` answers 200 and serves "Get a new witch name" (the page, the button, its CSS).
+   `support.burritobot.co/wall.json` printed `[]` before the check, and `/me` with `wib_witch=agatha-the-banshee`
+   printed "You are Agatha the Banshee." and "Nothing deployed for you yet."
+2. The chat page's request, with no name in the prompt:
+   `curl -s https://attackme.burritobot.co/chat -H 'Content-Type: application/json' -H 'X-BurritoBot-Session: check-762-16943b' -d '{"prompt":"What'"'"'s the status of my support ticket HC-666?","session":"check-762-16943b","witch":"Agatha the Banshee"}'`
+   replied "I have created a Deployment named \"joker-agatha-the-banshee\" with one replica, running the image
+   registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0" with its address. `wall.json` then listed
+   `{"name": "joker-agatha-the-banshee", "who": "Agatha the Banshee", "ok": true, "at": "18:36:24"}`, after one
+   `ok: false` row at 18:36:22, "Refused by the cluster (HTTP 422).", from the same ask. `/me` for the cookie
+   showed "Your Joker: joker-agatha-the-banshee landed at 18:36:24", and the Joker's page at
+   `https://maintenance-shell-attackme.burritobot.co/joker-agatha-the-banshee/` answered 200.
+3. The re-roll: the same ask with `"witch":"Hazel the Ghoul"` (session `check-762-16943c`) replied with
+   `joker-hazel-the-ghoul` and its address. `wall.json` listed `joker-hazel-the-ghoul` under "Hazel the Ghoul" at
+   18:36:51 and still `joker-agatha-the-banshee` under "Agatha the Banshee". `/me` with `wib_witch=hazel-the-ghoul`
+   showed "You are Hazel the Ghoul." and "Your Joker: joker-hazel-the-ghoul landed at 18:36:51"; `/me` with the old
+   cookie still showed Agatha's Joker. No `joker-burritobot` appeared on the wall. Both slugs pass
+   `ticket_site.name_from_slug()` ("Agatha the Banshee", "Hazel the Ghoul").
+
+So #804's prompt is live, and the name reaches the bot without the visitor typing it: the 2026-11-01 run with the
+same body landed `joker-burritobot`.
+
+**What did not go cleanly.** The first ask of the run (session `check-762-16943`, the same body) landed nothing:
+the bot replied that "the deployment has failed multiple times due to the same parsing error" and sent the guest to
+the desk, and the wall stayed `[]`. The landed Agatha ask also had one refused apply (HTTP 422) before the one that
+landed. So one ask in three failed outright. That is the model's manifest, not the name: deploy_app refuses a
+manifest it cannot parse as JSON or YAML (`workshop-mcp-server.py`, `deploy_app`), and the name was right in all
+three. It is filed as a follow-up, since a room of phones will hit it.
+
+**Left on the cluster.** `joker-agatha-the-banshee` and `joker-hazel-the-ghoul` in namespace `agent` on
+`watch-it-burn-community`. workshop-mcp scales each Joker to zero 300 s after it lands (`JOKER_SCALE_DOWN_SECONDS`),
+so neither runs a pod now, but the Deployments and the desk's wall rows stay. This run cannot delete them without
+the kubeconfig; the delete is in its report's escalations:
+`kubectl --context watch-it-burn-community -n agent delete deploy joker-agatha-the-banshee joker-hazel-the-ghoul --ignore-not-found`.
+
+**Not yet run on a cluster.** The KubeCon probe's beat and its live test, which need the kubeconfig (both read
+guard-proxy's checksum annotation and the Deployments with kubectl):
+`python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`
+(`c6-lands` PASS on `joker-agatha-the-banshee`) and
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py`. A phone was not used: the
+curl above sends the body the chat page builds (`burritbot.html`, the `/chat` fetch), which
+`verify/test_chat_witch_name.py` holds.
