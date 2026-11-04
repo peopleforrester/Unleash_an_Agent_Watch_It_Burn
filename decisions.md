@@ -14182,3 +14182,7 @@ outside this row and are named as followups.
 
 **Live check.** None applies: a readiness-file row moves nothing on either cluster, and nothing is owed on a cluster
 for it.
+
+**The suites (run 16874, on `4a1f6072`, submodules checked out at their pins).** `bash verify/run-e2e-tools.sh` ran
+53 checks (the offline suite and 52 tier tests) in 24m54s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`; the
+offline suite inside it printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
