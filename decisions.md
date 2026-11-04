@@ -13933,3 +13933,32 @@ syncs the page. This run's `$KUBECONFIG` is mode 640, group `hecaton`, and its u
 cannot read it (hecaton#508): `kubectl --context watch-it-burn-community get ingress -A` failed with `permission denied`
 and changed nothing. **Not yet run on a cluster:** once the page syncs, `/kubecon` on each KubeCon cluster shows segment 6's
 LLM06 line as "Challenges 1 to 4".
+
+## 2026-11-04 · #845 · The readiness file's opening paragraph follows the four-challenge run-of-show
+
+**The spec.** `docs/KUBECON-ABSTRACT-READINESS.md` still opened on the 2026-10-28 three-challenge plan (C5 in
+segment 2, C6 in 3, C7 in 4, a trace walk-through in 5), and its Assessed line ended at the 2026-10-29 re-read.
+#822 updated rows 5 and 7, the verdict and the record and left the paragraph for this follow-up.
+`verify/prior-drafts.sh 845 origin/staging` printed NONE, so nothing earlier was reused.
+
+**The change.** The paragraph now gives the run-of-show's "The segments, in order" as it stands on `staging` at
+`0747446`: four challenges numbered 1 to 4 from the 2026-10-29 planning call (#687), Challenge 1 (C5) in segment
+2, Challenge 2, the Kubernetes catch-all (C2, C3 and C1), in 3 ending on `guardrails-on` (#774), Challenge 3 (C6)
+in 4, Challenge 4 (C7) in 5, and the close in 6. Since the 2026-11-01 review (#776) each trace follows its live
+attack, so there is no walk-through segment. Denial-of-wallet (C4) is folded into the close (#690) and C8 is cut,
+as the run-of-show's "Challenges shown live, and challenges cut" table says. The Assessed line adds #822's
+2026-11-04 re-read of rows 5 and 7 and this one. The record gets a 2026-11-04 line at the same tally, 7 READY,
+2 PARTIAL, 0 MISSING; no row or status changes.
+
+**One paragraph past the issue's.** The "Spend control" section said C4 "is not narrated" and is shown only in
+Q&A. Since #690 the close runs `finale-cap-on` and the room tries to drive the bill to the cap, so that section
+now says C4 is folded into the close. It is the same stale 2026-10-28 plan the issue names, two sentences long.
+
+**Left alone.** Row 6's Open cell still says "the output guard is still on only if segment 2 turned it on", and
+segment 2 has no output guard since #776. That is a row's assessment, outside this issue, and is proposed as a
+follow-up.
+
+**Live check (run 16864): not run.** The change is to one Markdown file that no cluster serves. The run's
+`clusters/env` could not be read either: `. "$HECATON_CLUSTER_ENV"` printed "Permission denied" (hecaton#508).
+
+**Not yet run on a cluster:** nothing; no cluster resource changes.

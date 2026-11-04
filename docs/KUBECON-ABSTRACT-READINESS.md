@@ -11,15 +11,21 @@ talks-knowledge `talks/2026-10-16_hard-dated-commitments.md` section 1. That not
 
 The beats each point is delivered in are in `facilitation/kubecon-na-2026-run-of-show.md` ("Abstract points
 to segments"). This file says how far each point is built and proven. The run-of-show says when it is shown.
-Since 2026-10-28 that is the three-challenge plan agreed on the planning call
-(`facilitation/kubecon-na-2026-planning-2026-10-28.md`): six segments, C5 in 2, C6 in 3, C7 in 4, the trace
-walk-through in 5, and the layers by voice, `guard-topic-on` and the close in 6. C1 and C3 are on deck, C2 is
-folded into C6, and C4 is cut.
+Since the 2026-10-29 planning call (`facilitation/kubecon-na-2026-planning-2026-10-29.md`, #687) that is four
+challenges, numbered Challenge 1 to 4 in the order shown, in six segments: the opening in 1, Challenge 1 (C5) in
+2, Challenge 2, the Kubernetes catch-all (C2, C3 and C1), in 3, Challenge 3 (C6) in 4, Challenge 4 (C7) in 5, and
+the OWASP close, `guard-topic-on` and the room's try at the spend cap in 6. Since the slide-by-slide review of
+2026-11-01 (#776), each challenge runs its play, the presenters' live attack, its trace and then its fix, so there
+is no trace walk-through segment. Segment 3 ends on `guardrails-on` (#774), which switches RBAC, Kyverno admission,
+KubeArmor and egress on together. Denial-of-wallet (C4) is no longer a challenge and is folded into the close
+(#690), and service-account token theft (C8) is cut.
 
 **Assessed:** first on `staging` at `c724652` (2026-10-24 21:06 CEST), plus `e810736`, which adds only the #454
 record to `decisions.md` and `PROJECT_STATE.md`. Re-read against the three-challenge run-of-show on `staging` at
-`248abb3` (2026-10-29, #667), with the Live column taken from the run-of-show's "Probe record". The issue
-threads were not readable from that run, so no issue state newer than what `staging` records is used.
+`248abb3` (2026-10-29, #667), with the Live column taken from the run-of-show's "Probe record". Rows 5 and 7 and
+the verdict re-read against the four-challenge run-of-show on 2026-11-04 (#822), and this opening paragraph on
+`staging` at `0747446` the same day (#845). The issue threads were not readable from the 2026-10-29 run, so no
+issue state newer than what `staging` records is used.
 
 ## Legend
 
@@ -64,9 +70,10 @@ The accepted text does not mention spend. The archived BurritoBot CFP draft prom
 (BurritoBot#58), and the accepted text dropped it. If the deck mentions spend control, this repo covers it: the
 C4 budget cap (`COST_CAP_USD` 25 with `guard-budget-on`) and the live cost counter priced at `MODEL_TIER` nova,
 both in `gitops/ai-layer/resources.yaml`. The counter's pricing is checked against the pin by
-`verify/model_pin_check.py` (#453). C4 is cut from the session: Whitney, on the 2026-10-28 planning call, because
-the number never moved convincingly and the room cannot drive it. It is not narrated. The budget cap stays armed
-and can be shown in Q&A (run-of-show "Challenges shown live, and challenges cut").
+`verify/model_pin_check.py` (#453). C4 is not a challenge: Whitney, on the 2026-10-28 planning call, because
+the number never moved convincingly. Since #690 it is folded into the close instead: in segment 6 `finale-cap-on`
+lowers the public cluster's cap to what the room has spent plus a little headroom, and the room tries to drive the
+bill to it (run-of-show "Challenges shown live, and challenges cut").
 
 ## The scope calls from talks-knowledge#29
 
@@ -97,3 +104,4 @@ and each row's "run-of-show segment N" among the segments the run-of-show's tabl
 | 2026-10-25 | `73072af` | 7 | 2 | 0 | Row 6 to READY: the agentgateway half of mid-inference is on `staging` (#514 to #518), and the Open cell no longer names an unpromoted branch (#563). C7 at the gateway is not yet proven live; that is the Live column's, at the next bring-up (#503). #480 is out of scope for KubeCon. Row 2's Open cell names the C7 fallback the run-of-show now lists (#571) |
 | 2026-10-29 | `248abb3` | 6 | 3 | 0 | Re-read against the three-challenge run-of-show (#667). Segments renumbered: C7 in 4 (rows 2, 6), the trace walk-through in 5 (row 7), the layers by voice and `guard-topic-on` in 6 (rows 3, 5, 8); C4 cut, not narrated. Row 3 stays READY: the IDP is named by voice, not toured, and its bar is the platform being up. Row 5 to PARTIAL: the plan shows one Kubernetes layer, Kyverno admission as C6's second tier, after the output guard, and names the rest, so "shown before the LLM-specific layer" is not met; the call on the bar is #456's. Live column filled from the 2026-10-27 and 2026-10-28 probe records. Row 8's Open cell: the topic stage is built and passed live; the BanTopics paraphrase is what is left (llm-guard-cpu-offline#2). Row 9's: the per-conversation rate limit is on `staging` |
 | 2026-11-04 | `c5f8940` | 7 | 2 | 0 | Rows 5 and 7 follow the run-of-show's 2026-11-01 segments (#776, #822). Row 5 to READY: RBAC moves from segment 2 into segment 3's one `guardrails-on` switch (#774) with Kyverno admission, KubeArmor and egress, all four shown turning on before segment 4's input guard, so "shown before the LLM-specific layer" is met as written. Row 7: each challenge's trace follows its live attack in segments 2 to 5; the Challenge 2 seed is #843 |
+| 2026-11-04 | `0747446` | 7 | 2 | 0 | The opening paragraph and the Assessed line follow the four-challenge run-of-show (#845): Challenge 1 to 4 in segments 2 to 5, each trace after its live attack, no walk-through segment. The spend-control note says C4 is folded into the close with `finale-cap-on` (#690), not left unnarrated. No row or status changes |
