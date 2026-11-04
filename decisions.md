@@ -15714,3 +15714,10 @@ tool.
 watch-it-burn-community` printed `ACTIVE` and `kubectl get ns guardrails-switch` reached both clusters (NotFound on
 each, so the hazard is live). The same two commands through `no_cloud_run` reached neither: both stubs printed their
 refusal, the call log named both, and the exit was 1. Nothing was changed on either cluster.
+
+**The suites (run 17087, at `7129a08f`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 26m33s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
+tests under the guard, `test_offline_suite_no_cloud.sh` among them (24 passed), printed `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, and no test called a stubbed tool.
+
+**Not yet run on a cluster.** Nothing: the guard runs on the host, and the live check above is all it needs.
