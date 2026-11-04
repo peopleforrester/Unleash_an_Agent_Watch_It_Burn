@@ -14117,3 +14117,34 @@ both hosts should show the line opening `<b>challenge slide</b>`.
 **The suites (run 16872, on `09cec76c`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
 verify/run-tests.sh`, ran 244 tests, all green (`ALL OFFLINE RENDER-GATE TESTS GREEN`). Then it printed "53 checks
 ran (the offline suite and 52 tier tests) in 25m27s" and `ALL E2E TOOLS TIER CHECKS GREEN`. No dependency was added.
+## 2026-11-04 · #849 · The close's LLM06 Excessive Agency mapping is settled at Challenges 1 to 4
+
+**The spec.** #849 asks for one LLM06 mapping across the deck's OWASP close table, segment 6 of
+`facilitation/kubecon-na-2026-run-of-show.md` and the segment 6 block of `gitops/ai-layer/web/kubecon.html`, once the
+close is reviewed. `verify/prior-drafts.sh 849 origin/staging` printed NONE, and the issue has no comments, so
+nothing earlier was reused.
+
+**What the sources say (read 2026-11-04).** The deck's `attendee.html`, the same on rounds-agenticburn `main` and
+`staging` (last changed at `bc9209f1`), maps LLM06 to "Challenges 1, 2". No rounds-agenticburn issue, open or closed,
+reviews the close: #58 rebuilt the opening, Challenge 1 and Challenge 2 and stopped there. The run-of-show and the page
+map LLM06 to "Challenges 1 to 4" since #842.
+
+**Why Challenges 1 to 4.** The deck's own Challenge 3 slides explain its shorter list: they still show the fix as
+`guard-admission-on` then `guard-input-on`, the order from before #775. Since #775 (approved by Michael on
+2026-11-02), Challenge 3's first fix is least privilege, `guard-agency-on`, which takes create and patch on
+Deployments and Pods away from the private bot; segment 4 names that LLM06, Excessive Agency, in the run-of-show and on
+the page. Challenge 4's fix narrows the gateway to the one registered tool, so the model can be persuaded and still find
+the capability gone, which is the "excessive functionality" case in OWASP's LLM06 text. Challenges 1 and 2 are LLM06 in
+the deck too. So every challenge the talk shows is fixed, at least in part, by taking agency away, and "Challenges 1,
+2" is the stale side. No question was put to Michael: #842's decision and #775's approved design settle it.
+
+**What changed here.** The run-of-show and the page already read "Challenges 1 to 4" and are not edited.
+`verify/test_instructor_brief.py` gains one check: the page's segment 4 names `guard-agency-on` OWASP LLM06, Excessive
+Agency, as the run-of-show's segment 4 already must. That is the ground the close's Challenge 3 entry stands on. With
+the page's "(OWASP LLM06, Excessive Agency)" replaced by "(OWASP LLM02)" and the test kept, the check fails and the test
+exits 1.
+
+**Left to the deck repo.** This run cannot change rounds-agenticburn. Two follow-ups are filed there: the close
+table's LLM06 row to read "Challenges 1 to 4", and Challenge 3's fix slides to follow #775 (least privilege, then the
+input guard; Kyverno admits the trusted image). Until the first lands, the deck and the run-of-show disagree on that
+one cell.

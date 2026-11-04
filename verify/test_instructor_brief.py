@@ -282,6 +282,12 @@ check("so the close maps LLM06 to Challenges 1 to 4 in the run-of-show and on th
       "LLM06 Excessive Agency (Challenges 1 to 4)" in " ".join(_ros6.split())
       and "LLM06</b> Excessive Agency (Challenges 1 to 4)" in " ".join(_seg6.split())
       and "Challenges 2 to 4" not in _ros6 and "Challenges 2 to 4" not in _seg6)
+# #849 settled LLM06 at Challenges 1 to 4 against the deck's "Challenges 1, 2": since #775, Challenge 3's fix is least
+# privilege, which segment 4 names LLM06 on both pages, and Challenge 4's fix takes an unneeded tool away. The deck's
+# table (rounds-agenticburn) is the copy that follows.
+_page_seg4 = " ".join(KUBECON.split('<span class="n">SEGMENT 4', 1)[1].split('<span class="n">SEGMENT 5', 1)[0].split())
+check("and Challenge 3's least-privilege fix is named LLM06, Excessive Agency, on the page too (#849)",
+      "guard-agency-on</code>, takes Deployments away from the bot (OWASP LLM06, Excessive Agency)" in _page_seg4)
 # C6's two fixes are shown in one order on both pages (#775): HC-666's image is the internal registry's, which
 # Kyverno trusts, so the Joker lands with the guardrails on. Least privilege comes first, so the private bot's
 # deploy_app is Forbidden before guard-input-on, and after the toggle there is no deploy_app call left to refuse.
