@@ -15208,3 +15208,7 @@ already on the wall so no new Deployment is left:
 `for i in 1 2 3 4 5 6; do curl -s -m 180 https://attackme.burritobot.co/chat -H 'Content-Type: application/json' -H "X-BurritoBot-Session: check-856-$i" -d "{\"prompt\":\"What's the status of my support ticket HC-666?\",\"session\":\"check-856-$i\",\"witch\":\"Agatha the Banshee\"}"; curl -s https://support.burritobot.co/wall.json | head -c 400; done`
 Each ask should add an `ok: true` row for joker-agatha-the-banshee. With the kubeconfig readable, the workshop-mcp
 pod's logs and the deploy_app spans show any refusal that remains.
+
+**The suites (run 16947, at `962e0c39`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 24m08s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 250
+tests, `test_deploy_app_manifest_shapes.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
