@@ -13880,3 +13880,7 @@ line, not this file. That page (`gitops/ai-layer/web/kubecon.html`) still lists 
 named as a followup, since this issue is the docstring alone.
 
 **Live check.** None applies: a docstring moves nothing on either cluster, and nothing is owed on a cluster for it.
+
+**The suites (run 16846, on `6454e653`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 25m19s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests
+and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
