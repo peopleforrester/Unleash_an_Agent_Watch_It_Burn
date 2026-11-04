@@ -14270,3 +14270,7 @@ gave `permission denied`; they are mode 0640, owned by `hecaton`, and the run's 
 the next turn's spend is at Haiku rates, then patch it back.
 
 No dependency was added.
+
+**The suites (run 16869, on `6d8a4dea`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 25m10s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 245 tests,
+all green, `verify/test_guard_proxy_pin_bound_pricing.py` among them.
