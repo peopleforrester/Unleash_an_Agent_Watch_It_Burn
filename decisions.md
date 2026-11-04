@@ -15528,3 +15528,13 @@ tool-pin image has never been pushed, so its tag lives in images.lock and its Do
 **Live check (run 17065).** This run could read its kubeconfig. `kubectl get pods -A` on watch-it-burn-community
 (54 pods) and watch-it-burn-private (74 pods) found no container running a `watch-it-burn:sample-app` or
 `watch-it-burn:tool-pin` image, so the retag changes nothing on either cluster. The run changed nothing on them.
+
+**The suites (run 17065, at `012804d2`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 26m08s and exited 1. The offline suite inside it ran 251 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. `test_image_version_tags.py` passed every check, among them
+`PASS  ghcr.io serves ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5 at the pinned sha256:556e176dd1ac..., anonymously`,
+`PASS  its nginx is 1.27.5, the tag's` and `PASS  ghcr.io has no tool-pin-grpcio-1.84.1, as the row's - digest says`.
+The one red was `test_dispatched_runs_cause_comment.py`: GitHub answered its anonymous read of #633's comments with
+HTTP 403, "0 anonymous requests left this hour", since every run on the host shares the one anonymous quota. Run
+again alone once the quota had refilled, the test passed all its checks. A follow-up asks for that read to use a
+token, so the host's other runs cannot turn it red.
