@@ -13849,3 +13849,19 @@ ConfigMap's `kubecon.html` on both clusters, still showing 6 and 4 minutes befor
 **The suites (run 16840, at 91b23410).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
 verify/run-tests.sh`, ran 243 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"). Then it printed "53 checks
 ran (the offline suite and 52 tier tests) in 25m18s" and "ALL E2E TOOLS TIER CHECKS GREEN". No dependency was added.
+
+## 2026-11-04 · #822 · question 1055: #822 keeps its two-number edit to the /kubecon page
+
+**The question.** Should #822 keep its edit to `gitops/ai-layer/web/kubecon.html`, the page's segment 2 and 3 minute
+chips changed from 6 and 4 to 5 and 5, when the issue's last criterion limits it to the run-of-show,
+`docs/KUBECON-ABSTRACT-READINESS.md`, decisions.md and PROGRESS.md?
+
+**The answer.** Accept the page edit. Decided by hecaton's research under Michael's standing rules, not by Michael
+(issue comment 6619191358). Its sources were `verify/test_instructor_brief.py`, which holds the page's chips equal to
+the run-of-show table's minutes, and the 2026-10-29 decisions for #639 and #687, which already tie `/kubecon` to the
+run-of-show's segments.
+
+**What it changes.** Run 16855 resumes run 16840's branch with no code change: commits `91b23410` and `1e5b8d50`
+stand as they are, the two chips included, and #822's last criterion counts the page edit as within scope. The rest
+of the `/kubecon` page still follows the 2026-10-31 flow; moving it to the 2026-11-01 flow stays a separate change,
+proposed as a follow-up in run 16840's report.
