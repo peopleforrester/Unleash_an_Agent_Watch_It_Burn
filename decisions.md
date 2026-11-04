@@ -14087,3 +14087,29 @@ the offline suite (245 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then 53 ch
 tests) in 25m10s, ending `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The four narrative files still name the
 instance-identity document and none says get-caller-identity after staging's own edits to the run-of-show and
 /kubecon page.
+## 2026-11-04 · #848 · The /kubecon pattern line follows the run-of-show: the trace comes after the attack
+
+**What changed.** `gitops/ai-layer/web/kubecon.html` stated each challenge's pattern in the 2026-10-31 order:
+tee-up, trace "before the room plays", play, attack, fix, keep trying. Since the 2026-11-01 slide-by-slide review
+(#776), and #818 in `facilitation/kubecon-na-2026-run-of-show.md`, the room tries first and each trace follows the
+presenters' live attack. The page's line now runs the run-of-show's six numbered steps in its order: challenge slide
+(a line or two of tee-up, then the call to action, and the room starts trying on the public bot), hint where there
+is one, the presenters' live attack on the private bot, the pre-seeded Datadog trace of what the attack just did,
+the fix, and the room keeps trying. Tee-up is no longer a step of its own; it is part of the challenge slide, as in
+the run-of-show.
+
+**Tests that read the words.** `git grep -nF` over `verify` and `scripts` for the line's words found one reader,
+`verify/test_instructor_brief.py`, whose check held the trace before the play step (Michael, 2026-10-31). It now
+finds the line by its opening words and exits naming the anchor and the file when they are missing, reads the
+bolded steps in order and checks they are challenge slide, hint, attack, trace, fix, keeps trying; checks the trace
+follows the attack and the old "before the room plays", play and tee-up steps are gone; and checks the run-of-show's
+numbered pattern runs in the same order, so the two cannot drift apart again. On the old page line the first two
+checks fail; on the new one all three pass.
+
+**Live check (run 16872).** The run's `clusters/env` and `clusters/kubeconfig` could not be read ("Permission
+denied", hecaton#508), so no `kubectl` call ran. The page is public, so `curl https://<host>/kubecon` read it
+from both clusters instead: `burritobot-private.burritobot.co` and `attackme.burritobot.co` each returned 200 with
+the old line, `Every challenge runs one pattern: <b>tee-up</b>`, as expected before promotion.
+
+**Not yet run on a cluster:** after promotion and the Argo CD sync of the `ai-layer` ConfigMap, the same `curl` on
+both hosts should show the line opening `<b>challenge slide</b>`.

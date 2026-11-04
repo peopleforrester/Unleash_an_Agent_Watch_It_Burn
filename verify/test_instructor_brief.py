@@ -223,11 +223,26 @@ check("Challenge 3 runs least privilege as guard-agency-on, and admission is not
       "guard-agency-on" in " ".join(beat_blocks.get("C6", []))
       and "guard-admission-on" not in " ".join(beat_blocks.get("C6", [])))
 print("== the per-challenge pattern and the OWASP close (#687) ==")
-check("the page states the pattern once: tee-up, trace, play, attack, fix, keep trying",
-      all(w in KUBECON for w in ("<b>tee-up</b>", "<b>trace</b>", "<b>play</b>", "<b>attack</b>", "<b>fix</b>",
-                                 "<b>keeps trying</b>")))
-_pat = KUBECON.split('<p class="note">Every challenge runs one pattern:', 1)[-1].split("</p>", 1)[0]
-check("the trace comes before the room plays (Michael, 2026-10-31)", _pat.find("<b>trace</b>") < _pat.find("<b>play</b>"))
+# Since the 2026-11-01 slide-by-slide review (#776, #818) the room tries first and each trace follows the
+# presenters' attack; the page's pattern line follows the run-of-show's numbered pattern (#848).
+_PAT_ANCHOR = '<p class="note">Every challenge runs one pattern:'
+if _PAT_ANCHOR not in KUBECON:
+    sys.exit(f"anchor {_PAT_ANCHOR!r} is not in gitops/ai-layer/web/kubecon.html: reword the test with it")
+_pat = KUBECON.split(_PAT_ANCHOR, 1)[1].split("</p>", 1)[0]
+_steps = [m.group(1) for m in re.finditer(r"<b>([^<]+)</b>", _pat)]
+check("the page states the pattern once, in the run-of-show's order: challenge slide, hint, attack, trace, fix, "
+      "keep trying (#848)",
+      _steps == ["challenge slide", "hint", "attack", "trace", "fix", "keeps trying"])
+check("the trace comes after the presenters' attack, not before the room plays (#776, #818, #848)",
+      _steps.index("attack") < _steps.index("trace") and "before the room plays" not in _pat
+      and "<b>play</b>" not in _pat and "<b>tee-up</b>" not in _pat)
+_ROS_PAT_ANCHOR = "Every challenge runs one pattern:"
+if _ROS_PAT_ANCHOR not in ROS:
+    sys.exit(f"anchor {_ROS_PAT_ANCHOR!r} is not in facilitation/kubecon-na-2026-run-of-show.md: reword the test with it")
+_ros_pat = ROS.split(_ROS_PAT_ANCHOR, 1)[1].split("\n\n", 2)[1]
+check("and the run-of-show's numbered pattern runs in the same order",
+      [re.sub(r"[:,]$", "", s) for s in re.findall(r"^\d\. \*\*([^*]+)\*\*", _ros_pat, re.M)]
+      == ["Challenge slide", "Hint slide", "Attack", "Trace", "Fix", "Keep trying"])
 check("the KubeCon opening carries no deleted-cluster story (#740)",
       "deleted-cluster" not in KUBECON and "Cold open" not in KUBECON
       and "deleted-cluster hook" not in ROS and "### Segment 1: Opening" in ROS)
