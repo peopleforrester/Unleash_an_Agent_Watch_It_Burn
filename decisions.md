@@ -14616,3 +14616,8 @@ the `guard-proxy-src-*` ConfigMap's `proxy.py` holds "Wait a few seconds and sen
 `ba8d8e2b789f`.
 
 No dependency was added.
+
+**The suites (run 16889, on `755bcf89`, guard-proxy at its c2eb4cf2 pin).** `bash verify/run-e2e-tools.sh` ran 54
+checks (the offline suite and 53 tier tests) in 24m54s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The
+offline suite inside it ran 246 tests and printed "ALL OFFLINE RENDER-GATE TESTS GREEN", `verify/test_load_replay.py`
+among them.
