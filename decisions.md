@@ -13845,3 +13845,7 @@ ConfigMap's `kubecon.html` on both clusters, still showing 6 and 4 minutes befor
 
 **Not yet run on a cluster:** once this is promoted and Argo CD syncs ai-layer, `/kubecon` on
 `burritobot-private.burritobot.co` shows "SEGMENT 2 · 5 min" and "SEGMENT 3 · 5 min".
+
+**The suites (run 16840, at 91b23410).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
+verify/run-tests.sh`, ran 243 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"). Then it printed "53 checks
+ran (the offline suite and 52 tier tests) in 25m18s" and "ALL E2E TOOLS TIER CHECKS GREEN". No dependency was added.
