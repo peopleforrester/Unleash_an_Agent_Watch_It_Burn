@@ -13721,4 +13721,9 @@ hecaton#508 problem. Nothing on either cluster was read or changed.
 `ba8d8e2b789f`), patch `workshop-agent` from bedrock-nova to bedrock-haiku and check `/cost`'s `tier` reads haiku and
 the next turn's spend is at Haiku rates, then patch it back.
 
+**The suites (run 16852, on `039a6db0`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
+tier tests) in 24m19s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 244 tests,
+all green, the new test among them. The run before the weaver fix, on `04bea5f9`, failed only
+`test_weaver_guard_proxy_spans.py`.
+
 No dependency was added.
