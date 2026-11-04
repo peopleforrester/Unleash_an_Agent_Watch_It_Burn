@@ -15600,3 +15600,31 @@ built on, so most of it was made again on the current layout:
 **Not yet done:** the six videos and shots 02-2 and 03-4, made at the first full rehearsal, and the replay over a
 presenter's phone hotspot, which is the Night Before's. `verify/test_fallback_deck_e2e.py` (tools tier) opens the
 deck from disk with the network cut off and steps through every slide.
+
+## 2026-11-05 · #452 · Run 17082 ports run 16962's recorded fallback onto staging and retries the Challenge 2 shot
+
+Run 16962's draft (`origin/agent/452-16962`) built the recorded fallback and never reached staging: hecaton had
+not yet promoted or rejected it when this run was dispatched. `verify/prior-drafts.sh 452 origin/staging` named it
+START, two base commits behind, with one drift line: `verify/test_presenter_student_retired.sh`, which staging's
+75e8461d (#616) had edited. That commit adds the same `cmd_guardrails_link() { :; }` stub as the draft's 62524287,
+on the same line, so 62524287 was dropped and staging's version kept. The draft's 0052b930 and 5edc800d were
+cherry-picked as they are, with decisions.md's two appends both kept. The draft's last commit, 6c9843ca, only
+recorded its own suite run at 62524287; this run's suite results are below instead. Nothing else differs from the
+draft.
+
+**What ran live (run 17082, 2026-11-05, on `watch-it-burn-community`).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` printed `DONE: 1 of 1 delivered to
+  https://attackme.agenticburn.com/chat` and `All live replay checks passed.`, about $0.004 of Bedrock.
+- Shot 03-1 (Challenge 2's public image) was tried once more with every community guard off, as `/controls`
+  read: `scripts/capture-fallback-screenshots.py --shot 03-1-c2-public-image`. The model called `deploy_app`
+  twice with the manifest `"Tron"`, which the tool refused as not a single object with apiVersion and kind
+  (workshop-mcp's log), and then offered a manifest naming the Docker Hub image `tron`, which `deploy_app` would
+  refuse too, since only its `PUBLIC_IMAGES` names are pulled (#714, #773). The PNG showed the failure, so it was
+  deleted and not committed. That is four failures in four tries of the room's own Challenge 2 ask on the public
+  bot. The `tron` Deployment on community is the 2026-11-01 run's (`trongame/tron:latest`); its YAML was saved
+  before the shot and compared after, unchanged, and the agent namespace's Deployments, StatefulSets and
+  ReplicaSets matched the list saved before. The cluster was left as found.
+
+**Not yet done:** the six segment videos and by-hand shots 02-2 and 03-4, which come from the first full
+rehearsal (the run-of-show's Run-through record still reads "not yet run"), and shot 03-1, which waits on the
+Challenge 2 ask landing on the public bot.

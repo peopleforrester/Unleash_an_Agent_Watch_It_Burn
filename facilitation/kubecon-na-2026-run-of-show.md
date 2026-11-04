@@ -1403,7 +1403,9 @@ number and says who settled it and when, so references to it elsewhere still lan
    first full rehearsal and do not exist until then. The third missing shot is
    Challenge 2's public image: on 2026-11-04 the Tron ask did not deploy on the
    community bot, because the model passed `deploy_app` the bare name "Tron" for its
-   manifest, three times out of three. Where the videos are kept is
+   manifest, three times out of three, and again on 2026-11-05. The manifest the
+   model then offered names the Docker Hub image `tron`, which `deploy_app` refuses
+   because the cantina pulls only its listed public images. Where the videos are kept is
    open: the default keeps them out of git and on both laptops plus a USB stick
    (`facilitation/kubecon-na-2026/fallback/README.md`).
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
