@@ -13962,3 +13962,7 @@ follow-up.
 `clusters/env` could not be read either: `. "$HECATON_CLUSTER_ENV"` printed "Permission denied" (hecaton#508).
 
 **Not yet run on a cluster:** nothing; no cluster resource changes.
+
+**The suites (run 16864, at 5ab77bf).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
+verify/run-tests.sh`, ran 244 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"). Then it printed "53 checks
+ran (the offline suite and 52 tier tests) in 25m49s" and "ALL E2E TOOLS TIER CHECKS GREEN". No dependency was added.
