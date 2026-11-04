@@ -13991,3 +13991,7 @@ Both checks fail on the old rows and pass on the new ones.
 
 **Live check.** None applies: a run-of-show table row moves nothing on either cluster, and nothing is owed on a
 cluster for it.
+
+**The suites (run 16867, on `829160d8`, submodules checked out at their pins).** `bash verify/run-e2e-tools.sh`
+ran 53 checks (the offline suite and 52 tier tests) in 26m49s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`.
+The offline suite inside it ran 244 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
