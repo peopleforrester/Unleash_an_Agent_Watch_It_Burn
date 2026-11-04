@@ -15843,3 +15843,8 @@ Private's release is at revision 3, `failed`; Helm upgrades from a failed last r
 argo-cd-10.11.7, every Application on the cluster reads Synced and Healthy as it did before, and
 `https://argocd-<cluster>.agenticburn.com/api/version` answers v3.5.7. The roll is handed on as an escalation in this
 run's report.
+
+**The suites (run 17110, at `e25e699a`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 27m10s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. `test_images_lock_render.py` rendered chart 10.11.7 with
+the new values and found a row for each of the 57 images.
