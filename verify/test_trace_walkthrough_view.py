@@ -231,6 +231,12 @@ check("the row's beat panels are laid out in that order", laid_out == run_order)
 walked = sorted(run_order, key=lambda b: seg.index(f"**{b}:**"))
 check("the section walks the panels in that order", walked == run_order)
 check("the section names the row by its title", 'the "Traces" row' in seg)
+# The row title moved off "Segment 5" in #675; the header comment, the description and the tag kept it until #854.
+DASH_TEXT = (REPO / "observability-idp/grafana/dashboards/agent-observability.yaml").read_text(encoding="utf-8")
+check("the dashboard's comment, description and tags name no trace walk-through segment (#854)",
+      re.search(r"segment[ -]5", DASH_TEXT, re.I) is None and "trace walk-through" not in DASH_TEXT)
+check("the description says each beat is shown after its challenge's attack",
+      "each shown right after its challenge's attack" in dash["description"])
 rdy = (REPO / "docs/KUBECON-ABSTRACT-READINESS.md").read_text(encoding="utf-8")
 check("the readiness file no longer notes a stale row title", 'still titled "Segment' not in rdy)
 

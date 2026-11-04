@@ -1,13 +1,14 @@
-# ABOUTME: Grafana dashboard ConfigMap for the agent-observability narration surface (P4), and segment 5's
-# ABOUTME: Datadog-free view: cost, the gen_ai trace view, and one Tempo panel per guardrail beat (C5, C6, C7).
+# ABOUTME: Grafana dashboard ConfigMap for the agent-observability narration surface (P4), and its
+# ABOUTME: Datadog-free view of each challenge's trace: cost, the gen_ai trace view, and one Tempo panel per guardrail beat (C5, C6, C7).
 # Auto-provisioned by the Grafana sidecar via the grafana_dashboard label.
 # verify-at-build: confirm the Prometheus datasource uid on the live Grafana (kube-prometheus-stack
 #   default is "prometheus"); the Tempo datasource uid is pinned to "tempo" in prometheus.yaml.
 #
-# THE SEGMENT 5 PANELS (#500, #675). The KubeCon run-of-show's segment 5, the trace walk-through, shows, for the
-# beats just run on the private cluster, the C5 read of the CEO's Secret (the record before guardrails-on, Forbidden
-# after it), the C6 ticket the input guard withheld, and the C7 call that never reached read_internal_config, in the
-# order the challenges run. Datadog
+# THE GUARDRAIL BEAT PANELS (#500, #675, #854). Since #687 the KubeCon run-of-show gives the traces no segment of
+# their own: each challenge shows its own trace right after its attack on the private cluster. The "Traces" row holds
+# one panel per beat, in the order the challenges run: the C5 read of the CEO's Secret (the record before
+# guardrails-on, Forbidden after it), the C6 ticket the input guard withheld, and the C7 call that never reached
+# read_internal_config. Datadog
 # Agent Observability is the primary surface; these panels are the fallback when no Datadog org pool is live,
 # and they read only Tempo, which the collector feeds with or without a Datadog key
 # (gitops/otel-collector/values.yaml). Open at
@@ -49,13 +50,13 @@ data:
   agent-observability.json: |
     {
       "annotations": { "list": [] },
-      "description": "Cost, gen_ai traces, and the segment 5 guardrail beats (C5, C6, C7) from Tempo. The session picker scopes the beat panels to one BurritoBot browser session; All lists every session in the time range.",
+      "description": "Cost, gen_ai traces, and the guardrail beats (C5, C6, C7) from Tempo, each shown right after its challenge's attack. The session picker scopes the beat panels to one BurritoBot browser session; All lists every session in the time range.",
       "editable": true,
       "graphTooltip": 1,
       "id": null,
       "links": [],
       "schemaVersion": 39,
-      "tags": ["watch-it-burn", "agent", "cost", "segment-5"],
+      "tags": ["watch-it-burn", "agent", "cost", "guardrail-beats"],
       "time": { "from": "now-30m", "to": "now" },
       "title": "Agent Observability (Watch It Burn)",
       "uid": "witb-agent-obs",

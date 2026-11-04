@@ -14621,3 +14621,28 @@ No dependency was added.
 checks (the offline suite and 53 tier tests) in 24m54s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The
 offline suite inside it ran 246 tests and printed "ALL OFFLINE RENDER-GATE TESTS GREEN", `verify/test_load_replay.py`
 among them.
+
+## 2026-11-04 · #854 · The agent-observability dashboard no longer calls the guardrail beats "segment 5"
+
+**What changed.** `observability-idp/grafana/dashboards/agent-observability.yaml` still named the KubeCon
+run-of-show's "segment 5, the trace walk-through" in its ABOUTME line, its header comment and the dashboard's
+description, and carried a `segment-5` tag. That segment went away in #687: each challenge now shows its own trace
+right after its attack. The row title was already "Traces" (#675). The header comment now says the run-of-show gives
+the traces no segment of their own and that the "Traces" row holds one panel per beat in the challenges' order. The
+description reads "the guardrail beats (C5, C6, C7) from Tempo, each shown right after its challenge's attack", and
+the tag is `guardrail-beats`. The two mentions of "segment 3's guardrails-on" stay: segment 3 is still where
+`guardrails-on` runs.
+
+**Tests that read the words.** `git grep -nF` over `verify` and `scripts` for "segment 5 guardrail", "segment-5" and
+"THE SEGMENT 5" found no reader. `verify/test_trace_walkthrough_view.py` gains two checks: the dashboard file names
+neither "segment 5" (or "segment-5") nor "trace walk-through", and the description says each beat is shown right
+after its challenge's attack. Both fail on the old file and pass on the new one. `verify/test_observability.py` and
+`verify/test_trace_walkthrough_view.py` both pass.
+
+**Live check: not run.** kubectl could not open `/var/lib/hecaton/runs/16894/clusters/kubeconfig` ("permission
+denied"; the file is mode 0640, owned by `hecaton:hecaton`, and this run's user is not in that group), so the
+deployed ConfigMap on `watch-it-burn-private` could not be read (hecaton#508).
+
+**Not yet run on a cluster:** once Argo CD syncs this to the private cluster, open
+`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs` and check that the dashboard's description no
+longer says "segment 5" and that its tags read `guardrail-beats`. The panels and queries are unchanged.
