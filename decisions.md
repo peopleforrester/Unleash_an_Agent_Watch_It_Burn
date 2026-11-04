@@ -13679,7 +13679,7 @@ No dependency was added.
 tier tests) in 24m21s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests,
 all green, `verify/test_ghcr_version_tag.py` among them, and `test_image_version_tags.py` passes in the tier.
 
-## 2026-11-04 · #839 · A test holds #784's token counts on guard-proxy's chat span, and it stays red until the repin
+## 2026-11-04 · #839 · A test holds #784's token counts on guard-proxy's chat span, green at Michael's repin to c2eb4cf2
 
 **What #839 asks.** Test review run 16790 found that nothing checks the token-count part of #784: that guard-proxy's
 `/chat` `chat` span carries `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`. `verify/test_genai_semconv_pin.py`
@@ -13693,28 +13693,29 @@ is sent; a reasoning-only reply retried once, whose span must carry the sum of b
 whose span must carry 0 and 0; and an A2A `message/send`. On every turn no span but `chat` may carry a count, so the
 `POST /chat` root, `agent.forward`, `POST /` and `sanitize` stay without one, as #784's entry requires.
 
-**Red at the pin, by design.** Staging pins guard-proxy at 88b9b52, which sums the counts into `spent` and sets
-neither attribute. The test fails there on seven checks: the pin check and the six count checks. With the submodule's
-working tree at guard-proxy-agenticburn main (c2eb4cf2), every behavioral check passes and only the pin check fails,
-because the gitlink in HEAD still reads 88b9b52. Two hand mutations of c2eb4cf2's proxy.py were also run: one that
-also writes the input count onto the `POST /chat` root fails the three "no span but chat" checks, and one that keeps
-only the last forward's counts fails the retry's sum check. A run cannot move the gitlink (question 766, "Michael pins,
-a run does the rest"), so this run's report puts the repin in escalate and the test stays red until that commit.
+**Ported from run 16836.** Run 16836 wrote this test (its commits 927ee06c, 7038564c, 067385fe, on
+`agent/839-16836`) at staging's pin of the day, guard-proxy 88b9b52, which sums the counts into `spent` and sets neither
+attribute. There the test failed on seven checks, by design, and the run ended blocked on the repin, which a run does not
+move (question 766, "Michael pins, a run does the rest"). Michael's `a65f748d` then repinned guard-proxy to
+guard-proxy-agenticburn main c2eb4cf2, which contains 96d16214, with `checksum/proxy-py` `ba8d8e2b789f`. Run 16849
+cherry-picked the three commits onto that staging; only this decisions.md entry conflicted, an append on both sides, and
+both entries are kept. At c2eb4cf2 every check of the new test passes. One hand mutation was run again: with the two
+`chat_span.set_attribute("gen_ai.usage.*")` lines of c2eb4cf2's proxy.py turned into `pass`, the test fails six count
+checks and exits 1. Run 16836 also caught two others: counts also written on the `POST /chat` root, and counts from only
+the last forward.
 
-**The repin it needs.** #793's escalate asks for 2cff90d, which predates 96d16214, so that pin alone would leave this
-test red. The repin should go to c2eb4cf2 (guard-proxy-agenticburn main on 2026-11-04), which carries 2cff90d too,
-with `checksum/proxy-py` in `gitops/ai-layer/resources.yaml` set to `ba8d8e2b789f`. With the submodule's working
-tree at c2eb4cf2, `bash verify/run-tests.sh` ran 244 tests and failed three: this test's pin check, the checksum (which
-the repin commit sets), and `verify/test_weaver_guard_proxy_spans.py`, whose gauge check read the spend as
-`_cost["usd"]`. guard-proxy-agenticburn#38 (1cfa6d6) yields one series per model, so that check now reads any first
-argument and requires a single `yield Observation(`. It passes at 88b9b52 and at c2eb4cf2. The tools tier was not run
-at c2eb4cf2.
+**The gauge check.** `verify/test_weaver_guard_proxy_spans.py` read the spend as `_cost["usd"]`, and
+guard-proxy-agenticburn#38 (1cfa6d6), which c2eb4cf2 carries, yields one series per model. The check now reads any first
+argument and requires a single `yield Observation(`. It passes at 88b9b52 and at c2eb4cf2.
 
-**The registry note.** `weaver/registry/guard-proxy-spans.yaml`'s note on `gen_ai.usage.input_tokens` now names
-guard-proxy-agenticburn#49 (96d16214) as the change and this test as what holds the pin to it.
+**What else changed with the pin.** `weaver/registry/guard-proxy-spans.yaml`'s notes on both counts no longer say the
+pinned proxy.py sets neither: they name guard-proxy-agenticburn#49, the pin that carries it, and this test. The level
+stays `recommended`, since a turn whose forward fails returns before the counts are set, and
+`verify/test_genai_semconv_pin.py`'s label for that check now says so instead of "recommended until the guard-proxy
+repin emits it".
 
 **Not yet run on a cluster.** This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` are mode 640, group `hecaton`, and
-its user (`hecaton-s6-claude-certkraken`) cannot read them (hecaton#508), so the read of which proxy.py the clusters
-run failed with `permission denied` and changed nothing. After the repin syncs, #784's step 3 is the live check: the
-APM `chat` span on each KubeCon cluster carries both counts, and the Agent Observability total equals the sum of the
-`generate_content` rows.
+its user (`hecaton-s7-claude-certkraken`) cannot read them (hecaton#508). So the read of each cluster's guard-proxy
+`checksum/proxy-py` failed with `permission denied` and changed nothing. Once Argo CD syncs `a65f748d`, #784's step 3
+is the live check: the APM `chat` span on each KubeCon cluster carries both counts, and the Agent Observability total
+equals the sum of the `generate_content` rows.

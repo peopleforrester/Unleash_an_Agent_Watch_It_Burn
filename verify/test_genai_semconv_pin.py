@@ -69,7 +69,8 @@ check("gen_ai.operation.name is required, so Datadog keeps and classifies the sp
       on_chat.get("gen_ai.operation.name", {}).get("requirement_level") == "required")
 for key in ("gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"):
     level = on_chat.get(key, {}).get("requirement_level")
-    check(f"{key} is declared, recommended until the guard-proxy repin emits it", level == "recommended", str(level))
+    check(f"{key} is declared recommended: a turn whose forward fails ends without it "
+          "(verify/test_chat_span_token_counts.py holds that every answered turn carries it)", level == "recommended", str(level))
 
 print("== the token counts never count twice in Agent Observability ==")
 check("filter/llmobs_one_root still drops guard-proxy's chat span from Agent Observability's copy (#746)",

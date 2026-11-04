@@ -228,13 +228,14 @@ groups:
         note: >-
           The turn's input tokens, summed over its forwards from the agent's kagent_usage_metadata
           (promptTokenCount, proxy.py chat_usage_tokens). Datadog's Agent Observability reads an llm span's token
-          counts and its cost estimate from gen_ai.usage.* (#784). The pinned proxy.py (88b9b52) sums them into
-          `spent` and sets neither attribute; guard-proxy-agenticburn#49 (96d16214) sets both, a repin brings it
-          here, and verify/test_chat_span_token_counts.py holds the pin to it (#839).
+          counts and its cost estimate from gen_ai.usage.* (#784). guard-proxy-agenticburn#49 (96d16214) sets both
+          on this span alone, every forward of the turn summed and 0 when kagent reports no usage; the pin
+          (c2eb4cf2) carries it, and verify/test_chat_span_token_counts.py holds that (#839). Recommended, not
+          required: a turn whose forward fails returns before the counts are set.
       - ref: gen_ai.usage.output_tokens
         requirement_level: recommended
         note: >-
-          The turn's output tokens (candidatesTokenCount), summed and pending the same change as the input tokens.
+          The turn's output tokens (candidatesTokenCount), summed and set beside the input tokens.
 
   # --- The cost gauge. ---
   #
