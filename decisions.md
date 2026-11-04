@@ -15330,3 +15330,43 @@ Nothing in fleet.sh changes.
 **The suites (run 16967, at `75e8461d`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-04 · #421 · The issue's 72 alerts are all closed on GitHub; three newer Backstage and Go advisories cleared, Argo CD's own two left for a follow-up
+
+**The issue's alerts.** Run 16963 could read the Dependabot alerts API, which earlier runs could not. Every alert
+open when the fleet audit filed #421 on 2026-10-14 is now closed: the vm2, shell-quote, axios, grpc-js, basic-ftp,
+fast-uri, undici, (at)graphql-tools/utils and http-cache-semantics alerts read `fixed`, node-forge's
+(GHSA-86w9-cpqp-85rv, alert 177) read `fixed` on 2026-11-01 once fb6a7706 moved the `node-forge` resolution to 1.4.2, and the
+three urllib3 alerts on the removed `lab-distribution/uv.lock` read `dismissed` as not used. The oldest open alert
+is number 261. The 15 open alerts were all published after the issue was filed.
+
+**What this change clears (11 of the 15).**
+
+- `images/watch-it-burn-backstage`: follow-redirects 1.16.1 to 1.16.2 by a lock refresh (GHSA-mrwp-f3q8-3g9p, high),
+  and the `@hono/node-server` resolution from 2.0.10 to 2.1.5 (GHSA-rmxm-3fg6-px4f, medium, fixed in 2.1.3). Its
+  one consumer asks for `^1.19.9 || ^2.0.5`, and 2.1.5 is three weeks old, past `.yarnrc.yml`'s three-day age gate.
+- `docs/research/2026-10-30-argo-sync-replay/go.mod`: grpc 1.81.1 to 1.83.1, go-git 5.19.1 to 5.19.3, oras-go 2.6.1
+  to 2.6.4 and klauspost/compress 1.18.0 to 1.18.7, each in the line it was on. That clears six high and two medium
+  alerts. `go get` also moved go-billy, sha1cd and the golang.org/x modules up to what those need. Argo CD stays at
+  v3.5.2: the replay exists to run the code the clusters run, and `replay.sh` clones v3.5.2's gitops-engine tree.
+
+**Left open.**
+
+- Argo CD v3.5.2 on the replay's go.mod: GHSA-fmxq-cgp8-87wp (critical, PreDelete and PostDelete hooks skip the
+  AppProject check) and GHSA-j6cw-g6p4-7hch (high, repo-server command injection through an SSH repository's proxy
+  URL), both fixed in v3.5.4. Dependabot sees them only on the research module, but both clusters run
+  `quay.io/argoproj/argocd:v3.5.2` (read with `kubectl get deploy,sts -n argocd` on watch-it-burn-community and
+  watch-it-burn-private on 2026-11-04). Moving the platform is chart 10.8.4 to a 10.11.x chart (10.11.7 ships
+  v3.5.7), with VERSIONS.lock, `infra/deploy-full-idp.sh`, `infra/argocd-values.yaml`, the tests that name v3.5.2
+  (`test_platform_version_pins.py`, `test_observability.py`, `test_agent_tools_sync.py`) and this replay moving in
+  step, and a roll of both clusters. That is filed as a follow-up of its own rather than folded into an alert sweep.
+- deepmerge 4.3.1 (GHSA-gcqx-w48m-w2h4, low): no fixed release.
+
+`yarn npm audit --all --recursive` lists, besides deprecations, deepmerge and elliptic (no fix), zod 3, react-router
+6 (fixed only in a new major, see the 2026-10-25 #421 entry), and two moderate npm advisories GitHub does not list,
+glob 10/13 and minimatch 9/10, whose fixes are in glob 14.0.2 and minimatch 11.0.1, new majors under Backstage's
+build tooling.
+
+**Checks (run 16963).** In the Backstage image: `yarn install --immutable`, `yarn tsc`, `CI=true yarn test` (1
+suite, 1 test) and `yarn build:backend`, all exit 0. `bash docs/research/2026-10-30-argo-sync-replay/replay.sh`
+printed `All argo-sync-replay scenarios match.` with 25 PASS and no FAIL both before the Go bumps and after them.
+The live check was the read-only Argo CD image read above; this change alters nothing on a cluster.
