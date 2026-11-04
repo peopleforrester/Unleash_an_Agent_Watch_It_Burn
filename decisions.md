@@ -14076,3 +14076,8 @@ found nothing and failed three checks. The registry was already right: `metric.w
 
 The draft's two commits (839dca3d, 70462af9 on `origin/agent/837-16832`) were cherry-picked unchanged:
 `verify/draft-drift.sh` said staging had touched none of their six paths.
+
+**The suites (run 16854, on 538fa12e, guard-proxy at its c2eb4cf2 pin).** `bash verify/run-e2e-tools.sh` ran the
+offline suite (244 tests, `test_ensure_submodules.sh` the new one, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then 53
+checks (the offline suite and 52 tier tests) in 25m11s, ending `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No live
+cluster check is owed: the change is presenter prose, one test's regex and the submodule step of the test runners.
