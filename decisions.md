@@ -15337,3 +15337,29 @@ built on, so most of it was made again on the current layout:
 - Kept from the draft: the required target, one session per prompt, pacing at most half the window, a guardrail
   block and a missed marker reported but not failures, the asset checker, and the videos out of git by default
   (Git LFS or a release asset instead is still open for Michael).
+
+**What ran live (run 16962, 2026-11-04, on `watch-it-burn-community` and `watch-it-burn-private`).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` read the public host from
+  cluster-identity (`attackme.agenticburn.com`) and printed `DONE: 1 of 1 delivered` and `All live replay checks
+  passed.`
+- The Night Before's replay, `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment
+  1`, printed `ok` on all five prompts and `DONE: 5 of 5 delivered`, about $0.026 of Bedrock. The wide-open bot
+  taught salsa steps, planned the hot dog party, listed karaoke songs and reversed a linked list, and the prompt
+  wall showed the five prompts under attackme (shot 01-3).
+- `scripts/capture-fallback-screenshots.py` took 12 of the deck's 15 shots, committed here. The 8 community shots
+  were taken with every guard off, as found. The 4 private ones were taken one guard at a time from the private
+  terminal (`guard-input-on`, `guard-mcp-on`, `guard-topic-on`, `guard-rbac-on`), each put back with its `-off`
+  helper; `/controls` then read as it did before the first, and the workshop-agent Role's rules matched the saved
+  copy. 03-5 used `guard-rbac-on` instead of `guardrails-on`, because the scoped Role is the one guardrail the
+  shot shows and `guardrails-on` switches both clusters. HC-666 deployed two Jokers on community
+  (`joker-morgana-the-wraith`, `joker-isolde-the-troll`); both were deleted, and community's Deployments then
+  matched the list saved before the first shot.
+- Retakes: one HC-666 reply came back as Bedrock's "blocked by our content filters" after the Joker had deployed,
+  and one beacon ask broke its own curl quoting and then timed out; each landed on the next try. Shot 03-1
+  (Challenge 2's public image) is not committed: three times out of three the model called `deploy_app` with the
+  manifest `"Tron"`, and the tool refused it as not a single object with apiVersion and kind. That is the room's
+  own Challenge 2 ask failing on the public bot, filed as a followup from this run.
+
+**Not yet done:** the six videos and shots 02-2 and 03-4, made at the first full rehearsal, and the replay over a
+presenter's phone hotspot, which is the Night Before's. `verify/test_fallback_deck_e2e.py` (tools tier) opens the
+deck from disk with the network cut off and steps through every slide.
