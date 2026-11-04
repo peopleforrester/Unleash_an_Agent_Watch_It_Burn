@@ -14422,3 +14422,8 @@ is unchanged on staging. The live check was not run in this run either: `cluster
 **The suites (run 16878, at 6b9bf73d, on staging's eee084d0).** `bash verify/run-e2e-tools.sh` exited 0. Its offline
 stage ran 245 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "53 checks ran (the offline
 suite and 52 tier tests) in 24m30s" and "ALL E2E TOOLS TIER CHECKS GREEN".
+
+**The offline suite again (run 16878, on staging's 5088a28b).** Staging gained six commits for #841 and #834 while the
+tools tier ran. They touch none of this change's files except PROGRESS.md and decisions.md, where git merged both
+sides with no conflict, so the branch was rebased onto 5088a28b and `bash verify/run-tests.sh` run once more: 246 tests ran, all green
+("ALL OFFLINE RENDER-GATE TESTS GREEN"). The tools tier was not run a third time; its last green run is the one above.
