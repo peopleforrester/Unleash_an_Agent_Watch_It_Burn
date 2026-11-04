@@ -14400,3 +14400,8 @@ with no guard flipped, its audit lines and its `run_shell` span read back from L
 watch-it-burn-private --kubeconfig <kubeconfig> --profile accen-dev` must end `SEEDED GREEN` with `c2-attack` and
 `c2-fixed` PASS. This needs no promotion, since the script runs from the operator's machine, but it runs
 `guardrails-on` on both clusters for its duration and ends with `guardrails-off`.
+
+**The suites (run 16862, at d22f5f12).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
+verify/run-tests.sh`, ran 244 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), `test_stage_traces.py`
+included. Then it printed "53 checks ran (the offline suite and 52 tier tests) in 26m48s" and "ALL E2E TOOLS TIER
+CHECKS GREEN". No dependency was added.
