@@ -14148,3 +14148,11 @@ exits 1.
 table's LLM06 row to read "Challenges 1 to 4", and Challenge 3's fix slides to follow #775 (least privilege, then the
 input guard; Kyverno admits the trusted image). Until the first lands, the deck and the run-of-show disagree on that
 one cell.
+
+**The suites (run 16873, on `65b7d91f`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52 tier
+tests) in 25m14s, printed `ALL E2E TOOLS TIER CHECKS GREEN` and exited 0.
+
+**Live check.** This run's `$KUBECONFIG` and cluster env file are mode 640, group `hecaton`, and its user cannot read
+them (hecaton#508), so no kubectl call ran. Read without a cluster: `curl https://attackme.burritobot.co/kubecon`
+(2026-11-04) served segment 6's "LLM06</b> Excessive Agency (Challenges 1 to 4)" and segment 4's "(OWASP LLM06,
+Excessive Agency)", so the page live now already says what this decision settles. It changed nothing.
