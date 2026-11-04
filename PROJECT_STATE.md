@@ -22,12 +22,12 @@ lookup, and `verify/test_deployments_page_live.py` on both KubeCon clusters. Det
 
 ## guard-proxy prices the bound model (#793)
 
-Waiting on Michael's repin. guard-proxy-agenticburn main 2cff90d prices each request at the `workshop-agent` Agent's
-bound `bedrock-<tier>` ModelConfig (#37), so on it a live tier swap is the Agent patch alone. A run cannot move the
-gitlink (question 766), so `gitops/ai-layer/guard-proxy` stays at 88b9b52 until Michael commits the move and
-`checksum/proxy-py` `19fbbe48283e`. `verify/model_pin_check.py`, its test, the cost-counter and finale-cap tests and
-the recreation spec already hold for either build. Owed after the repin syncs: the nova-to-haiku swap on a cluster,
-with `/cost`'s tier and Haiku-rate spend checked. Details in decisions.md, 2026-11-03 · #793.
+Repinned. a65f748d moved `gitops/ai-layer/guard-proxy` to c2eb4cf2, which carries guard-proxy-agenticburn#37 and
+prices each request at the `workshop-agent` Agent's bound `bedrock-<tier>` ModelConfig, with `checksum/proxy-py`
+`ba8d8e2b789f`. On it a live tier swap is the Agent patch alone. `verify/test_guard_proxy_pin_bound_pricing.py`
+(#841) fails if the pin goes back before #37 or if `verify/model_pin_check.py` stops accepting the swap on it. Owed:
+the nova-to-haiku swap on a cluster, with `/cost`'s tier and Haiku-rate spend checked. Details in decisions.md,
+2026-11-03 · #793 and 2026-11-04 · #841.
 
 ## KubeCon guardrails switch (#774)
 
