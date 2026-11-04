@@ -13714,6 +13714,10 @@ stays `recommended`, since a turn whose forward fails returns before the counts 
 `verify/test_genai_semconv_pin.py`'s label for that check now says so instead of "recommended until the guard-proxy
 repin emits it".
 
+**The suites (run 16849, on `56e468e3`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and
+52 tier tests) in 24m45s, printed `ALL E2E TOOLS TIER CHECKS GREEN` and exited 0. The offline suite inside it ran 244
+tests, all green, `verify/test_chat_span_token_counts.py` among them.
+
 **Not yet run on a cluster.** This run's `$KUBECONFIG` and `$HECATON_CLUSTER_ENV` are mode 640, group `hecaton`, and
 its user (`hecaton-s7-claude-certkraken`) cannot read them (hecaton#508). So the read of each cluster's guard-proxy
 `checksum/proxy-py` failed with `permission denied` and changed nothing. Once Argo CD syncs `a65f748d`, #784's step 3
