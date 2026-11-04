@@ -15505,3 +15505,9 @@ needs the apply to be seen.
 
 **Left on the cluster.** Nothing. Every call was a read: the Secrets Manager read, Datadog queries, and
 `kubectl get` on both contexts.
+
+**The suites (run 16997, at `c05c962b`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 26m41s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
+tests, `test_leaderboard.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. A first attempt lost its
+verdict because the shared host's `/tmp`, where its log was, was emptied while it ran; the log now goes in the run's
+own directory.
