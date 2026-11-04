@@ -15330,3 +15330,25 @@ Nothing in fleet.sh changes.
 **The suites (run 16967, at `75e8461d`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #618 · M9 waits on M7: the KubeCon delivery is not yet given, and the register is talks-knowledge's
+
+**M9.** Issue #618 is milestone M9 of the spec talks/burritobot/001: "Delivery logged in talks-knowledge's register as
+a delivery of this talk's repo", moving TALK.REUSE, dated "after M7". M7 (#616) is the KubeCon NA 2026 breakout with
+Whitney Lee on Thursday 2026-11-12, and #616 waits until 2026-11-13. Today is 2026-11-04, so there is no delivery to
+log. The issue waits on #616 closing.
+
+**What talks-knowledge already holds** (read at its `1f67749`). Register section 2 lists this repo's two deliveries,
+AI Engineer World's Fair 2026 and DevOpsDays Portland 2026. Section 3 holds the KubeCon breakout with Whitney Lee
+(its title is in that section) as accepted and scheduled for 2026-11-12, built in this repo since
+repo-management#22. The Portfolio index already gives this repo's folder under the layout as
+`unleash-an-agent-and-watch-it-burn/`, after 2026-11-12, with the GitHub name kept. So the one change M9 needs is the
+KubeCon row marked delivered, as a delivery of `Unleash_an_Agent_Watch_It_Burn`, and that edit is in talks-knowledge,
+not here. It is handed there as a follow-up held on #616.
+
+**The reading, when it is taken.** TALK.REUSE has no KR. Its metric "talks delivered more than once" reads 2 in
+talks-knowledge's decisions.md for its #92 (`deleted-my-cluster` 3, `agenticburn` 2). Logging KubeCon under either
+`agenticburn` or `burritobot` leaves it at 2, since `agenticburn` already counts. No reading is given now: the
+milestone is not done.
+
+**Left on the cluster.** Nothing: the run made no live check, since M9 changes no platform.
