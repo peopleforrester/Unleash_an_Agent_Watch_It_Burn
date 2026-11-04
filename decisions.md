@@ -14113,3 +14113,7 @@ the old line, `Every challenge runs one pattern: <b>tee-up</b>`, as expected bef
 
 **Not yet run on a cluster:** after promotion and the Argo CD sync of the `ai-layer` ConfigMap, the same `curl` on
 both hosts should show the line opening `<b>challenge slide</b>`.
+
+**The suites (run 16872, on `09cec76c`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage, `bash
+verify/run-tests.sh`, ran 244 tests, all green (`ALL OFFLINE RENDER-GATE TESTS GREEN`). Then it printed "53 checks
+ran (the offline suite and 52 tier tests) in 25m27s" and `ALL E2E TOOLS TIER CHECKS GREEN`. No dependency was added.
