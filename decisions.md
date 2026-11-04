@@ -13678,3 +13678,40 @@ No dependency was added.
 **The suites (run 16834, on `ded328a4`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 24m21s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests,
 all green, `verify/test_ghcr_version_tag.py` among them, and `test_image_version_tags.py` passes in the tier.
+
+## 2026-11-04 · #841 · A test holds the guard-proxy pin to #37 and model_pin_check to accepting a live tier swap on it
+
+**Why.** #793 asked for the repin of `gitops/ai-layer/guard-proxy` to a build carrying guard-proxy-agenticburn#37
+(which prices each request at the `workshop-agent` Agent's bound `bedrock-<tier>` ModelConfig), and for
+`verify/model_pin_check.py` to accept a live tier swap on that build. The tests #793 changed hold for either build on
+purpose, so a pin before #37 passed them all (test review run 16810). Michael's a65f748d has since moved the gitlink
+from 88b9b52 to c2eb4cf2, which descends from #37 (c8ac56e).
+
+**What changed.** `verify/test_guard_proxy_pin_bound_pricing.py` (offline) reads proxy.py at the gitlink the index
+records (`git show <gitlink>:proxy.py` in the submodule), not the checked-out file, and checks:
+- the gitlink descends from c8ac56e, and `model_pin_check.prices_bound_model()` reads that proxy.py as pricing at the
+  bound model;
+- imported with the committed MODEL_TIER (nova), the pinned proxy.py prices a request after a swap to bedrock-haiku,
+  bedrock-sonnet or bedrock-opus at that tier's rates, with MODEL_TIER unchanged;
+- `model_pin_check.main()`, on the manifests a live `kubectl patch agent workshop-agent` to each of those leaves
+  (modelConfig moved, MODEL_TIER still nova) and with no `aws` on PATH, prints the bound-pricing line, passes the
+  pricing judge at the swapped tier, prints no FAIL or WARN, and stops with exit 2 at the missing aws CLI;
+- judged as a build before #37, the same swap fails.
+
+A missing submodule object or a reworded `modelConfig: bedrock-nova` anchor ends the test with a message naming
+it. The dual-build branches in test_model_pin_check.py, test_cost_counter.py and test_recreation_spec_tier_swap.py
+are left as they are: they test model_pin_check's judges for both builds, and this test is the one that holds the pin.
+
+**How it was shown to fail.** With the index's gitlink set back to 88b9b52 the test fails three checks (ancestry,
+`prices_bound_model`, `_tier_of`/`bound_tier`) and stops naming the repin it needs; the gitlink was restored to
+c2eb4cf2. With `priced_tier()` in model_pin_check.py changed to return MODEL_TIER alone it fails 15 checks; the file
+was restored.
+
+**Live check.** Not run: `runs/16852/clusters/kubeconfig` and `clusters/env` give `permission denied`, the
+hecaton#508 problem. Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** #793's owed check: on a cluster that has synced c2eb4cf2 (`checksum/proxy-py`
+`ba8d8e2b789f`), patch `workshop-agent` from bedrock-nova to bedrock-haiku and check `/cost`'s `tier` reads haiku and
+the next turn's spend is at Haiku rates, then patch it back.
+
+No dependency was added.
