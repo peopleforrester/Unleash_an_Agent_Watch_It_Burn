@@ -14221,3 +14221,9 @@ that commit is dropped here and staging's fix stands. This run (16875) rebuilt t
 change: the test, unchanged since run 16814, this entry, and the PROGRESS.md bullet placed under #811's, the other
 cause-comment test, rather than at the top of the list, so a run adding its own bullet at the top does not collide
 with it.
+
+**The suites (run 16875, at acd71d4 on staging 34be4c1).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline
+suite and 53 tier tests) in 24m14s, "ALL E2E TOOLS TIER CHECKS GREEN", exit 0. Its offline suite ran 244 tests, "ALL
+OFFLINE RENDER-GATE TESTS GREEN", with guard-proxy at its c2eb4cf2 pin, so the Test command passes and
+test_weaver_guard_proxy_spans passes on staging's own fix. test_prose_gate_e2e_wait_cause_comment passed in the tier
+and found both causes at issuecomment-6595960290.
