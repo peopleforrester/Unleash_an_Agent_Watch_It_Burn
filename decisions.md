@@ -15015,3 +15015,7 @@ exists.
 Checks 2 to 4 are reads; with a readable session, `python3 verify/dd_traces.py --profile accen-dev --minutes 1440
 --traces 1` answers check 3 from the API. The brief and `verify/test_instructor_brief.py` are unchanged: nothing the
 org showed contradicts them, because nothing was shown.
+
+**The suites (run 16939, at `75bccf71`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier
+tests) in 24m36s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it, `run-tests.sh`,
+ran 248 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
