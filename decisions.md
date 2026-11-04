@@ -14646,3 +14646,8 @@ deployed ConfigMap on `watch-it-burn-private` could not be read (hecaton#508).
 **Not yet run on a cluster:** once Argo CD syncs this to the private cluster, open
 `https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs` and check that the dashboard's description no
 longer says "segment 5" and that its tags read `guardrail-beats`. The panels and queries are unchanged.
+
+**The suites (run 16894, at `3f917b6`, submodules checked out at their pins).** `bash verify/run-e2e-tools.sh`
+exited 0. Its offline stage, `bash verify/run-tests.sh`, ran 246 tests, all green ("ALL OFFLINE RENDER-GATE TESTS
+GREEN"). Then it printed "54 checks ran (the offline suite and 53 tier tests) in 24m23s" and "ALL E2E TOOLS TIER
+CHECKS GREEN". No dependency was added.
