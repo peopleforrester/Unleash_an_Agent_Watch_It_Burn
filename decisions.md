@@ -15297,3 +15297,7 @@ on the wall (`Agatha the Banshee`) and once with six new names, from the chat pa
 `ok: true` row and reply with the Joker's `maintenance-shell-attackme.burritobot.co/joker-<name>/` page. Any
 `refused as written (HTTP 422)` line in the workshop-mcp log names a 422 the plain Joker had to cover. The new
 names' Deployments are scaled to zero after 300 s and stay, as every room Joker does.
+
+**The suites (run 16959, at `a55d4363`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m11s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
+tests, `test_deploy_app_reapply_422.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
