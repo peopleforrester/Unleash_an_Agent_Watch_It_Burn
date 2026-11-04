@@ -14405,3 +14405,17 @@ watch-it-burn-private --kubeconfig <kubeconfig> --profile accen-dev` must end `S
 verify/run-tests.sh`, ran 244 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), `test_stage_traces.py`
 included. Then it printed "53 checks ran (the offline suite and 52 tier tests) in 26m48s" and "ALL E2E TOOLS TIER
 CHECKS GREEN". No dependency was added.
+
+**Run 16878: the rebase onto staging.** Run 16862's two commits did not land: hecaton's rebase onto staging stopped on
+PROGRESS.md, where runs 16857, 16858, 16864 and 16867 had also put an entry at the top of the same "### Changed"
+list (#842's is one of them), so both sides inserted a line at one spot. Run 16878 rebased the branch onto
+origin/staging at ca69cbb7 and kept both entries, #843's above #842's. `bash verify/draft-drift.sh` named staging's
+other edits to the draft's files: the readiness file's opening paragraph (77ad2e8e), the run-of-show's IMDS beat and
+challenge table (f4065986), and stage_traces.py's docstring (17a17178). Each is an edit in place away from the draft's
+lines, and git merged them with no conflict. The `/kubecon` page's C3 beat, which the seed reads its prompt from,
+is unchanged on staging. The live check was not run in this run either: `clusters/env` is again mode 0640 with group
+`hecaton`, and sourcing it printed "Permission denied" (hecaton#508).
+
+**The suites (run 16878, at 49d74c32).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage ran 245 tests, all
+green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), then it printed "53 checks ran (the offline suite and 52 tier tests) in
+24m26s" and "ALL E2E TOOLS TIER CHECKS GREEN".
