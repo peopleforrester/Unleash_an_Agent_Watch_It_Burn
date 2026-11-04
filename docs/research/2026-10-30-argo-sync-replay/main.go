@@ -1,13 +1,13 @@
-// Replays one Argo CD v3.5.2 sync of one resource against a real kube-apiserver (#679), with Argo CD's own code.
+// Replays one Argo CD v3.5.7 sync of one resource against a real kube-apiserver (#679), with Argo CD's own code.
 //
 //	argo-sync-replay norm  <in.json>                                      the target a sync applies
 //	argo-sync-replay diff  <kubeconfig> <target.json> <live.json> <ignores.json>  Synced or OutOfSync
 //
-// norm is controller/sync.go's normalizeTargetResources for one resource, copied from v3.5.2 (getMergePatch,
+// norm is controller/sync.go's normalizeTargetResources for one resource, copied from v3.5.2 and unchanged at v3.5.7 (getMergePatch,
 // applyMergePatch and restoreNonIgnoredFields verbatim), with the ignored fields deleted the way Argo CD's ignore
 // normalizer does it: gojq del(<expression>). Its input is {"target": {...}, "live": {...}, "exprs": [...]}.
 //
-// diff is util/argo/diff.StateDiff from the argo-cd v3.5.2 module itself, configured as controller/state.go configures
+// diff is util/argo/diff.StateDiff from the argo-cd v3.5.7 module itself, configured as controller/state.go configures
 // an Application that syncs with ServerSideApply=true: structured merge diff, manager argocd-controller, the GVK
 // parser built from the apiserver's OpenAPI. Its ignores file is the Application's ignoreDifferences as JSON.
 package main
@@ -73,7 +73,7 @@ func jqDel(obj map[string]any, exprs []string) map[string]any {
 	return obj
 }
 
-// ---- controller/sync.go v3.5.2, verbatim ------------------------------------------------------------------------
+// ---- controller/sync.go v3.5.7, verbatim ------------------------------------------------------------------------
 
 func getMergePatch(original, modified *unstructured.Unstructured, lookupPatchMeta *strategicpatch.PatchMetaFromStruct) ([]byte, error) {
 	originalJSON, err := original.MarshalJSON()

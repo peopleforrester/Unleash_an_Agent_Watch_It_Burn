@@ -2,8 +2,8 @@
 
 Two things never reached the KubeCon clusters on 2026-10-29 while Argo CD said every sync succeeded: the Agent's
 twelfth workshop-mcp tool, `read_support_ticket` (#640), and guard-proxy's new `CONSOLE_ORIGIN` env entry. This runs
-both through Argo CD v3.5.2's own code, the version VERSIONS.lock pins, against a real kube-apiserver. No cluster, no
-containers and no AWS are needed.
+both through Argo CD v3.5.7's own code, the version VERSIONS.lock pins since #858 (v3.5.2 before it), against a real
+kube-apiserver. No cluster, no containers and no AWS are needed.
 
 ```
 bash docs/research/2026-10-30-argo-sync-replay/replay.sh
@@ -11,15 +11,15 @@ bash docs/research/2026-10-30-argo-sync-replay/replay.sh
 
 It needs go 1.26 or later, git, curl, jq, python3 with PyYAML, and network the first time. It fetches envtest
 v1.34.1 (etcd, kube-apiserver, kubectl; checked against the SHA-512 in controller-tools' `envtest-releases.yaml`) and
-argo-cd v3.5.2's `gitops-engine` tree into the gitignored `tmp/argo-sync-replay`, starts its own apiserver on free
-localhost ports, and runs about 35 seconds.
+argo-cd v3.5.7's `gitops-engine` tree into the gitignored `tmp/argo-sync-replay`, and fetches that tree again when the
+one there is of another tag. It starts its own apiserver on free localhost ports and runs about 35 seconds.
 
 ## What runs
 
 - `main.go norm`: `normalizeTargetResources` from `controller/sync.go` at v3.5.2, for one resource, with
-  `getMergePatch`, `applyMergePatch` and `restoreNonIgnoredFields` copied verbatim. It is what a sync applies when the
-  Application has `RespectIgnoreDifferences=true`.
-- `main.go diff`: `util/argo/diff.StateDiff` from the argo-cd v3.5.2 module, configured as `controller/state.go`
+  `getMergePatch`, `applyMergePatch` and `restoreNonIgnoredFields` copied verbatim. All four are the same at v3.5.7.
+  It is what a sync applies when the Application has `RespectIgnoreDifferences=true`.
+- `main.go diff`: `util/argo/diff.StateDiff` from the argo-cd v3.5.7 module, configured as `controller/state.go`
   configures an Application with `ServerSideApply=true` (structured merge diff, manager `argocd-controller`).
 - The apply is server-side, field manager `argocd-controller`, force-conflicts, as gitops-engine runs it.
 - The live object it diffs is read with its managedFields, as Argo CD's live cache holds it.
@@ -27,7 +27,7 @@ localhost ports, and runs about 35 seconds.
   ignores, and the Agent from `gitops/workshop-agent/agent.yaml` with the workshop-agent Application's ignores (#707),
   or with the ignores ai-layer had before #707.
 
-## What it showed (all checks pass: 20 on 2026-10-30, the first run's layout; 25 on 2026-11-01, on #707's layout)
+## What it showed (all checks pass: 20 on 2026-10-30, the first run's layout; 25 on 2026-11-01, on #707's layout; 25 on 2026-11-05 at v3.5.7)
 
 1. guard-proxy, `CONSOLE_ORIGIN` added in git: one sync lands it in git's place, keeps a live `MODEL_TIER=sonnet`
    toggle, and the Deployment reads Synced. A built-in kind takes a strategic merge patch with merge keys, so the

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# ABOUTME: Runs #679 through Argo CD v3.5.2's own sync and diff code against a real kube-apiserver (envtest's, no
+# ABOUTME: Runs #679 through Argo CD v3.5.7's own sync and diff code against a real kube-apiserver (envtest's, no
 # ABOUTME: cluster, no containers): the Agent's frozen tools array, guard-proxy's frozen env order, and both fixes.
 #
 # Usage: bash docs/research/2026-10-30-argo-sync-replay/replay.sh
 #
 # Needs go (1.26 or later), git, curl, jq, python3 with PyYAML, sha512sum, and network for the first run. Everything it
 # fetches or builds goes under the repo's gitignored tmp/argo-sync-replay: envtest v1.34.1's etcd, kube-apiserver and
-# kubectl (checked against the SHA-512 controller-tools publishes in envtest-releases.yaml), and argo-cd v3.5.2's
+# kubectl (checked against the SHA-512 controller-tools publishes in envtest-releases.yaml), and argo-cd v3.5.7's
 # gitops-engine tree, which go.mod's replace points at. It starts its own etcd and apiserver on free localhost ports
 # with a kubeconfig of its own, touches no other cluster, and stops both when it exits. Each scenario prints PASS or
 # FAIL; any FAIL exits 1. verify/test_agent_tools_sync.py ports what this runs and holds the same results offline.
@@ -21,7 +21,7 @@ REPO="$(cd "${HERE}/../../.." && pwd)"
 WORK="${REPO}/tmp/argo-sync-replay"
 ENVTEST_URL="https://github.com/kubernetes-sigs/controller-tools/releases/download/envtest-v1.34.1/envtest-v1.34.1-linux-amd64.tar.gz"
 ENVTEST_SHA512="c5e7c237ae18a8c65d0df1214b864ecd19aa9ff4f1383dbd477c202546d778c0f74efe15750ec38f57d8de26ba17cd62f404446cdd3c975399a5d4589de35cdd"
-ARGOCD_TAG="v3.5.2"
+ARGOCD_TAG="v3.5.7"
 
 missing=()
 for t in go git curl jq python3 sha512sum tar; do command -v "${t}" >/dev/null 2>&1 || missing+=("${t}"); done
@@ -39,11 +39,14 @@ if [[ ! -x "${WORK}/envtest/kube-apiserver" ]]; then
     mkdir -p "${WORK}/envtest"
     tar -xzf "${WORK}/envtest.tgz" -C "${WORK}/envtest" --strip-components=2
 fi
-if [[ ! -d "${WORK}/argo-cd/gitops-engine" ]]; then
-    rm -rf "${WORK}/argo-cd"
-    git clone -q --depth 1 --branch "${ARGOCD_TAG}" --filter=blob:none --sparse \
+# A tree left by an earlier tag is cloned again (#858): go.mod's replace points here, so an old tree would build the
+# new argo-cd module against the old gitops-engine.
+if [[ ! -d "${WORK}/argo-cd/gitops-engine" || "$(cat "${WORK}/argo-cd.tag" 2>/dev/null)" != "${ARGOCD_TAG}" ]]; then
+    rm -rf "${WORK}/argo-cd" "${WORK}/argo-cd.tag"
+    git clone -q -c advice.detachedHead=false --depth 1 --branch "${ARGOCD_TAG}" --filter=blob:none --sparse \
         https://github.com/argoproj/argo-cd.git "${WORK}/argo-cd"
     git -C "${WORK}/argo-cd" sparse-checkout set gitops-engine
+    echo "${ARGOCD_TAG}" >"${WORK}/argo-cd.tag"
 fi
 BIN="${WORK}/argo-sync-replay"
 ( cd "${HERE}" && go build -o "${BIN}" . )

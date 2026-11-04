@@ -15778,3 +15778,68 @@ ASI05.
 on a cluster" section names the checks (armed refuses at admission with `disallow-host-escape` named, the Deployment
 keeps no pods, no regression to the platform's own `agent` pods or the `apps` clown-file refusal) a session with AWS
 access runs on a cluster once the build lands, on or after 2026-11-13.
+## 2026-11-05 · #858 · Argo CD moves to chart 10.11.7 (v3.5.7), and every Argo CD container gets the limits Kyverno requires
+
+**Why.** Both KubeCon clusters run `quay.io/argoproj/argocd:v3.5.2`, which carries GHSA-fmxq-cgp8-87wp (critical:
+PreDelete and PostDelete hooks skip the AppProject destination and resource checks) and GHSA-j6cw-g6p4-7hch (high:
+repo-server command injection through an SSH repository's proxy URL), both fixed in v3.5.4 (#421's entry of
+2026-11-04). There was no earlier draft: `verify/prior-drafts.sh 858 origin/staging` printed NONE.
+
+**The version.** argo-helm's index on 2026-11-05 lists 10.11.7 (v3.5.7, 2026-11-03) as the newest 10.11.x, and
+10.12.0 and 10.12.1 (v3.6.0, v3.6.1, both 2026-11-04) above it. The issue asks for a 10.11.x chart; v3.6 is a minor
+release a day old, so it is not taken here. Between 10.8.4 and 10.11.7 the chart's values only gain keys
+(`unhealthyPodEvictionPolicy`, `redis.existingSecret`, `server.enabled`), and with this repo's values the render
+differs in the image, the limits below, three Bitbucket SSH known-host lines and an optional
+`GRPC_ENABLE_TXT_SERVICE_CONFIG` env read from `argocd-cmd-params-cm`. The CRDs render the same.
+
+**The change.**
+- `infra/deploy-full-idp.sh` installs chart 10.11.7 and logs `chart 10.11.7 / app v3.5.7`. Both VERSIONS.lock lines,
+  argocd-server's `tags.datadoghq.com/version` and the note under it, `test_observability.py`, the build spec, the
+  recreation spec, the stack walkthrough and `docs/floor.md` say the same.
+- images.lock's Argo CD row is `quay.io/argoproj/argocd:v3.5.7` at
+  `sha256:16df57da6f223808d204cd94c67c929b931fa01670b91b0b3a2298c4647de0db`, the index digest quay.io's manifest API
+  served on 2026-11-05. The same read gives v3.5.2's old row, `sha256:e2aadfae...`. Redis stays 8.6.4-alpine.
+- `infra/argocd-values.yaml` gives limits to the application controller, repo server, ApplicationSet controller,
+  notifications controller, Redis and the redis-secret-init Job. Only argocd-server had them. require-resource-limits is
+  a Deny policy on every pod in every namespace on watch-it-burn-private, and `helm history argocd` there shows
+  revisions 2 and 3 (2026-11-02) failed on it, at the redis-secret-init pre-upgrade Job. The other pods run only
+  because they predate Kyverno. Without limits this bump would have failed the same way, and a roll that got past
+  the hook would leave the controller StatefulSet with no pod. The sizes come from the kubelet's stats summary on
+  2026-11-05 (there is no metrics-server): the controller's working set was 749Mi on private (38 apps) and 387Mi on
+  community, the repo server 151Mi to 217Mi, every other container under 40Mi. The controller gets 1Gi requested and
+  3Gi limit, the repo server 256Mi and 2Gi, the rest 64Mi or less and 256Mi.
+
+**The replay and the port.** `controller/sync.go` differs between v3.5.2 and v3.5.7 only in a sync-window check for
+terminating operations; `normalizeTargetResources`, `getMergePatch`, `applyMergePatch` and `restoreNonIgnoredFields`
+hash the same at both tags, and `main.go`'s copies equal v3.5.7's apart from the comments it already left out.
+`util/argo/diff` and `controller/state.go` did not change; gitops-engine's `serverSideDiff` now drops
+`metadata.generation` and fields another actor removed. The replay's go.mod takes argo-cd v3.5.7 by `go get` (which
+also moved grpc to 1.84.0, golang.org/x/crypto, net, sys, term and text, genproto and go.yaml.in/yaml/v2), and
+`replay.sh` clones the v3.5.7 tree. `replay.sh` used to keep any tree already in `tmp/argo-sync-replay`, so an old
+checkout would have built v3.5.7 against v3.5.2's gitops-engine; it now records the tag beside the tree and clones
+again when the tag differs. `bash docs/research/2026-10-30-argo-sync-replay/replay.sh` printed 25 PASS, no FAIL, and
+`All argo-sync-replay scenarios match.` `verify/test_agent_tools_sync.py`'s PORTED_FROM is v3.5.7. `docs/floor.md`'s
+self-heal backoff stands: `selfHealRemainingBackoff` and the controller's self-heal flags are the same at v3.5.7.
+Nothing in `gitops/` uses a PreDelete or PostDelete hook or an AppProject other than `default`, so the hook fix
+changes no sync here.
+
+**Live check (run 17110), nothing changed on either cluster.** Each workload's pod template from the new render, sent
+as a Pod with `kubectl create --dry-run=server` in `argocd`: watch-it-burn-private admitted all seven, and the same
+from the 10.8.4 render with the old values had six of seven denied by require-resource-limits (argocd-server alone
+passed). watch-it-burn-community, which runs no Kyverno, admitted both sets. No `dryrun-858-*` pod exists on either
+cluster afterwards. The private node's requests stood at 67% CPU and 32% memory, so the new requests fit.
+
+**Not yet run on a cluster: the roll.** `deploy-full-idp.sh` installs Argo CD as a Helm release, outside Argo CD,
+so promotion does not move it, and a run does not deploy. Once this commit is on staging, for watch-it-burn-private
+and then watch-it-burn-community:
+
+    helm --kube-context <ctx> upgrade argocd argo-cd --repo https://argoproj.github.io/argo-helm --version 10.11.7 \
+      -n argocd --values https://raw.githubusercontent.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/staging/infra/argocd-values.yaml
+    kubectl --context <ctx> -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
+    kubectl --context <ctx> -n argocd rollout status deploy/argocd-repo-server deploy/argocd-server --timeout=300s
+
+Private's release is at revision 3, `failed`; Helm upgrades from a failed last release. The check after it:
+`kubectl -n argocd get deploy,sts` shows every argocd image at v3.5.7, `helm history argocd` ends `deployed`
+argo-cd-10.11.7, every Application on the cluster reads Synced and Healthy as it did before, and
+`https://argocd-<cluster>.agenticburn.com/api/version` answers v3.5.7. The roll is handed on as an escalation in this
+run's report.

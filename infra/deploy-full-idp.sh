@@ -41,7 +41,7 @@ export CONTEXT
 log "[1] default gp3 StorageClass"
 kubectl --context "${CONTEXT}" apply -f "${REPO}/infra/gp3-storageclass.yaml"
 
-log "[2] ArgoCD (chart 10.8.4 / app v3.5.2)"
+log "[2] ArgoCD (chart 10.11.7 / app v3.5.7)"
 helm --kube-context "${CONTEXT}" repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
 helm --kube-context "${CONTEXT}" repo update >/dev/null
 # NOTE: do NOT use --wait here. On EKS the helm install with --wait repeatedly hangs in
@@ -49,7 +49,7 @@ helm --kube-context "${CONTEXT}" repo update >/dev/null
 # immediately and the pods come up normally. Wait on the core components explicitly afterwards.
 # argocd-values.yaml carries dex.enabled=false + the Datadog Agent Autodiscovery annotation on
 # argocd-server (PRD #26 M2). Folded in here because ArgoCD is bootstrap-installed, not Application-managed.
-helm --kube-context "${CONTEXT}" upgrade --install argocd argo/argo-cd --version 10.8.4 \
+helm --kube-context "${CONTEXT}" upgrade --install argocd argo/argo-cd --version 10.11.7 \
   -n argocd --create-namespace --values "${SCRIPT_DIR}/argocd-values.yaml"
 log "    waiting for ArgoCD core components..."
 kubectl --context "${CONTEXT}" -n argocd rollout status statefulset/argocd-application-controller --timeout=180s

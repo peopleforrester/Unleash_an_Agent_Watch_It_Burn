@@ -160,7 +160,7 @@ INPUT_CLASSIFIER, OUTPUT_GUARD, PROXY_FAIL_CLOSED, MODEL_TIER, RATE_LIMIT_RPM, C
 OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT) and syncs with `RespectIgnoreDifferences=true`, so a live value
 of one of those nine survives every sync, and a committed change to one of them reaches new clusters only. Every
 other entry is git's: a changed value or a new entry lands on the next sync, in git's place (run through Argo CD
-v3.5.2's own code, `docs/research/2026-10-30-argo-sync-replay/`). Before #265 the whole env was ignored, which is
+v3.5.7's own code, `docs/research/2026-10-30-argo-sync-replay/`). Before #265 the whole env was ignored, which is
 why this section used to say git delivers nothing here.
 
 **Never add an env entry live.** Under `RespectIgnoreDifferences` a list with an ignored element is synced in its

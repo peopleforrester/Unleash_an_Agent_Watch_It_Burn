@@ -68,7 +68,8 @@ public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd
 # gitops/bootstrap/apps, which no tracked image: line names, and the two the Argo CD chart infra/deploy-full-idp.sh
 # installs. A ghcr.io/peopleforrester/lab-platform/mirror/ row is lab-platform's copy of a Docker Hub image (#714), at
 # the digest its tag ends in; lab-platform keeps no images.lock, so this repo's save is its retained copy. Each
-# digest is the one its registry served anonymously on 2026-11-03, read with crane 0.22.1.
+# digest is the one its registry served anonymously on 2026-11-03, read with crane 0.22.1, except Argo CD v3.5.7's
+# (#858), the index digest quay.io's manifest API served anonymously on 2026-11-05 (the same read gives v3.5.2's old row).
 # verify/test_images_lock_render.py renders them and holds each to a row here.
 quay.io/jetstack/cert-manager-cainjector:v1.21.2 sha256:c85268c64f2e0e76684bf5fe8906caff34b82523561c6affe0fae3546bd87562 upstream:https://github.com/cert-manager/cert-manager -
 quay.io/jetstack/cert-manager-controller:v1.21.2 sha256:70f532fd9cfde0b09d55687200942399d89838bc2d5d5b45152eb799a15912b8 upstream:https://github.com/cert-manager/cert-manager -
@@ -107,5 +108,5 @@ quay.io/prometheus-operator/prometheus-operator:v0.94.0 sha256:cf153f64d6c38113f
 quay.io/prometheus/prometheus:v3.14.0-distroless sha256:50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a upstream:https://github.com/prometheus/prometheus -
 ghcr.io/jkroepke/kube-webhook-certgen:1.8.8 sha256:cd85a621724cd9043a5b46a784578fa159437712f920166389fce830554e1c44 upstream:https://github.com/jkroepke/kube-webhook-certgen -
 ghcr.io/peopleforrester/lab-platform/mirror/grafana/tempo:3.0.3-05321ebf1f19 sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c upstream:https://github.com/grafana/tempo -
-quay.io/argoproj/argocd:v3.5.2 sha256:e2aadfae709d904e87f46ba4aa49601d827b3022db22cd4d03aae816a2e7097b upstream:https://github.com/argoproj/argo-cd -
+quay.io/argoproj/argocd:v3.5.7 sha256:16df57da6f223808d204cd94c67c929b931fa01670b91b0b3a2298c4647de0db upstream:https://github.com/argoproj/argo-cd -
 ecr-public.aws.com/docker/library/redis:8.6.4-alpine sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763 upstream:https://github.com/redis/docker-library-redis -

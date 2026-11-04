@@ -10,6 +10,14 @@
 # live 2026-06-25). argocd-server is the API server, so api_server_endpoint.
 dex:
   enabled: false
+# Every Argo CD container carries limits, not only argocd-server's (#858). require-resource-limits is a Deny policy on
+# every pod in every namespace on the profiles that run Kyverno (watch-it-burn-private among them), and it refuses a pod
+# whose containers have no cpu and memory limit. The other components ran without them because they were created before
+# Kyverno came up. On 2026-11-02 two `helm upgrade` runs of this release on watch-it-burn-private failed on the
+# redis-secret-init pre-upgrade Job for that reason (`helm history argocd`, read 2026-11-05), and a chart bump that rolls
+# the controller's StatefulSet would leave it with no pod. Sized from the kubelet's stats on 2026-11-05: the
+# application controller's working set was 749Mi on watch-it-burn-private (38 apps) and 387Mi on
+# watch-it-burn-community, the repo server 217Mi, every other container under 40Mi.
 server:
   # The require-resource-limits policy (kyverno-policies) rejects any pod without limits. The chart ships
   # argocd-server without them, so a rollout after install (for example to pick up server.insecure,
@@ -27,9 +35,9 @@ server:
   podLabels:
     tags.datadoghq.com/service: burritobot-argocd
     tags.datadoghq.com/env: burritobot-kubecon-na-26
-    tags.datadoghq.com/version: "v3.5.2"
+    tags.datadoghq.com/version: "v3.5.7"
 # Every other Argo CD pod logs under its own burritobot- service (#662). The chart merges global.podLabels under
-# each component's, so the env is set once and each component names its service. The version is argo-cd 10.8.4's
+# each component's, so the env is set once and each component names its service. The version is argo-cd 10.11.7's
 # appVersion, the chart deploy-full-idp.sh pins.
 global:
   podLabels:
@@ -37,16 +45,34 @@ global:
     tags.datadoghq.com/service: burritobot-argocd
 controller:
   podLabels: { tags.datadoghq.com/service: burritobot-argocd-application-controller }
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { cpu: "2", memory: 3Gi }
 repoServer:
   podLabels: { tags.datadoghq.com/service: burritobot-argocd-repo-server }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "2", memory: 2Gi }
 applicationSet:
   podLabels: { tags.datadoghq.com/service: burritobot-argocd-applicationset }
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
 notifications:
   podLabels: { tags.datadoghq.com/service: burritobot-argocd-notifications }
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
 redis:
   podLabels: { tags.datadoghq.com/service: burritobot-argocd-redis }
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
 redisSecretInit:
   podLabels: { tags.datadoghq.com/service: burritobot-argocd-redis-secret-init }
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 64Mi }
 # argocd-server behind the console's reverse proxy at argocd-<cluster>.agenticburn.com (#233). The
 # proxy terminates TLS; without this the server redirects every plain-HTTP hop to https and the
 # login loops. The chart's params ConfigMap carries it, so it survives helm upgrades.

@@ -1,4 +1,4 @@
-# ABOUTME: Ports Argo CD v3.5.2's RespectIgnoreDifferences sync (#679): a CRD array with an ignore inside freezes whole
+# ABOUTME: Ports Argo CD v3.5.7's RespectIgnoreDifferences sync (#679): a CRD array with an ignore inside freezes whole
 # ABOUTME: (the Agent's tools, fixed by #707's own Application), a built-in list with an ignored element freezes in order.
 #
 # Why (#679). Git gave workshop-mcp twelve tools, read_support_ticket among them (#640), and both KubeCon clusters
@@ -30,9 +30,11 @@
 # admin with no fleet.sh converge, a student's guard-mcp-on survives a selfHeal with no git change, and the two costs
 # #707 accepted hold as recorded. It then runs guard-proxy's env through ai-layer's ignores, and holds every ignored
 # list element under RespectIgnoreDifferences to a row of repair_env_order. The port was checked against the real code:
-# docs/research/2026-10-30-argo-sync-replay/ runs Argo CD v3.5.2's normalizeTargetResources and its diff against a
+# docs/research/2026-10-30-argo-sync-replay/ runs Argo CD v3.5.7's normalizeTargetResources and its diff against a
 # real kube-apiserver with server-side apply, and its results are the ones held here. The port is held to
-# VERSIONS.lock's Argo CD version: a version bump fails here until the port is read against the new sync.go.
+# VERSIONS.lock's Argo CD version: a version bump fails here until the port is read against the new sync.go. #858's
+# bump to v3.5.7 was: normalizeTargetResources, getMergePatch, applyMergePatch and restoreNonIgnoredFields are byte for
+# byte v3.5.2's, and the replay printed the same 25 PASS.
 from __future__ import annotations
 
 import copy
@@ -63,7 +65,7 @@ if not JQ:
     print("FAIL: jq is not on PATH; Argo CD's jqPathExpressions are jq, and this runs them as jq does", file=sys.stderr)
     sys.exit(1)
 
-PORTED_FROM = "v3.5.2"
+PORTED_FROM = "v3.5.7"
 EVIL = '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
 # What both KubeCon clusters carried on 2026-10-29: git's list before 0633ab0, the same eleven toggle-mcp-authz-on.sh's
 # GOOD_TOOL held before cb296cb.
@@ -77,7 +79,7 @@ MERGE_KEYS = {"containers": "name", "initContainers": "name", "env": "name", "vo
 ORDER = "$setElementOrder/"
 
 
-# ---- the port: Argo CD v3.5.2 controller/sync.go normalizeTargetResources ---------------------------------------
+# ---- the port: Argo CD v3.5.7 controller/sync.go normalizeTargetResources (v3.5.2's, unchanged) ------------------
 def jq_delete(obj: dict, expression: str) -> dict:
     """Argo CD's jq normalizer: del(<expression>); a failing expression leaves the object as it was."""
     r = subprocess.run([JQ, "-c", f"del({expression})"], input=json.dumps(obj), capture_output=True, text=True)

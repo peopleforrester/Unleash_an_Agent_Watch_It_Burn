@@ -1057,7 +1057,7 @@ repair_agent_injection() {
 #
 # #679 was the same wall: the Agent is a CRD, so RespectIgnoreDifferences carried the ignored evil-mcp toolNames back
 # as a JSON merge patch, which holds the whole live tools array, and every sync applied that (verify/test_agent_tools_sync.py
-# ports Argo CD v3.5.2's code). read_support_ticket (#640) never reached either KubeCon cluster that way.
+# ports Argo CD v3.5.2's code, unchanged in the v3.5.7 #858 moved to). read_support_ticket (#640) never reached either KubeCon cluster that way.
 #
 # This repair is no longer the only route on the toolnames profiles (attendee, burn, full) (#707). The Agent is the
 # workshop-agent Application's now (gitops/bootstrap/apps/workshop-agent.yaml), which keeps the evil-mcp ignore and
@@ -1099,7 +1099,7 @@ PYEOF
 }
 
 # An env list Argo CD cannot put back in order (#679). ai-layer ignores some env entries BY NAME (guard-proxy's live
-# toggles, agentgateway's BEDROCK_NOVA_MODEL pin) and syncs with RespectIgnoreDifferences=true. Argo CD v3.5.2 copies
+# toggles, agentgateway's BEDROCK_NOVA_MODEL pin) and syncs with RespectIgnoreDifferences=true. Argo CD (v3.5.2 to v3.5.7) copies
 # those entries back from live as a strategic merge patch that also carries `$setElementOrder/env` from live, so the
 # list it applies is in the LIVE order. Git's own changes land (a new entry goes where git puts it), but once the live
 # order differs from git's, no sync corrects it, while the diff predicts git's order: the Deployment reads OutOfSync

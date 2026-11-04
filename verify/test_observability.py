@@ -207,7 +207,7 @@ _PLATFORM_UST = [
     ("cert-manager", "burritobot-cert-manager", "v1.21.2", _pod_values("gitops/bootstrap/apps/cert-manager.yaml")),
     ("falco", "burritobot-falco", "0.45.1", _pod_values("gitops/bootstrap/apps/falco.yaml")),
     ("kyverno", "burritobot-kyverno", "v1.19.1", _pod_values("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
-    ("argocd", "burritobot-argocd", "v3.5.2", _pod_values("infra/argocd-values.yaml", "server")),
+    ("argocd", "burritobot-argocd", "v3.5.7", _pod_values("infra/argocd-values.yaml", "server")),
     ("istio-ztunnel", "burritobot-istio", "1.30.4", _pod_values("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
     ("istiod", "burritobot-istio", "1.30.4", _pod_values("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
 ]

@@ -35,9 +35,9 @@ controller backs off. Each heal waits longer than the one before: 2 s, 6 s, 18 s
 300 s for every heal after that. The wait counts from when the previous sync finished, and the count
 starts again only at a new revision. This was read from the Argo CD v3.5.2 controller source
 (`selfHealRemainingBackoff` in `controller/appcontroller.go`; flags `--self-heal-backoff-timeout-seconds 2`,
-`--self-heal-backoff-factor 3`, `--self-heal-backoff-cap-seconds 300`). Argo CD v3.5.2 is what
-`infra/deploy-full-idp.sh` installs (chart 10.8.4). lab-platform installs Argo CD v3.5.6 (chart 10.11.3),
-and its source has the same code and defaults. `--self-heal-backoff-cooldown-seconds` is deprecated in
+`--self-heal-backoff-factor 3`, `--self-heal-backoff-cap-seconds 300`), and both are byte for byte the same
+in Argo CD v3.5.7, which is what `infra/deploy-full-idp.sh` installs (chart 10.11.7) since #858.
+lab-platform installs Argo CD v3.5.6 (chart 10.11.3), and its source has the same code and defaults. `--self-heal-backoff-cooldown-seconds` is deprecated in
 both and has no effect.
 
 What that means on the day:
