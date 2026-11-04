@@ -15326,3 +15326,7 @@ offline suite. `run_with_tail` in `verify/test_fleet_apply_failure_exit.sh` runs
 Nothing in fleet.sh changes.
 
 **Left on the cluster.** Nothing: the stopped check wrote nothing to either cluster, and the run made no live change.
+
+**The suites (run 16967, at `75e8461d`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
