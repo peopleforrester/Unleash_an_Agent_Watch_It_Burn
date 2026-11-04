@@ -14287,3 +14287,33 @@ checks (the offline suite and 52 tier tests) in 24m17s and exits 0 with `ALL E2E
 suite inside it ran 245 tests, all green, `verify/test_guard_proxy_pin_bound_pricing.py` among them. The live check
 did not run: run 16876's `clusters/env` and `clusters/kubeconfig` are again mode 0640, owned by `hecaton`, and
 `. "$HECATON_CLUSTER_ENV"` gave `Permission denied` (hecaton#508). Nothing on either cluster was read or changed.
+## 2026-11-04 · #851 · the c7-off beat says the sentinel comes back raw
+
+**What changed.** `verify/kubecon_probe.py`'s `c7-off` beat was titled "gateway rule open; the output guard redacts
+the sentinel", and `judge_c7_chained`'s docstring said the stage runs C7 after `guard-output-on`. Since the
+2026-11-01 run-of-show (#776) no KubeCon beat turns the output guard on, so the title now reads "gateway rule open;
+the sentinel comes back raw" and the docstring says the chain shows as evil-mcp's raw sentinel in segment 5, before
+`guard-mcp-on`.
+
+**The redacted form is no longer accepted.** The issue kept the redacted calibration block (#628) as a pass only if
+some flow still turns the output guard on before C7. Two flows run `judge_c7_chained`: the probe's ADMIN list
+(`c7-off`) and `verify/stage_traces.py`'s seed beats (`c4-attack`). Neither has a `guard-output-on` beat, and both
+begin with the start-state beat, which fails unless every AI guard is off. The C5 fallback script turns the output
+guard on, but it puts it back and does not run C7. So the `C7_REDACTED` branch and constant are gone, and
+`judge_c7_chained` is `from_green(judge_mcp_leaks(d))`: a redacted token on stage now means the output guard was left
+on, and the beat fails. `verify/test_kubecon_probe.py` flips its redacted case from a pass to a fail and checks that
+the beat's title says the sentinel comes back raw and no longer says the output guard redacts it.
+
+**Tests that read the words.** `git grep -nF` over `verify` and `scripts` for "the output guard redacts the
+sentinel" found the beat itself and `verify/test_c7_output_guard.py`'s docstring. That test holds the output-guard
+Regex the 2-hour lab still uses, so it stays as is. `judge_c7_chained` is read by `test_kubecon_probe.py` and
+`stage_traces.py`.
+
+**Live check (run 16882).** A read-only `GET /controls` on both clusters returned
+`{'input_blocklist': False, 'input_classifier': False, 'output': False, 'budget': False, 'topic': False}` from
+`burritobot-private.agenticburn.com` and from `attackme.agenticburn.com`. The output guard is off where the
+`c7-off` beat runs, so the raw sentinel is what a chained turn returns there. Neither cluster was changed.
+
+**Not yet run on a cluster.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private`, whose `c7-off` beat now fails a redacted reply. It spends model calls and flips the guards,
+and nothing in this change alters what reaches the cluster, so the next admin probe run covers it.
