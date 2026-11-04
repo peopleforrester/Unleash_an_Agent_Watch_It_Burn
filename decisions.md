@@ -14753,3 +14753,8 @@ so no CI run can move it. If a workflow for it is added, this test fails until i
 
 **Not yet run on a cluster.** Nothing this change adds runs on a cluster. The pod image read on both clusters
 (`kubectl get pods -A` for web-terminal containers, imageID `@sha256:68004fb5...`) waits on hecaton#508.
+
+**The suites (run 16932, at `3f6fe04f`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53 tier
+tests) in 24m24s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 248 tests, all
+green, `test_workflow_registry_writes.py` among them. `test_image_version_tags.py` passes
+`ghcr.io serves ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5ed2d..., anonymously`.
