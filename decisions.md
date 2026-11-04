@@ -14503,3 +14503,8 @@ Retry-After (at most 30 s), or 2, 4, 8 and 16 s, five tries in all. Any other er
 check, so a registry that stopped serving a digest still reads red. `verify/test_public_images_retry.py` is the offline
 half: it lifts `opened()` and `RETRIES_ON_429` out of the file by name and runs them against a stubbed urlopen and
 sleep (two 429s then an answer; a Retry-After of 3 and of 3600; five 429s; a 404). No dependency was added.
+
+**The suites (run 16863, at `e5eecbae`).** `bash verify/run-e2e-tools.sh` exited 0. Its offline stage,
+`bash verify/run-tests.sh`, ran 245 tests, all green ("ALL OFFLINE RENDER-GATE TESTS GREEN"), the new retry test among
+them. Then it printed "53 checks ran (the offline suite and 52 tier tests) in 24m57s" and "ALL E2E TOOLS TIER CHECKS
+GREEN".
