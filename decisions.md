@@ -15395,3 +15395,8 @@ names the three `aws eks update-kubeconfig` calls; with it, all 35 checks pass i
 The other offline tests that source fleet.sh are not given the same backstop here. #616 found
 `test_fleet_exit_codes.sh`, `test_cluster_roles.sh` and `test_fleet_converge_repairs.sh` already stub the link;
 whether any other one reaches the cloud is a follow-up.
+
+**The suites (run 17025, at `72388711`, rebased on `916b016e`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the
+offline suite and 53 tier tests) in 27m34s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite
+inside it ran 251 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. Staging changed nothing under `images/`
+or `docs/research/` between `7210cbb8` and `916b016e`, so run 16963's Backstage build and replay results stand.
