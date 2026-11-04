@@ -15511,3 +15511,20 @@ tier tests) in 26m41s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The
 tests, `test_leaderboard.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. A first attempt lost its
 verdict because the shared host's `/tmp`, where its log was, was emptied while it ran; the log now goes in the run's
 own directory.
+
+## 2026-11-04 · #814 · The sample-app and tool-pin retag is complete; ghcr.io serves the new sample-app tag
+
+**What was left.** #814's change (`35cd065e`) reached staging on 2026-11-03 with one ghcr.io write owed: the tag
+`watch-it-burn:sample-app-nginx-1.27.5` on the pinned digest. #828's `.github/workflows/keep-sample-app-tag.yml`
+created it on the push to staging, so the escalated `crane tag` was never needed. Run 17065 found every earlier #814
+draft already in staging (`verify/prior-drafts.sh 814 origin/staging` printed NONE) and changes no code.
+
+**Read from ghcr.io (anonymous pull token, 2026-11-04).** `watch-it-burn:sample-app-nginx-1.27.5` answers 200 at
+`sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24`, the digest images.lock and
+`backstage/k8s/templated-test-svc.yaml` pin. The old `sample-app` tag still serves that digest, and nothing in the
+repo names it. `watch-it-burn:tool-pin-grpcio-1.84.1` answers 404, as its images.lock row's empty digest says: the
+tool-pin image has never been pushed, so its tag lives in images.lock and its Dockerfile's build and push commands.
+
+**Live check (run 17065).** This run could read its kubeconfig. `kubectl get pods -A` on watch-it-burn-community
+(54 pods) and watch-it-burn-private (74 pods) found no container running a `watch-it-burn:sample-app` or
+`watch-it-burn:tool-pin` image, so the retag changes nothing on either cluster. The run changed nothing on them.
