@@ -14156,3 +14156,29 @@ tests) in 25m14s, printed `ALL E2E TOOLS TIER CHECKS GREEN` and exited 0.
 them (hecaton#508), so no kubectl call ran. Read without a cluster: `curl https://attackme.burritobot.co/kubecon`
 (2026-11-04) served segment 6's "LLM06</b> Excessive Agency (Challenges 1 to 4)" and segment 4's "(OWASP LLM06,
 Excessive Agency)", so the page live now already says what this decision settles. It changed nothing.
+
+## 2026-11-04 · #850 · readiness row 6 follows the four-challenge run-of-show
+
+**What changed.** `docs/KUBECON-ABSTRACT-READINESS.md` row 6 (LLM-specific guardrails) said in its Open cell that
+the output guard was still on only if segment 2 turned it on, and its Evidence cell described mid-inference on C7 as
+agentgateway MCP authorization plus the output guard. Since the 2026-11-01 review (#776, #820) segment 2 runs no fix
+and Challenge 1 has no output guard, and segment 5's only fix is `guard-mcp-on`. The Evidence cell now keeps
+Michael's #456 ruling as he gave it, says the stage shows its gateway half in run-of-show segment 5, and says the
+output-guard half is built and held offline but runs only in the 2-hour lab. The Open cell says the stage claim for
+mid-inference is the gateway rule alone, that no KubeCon segment turns the output guard on, so the redaction of what
+the MCP server returns is not claimed on stage, and that the bar is met by `guard-input-on` in segment 4 and
+`guard-mcp-on` in segment 5. Row 6 stays READY and the tally is unchanged (7, 2, 0). The scope-calls table's
+mid-inference answer, the Assessed line and the "Keeping this current" log say the same.
+
+**Tests that read the words.** `git grep -nF` over `verify` and `scripts` for "output guard is still on only if
+segment 2" and "plus the output guard" found no reader. `verify/test_kubecon_abstract_readiness.py` holds the row's
+structure, cited paths and segments, and passes.
+
+**Left alone.** `verify/kubecon_probe.py`'s `c7-off` beat is still titled "the output guard redacts the sentinel",
+and `judge_c7_chained`'s docstring says the stage runs C7 after `guard-output-on`, though the probe's ADMIN list no
+longer flips the output guard; the judge accepts a raw leak as well, so the verdict is right and only the wording is
+stale. The run-of-show's Grafana note for C5 (the reply that came back redacted) is stale the same way. Both are
+outside this row and are named as followups.
+
+**Live check.** None applies: a readiness-file row moves nothing on either cluster, and nothing is owed on a cluster
+for it.
