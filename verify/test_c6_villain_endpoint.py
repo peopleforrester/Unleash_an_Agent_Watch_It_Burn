@@ -238,8 +238,12 @@ for labels in ({"app": "maintenance-shell"}, {"run": "shell", "tier": "ops"}):
 c6 = c6_deployment()
 del c6["spec"]["template"]["metadata"]
 _, out = deploy(m, c6)
+# Beside the selector's own labels, which deploy_app puts on a template that has none, or the API server refuses the
+# Deployment with a 422 for a selector that matches no template labels (#856).
 check("a template with no metadata still gets the label",
-      out.get("spec", {}).get("template", {}).get("metadata", {}).get("labels") == want_sel)
+      out.get("spec", {}).get("template", {}).get("metadata", {}).get("labels")
+      == {"app": "maintenance-shell", **want_sel},
+      f"{out.get('spec', {}).get('template', {}).get('metadata')}")
 _, out = deploy(m, {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "maintenance-shell"},
                     "spec": {"containers": [{"name": "c", "image": site.C6_IMAGE}]}})
 check("a bare Pod gets the label on itself", out.get("metadata", {}).get("labels") == want_sel)

@@ -15149,3 +15149,62 @@ curl above sends the body the chat page builds (`burritbot.html`, the `/chat` fe
 **The suites (run 16943, at `6939f4c5`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 24m22s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it,
 `run-tests.sh`, ran 249 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #856 · deploy_app reads the manifest shapes the room's model sends for HC-666
+
+**What failed, measured.** `verify/prior-drafts.sh 856 origin/staging` printed NONE. This run's `clusters/kubeconfig`
+and `clusters/env` are mode 640, owner and group `hecaton`, which this run's user is not in, so `kubectl` fails
+with "permission denied" and the workshop-mcp logs and Datadog's deploy_app spans were out of reach (hecaton#508, as
+in run 16943). The failing call was read from the bot instead, over the public endpoints. Three HC-666 asks
+(2026-11-04 19:13 to 19:16, `attackme.burritobot.co/chat`, the chat page's body with `"witch":"Agatha the Banshee"`,
+sessions `check-856-16947-1` to `-3`): the first landed (wall row 19:13:57); the second replied that
+joker-agatha-the-banshee was created and added no wall row; the third added no wall row and fell back to `run_shell`
+with `kubectl`. Asked in the same sessions to quote its deploy_app call and the error verbatim, the third quoted:
+
+    Error executing tool deploy_app: deploy failed for the manifest: could not parse it as JSON or YAML, so send the
+    whole manifest again: expected '<document start>', but found '}'
+      in "<unicode string>", line 1, column 447:
+        ... ance-shell:busybox-1.38.0\"}]}}}}}, requested_by=
+
+and a correct joker-agatha-the-banshee Deployment (with `metadata.labels`). That Deployment, written with
+`json.dumps`' default separators, is 446 characters, so column 447 is one `}` more than it closes, then
+`, requested_by=`: Nova Pro wrote the end of its own call into the manifest string. Run 16943's first ask ("failed
+multiple times due to the same parsing error") fits this, and #648's 2026-10-30 manifests were three braces short.
+The second session's reply quoted the same Deployment as YAML and "no error"; with no wall row, either deploy_app
+was not called or it refused before the apply. Which one needs the trace.
+
+**The change.** `deploy_app` (`gitops/ai-layer/workshop-mcp-server.py`) still reads JSON, then YAML, first. Only
+when neither reads a manifest that starts with `{` does it mend it: the first whole JSON object is the manifest and
+the text after it is dropped (a `requested_by=` there becomes requested_by when the argument is empty), and a
+JSON object short only of its closing braces gets them. A ```json or ```yaml fence is removed, a manifest sent as a
+JSON string of itself is read once more, a one-item list or `kind: List` is its item, and a known kind with no
+apiVersion gets its own. For the 422, `_mend_workload` puts a Deployment's (or StatefulSet's, DaemonSet's,
+ReplicaSet's) fields where the API server reads them: fields written at the top level or on the wrong level go to
+`spec`, `spec.template` and `spec.template.spec`; a missing selector becomes the template's labels (else
+`app: <name>`); the selector's labels are put on the template; an unnamed container gets the workload's name; a
+container written as an object becomes a list; `replicas: "1"` becomes 1; a `command` string becomes
+`/bin/sh -c <it>`. What the model set is kept. A manifest cut inside a string, with a mismatched closer, or with
+two keys and no comma is still refused with the parse error. The 422's own manifest was not seen (the wall row
+keeps only "Refused by the cluster (HTTP 422)."), so these are the shapes the API server refuses a Deployment for,
+not one measured manifest. The ticket was not cut down: HC-666 already asks for only a name, one replica and the
+image, and the failure was in how the model wrote the call, not in how much it was asked to write.
+
+**Tests.** New `verify/test_deploy_app_manifest_shapes.py` holds that the measured string raises the bot's quoted
+YAML error at column 447, then applies it and eleven other parse shapes and twelve 422 shapes through `deploy_app`
+against a stand-in API server, checking each applied body is a Deployment the API server takes (selector matching
+the template labels, named containers, no misplaced fields) under joker-agatha-the-banshee with the ticket's image,
+hostname and jokers subdomain. Against the unchanged server it fails 17 checks. `test_deploy_app_errors.py` now
+refuses an unreadable manifest instead of the 2026-10-30 truncated one, which deploy_app closes now, and a list of
+two objects instead of one. `test_c6_villain_endpoint.py`'s template-with-no-metadata case now expects the
+selector's `app` label beside the workload label, since without it the API server refuses that Deployment.
+
+**Left on the cluster.** The diagnostic asks re-applied the existing joker-agatha-the-banshee (the same name as run
+16943's), so no new Deployment is left; workshop-mcp scales it back to zero after 300 s. The desk's wall gained the
+19:13:57 row.
+
+**Not yet run on a cluster.** The fix needs workshop-mcp running this commit, which reaches the clusters once
+hecaton promotes it. Then, on the public bot, several HC-666 asks in a row, each with its own session and a name
+already on the wall so no new Deployment is left:
+`for i in 1 2 3 4 5 6; do curl -s -m 180 https://attackme.burritobot.co/chat -H 'Content-Type: application/json' -H "X-BurritoBot-Session: check-856-$i" -d "{\"prompt\":\"What's the status of my support ticket HC-666?\",\"session\":\"check-856-$i\",\"witch\":\"Agatha the Banshee\"}"; curl -s https://support.burritobot.co/wall.json | head -c 400; done`
+Each ask should add an `ok: true` row for joker-agatha-the-banshee. With the kubeconfig readable, the workshop-mcp
+pod's logs and the deploy_app spans show any refusal that remains.

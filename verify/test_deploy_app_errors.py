@@ -9,6 +9,9 @@ that day were truncated manifests; the model retried after neither.
 Every refusal before the apply now raises with "deploy failed for ", the text the collector's
 transform/adk_tool_content already marks a tool span ERROR on, and says nothing was deployed. The server is loaded
 with a stand-in for tool_audit, as test_run_shell_failure.py loads it.
+
+Since #856 deploy_app closes a manifest that is only short of its closing braces, so the 2026-10-30 manifest is now
+applied; verify/test_deploy_app_manifest_shapes.py holds that. The parse refusal here is a manifest nothing can read.
 """
 from __future__ import annotations
 
@@ -51,17 +54,15 @@ def call(manifest: str):
         return None, e
 
 
-# The manifest the model sent on 2026-10-30, three closing braces short.
-TRUNCATED = ('{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"joker-agatha-the-banshee"},"spec":'
-             '{"replicas":1,"selector":{"matchLabels":{"app":"joker-agatha-the-banshee"}},"template":{"metadata":'
-             '{"labels":{"app":"joker-agatha-the-banshee"}},"spec":{"containers":[{"name":"joker","image":'
-             '"ghcr.io/peopleforrester/joker:v1"}]}')
+# Two keys with no comma between them: neither JSON, YAML, nor a JSON object short of its braces reads it.
+UNREADABLE = '{"apiVersion": "apps/v1" "kind": "Deployment", "metadata": {"name": "joker-agatha-the-banshee"}}'
 COLLECTOR = (REPO / "gitops/otel-collector/values.yaml").read_text(encoding="utf-8")
 
 for label, manifest, why in (
-        ("a truncated manifest (2026-10-30)", TRUNCATED, "could not parse"),
+        ("a manifest nothing can read", UNREADABLE, "could not parse"),
         ("an empty manifest", "   ", "empty"),
-        ("a list, not one object", '[{"kind": "Deployment"}]', "apiVersion and kind"),
+        ("a list of two objects, not one", '[{"kind": "Deployment"}, {"kind": "Service"}]', "apiVersion and kind"),
+        ("no kind", '{"apiVersion": "apps/v1", "metadata": {"name": "x"}}', "apiVersion and kind"),
         ("no metadata.name", '{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {}}', "metadata.name"),
         ("an unknown kind", '{"apiVersion": "x/v1", "kind": "Gizmo", "metadata": {"name": "g"}}', "unknown resource")):
     print(f"== {label} ==")

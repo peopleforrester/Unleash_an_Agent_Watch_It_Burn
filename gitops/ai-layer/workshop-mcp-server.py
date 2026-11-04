@@ -610,6 +610,156 @@ def _refuse(what: str, why: str) -> None:
     raise RuntimeError(f"deploy failed for {what}: {why}. Nothing was deployed.")
 
 
+# The shapes the room's model (Nova Pro) sends deploy_app's manifest in, which deploy_app reads rather than refuses
+# (#856). On 2026-11-04 HC-666 landed nothing on three of six asks on the public bot. The failing call the bot quoted
+# was a whole Deployment with one more "}" and the rest of the call after it ('...busybox-1.38.0"}]}}}}},
+# requested_by=...'), which neither JSON nor YAML reads, so deploy_app refused it and the model resent the same thing
+# until it gave up. On 2026-10-30 it was a Deployment three closing braces short (#648). The 422 that day was a
+# Deployment the API server cannot take as written; _mend_workload fills in what such a manifest leaves out or puts
+# a level off. verify/test_deploy_app_manifest_shapes.py holds each shape.
+_FENCE = re.compile(r"^```[A-Za-z0-9_-]*[ \t]*\n(?P<body>.*?)\n?```\s*$", re.S)
+# What the model wrote after the manifest's last brace: ', requested_by="Agatha the Banshee"' and the like.
+_TRAILING_REQUESTED_BY = re.compile(r"""\s*,\s*["']?requested_by["']?\s*[=:]\s*["']?(?P<who>[^"'{}\n]*)["'\s})\]]*\Z""")
+_CLOSERS = {"{": "}", "[": "]"}
+
+
+def _close_brackets(text: str) -> str | None:
+    """The text with the braces and brackets it leaves open closed, or None when it ends inside a string or a
+    closer does not match what it closes (a manifest cut there cannot be finished without guessing)."""
+    stack: list[str] = []
+    in_string = escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in _CLOSERS:
+            stack.append(_CLOSERS[ch])
+        elif ch in "}]":
+            if not stack or stack.pop() != ch:
+                return None
+    if in_string or not stack:
+        return None
+    return text.rstrip().rstrip(",") + "".join(reversed(stack))
+
+
+def _parse_manifest(manifest: str) -> tuple[object, str]:
+    """The manifest as an object, and the requested_by the model wrote after it ("" when it wrote none).
+
+    Reads JSON, then YAML, as deploy_app always has. Only when neither reads it: a JSON object with text after it is
+    its first whole object, and a JSON object missing its closing braces gets them. Raises the YAML parser's error
+    when none of those reads it."""
+    import yaml
+    text = manifest.strip()
+    fenced = _FENCE.match(text)
+    if fenced:
+        text = fenced.group("body").strip()
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        try:
+            obj = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            if not text.startswith("{"):
+                raise
+            return _mend_json(text, e)
+    if isinstance(obj, str) and obj.strip().startswith("{"):
+        # The manifest sent as a JSON string of itself.
+        return _parse_manifest(obj)
+    return obj, ""
+
+
+def _mend_json(text: str, error: Exception) -> tuple[object, str]:
+    trailer = _TRAILING_REQUESTED_BY.search(text)
+    who = trailer.group("who").strip() if trailer else ""
+    if trailer:
+        text = text[: trailer.start()]
+    try:
+        return json.JSONDecoder().raw_decode(text)[0], who
+    except ValueError:
+        pass
+    closed = _close_brackets(text)
+    if closed:
+        try:
+            return json.loads(closed), who
+        except ValueError:
+            pass
+    raise error
+
+
+# A manifest that names its kind but not its apiVersion gets the one the kind has.
+_API_VERSIONS = {"Deployment": "apps/v1", "StatefulSet": "apps/v1", "DaemonSet": "apps/v1", "ReplicaSet": "apps/v1",
+                 "Pod": "v1", "Service": "v1", "ConfigMap": "v1", "Job": "batch/v1", "CronJob": "batch/v1"}
+_TEMPLATED_KINDS = ("Deployment", "StatefulSet", "DaemonSet", "ReplicaSet")
+_WORKLOAD_SPEC_KEYS = ("replicas", "selector", "template", "strategy", "serviceName")
+_POD_SPEC_KEYS = ("containers", "initContainers", "volumes", "restartPolicy", "serviceAccountName")
+
+
+def _one_object(obj):
+    """A one-item list, or a kind: List with one item, is that item."""
+    if isinstance(obj, list) and len(obj) == 1:
+        return obj[0]
+    if isinstance(obj, dict) and obj.get("kind") == "List" and isinstance(obj.get("items"), list) \
+            and len(obj["items"]) == 1:
+        return obj["items"][0]
+    return obj
+
+
+def _mend_containers(pod: dict, name: str) -> None:
+    containers = pod.get("containers")
+    if isinstance(containers, dict):
+        pod["containers"] = containers = [containers]
+    for i, c in enumerate(containers if isinstance(containers, list) else []):
+        if not isinstance(c, dict):
+            continue
+        if not c.get("name"):
+            c["name"] = name if i == 0 else f"{name}-{i}"
+        for key in ("command", "args"):
+            if isinstance(c.get(key), str):
+                c[key] = ["/bin/sh", "-c", c[key]] if key == "command" else [c[key]]
+
+
+def _mend_workload(obj: dict, name: str) -> None:
+    """Put a Deployment's fields where the API server reads them, so a manifest the model nested one level off, or
+    left without a selector, labels or a container name, is not refused with a 422. The fields it set stay."""
+    if obj.get("kind") not in _TEMPLATED_KINDS:
+        if obj.get("kind") == "Pod" and isinstance(obj.get("spec"), dict):
+            _mend_containers(obj["spec"], name)
+        return
+    spec = obj.get("spec") if isinstance(obj.get("spec"), dict) else {}
+    obj["spec"] = spec
+    for key in _WORKLOAD_SPEC_KEYS + _POD_SPEC_KEYS:
+        if key in obj and key not in spec:
+            spec[key] = obj.pop(key)
+    tmpl = spec.get("template") if isinstance(spec.get("template"), dict) else {}
+    spec["template"] = tmpl
+    pod = tmpl.get("spec") if isinstance(tmpl.get("spec"), dict) else {}
+    tmpl["spec"] = pod
+    for key in _POD_SPEC_KEYS:
+        for holder in (spec, tmpl):
+            if key in holder and key not in pod and holder is not pod:
+                pod[key] = holder.pop(key)
+    _mend_containers(pod, name)
+    if isinstance(spec.get("replicas"), str) and spec["replicas"].strip().isdigit():
+        spec["replicas"] = int(spec["replicas"])
+    meta = tmpl.get("metadata") if isinstance(tmpl.get("metadata"), dict) else {}
+    tmpl["metadata"] = meta
+    labels = {k: str(v) for k, v in meta.get("labels").items()} if isinstance(meta.get("labels"), dict) else {}
+    selector = spec.get("selector") if isinstance(spec.get("selector"), dict) else {}
+    match = selector.get("matchLabels") if isinstance(selector.get("matchLabels"), dict) else {}
+    if not match and not selector.get("matchExpressions"):
+        match = dict(labels) or {"app": name}
+    if match:
+        selector["matchLabels"] = {k: str(v) for k, v in match.items()}
+    spec["selector"] = selector
+    meta["labels"] = {**labels, **selector.get("matchLabels", {})}
+
+
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults. For a common public app, "
                       "the image can be just its name: " + ", ".join(PUBLIC_IMAGES) + "; the cantina pulls that "
@@ -623,21 +773,25 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     if not manifest.strip():
         _refuse("an empty manifest", "send the resource as YAML or JSON")
     try:
-        obj = json.loads(manifest)
-    except Exception:  # noqa: BLE001
-        try:
-            import yaml
-            obj = yaml.safe_load(manifest)
-        except Exception as e:  # noqa: BLE001
-            _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
-    if not isinstance(obj, dict) or "kind" not in obj or "apiVersion" not in obj:
+        obj, written_by = _parse_manifest(manifest)
+    except Exception as e:  # noqa: BLE001
+        _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
+    requested_by = str(requested_by or "").strip() or written_by
+    obj = _one_object(obj)
+    if isinstance(obj, dict) and isinstance(obj.get("kind"), str) and not obj.get("apiVersion"):
+        obj["apiVersion"] = _API_VERSIONS.get(obj["kind"], "")
+    if not isinstance(obj, dict) or not isinstance(obj.get("kind"), str) or not isinstance(obj.get("apiVersion"), str) \
+            or not obj["kind"] or not obj["apiVersion"]:
         _refuse("the manifest", "it must be a single object with apiVersion and kind")
     kind, api_version = obj["kind"], obj["apiVersion"]
-    name = (obj.get("metadata") or {}).get("name")
-    if not name:
+    if not isinstance(obj.get("metadata"), dict):
+        obj["metadata"] = {}
+    name = obj["metadata"].get("name")
+    if not name or not isinstance(name, str):
         _refuse(f"{kind}", "metadata.name is required")
     ns = _ns()
-    obj.setdefault("metadata", {})["namespace"] = ns
+    obj["metadata"]["namespace"] = ns
+    _mend_workload(obj, name)
     room = _resolve_public_images(obj, f"{kind}/{name}")
     _default_limits(obj)
     _shrink_room_joker(obj, name)
@@ -651,7 +805,7 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
     _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}",
-            image=_first_image(obj), requested_by=str(requested_by or "").strip())
+            image=_first_image(obj), requested_by=requested_by)
     if code in (200, 201) and ((room and kind in SCALED_KINDS)
                                or (kind == "Deployment" and name.startswith(JOKER_PREFIX))):
         t = threading.Timer(JOKER_SCALE_DOWN_SECONDS, _scale_to_zero, args=(base, ns, plural, name))
