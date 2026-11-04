@@ -13884,3 +13884,13 @@ named as a followup, since this issue is the docstring alone.
 **The suites (run 16846, on `6454e653`).** `bash verify/run-e2e-tools.sh` ran 53 checks (the offline suite and 52
 tier tests) in 25m19s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 243 tests
 and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+**Why run 16846 did not land, and run 16857's rerun.** Hecaton rebased run 16846's two commits onto staging
+`a65f748d`, which repins guard-proxy to `c2eb4cf2`, and its tests gate failed on `test_weaver_guard_proxy_spans.py`.
+The docstring did not cause it. At `c2eb4cf2` the cost gauge is observed in a shape that test could not read until
+staging's `abeb41b9` (#839), which came after `a65f748d`; run 16846's suites had run with the submodule still
+checked out at the old pin, `88b9b522`, so they did not hit it. With `c2eb4cf2` checked out on `a65f748d`, the test
+fails its three gauge checks. Run 16857 rebased the branch onto staging `7b958e75` with no conflict, checked out the
+pinned submodule, and the test passes. `bash verify/run-e2e-tools.sh` then ran 53 checks (the offline suite and 52
+tier tests) in 24m27s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`; the offline suite inside it ran 244
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
