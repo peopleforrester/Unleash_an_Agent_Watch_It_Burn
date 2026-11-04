@@ -15301,3 +15301,58 @@ names' Deployments are scaled to zero after 300 s and stay, as every room Joker 
 **The suites (run 16959, at `a55d4363`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m11s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests, `test_deploy_app_reapply_422.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-04 · #610 · M1 read on the two live KubeCon clusters: the platform fleet.sh built is up and rehearsable
+
+**No code changed.** #610 is milestone M1 of spec talks/burritobot/001: the delivery platform comes up from this
+repo's provisioning (`fleet.sh`) for a rehearsal. The coordinator's comment of 2026-11-02 asked the next run to check
+it against the two clusters that are up, with no bring-up. Hecaton run 16965 did that on 2026-11-04 between 20:50Z and
+21:20Z, with the run's accen-dev session (account 515966504359, us-west-2) and its two contexts.
+
+**What the clusters show.**
+- `aws eks describe-cluster`: watch-it-burn-community and watch-it-burn-private are ACTIVE on EKS 1.36, created
+  2026-10-28 (the rebuild in PROJECT_STATE, "KubeCon platform up"), and carry fleet.sh's tags: `ManagedBy=terraform`,
+  `project=watch-it-burn`, `attendee=<cluster name>`, `event=kubecon-na-2026`, and `role=community` on the public one.
+  One node each, Ready.
+- Argo CD: every Application on both is Synced and Healthy, 20 on community and 38 on private, and every
+  Application that tracks this repo is at `7210cbb8`, this run's base. The lab-bootstrap root renders
+  `values-burn.yaml` on community and `values-admin.yaml` on private.
+- `https://attackme.burritobot.co/`, `https://burritobot-private.burritobot.co/` and both agenticburn.com names answer
+  200 with a certificate that verifies.
+- `python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community`:
+  12 beats, 12 PASS, `KUBECON PROBE GREEN`, about $0.04 over 7 model calls.
+- `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context watch-it-burn-private`:
+  31 beats, 26 PASS, 5 FAIL, `KUBECON PROBE RED`, about $0.04 over 12 model calls. All five failures have one
+  cause: the two clusters still run the pre-#774 profiles (burn and admin), not `kubecon-community` and
+  `kubecon-private`, and fleet.sh's `guardrails-link` has not run, so there is no `guardrails-switch` namespace.
+  The start-state beat found the private cluster's Kubernetes guardrails already on and `deny-external-registries`
+  missing; `guardrails-on` and `guardrails-off` exit 1 on "not linked to the other KubeCon cluster"; the armed beat
+  and the public-image denial beat fail on the missing `deny-external-registries`. Every challenge beat passed:
+  Challenge 1 leaks then is out of reach, Challenge 2 is blocked at egress, Kyverno and KubeArmor, Challenge 3's
+  Joker lands then is refused by RBAC and the input guard, Challenge 4 chains then is stopped at the gateway, and
+  the topic guard redirects the four off-topic asks and answers the two on-topic ones.
+
+**The reading.** M1 is met: both clusters came up from fleet.sh and have carried rehearsals since, M2's cold read
+(#611) and M6's two timed run-throughs (#615), both closed. The 5 admin-probe failures are #774's rollout, which its
+own entry (2026-11-02 · #774) lists as not yet run on a cluster, not part of the bring-up. Moving the live pair onto
+the KubeCon profiles redeploys the bootstrap root, which a run does not do, so it goes to a follow-up. M1's Moves
+column names `kubecon-na-burritobot`, the date KR "BurritoBot breakout with Whitney Lee and its demo platform
+ready, in line with the accepted abstract", due 2026-11-08. It is read the way talks-knowledge read `kubecon-na-cnu`
+for spec M3 (2026-10-29): 1 once met, 0 before. The breakout is not yet ready (the admin probe is RED, and #775's
+internal Joker tag is unpushed), so it reads 0:
+`reading: kubecon-na-burritobot = 0 [https://github.com/peopleforrester/personal-knowledge/blob/360b9468e987a1b4e8570f16b02f5e64dafe6d95/okr/okrs.yaml#L118]`.
+
+**Left on the clusters.** The admin probe's closing `guardrails-off` ran on the private cluster alone, then failed
+on the missing link. It removed the guardrails the cluster had on at the start, so the run put them back. Argo CD's
+selfHeal restored the six agent NetworkPolicies (by 21:17:52Z), `block-recipe-snoop` and the workshop-agent Role.
+`restrict-image-registries` has its `validationActions` in Argo's ignoreDifferences and stayed at Audit, so the run
+patched it back to Deny. After that, all 38 Applications read Synced and Healthy, every AI guard was off, and
+`/controls` showed networkpolicy, kyverno, kubearmor and falco on and rbac_scoped off, as at the start. The
+community probe deleted and recreated its own `joker-agatha-the-banshee` (stage name Agatha), which an earlier probe
+had left in ImagePullBackOff, and removed it at the end. On community, the other room Jokers and `tron` sit in
+ImagePullBackOff because `registry.burritobot.co` has no `maintenance-shell:busybox-1.38.0` yet: the unpushed
+`-internal` tag of #775 and #829, unchanged here.
+
+**Not yet run on a cluster.** The #774 checks in that entry: on both clusters, re-root lab-bootstrap with
+`infra/deploy-full-idp.sh kubecon-community` and `kubecon-private`, then `./fleet.sh guardrails-link`, then both
+probes GREEN. Filed as a follow-up of #610.

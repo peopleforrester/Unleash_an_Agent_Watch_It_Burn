@@ -108,6 +108,11 @@ the public bot's counter was reset to zero. Datadog ships to Whitney's sandbox o
 `burritobot-private`, env `burritobot-kubecon-na-26`, keys in `watch-it-burn/datadog` (accen-dev). The probe
 record is in the run-of-show.
 
+Read again 2026-11-04 for M1 (#610, run 16965): both ACTIVE, every Application Synced and Healthy at `7210cbb8`; the
+community probe GREEN 12/12, the admin probe RED 26/31. The five failures are one gap: the pair still runs the
+burn and admin profiles, not #774's `kubecon-community` and `kubecon-private`, and `guardrails-link` has not run.
+Details in decisions.md, 2026-11-04 · #610.
+
 Fixed 2026-10-27 and 10-28: the Bedrock profile description comma (#610); the guard-proxy re-pin (#487, #519,
 #486, #455); the probe and the gateway pin writing Argo-managed objects as the principals block-argocd-drift
 admits (#630); the C6 image named in full (#627); the probe judging C7 as the stage shows it (#628); Falco
