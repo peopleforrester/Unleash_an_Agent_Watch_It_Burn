@@ -15677,3 +15677,40 @@ comment reaches the cluster with the pin move.
 **The suites (run 17099, at `eb63fd61` on staging `949fbd17`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the
 offline suite and 53 tier tests) in 26m37s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite
 inside it ran 251 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #857 · The offline suite stubs every cloud tool and fails a test that calls one
+
+**What was missing.** #616 (run 16967) stubbed `cmd_guardrails_link` in the two offline tests that reached the live
+KubeCon pair, and #421 (run 17025) gave one of them stubbed cloud tools as a backstop. Nothing stopped the next test
+from doing the same: on a dispatched run the `aws` on PATH is hecaton's wrapper, which exports the run's live session
+whatever the caller's environment holds, so even a test that unsets every AWS variable still reaches both clusters.
+
+**Change.** The issue offered two shapes: a source scan that fails any test running `cmd_instructors up` without one
+of four guards, or a fleet.sh guard on `cmd_guardrails_link` under the offline suite. This takes a third that covers
+both and more. `verify/no-cloud.sh` writes stubs for aws, kubectl, eksctl, helm and terraform that log the call and
+exit 1, and `verify/run-tests.sh` runs every offline test with them first on PATH (`no_cloud_run`). A test that called
+one fails with its own exit code, or 1 when it swallowed the failure and exited 0, and the runner prints each call.
+The stubs carry their log path in their own text, so a test that rebuilds its environment (`env -i` with PATH, a
+python `subprocess` with `env=`) is still caught. A test that needs a tool to answer puts its own fake ahead of the
+stubs, which `test_guardrails_switch.py` already does. Why not the issue's two shapes: a source scan reads one of a
+dozen ways to call fleet.sh (sourced and called, `bash fleet.sh instructors up`, python's `run_fleet`) and misses the
+next; a fleet.sh guard keyed on an environment variable is dropped by any test that builds its own environment,
+which is how #421's test calls fleet.sh now, and it guards one function where every cloud call is the hazard. The
+tools tier keeps its real pinned binaries and is not changed.
+
+**#616's shape, under the guard.** `verify/test_offline_suite_no_cloud.sh` sources the real fleet.sh and runs
+`cmd_instructors up all` on the kubecon profile with the build stubbed and `cmd_guardrails_link` not, as the two
+tests did before #616. It now ends in under a second instead of polling for five minutes, fails, and names
+`aws eks update-kubeconfig ... --name watch-it-burn-community`. The test runs a second set of logging fakes behind the
+guard's stubs, so a broken guard would land there and not on the live session. With `no_cloud_run`'s PATH prefix
+taken out, 10 of its 24 checks fail and the backstop lists every call; with it, all 24 pass.
+
+**What the guard found.** The first full suite run under the guard (251 tests) flagged one test:
+`test_fleet_standbys.sh`, whose bootstrap check ran the real `kubectl config current-context` against an empty
+isolated kubeconfig from `bootstrap_one`. That never left the host, but it was the real binary, so the check now
+stubs `kubectl` as its header said it did. That answers #421's open follow-up: no other offline test calls a cloud
+tool.
+
+**Live check (read-only, 2026-11-05).** In this run's shell, `aws eks describe-cluster --name
+watch-it-burn-community` printed `ACTIVE` and `kubectl get ns guardrails-switch` reached both clusters (NotFound on
+each, so the hazard is live). The same two commands through `no_cloud_run` reached neither: both stubs printed their
+refusal, the call log named both, and the exit was 1. Nothing was changed on either cluster.

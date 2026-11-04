@@ -92,6 +92,7 @@ echo "== the bootstrap is told the cluster's region =="
 ( cd "$(dirname "${FLEET}")" && WIB_REGION=us-east-1 WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" bash -c '
     source "'"${FLEET}"'" >/dev/null 2>&1
     provider_write_kubeconfig() { :; }
+    kubectl() { :; }   # bootstrap_one reads the kubeconfig'"'"'s context; the offline suite runs no kubectl (#857)
     datadog_keys_for() { echo "a b - -"; }
     run_idp_script() { echo "${REGION:-unset}" >"'"${T}"'/idp-region"; }
     bootstrap_student_aws() { :; }; bootstrap_terminal_auth() { :; }; pin_bedrock_profiles() { :; }; arm_infra_guardrails() { :; }

@@ -18,6 +18,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 bash "${SCRIPT_DIR}/ensure-submodules.sh"
 
+# No offline test reaches a cluster or an AWS account (#857): each runs with aws, kubectl, eksctl, helm and terraform
+# stubbed first on PATH, and one that calls a stub fails, naming the call. See no-cloud.sh for why.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${SCRIPT_DIR}/no-cloud.sh"
+NO_CLOUD_DIR="$(mktemp -d)"
+trap 'rm -rf "${NO_CLOUD_DIR}"' EXIT
+no_cloud_setup "${NO_CLOUD_DIR}"
+
 fail=0
 ran=0
 failed_names=()
@@ -33,7 +41,7 @@ run_one() {
     printf '\n== %s ==\n' "${name}"
     ran=$((ran + 1))
     rc=0
-    "${interp[@]}" "$1" || rc=$?
+    no_cloud_run "${interp[@]}" "$1" || rc=$?
     # Any non-zero exit fails, 2 included: bash exits 2 on a syntax or usage error, and that is not a pass.
     [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${name} (exit ${rc})"); }
 }
