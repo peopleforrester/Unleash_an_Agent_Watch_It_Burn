@@ -19474,3 +19474,8 @@ draft.
 **Not yet done:** the six segment videos and by-hand shots 02-2 and 03-4, which come from the first full
 rehearsal (the run-of-show's Run-through record still reads "not yet run"), and shot 03-1, which waits on the
 Challenge 2 ask landing on the public bot.
+
+**The suites (run 17082, at `33c9685e`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests) in 25m41s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
+tests, `test_replay_prompts.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier ran
+`test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
