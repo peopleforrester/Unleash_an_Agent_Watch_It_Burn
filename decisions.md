@@ -14186,3 +14186,38 @@ for it.
 **The suites (run 16874, on `4a1f6072`, submodules checked out at their pins).** `bash verify/run-e2e-tools.sh` ran
 53 checks (the offline suite and 52 tier tests) in 24m54s and exited 0 with `ALL E2E TOOLS TIER CHECKS GREEN`; the
 offline suite inside it printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-03 · #834 · A test for #796's "cause named in a comment" criterion
+
+Test review run 16705 found that nothing checked #796's first criterion, "The cause is named in a comment on this
+issue." The comment is on GitHub, not in the tree, and `verify/test_dispatched_runs.py` reads only AGENTS.md. The
+criterion holds. Michael's comment on #796 (issuecomment-6596098793) and hecaton's first run report there
+(issuecomment-6595960290) each name both causes. Run 15816: `verify/run-e2e-tools.sh` took longer than the 20 minutes
+that run gave its background job, and `pgrep` by script name matched other runs' processes. Run 9604: hecaton's
+ai-isms gate counts every form of the talk's verb as a hype verb, and decisions.md, PROJECT_STATE.md and PROGRESS.md
+already read major, so the repo's nickname in a run's record failed the run.
+
+`verify/test_prose_gate_e2e_wait_cause_comment.py` (tools tier, new) follows #659's and #811's cause-comment tests. It
+reads from AGENTS.md's Dispatched runs (hecaton) section the two runs the intro cites for the fourth and fifth items
+(15816 and 9604) and the minutes item 4 says run 15816 gave the job (20), and checks that item 4 still warns against
+`pgrep` by name and item 5 still names the gate's hype-verb list. It then asks api.github.com for #796's comments,
+anonymously because the repo is public, and checks that one comment by hecatongithub[bot] or peopleforrester names
+both causes with those same runs and that limit. For run 15816 the comment must name the run, run-e2e-tools.sh, the
+20-minute limit, `pgrep` and other runs. For run 9604 it must name the run, the ai-isms gate, the hype verb, the
+talk's verb, major, and the three record files. A failed or refused read (the 60 anonymous requests an hour) fails it
+with the reason, the same exposure the two earlier tests have; the three together spend three of the 60.
+
+**The test shows it can fail.** Mutated copies were run from memory and nothing was written. Pointed at #633, it failed
+both cause checks and the both-causes check. With the hype-verb pattern misspelled, it failed the run 9604 check. With
+item 4's anchor changed so the limit cannot be read, it failed the anchor check, naming it, and the run 15816 check.
+With only Michael counted as an author, it still passed, on his comment.
+
+
+**Why this landed on its fourth attempt.** Runs 16814 and 16853 ended in a rebase conflict in PROGRESS.md: each time,
+another run's bullet went in at the top of [Unreleased]'s Added list, where #834's bullet also went. Run 16839 failed
+the tests gate on `verify/test_weaver_guard_proxy_spans.py`, red on staging at a65f748 after the guard-proxy repin to
+c2eb4cf2 (#839). Run 16853 fixed that test on this branch, but staging fixed it the same day in abeb41b9 (#839), so
+that commit is dropped here and staging's fix stands. This run (16875) rebuilt the branch on staging 34be4c1 as one
+change: the test, unchanged since run 16814, this entry, and the PROGRESS.md bullet placed under #811's, the other
+cause-comment test, rather than at the top of the list, so a run adding its own bullet at the top does not collide
+with it.
