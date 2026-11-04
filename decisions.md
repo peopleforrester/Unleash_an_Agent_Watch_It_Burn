@@ -10675,7 +10675,6 @@ above (then at `d6acd503…`, so the workflow has pushed over the tag again sinc
 fix needs a ghcr.io write and the signing key and is in run 16420's follow-up. Run 16467 stalled waiting on the tier in
 the background with nothing polling it, so run 16549 ran it again and polled it to the end (about 25 minutes on a
 shared box).
-## 2026-11-03 · #803 · The witch-name repin is guard-proxy 88b9b52, one pin for #803 and #744, and the gitlink is Michael's
 ## 2026-11-03 · #803 · The witch-name repin is guard-proxy 88b9b52, one pin for #803 and #744
 
 **The pin.** `gitops/ai-layer/guard-proxy` moves from fb6e2bf to 88b9b52 (`88b9b5229312d785331237474b82bab1d5d31402`),
@@ -14758,3 +14757,27 @@ so no CI run can move it. If a workflow for it is added, this test fails until i
 tests) in 24m24s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 248 tests, all
 green, `test_workflow_registry_writes.py` among them. `test_image_version_tags.py` passes
 `ghcr.io serves ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7 at the pinned sha256:68004fb5ed2d..., anonymously`.
+
+## 2026-11-04 · #803 · The witch-name pin holds at c2eb4cf2, the pin Michael's a65f748d moved it to
+
+**Where the pin is now.** Run 16562's work for #803 is on staging (merged as `2b3c7dfb046e`), at the pin
+guard-proxy-agenticburn 88b9b52 from Michael's 6d8505a. Michael's `a65f748d` (#839, #793, #784) has since moved the
+gitlink to `c2eb4cf2d7f361f4d4bf7e1b4dc239a85acb4132` and `checksum/proxy-py` to `ba8d8e2b789f`. c2eb4cf2 descends
+from 88b9b52: inside the submodule, `git merge-base --is-ancestor 6f2de73 HEAD` succeeds. So #34's witch-name
+forwarding, #27's task cancel and #25's cluster-cap reply all stay, and one pin still covers #803 and #744.
+`verify/prior-drafts.sh 803 origin/staging` printed NONE: drafts 16538, 16556 and 16562 are all in staging. This run
+also removes a stale copy of the 2026-11-03 #803 heading, left above its entry when run 16562 rewrote it.
+
+**The tests at c2eb4cf2 (run 16935, at `137dc650`).** `verify/test_chat_witch_name.py`, `test_chat_turn_cancel.py`,
+`test_c7_badge_grants.py` and `test_proxy_checksum.py` each pass when run alone. The witch-name test prints "All /chat
+witch-name forwarding checks passed." That covers the two text parts for a named `/chat` and the prompt alone for a
+missing, empty, blank, null or non-string `witch`. The checksum test prints `want ba8d8e2b789f, got ba8d8e2b789f`.
+
+**The cluster reads did not run.** This run's `clusters/kubeconfig` and `clusters/env` are mode 640, owner and group
+`hecaton`, and this run's user is not in that group. So `kubectl --context watch-it-burn-community` (and `-private`)
+fails with "permission denied", and so does sourcing `$HECATON_CLUSTER_ENV` (hecaton#508). Run 16932 hit the same.
+
+**Not yet run on a cluster.** The 2026-11-03 entry's check, with the checksum updated to the current pin. For C in
+`watch-it-burn-community` and `watch-it-burn-private`, the guard-proxy pod's `checksum/proxy-py` annotation reads
+`ba8d8e2b789f`. Then, on the public storefront, an HC-666 chat lands `joker-<visitor slug>`, not `joker-burritobot`
+(#762's live check).
