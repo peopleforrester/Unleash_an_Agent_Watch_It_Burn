@@ -366,6 +366,15 @@ guard false, but private's Falco badge, which reads the Falco DaemonSet that `ku
 `joker-*` Deployment is left on either cluster. `registry.burritobot.co` and `deployments.burritobot.co` still
 answer the router's 404, for the reason above.
 
+**2026-11-05, the private drift run 17370 met, read again (#888).** Hecaton run 17708, at staging `966991a0`, on
+watch-it-burn-private (`burritobot-private.burritobot.co`). Run 17370's red start state (#651) came from the private
+root still on the `admin` profile, which #906 moved to `kubecon-private` at 15:24Z. The probe's start state now names
+the root's profile first when it is any other.
+
+Admin, 21:43Z: 32 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.2914 to $0.3343 over 13 model calls. The start state read
+`root on kubecon-private`, guardrails-on from the private terminal armed both clusters, and guards-off and
+guardrails-off left both at the start state.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in

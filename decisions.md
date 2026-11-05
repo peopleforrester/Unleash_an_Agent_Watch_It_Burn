@@ -20717,3 +20717,48 @@ KubeCon is #872's, once its fleet is down.
 **The suites (run 17689, at `bbcffac6`).** `bash verify/run-e2e-tools.sh` printed `271 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, with `test_kubecon_cost_measured.py` at all 40 checks,
 then `60 checks ran (the offline suite and 59 tier tests) in 29m24s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #888 · run 17708 · The private cluster's drift was #906's, already fixed; the admin probe GREEN again, and its start state now names the root's profile
+
+`verify/prior-drafts.sh 888 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging `966991a0`.
+
+**What run 17370 saw was already put right by #906.** Run 17370 (#651) met the private cluster before 15:24Z, when its
+`lab-bootstrap` root still rendered `values-admin.yaml`. That one cause gave all three of its symptoms: the admin
+profile lists `network-policies` and `kubearmor-policies`, which owned `agent-egress-allowlist` and
+`block-recipe-snoop`, and leaves out `kyverno-breakout` and `guardrails-switch`, so neither `deny-external-registries`
+nor the peer Secret could exist. Run 17556 (#906) moved both roots to their KubeCon profiles at 15:24Z and 15:26Z, ran
+`fleet.sh guardrails-link`, and opened each control plane to the other cluster's nodes on 443. Its entry above has
+the commands. At 21:37Z this run read the private root's `lab-platform/profile` label as `kubecon-private`,
+with valueFiles `["values-kubecon-private.yaml"]`, and the community root's as `kubecon-community`. `kyverno-breakout`
+read Synced and Healthy on both clusters at staging `966991a0`, `deny-external-registries` and
+`restrict-image-registries` both read `[Audit]` on both, and `guardrails-switch/guardrails-peer` was 6h4m old on
+both. Nothing in this issue was left to change on a cluster.
+
+**One reading looked like the drift again and was not.** At 21:38Z `agent-egress-allowlist` and the five
+`agent-allow-*` policies appeared on private, applied by `kubectl-client-side-apply`. The run on #886 had them up for
+`verify/test_llm_bypass_live.py`, whose pods (`llm-*-bcb58e`) were running beside them. This run waited for that test
+to end. By 21:43Z the six policies and the test's pods were gone, and the probe started after that.
+
+**The probe change.** `verify/kubecon_probe.py`'s `measure()` now reads the root's `lab-platform/profile` label, and
+`judge_start_state` fails first, naming that label, when it is not `kubecon-private`. Run 17370's failure would then
+have opened with `the lab-bootstrap root renders the 'admin' profile, not 'kubecon-private'`, the one cause, ahead of
+the three symptoms. Only the start state reads it: guards-off's closing check and the armed beat judge the four
+guardrails themselves, and a root's profile does not change mid-probe. `verify/test_kubecon_probe.py` adds the admin
+and the unreadable profile to the start state's failing cases, checks that run 17370's drifted cluster gets the
+profile named first, and has both of its stand-in clusters answer the label. Both new failing cases pass on the old
+judge, which ignored the profile, so the checks fail without the change.
+
+**The live check.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`, at 21:43Z on this run's commit `1f4f3f07`:
+`32 beats: 32 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $0.2914 to $0.3343 over 13 model calls. The start state read
+`root on kubecon-private; AI guards off, C7 gateway rule open; RBAC broad, Kyverno at Audit, no KubeArmor policy,
+egress open`, and guardrails-on, run in the private terminal, applied the set to watch-it-burn-community through
+`~/.kube/peer` and armed both. The probe's own guards-off and guardrails-off ended it. At 21:50Z both clusters read the
+start state again: both registry policies `[Audit]`, no KubeArmor policy, no `agent-egress-allowlist`, the
+workshop-agent Role broad (`secrets` get and list), and the peer Secret in place. No Joker is left on private. The
+`joker-agatha-the-banshee` on community was created at 20:34Z, before this run started, and this run left it alone.
+The probe record in the KubeCon run-of-show has the run.
+
+**Not yet run on a cluster.** Nothing is owed. The probe reads the label it now checks from the Argo CD root, which
+both clusters already carry, so the change was run live as it stands.
