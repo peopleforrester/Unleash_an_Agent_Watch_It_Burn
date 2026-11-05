@@ -22197,3 +22197,7 @@ whose page keeps the allow-list line, true where it runs.
 reads `copying ...@sha256:793db299...` and `seeded; serving`, and `regctl image digest` on
 `registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0` reads `sha256:793db299...`. A node that already
 holds the old tag keeps it under `IfNotPresent`, so the banner reaches a Joker on a node that has not pulled it.
+
+**The suites (run 17723, at `5b8e74ff`).** `bash verify/run-e2e-tools.sh` printed `274 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `61 checks ran (the offline suite
+and 60 tier tests) in 30m41s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
