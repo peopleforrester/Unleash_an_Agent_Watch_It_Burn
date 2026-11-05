@@ -17172,3 +17172,6 @@ clusters after the run, so both were left as found.
 
 **Not yet run on a cluster.** Nothing for #555. Attendee clusters run the same check through `bash verify/run-e2e.sh`
 at their own build.
+
+**The suites (run 17347, at `f8900b12`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 29m00s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
