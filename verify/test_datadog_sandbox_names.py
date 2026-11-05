@@ -191,6 +191,11 @@ tmpl = (pin_docs[0]["spec"]["template"]["metadata"]["labels"] if pin_docs else {
 check("the tool-pin Deployment's pods carry service burritobot-tool-pin and the env",
       tmpl.get("tags.datadoghq.com/service") == "burritobot-tool-pin" and tmpl.get("tags.datadoghq.com/env") == DD_ENV, str(tmpl))
 
+beat = (REPO / "verify/beat-01.sh").read_text(encoding="utf-8")
+check("beat-01's sample workload is labelled into burritobot-beat1-sample-web with the env, and a failed label stops the beat",
+      '"tags.datadoghq.com/service":"burritobot-beat1-sample-web","tags.datadoghq.com/env":"burritobot-kubecon-na-26"' in beat
+      and "could not label the sample workload for Datadog" in beat)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
