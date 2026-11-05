@@ -19448,3 +19448,9 @@ the run, and the run's `TMPDIR` points into the worktree. The test starts the ru
 the test does not own. The three fixture envs in the test now set `TMPDIR` to the test's own temporary directory, as
 they already did for `HOME`. Run alone after that, the test passed all 314 of its checks. The runner and the scripts
 are unchanged.
+
+**The suites (run 17584, at `fa53301d`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 30m46s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. At the end of the run the live
+`registry` pod on watch-it-burn-private still read 1/2 with the seed in Error after 26 restarts, as expected until
+Argo CD syncs this change; no scratch namespace is left on either cluster.
