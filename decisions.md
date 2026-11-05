@@ -26871,3 +26871,76 @@ tier tests. Its offline suite was green (234 tests, `verify/test_kyverno_profile
 serves `web-terminal-ttyd-1.7.7` at `sha256:0b72ecc7...` where resources.yaml pins `68004fb5...`, the red the #797,
 #798 and #801 entries record. Second, ghcr.io answers 404 for `sample-app-nginx-1.27.5`, the tag #814 renamed to
 and whose push that entry escalates.
+
+## 2026-11-05 · #467 · The Kyverno CEL migration checked live on both clusters: no ClusterPolicy left, the profile's policies all READY, one red on the lab's PolicyReport timing
+
+**What this run did.** Run 17286 started from staging `b1229d1`. `verify/prior-drafts.sh 467 origin/staging` printed
+START from `origin/agent/467-16704`, whose only drift was this file. Run 16704 did not land because it could not read
+its session files (hecaton#508); this run could. Its two commits are cherry-picked, the conflict here resolved by
+keeping both entries. What differs from that draft: it expected the two clusters to run the KubeCon profiles
+(kubecon-community and kubecon-private). Read off each cluster's root Application on 2026-11-05, they do not.
+watch-it-burn-private's `lab-bootstrap` renders `values-admin.yaml` (label `lab-platform/profile=admin`), and
+watch-it-burn-community's renders `values-burn.yaml` (`burn`). `verify/test_kyverno_profile_policies.py` now also holds
+admin to the eleven and the admin and burn roots to their labels, and the live check's docstring names what it does on
+a burn cluster. The issue's "the same ten" is eleven since #606 added restrict-agent-spawned-workloads.
+
+**watch-it-burn-private (admin), the commands and what they printed.**
+
+    kubectl --context watch-it-burn-private get clusterpolicy
+      No resources found   (and the API server's deprecation warning for kyverno.io/v1 ClusterPolicy)
+    kubectl --context watch-it-burn-private get validatingpolicy,imagevalidatingpolicy
+      ten ValidatingPolicies (block-argocd-drift, deny-llm-endpoint-bypass, disallow-privileged, minimal-floor,
+      require-labels, require-networkpolicy, require-probes, require-resource-limits,
+      restrict-agent-spawned-workloads, restrict-image-registries) and one ImageValidatingPolicy
+      (verify-image-signatures), every one READY true
+    CONTEXT=watch-it-burn-private python3 verify/test_kyverno_cel_live.py
+      exit 1, one FAIL: step 4's PolicyReport line (below). Everything else PASS: no ClusterPolicy; the eleven names
+      equal bootstrap_chart.kyverno_policies("admin"), each READY; kyverno-policies and minimal-floor Synced and
+      Healthy; toggle-kyverno-enforce.sh exits 0, both policies read [Deny] and stay [Deny] for 90s after a hard
+      refresh with kyverno-policies still Synced; the C2 villain dry run as workshop-mcp is refused with
+      'Policy restrict-image-registries failed: Images must come from allowed registries'; the signed
+      watch-it-burn:busybox-1.36 Deployment admits and its Pod runs behind agent-egress-allowlist.
+    bash verify/beat-01.sh watch-it-burn-private agent
+      PASS [beat-01]: all three CNCF walls held; Kyverno Audit->Enforce toggle behaves per §2.   exit 0
+    python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context watch-it-burn-private \
+        --kubeconfig "$KUBECONFIG" --profile accen-dev
+      31 beats, 26 PASS, 5 FAIL. "The /controls badges light with the guardrails" PASS (every badge matches the
+      cluster), and "Challenge 2: villain image denied (Kyverno admission)" PASS (denied at admission by
+      restrict-image-registries). The five reds come from the KubeCon pairing, and none from Kyverno's migration: the admin profile
+      has no deny-external-registries (the start state, "Armed", and the public-image beat), and guardrails-on and
+      guardrails-off stop on "This cluster is not linked to the other KubeCon cluster (no
+      guardrails-switch/guardrails-peer Secret)".
+
+**watch-it-burn-community (burn).** The burn profile installs no Kyverno, by design (LAB-TEXT.md's Community cluster
+section). `kubectl --context watch-it-burn-community get clusterpolicy` and `get validatingpolicy` each print
+`error: the server doesn't have a resource type`, and `kubectl api-resources | grep -ic kyverno` prints 0. So no
+ClusterPolicy is left, and the policies are the profile's set, which is empty: there is nothing to be READY.
+`CONTEXT=watch-it-burn-community python3 verify/test_kyverno_cel_live.py` exits 1 at its prerequisite "profile burn
+installs restrict-image-registries", as written: steps 4 to 7 need the C2 wall, which this cluster does not have.
+
+**The red: the lab's PolicyReport line comes about nine minutes late.** The jq in LAB-TEXT.md does print the lab's line,
+word for word: 'restrict-image-registries: Images must come from allowed registries: the internal Harbor,
+registry.burritobot.co, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, registry.k8s.io, or ECR, and not from the
+lab-platform/promo/ or festival-ops/ paths.' It does not print it within the live check's 150s. Two causes, measured:
+
+- The reports controller had stopped. Its pod, up since 2026-10-29 06:09, wrote no PolicyReport after 2026-10-30
+  00:52, and a villain Deployment left up ten minutes got none. Deleting the pod (no spec change, so Argo CD saw no
+  drift) brought a new one; the line appeared 85s later and the report count went from 221 to 332.
+- With the new controller, a fresh villain's report still took 530s. No EphemeralReport is written at admission for it
+  (`kubectl get ephemeralreports -A` is empty right after the create, while background-scan ones come and go), so the
+  report waits for the background scan to reach it across every resource on the cluster. The 30s
+  backgroundScanInterval in `gitops/bootstrap/apps/kyverno.yaml` (#323) does not make that cycle 30s on Kyverno
+  v1.19.1 with the CEL policies. A student reading the report right after deploy_app sees nothing.
+
+The live check's 150s is left as it is: the lab tells the room the report is there right away, so a check that waits
+nine minutes would pass a beat the room cannot see. The latency is filed as a follow-up.
+
+**The cluster as left.** The live check put restrict-image-registries back to [Audit] and require-resource-limits to
+[Deny], as found. beat-01.sh leaves require-resource-limits at Audit, so this run patched it back to [Deny]. The
+probe's own guards-off ran (`/controls` reads every AI guard false, the workshop-agent Role is the shipped one), every
+Argo CD Application is Synced and Healthy, and no test Deployment is left in agent. The only lasting change is the new
+kyverno-reports-controller pod.
+
+**Not run.** `bash verify/run-e2e.sh` as a whole: it needs DRIFT_PROFILE and ATTENDEE_CLUSTER naming an attendee
+cluster in the fleet account, and neither of the two clusters is one. The parts this issue names in it, run-all.sh's
+beat-01 and the KubeCon probe's badges, ran above on their own. The kyverno CLI on this host is v1.19.1, not v1.19.0.

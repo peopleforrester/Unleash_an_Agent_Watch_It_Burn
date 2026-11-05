@@ -2,12 +2,14 @@
 # ABOUTME: toggle holding against selfHeal, the C2 refusal and report text, and signed images behind the C1 seal.
 # SUITE: e2e
 """Needs kubectl, jq and CONTEXT naming a cluster whose profile installs restrict-image-registries: attendee, full,
-admin, or the KubeCon pair (watch-it-burn-community, watch-it-burn-private). Every missing prerequisite is a failure
-with the reason, never a skip.
+admin, kubecon-private or kubecon-community. Every missing prerequisite is a failure with the reason, never a skip.
+On 2026-11-05 watch-it-burn-private ran admin and watch-it-burn-community ran burn, which installs no Kyverno at all,
+so there the check stops at its prerequisites; on burn, steps 1 and 2 are `kubectl get clusterpolicy` and
+`kubectl get validatingpolicy,imagevalidatingpolicy`, each answered "the server doesn't have a resource type".
 
 What the cluster must hold is its profile's, read from the root Application lab-bootstrap's lab-platform/profile
-label (the label the web terminal reads, #774) and bootstrap_chart.kyverno_policies (#467): eleven on attendee and
-full, twelve on kubecon-private (kyverno-breakout adds deny-external-registries), two on kubecon-community
+label (the label the web terminal reads, #774) and bootstrap_chart.kyverno_policies (#467): eleven on attendee,
+full and admin, twelve on kubecon-private (kyverno-breakout adds deny-external-registries), two on kubecon-community
 (restrict-image-registries alone through kyverno-registry-policy, and deny-external-registries).
 
 Why (#467). test_kyverno_cel_policies.py proves each CEL expression with the Kyverno CLI on fixture requests.

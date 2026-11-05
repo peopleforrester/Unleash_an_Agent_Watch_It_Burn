@@ -6,10 +6,11 @@ kubecon-community syncs restrict-image-registries alone (kyverno-registry-policy
 (kyverno-breakout), and kubecon-private adds deny-external-registries to the eleven. The live check now asks
 bootstrap_chart.kyverno_policies for the profile the cluster's root names. This holds that answer, without a cluster:
 
-  * attendee and full get the eleven, every policy file in policies/kyverno and policies/floor, as before;
+  * attendee, full and admin get the eleven, every policy file in policies/kyverno and policies/floor, as before;
+    admin is what watch-it-burn-private runs (run 17286 read it off the cluster on 2026-11-05);
   * kubecon-private gets those eleven and deny-external-registries;
   * kubecon-community gets exactly restrict-image-registries and deny-external-registries, each from its app;
-  * burn installs no Kyverno policy;
+  * burn installs no Kyverno policy, and watch-it-burn-community runs burn, so the live check has no wall there;
   * the Kustomization the kyverno-policies app builds names every policy file in policies/kyverno;
   * the label the live check reads is the one infra/deploy-full-idp.sh puts on lab-bootstrap, valued the profile.
 """
@@ -55,7 +56,7 @@ check("policies/kyverno-breakout holds deny-external-registries alone", breakout
       f"it holds {sorted(breakout)}")
 
 print("== each profile's set ==")
-for profile in ("attendee", "full"):
+for profile in ("attendee", "full", "admin"):
     got = flat(profile)
     check(f"{profile} installs the eleven", set(got) == workshop, f"got {sorted(got)}")
 got = flat("kubecon-private")
@@ -86,7 +87,7 @@ live = LIVE.read_text(encoding="utf-8")
 check("the live check reads lab-bootstrap's lab-platform/profile label",
       'PROFILE_LABEL = "lab-platform/profile"' in live and "applications.argoproj.io/lab-bootstrap" in live)
 check("the live check takes its policy set from bootstrap_chart.kyverno_policies", "kyverno_policies(profile)" in live)
-for profile in ("attendee", "full", "kubecon-community", "kubecon-private"):
+for profile in ("attendee", "full", "admin", "burn", "kubecon-community", "kubecon-private"):
     root = deploy_root(profile)
     label = ((root.get("metadata") or {}).get("labels") or {}).get("lab-platform/profile")
     check(f"deploy-full-idp.sh labels the {profile} root lab-platform/profile={profile}", label == profile,
