@@ -21470,4 +21470,8 @@ before it.
 
 **Not yet run on a cluster.** Nothing is owed. The check reads only the sandbox org and Secrets Manager.
 
+**The suites (run 17742, at `c6ceef2e`).** `bash verify/run-e2e-tools.sh` printed "61 checks ran (the offline suite
+and 60 tier tests) in 29m59s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash
+verify/run-tests.sh`, printed "274 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces.py` among them.
+
 No dependency was added.
