@@ -19045,3 +19045,6 @@ RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 26m35s, ALL E2E T
 `verify/test_topic_classifier.py` among them ran llm-guard 0.3.16's BanTopics off-cluster over the 20 asks the phrase
 step leaves to it and judged all 20 as the live probe did, with the same risks on the two closest calls (0.2 and 0.3).
 No dependency was added.
+**After merging staging (run 17422, at 797b242b).** Staging moved during the run, and its decisions.md appends conflicted
+with this entry, so 797b242b merges origin/staging at `f31971f5`, staging's entries first and this one after. No other
+file conflicted. `bash verify/run-tests.sh` on the merge: 263 tests, ALL OFFLINE RENDER-GATE TESTS GREEN, exit 0.
