@@ -18102,3 +18102,79 @@ open. The live test stays red until #876's change reaches the clusters; it is th
 **The suites (run 17405, at `0868c17d`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
 tests) in 27m25s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 259 tests, the
 new `test_llmobs_chat_judge.py` among them, all green.
+
+## 2026-11-05 · #733 · #707's live check passes on watch-it-burn-community, and the audit log shows how the first move went on both clusters
+
+**No code changed.** Hecaton run 17386 is the first #733 run that could read its cluster session (hecaton#508 is
+fixed). It ran every read the 2026-11-02 entries name, on watch-it-burn-community (the public burn cluster), and the
+first-move reads on watch-it-burn-private (the admin cluster) as well. EKS control-plane audit logging is on for both
+clusters, and their CloudWatch log groups (`/aws/eks/<cluster>/cluster`) keep events with no expiry, so the first
+move of 2026-10-31 was read from the API server's own record, not inferred from timestamps.
+
+**Synced and Healthy at a revision carrying 4cd52ed.** On community, `workshop-agent` read `Synced Healthy` at
+`ad18f774`, and `lab-bootstrap` read `Synced Healthy` at `f709b00e`, this run's base. `813404e` (4cd52ed as it reached
+staging) and `a29bb91` (the swap) are both ancestors of `ad18f774`. The Agent's tracking-id is
+`workshop-agent:kagent.dev/Agent:agent/workshop-agent`.
+
+**The git change reached the cluster with no converge.** Run 15968's swap, `a29bb91`, put `reorder_supply` before
+`check_inventory`. `workshop-agent`'s history records it as an automated sync at 2026-11-02T10:40:10Z, and the audit
+log has the matching server-side apply patches by `argocd-application-controller` at 10:40:10.7. The issue's read
+printed git's list, in git's order:
+
+    $ kubectl --context watch-it-burn-community -n agent get agent workshop-agent \
+        -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'
+    ["lookup_customer_records","reorder_supply","check_inventory","get_order_history","get_marketing_intel",
+     "search_web","read_support_ticket","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]
+
+A converge could not have done it: `repair_agent_tools` compares sorted lists and deletes the Agent when they differ,
+and the audit log has no create or delete of the Agent from 2026-10-31 08:52Z to this run. Every write to it in that
+time is by `argocd-application-controller` (seven syncs, each matching a history entry), by kagent's and the garbage
+collector's service accounts, or by the web terminal's `kubectl patch` (the C7 toggle, on 11-02 at 10:45 and 10:47
+and in this run). No user identity wrote it.
+
+**guard-mcp-on survives a reconcile.** Before: evil-mcp's toolNames read
+`["get_weather","read_internal_config","apply_optimization"]`. At 08:27:48Z this run ran
+`kubectl --context watch-it-burn-community -n agent exec deploy/web-terminal -c ttyd -- bash -c '"$HOME/guard-mcp-on"'`.
+It took the `toolnames` branch, patched `/spec/declarative/tools/1/mcpServer/toolNames` to `["get_weather"]`, and
+exited 0. Argo CD's reconciliation period here is 120s with 60s of jitter. `workshop-agent` next reconciled at
+08:30:40Z and stayed `Synced Healthy`, with no new operation (its last is still the 2026-11-04T20:45:56Z sync). At
+08:32:05Z, 85 seconds past that reconcile, evil-mcp still read `["get_weather"]` and workshop-mcp's list was unchanged.
+Then `guard-mcp-off` in the same terminal put the list back to all three, the Application read `Synced Healthy`, and
+the agent Deployment read 1/1 ready: the cluster is as this run found it.
+
+**How the first move went: the two clusters raced, and each went a different way.**
+- *watch-it-burn-community: ai-layer pruned the Agent, and workshop-agent made it again.* ai-layer's sync to
+  `813404e` began at 08:50:10Z on 2026-10-31. At 08:50:27.5 `argocd-application-controller` deleted the Agent; the
+  `workshop-agent` Application did not exist yet (the root created it at 08:51:03.9), so the delete was ai-layer's
+  prune. Argo CD prunes with foreground propagation, so the Agent stayed, marked for deletion, until the garbage
+  collector had removed its dependents. kagent's controller kept making the agent Deployment again, and the
+  collector kept deleting it: 30 Deployment creates and 30 pods scheduled between 08:50:30.5 and 08:51:34.6, about
+  one every two seconds. workshop-agent's first sync at 08:51:04.7 applied to the Agent while it was still being
+  deleted, which did not stop the delete. The collector released the Agent at 08:51:34.1, and workshop-agent's next
+  sync created it at 08:51:34.6 (HTTP 201). The current Agent and Deployment both date from 08:51:34Z. So the agent
+  was down for about 67 seconds and its pod cycled about thirty times, where the #707 entry expected one cycle. Any C7
+  state live then was reset.
+- *watch-it-burn-private: workshop-agent took the Agent over first.* The root created `workshop-agent` at 08:49:04Z,
+  and its sync patched the Agent at 08:49:05.6, changing its tracking-id before ai-layer's sync (which began at
+  08:49:02.9) reached its prune. The audit log has no delete of the Agent and no create of the agent Deployment
+  there, and the Agent still carries its 2026-10-28T11:59:00Z creation time. On private `workshop-agent` reads
+  `Synced Healthy` at `9c9c414a`, with the same twelve tools in git's order.
+
+Both clusters have moved, and a cluster built from now on gets the Agent from `workshop-agent` alone, so neither
+outcome can recur from #707. The finding is general: when a kagent Agent changes Application on a running cluster
+and the old one's prune wins, the agent is down for about a minute while kagent and the collector loop on its
+Deployment.
+
+**Reads, for a later run.** The first-move queries are CloudWatch Logs Insights on
+`/aws/eks/watch-it-burn-community/cluster`, over 2026-10-31 08:40Z to 09:05Z:
+
+    fields @timestamp, verb, objectRef.resource, responseStatus.code, user.username
+    | filter objectRef.namespace="agent" and objectRef.name="workshop-agent"
+      and objectRef.resource in ["agents","deployments"] and verb in ["create","delete","patch"]
+    | sort @timestamp asc
+
+The audit policy is at Metadata level, so request bodies (the delete's propagation policy among them) are not
+recorded. The collector's two patches of the Agent just before it vanished are what foreground deletion does when
+it removes its own finalizer.
+
+**Tests.** No code changed; this run's suite results follow in the next entry.
