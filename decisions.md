@@ -16919,3 +16919,64 @@ and no cluster reads them.
 **The suites (run 17310, at `a243799f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 28m09s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_iam_policy_pipeline.py` and
 `verify/test_iam_policy_structural.py` passed in it.
+## 2026-11-05 · #485 · Every fleet monitor and fleet-dashboard query measured live in Whitney's org: all answer for both clusters, and two false blanks in --data are fixed; the apply still waits on the write key
+
+**What this run had.** Run 17318 had the cluster session for `watch-it-burn-community` and `watch-it-burn-private` and
+the read pair in `watch-it-burn/datadog` (accen-dev, us-west-2), which names the org `Datadog` through
+/api/v2/current_user. It did not have the write key. The thread names it at
+`~/secrets/datadog/wib-sandbox-fleet-monitors.env`, which is Michael's home on this host: `/home/michael` answers this
+run's user with "Permission denied", the run's own home has no `secrets/`, and Secrets Manager in the account holds
+only `watch-it-burn/datadog`. So `--apply` could not run here, as for run 17295 on #489, and it goes to the custodian.
+
+**Every name, measured.** `fleet.sh monitors --check` at 05:01Z printed MISSING for all seven monitors and both
+dashboards. Each query was then read through /api/v2/query/scalar, the API the widgets use, over its own window:
+
+| query | window | burritobot-public | burritobot-private |
+|---|---|---|---|
+| cluster-silent: `max:datadog.agent.running` by kube_cluster_name | 5 m | 1 | 1 |
+| console-unavailable: `replicas_available`, `kube_deployment:console` | 5 m | 1 | 1 |
+| burritobot-not-ready: `replicas_available`, `kube_deployment:workshop-agent` | 5 m | 1 | 1 |
+| no-traces: `sum:traces.span.metrics.calls` `.as_count()` | 10 m | 1102 | 22 |
+| agent-obs-silent: `sum:ml_obs.trace{ml_app:burritobot}` (org-wide, no cluster tag) | 10 m | 11, whole org | |
+| node-not-ready's signal: `kubernetes_state.node.by_condition{condition:ready}` | 5 m | 1, `status:true` | 1, `status:true` |
+| guard-proxy-erroring: logs `kube_namespace:agent kube_deployment:guard-proxy status:error` | 7 d | 103 | 78 |
+| the same logs, grouped by `status` | 7 d | 103 error, 260 info | 78 error, 108 info |
+| dashboard spend and cost: `gen_ai.client.cost` | 5 m | 0.454 | 0.170 |
+
+`!status:true` on by_condition also returned a series for burritobot-public over 7 days, so the monitor's own filter
+matches a real NotReady. Every metric, tag and log name in infra/datadog-fleet/ is right: no name changed, and
+verify/test_fleet_monitors.py keeps its name checks as they are.
+
+**The two blanks were the checker's.** `fleet.sh monitors --data --cluster burritobot-public --cluster
+burritobot-private` printed two NO DATA lines that were not missing data:
+
+- *Clusters reporting.* The tile's `count_not_null(max:datadog.agent.running{...} by {kube_cluster_name})` answered 2,
+  in a `kube_cluster_name` group column whose only value is `N/A`. `scalar()` took any group column as per cluster,
+  found neither cluster in it and called the tile blank. N/A is Datadog's value for a series without the tag, so an
+  answer whose groups are all N/A is now the ungrouped value, and an N/A row beside real clusters is dropped.
+  verify/test_fleet_monitors.py's fake org now answers that rollup the way the org did, and a check holds that an N/A
+  row never stands in for a missing cluster.
+- *guard-proxy's signal.* It was read over the monitor's 5 minutes, and guard-proxy logs only events: a block, a
+  retry, a forward_error, the price tier at start. One chat answered on burritobot-private at 05:08Z (from
+  `verify/agent_obs_flow.py chat`) and wrote no guard-proxy line; the newest lines there were 04:16Z. So the signal is
+  blank on any quiet, healthy cluster, with or without traffic. A signal may now name its own `window`
+  (validated as `<n>m`, `<n>h` or `<n>d`, and never sent to Datadog), and guard-proxy's reads `7d`. The monitor's
+  query and the apply's body are unchanged: `signal` is never part of what is written.
+
+After the fix, `--data` at 05:13Z printed DATA for both signals and all eight fleet-dashboard queries, and MISSING
+only for the five absence monitors, which are not yet in the org. The offline file fails 8 checks against the old
+loader and passes against the new one.
+
+**A note on the chat probe.** `agent_obs_flow.py chat --wait 240` read RED for burritobot-public. The wait was this
+run's choice and is below Datadog's documented 3 to 5 minutes. `agent_obs_flow.py watch` straight after read GREEN,
+with 91 ml_app:burritobot spans since APM's newest span (05:03:59Z, the public chat's own). Nothing is wrong there.
+
+**Left as found.** Two chats were sent (one per KubeCon bot, with guard-proxy's probe marker), nothing else on
+either cluster was touched, and nothing was written to the org.
+
+**Not yet run on a cluster.** The apply, from a clone of staging run as Michael with the write key:
+`infra/terraform/fleet/fleet.sh monitors --apply --session 2026-11-12T20:50Z/2026-11-12T21:20Z`, then `--check`.
+After that and once this change is in staging, the next run on #485 runs, within 5 minutes of a chat on each bot,
+`fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private` and
+`python3 verify/test_fleet_monitors_live.py`, which must print DATA for the five absence monitors too, and reads the
+fleet dashboard's URL that the apply prints.

@@ -290,7 +290,12 @@ class FakeOrg:
             text = fm.query_text(a["queries"][0])
             self.scalars.append((text, a["to"] - a["from"], a["queries"][0]))
             vals = self.data.get(text, {})
-            if "" in vals:
+            if "" in vals and "by {kube_cluster_name}" in text:
+                # A rollup over a grouped query, the Clusters reporting tile's count_not_null: Whitney's sandbox
+                # org answers a kube_cluster_name column holding only N/A beside the count (2026-11-05, #485).
+                cols = [{"name": "kube_cluster_name", "type": "group", "values": [["N/A"]]},
+                        {"name": "q", "type": "number", "values": [vals[""]]}]
+            elif "" in vals:
                 cols = [{"name": "q", "type": "number", "values": [vals[""]]}]
             elif vals:
                 cols = [{"name": "kube_cluster_name", "type": "group", "values": [[c] for c in vals]},
@@ -471,6 +476,13 @@ check("the traces query is read over the table's 5 minutes and the picker's defa
       sorted(w for t, w, _ in org.scalars if t == fm.query_text(table)) == [300_000, 3_600_000])
 check("a signal is read over its monitor's window",
       [w for t, w, _ in org.scalars if t == fm.query_text(signals["node-not-ready"])] == [300_000])
+# guard-proxy logs events only, never a plain chat (#485): its signal names its own window, and the window is the
+# loader's to read, not a field of the query Datadog is sent.
+check("guard-proxy-erroring's signal is read over its own 7 days, not the monitor's 5 minutes",
+      signals["guard-proxy-erroring"].get("window") == "7d"
+      and [w for t, w, _ in org.scalars if t == fm.query_text(signals["guard-proxy-erroring"])] == [7 * 86_400_000]
+      and "DATA     monitor guard-proxy-erroring (its signal, last 7d)" in text)
+check("a signal's window is never sent to Datadog", all("window" not in q for _, _, q in org.scalars))
 check("data needs no write key: it reads with the secret's read-only application key",
       all(h.get("DD-APPLICATION-KEY") == "APPKEY654321" for _, _, h in org.calls[calls_before:]))
 check("data never writes", all(m == "GET" or p == "/api/v2/query/scalar" for m, p, _ in org.calls[calls_before:]))
@@ -500,10 +512,20 @@ rc, text, _ = blanked(lambda o: o.groups["console-unavailable"].pop(CLUSTERS[1])
 check("a monitor with no group for a cluster fails", rc == 1 and "NO DATA  monitor console-unavailable" in text)
 rc, text, _ = blanked(lambda o: o.data[fm.query_text(signals["guard-proxy-erroring"])].pop(CLUSTERS[0]))
 check("a signal that answers nothing for a cluster fails",
-      rc == 1 and "NO DATA  monitor guard-proxy-erroring (its signal): burritobot-public" in text)
+      rc == 1 and "NO DATA  monitor guard-proxy-erroring (its signal, last 7d): burritobot-public" in text)
 spend = next(q for d, q in fleet_queries if d.get("title") == "Room spend so far (USD)")
 rc, text, _ = blanked(lambda o: o.data.update({fm.query_text(spend): {"": None}}))
 check("an ungrouped tile that answers null fails", rc == 1 and "NO DATA  fleet dashboard / Room spend so far (USD)" in text)
+reporting = next(q for d, q in fleet_queries if d.get("title") == "Clusters reporting")
+check("the Clusters reporting tile is a rollup the org answers with an N/A group, and it passes as a room-wide value",
+      "by {kube_cluster_name}" in fm.query_text(reporting) and not is_grouped(reporting)
+      and f"DATA     fleet dashboard / Clusters reporting / {reporting['name']}" in run(DATA_ARGS, org, env={})[1])
+rc, text, _ = blanked(lambda o: o.data.update({fm.query_text(reporting): {"": None}}))
+check("the Clusters reporting tile answering null fails", rc == 1 and "NO DATA  fleet dashboard / Clusters reporting" in text)
+rc, text, _ = blanked(lambda o: o.data.update({fm.query_text(table): {"N/A": 3.0, CLUSTERS[0]: 1.0}}))
+check("an N/A row beside one cluster does not stand in for the other",
+      rc == 1 and "NO DATA  fleet dashboard / Every cluster, last 5 minutes / traces: burritobot-private" in text
+      and "N/A" not in text)
 rc, text, _ = blanked(lambda o: o.data.pop(fm.query_text(table)))
 check("a column that answers nothing at all fails", rc == 1 and "NO DATA  fleet dashboard / Every cluster, last 5 minutes / traces" in text)
 rc, text, _ = blanked(lambda o: o.monitors.pop(next(i for i, m in o.monitors.items() if "wib-monitor:no-traces" in m["tags"])))
@@ -703,6 +725,8 @@ check("an ungrouped signal is refused", any("signal is not grouped" in p for p i
       "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready}"})))
 check("a logs signal searching a term the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
       "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "search": {"query": "kube_cluster_name:burritobot-* kube_deployment:console"}})))
+check("a signal window that is not <n>m, <n>h or <n>d is refused", any("signal window '7 days'" in p for p in broken_signal(
+      "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "window": "7 days"})))
 check("a signal on a monitor that fires on absence is refused",
       any("fires on absence" in p for p in broken_signal("cluster-silent", signal=signals["node-not-ready"])))
 

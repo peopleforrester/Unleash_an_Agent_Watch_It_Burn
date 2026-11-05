@@ -30,7 +30,9 @@ infra/terraform/fleet/fleet.sh monitors --board \
 `--check` says the org holds what the repo defines; `--data` says it is fed (#706). It fails on any blank:
 a monitor that fires on absence must have a group for every `--cluster` in a state other than No Data, a
 monitor that fires on a rising count (empty when healthy) must have its `signal` answer for every cluster, and
-every query on the fleet dashboard must answer for every cluster over its widget's window. A blank is a wrong
+every query on the fleet dashboard must answer for every cluster over its widget's window. A signal is read over
+its monitor's window unless it names its own `window`: guard-proxy's reads 7 days, because guard-proxy logs only
+events and a plain chat writes no line (#485). A blank is a wrong
 name, a cluster that is not shipping, or, for traces and spend, no /chat on that cluster inside the window.
 The leaderboard is left out: its cells are blank until the room plays. `--board` is its check.
 

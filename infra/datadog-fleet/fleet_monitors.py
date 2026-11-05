@@ -18,7 +18,8 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
                        read-only: every query returns data for every named cluster (#706). Each monitor that
                        fires on absence has a group per cluster in a state other than No Data; each monitor that
                        fires on a rising count, which is empty on a healthy cluster, has its `signal` (the same
-                       source without the bad-news filter) answer for each cluster; every query on the fleet
+                       source without the bad-news filter) answer for each cluster, over the monitor's window or
+                       the signal's own `window` when it names one (#485); every query on the fleet
                        dashboard answers for each cluster over its widget's window. Exit 1 on any blank. A
                        `scope: org` monitor (#810), on a metric with no cluster tag, must be in a state other
                        than No Data as a whole.
@@ -85,6 +86,11 @@ KEY_TAG_PREFIX = "wib-monitor:"
 SESSION_TAG = "window:session"
 DOWNTIME_MARK = "[wib-fleet-monitors]"
 GROUP_BY = "kube_cluster_name"
+# The group value Datadog's scalar API gives a series that lacks the tag, and a rollup that removed it (#485).
+NO_GROUP = "N/A"
+# A signal's own read window, for a source that is quiet on a healthy cluster even with traffic (#485): guard-proxy
+# logs only events, never a plain chat. Without it a signal is read over its monitor's window.
+SIGNAL_WINDOW = "window"
 TYPES = ("metric alert", "query alert", "log alert")
 # The metrics that carry no cluster tag, so a monitor on them is one alert for the whole org (`scope: org`, #810).
 # Agent Observability's ml_obs.* carry env, ml_app, service, version and a few more, never a span's k8s.cluster.name
@@ -225,6 +231,9 @@ def validate_signal(where: str, m: dict, flt: str) -> list[str]:
         return [f"{where}: fires on a rising count, so its query is empty on a healthy cluster; "
                 "give it a signal (the same source without the bad-news filter) for --data to read"]
     problems = []
+    window = sig.get(SIGNAL_WINDOW)
+    if window is not None and not SPAN_RE.match(str(window)):
+        problems.append(f"{where}: signal window '{window}' is not <n>m, <n>h or <n>d")
     text = query_text(sig)
     if flt not in text:
         problems.append(f"{where}: signal is not filtered to {flt}")
@@ -578,7 +587,12 @@ def monitor_span(query: str) -> int:
 def scalar(dd: Datadog, query: dict, span: int, now: dt.datetime) -> tuple[bool, dict[str, float]]:
     """One query through POST /api/v2/query/scalar, the API the dashboard widgets use. Returns (grouped, values):
     grouped when the answer has a kube_cluster_name column, values per cluster then, else under ''. A null cell
-    is no data."""
+    is no data.
+
+    N/A is Datadog's group value for a series without the tag, and the only one a room-wide rollup has: the
+    Clusters reporting tile's count_not_null(... by {kube_cluster_name}) answers a kube_cluster_name column holding
+    [["N/A"]] next to the count (read in Whitney's sandbox org on 2026-11-05, #485). It names no cluster, so an
+    answer whose groups are all N/A is the ungrouped value, and an N/A row beside real clusters is dropped."""
     q = {**query, "name": "q"}
     if q.get("data_source", "metrics") == "metrics":
         q.setdefault("aggregator", "avg")
@@ -592,12 +606,12 @@ def scalar(dd: Datadog, query: dict, span: int, now: dt.datetime) -> tuple[bool,
     groups = [c for c in cols if c.get("type") == "group" and c.get("name") == GROUP_BY]
     numbers = [c.get("values") or [] for c in cols if c.get("type") == "number"]
     nums = numbers[0] if numbers else []
-    if not groups:
+    names = [g[0] if isinstance(g, list) and g else g for g in (groups[0].get("values") or [])] if groups else []
+    if not groups or (names and all(n == NO_GROUP for n in names)):
         return False, ({"": float(nums[0])} if nums and nums[0] is not None else {})
     out = {}
-    for g, v in zip(groups[0].get("values") or [], nums):
-        name = g[0] if isinstance(g, list) and g else g
-        if isinstance(name, str) and v is not None:
+    for name, v in zip(names, nums):
+        if isinstance(name, str) and name != NO_GROUP and v is not None:
             out[name] = float(v)
     return True, out
 
@@ -622,7 +636,10 @@ def data_check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], clusters
     live = {key_of(m): m for m in managed_monitors(dd, group_states=True) if key_of(m)}
     for m in defs["monitors"]:
         if m.get("signal"):
-            need(f"monitor {m['key']} (its signal)", *scalar(dd, m["signal"], monitor_span(m["query"]), now))
+            sig = {k: v for k, v in m["signal"].items() if k != SIGNAL_WINDOW}
+            window = m["signal"].get(SIGNAL_WINDOW)
+            span = span_seconds({"time": {"live_span": window}}) if window else monitor_span(m["query"])
+            need(f"monitor {m['key']} (its signal{f', last {window}' if window else ''})", *scalar(dd, sig, span, now))
             continue
         lm = live.get(m["key"])
         if lm is None:

@@ -104,7 +104,11 @@ monitors:
       enable_logs_sample: true
       groupby_simple_monitor: false
     # Healthy is no error logs, so --data reads every guard-proxy log line instead: the names, minus status:error.
+    # guard-proxy logs events only (a block, a retry, a forward_error, the price tier at start), never a plain chat:
+    # on 2026-11-05 a chat answered on burritobot-private at 05:08Z wrote no line (#485). So 5 minutes is blank on a
+    # quiet, healthy cluster, and the signal reads 7 days, which held lines of both statuses for both KubeCon clusters.
     signal:
+      window: 7d
       data_source: logs
       indexes: ["*"]
       compute: { aggregation: count }
