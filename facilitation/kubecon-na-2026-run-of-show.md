@@ -339,7 +339,7 @@ The runs before those, all model variance, not the platform:
 
 | Run | Result | The FAILs |
 |---|---|---|
-| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once `6c477927` (#906) reaches the cluster. |
+| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once #906's fix for it reaches the cluster. |
 | Admin 1 | cut off | guardrails-on timed out at 300 s: every call to the other cluster's API hung on its private endpoint. Fixed by the security group rule above. |
 | Admin 3 | 31 PASS of 32 | Challenge 4's re-ask: "no sign it tried", as on 2026-10-29. |
 

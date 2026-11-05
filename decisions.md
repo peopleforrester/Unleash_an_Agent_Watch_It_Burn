@@ -20227,3 +20227,7 @@ Argo CD's `internal-registry` reads Synced and Healthy at `cb3367d2`, so #775's 
 **The suites (run 17652).** `bash verify/run-e2e-tools.sh` at `27f3bcab`, rebased on staging `cb3367d2`, printed `267
 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite and 57 tier tests) in
 33m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+Before promotion staging moved to `9506e37f` (#910's TMPDIR take-up and terminal login, #915's masked prompts), so the
+branch was rebased again, with no conflict. The hashes this entry names for #906's own commits are the branch's as
+of `cb3367d2` and change at each rebase; the commit subjects name them for good. The run-of-show now names #906's
+deploy_app fix by issue rather than by hash.
