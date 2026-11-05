@@ -20015,3 +20015,13 @@ root still printed `Installing hashicorp/aws v6.72.0`.
 
 **Live check.** None. The change is in the tools tier's renderer, which needs no cluster and no AWS, and nothing on
 either cluster reads it.
+
+**A second fix: the tier's own test hung on the host's `/tmp`.** The first full run of the E2E command at
+`39600ce0` failed one offline test, `test_e2e_tools_tier.py`, at 6 checks in #865's fixture of the whole runner.
+That fixture runs the runner with an `env=` of its own that drops `TMPDIR`. The runner's `mktemp -d` then fell back to
+`/tmp`, which this run's sandbox does not let it write (`mktemp: failed to create directory via template
+'/tmp/tmp.XXXXXXXXXX'`), while `TMPDIR` named a directory in the worktree. Run 17534 set `TMPDIR` in each of the
+test's three `env=` to a `tmp` directory inside the scratch tree (`ad0d0130`). Staging took the same fix
+independently under #775 (`fa53301d`, run 17584), which sets `TMPDIR` to the scratch root itself in all three. The
+two collided when hecaton rebased run 17610's branch, so run 17678 dropped `ad0d0130`'s edit to the test and kept
+staging's.
