@@ -21289,3 +21289,64 @@ copies. The page change itself reaches the clusters through Argo CD once hecaton
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `62 checks ran (the offline suite
 and 61 tier tests) in 30m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_chat_coc.py` ran in the
 offline suite and `test_chat_coc_e2e.py` in the tools tier, both green.
+
+## 2026-11-06 · #949 · run 17733 · The offline suite holds each part of #784, and a new test holds the cost gauge to its pre-#784 shape
+
+**Where the issue stood.** `verify/prior-drafts.sh 949 origin/staging` printed NONE, and the issue had no comments, so
+this run started from staging at `2cb0484d`. #784's code was all there: guard-proxy pinned at 0f0c809, which carries
+guard-proxy-agenticburn#49 (96d16214, the `chat` span's token counts); the Act 2 overlay's `transform/redact_sentinel`
+on `gen_ai.input.messages` and `gen_ai.output.messages`; and weaver pinned to semconv v1.41.1. Three of the four test
+criteria were met by the tests in place, each with one gap, and the cost gauge had no test against its shape before
+#784.
+
+**What each criterion is held by.**
+- *The token counts on the chat span alone:* `verify/test_chat_span_token_counts.py` (#839), unchanged. It runs the
+  pinned proxy.py against a fake kagent and holds both counts on `chat`, summed over a retried turn, 0 when kagent
+  reports no usage, and on none of the `POST /chat` root, `agent.forward`, `POST /` or `sanitize`.
+- *The cost gauge unchanged:* `verify/test_cost_gauge_unchanged.py`, new. It holds `gen_ai.client.cost`, a gauge in
+  `USD` observed with exactly `gen_ai.request.model` and `gen_ai.provider.name` (`aws.bedrock`), as literals, and
+  checks them against guard-proxy 88b9b52 (the pin `a65f748d` replaced, read from the submodule's history, and checked
+  to predate 96d16214), the pinned proxy.py, the Go build's `registerCostGauge` (its semconv constants resolved
+  through `attributes_gen.go`), and weaver's `metric.witb.guard_proxy.cost` (both attributes required, as at
+  `0164143d`'s parent). It checks that 96d16214's parent and the pin carry the gauge code byte for byte, in proxy.py
+  and in Go. It runs the pinned proxy.py with a recording meter: an idle cluster reads one series at 0, and after a
+  kagent reply of 1234 in and 56 out the series is those counts priced at the bound tier, the same counts
+  `chat_usage_tokens` reads for the span. It checks that nothing sets or declares `gen_ai.usage.cost`, and that every
+  cost query in the fleet dashboard, the leaderboard and the room view reads `gen_ai.client.cost`, and the Grafana
+  board groups it by `gen_ai_request_model`. `verify/test_weaver_guard_proxy_spans.py` still holds the registry and
+  proxy.py to each other; the new test holds both to the shape before #784.
+- *The Act 2 redaction targets:* `verify/test_collector_act2_redaction.py` already held the overlay's span and
+  span-event statements to `gen_ai.input.messages`, `gen_ai.output.messages` and the burn scrub's other keys, and held
+  the overlay's own statements clear of `gen_ai.content.prompt` and `gen_ai.content.completion`. It now also finds
+  every collector config under `gitops/` (any YAML mapping with a `processors` map, outside the guard-proxy submodule)
+  and fails one whose processors name either event name. It requires the scan to find values.yaml, values-burn.yaml
+  and the overlay, and fails a Helm template that does not parse yet holds a `processors:` line, so the scan cannot
+  miss a config quietly. `verify/test_collector_act2_redaction_e2e.py` runs the overlay in the real collector in the
+  tools tier.
+- *The pin, the adoptions and the not-adopted list:* `verify/test_genai_semconv_pin.py` held the v1.41.1 pin, the
+  token counts declared on `span.witb.guard_proxy.chat`, `gen_ai.tool.definitions` written by
+  `transform/adk_model_content`, and the cache, reasoning, `gen_ai.agent.version` and `mcp.*` attributes in no
+  registry group or collector write. It held MCP's attributes but not its spans, and the invoke_agent split only in
+  the collector. It now also checks that no registry group declares an MCP span or an invoke_agent span, and that no
+  collector rule sets `mcp.method.name` or renames a span to MCP's shape.
+
+Nothing here changes runtime behaviour, the chart, a collector config or the workshop. `gen_ai.usage.cost` stays off
+the chat span and the weaver pin stays on semantic-conventions v1.41.1, as #784's research comment explains.
+
+**Checked live, read only.** Both clusters' guard-proxy carry `checksum/proxy-py` `dfca2b1fe758`, and the proxy.py in
+each one's `guard-proxy-src-8t285g92fg` ConfigMap is byte for byte the pin's. Datadog's metric metadata names
+`gen_ai.client.cost` a gauge, and the query `sum:gen_ai.client.cost{*} by
+{gen_ai.request.model,gen_ai.provider.name,kube_cluster_name}` over the six hours to 2026-11-05 23:30Z returned two
+series, `burritobot-public` at 0.3076 USD and `burritobot-private` at 0.3780 USD, each tagged
+`gen_ai.provider.name:aws.bedrock` and `gen_ai.request.model:us.amazon.nova-pro-v1:0`, which is the shape the
+dashboards and the leaderboard query. Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** Nothing new: this run adds offline tests only. The live look on the chat span's counts
+in APM is #784's own, in its 2026-11-05 entry.
+
+**The suites (run 17733, at `9233fa90`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`275 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `61 checks ran (the offline suite and 60 tier tests) in
+31m10s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. In it, each test named above passed with no FAIL line:
+`test_chat_span_token_counts.py` 22 checks, `test_cost_gauge_unchanged.py` 26, `test_collector_act2_redaction.py`
+25, `test_genai_semconv_pin.py` 28, `test_weaver_guard_proxy_spans.py` 86, and in the tier
+`test_collector_act2_redaction_e2e.py` passed.
