@@ -12,7 +12,9 @@
 # To build one: infra/deploy-full-idp.sh local-inference. lab-platform.yaml does not present this profile, so labctl
 # never builds it on a roster or attendee cluster (verify/bootstrap_chart.py, DEPLOY_ONLY_PROFILES). The sister
 # measured vLLM at 4 CPU / 10Gi requested on a t3.2xlarge; whether it fits beside this platform on one is what the
-# cold build is for, and platform-baseline.yaml's vllm entry is where its measured cost goes.
+# cold build is for, and platform-baseline.yaml's vllm entry is where its measured cost goes. Measured 2026-11-05
+# (#704): by CPU request it does not. The platform requests about 6 of the node's 7.9 allocatable CPUs, so as
+# written vllm-qwen3 stays Pending on one t3.2xlarge; the vllm entry has the numbers.
 #
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
