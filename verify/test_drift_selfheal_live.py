@@ -28,6 +28,7 @@ WINDOW_S = 30          # docs/floor.md: back within this, given QUIET_S without 
 QUIET_S = 300          # the self-heal backoff cap; past it the next heal is immediate whatever the count
 QUIET_WAIT_S = 600     # how long to wait for that quiet before calling the app itself the finding
 GIVE_UP_S = 330        # past the window, keep watching this long so a miss reports the real time
+SYNC_WAIT_S = 120      # after the policy is back, how long the sync that put it back may take to finish
 TRACKING = "argocd.argoproj.io/tracking-id"
 
 CONTEXT = os.environ.get("CONTEXT", "")
@@ -60,6 +61,13 @@ def since_last_sync(app: dict) -> float | None:
         return None
     t = datetime.datetime.fromisoformat(fin.replace("Z", "+00:00"))
     return (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds()
+
+
+def new_operation(op: dict, prior: str | None) -> bool:
+    """Whether `op` is a sync that started after the one recorded before the delete (`prior`, its startedAt).
+    Compared with the server's own earlier timestamp, never this host's clock, so clock skew cannot pass it."""
+    started = op.get("startedAt")
+    return bool(started) and (prior is None or started > prior)
 
 
 def finish() -> int:
@@ -118,6 +126,7 @@ def main() -> int:
 
     print(f"== delete {ns}/{name} and time its return ==")
     old_uid = before["metadata"]["uid"]
+    prior_start = ((app.get("status") or {}).get("operationState") or {}).get("startedAt")
     p = kubectl("-n", ns, "delete", "networkpolicy", name, "--wait=false")
     check(f"the delete is admitted ({p.stderr.strip() or 'ok'})", p.returncode == 0)
     if p.returncode != 0:
@@ -142,8 +151,20 @@ def main() -> int:
     check("carrying Argo CD's tracking annotation", TRACKING in (after["metadata"].get("annotations") or {}))
     check("with the spec git has", after.get("spec") == before.get("spec"))
 
-    app = get_json("-n", "argocd", "application", app_name) or {}
-    op = (app.get("status") or {}).get("operationState") or {}
+    # The policy is back as soon as the sync applies it, which is before the sync ends: on watch-it-burn-private
+    # on 2026-11-05 it was back at 25.2 s and the sync still Running, finishing 6 s later. So wait for the sync
+    # that started after the delete to leave Running, then read how it ended.
+    op: dict = {}
+    t1 = time.monotonic()
+    while time.monotonic() - t1 < SYNC_WAIT_S:
+        app = get_json("-n", "argocd", "application", app_name) or {}
+        op = (app.get("status") or {}).get("operationState") or {}
+        if new_operation(op, prior_start) and op.get("phase") != "Running":
+            break
+        time.sleep(2)
+    check(f"a sync started after the delete and ended within {SYNC_WAIT_S}s of the policy's return "
+          f"(started {op.get('startedAt')}, phase {op.get('phase')})",
+          new_operation(op, prior_start) and op.get("phase") != "Running")
     check(f"the sync that did it was automated and succeeded (phase {op.get('phase')})",
           op.get("phase") == "Succeeded" and (op.get("operation", {}).get("initiatedBy") or {}).get("automated") is True)
     return finish()

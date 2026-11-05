@@ -74,7 +74,9 @@ The drill first waits until `ai-layer` has gone 5 minutes without a self-heal, s
 does not apply. If that does not happen within 10 minutes, the drill fails: an app that heals all the
 time is drift in itself. The drill then deletes the policy and times how long it takes to come back.
 It passes only if the policy returns within 30 seconds as a new object (a new uid) that carries Argo
-CD's tracking annotation and the spec git has. `verify/run-e2e.sh` runs it on every cluster build.
+CD's tracking annotation and the spec git has, and if the automated sync that put it back then ends
+`Succeeded`. The policy is back before that sync ends, so the drill waits up to 2 minutes for it.
+`verify/run-e2e.sh` runs it on every cluster build.
 
 Kyverno's `block-argocd-drift` refuses UPDATE and DELETE on Deployments, ConfigMaps and Services that
 Argo CD manages. For those three kinds, a hand-made change is refused at admission on the profiles that
@@ -139,7 +141,9 @@ writes a state. Each run covers three things:
    recording `AWS::S3::Bucket` and `AWS::EKS::Cluster`.
 
 The accounts are `WIB_ATTENDEE_ACCOUNTS`, read from `fleet.sh` when the environment does not set it, so
-the report covers the accounts the fleet builds in. Exit codes: 0 means clean, 2 means findings, 1 means
+the report covers the accounts the fleet builds in. Run it on the machine that holds the states. Anywhere
+else every cluster `fleet.sh` built is in no state the report can read, so each one is listed as
+unmanaged: run from the hecaton host on 2026-11-05, it listed both KubeCon clusters that way. Exit codes: 0 means clean, 2 means findings, 1 means
 the report is incomplete. An incomplete report is a failure: if the report could not look at something,
 it has not shown that thing is free of drift.
 
@@ -199,7 +203,10 @@ What each record covers:
   CloudTrail is what records who made something in a standby region.
 - The trail is multi-region.
 - CloudTrail event history keeps 90 days of management events even without a trail, and the report's
-  "created by" column reads that history.
+  "created by" column reads that history. It asks for the create events by name (`CreateBucket`,
+  `CreateCluster`) and picks the newest successful one for the resource. Asking by resource name does not
+  work: a cluster's newest events are its pod identity calls, so on 2026-11-05 the newest 50 for
+  `watch-it-burn-community` were all `AssumeRoleForPodIdentity` and its `CreateCluster` was past them.
 
 ### The acceptance case: a bucket made with an attendee key
 

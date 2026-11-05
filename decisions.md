@@ -16516,3 +16516,70 @@ APM's trace id.
 
 **The suites (run 17261, at `f26af809`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 30m32s and printed `ALL OFFLINE RENDER-GATE TESTS GREEN` and `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-05 · #205 · Run 17269: both drift acceptance cases run live; the drill and the report's creator lookup fixed
+
+**Context.** Run 17269 is the first #205 run with a readable session for the two clusters that are up and for accen-dev
+(account 515966504359, us-west-2), after hecaton#508. `bash verify/prior-drafts.sh 205 origin/staging` printed NONE:
+the #205 work is on staging (`939cd82`, `5743323`), and the only unmerged draft, `fa10d01` on `agent/205-6695`, is
+older than it. So nothing was ported. This run did the live checks #795 lists that a run can do, and fixed what they
+found.
+
+**Kubernetes plane, the NetworkPolicy drill.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`, first run:
+
+- watch-it-burn-community: `ai-layer` quiet for 5255 s, `selfHealAttemptsCount 0`; `agent/platform-console-egress`
+  back after 20.1 s as a new uid with the tracking annotation and git's spec; the sync automated and Succeeded.
+  `Self-heal drill passed.`
+- watch-it-burn-private: back after 25.2 s, every check green but the last, `the sync that did it was automated and
+  succeeded (phase Running)`. The Application then read startedAt 02:55:15, the policy's creationTimestamp 02:55:39,
+  finishedAt 02:55:45, `Succeeded`, automated. The policy is back when the sync applies it, which is before the sync
+  ends, so the check raced the sync.
+
+The fix: the drill now records the operation's `startedAt` before the delete, and after the policy is back waits up to
+`SYNC_WAIT_S` (120 s) for an operation that started later to leave `Running`. It compares with the server's earlier
+timestamp, so this host's clock skew cannot pass it. It then checks that operation ended `Succeeded` and
+automated. Rerun after the fix, both clusters: `ai-layer` quiet 301 s, back after 1.3 s, the new sync (started
+03:00:39 on community, 03:00:48 on private) `Succeeded`, `Self-heal drill passed.`, exit 0. Both clusters were left as
+found: `ai-layer` Synced and Healthy, the policy present with git's spec. The documented 30 s window held on all four
+deletes.
+
+**AWS plane, the drift report.** `python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region
+us-west-2` ran live, plan-only, and exited 2 (findings). This host holds no fleet, network, boundary or audit state, so
+it planned nothing and listed `watch-it-burn-community` and `watch-it-burn-private` (tags ManagedBy=terraform,
+event=kubecon-na-2026) as unmanaged. That is expected from a host without the states, and docs/floor.md now says to
+run the report where they are. It also reported `NO recorder in us-west-2`: `describe-configuration-recorders` and
+`describe-trails` both return empty in accen-dev, so the audit root has not been applied there.
+
+Its "created by" column said `no CreateCluster event in us-west-2's 90-day event history` for two clusters made on
+2026-10-28. That was a bug. `creator()` looked CloudTrail up by `ResourceName` and read 50 events, and the newest 50
+for `watch-it-burn-community` were 46 `AssumeRoleForPodIdentity`, 3 `ListAssociatedAccessPolicies` and 1
+`ListAccessEntries`. A lookup by `EventName=CreateCluster` returned 111 events in 2.5 s, among them both clusters'
+creates by `user/nwuser`. `creator()` now asks by event name, reads every page, caches one lookup per account, region
+and event, matches the resource by `Resources[].ResourceName` or `requestParameters` (`bucketName`, `name`), and
+skips an event with an `errorCode`, since a refused create made nothing. Rerun: both clusters `created by
+arn:aws:iam::515966504359:user/nwuser at 2026-10-28T12:39:25+01:00` (and `12:39:33` for private).
+`verify/test_drift_report.py`'s fake CloudTrail now answers a lookup by resource name the way the live account did,
+with 50 pod identity events, and puts a refused attempt on the same name and another resource's create in the
+event-name answer. Four new checks hold the lookup to that. Against the old `creator()` the test fails 4 checks; with
+the fix it passes.
+
+**AWS plane, the hand-made bucket.** The operator profile made `wib-drift-oob-515966504359-20261105030111` in
+us-west-2 at 03:01:13Z, tagged project=watch-it-burn and Purpose=drift-acceptance-205. CloudTrail event history had
+its `CreateBucket` by 03:03:09Z. The next drift report listed it under Unmanaged: `accen-dev | s3-bucket |
+wib-drift-oob-515966504359-20261105030111 | 2026-11-05T03:01:16+00:00 | arn:aws:iam::515966504359:user/nwuser at
+2026-11-05T04:01:13+01:00 | NOT recorded`. The bucket was then deleted, and `head-bucket` returns 404. So the drift
+report half of the acceptance case holds live. The Config half does not, because there is no recorder.
+
+**What this run could not do, and why.** The session hecaton hands a run is a `GetSessionToken` session without MFA,
+and IAM refuses every call from one: `iam get-policy`, `list-users` and `list-attached-user-policies` all returned
+`InvalidClientTokenId`. The audit root creates an IAM role and looks up the permissions boundary, so this session
+cannot apply it, and it cannot mint a key with the attendee grant for the refusal half. The attendee key CSVs
+(`infra/terraform/fleet/aws-pool/`) and the fleet states are kept on the operator machine only. So these stay owed,
+from a principal that can call IAM:
+
+**Not yet run on a cluster.** In accen-dev: `aws configservice describe-configuration-recorders --profile accen-dev
+--region us-west-2` (empty on 2026-11-05), then `terraform -chdir=infra/terraform/aws/audit init` and `terraform
+-chdir=infra/terraform/aws/audit apply -state=states/accen-dev.tfstate -var profile=accen-dev -var
+event=kubecon-na-2026`. Then `WIB_ATTENDEE_ACCOUNTS=accen-dev DRIFT_PROFILE=accen-dev
+ATTENDEE_CLUSTER=watch-it-burn-community python3 verify/test_drift_aws_live.py` with the cluster's attendee CSV, and
+`IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`. The drill
+change itself needs nothing synced: it is a test, and it was run here on both clusters.

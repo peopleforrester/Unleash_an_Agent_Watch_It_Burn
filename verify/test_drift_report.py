@@ -66,10 +66,28 @@ if key == "eks describe-cluster":
     c = acct["clusters"][opt("--name")]
     out({"cluster": {"name": opt("--name"), "tags": c.get("tags", {}), "createdAt": "2026-10-02T00:00:00Z"}})
 if key == "cloudtrail lookup-events":
-    name = opt("--lookup-attributes").split("AttributeValue=")[1]
-    who = acct.get("creators", {}).get(name)
-    evs = [] if not who else [{"EventName": who[0], "EventTime": "2026-10-03T09:00:00Z", "Username": "u",
-                               "CloudTrailEvent": json.dumps({"userIdentity": {"arn": who[1]}})}]
+    attr, _, value = opt("--lookup-attributes").partition(",AttributeValue=")
+    if attr == "AttributeKey=ResourceName":
+        # What the live account gives (2026-11-05): a resource's newest events are its pod identity calls, so a
+        # lookup by name never reaches the create event of a resource older than a day.
+        out({"Events": [{"EventName": "AssumeRoleForPodIdentity", "EventTime": "2026-10-04T09:00:00Z",
+                         "Username": "pod", "Resources": [{"ResourceName": value}]}] * 50})
+    evs = []
+    for name, (event, arn) in acct.get("creators", {}).items():
+        if event != value:
+            continue
+        # Newest first, as CloudTrail returns them: a refused attempt on the same name by an attendee key, then
+        # the create that made it, then a create of a different resource that only shares the event name.
+        evs += [{"EventName": event, "EventTime": "2026-10-03T09:01:00Z", "Username": "attendee",
+                 "Resources": [{"ResourceName": name}],
+                 "CloudTrailEvent": json.dumps({"userIdentity": {"arn": "arn:aws:iam::0:user/attendee"},
+                                                "errorCode": "AccessDenied"})},
+                {"EventName": event, "EventTime": "2026-10-03T09:00:00Z", "Username": "u",
+                 "Resources": [{"ResourceName": name}],
+                 "CloudTrailEvent": json.dumps({"userIdentity": {"arn": arn}})}]
+    evs.append({"EventName": value, "EventTime": "2026-10-02T09:00:00Z", "Username": "other",
+                "Resources": [{"ResourceName": "something-else"}],
+                "CloudTrailEvent": json.dumps({"userIdentity": {"arn": "arn:aws:iam::0:user/not-the-creator"}})})
     out({"Events": evs})
 if key == "configservice describe-configuration-recorders":
     out({"ConfigurationRecorders": acct.get("recorders", [])})
@@ -341,6 +359,16 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
           awscalls and all("--profile" in c and "--region" in c for c in awscalls))
     check("tags are only fetched for resources not already in a state",
           not any(c[:2] == ["s3api", "get-bucket-tagging"] and AUDIT_BUCKET in c for c in awscalls))
+    trail = [c for c in awscalls if c[:2] == ["cloudtrail", "lookup-events"]]
+    check("CloudTrail is asked by event name, never by resource name, whose newest page is pod identity calls",
+          trail and all("AttributeKey=EventName" in c[c.index("--lookup-attributes") + 1] for c in trail))
+    keys = [(c[c.index("--profile") + 1], c[c.index("--region") + 1], c[c.index("--lookup-attributes") + 1])
+            for c in trail]
+    check(f"once per account, region and event, every page of it ({len(trail)} lookups)",
+          len(keys) == len(set(keys)) and not any("--max-items" in c for c in trail))
+    check("the creator is the create that succeeded, not a refused attempt on the same name",
+          "user/attendee" not in unmanaged)
+    check("nor a create of another resource under the same event name", "not-the-creator" not in unmanaged)
 
     print("== drift is what the refresh found, not what the plan would change ==")
     (env.tf / f"{C002}.tfstate").rename(env.root / "parked-002.tfstate")

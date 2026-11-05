@@ -370,19 +370,35 @@ def match_register(entries: list[dict], profile: str, kind: str, name: str, tags
     return ""
 
 
+# (profile, region, event name) -> that event's history, newest first. One lookup serves every unmanaged resource.
+_CREATE_EVENTS: dict[tuple[str, str, str], list[dict]] = {}
+
+
 def creator(profile: str, region: str, kind: str, name: str) -> str:
-    got = aws(profile, region, "cloudtrail", "lookup-events", "--lookup-attributes",
-              f"AttributeKey=ResourceName,AttributeValue={name}", "--max-items", "50") or {}
-    for ev in got.get("Events", []):
-        if ev.get("EventName") != CREATE_EVENT[kind]:
-            continue
-        who = ev.get("Username", "")
+    """Who made `name`, from the newest successful create event for it in the region's 90-day event history.
+
+    Looked up by event name and matched on the resource, not looked up by resource name: a cluster's history by
+    name is its pod identity calls, dozens an hour, so its CreateCluster is past any page of it within a day
+    (seen live on 2026-11-05: the newest 50 events for watch-it-burn-community were all AssumeRoleForPodIdentity).
+    Every page of the create events is read; a refused call (an errorCode) made nothing and is not the creator."""
+    event = CREATE_EVENT[kind]
+    key = (profile, region, event)
+    if key not in _CREATE_EVENTS:
+        _CREATE_EVENTS[key] = (aws(profile, region, "cloudtrail", "lookup-events", "--lookup-attributes",
+                                   f"AttributeKey=EventName,AttributeValue={event}") or {}).get("Events", [])
+    for ev in _CREATE_EVENTS[key]:
         try:
-            who = json.loads(ev.get("CloudTrailEvent", "{}")).get("userIdentity", {}).get("arn", who)
+            body = json.loads(ev.get("CloudTrailEvent") or "{}")
         except ValueError:
-            pass
+            body = {}
+        params = body.get("requestParameters") or {}
+        names = {r.get("ResourceName") for r in ev.get("Resources") or []} | {params.get("bucketName"),
+                                                                             params.get("name")}
+        if name not in names or body.get("errorCode"):
+            continue
+        who = (body.get("userIdentity") or {}).get("arn") or ev.get("Username", "")
         return f"{who} at {ev.get('EventTime', '?')}"
-    return f"no {CREATE_EVENT[kind]} event in {region}'s 90-day event history"
+    return f"no {event} event in {region}'s 90-day event history"
 
 
 def config_has(profile: str, region: str, kind: str, name: str) -> str:
