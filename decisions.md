@@ -20033,3 +20033,10 @@ scans the scratch root. Rerun alone, it exits 0.
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
 offline suite and 57 tier tests) in 28m15s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
 `test_iam_policy_structural.py` ended `0 failure(s)` in it, and in the first full run at `39600ce0` as well.
+
+**Resumed as run 17610.** Run 17534 ended `executor-error`. Its executor could not read
+`config/publication.yaml` from hecaton release `ab58b52213b5`, which is no longer on the host (the current release,
+`b5ac95bc543e`, has the file). That is hecaton's side, so nothing here changed. Staging had not moved from
+`92dfea31`. At `52fc7d7f`, `bash verify/run-e2e-tools.sh` printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, `58 checks ran (the offline suite and 57 tier tests) in 32m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_iam_policy_structural.py` at `0 failure(s)`.
