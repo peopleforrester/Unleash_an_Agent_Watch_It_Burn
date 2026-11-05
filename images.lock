@@ -19,36 +19,40 @@
 # publications served anonymously on 2026-11-02. The breakout's Joker, busybox-1.38.0-internal (#775), is the digest
 # images/villains/build.sh builds from this checkout with crane 0.22.1, computed on 2026-11-03 before its first push:
 # verify/test_joker_build_digest.py rebuilds it, and the festival-ops Joker above, and holds both to these rows.
-# saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
+# saved is - until `mirror-images.sh save .` runs on netcup and writes the date. The first save, as michael on netcup
+# on 2026-11-04, saved 65 of the 70 rows that owe a copy into ~/repos/private/image-archive; run 17350 copied those dates
+# here from its manifest.tsv. Still -: the three Docker Hub rows (laiyer/llm-guard-api, node, debian), which that save
+# did not write, most likely on netcup's expired Docker Hub login (llm-coding-workflow#433); the breakout Joker, not
+# yet pushed (#775); Argo CD v3.5.7, whose row #858 wrote after that save; and the five run-time rows at the end.
 # verify/test_images_lock.py holds every reference to a row here.
 node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
 debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
 ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
-ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app -
+ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app 2026-11-04
 ${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -
-ghcr.io/peopleforrester/lab-platform/promo/joker@sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 repo:peopleforrester/lab-platform/deploy/images -
+ghcr.io/peopleforrester/lab-platform/promo/joker@sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 repo:peopleforrester/lab-platform/deploy/images 2026-11-04
 REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-the-facilitator-fills-in-at-build -
 ghcr.io/peopleforrester/watch-it-burn:tool-pin-grpcio-1.84.1 - build:images/tool-pin -
-ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
+ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains 2026-11-04
 ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
-ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator -
-cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway -
-ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -
-ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python -
-llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad repo:peopleforrester/lab-platform/deploy/images -
-ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp -
-ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal -
-ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx -
-{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor:stable-bf867783eb30 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor@sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388 upstream:https://github.com/kubearmor/KubeArmor -
-{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-init@sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d upstream:https://github.com/kubearmor/KubeArmor -
-{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-relay-server:latest-e4fd875cc1e4 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-relay-server@sha256:e4fd875cc1e4f6f6a2a90c57655d3bda09fc7846eb82ea24e0296e578ee29f29 upstream:https://github.com/kubearmor/KubeArmor -
-{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-controller@sha256:89f52a3e9fc07af532c68019c028451a5986a63d128dccb560bf3aa3004c8922 upstream:https://github.com/kubearmor/KubeArmor -
-web ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9 repo:peopleforrester/lab-platform/cmd/web -
-ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 -
-ghcr.io/peopleforrester/watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/watch-it-burn-backstage -
-postgres ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres -
-ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 upstream:https://github.com/distribution/distribution -
-ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 upstream:https://github.com/regclient/regclient -
+ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator 2026-11-04
+cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python 2026-11-04
+llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad repo:peopleforrester/lab-platform/deploy/images 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx 2026-11-04
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor:stable-bf867783eb30 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor@sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388 upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-init@sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-relay-server:latest-e4fd875cc1e4 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-relay-server@sha256:e4fd875cc1e4f6f6a2a90c57655d3bda09fc7846eb82ea24e0296e578ee29f29 upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-controller@sha256:89f52a3e9fc07af532c68019c028451a5986a63d128dccb560bf3aa3004c8922 upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
+web ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9 repo:peopleforrester/lab-platform/cmd/web 2026-11-04
+ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/watch-it-burn-backstage 2026-11-04
+postgres ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres 2026-11-04
+ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9 upstream:https://github.com/distribution/distribution 2026-11-04
+ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40089bd4ead05c1ecd763c43e24fd55b5 upstream:https://github.com/regclient/regclient 2026-11-04
 # Declared: images no tracked file names as an image: key or FROM line.
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.
@@ -58,12 +62,12 @@ laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a
 # docker/library/ is Docker's official images on Amazon's public registry, whose digests equal Docker Hub's. 2048 is
 # the image AWS's EKS load-balancer tutorials deploy, in an ECR Public account nobody here knows: the repository it
 # says it is built from is named, and nothing proves that. verify/test_public_images.py holds these to PUBLIC_IMAGES.
-public.ecr.aws/docker/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 upstream:https://github.com/docker-library/busybox -
-public.ecr.aws/docker/library/alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 upstream:https://github.com/alpinelinux/docker-alpine -
-public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de upstream:https://github.com/nginx/docker-nginx -
-public.ecr.aws/docker/library/httpd:2.4-alpine@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c upstream:https://github.com/docker-library/httpd -
-public.ecr.aws/docker/library/redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 upstream:https://github.com/docker-library/redis -
-public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 upstream:https://github.com/alexwhen/docker-2048 -
+public.ecr.aws/docker/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 upstream:https://github.com/docker-library/busybox 2026-11-04
+public.ecr.aws/docker/library/alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 upstream:https://github.com/alpinelinux/docker-alpine 2026-11-04
+public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de upstream:https://github.com/nginx/docker-nginx 2026-11-04
+public.ecr.aws/docker/library/httpd:2.4-alpine@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c upstream:https://github.com/docker-library/httpd 2026-11-04
+public.ecr.aws/docker/library/redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 upstream:https://github.com/docker-library/redis 2026-11-04
+public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 upstream:https://github.com/alexwhen/docker-2048 2026-11-04
 # Chart renders (#603): the images Argo CD hands a cluster from the Helm charts and kustomize builds of
 # gitops/bootstrap/apps, which no tracked image: line names, and the two the Argo CD chart infra/deploy-full-idp.sh
 # installs. A ghcr.io/peopleforrester/lab-platform/mirror/ row is lab-platform's copy of a Docker Hub image (#714), at
@@ -71,42 +75,53 @@ public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd
 # digest is the one its registry served anonymously on 2026-11-03, read with crane 0.22.1, except Argo CD v3.5.7's
 # (#858), the index digest quay.io's manifest API served anonymously on 2026-11-05 (the same read gives v3.5.2's old row).
 # verify/test_images_lock_render.py renders them and holds each to a row here.
-quay.io/jetstack/cert-manager-cainjector:v1.21.2 sha256:c85268c64f2e0e76684bf5fe8906caff34b82523561c6affe0fae3546bd87562 upstream:https://github.com/cert-manager/cert-manager -
-quay.io/jetstack/cert-manager-controller:v1.21.2 sha256:70f532fd9cfde0b09d55687200942399d89838bc2d5d5b45152eb799a15912b8 upstream:https://github.com/cert-manager/cert-manager -
-quay.io/jetstack/cert-manager-webhook:v1.21.2 sha256:a60e2dac46dbb8a7f3df95c54ce941012f54c2fe022f0ee55aaa1ab40ed957ae upstream:https://github.com/cert-manager/cert-manager -
-quay.io/jetstack/cert-manager-startupapicheck:v1.21.2 sha256:46e75b6866359ffb5d82624f41e3ed1c70b2994982702ced547ce5edb418a8f5 upstream:https://github.com/cert-manager/cert-manager -
-registry.datadoghq.com/operator:1.30.0 sha256:9e0fe59c86ea1b8c0bb46d2e07d1c16db89a421b6da39f59ab009d04b1cf6715 upstream:https://github.com/DataDog/datadog-operator -
-ghcr.io/external-secrets/external-secrets:v2.10.0 sha256:814117b0fd6d121b03e8ba3b6db1cecbe7449a354fc0fc9c4faf73a37aa221b1 upstream:https://github.com/external-secrets/external-secrets -
-ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco:0.45.1-dc34bb8e231e sha256:dc34bb8e231e1afda8eefcf9467992a3912b5b6aed5151d49b4a0544369a9048 upstream:https://github.com/falcosecurity/falco -
-ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcoctl:0.14.2-d9d2591057eb sha256:d9d2591057eb514b1fbfb57ebf5ae52f3e938e4797dec1b8f7ce422dace81d83 upstream:https://github.com/falcosecurity/falcoctl -
-ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco-talon:0.3.0-0a06b6a5e9f0 sha256:0a06b6a5e9f0e45d4ccdcf4c7a8c5ac4156e728f81ffd0122cb6675e3b525b40 upstream:https://github.com/falcosecurity/falco-talon -
-ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcosidekick:2.32.0-399d95934a67 sha256:399d95934a67b1c6b57d3e1f678694b3407f89f878e8fd072dba51968fa9745f upstream:https://github.com/falcosecurity/falcosidekick -
-registry.istio.io/release/install-cni:1.30.4-distroless sha256:6ad7297afb961a333df27636c247a415bc8c51b0f08879c0bff26eeaea2322a8 upstream:https://github.com/istio/istio -
-registry.istio.io/release/pilot:1.30.4-distroless sha256:fe77533a5524e41e2381a262a89e965d590a547a2d867a6e1dfa68b2bd438dd3 upstream:https://github.com/istio/istio -
-registry.istio.io/release/ztunnel:1.30.4 sha256:090ca2d66460f0ce78b062380b9b9c7e3a8e1e678057f55cf3397eb28e5df6e9 upstream:https://github.com/istio/ztunnel -
-ghcr.io/peopleforrester/lab-platform/mirror/mcp/grafana:latest-208f8ea16064 sha256:208f8ea16064060f92e9960b2f060f5e37af5abda3ec14c1a8ebbc4d5cc8c718 upstream:https://github.com/grafana/mcp-grafana -
-ghcr.io/kagent-dev/kagent/tools:0.2.1 sha256:50b431281d3e32666f27a292962fd486aabaac157083a844d037c12137e353aa upstream:https://github.com/kagent-dev/tools -
-ghcr.io/kagent-dev/kmcp/controller:0.3.0 sha256:86ab878da25a639358aad18933c6b99e06a7ac34a801dc17fd657db0f28cee28 upstream:https://github.com/kagent-dev/kmcp -
-ghcr.io/kagent-dev/kagent/controller:0.10.1 sha256:878a55478c1727e048d38154158aae41aa701149c6660f78696fe682c7495146 upstream:https://github.com/kagent-dev/kagent -
-ghcr.io/peopleforrester/lab-platform/mirror/library/postgres:18.6-alpine3.23-dd504ba15d33 sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres -
-ghcr.io/kagent-dev/kagent/ui:0.10.1 sha256:2c4de55d3ffea5b960a41d667e3cd6b59d64d8da4d6d3ccf528fcd17e6fec4a0 upstream:https://github.com/kagent-dev/kagent -
-ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-operator:v1.7.4-84626528c4d6 sha256:84626528c4d6e6a11ba7082f0b87eb15bb73bb9b14b3b600a79f3c7dffe6e67a upstream:https://github.com/kubearmor/KubeArmor -
-reg.kyverno.io/kyverno/kyvernopre:v1.19.1 sha256:c25c47461f06f2845a48c319ae86fbbc1730a7b9ed5b701889c9dc1f9ee94b09 upstream:https://github.com/kyverno/kyverno -
-reg.kyverno.io/kyverno/kyverno:v1.19.1 sha256:b31d8511ae5fd6010e2a01ea72ebae08eb82fa51d91af14a1d9fe989949b4edb upstream:https://github.com/kyverno/kyverno -
-reg.kyverno.io/kyverno/background-controller:v1.19.1 sha256:8f1e9143373a27578cafc2d28d2c66ba0926c63b4c77e63de8d2fdd4a122859f upstream:https://github.com/kyverno/kyverno -
-reg.kyverno.io/kyverno/cleanup-controller:v1.19.1 sha256:67a48e62a8d8f8120c86914ff822b90017c54054c7b64ef8a1555645e9d9761e upstream:https://github.com/kyverno/kyverno -
-reg.kyverno.io/kyverno/reports-controller:v1.19.1 sha256:c0eee97b9b44a0dd35805d56b358fa52548480f79d4944602b9609538eccd64c upstream:https://github.com/kyverno/kyverno -
-reg.kyverno.io/kyverno/kyverno-cli:v1.19.1 sha256:ced7b2be0b04250cabfe695f15307f69eb715fe23234816388af4f3812915b2a upstream:https://github.com/kyverno/kyverno -
-ghcr.io/kyverno/readiness-checker:v1.19.1 sha256:31bb42ce7f5b2e27c1cf633aeff4f0cad1f5bb63761e2cb09f0e25cdd26572bf upstream:https://github.com/kyverno/kyverno -
-ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921 sha256:5b66b0dc6921f2a439cf50b942ccb9e2a4375f136239a9fdf709ef33e4bfc668 upstream:https://github.com/open-telemetry/opentelemetry-collector-releases -
-ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator:0.158.0 sha256:d4789a6537fdbc69929dc9227900511224b2fe8e5a0938e604cc8ca56b07336e upstream:https://github.com/open-telemetry/opentelemetry-operator -
-quay.io/prometheus/node-exporter:v1.12.1-distroless sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106 upstream:https://github.com/prometheus/node_exporter -
-quay.io/kiwigrid/k8s-sidecar:2.11.2 sha256:2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6 upstream:https://github.com/kiwigrid/k8s-sidecar -
-ghcr.io/peopleforrester/lab-platform/mirror/grafana/grafana:13.2.2-distroless-ada1141b386c sha256:ada1141b386c443192521bfed414c62209428361111f1505988930adf9dee751 upstream:https://github.com/grafana/grafana -
-registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0 sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b upstream:https://github.com/kubernetes/kube-state-metrics -
-quay.io/prometheus-operator/prometheus-operator:v0.94.0 sha256:cf153f64d6c38113fceb2cda7642365ea887f71edd7888f054e43e54cf177e55 upstream:https://github.com/prometheus-operator/prometheus-operator -
-quay.io/prometheus/prometheus:v3.14.0-distroless sha256:50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a upstream:https://github.com/prometheus/prometheus -
-ghcr.io/jkroepke/kube-webhook-certgen:1.8.8 sha256:cd85a621724cd9043a5b46a784578fa159437712f920166389fce830554e1c44 upstream:https://github.com/jkroepke/kube-webhook-certgen -
-ghcr.io/peopleforrester/lab-platform/mirror/grafana/tempo:3.0.3-05321ebf1f19 sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c upstream:https://github.com/grafana/tempo -
+quay.io/jetstack/cert-manager-cainjector:v1.21.2 sha256:c85268c64f2e0e76684bf5fe8906caff34b82523561c6affe0fae3546bd87562 upstream:https://github.com/cert-manager/cert-manager 2026-11-04
+quay.io/jetstack/cert-manager-controller:v1.21.2 sha256:70f532fd9cfde0b09d55687200942399d89838bc2d5d5b45152eb799a15912b8 upstream:https://github.com/cert-manager/cert-manager 2026-11-04
+quay.io/jetstack/cert-manager-webhook:v1.21.2 sha256:a60e2dac46dbb8a7f3df95c54ce941012f54c2fe022f0ee55aaa1ab40ed957ae upstream:https://github.com/cert-manager/cert-manager 2026-11-04
+quay.io/jetstack/cert-manager-startupapicheck:v1.21.2 sha256:46e75b6866359ffb5d82624f41e3ed1c70b2994982702ced547ce5edb418a8f5 upstream:https://github.com/cert-manager/cert-manager 2026-11-04
+registry.datadoghq.com/operator:1.30.0 sha256:9e0fe59c86ea1b8c0bb46d2e07d1c16db89a421b6da39f59ab009d04b1cf6715 upstream:https://github.com/DataDog/datadog-operator 2026-11-04
+ghcr.io/external-secrets/external-secrets:v2.10.0 sha256:814117b0fd6d121b03e8ba3b6db1cecbe7449a354fc0fc9c4faf73a37aa221b1 upstream:https://github.com/external-secrets/external-secrets 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco:0.45.1-dc34bb8e231e sha256:dc34bb8e231e1afda8eefcf9467992a3912b5b6aed5151d49b4a0544369a9048 upstream:https://github.com/falcosecurity/falco 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcoctl:0.14.2-d9d2591057eb sha256:d9d2591057eb514b1fbfb57ebf5ae52f3e938e4797dec1b8f7ce422dace81d83 upstream:https://github.com/falcosecurity/falcoctl 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco-talon:0.3.0-0a06b6a5e9f0 sha256:0a06b6a5e9f0e45d4ccdcf4c7a8c5ac4156e728f81ffd0122cb6675e3b525b40 upstream:https://github.com/falcosecurity/falco-talon 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcosidekick:2.32.0-399d95934a67 sha256:399d95934a67b1c6b57d3e1f678694b3407f89f878e8fd072dba51968fa9745f upstream:https://github.com/falcosecurity/falcosidekick 2026-11-04
+registry.istio.io/release/install-cni:1.30.4-distroless sha256:6ad7297afb961a333df27636c247a415bc8c51b0f08879c0bff26eeaea2322a8 upstream:https://github.com/istio/istio 2026-11-04
+registry.istio.io/release/pilot:1.30.4-distroless sha256:fe77533a5524e41e2381a262a89e965d590a547a2d867a6e1dfa68b2bd438dd3 upstream:https://github.com/istio/istio 2026-11-04
+registry.istio.io/release/ztunnel:1.30.4 sha256:090ca2d66460f0ce78b062380b9b9c7e3a8e1e678057f55cf3397eb28e5df6e9 upstream:https://github.com/istio/ztunnel 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/mcp/grafana:latest-208f8ea16064 sha256:208f8ea16064060f92e9960b2f060f5e37af5abda3ec14c1a8ebbc4d5cc8c718 upstream:https://github.com/grafana/mcp-grafana 2026-11-04
+ghcr.io/kagent-dev/kagent/tools:0.2.1 sha256:50b431281d3e32666f27a292962fd486aabaac157083a844d037c12137e353aa upstream:https://github.com/kagent-dev/tools 2026-11-04
+ghcr.io/kagent-dev/kmcp/controller:0.3.0 sha256:86ab878da25a639358aad18933c6b99e06a7ac34a801dc17fd657db0f28cee28 upstream:https://github.com/kagent-dev/kmcp 2026-11-04
+ghcr.io/kagent-dev/kagent/controller:0.10.1 sha256:878a55478c1727e048d38154158aae41aa701149c6660f78696fe682c7495146 upstream:https://github.com/kagent-dev/kagent 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/library/postgres:18.6-alpine3.23-dd504ba15d33 sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres 2026-11-04
+ghcr.io/kagent-dev/kagent/ui:0.10.1 sha256:2c4de55d3ffea5b960a41d667e3cd6b59d64d8da4d6d3ccf528fcd17e6fec4a0 upstream:https://github.com/kagent-dev/kagent 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-operator:v1.7.4-84626528c4d6 sha256:84626528c4d6e6a11ba7082f0b87eb15bb73bb9b14b3b600a79f3c7dffe6e67a upstream:https://github.com/kubearmor/KubeArmor 2026-11-04
+reg.kyverno.io/kyverno/kyvernopre:v1.19.1 sha256:c25c47461f06f2845a48c319ae86fbbc1730a7b9ed5b701889c9dc1f9ee94b09 upstream:https://github.com/kyverno/kyverno 2026-11-04
+reg.kyverno.io/kyverno/kyverno:v1.19.1 sha256:b31d8511ae5fd6010e2a01ea72ebae08eb82fa51d91af14a1d9fe989949b4edb upstream:https://github.com/kyverno/kyverno 2026-11-04
+reg.kyverno.io/kyverno/background-controller:v1.19.1 sha256:8f1e9143373a27578cafc2d28d2c66ba0926c63b4c77e63de8d2fdd4a122859f upstream:https://github.com/kyverno/kyverno 2026-11-04
+reg.kyverno.io/kyverno/cleanup-controller:v1.19.1 sha256:67a48e62a8d8f8120c86914ff822b90017c54054c7b64ef8a1555645e9d9761e upstream:https://github.com/kyverno/kyverno 2026-11-04
+reg.kyverno.io/kyverno/reports-controller:v1.19.1 sha256:c0eee97b9b44a0dd35805d56b358fa52548480f79d4944602b9609538eccd64c upstream:https://github.com/kyverno/kyverno 2026-11-04
+reg.kyverno.io/kyverno/kyverno-cli:v1.19.1 sha256:ced7b2be0b04250cabfe695f15307f69eb715fe23234816388af4f3812915b2a upstream:https://github.com/kyverno/kyverno 2026-11-04
+ghcr.io/kyverno/readiness-checker:v1.19.1 sha256:31bb42ce7f5b2e27c1cf633aeff4f0cad1f5bb63761e2cb09f0e25cdd26572bf upstream:https://github.com/kyverno/kyverno 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921 sha256:5b66b0dc6921f2a439cf50b942ccb9e2a4375f136239a9fdf709ef33e4bfc668 upstream:https://github.com/open-telemetry/opentelemetry-collector-releases 2026-11-04
+ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator:0.158.0 sha256:d4789a6537fdbc69929dc9227900511224b2fe8e5a0938e604cc8ca56b07336e upstream:https://github.com/open-telemetry/opentelemetry-operator 2026-11-04
+quay.io/prometheus/node-exporter:v1.12.1-distroless sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106 upstream:https://github.com/prometheus/node_exporter 2026-11-04
+quay.io/kiwigrid/k8s-sidecar:2.11.2 sha256:2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6 upstream:https://github.com/kiwigrid/k8s-sidecar 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/grafana/grafana:13.2.2-distroless-ada1141b386c sha256:ada1141b386c443192521bfed414c62209428361111f1505988930adf9dee751 upstream:https://github.com/grafana/grafana 2026-11-04
+registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0 sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b upstream:https://github.com/kubernetes/kube-state-metrics 2026-11-04
+quay.io/prometheus-operator/prometheus-operator:v0.94.0 sha256:cf153f64d6c38113fceb2cda7642365ea887f71edd7888f054e43e54cf177e55 upstream:https://github.com/prometheus-operator/prometheus-operator 2026-11-04
+quay.io/prometheus/prometheus:v3.14.0-distroless sha256:50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a upstream:https://github.com/prometheus/prometheus 2026-11-04
+ghcr.io/jkroepke/kube-webhook-certgen:1.8.8 sha256:cd85a621724cd9043a5b46a784578fa159437712f920166389fce830554e1c44 upstream:https://github.com/jkroepke/kube-webhook-certgen 2026-11-04
+ghcr.io/peopleforrester/lab-platform/mirror/grafana/tempo:3.0.3-05321ebf1f19 sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c upstream:https://github.com/grafana/tempo 2026-11-04
 quay.io/argoproj/argocd:v3.5.7 sha256:16df57da6f223808d204cd94c67c929b931fa01670b91b0b3a2298c4647de0db upstream:https://github.com/argoproj/argo-cd -
-ecr-public.aws.com/docker/library/redis:8.6.4-alpine sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763 upstream:https://github.com/redis/docker-library-redis -
+ecr-public.aws.com/docker/library/redis:8.6.4-alpine sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763 upstream:https://github.com/redis/docker-library-redis 2026-11-04
+# Run time (#603, run 17350): images both KubeCon clusters run that no tracked file names and no chart renders. The
+# kagent controller starts golang-adk for a runtime: go Agent, the Prometheus operator puts its config reloader beside
+# Prometheus, and the Datadog operator starts the Agent and Cluster Agent for gitops/manifests/datadog/datadog-agent.yaml.
+# The AWS Load Balancer Controller is chart 1.14.0, which infra/deploy-full-idp.sh installs with Helm, outside Argo CD.
+# Each digest is the one its registry served anonymously on 2026-11-05, and the imageID both clusters report.
+# verify/test_images_lock_live.py holds every image the clusters run to a row here.
+ghcr.io/kagent-dev/kagent/golang-adk:0.10.1 sha256:120353200c0226b322e2830de2844eaf02ae4a4c06e778ee60014e5f6ed4a6d0 upstream:https://github.com/kagent-dev/kagent -
+quay.io/prometheus-operator/prometheus-config-reloader:v0.94.0 sha256:142a1f11df8dd165f00375b0b1826aecb9c9adeb05c39855893138d7c7575ff7 upstream:https://github.com/prometheus-operator/prometheus-operator -
+registry.datadoghq.com/agent:7.83.0 sha256:3e915817a38ad113551851015d56a0e50f83fb587bcbbb1ae703dc157b112538 upstream:https://github.com/DataDog/datadog-agent -
+registry.datadoghq.com/cluster-agent:7.83.0 sha256:27c294c40d2503c8cfd2e0a6988a85f2cd5647aa80b8866285e36e111063b41e upstream:https://github.com/DataDog/datadog-agent -
+public.ecr.aws/eks/aws-load-balancer-controller:v2.14.0 sha256:b21255725e67c112fe95888ec4cf38964950ad17800837618c30685cc6856864 upstream:https://github.com/kubernetes-sigs/aws-load-balancer-controller -

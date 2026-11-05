@@ -17175,3 +17175,57 @@ at their own build.
 
 **The suites (run 17347, at `f8900b12`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 29m00s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-05 · #603 · The first netcup save holds 65 of the 70 owed images; their dates are in images.lock, and a live check adds five run-time images
+
+**What the save did.** Through sources, `~/repos/private/image-archive` now exists. Its `manifest.tsv` has 66 lines,
+all dated 2026-11-04 and all with this repo's origin, so `mirror-images.sh save .` ran as michael on netcup in
+michael's checkout. That save wrote its dates into the checkout's images.lock, but nothing committed them, and staging
+still read `-` in every row. Run 17350 copied the date onto each staging row whose ref has a manifest line at the
+row's current digest (the part after the @ for a name@sha256 row), and only where michael's checkout carries the
+same digest and the same date. That is 65 rows. Every file those 65 lines name is in the archive except one that
+sources refuses to list, `ghcr.io_external-secrets_external-secrets/`, a name it reads as a secret. sources returns a
+file as text, so this run could not hash the tarballs; `verify/test_images_saved.py`, run as michael, does that.
+
+**The five it did not save.** laiyer/llm-guard-api:0.3.16, node:24.22.2-trixie-slim and debian:bookworm-slim, the
+three Docker Hub rows, have no line and no directory in the archive, while every other registry's images do. All
+three still resolve anonymously from Docker Hub here on 2026-11-05 at their locked digests (`podman manifest
+inspect`). The likely cause is the one llm-coding-workflow#433 names: michael's Docker Hub login on netcup holds an
+expired personal access token, and the daemon answers "authentication required - personal access token is expired"
+instead of pulling anonymously. That save left no log, so this cause is an inference. The breakout's Joker,
+`maintenance-shell:busybox-1.38.0-internal`, still answers "manifest unknown" on ghcr.io: its push is #775's, which is
+still open. Argo CD v3.5.7's row came with #858 after the save, and v3.5.2's row, which the save did hold, is gone.
+
+**Five run-time images had no row.** The live check (below) found five images running on both clusters with no row:
+kagent's `golang-adk:0.10.1`, which the kagent controller starts for a `runtime: go` Agent; the Prometheus
+operator's `prometheus-config-reloader:v0.94.0`; the Datadog operator's `agent:7.83.0` and `cluster-agent:7.83.0`; and
+`aws-load-balancer-controller:v2.14.0`, chart 1.14.0, which infra/deploy-full-idp.sh installs with Helm outside Argo
+CD. No tracked file names them and no chart that `test_images_lock_render.py` renders yields them. Each now has a
+declared row at the digest its registry served anonymously on 2026-11-05, which is also the imageID both clusters
+report, with its project's repository as the source.
+
+**The live test.** `verify/test_images_lock_live.py` (`# SUITE: e2e`, COMMUNITY_CONTEXT and PRIVATE_CONTEXT, which
+run-e2e.sh already requires) reads every pod on both clusters with one read-only `kubectl get` each and fails on any
+container with no row. `verify/images_live.py` is the judge. A row covers a container by name and tag, with Docker
+Hub's docker.io/ and library/ taken off; by the digest's name at the ref's tag for a templated row; or by digest. The
+name and tag come first because KubeArmor's pods on watch-it-burn-private report the Docker Hub original's name and a
+different digest in imageID, though they run lab-platform's mirror/ tags. It leaves out, and lists, two kinds of pod.
+The first is EKS's own add-ons from its us-west-2 ECR account 602401143452 (the VPC CNI, CoreDNS, kube-proxy, the EBS
+CSI driver, the pod identity agent): they need an AWS login to pull, and they go with EKS. The second is what the
+room deploys through the bot: `trongame/tron:latest` on the community cluster is one, applied by workshop-mcp on
+2026-11-01. A room deploy is a pod whose owner chain reaches an object with a `workshop-mcp` managedFields entry, and
+the test passes `--show-managed-fields`, since kubectl leaves those out of `-o json` without it.
+`verify/test_images_lock_live_judge.py` (offline) holds the judge to fixtures, the cases above among them.
+
+**Live check (run 17350).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_images_lock_live.py` before the five rows: community 54 pods, private 79, and the five images above
+without a row on each (with the room's tron and, before the judge read a templated row's tag, private's four KubeArmor
+images). After: "Every image both clusters run has an images.lock row.", exit 0. It only read; nothing on either
+cluster changed. `mirror-images.sh check .` (read through sources) now reports 26 references, 53 declared rows and 10
+problems, each "never saved": the five above and the five run-time rows.
+
+**Not yet run where it can pass.** The remaining save, as michael on netcup, from a clone of staging once this change
+is in it, with an empty Docker config so Docker Hub is pulled anonymously and the expired token is not sent:
+`mirror-images.sh save` on that clone, logging to `~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-<date>.log`.
+The exact command is in run 17350's escalation. It should save nine rows and FAIL only the internal Joker until #775
+pushes it. The next run on #603 then copies the new dates in the same way and runs `python3 verify/test_images_saved.py`
+as michael.
