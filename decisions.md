@@ -16252,3 +16252,42 @@ calling a cloud tool.
 Staging moved to `df669958` (#864, agentgateway and the tools tier) while that ran. The two commits rebased onto it
 with no conflict, and `bash verify/run-tests.sh` on the rebased `21bc5574` ran 254 tests and printed
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
+**Live check after the sync (run 17221, #867).** Hecaton promoted the change to staging as `e9634b38` (the entry
+above names it `17158b7d`, its id on run 17196's host), and at 01:27:57 UTC on 2026-11-05 Argo CD synced ai-layer on watch-it-burn-private to
+`df669958`. `agentgateway-config` then read `frontendPolicies:` / `tracing:` / `host:
+otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318` / `protocol: http` / `randomSampling: true`.
+Three things differ from what the entry above expected.
+
+1. The pod did not roll, and the main container did not take the new file either. It watches its config file, and at
+   01:28:07 it reread the synced file, logged the warning 5 more times (10 in all), and then `Failed to reload config:
+   cannot use deprecated config.tracing together with frontendPolicies.tracing`. It kept serving the old config.
+2. `kubectl rollout restart deploy/agentgateway` is not open to a run: Kyverno's `block-argocd-drift` denies an UPDATE
+   of an Argo-managed Deployment by any principal outside its excludes, and the run's IAM user is in
+   `system:authenticated` only (server dry run, denied). Deleting the pod is not an UPDATE of the Deployment, so the
+   run deleted `agentgateway-b49f45688-vlkvv` and the ReplicaSet started `agentgateway-b49f45688-xv9l9` from the same
+   template, which is the restart the issue asked for. In the new pod the agentgateway container logged the warning
+   0 times and `loaded config from File("/etc/agentgateway/config.yaml")`.
+3. `agentgateway-c7-config` did not change, and agentgateway-c7 logged the warning 5 times in the new pod, not 0. Its
+   `config.yaml` is in ai-layer's ignoreDifferences with RespectIgnoreDifferences, so a committed change to it reaches
+   new clusters only, the cost #515 accepted (`gitops/bootstrap/apps/ai-layer.yaml`, `docs/floor.md`). The live file
+   differs from git in the tracing block alone, and its rule line is the committed `'true'`. The run could not apply
+   git's file by hand either: the same Kyverno policy denied an UPDATE of that ConfigMap (server dry run). So on this
+   cluster c7 keeps the old form, with the same tracing behind it, until the cluster is rebuilt or someone Kyverno
+   admits applies it together with a restart (below).
+
+`CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passed in the new pod: trace
+6c8bcb2705014aaa95fc41741ce0bdb5, one root (guard-proxy's POST /chat under the probe's traceparent), the gateway's span
+for the A2A hop, the agent's server span under the gateway's outbound span, and `One interaction, one root.`
+
+**Why a restart has to come with any live switch of the tracing form.** The failed reload was run again offline on
+the pinned v1.7.0 release binary (SHA-256 checked against `verify/e2e-tools.lock`), on c7's live file and its git
+file with loopback ports, rewriting the watched file the way a ConfigMap update does. Started on the old form, the
+process failed every reload of a new-form file with the same error, the narrowed `guard-mcp-on` rule included, and
+reloaded old-form files cleanly. Started on the new form, it reloaded every file, both rule lines included. So the
+cluster as left is consistent: the main container started on the new form and c7 on the old one, and `guard-mcp-on`
+still reloads on c7. Applying git's c7 file to this running pod without a restart would leave `guard-mcp-on`
+silently not applied. `docs/floor.md`'s row for the ignore now says so.
+
+**Not yet run on a cluster.** agentgateway-c7 on the new form: 0 warnings from that container, and `guard-mcp-on` then
+`guard-mcp-off` reloading on it. That needs a cluster built from staging at or after `e9634b38`, or the committed c7
+file applied to watch-it-burn-private by a principal Kyverno admits, followed by a pod restart.
