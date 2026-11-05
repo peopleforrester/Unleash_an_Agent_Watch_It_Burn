@@ -177,6 +177,20 @@ check("the backstage container's log config names service burritobot-backstage",
 check("its rule renames Backstage's service key to backstage_service, and keeps the value",
       json.loads(renamed).get("backstage_service") == "rootHttpRouter" and "service" not in json.loads(renamed))
 
+print("== the tool-pin spike's pods, which run in the agent namespace of both clusters, carry the sandbox tags (#629) ==")
+# docs/research/2026-10-24-tool-pin-spike runs one-shot pods (a probe and a curl ask) and a Deployment in agent. Without
+# these tags their logs were filed under the image name (curl, watch-it-burn) and no env, outside BurritoBot (2026-11-05).
+spike = REPO / "docs/research/2026-10-24-tool-pin-spike"
+live_check = (spike / "live-check.sh").read_text(encoding="utf-8")
+check("the probe pod is labelled into burritobot-tool-pin-probe with the env",
+      "tags.datadoghq.com/service=burritobot-tool-pin-probe,tags.datadoghq.com/env=burritobot-kubecon-na-26" in live_check)
+check("the ask pod is labelled into burritobot-tool-pin-ask with the env",
+      "tags.datadoghq.com/service=burritobot-tool-pin-ask,tags.datadoghq.com/env=burritobot-kubecon-na-26" in live_check)
+pin_docs = [d for d in yaml.safe_load_all((spike / "tool-pin.yaml").read_text(encoding="utf-8")) if d and d.get("kind") == "Deployment"]
+tmpl = (pin_docs[0]["spec"]["template"]["metadata"]["labels"] if pin_docs else {})
+check("the tool-pin Deployment's pods carry service burritobot-tool-pin and the env",
+      tmpl.get("tags.datadoghq.com/service") == "burritobot-tool-pin" and tmpl.get("tags.datadoghq.com/env") == DD_ENV, str(tmpl))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
