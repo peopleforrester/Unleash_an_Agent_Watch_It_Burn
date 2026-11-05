@@ -17838,3 +17838,7 @@ exit 1, a key on the listing's second page is found, a 403 on the listing names 
 scopes are refused while five read scopes pass the rule.
 
 **Not yet run on a cluster.** Nothing is owed. The read needs no change running on a cluster, only the sandbox org.
+
+**The suites (run 17391, on 065236e).** `bash verify/run-e2e-tools.sh` printed "56 checks ran (the offline suite and
+55 tier tests) in 27m13s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash verify/run-tests.sh`,
+printed "258 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces.py` among them.
