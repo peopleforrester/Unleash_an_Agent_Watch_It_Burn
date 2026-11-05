@@ -17345,3 +17345,7 @@ exits 0, the same check against the system roots:
 Then the definition of done's own leg, lab-platform#344: `labctl event up ... --front-door-cert=<that ARN>` logging
 `front doors: 2 roster clusters recorded`, and `labctl tls-check attackme.agenticburn.com` through lab-platform's
 gateway, which is lab-platform's to run once lab-platform#122 moves the wildcard.
+
+**Suites (run 17359, at a41023e4).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier, `test_front_door_tls_live_logic.py` among it with all 8 checks
+passing: 56 checks in 26m54s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
