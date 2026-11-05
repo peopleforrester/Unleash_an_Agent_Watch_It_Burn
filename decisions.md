@@ -18643,3 +18643,74 @@ No dependency was added.
 **The suites (run 17416, on 5c6c42f9, staging 5318d1e1 plus this change).** `bash verify/run-e2e-tools.sh` ran 56 checks
 (the offline suite and 55 tier tests) in 27m18s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite
 inside it ran 260 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_tier_swap_live_judges.py` among them.
+## 2026-11-05 · #792 · Every prompt is still not saved; the spans the brief describes were read live, and the save goes to the browser route and the custodian
+
+**What #792 asks.** Save the brief's room query, `ml_app:burritobot k8s.cluster.name:burritobot-public` (beat 3 of
+`gitops/ai-layer/web/brief.html`, #791), as a view named **Every prompt** in LLM Observability in Whitney's sandbox org,
+check that the brief's link fills it in and lists BurritoBot turns with the student's words in CONTENT, and change
+nothing in the org that is not BurritoBot's (#629). Michael's 2026-11-01 answer to escalation 397 on #337 ("Why does
+this need Michael?") stands, so nothing here asks him.
+
+**What run 17415 had, on 2026-11-05.** Unlike runs 16939 and before, the cluster session under
+`/var/lib/hecaton/runs/17415/clusters/` was readable (hecaton#508 is fixed for this run): `aws sts get-caller-identity`
+answered account 515966504359, and the read pair in `watch-it-burn/datadog` named the org `Datadog`. It did not have
+the unscoped application key the thread names at `~/secrets/datadog/wib-sandbox-fleet-monitors.env`: that is
+`/home/michael/secrets`, which answers this run's user with "Permission denied", as for runs 17295 and 17318. It has no
+browser signed in to Datadog: the shared Playwright cache has browsers, but no session in Whitney's org and no
+credentials to make one.
+
+**No saved-view API found again.** Datadog's LLM Observability docs, searched on 2026-11-05, describe the trace
+explorer's query syntax and no endpoint for its saved views. GETs with the read pair (which write nothing) answered 404
+on `/api/v1/saved_views`, `/api/v2/saved_views`, `/api/ui/saved_views`, `/api/ui/saved-views?type=llm_obs`,
+`/api/v2/llm-obs/v1/saved-views` and `/api/unstable/llm-obs/saved_views`, on both `api.` and `app.datadoghq.com`.
+Only `/api/v1/logs/views`, the logs explorer's saved views, exists: it answered 403 "Failed permission authorization
+checks", so the read pair cannot see it. Whether it also holds LLM Observability views is unknown. The run escalated
+one read-only listing of it with the unscoped key, run as Michael on this host by the custodian, so the next run can
+see whether Every prompt (or the room view #665 asked for) is there and what shape a view takes. No write was
+escalated: a POST shaped by guesswork could create something in Whitney's org that is not BurritoBot's.
+
+**The spans, read live.** One probe chat per KubeCon bot went through `python3 verify/agent_obs_flow.py chat
+--own-session --profile accen-dev --wait 480`: attackme.burritobot.co at 10:25:37Z and burritobot-private.burritobot.co
+at 10:30:13Z, both with guard-proxy's probe marker so neither reached the prompt wall. Both read PASS with 4
+`ml_app:burritobot` spans carrying the chat's own session, and the run printed `AGENT OBSERVABILITY GREEN`, exit 0.
+The Community trace, `3ab2a390c8ac54c19c2e41b8d2b80f42`, read with `verify/dd_traces.py --trace ... --json`:
+
+| span | kind | service | k8s.cluster.name | input |
+|---|---|---|---|---|
+| `POST` (root) | agent | burritobot | burritobot-public | value `What are your hours? [[wib-probe]]` |
+| `invocation` | agent | burritobot-agent | burritobot-public | empty |
+| `workshop_agent` | agent | burritobot-agent | burritobot-public | empty |
+| `generate_content ...` | llm | burritobot-agent | burritobot-public | messages: system (`You are BurritoBot, the cheerful and slightly witchy assistant...`), then the user's prompt |
+
+The root's output is BurritoBot's reply. The private cluster's three newest traces before the probes
+(`f4993fe8...`, `0eba6a5b...`, `92cc0b38...`, 09:26Z back to 08:33Z) have the same four-span shape on
+`burritobot-private`, with one root each.
+
+**What that settles.** The #791 entry's check 3: guard-proxy's root span carries `k8s.cluster.name:burritobot-public`
+and its input is the chat's prompt, so the brief's query selects the turn and its root carries the student's words.
+Check 4, as far as the API shows it: of the `service:burritobot-agent` rows, two have no input and the
+`generate_content` row's input starts with the system prompt, as the brief's warning says. One name differs from the
+brief's comment: LLM Observability names the root `POST`, where APM and Tempo name it `POST /chat`
+(`verify/one_root_probe.py`). The comment speaks of guard-proxy's span, which both are, so it and
+`verify/test_instructor_brief.py` stay as they are; nothing the org showed contradicts the brief's visible text.
+
+**The run of show.** Line 52 still lists "the room view is saved (#665)" as due by 2026-11-08, and the Night Before
+step has Whitney save the room's view on Past 15 Minutes. #665 is closed, but no entry here records a saved view's
+URL, so Every prompt is not taken as already saved.
+
+**Nothing in the org was created, edited or deleted.** Every call this run made to Datadog was a GET with the
+read-only pair. The two probe chats are BurritoBot's own turns, made the way `agent_obs_flow.py` always makes them.
+
+**Escalated.** A browser `read` and a `screenshot` of
+`https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-public` on Tanjiro, and
+the custodian's GET of `https://api.datadoghq.com/api/v1/logs/views` with the unscoped key. They show whether Michael's
+Chrome has a session in Whitney's org, whether the link fills in the query and lists turns in CONTENT, where the
+explorer's Views control is, and whether a view named Every prompt exists.
+
+**Not yet run on a cluster,** named again:
+1. Save the view: signed in to Whitney's sandbox org, open the brief's link, save it as a view named Every prompt on
+   Past 15 Minutes, reload, and record the view's URL and the page text in this file.
+2. The link fills in the query: the search bar holds `ml_app:burritobot k8s.cluster.name:burritobot-public` and the
+   list is filtered by it, with the root's INPUT in the CONTENT column.
+3. The warning in the page itself: the `generate_content` rows' preview shows the system prompt, not the student's
+   question. The API settles the input's order; only the page settles what its preview shows.
