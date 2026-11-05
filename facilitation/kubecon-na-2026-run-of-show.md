@@ -279,6 +279,33 @@ Bedrock directly, with the same model settings as the private cluster, which pas
 Seen in both public runs, so this is past a watch item: the room should expect some HC-666 tries to need a
 second send, which the "keep trying" step already covers. On stage, the presenters send it until it lands.
 
+**2026-11-05, the run-through day: both clusters on their KubeCon profiles (#906).** Hecaton run 17556, at staging
+`92dfea31`, on watch-it-burn-community (`attackme.burritobot.co`) and watch-it-burn-private
+(`burritobot-private.burritobot.co`). Before the probes, both clusters still ran the 2-hour workshop's profiles
+(`burn` and `admin`), which is what had left `block-recipe-snoop` and the agent egress set applied on private and
+`deny-external-registries` missing. Their `lab-bootstrap` roots now render `kubecon-community` and `kubecon-private`.
+`fleet.sh guardrails-link` linked the pair, and each control-plane security group now admits the other cluster's
+nodes on 443 (the switch's peer calls had timed out on the private endpoint).
+
+Admin, 16:21Z: 32 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.2001 to $0.2479 over 13 model calls. guardrails-on armed
+both clusters from the private terminal, and guards-off and guardrails-off left both at the start state.
+guardrails-on and guardrails-off from the community terminal also switched both, by hand, in 6 seconds.
+
+Community, 16:30Z: 12 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $4.4517 to $4.4866 over 7 model calls. Then
+`./fleet.sh reset-bot watch-it-burn-community` read `$0.0000 over 0 requests`.
+
+The runs before those, all model variance, not the platform:
+
+| Run | Result | The FAILs |
+|---|---|---|
+| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once `d25d21da` (#906) reaches the cluster. |
+| Admin 1 | cut off | guardrails-on timed out at 300 s: every call to the other cluster's API hung on its private endpoint. Fixed by the security group rule above. |
+| Admin 3 | 31 PASS of 32 | Challenge 4's re-ask: "no sign it tried", as on 2026-10-29. |
+
+Not shown by the probe: `registry.burritobot.co` and `deployments.burritobot.co` still answer the router's 404,
+because the routes table with their rows is not published yet. The private cluster's registry seed failed with a 405
+until `02404d1d` (#906) reaches it, so HC-666's Joker there is admitted but its image cannot be pulled before both.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in

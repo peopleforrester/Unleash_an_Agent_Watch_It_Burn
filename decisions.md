@@ -19384,3 +19384,109 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
+## 2026-11-05 · #906 · run 17556 · Both KubeCon clusters on their KubeCon profiles, linked, both probes GREEN, the bot reset
+
+`verify/prior-drafts.sh 906 origin/staging` printed NONE, and the issue had no comments, so this run started from
+staging `92dfea31`. The attempt before it ended on hecaton's own podman socket (`/run/user/103/podman/podman.sock`
+missing), before any work, so nothing was ported.
+
+**Step 1, the heavy gate (#883).** #883 was filed on staging `9c0e791c`, where `test_iam_policy_structural.py` failed.
+Every suite record on staging since names the tools tier green (58 checks at `92dfea31`, #874's entry). This run's own
+tools tier result is at the end of this entry.
+
+**Step 2, what applied the two policies outside the switch.** Argo CD did. The live `lab-bootstrap` root on
+watch-it-burn-private rendered `values-admin.yaml` (label `lab-platform/profile: admin`), and the one on
+watch-it-burn-community `values-burn.yaml`. Both clusters were built on 2026-10-28, before #774 added the two KubeCon
+profiles on 2026-11-01, and nothing had moved their roots since. The admin profile lists `network-policies` and
+`kubearmor-policies`, whose Applications owned `agent-egress-allowlist` and `block-recipe-snoop` (their Argo CD
+tracking ids said so), and it does not list `kyverno-breakout`, `guardrails-switch` or `internal-registry`. The burn
+profile has no Kyverno engine, so guardrails-on could not have armed community either. At 15:24Z and 15:26Z this run
+patched each root's values file and label to its KubeCon profile, the root `infra/deploy-full-idp.sh` writes for
+`kubecon-private` and `kubecon-community`:
+
+    kubectl --context watch-it-burn-private -n argocd patch application lab-bootstrap --type merge \
+      -p '{"metadata":{"labels":{"lab-platform/profile":"kubecon-private"}},"spec":{"source":{"helm":{"valueFiles":["values-kubecon-private.yaml"]}}}}'
+
+and the same with `kubecon-community` on watch-it-burn-community. Argo CD pruned `network-policies` and
+`kubearmor-policies` on private, which deleted the two policies and the agent and apps namespaces' other NetworkPolicies
+those Applications owned, and added `guardrails-switch`, `internal-registry` and `kyverno-breakout` (step 3). On
+community it added `kyverno`, `kyverno-registry-policy`, `kyverno-breakout` and `guardrails-switch`. Every Application
+on both clusters came back Synced and Healthy, except private's `internal-registry` (below). `event.sh` already defaults
+`WIB_ROSTER_PROFILES` to `kubecon`, so a fresh bring-up gets these profiles without this patch.
+
+`/controls` on private still reads `falco: true`. That badge reads the Falco DaemonSet (guard-proxy's
+`test_controls_falco_reads_the_daemonset`), and `kubecon-private` installs Falco on purpose: it detects and blocks
+nothing, and it is not one of the four guardrails #774 starts off. Every other badge on both clusters reads false.
+
+**Step 4, the link, and why guardrails-on still hung.** `./fleet.sh guardrails-link watch-it-burn-community
+watch-it-burn-private` printed `linked; guardrails-on in either terminal arms both`. The first admin probe then
+timed out on guardrails-on after 300 s, and private's terminal showed why: `kubectl --kubeconfig ~/.kube/peer`
+answered `dial tcp 10.0.50.254:443: i/o timeout`. Both clusters sit in one VPC with private endpoint access on, so
+inside the VPC a cluster's API name resolves to its private endpoint, whose security group (the EKS module's cluster
+group) admits only that cluster's own nodes. guardrails-link checks each link from this host, over the public
+endpoint, so it passed. This run added one rule to each module cluster group, from the other cluster's node group only:
+
+    aws ec2 authorize-security-group-ingress --group-id sg-04130d5989d5c1ab1 --ip-permissions \
+      'IpProtocol=tcp,FromPort=443,ToPort=443,UserIdGroupPairs=[{GroupId=sg-011fc555e507cfb40,Description="watch-it-burn-private nodes to this cluster API, the guardrails switch (#906)"}]'
+
+(`sgr-06466079a45231aba` on community) and the mirror on private, `sg-0ca9886f5a9d4f6d3` from community's node group
+`sg-0b7d2a0cfaed6fecd` (`sgr-00a76b36470442653`). The same peer call then answered in 0.1 s, and guardrails-on and
+guardrails-off each switched both clusters in 6 s, from either terminal. In git, `e6f34a90` gives `module "eks"` a
+`security_group_additional_rules` entry admitting the lab VPC's CIDR (`data "aws_vpc" "lab"`) on 443. The public
+endpoint already admits 0.0.0.0/0, so the rule opens nothing a VPC host could not reach already. A root apply adds it
+beside the two hand rules, which differ in source, so the apply does not collide with them, and they can then be
+revoked (`aws ec2 revoke-security-group-rules --group-id <group> --security-group-rule-ids <id>`). Until then #205's
+drift report will name them. `verify/test_peer_api_rule.py` pins the rule offline, and
+`verify/test_control_plane_app_ports_module.py` (tools tier) now also checks every attribute it sets against the pinned
+module's `security_group_additional_rules` type and that the module's cluster rule passes `cidr_blocks` through.
+
+**The internal registry's seed failed, and why.** On private, `internal-registry`'s pod read 1/2: the seed container
+exited with `failed to send blob (chunk) ... Method Not Allowed [http 405]`. The registry's log has the upload POSTs
+(202) and no PATCH at all. `REGISTRY_HTTP_HOST=https://registry.burritobot.co` made every upload Location absolute on
+the public name, so regctl sent its PATCH out through the router and the console, whose door admits only GET (a
+`curl -X PATCH` on the public name answers 405 too). `02404d1d` sets `REGISTRY_HTTP_RELATIVEURLS=true` instead. A live
+patch of the Deployment was refused by `block-argocd-drift`, as it should be, so the fix was checked in a scratch
+namespace, `check-906-17556`, with the same two images and seed script: the pod read 2/2, the tags list read
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`, and `regctl image digest` read the pinned
+`sha256:0dbe92d4...`. The namespace was deleted. `internal-registry` reads Degraded on private until `02404d1d` reaches
+it. `verify/test_guardrails_switch.py` now checks the relative URLs and that the seed pushes only to localhost.
+
+**Step 5, the routes table.** Not published by this run: publishing pushes apex-agenticburn's main and reloads the
+live router over Railway SSH, which a run's governance forbids, so the report escalates it (`./fleet.sh routes roster`,
+then `router-check` and `wall-check`, from a staging checkout). At 16:30Z `registry.burritobot.co/v2/` and
+`deployments.burritobot.co` still answered the router's 404.
+
+**Step 6, the breakout image.** Done before this run: push-jokers.yml's staging run of 10:22Z (#775) pushed it.
+ghcr.io's tags list for `peopleforrester/festival-ops/maintenance-shell` reads `busybox-1.38.0` and
+`busybox-1.38.0-internal`, the manifest request for the second answers 200, and the scratch seed above copied it at the
+images.lock digest.
+
+**Step 7, the probes.** Full results are in the run-of-show's Probe record (2026-11-05 entry). Admin, 16:21Z: 32 PASS,
+`KUBECON PROBE GREEN`, $0.2001 to $0.2479 over 13 model calls. Community, 16:30Z: 12 PASS, `KUBECON PROBE GREEN`,
+$4.4517 to $4.4866 over 7 model calls. Every FAIL before those was the model: the linked-list ask twice, Challenge 4's
+re-ask once, and HC-666 three times in five community runs on a new manifest shape. The bot wrote `requested_by` as a
+top-level field of the Deployment, and the API server answered `failed to create typed patch object ...
+.requested_by: field not declared in schema`. `d25d21da` has deploy_app take that field out and read it as the
+requester, as #856 did for the trailing form, and `verify/test_deploy_app_manifest_shapes.py` gains the shape (its six
+new checks fail on the old server). The first admin run was cut off by this run's own 590 s timeout before its last
+beat; the clusters were read afterwards and put back with guardrails-off from the terminal, and every later run ended
+with the probe's own guards-off and guardrails-off.
+
+**Step 8.** `./fleet.sh reset-bot watch-it-burn-community` printed `counter at zero on
+https://attackme.burritobot.co/cost ($0.0000 over 0 requests)`, and `/cost` read `"requests": 0, "usd": 0.0`.
+
+**Left on the clusters, at 16:31Z.** Both roots on their KubeCon profiles; the pair linked both ways; the two security
+group rules above; every AI guard off and the four Kubernetes guardrails off on both (`/controls` all false but
+private's Falco badge); no `joker-*` Deployment on either; community's counter at zero.
+
+**Not yet run on a cluster.** Once hecaton promotes this run and Argo CD syncs it:
+1. On private, `internal-registry` reads Synced and Healthy, its pod 2/2.
+2. Once the routes are published as well,
+   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` lists `busybox-1.38.0`,
+   `deployments.burritobot.co` answers 200, and `CONTEXT=watch-it-burn-community python3
+   verify/test_service_hosts_live.py` covers the kept service hosts.
+3. Several HC-666 asks in a row on community land `joker-<name>` with no schema refusal: the community probe's
+   `c6-lands` beat, run three times.
+4. After a root apply of `infra/terraform/aws/cluster` to either cluster, `aws ec2 describe-security-group-rules` on
+   its module cluster group shows TCP 443 from the lab VPC CIDR, and the two hand rules can be revoked.
