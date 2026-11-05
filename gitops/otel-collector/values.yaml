@@ -130,6 +130,20 @@ config:
           # v1.7.0 also writes the backend call as a CLIENT span of its own and forwards that span's id to kagent
           # (log.rs start_outbound, read at tag v1.7.0), so it is kept too: the A2A backend is the one plain-HTTP
           # call, subtype "Http" (MCP calls are "Mcp", model calls "Llm").
+          #
+          # The kept tools/call pair is its own parentless trace in APM, one per tool call, and stays one (#877).
+          # kagent's MCP client sends no traceparent: golang-adk v0.10.1 builds it on a plain http.Transport
+          # (go/adk/pkg/mcp/registry.go, createTransport, read at tag v0.10.1), and its execute_tool span has no HTTP
+          # child. The gateway follows a context on :3001 when one arrives: an MCP exchange sent with a traceparent
+          # (burritobot-private, 2026-11-05) put tools/call under the parent it named. The collector sees one span at
+          # a time and cannot give it the agent's, so the pair stays apart until kagent sends one.
+          #
+          # The A2A hops on :3000 include guard-proxy's tasks/get polls (#877): once a second while a tool runs, each
+          # one guard-proxy POST, this SERVER span, the Http CLIENT span and the agent's server span, all inside the
+          # turn's one trace. Span for span, a poll's guard-proxy and gateway spans carry the same names and attributes
+          # as the message/send hop the turn hangs from, so no rule here can drop a poll without cutting that path
+          # (#320). They are dropped at source or not at all: guard-proxy can send a poll with an unsampled
+          # traceparent, which the gateway does not record (log.rs TraceSampler, parent_not_sampled, read at v1.7.0).
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call") and not attributes["server.port"] == 3000 and not attributes["agentgateway.outbound.subtype"] == "Http"'
           # kagent's own agent-card GET server spans (the client side is dropped above), and every other
           # HTTP verb from the agent's ASGI instrumentation. Measured 2026-09-07 against the live org: 37 of
@@ -503,6 +517,14 @@ config:
     # same prompt and reply as its root, an llm row with no tokens. kagent's server span is the 14 ms message/send row
     # whose invocation now hangs from the root. Every span with no gen_ai.* attribute is one Datadog would drop anyway,
     # so it is not sent twice.
+    #
+    # And every gateway span (#877). The only ones filter/drop_noise lets through with a gen_ai.* attribute are the MCP
+    # tools/call pair, the SERVER span on :3001 and its "tools/call workshop-mcp_<tool>" CLIENT child, which carry
+    # gen_ai.tool.name. The intake made no Agent Observability row of them, but it wrote them into APM under the
+    # copy's derived trace id, so each tool call showed there as two parentless traces with the same span ids: APM
+    # trace ba4d717c4482c8c0598202c7238ecc7f and its copy be12f808f25277a4fcbe7c7c993df2c2 (the SHA-256 prefix of
+    # the first), read from both Tempo and Datadog on burritobot-private 2026-11-05. Agent Observability has the same
+    # call as kagent's execute_tool row, so the copy loses nothing, and APM keeps the gateway's own pair.
     filter/llmobs_one_root:
       error_mode: ignore
       traces:
@@ -510,6 +532,7 @@ config:
           - 'resource.attributes["service.name"] == "burritobot" and name == "chat" and kind == SPAN_KIND_INTERNAL'
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and kind == SPAN_KIND_SERVER and attributes["gen_ai.operation.name"] == nil'
           - 'not Any(Keys(attributes), (_, k) => HasPrefix(k, "gen_ai."))'
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$")'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
