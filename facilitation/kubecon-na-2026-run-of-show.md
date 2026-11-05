@@ -132,6 +132,26 @@ read at zero. If it fails, it says which step, and it scales back and
 resumes Argo CD before it exits. If it says it could not resume Argo CD, run the
 `kubectl ... annotate application ai-layer argocd.argoproj.io/skip-reconcile-` line it prints.
 
+**Check the challenge traces before each run (#760).** The presenters open each
+challenge's trace in front of the room, so before run 1, before run 2 and the Night
+Before, from the repo root, after `agent_obs_flow.py chat` (#783) is green:
+
+```bash
+python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json
+```
+
+It reads the newest `ml_app:burritobot` trace for each challenge in Whitney's sandbox
+org and judges it against `verify/challenge-trace-shapes.yaml`: one root row, the
+prompt and the reply on it, tokens and cost, the root's duration covering the chat,
+and the challenge's key calls under the root. It prints PASS or FAIL per challenge,
+with the trace's link, and must end `CHALLENGE TRACES GREEN`. Each FAIL is filed as
+its own issue here, with the link as evidence, unless the line already names an
+open issue. `--tag k8s.cluster.name:burritobot-private` reads only the presenters'
+cluster, `--tag k8s.cluster.name:burritobot-public` only the room's. A `note:` line is
+not a failure: in Challenge 4 the bot often asks for both tools in one turn, so the
+trace shows them side by side. On 2026-11-05 every challenge failed only on cost,
+#876, and the private cluster had no chat making both of Challenge 2's calls.
+
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
 | Date | not yet run | not yet run | not yet run |
@@ -140,6 +160,7 @@ resumes Argo CD before it exits. If it says it could not resume Argo CD, run the
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
 | Prompt wall empty first (`wall-check --empty` passed?) | | | |
+| Challenge traces checked first (`challenge_traces.py` GREEN? FAILs filed as) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
@@ -1848,6 +1869,19 @@ is merely slow rather than rebuilding:
   Between runs, `python3 verify/agent_obs_flow.py watch --profile accen-dev` spends
   nothing and goes red when APM's newest BurritoBot span never reached Agent
   Observability.
+- [ ] **Check each challenge's trace shape (#760), after the seed and the flow
+  check.** The seeded attacks are the newest traces for Challenges 1, 3 and 4, and
+  the probe's or the room's for Challenge 2:
+
+  ```bash
+  python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json
+  ```
+
+  It must end `CHALLENGE TRACES GREEN`: one root row per chat with the prompt and the
+  reply on it, tokens and cost, and each challenge's key calls under the root, as
+  `verify/challenge-trace-shapes.yaml` writes them down. Each FAIL is filed as its
+  own issue with the trace link it prints, the night before, not on the day. When no
+  chat made both of Challenge 2's calls, its FAIL links the newest trace of each.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
