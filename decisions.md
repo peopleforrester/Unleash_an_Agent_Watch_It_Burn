@@ -16291,3 +16291,6 @@ silently not applied. `docs/floor.md`'s row for the ignore now says so.
 **Not yet run on a cluster.** agentgateway-c7 on the new form: 0 warnings from that container, and `guard-mcp-on` then
 `guard-mcp-off` reloading on it. That needs a cluster built from staging at or after `e9634b38`, or the committed c7
 file applied to watch-it-burn-private by a principal Kyverno admits, followed by a pod restart.
+
+**The suites (run 17221, at `ae3877c4`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m25s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
