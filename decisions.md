@@ -18553,7 +18553,11 @@ and with no map nothing is renamed. With `transform/llmobs_model` taken out of `
 across the three profiles. `verify/test_pin_bedrock_profiles.sh` adds the ConfigMap: written on a fresh pin with the
 four keys and a collector restart, left alone and no restart on a second pass, written for a cluster pinned before
 #784, rewritten with a standby's own ARNs, holding only the three pinned tiers when one has no profile, and a refused
-write that fails the pin and restarts nothing.
+write that fails the pin and restarts nothing. `verify/test_collector_no_datadog.py` held that the collector has no
+envFrom and that every env var its config reads is set on the container; it now admits exactly the optional
+`bedrock-profile-models` envFrom and the `WIB_BEDROCK_PROFILE_*` references read with a default, and still fails any
+other envFrom or any undefaulted variable the container does not set. `verify/test_collector_llmobs_model.py` sources
+fleet.sh, so it runs behind `no_cloud.setup()` and ends on its call log (#859, held by `test_no_cloud_by_hand.sh`).
 
 **Not yet run on a cluster.** The rename needs this change running, and the ConfigMap. Once Argo CD has synced the
 collector change on both clusters:

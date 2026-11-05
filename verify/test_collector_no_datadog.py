@@ -110,7 +110,12 @@ check(f"collector container env: no blocking secret reference {blocking_refs(val
 for name, c in sorted(inits.items()):
     check(f"init container {name}: no blocking secret reference {blocking_refs(c.get('env'), ABSENT)}",
           not blocking_refs(c.get("env"), ABSENT))
-check("no envFrom on the collector that could name a missing secret", not vals.get("extraEnvsFrom"))
+# The one envFrom is #784's map of the cluster's Bedrock profile ARNs, a ConfigMap fleet.sh writes, optional so a
+# cluster that has not been pinned starts the same.
+env_from = vals.get("extraEnvsFrom") or []
+check("no envFrom on the collector that could name a missing secret or ConfigMap: only the optional "
+      "bedrock-profile-models map (#784)",
+      env_from == [{"configMapRef": {"name": "bedrock-profile-models", "optional": True}}])
 check("no secret volume on the collector", not any("secret" in v for v in vals.get("extraVolumes") or []))
 fsk_app = yaml.safe_load((REPO / "gitops/bootstrap/apps/falcosidekick.yaml").read_text(encoding="utf-8"))
 fsk = fsk_app["spec"]["source"]["helm"]["valuesObject"]
@@ -137,8 +142,14 @@ check("the metrics pipeline exports to Prometheus", "prometheusremotewrite" in p
 check("span_metrics still turns spans into metrics", "span_metrics" in pipes["traces"]["exporters"]
       and "span_metrics" in pipes["metrics"]["receivers"])
 refs = env_refs(bare)
-check(f"every env var the config reads is set on the container {sorted(refs)}",
-      refs <= {e["name"] for e in vals.get("extraEnvs") or []} | CHART_ENV)
+# A reference with a default (${env:NAME:-value}) reads the default when the variable is unset: #784's
+# WIB_BEDROCK_PROFILE_* keys, which come from the optional envFrom ConfigMap above and default to "unpinned".
+defaulted = set(re.findall(r"\$\{env:([A-Za-z_][A-Za-z0-9_]*):-", yaml.safe_dump(bare)))
+undefaulted = set(re.findall(r"\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}", yaml.safe_dump(bare)))
+check(f"every env var the config reads is set on the container, or read with a default {sorted(refs)}",
+      undefaulted <= {e["name"] for e in vals.get("extraEnvs") or []} | CHART_ENV and refs == undefaulted | defaulted)
+check(f"each read with a default is one of the profile map's keys {sorted(defaulted)}",
+      defaulted and all(r.startswith("WIB_BEDROCK_PROFILE_") for r in defaulted) and not defaulted & undefaulted)
 check("the config reads no Datadog env var", not any(r.startswith("DD_") for r in refs))
 # The chart renames otlp/otlphttp exporters in relay.yaml and not in the overlay; an old name would make the
 # two files disagree about what the Tempo exporter is called, which is how the first cut of this broke.

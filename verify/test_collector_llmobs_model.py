@@ -27,6 +27,10 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, helm_values  # noqa: E402
+# Offline means offline (#859): the test sources fleet.sh, so aws, kubectl, eksctl, terraform and helm are stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
 
 FLEET = REPO / "infra/terraform/fleet/fleet.sh"
 RESOURCES = REPO / "gitops/ai-layer/resources.yaml"
@@ -111,6 +115,9 @@ for profile in PROFILES:
         others = sorted(p for p, pipe in pipes.items() if p != "traces/llmobs" and PROC in pipe.get("processors", []))
         check(f"{label}: no other pipeline renames, so APM keeps the ARN the bill's tags trace", not others, str(others))
         check(f"{label}: the rules are the same on this profile", conf["processors"][PROC] == vals["config"]["processors"][PROC])
+
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls, _calls)
 
 print()
 if failures:
