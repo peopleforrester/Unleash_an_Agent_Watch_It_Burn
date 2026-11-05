@@ -18579,3 +18579,63 @@ and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_collector_llmobs_model.py`, `te
 `test_collector_act2_redaction_e2e.py` and `test_trace_shape_e2e.py` passed. The first run, at `21d85e16`, failed only
 the two offline checks the second commit answers (the no-Datadog collector's envFrom and env rules, and the fleet.sh
 guard); its 56 tier tests passed.
+## 2026-11-05 · #793 · The live tier swap on watch-it-burn-community: /cost reads haiku in 3.8 s and new spend is at the Haiku row
+
+**Context.** #793 had four items. Items 2 and 3 landed in 6525992e (run 16791, the 2026-11-03 · #793 entry), and the
+repin, item 1, is Michael's a65f748d to c2eb4cf2, since moved again to 0f0c809 by 9f2b575c; both carry
+guard-proxy-agenticburn#37 (c8ac56e), and `verify/test_guard_proxy_pin_bound_pricing.py` (#841) holds that. Item 4,
+the swap on a cluster, was owed because runs 16460, 16752, 16791, 16852, 16869 and 16876 could not read their cluster
+files (hecaton#508). Run 17416 could, and `bash verify/prior-drafts.sh 793 origin/staging` answered NONE: every
+earlier draft is in staging or followed there by later #793 work, so nothing was ported.
+
+**What changed.** The swap is now a live check that any cluster build reruns, not a hand procedure:
+- `verify/test_tier_swap_live.py` (`# SUITE: e2e`, so `verify/run-e2e.sh` runs it on CONTEXT) checks that guard-proxy
+  runs the pinned proxy.py (pod template, resources.yaml and the sha256 of the pinned file agree) with no
+  COST_PER_1K_IN or COST_PER_1K_OUT override, that the Agent starts on bedrock-nova with `/cost`'s tier nova, then
+  patches the Agent to bedrock-haiku and nothing else. A poller inside the guard-proxy pod reads the Agent with
+  guard-proxy's own token and `/cost` on loopback on one clock, so the delay it reports carries no exec or clock-skew
+  overhead; it bounds the delay from above by timing from the start of the last read that still showed bedrock-nova.
+  The check wants that bound under the 5 s cache plus 1 s for the poll cycle, one `price_tier` log line naming
+  bedrock-haiku, MODEL_TIER untouched, and, once kagent has rolled the agent out on the new config-hash, one /chat
+  turn whose `cost_usd` is its tokens at the Haiku row and a `/cost` growth equal to the tokens it gained at the Haiku
+  row. That last judge holds with a visitor's turn in the same window, since every turn after the swap is priced at
+  Haiku, so the public bot's traffic does not make it fail. It then patches back to bedrock-nova and checks the tier
+  and the rollout again; the swap back runs whatever failed after the first patch. The rates come from the pinned
+  proxy.py's `TIER_PRICES_PER_1K`, not a copy. Patches go `--as` Argo CD's application controller, which Kyverno's
+  block-argocd-drift always admits, so an armed cluster needs no policy flip and the policy is left as found.
+- `verify/test_tier_swap_live_judges.py` (offline) runs the judges on the readings below and on each way they should
+  fail: a 6.5 s flip, a poller timeout, a turn or counter priced at the Nova row, a guarded turn, a counter that did
+  not count or was reset, a stale pod template, a price override, a `price_tier_unknown` line. It also compiles the
+  two in-pod scripts and checks the poller reads the `_AGENT_PATH` the pinned proxy.py prices from.
+- `docs/MASTER-RECREATION-SPEC.md`'s tier bullet no longer says the live patch is not validated live, and
+  PROJECT_STATE.md's #793 section no longer lists the swap as owed. `verify/run-e2e.sh`'s header names what the new
+  check spends.
+
+**Live, 2026-11-05, on watch-it-burn-community** (`. "$HECATON_CLUSTER_ENV"`, then
+`CONTEXT=watch-it-burn-community python3 verify/test_tier_swap_live.py`), guard-proxy at 0f0c809, `checksum/proxy-py`
+dfca2b1fe758, MODEL_TIER nova:
+```
+PASS guard-proxy runs the pinned proxy.py: pod template checksum/proxy-py 'dfca2b1fe758', resources.yaml 'dfca2b1fe758', sha256 of the pinned proxy.py 'dfca2b1fe758'
+PASS guard-proxy prices by the tier table (no COST_PER_1K_IN/OUT override)
+PASS before the swap the Agent is bound to 'bedrock-nova' (want bedrock-nova)
+PASS before the swap /cost's tier reads 'nova' (want nova)
+PASS /cost's tier read haiku at most 3.77s after the patch (3.63s after the poller saw it; limit 5s cache + 1s poll allowance)
+PASS guard-proxy logged 1 price_tier line(s) naming bedrock-haiku: 'pricing at haiku: workshop-agent is bound to bedrock-haiku'
+PASS guard-proxy's MODEL_TIER was left at 'nova' (was 'nova')
+PASS workshop-agent rolled out on its new config-hash: ['deployment "workshop-agent" successfully rolled out']
+PASS the /chat turn answered: guarded=False, 5889 in / 400 out tokens, reply 'Welcome to Hex & Cauldron, friend! ✨ Our menu is *always* spooky and delicious. '
+PASS the turn's cost_usd 0.007889 is its tokens at the haiku row, $0.007889 (the nova row would be $0.005991)
+PASS /cost's tier after the turn reads 'haiku' (want haiku)
+PASS /cost counted the turn: +1 request(s), +5889 in / +400 out tokens
+PASS /cost's usd grew $0.007889, its token growth at the haiku row is $0.007889 (the nova row would be $0.005991)
+PASS swapped back to bedrock-nova: /cost's tier read nova at most 3.65s after the patch (3.47s after the poller saw it; limit 5s cache + 1s poll allowance)
+PASS after the swap back, workshop-agent rolled out on its new config-hash: ['deployment "workshop-agent" successfully rolled out']
+15/15 tier-swap checks passed on watch-it-burn-community
+```
+Left as found: the Agent reads bedrock-nova, `/cost`'s tier nova, workshop-agent's config-hash is back at
+11285754136355302026, and the workshop-agent Application reads Synced and Healthy. The one change that stays is the
+counter: `/cost` went from 773 requests and $4.1810 to 774 and $4.1889, the probe turn (marked [[wib-probe]], so the
+feed skipped it), until the counter is next reset. watch-it-burn-private was only read. The run-e2e.sh header line
+and the `turn` readings line the check now prints were added after this run, and the judges test reran green on them.
+
+No dependency was added.
