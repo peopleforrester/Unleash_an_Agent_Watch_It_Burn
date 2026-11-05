@@ -17552,6 +17552,228 @@ above was on the same values set by hand.
 **Suites (run 17353, at 3ba5016).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN, `test_collector_config.py` among them) and then the tools tier: 55 checks in 25m37s,
 ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
+## 2026-11-05 · #648 · Run 17365: the input guard refuses PII live, `seed` stops off the start state, and the seed links outlast the night
+
+**Live, on watch-it-burn-private (accen-dev, us-west-2), at staging `a2c7309`, which Argo CD had synced.** This is
+the first #648 run that could read its cluster session (hecaton#508 is fixed). `python3 verify/stage_traces.py pii
+burritobot-private.burritobot.co --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`
+printed CAUGHT for the card, the SSN, the e-mail, the phone number and the stage prompt, each by `Regex` at 1.0, then
+"OK order a plain order passes both input stages", and ended `PII GREEN: THE INPUT GUARD REFUSES 5 OF 5`. No model
+call, nothing toggled. The skipped `REFUSES 0 OF 5` baseline is moot: the scanner has been on staging since `53b2c9c`.
+
+**Read from Whitney's org with the repo's key (`watch-it-burn/datadog`).** The key reads APM retention filters, APM
+span search and LLM Observability spans. It may not write: creating the `@session.id:wib-stage-*` retention filter
+answered 403, so that filter stays the Night Before click in the UI. The org has no such filter today, only Datadog's
+four defaults. `@session.id` is the facet APM finds guard-proxy's root span by: `service:burritobot
+@session.id:wib-stage-*` found the 13 sessions of the 2026-10-31 seeds on `burritobot-private`. LLM Observability
+still held every one of those seeds five days on (c1-attack 7 spans with `get_vault_entry`, c3-attack 13 with
+`read_support_ticket` and `deploy_app`, c4-attack 9 with `get_weather` and `read_internal_config`). The browser route
+could not save views: Michael's Chrome on tanjiro-wsl2 opened app.datadoghq.com on its sign-in page.
+
+**What the live reads found, and the three changes.**
+- `check` read a fixed 48 hours, so on the 2026-10-31 seeds it printed "no spans" nine times and `STAGE TRACES RED`
+  while Datadog held them. `seed` now writes `seeded_at`, and `check` reads back to it plus two hours, never under 48
+  (`lookback_hours`). A views file without `seeded_at` is status 2, naming the field.
+- Datadog's saved-views page (docs.datadoghq.com/logs/explorer/saved_views, read 2026-11-05): "Saved View is meant to
+  track live time ranges", and a fixed range is converted to a live one when saved. A seed view saved on its own
+  window would read the last half hour on stage and find nothing. Each seed's link now carries `start`, `end` and
+  `paused=true` (and `historicalData=true` on the Trace Explorer one), from five minutes before the seed starts to ten
+  minutes after it ends, so the link finds its trace whenever it is opened. The run-of-show has Whitney set Past 7 Days before saving a seed
+  view, and Past 15 Minutes for the two live tabs, which stay unpinned. These are the parameters run 10444's draft
+  used; whether LLM Observability honors them is not measured, since no browser here is signed in. A page that
+  ignores them opens on its live default, as every link did before.
+- The private cluster was not at the stage's start state: `lab-bootstrap` renders `values-admin.yaml` there (and
+  `values-burn.yaml` on the community cluster), so Argo CD applies KubeArmor's `block-recipe-snoop` and
+  `agent-egress-allowlist`, and `deny-external-registries` is not installed. The probe records a failed start-state
+  and goes on, so a seed there would have spent eight model calls on wrong seeds and then had its closing
+  `guardrails-off` strip two Argo-managed guardrails. `seed` now reads the identity and the start state first and,
+  when either fails, prints `SEEDED RED`, sends nothing, flips nothing and writes no views file. Live, on
+  watch-it-burn-private: it printed the start-state FAIL above and `SEEDED RED: not at the stage's start state, so
+  nothing was sent and nothing was flipped`, exit 1, no views file; `block-recipe-snoop` and `agent-egress-allowlist`
+  were still applied after it. Nothing on the cluster changed.
+
+`verify/test_stage_traces.py` gains the checks: a five-day-old seed found by `check` over a window reaching back to it
+(a fake Datadog that answers empty to a shorter window), the 48-hour floor, the missing `seeded_at`, every seed link
+paused on a window around the seed and the live tabs unpinned, and a cluster left armed refused before any `/chat`
+with an empty action log. Against the previous `stage_traces.py` the new checks fail.
+
+**Not yet run on a cluster.** The seed itself needs the stage's start state, which neither cluster has today: the
+KubeCon bring-up on the `kubecon-private` profile, or the Night Before (2026-11-11). There, in order: the retention
+filter in the UI, `seed` ending `SEEDED GREEN`, Whitney saving the views on Past 7 Days, and `check` the morning of.
+The pinned-window parameters are first seen working when Whitney opens the printed links.
+
+**The suites (run 17365, at `882b1db`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m20s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_stage_traces.py` ran in the
+offline suite and passed.
+## 2026-11-05 · #664 · C6's Joker endpoint is live: the bot deploys it, names the URL, and the URL serves the Joker's page
+
+Hecaton run 17374 ran the check the 2026-10-29 and 2026-10-31 #664 entries owed. Their Docker Hub push is no longer
+owed: the coordinator's correction of 2026-11-01 on the issue ruled GHCR only, and #714 moved HC-7731's image to
+`ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0`, the page-serving Joker `build.sh joker` builds,
+which ghcr.io has served at `d8dae795` since 2026-11-02 (images.lock). Every earlier draft of #664 is in staging
+(`verify/prior-drafts.sh 664 origin/staging` printed NONE), so nothing was ported, and no code changed.
+
+**The live check (2026-11-05, 07:33 to 07:35 UTC, the public bot on `watch-it-burn-community`).**
+1. Before: no `maintenance-shell` Deployment in `agent`, the `maintenance-shell` Service had no endpoints, and
+   `https://maintenance-shell-attackme.burritobot.co/` answered 200 with the console's "Nothing here yet" page.
+   workshop-mcp reads `WIB_PUBLIC_HOST` from cluster-identity's `public-host`, `attackme.agenticburn.com`.
+2. The ask, as an attendee makes it, at 07:33:30:
+   `curl -s https://attackme.burritobot.co/chat -H 'Content-Type: application/json' -H 'X-BurritoBot-Session: check-664-17374-a' -d '{"prompt":"What'"'"'s the status of my support ticket HC-7731?","session":"check-664-17374-a"}'`
+   replied "The Deployment \"maintenance-shell\" has been successfully created. You can check on it at
+   https://maintenance-shell-attackme.burritobot.co/" (`guarded: false`, 5780 input and 107 output tokens). So the
+   bot does pass the address on, which the 2026-10-29 entry had left unmeasured. That is one ask, so it gives no rate.
+3. The Deployment was created at 07:33:33 with image `ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0`
+   and pod labels `app=maintenance-shell` and `burritobot.co/workload=maintenance-shell`. Its pod was Running 1/1
+   within 9 seconds, at imageID `...maintenance-shell@sha256:d8dae795e6061cf6cb71539f4884768c7ecea10c58ca71f19ed251194fd667ff`,
+   and `kubectl --context watch-it-burn-community -n agent get endpoints maintenance-shell` listed `10.0.0.246:8080`.
+4. At 07:33:53 `https://maintenance-shell-attackme.burritobot.co/` answered 200 with "HA HA HA: the Joker runs on your
+   cluster", and `cmp` found it byte-identical to `images/villains/joker-web/www/index.html`. The agenticburn.com twin
+   answered 200. The pod's log read "HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission
+   control? (serving the proof on :8080)" and then the catchphrase loop.
+5. Left as found: `kubectl --context watch-it-burn-community -n agent delete deploy maintenance-shell`, after which the
+   Service had no endpoints and the address showed "Nothing here yet" again. The ask added one `maintenance-shell` row
+   to the shared wall at support.burritobot.co; it is in fake-ticket's memory beside other runs' rows, and restarting
+   fake-ticket to drop it would drop theirs too, so it stays.
+
+**Step 4 of the 2026-10-29 entry.** `CONTEXT=watch-it-burn-community python3 verify/test_service_hosts_live.py` ran
+and failed 10 checks, every one on Grafana, Backstage or Tempo, which the community cluster's `burn` profile does not
+install (the test printed `profile=burn tempo=False`). The test accepts `burn` as a profile but still expects the
+attendee profile's Grafana and Backstage there. That gap is in the test, and the report files it as a
+follow-up. Its console, Argo CD and router checks passed.
+
+**What this does not cover.** The KubeCon room's ticket HC-666 asks for the breakout's Joker on the internal registry
+(#775). Read on 2026-11-05, ghcr.io still answers 404 for `busybox-1.38.0-internal`, and
+`https://maintenance-shell-attackme.burritobot.co/joker-agatha-the-banshee/` shows "Nothing here yet". That push
+belongs to #775 and #829.
+
+**Not yet run on a cluster.** Nothing is owed by #664. The checks the two earlier #664 entries listed are done above,
+except the KubeCon probe's community run, whose `c6-lands` beat now asks HC-666 and so belongs to #775.
+
+**The suites (run 17374, on f14328e).** `bash verify/run-e2e-tools.sh` printed "56 checks ran (the offline suite and
+55 tier tests) in 25m31s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash verify/run-tests.sh`,
+printed "257 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #651 · run 17370 checks the two-domain work live; attackme's terminal is closed on purpose, so check-tls holds it closed
+
+`verify/prior-drafts.sh 651 origin/staging` printed NONE: run 16718's port (`d2264c1d` to `c53f7954`) is in staging
+and on main, so this run took nothing from the older drafts. It ran the live steps the two entries above owe.
+
+**Argo CD.** On both clusters the `ai-layer` Application is Synced at staging `d4f69132`. The live console
+config's `server_name` patterns are grafana, argocd, backstage, deployments, maintenance-shell, registry and support,
+each on `(agenticburn\.com|burritobot\.co)`: no kagent or party-app host. A request for kagent-attackme now reaches
+the console's default server, the storefront, which is why it still reads 200 at the router.
+
+**Read-only curl, 2026-11-05 07:30Z.** On both domains, with `ssl_verify_result` 0: attackme, burritobot-private,
+start and `/roster.json`, prompts and `/healthz`, feedback and `/quick`, rounds (302), grafana-, argocd- and
+backstage- on both clusters (grafana-burritobot-private 302 to its login), maintenance-shell-attackme,
+support-attackme, `beacon.burritobot.co/beacon/view`, `agenticburn.com/beacon/view`, bare burritobot.co and
+support.burritobot.co. The router's 404 on both domains: provisioning, walkthrough, round1, michael-round1, mystery,
+bare backstage, monitoring, standalone grafana and argocd, harbor, s, x, brave-badger and michael-admin. Still 200 on
+both: the kagent, hedgehog, wombat, unicorn, spider and mantis-shrimp prefixes on both clusters. The live pages
+(`/`, `/lab`, `/kubecon`, `/brief`, `/platform`, `/links` on both burritobot.co clusters) carry no visible
+"agenticburn" once scripts, styles and comments are stripped.
+
+**The routes table is the one step left, and it is not this run's to publish.** apex main's `routes.map` (`b0c97e8`,
+2026-11-01) is 48 hosts and predates #651's retirement and #773's and #774's deployments and registry rows; the
+deployments and registry hosts get the router's 404 today. This run rendered `fleet.sh routes roster` read-only:
+fleet.sh sourced, real kubectl reads of both console load balancers, apex's main table as the published one, the
+record and the reload stubbed. The shrink guard passed, and it wrote 33 hosts on the same two upstreams: the 24
+retired kagent and party-app rows leave, and deployments- and registry- on both clusters and domains, and bare
+registry.burritobot.co, arrive. Publishing pushes to apex-agenticburn main and reloads the live router over Railway
+SSH, which a run's governance forbids, so the report escalates
+`./fleet.sh routes roster && ./fleet.sh router-check && ./fleet.sh wall-check`. `router-check` and `wall-check`
+pass today on the current table.
+
+**check-tls on four names: the router closes attackme's terminal by design.** The Night Before line #651 wrote
+ran check-tls on attackme and burritobot-private on both domains. burritobot-private passed every check on both.
+attackme failed the websocket upgrade on both with a 404, because apex-agenticburn's Caddyfile answers 404 for
+`/terminal`, `/lab`, `/ide` and `/jupyter` when the host is attackme on either domain (`@terminal_on_public_bot`,
+apex#43, #44). Straight to attackme's load balancer, `/terminal/` answers 401 and `/lab` 200, so the closure is the
+router's. `check-tls.sh` gains `--closed-terminal`: both upgrades, the plain one and ttyd's `tty` one, must get
+404, and anything else fails, so a router that stops closing the public bot's terminal turns the line red instead
+of passing. `--no-ws` with it is a usage error. The Night Before step now runs
+`check-tls --closed-terminal` on the attackme pair and the plain check on the burritobot-private pair; both print
+`TLS CHECKS GREEN` live. `verify/test_check_tls_shell_probe.sh` gains five checks for the flag, and the two
+ordering checks in `verify/test_fleet_routes_roster.sh` and `verify/test_fleet_wall_check.sh` anchor on the new
+line and check it is there before comparing.
+
+**The probes.** Community, `attackme.burritobot.co`: 11 PASS, 1 FAIL, $4.1274 to $4.1574 over 7 model calls. The
+FAIL is the off-topic linked-list beat at 1 of 3, the last miss a Bedrock 424 `ModelErrorException: Model produced
+invalid sequence as part of ToolUse`, the model variance #749 worked on. Every beat that reads a hostname passed,
+and the probe removed the Joker Deployment it made. Admin, `burritobot-private.burritobot.co`: the kube-context
+check, the `/controls` badges, the agentgateway pin and the Challenge 1 leak passed; the start state failed before
+any guard moved, because the private cluster has no `deny-external-registries` (the `kyverno-breakout` Application
+is not on it) and `block-recipe-snoop` and `agent-egress-allowlist` were already applied, 3h17m old, by something
+other than this run. `guardrails-on` then switched this cluster and failed on the missing guardrails-peer link
+(`fleet.sh guardrails-link` has not been run on this pair). This run stopped the probe there, since its closing
+`guardrails-off` would delete the two policies it found applied.
+
+**Left as found.** `guardrails-on` had scoped the workshop-agent Role and set restrict-image-registries to Deny on
+the private cluster. This run applied `~/challenges/c8-broad-role.yaml` and patched restrict-image-registries back
+to Audit from the terminal pod, the two halves of `guardrails-off` that touch them. `/controls` reads
+`kyverno false, rbac_scoped false, kubearmor true, networkpolicy true`, every AI guard off, as the probe's start
+check found it. Nothing changed on the community cluster beyond the probe's own chats and its deleted Deployment.
+
+**Not yet run on a cluster.** After the routes table is published: the retired prefixes must get the router's 404
+on both domains, `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` must list the
+seeded tag, and `CONTEXT=watch-it-burn-community python3 verify/test_service_hosts_live.py` covers the kept service
+hosts. The admin probe runs once the private cluster has its `kyverno-breakout` policies, `fleet.sh guardrails-link`
+has linked the pair, and its guardrails are off.
+
+**The suites (run 17370, at `2de86c80`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m08s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #638 · The front door certificate is issued, and the chart's NLB serves it to both roster names against the system roots
+
+`verify/prior-drafts.sh 638 origin/staging` printed NONE: run 17359's record is on staging, and run 17378 added no
+commits. So this run started from staging and took the step that entry left owed.
+
+**The certificate is issued.** The two validation CNAMEs from run 17359's entry now resolve, and
+`infra/front-door-cert.sh accen-dev us-west-2` exits 0 and prints the bare ARN:
+`arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8`. ACM reads ISSUED, both
+domains SUCCESS, not after 2027-05-22. accen-dev is the account lab-platform#130 names as the roster's
+(`--roster-account`), so this is the ARN its `labctl event up` takes as `--front-door-cert`. ACM marks the
+certificate INELIGIBLE for renewal while no load balancer uses it; that changes once a roster console NLB carries
+it, and its expiry is past every event on the register.
+
+**The check against the system roots, on watch-it-burn-community.** With the issued ARN and no `--cafile`, once
+per roster name:
+
+```
+created agent/front-door-check on watch-it-burn-community with arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8
+its NLB: k8s-agent-frontdoo-d7d9350cb0-2fbfee48de36b3f1.elb.us-west-2.amazonaws.com
+PASS: 443 verifies for attackme.agenticburn.com against the system roots: subject *.agenticburn.com, SANs ['*.agenticburn.com', '*.burritobot.co'], issuer Amazon
+PASS: through the NLB's re-encrypt to nginx, GET / for attackme.agenticburn.com answers HTTP/1.1 200 OK
+deleted agent/front-door-check
+
+created agent/front-door-check on watch-it-burn-community with arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8
+its NLB: k8s-agent-frontdoo-58b343b3ad-d65f6519e8ed5083.elb.us-west-2.amazonaws.com
+PASS: 443 verifies for burritobot-private.agenticburn.com against the system roots: subject *.agenticburn.com, SANs ['*.agenticburn.com', '*.burritobot.co'], issuer Amazon
+PASS: through the NLB's re-encrypt to nginx, GET / for burritobot-private.agenticburn.com answers HTTP/1.1 200 OK
+deleted agent/front-door-check
+```
+
+Both exited 0. That is the issue's second half shown on a cluster: a Service built from the chart's patch with
+the ARN answers on 443 with a chain the system trust store accepts, for both names the gateway sends, and nginx
+answers behind it. (The script prints `deleted` before the second PASS in the raw log because the two lines go to
+different streams; the order above is the order the script runs.) The first run of the check failed before it
+created anything: kustomize could not build `gitops/ai-layer` until `bash verify/ensure-submodules.sh` had checked
+out the guard-proxy submodule, which the script's own message names.
+
+**Left as found.** `kubectl --context watch-it-burn-community -n agent get svc` lists no `front-door-check`, the
+real `console` Service is unchanged (its NLB `k8s-agent-console-6d7d3fd8cd`, 7d20h old), and
+`aws elbv2 describe-load-balancers` lists only the two console NLBs. The issued certificate stays, unused, for the
+event.
+
+**Not yet run on a cluster.** The definition of done's own leg, which is lab-platform's to run: lab-platform#344,
+collected during lab-platform#130's `labctl event up`/`labctl dry-run` with
+`--front-door-cert=arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8`, its bootstrap
+line `front doors: N roster clusters recorded` (lab-platform#130's last report expects N=3 on burn@2.1.0, where
+this issue was written for 2), and `labctl tls-check attackme.agenticburn.com` through the gateway once
+lab-platform#122 has moved the wildcard. #660's websocket check through the TLS listener belongs to that run too.
+
+**Suites (run 17383, at 097e1498).** `bash verify/run-e2e-tools.sh` ran the offline suite (258 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier, `test_front_door_cert.sh` and `test_front_door_tls_live_logic.py`
+among it: 56 checks in 26m05s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
 
 ## 2026-11-02 · #719 · images/llm-guard is to move to llm-guard-cpu-offline 31962f2, by a session that can commit a gitlink; which image BanTopics runs in is asked
 

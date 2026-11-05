@@ -34,7 +34,7 @@ cat >"${T}/bin/openssl" <<'EOF'
 case "$1" in
   rand)     echo "c3R1YmJlZC1rZXktMTIzNA==" ;;
   s_client) cat >/dev/null ;;
-  x509)     cat >/dev/null; echo "notAfter=$(date -u -d '+365 days' '+%b %d %H:%M:%S %Y GMT')"; echo "DNS:*.agenticburn.com" ;;
+  x509)     cat >/dev/null; echo "notAfter=$(date -u -d '+365 days' '+%b %d %H:%M:%S %Y GMT')"; echo "DNS:*.agenticburn.com, DNS:*.burritobot.co" ;;
 esac
 EOF
 chmod +x "${T}/bin/curl" "${T}/bin/openssl"
@@ -64,6 +64,30 @@ check "the plain upgrade probe still asks for no subprotocol" \
 check "--no-ws skips both upgrade probes" \
   ': >"${T}/curl.log"; PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" WS_CODE=101 TTY_CODE=101 \
      bash "${CHECK_TLS}" --no-ws burritobot-private.agenticburn.com >"${T}/log" 2>&1 && ! grep -q "Upgrade: websocket" "${T}/curl.log"'
+
+# The public bot (#651): the router answers 404 on attackme's terminal path under both domains (apex-agenticburn#43,
+# #44), so the Night Before line runs attackme with --closed-terminal, which holds that 404 instead of skipping.
+closed() {   # $1 the plain upgrade's code, $2 the tty upgrade's code; prints rc=<n>
+    : >"${T}/curl.log"
+    PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" WS_CODE="$1" TTY_CODE="$2" \
+        bash "${CHECK_TLS}" --closed-terminal attackme.burritobot.co >"${T}/log" 2>&1
+    echo "rc=$?"
+}
+echo "== --closed-terminal holds the public bot's terminal closed =="
+check "both upgrades answered 404 by the router pass" \
+  '[[ "$(closed 404 404)" == rc=0 ]] && grep -q "PASS  the router closes the terminal: both websocket upgrades on /terminal/ get 404" "${T}/log" &&
+   grep -q "TLS CHECKS GREEN" "${T}/log"'
+check "a plain upgrade that reaches the terminal (101) fails" \
+  '[[ "$(closed 101 404)" == rc=1 ]] && grep -q "FAIL  the terminal is NOT closed on attackme.burritobot.co" "${T}/log"'
+check "a credentialed terminal behind an open router (401, then 502) fails" \
+  '[[ "$(closed 401 502)" == rc=1 ]] && grep -q "the upgrade got .401. and the tty upgrade .502." "${T}/log"'
+check "--closed-terminal sends both upgrades, pinned to HTTP/1.1, to the terminal path" \
+  '[[ "$(closed 404 404)" == rc=0 ]] &&
+   grep "Sec-WebSocket-Protocol: tty" "${T}/curl.log" | grep -q -- "--http1.1 .*https://attackme.burritobot.co/terminal/$" &&
+   grep "Upgrade: websocket" "${T}/curl.log" | grep -v "Sec-WebSocket-Protocol" | grep -q -- "--http1.1 .*https://attackme.burritobot.co/terminal/$"'
+check "--no-ws with --closed-terminal is refused as a usage error" \
+  'PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" bash "${CHECK_TLS}" --no-ws --closed-terminal attackme.burritobot.co >"${T}/log" 2>&1;
+   [[ $? -eq 2 ]] && grep -q "contradict" "${T}/log"'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }

@@ -21,14 +21,19 @@ note() { printf '  note  %s\n' "$*"; }
 
 WS_PATH="${WIB_WS_PATH:-/terminal/}"
 CHECK_WS=1
+CLOSED_TERMINAL=0
 
 usage() {
     cat >&2 <<EOF
-Usage: ${0##*/} [--no-ws] <hostname> [hostname...]
+Usage: ${0##*/} [--no-ws | --closed-terminal] <hostname> [hostname...]
 
   --no-ws   Skip the websocket probe. Use for hosts that legitimately have no terminal (the
             provisioning app, the apex router), where a 404 there means "correct", not "broken".
             Override the path instead with WIB_WS_PATH=/some/path/.
+  --closed-terminal
+            The host is a cluster console whose terminal the router closes: the public bot,
+            attackme, on either domain (apex-agenticburn#43, #44). Both upgrade probes must get
+            the router's 404, so a router that stops closing it fails here instead of passing.
 
 Asserts, per hostname:
   * https:// returns 200
@@ -46,11 +51,14 @@ EOF
 while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --no-ws) CHECK_WS=0; shift ;;
+        --closed-terminal) CLOSED_TERMINAL=1; shift ;;
         -h|--help) usage ;;
         *) echo "unknown flag: $1" >&2; usage ;;
     esac
 done
 
+[[ "${CHECK_WS}" -eq 0 && "${CLOSED_TERMINAL}" -eq 1 ]] \
+    && { echo "--no-ws and --closed-terminal contradict: one skips the probe the other asserts" >&2; usage; }
 [[ $# -ge 1 ]] || usage
 command -v openssl >/dev/null 2>&1 || { echo "openssl not found" >&2; exit 1; }
 
@@ -104,6 +112,21 @@ for host in "$@"; do
         -H "Connection: Upgrade" -H "Upgrade: websocket" \
         -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
         "https://${host}${WS_PATH}" 2>/dev/null)"
+    if [[ "${CLOSED_TERMINAL}" -eq 1 ]]; then
+        # The public bot (#651's Night Before line). The router answers 404 on the terminal's path before the
+        # console sees it, so both upgrades, the plain one and the shell's own tty one, must get that 404.
+        shell="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --http1.1 \
+            -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Protocol: tty" \
+            -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
+            "https://${host}${WS_PATH}" 2>/dev/null)" || true
+        if [[ "${ws}" == 404 && "${shell}" == 404 ]]; then
+            ok "the router closes the terminal: both websocket upgrades on ${WS_PATH} get 404"
+        else
+            bad "the terminal is NOT closed on ${host}: the upgrade got '${ws:-no response}' and the tty upgrade '${shell:-no response}', not 404 (the router's @terminal_on_public_bot)"
+        fi
+        echo
+        continue
+    fi
     case "${ws}" in
         101) ok "websocket upgrade accepted (101)" ;;
         401) ok "websocket endpoint reachable, auth required (401) — expected once ttyd has a credential" ;;

@@ -9,12 +9,14 @@ sent only after guard-proxy's own input stages say they refuse it, and its trace
 read, before guardrails-on and after it (#843), and both seeds need run_shell's grep in workshop-mcp's audit log."""
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import pathlib
 import re
 import sys
 import tempfile
+import urllib.parse
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -341,6 +343,81 @@ with tempfile.TemporaryDirectory() as tmp:
     st.datadog = lambda profile, region: (FakeDatadog(missing=("c3-pii",)), "datadoghq.com")  # noqa: E731
     check("check is red when the PII trace was not kept overnight (no retention filter indexed it)",
           st.main(["check", "--profile", "accen-dev", "--out", str(out)]) == 1)
+
+    print("== check reads back to the seed's own start ==")
+    class AgeAware(FakeDatadog):
+        """Datadog as measured on 2026-11-05: a seed's spans are there, but only a window reaching back to it finds
+        them. It records every window it is asked for."""
+
+        def __init__(self, age_h: int) -> None:
+            super().__init__()
+            self.age_h, self.windows = age_h, []
+
+        def call(self, method, path, body=None):
+            frm = (body["data"]["attributes"]["filter"]["from"] if body
+                   else path.split("filter[from]=", 1)[1].split("&", 1)[0])
+            hours = int(frm.removeprefix("now-").removesuffix("h"))
+            self.windows.append(hours)
+            if hours < self.age_h:
+                return {"data": []}
+            return super().call(method, path, body)
+
+    old = json.loads(out.read_text())
+    five_days = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=5)).isoformat()
+    out_old = pathlib.Path(tmp, "stage-traces-old.json")
+    out_old.write_text(json.dumps({**old, "seeded_at": five_days}))
+    aged = AgeAware(age_h=5 * 24)
+    st.datadog = lambda profile, region: (aged, "datadoghq.com")  # noqa: E731
+    check("check finds a five-day-old seed, reading back past its start, in LLM Observability and APM",
+          st.main(["check", "--profile", "accen-dev", "--out", str(out_old)]) == 0
+          and aged.windows and min(aged.windows) >= 5 * 24, str(sorted(set(aged.windows))))
+    check("a seed from the night before is read over 48 hours, never less",
+          st.lookback_hours((dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=14)).isoformat(),
+                            dt.datetime.now(dt.timezone.utc)) == 48)
+    check("the 2026-10-31 seeds, read on 2026-11-05, are read over more than five days",
+          st.lookback_hours("2026-10-31T14:52:00+00:00", dt.datetime(2026, 11, 5, 9, 0, tzinfo=dt.timezone.utc))
+          == 4 * 24 + 18 + 2)
+    out_bare = pathlib.Path(tmp, "stage-traces-bare.json")
+    out_bare.write_text(json.dumps({k: v for k, v in old.items() if k != "seeded_at"}))
+    check("check on a views file with no seeded_at: status 2, naming the field",
+          st.main(["check", "--profile", "accen-dev", "--out", str(out_bare)]) == 2)
+
+    print("== each seed's link opens on the seed's own window ==")
+    seeded_ms = int(dt.datetime.fromisoformat(old["seeded_at"]).timestamp() * 1000)
+
+    def params(url: str) -> dict:
+        return dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+
+    seed_views = [v for v in views if v["session"]]
+    check("every seed link is paused on a window that starts before the seed and ends after it",
+          all(params(v["url"]).get("paused") == "true"
+              and int(params(v["url"])["start"]) < seeded_ms < int(params(v["url"])["end"]) for v in seed_views),
+          str([params(v["url"]) for v in seed_views][:2]))
+    check("the PII seed's Trace Explorer link reads historical data, since its span is indexed, not live",
+          params(pv["url"]).get("historicalData") == "true", str(params(pv.get("url", ""))))
+    check("the room's and the presenters' tabs stay live: no pinned window",
+          all("start" not in params(v["url"]) and "paused" not in params(v["url"]) for v in views if not v["session"]))
+
+    print("== a seed off the stage's start state ==")
+
+    class LeftArmed(FakePrivate):
+        """The private cluster as found on 2026-11-05: the admin profile, KubeArmor's block-recipe-snoop and the egress
+        allowlist applied by Argo CD, so the stage's start state fails."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.armed = True
+
+        def toggle(self, q):
+            raise AssertionError(f"toggled {q} on a cluster off its start state")
+
+    la = LeftArmed()
+    out_la = pathlib.Path(tmp, "stage-traces-armed.json")
+    check("seed exits 1 off the start state, before any /chat",
+          run_seed(la, FakeDatadog(), out_la) == 1 and la.calls == 0 and not la.sent, str(la.sent))
+    check("and flips nothing: no guardrails-off, no AI guard, Role or gateway change, the guardrails left as found",
+          la.log == [] and la.armed is True, str(la.log))
+    check("and writes no views file, since nothing was seeded", not out_la.exists())
 
     print("== a trace that never reaches Datadog ==")
     out2 = pathlib.Path(tmp, "stage-traces-2.json")

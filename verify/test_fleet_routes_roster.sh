@@ -179,9 +179,9 @@ check "the usage text names routes roster and router-check" \
 ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"
 line_of() { grep -nF -- "$1" "${ROS}" | head -1 | cut -d: -f1; }
 check "the Night Before writes the roster table and checks the router before check-tls" \
-  '[[ -n "$(line_of "./fleet.sh routes roster")" && -n "$(line_of "./fleet.sh router-check")" ]] &&
+  '[[ -n "$(line_of "./fleet.sh routes roster")" && -n "$(line_of "./fleet.sh router-check")" && -n "$(line_of "./fleet.sh check-tls --closed-terminal attackme")" ]] &&
    (( $(line_of "./fleet.sh routes roster") < $(line_of "./fleet.sh router-check") &&
-      $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls attackme") ))'
+      $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls --closed-terminal attackme") ))'
 check "the C1 beat names the beacon view by URL" \
   'grep -A3 -E "^ *- C1 exfiltrate" "${ROS}" | grep -qF "https://beacon.burritobot.co/beacon/view"'
 
