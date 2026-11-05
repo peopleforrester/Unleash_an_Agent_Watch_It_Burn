@@ -21682,3 +21682,63 @@ not repeated: they ran after the routes publish on the netcup router that the #9
 **The suites (run 17754, at `fedc85fc`, on staging `f144c2b6`).** `bash verify/run-e2e-tools.sh` printed `278 tests
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `63 checks ran
 (the offline suite and 62 tier tests) in 39m09s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #784 · Run 17459: the owed steps ran on both clusters, and every model call in Agent Observability is priced
+
+**Where the issue stood.** `verify/prior-drafts.sh 784 origin/staging` printed NONE: every earlier draft is in
+staging, run 17406's `transform/llmobs_model` among them (merged as `8fb9b076`). That run's entry, the 2026-11-05 ·
+#784 entry above, left three steps under "Not yet run on a cluster". This run did all three on staging `c96c9e3b`.
+It changed no file under `gitops/`, `infra/` or `verify/`; this entry and one PROGRESS.md line are its commit.
+
+**What the clusters ran.** On both clusters the `otel-collector` Application was Synced and Healthy at
+`312d4e48`, which contains `8fb9b076`. The rendered relay config holds `transform/llmobs_model`. The DaemonSet loads
+`bedrock-profile-models` through an optional `configMapRef`. `monitoring/bedrock-profile-models` was on both clusters
+already, written at 12:38:16Z (community) and 12:38:26Z (private) by a `kubectl create` this run did not make. Its
+four `WIB_BEDROCK_PROFILE_*` keys equal the four Bedrock ModelConfigs' `spec.model` on each cluster (community nova
+`.../5l72jg8rnz71`, private nova `.../88hce5o0zw45`). The collector pods had started at 11:27:08Z and 11:25:21Z,
+before the map existed. A pod reads `envFrom` only when it starts, so they still read every key as `unpinned`, and
+nothing was renamed.
+
+**Step 1.** The map needed no write, so this run did only the restart that step 1 and fleet.sh's
+`_write_profile_models` both end with:
+`kubectl --context <c> -n monitoring delete pod -l app.kubernetes.io/name=opentelemetry-collector` on each cluster at
+12:56Z. Both DaemonSets rolled out again (pods `kb5f4` and `rjmfr`, Ready). That is the state fleet.sh's converge
+leaves, so the clusters are as a converge would leave them, with no other change.
+
+**Step 2, a fresh chat on each bot.** `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session
+--wait 540` sent both chats (community 12:56:55Z, session `wib-aoflow-burritobot-public-20261105125655`; private
+13:01:31Z, session `wib-aoflow-burritobot-private-20261105125655`). The shell's 580 s timeout stopped it while it
+was still waiting on private's spans, so the read-back is `verify/dd_traces.py --profile accen-dev --trace <id>
+--json`:
+- community, trace `bead9e7b734655089abee7550a1c977e`: one `generate_content` llm row named
+  `us.amazon.nova-pro-v1:0`, 5312 in and 118 out, `cost_estimate_status:success`, `estimated_total_cost` 4627200
+  (1e-9 USD), tagged `witb.bedrock.application_profile:` with community's nova ARN;
+- private, trace `bb6eea9c2b2753819288621d6a3a314f`: the same, 5312 in and 76 out, `success`, 4492800, tagged with
+  private's nova ARN.
+A third chat in the window, another run's probe on community (session `wib-aoflow-burritobot-public-20261105130303`,
+trace `f097b82e087d528084a4f47a022d8d44`), read the same: `success`, 4496000. Community's figure is 5312 in at 0.80
+and 118 out at 3.20 USD per million, Nova Pro's list price, so the estimate is the price table's in proxy.py.
+
+**Step 3, APM.** Read from `/api/v2/spans/events` with the read-only pair, by trace id. Private's chat (APM trace
+`33d004134b6076d9deeeb80c239100af`) has guard-proxy's `chat` span (service `burritobot`) with
+`gen_ai.usage.input_tokens` 5312 and `output_tokens` 76, and its one `generate_content` span (service
+`burritobot-agent`) with the same two counts, still named by the profile ARN. Community's probe chat at 13:03Z (APM
+trace `da16918ea6588dc6248fb8a70e8e8504`) reads 5312 and 77 on both spans. One model call per turn, so the sum is that
+call's counts and they match. APM keeps the ARN, as the 2026-11-05 entry says it should. APM also shows the copy's
+own trace for each turn, with the system id: the extra trace the 2026-11-02 · #783 entry's "What it costs"
+paragraph describes. That is not a change.
+
+**The judge.** `WIB_LLMOBS_JUDGE_MINUTES=12 python3 verify/test_llmobs_chat_judge_live.py` at 13:09Z judged trace
+`f097b82e...`. Check 5 (tokens on every llm row, `estimated_total_cost` above zero, no `skipped_tokens_missing`)
+passed, where every row failed it at 09:26Z (the 2026-11-05 · #771 entry). Checks 1, 2 and 4 passed. Check 3 failed
+because the window held no chat that called `read_support_ticket` and `deploy_app`, and the test exited 1 for that
+reason only. This run sent no HC-666 chat to get one. On community it deploys a `joker-` Deployment and needs
+Kyverno off, so it would leave the cluster changed. Check 3 is #746's and passed at 09:26Z, and the rename does not
+touch tool rows.
+
+**Redaction.** No flip to Act 2 was made on a cluster. The 2026-11-05 entry's Act 2 probe at Datadog's intake
+(trace `3cd4975613e25ec2a55f2952b747d0e6`) stands as the evidence, and `verify/test_collector_act2_redaction_e2e.py`
+holds it in the tools tier.
+
+**What is left.** Nothing for #784 and nothing for #876, which is the same change. The cost on a turn with several
+model calls (an HC-666 chat) rests on the same per-span rename, and `verify/test_llmobs_chat_judge_live.py` reads it
+the next time the live suite runs after such a chat.
