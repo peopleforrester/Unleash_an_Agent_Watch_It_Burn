@@ -29,8 +29,7 @@ the delivery's cost is higher. Run the command below with all five profiles to c
 
 Why these windows:
 
-- **Portland.** On accen-dev, CloudTrail shows the first fleet `CreateCluster` (watch-it-burn-r1-1) at
-  2026-08-26 10:31 UTC and the last `DeleteCluster` (watch-it-burn-whitney-admin) at 2026-09-09 00:52 UTC. The next
+- **Portland.** On accen-dev, CloudTrail shows the first fleet `CreateCluster` at 2026-08-26 10:31 UTC and the last `DeleteCluster` (watch-it-burn-whitney-admin) at 2026-09-09 00:52 UTC. The next
   cluster, wib-137-probe at 2026-09-10 17:37 UTC, is post-delivery work on #137, and its days are not Portland's. The
   day before the window billed 0.08 USD and the day after 8.19 USD. The 550.88 USD in the issue is
   2026-09-06 .. 2026-09-12, which takes in the event days and the probe and misses the eleven days of build before.
