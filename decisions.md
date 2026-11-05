@@ -18969,3 +18969,8 @@ nginx's per-network /chat zone removed) and `9b0b4a01` (#787, the test's tighter
 
 The one probe turn, marked `[[wib-probe]]`, cost about half a cent of Bedrock and counts on the community bot's
 /cost until the counter is reset (run-of-show, "Reset the community bot"). The run changed no cluster state.
+
+**The suites, on this branch (run 17425).** `bash verify/run-e2e-tools.sh` ran the offline suite first: 261 tests,
+"ALL OFFLINE RENDER-GATE TESTS GREEN". The tools tier then ran "57 checks ran (the offline suite and 56 tier tests)
+in 27m18s", ended "ALL E2E TOOLS TIER CHECKS GREEN" and exited 0. The ghcr.io 404 that held run 16809's tier red
+(#814) no longer appears. The prose gate passed on this entry.
