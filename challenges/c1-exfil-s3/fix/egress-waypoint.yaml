@@ -1,0 +1,93 @@
+# ABOUTME: Option B of the C1 stage-2b fix (#727): a forced egress proxy for the agent namespace, built as an
+# ABOUTME: Istio ambient egress waypoint that admits only the lab's allowed hostnames at L7.
+#
+# WHY A WAYPOINT
+# Question 1009 (#724, decisions.md 2026-11-04) chose option B, a forced egress proxy enforcing an FQDN
+# allowlist, over option A (Cilium toFQDNs, a fleet CNI migration) and option D (AWS ApplicationNetworkPolicy,
+# EKS-Auto-Mode only). The attendee and admin clusters already run Istio ambient (gitops/bootstrap/apps/
+# istio.yaml, pinned 1.30.4), so the proxy is built on the mesh as an egress waypoint rather than a new
+# standalone component. Question 1077 (#860) settled that the community cluster, on the bare burn profile
+# with no Istio, never carries this fix; it stays the stage-1 cluster with egress open.
+#
+# WHAT IT DOES
+# The ServiceEntry names the external hosts the lab is allowed to reach and routes them through the
+# waypoint. The AuthorizationPolicy on the waypoint admits only those hosts, so any other external name a
+# pod tries to reach through the waypoint is refused at L7. Paired with agent-egress-fqdn.yaml, which drops
+# the weather feed's direct TCP-443-to-anywhere allow, the waypoint becomes the only path to the public
+# internet for that pod, and Open-Meteo the only destination it admits. Bedrock keeps its in-VPC L3/L4
+# allow (it is reached over PrivateLink inside 10.0.0.0/16, not the internet), so it does not pass through
+# the waypoint.
+#
+# BUILD-TIME CHECKS OWED TO THE LIVE VALIDATION (#728)
+#   - Istio version. The ambient egress-gateway pattern is documented against release-1.31 samples
+#     (istio.io/latest/docs/ambient/usage/egress-gateway/, read 2026-11-04); the fleet pins 1.30.4. Confirm
+#     the waypoint egress pattern on the pinned version, or carry the Istio upgrade that #860 left open for
+#     the attendee and admin clusters, before this is applied live.
+#   - Gateway API CRDs. The waypoint Gateway needs gateway.networking.k8s.io installed. Istio ships them or
+#     they are installed separately; confirm they are present on the cluster that carries the fix.
+#   - DNS for the ServiceEntry hosts. resolution: DNS leaves the client resolving the host; the locked
+#     resolver (resolver-lockdown.yaml) forwards open-meteo.com for exactly this, so the name resolves and
+#     ztunnel then steers the connection to the waypoint. Confirm the steering on the pinned version.
+---
+# The egress waypoint itself: a Gateway of the istio-waypoint class, used for service-addressed traffic.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: egress-waypoint
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+    # A waypoint that handles traffic addressed to services (the ServiceEntry below), not to pods.
+    istio.io/waypoint-for: service
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+    - name: mesh
+      port: 15008
+      protocol: HBONE
+---
+# The only external hosts the lab is allowed to reach: C7's two Open-Meteo endpoints. Routed through the
+# waypoint by the use-waypoint label, so the AuthorizationPolicy below governs them.
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: open-meteo-egress
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+    istio.io/use-waypoint: egress-waypoint
+spec:
+  hosts:
+    - api.open-meteo.com
+    - geocoding-api.open-meteo.com
+  ports:
+    - number: 443
+      name: https
+      protocol: TLS
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+# L7 allowlist on the waypoint: admit only TLS to the two Open-Meteo hosts on 443. Because an ALLOW policy
+# is attached to the waypoint, Istio refuses every request the policy does not match, so any other external
+# host steered here (a label-encoded name, an attacker webhook) is denied.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: egress-waypoint-allowlist
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: egress-waypoint
+  action: ALLOW
+  rules:
+    - to:
+        - operation:
+            hosts:
+              - api.open-meteo.com
+              - geocoding-api.open-meteo.com
+            ports:
+              - "443"

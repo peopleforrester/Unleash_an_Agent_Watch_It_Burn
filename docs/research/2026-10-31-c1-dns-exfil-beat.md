@@ -91,6 +91,20 @@ stage 1 cluster, egress open, on the bare burn profile, which gains no Istio and
 attendee and admin clusters, which run Istio ambient, so B is built once, on the mesh. A later breakout profile
 that wants the full fix on its community cluster makes that choice in its own issue.
 
+**The config, landed (#727).** `challenges/c1-exfil-s3/fix/` holds B over C as config, with
+`verify/test_c1_dns_exfil_fix.py` covering it offline. `resolver-lockdown.yaml` is floor C: a CoreDNS Corefile whose
+`.` block carries no catch-all `forward`, so it serves in-cluster names and forwards only `amazonaws.com` and
+`open-meteo.com` to the VPC resolver. Every other name, the collector's zone under `agenticburn.com` included, finds
+no upstream and comes back SERVFAIL without leaving the cluster. `egress-waypoint.yaml` is option B: an Istio ambient
+egress waypoint, a `ServiceEntry` for C7's two Open-Meteo hosts, and an `AuthorizationPolicy` that admits only those
+hosts. `agent-egress-fqdn.yaml` makes the waypoint the one workload granted a public 443 and shuts the weather feed's
+direct door, leaving the stage 2 L3/L4 allowlist and the DNS allow in place. The build settled the two items the
+decision left open: Bedrock keeps its in-VPC `10.0.0.0/16:443` allow and does not pass through the waypoint, and the
+proxy allowlist is the two Open-Meteo hosts. The config has run on no cluster. Build-time items owed before it is
+applied live are in that directory's `README.md`: the Istio version that supports the ambient egress pattern (the
+1.30.4 pin against the 1.31 samples, which may need the upgrade #860 left open), the Gateway API CRDs, the waypoint
+pod label, and pinning the resolver lock through the `coredns` addon so it is not reverted.
+
 ## Build pieces and cost
 
 | Piece | Size | Notes |

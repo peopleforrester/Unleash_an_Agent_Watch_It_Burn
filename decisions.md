@@ -21539,3 +21539,46 @@ RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), the
 and 62 tier tests) in 36m21s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
 `verify/test_dd_credential_comment.py` among the tier tests and passing. The prose gate printed `prose gate: pass`.
 No dependency was added.
+## 2026-11-05 · #727 · The C1 stage-2b fix landed as config: a forced egress proxy over a locked resolver
+
+**What this run did.** It implemented the FQDN control chosen by question 1009 (#724), option B, a forced egress
+proxy enforcing a hostname allowlist, on top of floor C, a locked DNS resolver, and landed it as config under
+`challenges/c1-exfil-s3/fix/` with an offline test. Nothing was applied to a cluster. The live validation is owed and
+tracked by #728.
+
+**Why here, and why these pieces.** C1's second stage holds the direct HTTPS beacon with the L3/L4 egress allowlist,
+and stage 2b carries the same marketing demographics out as labels in a DNS query name, which that allowlist cannot
+read. The fix has two pieces that hold together. `resolver-lockdown.yaml` is floor C: a CoreDNS Corefile with no
+catch-all `forward` in its `.` block, forwarding only `amazonaws.com` and `open-meteo.com` to the VPC resolver, so
+in-cluster names, Bedrock and C7's weather host resolve and every other name, the collector's zone under
+`agenticburn.com` included, comes back SERVFAIL without leaving the cluster. `egress-waypoint.yaml` is option B: an
+Istio ambient egress waypoint, a `ServiceEntry` for the two Open-Meteo hosts, and an `AuthorizationPolicy` admitting
+only those hosts at L7. `agent-egress-fqdn.yaml` makes the waypoint the one workload granted a public 443 and shuts
+the weather feed's direct `TCP 443` to anywhere.
+
+**What the build settled.** Question 1009 left two items to the build. Bedrock keeps its in-VPC `10.0.0.0/16:443`
+allow and does not pass through the waypoint, because it is reached over PrivateLink inside the VPC rather than the
+internet. The proxy allowlist is C7's two Open-Meteo hosts, `api.open-meteo.com` and `geocoding-api.open-meteo.com`,
+read from `gitops/ai-layer/weather_feed.py`.
+
+**Stage 2 kept intact.** The fix defines no `agent-egress-allowlist` and no `agent-allow-dns` of its own, so those
+stage-2 objects stand unchanged, and `policies/network-policies/per-namespace/agent-egress-allowlist.yaml` still
+carries the Bedrock, service-CIDR and Pod Identity allows. The one companion the fix rewrites is
+`agent-allow-weather-feed-egress`, whose stage-2 broad `TCP 443` to anywhere is the last direct public door; the fix
+replaces it with an empty egress rule set, since the weather feed reaches Open-Meteo through the waypoint now. No
+`apps-*` policy and no `default-deny` is touched, and the other agent companions do not reach a public host, so no
+other challenge's network assumptions change. `policies/network-policies/` is not edited by this run.
+
+**Owed before it is applied live (#728).** The Istio version that supports the ambient egress pattern (the fleet
+pins 1.30.4; the pattern is documented against 1.31 samples, which may need the Istio upgrade #860 left open for the
+attendee and admin clusters); the Gateway API CRDs on the carrying cluster; that the waypoint pod label
+(`gateway.networking.k8s.io/gateway-name` or `istio.io/gateway-name`) matches what the pinned Istio applies; and
+pinning the resolver lock through the `coredns` addon's `configuration_values`
+(`infra/terraform/aws/cluster/main.tf:324`) so the managed addon keeps it. These are listed in
+`challenges/c1-exfil-s3/fix/README.md`.
+
+**Not yet run on a cluster.** The owed live check stays as the design note
+(`docs/research/2026-10-31-c1-dns-exfil-beat.md`) lists it, under the `verify/run-e2e.sh` tier: a script paralleling
+`verify/c1-exfil-block.sh`, built by #728, asserts on a fresh attendee cluster that with the fix applied the DNS
+collector records nothing new for the same stage-2b request, while the beacon stays held and Bedrock and in-cluster
+resolution still answer so BurritoBot still replies.

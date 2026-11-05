@@ -1,0 +1,84 @@
+# ABOUTME: Floor C of the C1 stage-2b fix (#727): a locked CoreDNS Corefile that forwards only the lab's own
+# ABOUTME: external zones and refuses recursion for every other name, so label-encoded exfil cannot leave.
+#
+# WHAT THIS CLOSES
+# Stage 2b leaks the marketing demographics as labels in a query name under a delegated subdomain of
+# agenticburn.com (see ../dns-exfil.py and ../../../docs/research/2026-10-31-c1-dns-exfil-beat.md). The
+# default CoreDNS Corefile carries one catch-all rule, `forward . /etc/resolv.conf`, so CoreDNS relays any
+# name it does not serve to the VPC resolver, which walks to whichever authoritative server owns the zone.
+# The query, and the data in its labels, reaches the collector with the stage-2 L3/L4 egress allowlist
+# still enforced, because a NetworkPolicy matches addresses and ports and cannot read a query name.
+#
+# This Corefile removes that catch-all. CoreDNS still serves in-cluster names through the `kubernetes`
+# plugin, and forwards the two external zones the lab actually needs. Every other name (the exfil
+# collector's zone included) matches the `.` block, finds no upstream, and comes back SERVFAIL without
+# ever leaving the cluster.
+#
+# WHAT STILL RESOLVES
+#   - cluster.local and the cluster reverse zones: the `kubernetes` plugin, as before.
+#   - amazonaws.com: Bedrock is reached as bedrock-runtime.<region>.amazonaws.com, which the VPC resolver
+#     answers with the in-VPC PrivateLink ENI (10.0.0.0/16); the EKS control plane and other AWS APIs
+#     resolve here too. Forwarding this zone to the VPC resolver is not an exfil path: a name under
+#     amazonaws.com reaches AWS's own authoritative servers, which the attacker does not run.
+#   - open-meteo.com: C7's weather feed reaches Open-Meteo (api.open-meteo.com, geocoding-api.open-meteo.com).
+#     Resolving the name is separate from reaching the host: egress to Open-Meteo is forced through the
+#     egress waypoint and narrowed to those two hosts by option B (see egress-waypoint.yaml). The same
+#     "the attacker does not run open-meteo.com's nameservers" logic makes forwarding this zone safe.
+#
+# WHAT THIS IS NOT
+# This is floor C on its own. It closes the DNS relay. It does not make egress decisions above L3/L4; that
+# is option B, the forced egress proxy, which rides on top of this floor (see README.md).
+#
+# APPLYING IT
+# CoreDNS on EKS is the managed `coredns` addon. Replacing this ConfigMap and restarting the Deployment
+# (`kubectl -n kube-system rollout restart deployment/coredns`) takes effect until the addon reconciles.
+# Build-time item owed to the live validation (#728): pin the lock through the addon's own
+# `configuration_values` (infra/terraform/aws/cluster/main.tf:324, `coredns = {}`) so the addon keeps it,
+# rather than relying on a ConfigMap edit the addon can revert.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+    eks.amazonaws.com/component: coredns
+    k8s-app: kube-dns
+data:
+  Corefile: |
+    # The catch-all `.` zone. It serves in-cluster names and has NO `forward .`, so any name not matched
+    # by a more specific zone block below (the exfil collector's zone, and the open internet) gets no
+    # upstream and never leaves the cluster.
+    .:53 {
+        errors
+        health {
+            lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+            ttl 30
+        }
+        prometheus :9153
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+    # AWS and Bedrock. Forwarded to the VPC resolver, which answers Bedrock's PrivateLink endpoint in-VPC.
+    amazonaws.com:53 {
+        errors
+        cache 30
+        forward . /etc/resolv.conf {
+            max_concurrent 1000
+        }
+    }
+    # Open-Meteo, for C7's weather feed. Resolution only; egress to the host is narrowed by option B.
+    open-meteo.com:53 {
+        errors
+        cache 30
+        forward . /etc/resolv.conf {
+            max_concurrent 1000
+        }
+    }
