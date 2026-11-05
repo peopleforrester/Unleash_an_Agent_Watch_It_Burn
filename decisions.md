@@ -16774,3 +16774,37 @@ the badge and the bind's Service port and ingress rule, is #117's.
 **The suites (run 17293, at `127e5d1f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 27m07s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 255 tests and
 printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #382 · A run cannot move a submodule pin, so guard-proxy's repin to 0f0c809 is handed to Michael
+
+**What stopped run 17210.** Run 17210 repinned `gitops/ai-layer/guard-proxy` from c2eb4cf to 0f0c809, the
+guard-proxy-agenticburn#52 commit whose proxy.py says the proxy's own SERVER span is the trace root, and bumped
+`checksum/proxy-py` to dfca2b1fe758. Both suites passed, and hecaton refused the branch on its `forbidden` gate:
+"adds submodule gitops/ai-layer/guard-proxy". The gate (`gate_forbidden` in hecaton's `run/validate.py`) fails
+every changed path whose tree mode is 160000, so it refuses moving an existing pin as well as adding a new one;
+the wording says "adds" either way. Every earlier repin here is Michael's own commit (a65f748d, 6d8505a8,
+ef66c770, 8da97ad6 and the ones before them, by MRF-WSL). No change in this repo can get past that gate, so the
+repin leaves this branch and goes to Michael as one act, and #382's fourth criterion stays open until it lands.
+
+**The repin, ready to apply.** It is the change run 17210 committed and tested, two lines:
+- `gitops/ai-layer/guard-proxy` gitlink c2eb4cf2 to 0f0c809d3bb080493a541f4a6748947846a6fa97. `git diff c2eb4cf
+  0f0c809` touches proxy.py comments only, so no behaviour changes.
+- `checksum/proxy-py` on guard-proxy's pod template in `gitops/ai-layer/resources.yaml`, ba8d8e2b789f to
+  dfca2b1fe758, sha256 of 0f0c809's proxy.py (`verify/test_proxy_checksum.py` holds the two together).
+
+Run 17210 ran `bash verify/run-e2e-tools.sh` on that change: the offline suite (252 tests) green, then 54 checks in
+25m29s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. `verify/guard-proxy-pin-on-main.sh` printed ok for 0f0c809.
+
+**Why 0f0c809 and not guard-proxy's main head.** On 2026-11-05 guard-proxy-agenticburn's main is d30eba7, three
+commits past 0f0c809, and f842ec3 among them changes behaviour: it marks the /chat root and chat spans as errors
+when a forward fails (guard-proxy-agenticburn#53), in proxy.py and internal/server/chat.go. That pin, with its
+own checksum, belongs to the issue that asks for #53 here. 0f0c809 is an ancestor of main, so it satisfies #521
+and #681.
+
+**Live, 2026-11-05.** `kubectl --context <ctx> -n agent get deploy guard-proxy -o
+jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'` printed `ba8d8e2b789f` on
+watch-it-burn-private and on watch-it-burn-community: both still run c2eb4cf's proxy.py.
+
+**Not yet run on a cluster.** After the repin lands and Argo CD syncs ai-layer, the same read should print
+`dfca2b1fe758` on both clusters, and `kubectl --context watch-it-burn-private -n agent exec deploy/guard-proxy --
+grep -n "APM trace root" /app/proxy.py` should print nothing.
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py` checks that rollout.
