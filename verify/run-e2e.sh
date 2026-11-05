@@ -15,6 +15,11 @@
 # WIB_DEFAULT_ACCOUNT (default accen-dev) in WIB_REGION (default us-west-2). It spends two model calls and can wait
 # up to ten minutes per bot.
 #
+# #647's trace scrub (test_collector_pii_scrub_live.py) also runs on COMMUNITY_CONTEXT: it sends one span with PII into
+# attackme's collector over a port-forward, reads it back from Datadog APM and Agent Observability scrubbed, and scans
+# the stored burritobot-public spans for raw PII. No model call; the span goes with the post-talk purge. Its storefront
+# half (test_public_datadog_button_live.py) loads the public and private bots in headless Chromium and needs no context.
+#
 # #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
 # also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
 #

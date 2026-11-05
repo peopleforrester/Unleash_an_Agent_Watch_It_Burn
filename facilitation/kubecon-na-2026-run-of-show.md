@@ -1358,7 +1358,9 @@ hosts at peak, down to 1 within three hours).
 - Purge the room's data from Whitney's sandbox org, as promised on the planning call
   (#647): every `burritobot-public` trace, whatever the scrub caught. Signed in to
   her org, find the room's traces under `kube_cluster_name:burritobot-public` for the
-  session window. Delete their LLM Observability spans by trace id through
+  session window, and from the build days before it the spans of service
+  `wib-pii-scrub-check` (ml_app of the same name), which the live scrub check
+  `verify/test_collector_pii_scrub_live.py` sends. Delete their LLM Observability spans by trace id through
   `POST /api/v2/llm-obs/deletion/data/llmobs` (in preview, so confirm the call on the
   day). APM spans have no delete-by-query, so ask Datadog support to remove them or
   let retention expire them. Then post on #647 what was deleted and what is left to

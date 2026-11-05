@@ -17408,3 +17408,62 @@ prompt.
 **The suites (run 17361, at `97ffc883`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`256 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `verify/test_load_replay.py` ending "All load replay checks passed.")
 and 54 tier tests, 55 checks in 26m37s, and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #647 · Run 17362 ran the scrub's live checks on the community cluster: the scrub holds in Datadog, and only the post-talk purge is left
+
+Every earlier #647 draft is on staging (`verify/prior-drafts.sh 647 origin/staging` prints NONE). Three checks were
+owed on a cluster: the 2026-10-29 entry's prompt read back as `[EMAIL]`/`[PHONE]` in the `burritobot-public` tab, and
+its look at one agentgateway `tools/call` span for MCP arguments under a key the scrub does not cover; and the
+2026-11-02 entry's phone check of the hidden Datadog button. This run had both KubeCon clusters and the read pair in
+`watch-it-burn/datadog`, so it ran all three and made them repeatable.
+
+- **Why a sent span, not a chat.** Since #648 the public bot's input guard refuses a prompt carrying any of the four
+  kinds before guard-proxy's root span is given it, so a chat with an e-mail in it puts none of it in a trace and
+  tests nothing about the scrub. The check sends one OTLP span into attackme's collector over a kubectl port-forward
+  to `svc/otel-collector-opentelemetry-collector` :4318, the port every BurritoBot pod sends to, from a service of its
+  own (`wib-pii-scrub-check`) so it lands in no BurritoBot view. It carries `pii_scrub_cases.ATTENDEE` on
+  `gen_ai.input.messages` and on a span event, a tool call's arguments and result with an e-mail, a phone number and a
+  card, and a `session.id` holding an e-mail. Its span name carries the run's stamp, because APM kept it by diversity
+  sampling (one span per service and resource each 15 minutes), not by the retention filter BurritoBot's spans match.
+- **What came back.** APM, by trace id: every conversation key and the span event hold the scrubbed text, `session.id`
+  is whole, and no raw value is anywhere else in the span. Agent Observability files the copy under ml_app
+  `wib-pii-scrub-check` with trace id `sha256(apm trace id)[:32]` (traces/llmobs's `transform/llmobs_one_root`), found
+  by its `otel.trace_id:` tag; its input is scrubbed and so are the tags it makes from the tool arguments.
+- **What is stored.** Every APM span for `kube_cluster_name:burritobot-public` over 168 hours (38,331) and every
+  `ml_app:burritobot` Agent Observability span on that cluster (14,250) was read with the scrub's own patterns over the
+  conversation: the eight keys `keep_keys` names and each span event's attributes on APM, input and output on Agent
+  Observability. No match. Datadog's span count for the same query, read 10 minutes later, was 38,900. Real traffic
+  shows the scrub at work: in the newest 20,996 spans, read by hand first, 320 `[EMAIL]` in `gcp.vertex.agent.tool_call_args`
+  and as many in `gen_ai.tool.call.arguments`, 66 in tool results, 76 in guard-proxy's replies. Pattern matches outside
+  the conversation are ids the scrub leaves whole on purpose (numeric `session.id` and `gen_ai.conversation.id`
+  values, kagent's default `kagent.user_id` `admin@kagent.dev`) and span-event `time_unix_nano` values, which is why
+  the scan reads only the conversation.
+- **agentgateway records no MCP arguments.** The `burritobot-gateway` spans' keys over the week are request metadata
+  (`mcp.method.name`, `mcp.target`, `mcp.session.id`, `gen_ai.tool.name`, `url.path`, `url.query`, `http.*`, `k8s.*`
+  and the like); none carries a tool call's arguments or result, and no pattern matched in any of them. The scrub's
+  key list needs nothing for the gateway.
+- **The button.** In headless Chromium at 390x844, `attackme.burritobot.co` and `attackme.agenticburn.com` (event.js's
+  `publicHosts`, read from the file) hide `#ddbtn` and show no link to datadoghq.com, and
+  `burritobot-private.burritobot.co` shows the button. A phone viewport, not a phone: it proves what the served page
+  and event.js do on each host.
+
+**Live output (run 17362, 2026-11-05).** `COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_collector_pii_scrub_live.py`: 22 PASS, sent trace `78742ddddc93f5ae832fca398438f225`, "APM: the scan read
+every span of the last 168h (38331 read)", "Agent Observability (ml_app:burritobot): the scan read every span of the
+last 168h (14250 read)". `python3 verify/test_public_datadog_button_live.py`: 11 PASS. Before the test existed the
+same span was sent by hand as trace `744913650f2c2b1b9455ad463a8936ce`, with the same result.
+
+**What it leaves.** Those two spans, in Whitney's org under `burritobot-public`, and a `wib-pii-scrub-check` entry in
+APM's service list and Agent Observability's ml_app list. The run-of-show's purge step now names that service, since
+its spans fall on build days outside the session window. Nothing on the cluster changed.
+
+**Tests.** `verify/test_pii_scrub_live_logic.py` (offline) runs `pii_scrub_live.run` against a fake kubectl and a fake
+org: green on a healthy pair, and red on each of 17 breaks (no scrub, a scrub that never merges back, the scrub not
+last, another cluster's name, a refused send, a span that never arrives in either product, raw text read back on each
+key, the span event or an Agent Observability tag, a rewritten `session.id`, raw text stored in a reply, a span event
+or an Agent Observability input, and a scan that cannot finish). The leak check's raw strings are long enough that no
+span id, hash or timestamp can hold one by chance. Both live tests are `# SUITE: e2e`, and `run-e2e.sh`'s header says
+what they spend.
+
+**Not yet run.** The purge of `burritobot-public` from Whitney's org, per the run-of-show's Teardown step, on or after
+2026-11-13, by someone signed in to her org: the read pair in `watch-it-burn/datadog` cannot delete.
