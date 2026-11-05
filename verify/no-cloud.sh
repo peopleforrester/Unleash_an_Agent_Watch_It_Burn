@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: The offline suite's no-cloud guard (#857): each test runs with aws, kubectl, eksctl, helm and terraform
-# ABOUTME: replaced by stubs that log the call and fail, and a test that called one fails, naming the calls.
+# ABOUTME: The no-cloud guard (#857, #865): each test runs with its cloud tools replaced by stubs that log the call and
+# ABOUTME: fail, and a test that called one fails, naming the calls. The offline suite stubs five, the tools tier two.
 #
 # Why. On a dispatched run the `aws` on PATH is hecaton's wrapper, which exports the run's live session for the two
 # KubeCon clusters whatever the caller's environment holds, and KUBECONFIG names both. In run 16967 (#616) two
@@ -13,26 +13,34 @@
 # A stub stands first on PATH and has its log path written into it, so a test that rebuilds its environment
 # (python's subprocess env=, `env -u`, `env -i` with PATH kept) still reaches the stub and still logs. A test that
 # needs a cloud tool to answer puts its own fake ahead of these on PATH, as test_guardrails_switch.py does: a fake
-# never reaches the stub, so it logs nothing. The tools tier (run-e2e-tools.sh) runs its real pinned tools and does
-# not use this.
+# never reaches the stub, so it logs nothing.
 #
-# Sourced, not run: run-tests.sh calls no_cloud_setup once and runs each test through no_cloud_run.
+# The tools tier (run-e2e-tools.sh) runs its real pinned kubectl, helm and terraform from verify/.tools/bin with
+# KUBECONFIG=/dev/null and the AWS variables unset, but hecaton's aws wrapper exports the run's session whatever the
+# caller's environment holds, and the tier pins no aws or eksctl. So it stubs just those two, ahead of its pinned
+# tools on PATH (#865).
+#
+# Sourced, not run: each runner calls no_cloud_setup once and runs each test through no_cloud_run.
 
 NO_CLOUD_TOOLS=(aws kubectl eksctl helm terraform)
 
-# no_cloud_setup <dir>: write the stubs into <dir>/bin and the call log at <dir>/cloud-calls.
+# no_cloud_setup <dir> [tool...]: write a stub for each tool (all of NO_CLOUD_TOOLS when none is named) into
+# <dir>/bin and the call log at <dir>/cloud-calls.
 no_cloud_setup() {
     local dir="$1" tool
+    shift
+    local tools=("$@")
+    [[ "${#tools[@]}" -gt 0 ]] || tools=("${NO_CLOUD_TOOLS[@]}")
     NO_CLOUD_BIN="${dir}/bin"
     NO_CLOUD_LOG="${dir}/cloud-calls"
     mkdir -p "${NO_CLOUD_BIN}"
     : >"${NO_CLOUD_LOG}"
-    for tool in "${NO_CLOUD_TOOLS[@]}"; do
+    for tool in "${tools[@]}"; do
         # printf %q keeps a log path with spaces or quotes one word inside the stub.
         cat >"${NO_CLOUD_BIN}/${tool}" <<EOF
 #!/bin/sh
 printf '%s\n' "${tool} \$*" >>$(printf '%q' "${NO_CLOUD_LOG}")
-echo "offline suite: ${tool} is stubbed here; stub the call or put a fake ${tool} first on PATH (#857)" >&2
+echo "no-cloud guard: ${tool} is stubbed here; stub the call or put a fake ${tool} first on PATH (#857, #865)" >&2
 exit 1
 EOF
         chmod +x "${NO_CLOUD_BIN}/${tool}"
@@ -47,7 +55,7 @@ no_cloud_run() {
         echo "no_cloud_run: no_cloud_setup has not run, so the guard is not in place" >&2; return 1; }
     PATH="${NO_CLOUD_BIN}:${PATH}" "$@" || rc=$?
     if [[ -s "${NO_CLOUD_LOG}" ]]; then
-        printf 'OFFLINE TEST CALLED A CLOUD TOOL (#857); the offline suite never reaches a cluster or an AWS account:\n' >&2
+        printf 'TEST CALLED A CLOUD TOOL (#857, #865); no offline or tools-tier test reaches a cluster or an AWS account:\n' >&2
         sed 's/^/    /' "${NO_CLOUD_LOG}" >&2
         : >"${NO_CLOUD_LOG}"
         [[ "${rc}" -ne 0 ]] || rc=1

@@ -87,6 +87,20 @@ check "and names the kubeconfig the link tried to write for the live community c
 run link616 "cmd_guardrails_link() { :; }"
 check "with the link stubbed, as #616 left both tests, it passes" '[[ "${rc}" -eq 0 ]] && ! grep -q "CALLED A CLOUD TOOL" <<<"${out}"'
 
+echo "== the tools tier stubs only the tools it pins no copy of (#865) =="
+# run-e2e-tools.sh stubs aws and eksctl alone and puts them ahead of its pinned kubectl, helm and terraform, as
+# tier_env's PATH does here with a fake pinned kubectl; a guard set up with named tools shadows none of the others.
+mkdir -p "${T}/pinned"
+printf '#!/bin/sh\necho "pinned kubectl $*" >>"%s/pinned-calls"\n' "${T}" >"${T}/pinned/kubectl"
+chmod +x "${T}/pinned/kubectl"
+no_cloud_setup "${T}/tier" aws eksctl
+check "no_cloud_setup <dir> aws eksctl writes exactly those two stubs" \
+  '[[ "$(ls "${NO_CLOUD_BIN}" | tr "\n" " ")" == "aws eksctl " ]]'
+run env PATH="${NO_CLOUD_BIN}:${T}/pinned:${PATH}" bash -c "eksctl get cluster; kubectl version --client; exit 0"
+check "a tier test's eksctl call fails it and is named" '[[ "${rc}" -eq 1 ]] && grep -qF "    eksctl get cluster" <<<"${out}"'
+check "and its kubectl call reaches the pinned kubectl, unstubbed" \
+  'grep -qxF "pinned kubectl version --client" "${T}/pinned-calls" && ! grep -qF "    kubectl" <<<"${out}"'
+
 echo "== offline means offline =="
 check "nothing got past the guard's stubs to the backstop behind them" \
   '[[ ! -s "${T}/backstop-calls" ]] || { sed "s/^/        /" "${T}/backstop-calls"; false; }'

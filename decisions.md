@@ -19100,3 +19100,41 @@ No dependency was added.
 **The suites (run 17428, on 484923ce).** `bash verify/run-e2e-tools.sh` ran 57 checks (the offline suite and 56 tier
 tests) in 28m14s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 262 tests,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_fleet_monitors.py` among them.
+
+## 2026-11-05 · #865 · The tools tier stubs aws and eksctl ahead of its pinned tools
+
+**Why.** #857 put the offline suite behind `verify/no-cloud.sh`, which stubs aws, kubectl, eksctl, helm and
+terraform. The tools tier in `verify/run-e2e-tools.sh` was not covered. It unsets the AWS variables and sets
+KUBECONFIG=/dev/null, but on a dispatched run the aws on PATH is hecaton's wrapper, which exports the run's session
+whatever the caller's environment holds. The live check below shows that gap.
+
+**What changed.**
+- `no_cloud_setup <dir> [tool...]` takes an optional list of tools to stub. With none it still stubs all five, so
+  `run-tests.sh` is unchanged. The stub's message and `no_cloud_run`'s report now name both runners
+  (`TEST CALLED A CLOUD TOOL (#857, #865)`). The offline test greps `CALLED A CLOUD TOOL`, which still matches.
+- `run-e2e-tools.sh` sources no-cloud.sh, runs `no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl` in a temp directory
+  it removes on exit, puts `${NO_CLOUD_BIN}` ahead of `${TOOLS_BIN}` in tier_env's PATH and runs each tier test
+  through `no_cloud_run`. A tier test that calls aws or eksctl fails, naming the call, even when it swallows the
+  failure and exits 0. kubectl, helm and terraform are not stubbed: the tier runs the pinned ones.
+- The offline suite inside the runner is not wrapped again: `run-tests.sh` sets up its own guard.
+
+**No tier test needs a real aws or eksctl.** Of the 54 `# E2E TIER: tools` tests, ten contain the word `aws`, all as
+ARNs, annotations, `public.ecr.aws` URLs, Terraform paths or the `aws.bedrock` provider name. None calls the aws or
+eksctl CLI, and none runs fleet.sh, event.sh or deploy-full-idp.sh (two read deploy-full-idp.sh as text).
+`images/villains/build.sh`, which test_joker_build_digest.py runs, mentions aws only in a comment.
+
+**Tests.** `verify/test_e2e_tools_tier.py` runs the whole runner in a scratch verify/ whose tier is four fixture
+tests: one calls aws and swallows the failure, one calls eksctl, one calls aws from a python subprocess with
+`env={"PATH": ...}`, and one calls the fetched kubectl. The host's aws and eksctl are fakes that log as `host`, and
+AWS_PROFILE is set as on a dispatched run. The three cloud callers fail and are named, the kubectl test passes on the
+fetched kubectl, and nothing reaches the host's fakes. Against the old runner, that block and the three wiring
+checks fail (8 FAIL lines). `verify/test_offline_suite_no_cloud.sh` checks that `no_cloud_setup <dir> aws eksctl`
+writes exactly those two stubs, and that a kubectl call goes past them to the pinned one next on PATH.
+
+**Live check (run 17230), read-only.** `command -v aws eksctl` printed `/var/lib/hecaton/runs/17230/clusters/bin/aws`
+and `.../eksctl`, hecaton's wrappers. With CONTEXT, AWS_PROFILE and the three AWS key variables unset and
+KUBECONFIG=/dev/null, as tier_env had it, `aws sts get-caller-identity --query Account --output text` printed
+`515966504359`, exit 0: the fleet account, reached. The same command through `no_cloud_run` with the tier's stubs
+first on PATH printed `TEST CALLED A CLOUD TOOL (#857, #865)` and the call, exit 1. Neither cluster was changed.
+
+**Not yet run on a cluster:** nothing; the change is to the test runner, which runs on the dispatch host.

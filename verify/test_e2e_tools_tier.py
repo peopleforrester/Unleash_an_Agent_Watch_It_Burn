@@ -181,7 +181,12 @@ for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAF
                   ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane"),
                   ("AGENTGATEWAY", "agentgateway")):
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
-check("run-e2e-tools.sh puts the fetched tools first on PATH", 'PATH="${TOOLS_BIN}:${PATH}"' in code)
+check("run-e2e-tools.sh puts the fetched tools first on PATH, behind only the aws and eksctl stubs (#865)",
+      'PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}"' in code)
+check("run-e2e-tools.sh stubs aws and eksctl, and only those two, with no-cloud.sh (#865)",
+      '. "${SCRIPT_DIR}/no-cloud.sh"' in code and 'no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl\n' in code)
+check("run-e2e-tools.sh runs each tier test through no_cloud_run",
+      code.count('no_cloud_run "${tier_env[@]}"') == 2 and code.count('"${tier_env[@]}"') == 2)
 
 print("== a fetch is checked against the lock, and fails loudly ==")
 
@@ -409,6 +414,50 @@ with tempfile.TemporaryDirectory() as t:
           and f"FFmpeg (playwright ffmpeg v9) at {browsers / 'ffmpeg-9'}" in r.stderr
           and f"Chrome for Testing 1 (playwright chromium v9) at {browsers / 'chromium-9'}" in r.stderr, r.stderr)
     check("no test ran", "== " not in r.stdout, r.stdout)
+
+print("== a tier test that calls aws or eksctl fails, and the pinned tools still answer (#865) ==")
+# The whole runner, in a scratch verify/ whose tier is four fixture tests. The host's aws and eksctl here log as
+# "host" and stand in for hecaton's wrapper, which carries the run's live session: if one is ever reached, the
+# runner's stub was not first on PATH. AWS_PROFILE is set as a dispatched run has it.
+TIER_LOCK = f"kubectl v9 {sha(FIXTURES['kubectl-linux-amd64'])} https://fixture.invalid/kubectl-linux-amd64 -\n"
+TIER_TESTS = {
+    "test_calls_aws.sh": "aws sts get-caller-identity >/dev/null 2>&1 || true\nexit 0\n",
+    "test_calls_eksctl.sh": "eksctl utils write-kubeconfig --cluster watch-it-burn-private\n",
+    "test_calls_aws_env.py": ("import os, subprocess, sys\n"
+                              "subprocess.run(['aws', 'eks', 'list-clusters'], env={'PATH': os.environ['PATH']},"
+                              " capture_output=True)\nsys.exit(0)\n"),
+    "test_calls_kubectl.sh": "kubectl version --client || true\nexit 0\n",
+}
+HOST_CLOUD = '#!/bin/sh\necho "host $(basename "$0") $*" >>"$HOST_LOG"\nexit 0\n'
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    for name, body in TIER_TESTS.items():
+        (vdir / name).write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{body}")
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24,
+                             "aws": HOST_CLOUD, "eksctl": HOST_CLOUD})
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "AWS_PROFILE": "accen-dev",
+           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
+           "KUBECTL_LOG": str(tmp / "kubectl.log"), "HOST_LOG": str(tmp / "host.log")}
+    r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
+    out = r.stdout + r.stderr
+    check(f"the runner reached its tier and ran all four fixture tests (exit {r.returncode})",
+          "5 checks ran (the offline suite and 4 tier tests)" in out, out)
+    check("it fails, naming the three tests that called a cloud tool and not the kubectl one",
+          r.returncode == 1 and all(f"  {n} (exit 1)" in r.stderr for n in
+                                    ("test_calls_aws.sh", "test_calls_eksctl.sh", "test_calls_aws_env.py"))
+          and "test_calls_kubectl.sh (exit" not in r.stderr, r.stderr)
+    check("a test that swallows aws's failure and exits 0 still fails, and the call is named",
+          "    aws sts get-caller-identity" in r.stderr, r.stderr)
+    check("the eksctl call is named", "    eksctl utils write-kubeconfig --cluster watch-it-burn-private" in r.stderr,
+          r.stderr)
+    check("a python subprocess with env= of PATH alone still reaches the stub", "    aws eks list-clusters" in r.stderr,
+          r.stderr)
+    host = (tmp / "host.log").read_text() if (tmp / "host.log").exists() else ""
+    check("nothing reached the host's aws or eksctl", host == "", host)
+    kube = (tmp / "kubectl.log").read_text().splitlines() if (tmp / "kubectl.log").exists() else []
+    check("the fetched kubectl is what the kubectl test ran, unstubbed", kube == ["fetched version --client"], str(kube))
 
 print("== run-e2e.sh fetches the same tools and runs them first on PATH (#585) ==")
 RUN_E2E = VERIFY / "run-e2e.sh"

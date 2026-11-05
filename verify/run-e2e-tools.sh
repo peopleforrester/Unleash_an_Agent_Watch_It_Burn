@@ -13,7 +13,10 @@
 # A test joins the tier with a `# E2E TIER: tools` line next to its `# SUITE: e2e` line, so run-tests.sh still
 # leaves it out and run-e2e.sh still runs it on a cluster build. verify/test_e2e_tools_tier.py holds that no
 # tier test reads CONTEXT or IAM_PIPELINE_*. Each one runs with those unset and KUBECONFIG=/dev/null, so a test
-# that started to need a cluster or AWS fails here instead of reaching one.
+# that started to need a cluster or AWS fails here instead of reaching one. aws and eksctl, which the tier pins no
+# copy of, are stubbed first on PATH by no-cloud.sh (#865): on a dispatched run the aws on PATH is hecaton's wrapper,
+# which exports the run's live session whatever the environment holds, so unsetting AWS_PROFILE alone would not stop a
+# call reaching the two live clusters. A tier test that calls either one fails, naming the call.
 #
 # Nothing here skips. A missing prerequisite or a failed fetch exits 1 before any test runs, with every reason.
 set -euo pipefail
@@ -69,14 +72,19 @@ run_one() { # $1: label, rest: command
 run_one "run-tests.sh (the offline suite)" bash "${SCRIPT_DIR}/run-tests.sh"
 
 # The pinned tools come first on PATH, and the six tests that take a path get it, so a tool already on the
-# host is never what a check runs.
+# host is never what a check runs. Ahead of them stand only the aws and eksctl stubs (#865), which shadow no pinned tool.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${SCRIPT_DIR}/no-cloud.sh"
+NO_CLOUD_DIR="$(mktemp -d)"
+trap 'rm -rf "${NO_CLOUD_DIR}"' EXIT
+no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl
 # The Terraform provider cache outlives each test, so the ~800 MB aws provider downloads once per checkout, not once
 # per test process; the tests run one after another, so nothing writes to it concurrently (#572).
 TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
 mkdir -p "${TF_CACHE}"
 tier_env=(env -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
     -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
-    KUBECONFIG=/dev/null PATH="${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
+    KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
     KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
     OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
     AGENTGATEWAY="${TOOLS_BIN}/agentgateway")
@@ -85,8 +93,8 @@ for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
     [[ -e "${t}" ]] && grep -q '^# E2E TIER: tools' "${t}" || continue
     tier=$((tier + 1))
     case "${t}" in
-        *.py) run_one "$(basename "${t}")" "${tier_env[@]}" python3 "${t}" ;;
-        *)    run_one "$(basename "${t}")" "${tier_env[@]}" bash "${t}" ;;
+        *.py) run_one "$(basename "${t}")" no_cloud_run "${tier_env[@]}" python3 "${t}" ;;
+        *)    run_one "$(basename "${t}")" no_cloud_run "${tier_env[@]}" bash "${t}" ;;
     esac
 done
 # A tier that matched nothing would pass having proved nothing.
