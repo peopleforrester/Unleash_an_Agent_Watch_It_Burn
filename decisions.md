@@ -21502,3 +21502,7 @@ printed `All plan-policy e2e checks passed.`, each exit 0.
 **Not yet run on a cluster.** The rule on a live cluster is #906's own check, the KubeCon probe's guardrails-on beat
 (`verify/kubecon_probe.py`), run after the fleet next applies the cluster root to the KubeCon pair. This run applies
 no Terraform: a dispatched run deploys nothing.
+
+**The suites (run 17743, at `082a410c`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`275 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, the new test among them) and then the tier: `61 checks ran (the offline suite
+and 60 tier tests) in 30m13s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
