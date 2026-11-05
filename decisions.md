@@ -15964,3 +15964,51 @@ error-rate view keyed on the root span does not count a timed-out turn. Filed as
 
 **Suites, on 05c6ecf6.** `bash verify/run-e2e-tools.sh` ran the offline suite (252 tests, ALL OFFLINE RENDER-GATE
 TESTS GREEN) and then the tools tier: 54 checks in 25m25s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
+## 2026-11-05 · #862 · A test that fails until the leaderboard is applied and every column fills
+
+**Why.** Test review run 17104 found that nothing checks #489's criterion, "apply the challenge leaderboard to the
+next event's instructor org and confirm every column fills". `test_fleet_monitors_live.py` runs `--check`, which
+only finds the board by title, and `--data`, which skips every dashboard but the fleet one (`DATA_DASHBOARDS`),
+because the leaderboard is blank until the room plays. The per-column counts in #489's entry came from one-off
+queries.
+
+**Change.**
+- `fleet_monitors.py --board --cluster NAME ...`, read-only. It finds the leaderboard in the org and reads its
+  definition back by id. It fails as DRIFT when the org's table differs from `leaderboard.yaml` in its window, any
+  query's source, filter (whitespace aside), aggregator or grouping, or any column's formula, title or green rule.
+  Then it sends the table's whole request, all seven queries and all seven formulas, in one
+  `/api/v2/query/scalar` call over the widget's 4 hours. That is how query_table joins metrics, logs and spans on
+  `kube_cluster_name`. A cell is filled when it is green under its column's conditional format (online, 1, 2, 3, 5
+  and 6 at 1 or more), or above 0 for the bill, which has no green rule. Each named cluster must fill every column;
+  each blank is printed as `BLANK    challenge leaderboard / <column>: <cluster> (<value>)`. `--data` is unchanged.
+- `verify/test_leaderboard_live.py` (`# SUITE: e2e`, so `run-e2e.sh` runs it) runs `--board` for
+  `WIB_LEADERBOARD_CLUSTERS`, default `burritobot-private`: the KubeCon cluster with Falco, since column 3 never fills
+  on the Community cluster. The cluster has to have been walked through challenges 1 to 6 in the 4 hours before.
+- `verify/test_fleet_monitors.py` drives `--board` through the fake org, which now stores each dashboard body it is
+  given and answers a joined scalar request. Covered: a full board passes with one joined request and no writes. Each
+  blank column fails and names the column and cluster: no value, a count of 0, a bill of 0, online at 0. With two
+  clusters only the blank one is named. A missing board fails before any query, and a changed query, aggregator,
+  green rule or window is DRIFT. A joined answer with no `kube_cluster_name` column fails. `--board` needs a
+  `--cluster`.
+- `fleet.sh` usage and `infra/datadog-fleet/README.md` describe `--board`.
+
+**Live check (run 17194, 2026-11-05 00:27Z, the sandbox org `Datadog` through `watch-it-burn/datadog` as accen-dev in
+us-west-2).** `python3 verify/test_leaderboard_live.py` printed `MISSING  challenge leaderboard 'Watch It Burn:
+challenge leaderboard': not in the org` and exited 1, with `WIB_LEADERBOARD_CLUSTERS` set to `burritobot-private`
+and again to both clusters. That is the correct verdict: #489's criterion does not hold yet. The secret's
+application key is read-only, so the board cannot be applied from a run. To check the half after the lookup, the
+run called `table_scalar` and `filled` directly on the repo's table. The joined answer came back as one
+`kube_cluster_name` column and one number column per formula, named by the formula, which is the shape the code
+reads. Over 4 hours: burritobot-private filled online, 4 bill (0.073) and 6 blocked (2), with 1, 2, 3 and 5 blank.
+burritobot-public filled online, 1 exfil (33) and 4 bill (0.42), with 2, 3, 5 and 6 blank. Over 7 days: private
+had online, 1 (4), 4, 5 (12) and 6 (27), public had online, 1 (275), 2 (24485) and 4. Those are #489's counts, so
+the joined request reads the same data the single queries did. Column 3 is blank on both clusters over both
+windows, as #489 recorded: `recipe_snoop_in_agent_namespace` has no series in the org yet. Nothing was written to
+the org or to either cluster.
+
+**Not yet run on a cluster.** `verify/test_leaderboard_live.py` passing, which is #489's work and needs three things.
+First, the apply with Whitney's write key: `WIB_FLEET_MONITORS_APP_KEY=<key> fleet.sh monitors --apply --session
+START/END`. Second, a cluster with Falco and without KubeArmor's `block-recipe-snoop` walked through challenges 1 to
+6. Third, the test run within 4 hours of that walk. The DRIFT comparison has not yet read a board that Datadog
+stored. If Datadog rewrites a query string on save, the first run after the apply prints `DRIFT ... query <name>
+differs: the org has (...)`, and the comparison is then fixed to normalize that rewrite.

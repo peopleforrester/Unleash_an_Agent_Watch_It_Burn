@@ -249,6 +249,9 @@ class FakeOrg:
         # data: query text -> {cluster: value}, or {"": value} for an ungrouped answer; what /api/v2/query/scalar
         # answers. groups: monitor key -> {cluster: status}; what group_states=all adds to each monitor.
         self.data, self.groups, self.scalars, self.urls = dict(data or {}), dict(groups or {}), [], []
+        # bodies: dashboard id -> the body last written, which GET /api/v1/dashboard/<id> answers (#862).
+        # joined: (window ms, queries, formulas) of each multi-query scalar request, the leaderboard table's.
+        self.bodies, self.joined = {}, []
 
     def __call__(self, method, url, headers, body):
         path = url.split("datadoghq.com", 1)[1]
@@ -269,6 +272,19 @@ class FakeOrg:
             return 200, [{**m, "state": {"groups": {
                 f"kube_cluster_name:{c}": {"name": f"kube_cluster_name:{c}", "status": st}
                 for c, st in self.groups.get(fm.key_of(m), {}).items()}}} for m in self.monitors.values()]
+        if p == "/api/v2/query/scalar" and len(data["data"]["attributes"]["queries"]) > 1:
+            # The whole table in one request: one kube_cluster_name column over every cluster any query answered
+            # for, and one number column per formula, named by the formula, null where its query has no value.
+            a = data["data"]["attributes"]
+            self.joined.append((a["to"] - a["from"], a["queries"], a["formulas"]))
+            text = {q["name"]: fm.query_text(q) for q in a["queries"]}
+            rows = sorted({c for t in text.values() for c in self.data.get(t, {}) if c})
+            if not rows:
+                return 200, {"data": {"type": "scalar_response", "attributes": {"columns": []}}}
+            cols = [{"name": "kube_cluster_name", "type": "group", "values": [[c] for c in rows]}]
+            cols += [{"name": f["formula"], "type": "number",
+                      "values": [self.data.get(text[f["formula"]], {}).get(c) for c in rows]} for f in a["formulas"]]
+            return 200, {"data": {"type": "scalar_response", "attributes": {"columns": cols}}}
         if p == "/api/v2/query/scalar":
             a = data["data"]["attributes"]
             text = fm.query_text(a["queries"][0])
@@ -298,9 +314,13 @@ class FakeOrg:
         if p == "/api/v1/dashboard" and method == "POST":
             did = ["abc-def-ghi", "lea-der-brd"][len(self.dashboards)]
             self.dashboards.append({"id": did, "title": data["title"], "url": f"/dashboard/{did}/fleet"})
+            self.bodies[did] = data
             return 200, self.dashboards[-1]
         if p.startswith("/api/v1/dashboard/"):
-            return 200, {"id": p.rsplit("/", 1)[1], "url": f"/dashboard/{p.rsplit('/', 1)[1]}/fleet"}
+            did = p.rsplit("/", 1)[1]
+            if method == "PUT":
+                self.bodies[did] = data
+            return 200, {**self.bodies.get(did, {}), "id": did, "url": f"/dashboard/{did}/fleet"}
         if p == "/api/v2/downtime" and method == "GET":
             return 200, {"data": self.downtimes}
         if p == "/api/v2/downtime" and method == "POST":
@@ -522,6 +542,147 @@ check("a --cluster outside the queries' filter is refused", rc == 1 and "could n
 rc, text = run(["--check", "--cluster", CLUSTERS[0]], org, env={})
 check("--cluster without --data is refused", rc == 1 and "only means something with --data" in text)
 
+print("== board: the leaderboard is applied and every column fills for a cluster that played (#862) ==")
+board = fm.load_dashboard(fm.LEADERBOARD_FILE)
+board_widget, board_req = fm.board_table(board)
+board_queries = {q["name"]: q for q in board_req["queries"]}
+board_columns = [f.get("alias") or f["formula"] for f in board_req["formulas"]]
+PLAYED = "burritobot-private"
+BOARD_ARGS = ["--board", "--cluster", PLAYED]
+
+
+def played(*clusters, **over):
+    """What the org answers once each cluster has walked challenges 1 to 6: a count of 1 or more in every column,
+    and a bill above 0. over: query name -> value for every cluster, None for no value."""
+    data = {}
+    for name, q in board_queries.items():
+        v = over.get(name, 0.42 if name == "c4" else 3.0)
+        data[fm.query_text(q)] = {c: v for c in clusters} if v is not None else {}
+    return data
+
+
+def board_org(data, mutate=None):
+    o = FakeOrg()
+    run(["--apply"], o)
+    o.data = data
+    if mutate:
+        mutate(o)
+    return o
+
+
+check(f"the leaderboard's table has the online column and challenges 1 to 6 ({board_columns})",
+      [c.split()[0] for c in board_columns] == ["online", "1", "2", "3", "4", "5", "6"])
+check("every column but the bill has a green rule; the bill is filled above 0",
+      [f["formula"] for f in board_req["formulas"] if not any("green" in c.get("palette", "")
+       for c in f.get("conditional_formats") or [])] == ["c4"])
+org = board_org(played(PLAYED))
+calls_before = len(org.calls)
+rc, text = run(BOARD_ARGS, org, env={})
+check("an org with the leaderboard applied and every column filled for the cluster passes",
+      rc == 0 and "BLANK" not in text and "MISSING" not in text and "DRIFT" not in text)
+check(f"every column is reported filled ({len(board_columns)})",
+      all(f"FILLED   challenge leaderboard / {c}\n" in text for c in board_columns)
+      and text.count("FILLED") == len(board_columns))
+check("the board is read from the org by its id, not taken from the repo",
+      ("GET", "/api/v1/dashboard/lea-der-brd") in [(m, p) for m, p, _ in org.calls[calls_before:]])
+check("the table goes as one joined request: every query and every formula, the way the widget sends it",
+      len(org.joined) == 1 and [q["name"] for q in org.joined[0][1]] == list(board_queries)
+      and [f["formula"] for f in org.joined[0][2]] == [f["formula"] for f in board_req["formulas"]])
+check("over the widget's 4 hours", org.joined and org.joined[0][0] == 14_400_000)
+check("the joined request carries each query as the board does, c3's sum aggregator included",
+      org.joined and next(q for q in org.joined[0][1] if q["name"] == "c3")["aggregator"] == "sum")
+check("no column is sent on its own", org.scalars == [])
+check("board needs no write key: it reads with the secret's read-only application key",
+      all(h.get("DD-APPLICATION-KEY") == "APPKEY654321" for _, _, h in org.calls[calls_before:]))
+check("board never writes", all(m == "GET" or p == "/api/v2/query/scalar" for m, p, _ in org.calls[calls_before:]))
+
+rc, text = run(BOARD_ARGS, board_org(played(PLAYED, c3=None)), env={})
+check("a column with no value for the cluster fails, naming the column and the cluster",
+      rc == 1 and f"BLANK    challenge leaderboard / 3 recipe: {PLAYED} (no value)" in text
+      and text.count("BLANK") == 1)
+rc, text = run(BOARD_ARGS, board_org(played(PLAYED, c1=0.0)), env={})
+check("a count of 0 is not green, so it is blank", rc == 1 and f"BLANK    challenge leaderboard / 1 exfil: {PLAYED} (0)" in text)
+rc, text = run(BOARD_ARGS, board_org(played(PLAYED, c4=0.0)), env={})
+check("a bill of 0 is blank: a cluster that walked the challenges has spent", rc == 1
+      and f"BLANK    challenge leaderboard / 4 bill (USD): {PLAYED} (0)" in text)
+rc, text = run(BOARD_ARGS, board_org(played(PLAYED, online=0.0)), env={})
+check("online at 0 is the red cell, not filled", rc == 1 and "BLANK    challenge leaderboard / online" in text)
+for name in ("c2", "c5", "c6"):
+    rc, text = run(BOARD_ARGS, board_org(played(PLAYED, **{name: None})), env={})
+    alias = next(f["alias"] for f in board_req["formulas"] if f["formula"] == name)
+    check(f"{alias} blank fails", rc == 1 and f"BLANK    challenge leaderboard / {alias}: {PLAYED}" in text)
+both = played(PLAYED, "burritobot-public")
+both[fm.query_text(board_queries["c5"])].pop("burritobot-public")
+rc, text = run(["--board", "--cluster", PLAYED, "--cluster", "burritobot-public"], board_org(both), env={})
+check("with two clusters, only the one whose cell is blank is named",
+      rc == 1 and "BLANK    challenge leaderboard / 5 guarded: burritobot-public (no value)\n" in text)
+rc, text = run(["--board", "--cluster", "burritobot-attendee-007"], board_org(played(PLAYED)), env={})
+check("a named cluster that never played is blank in every column",
+      rc == 1 and text.count("burritobot-attendee-007 (no value)") == len(board_columns))
+rc, text = run(BOARD_ARGS, board_org({}), env={})
+check("an org with nothing in the window fails every column", rc == 1 and text.count("BLANK") == len(board_columns))
+
+org = FakeOrg(data=played(PLAYED))
+rc, text = run(BOARD_ARGS, org, env={})
+check("an org without the leaderboard fails as MISSING and sends no query",
+      rc == 1 and "MISSING  challenge leaderboard 'Watch It Burn: challenge leaderboard'" in text and org.joined == [])
+
+
+def drifted(mutate):
+    o = board_org(played(PLAYED))
+    b = o.bodies["lea-der-brd"]
+    mutate(fm.board_table(b))
+    rc, text = run(BOARD_ARGS, o, env={})
+    return rc, text, o
+
+
+rc, text, o = drifted(lambda t: next(q for q in t[1]["queries"] if q["name"] == "c3").update(
+    query="sum:falco.rules.matches.count{kube_cluster_name:burritobot-*} by {kube_cluster_name}.as_count()"))
+check("a query edited in the UI is drift, named, and no cell is read",
+      rc == 1 and "DRIFT    challenge leaderboard: query c3 differs" in text and o.joined == [])
+rc, _, _ = drifted(lambda t: next(q for q in t[1]["queries"] if q["name"] == "c3").update(aggregator="last"))
+check("a changed aggregator is drift", rc == 1)
+rc, text, _ = drifted(lambda t: t[1]["queries"].pop())
+check("a query missing from the org's table is drift", rc == 1 and "is in leaderboard.yaml, not in the org" in text)
+rc, text, _ = drifted(lambda t: t[1]["formulas"][1]["conditional_formats"][0].update(value=5))
+check("a changed green rule is drift", rc == 1 and "columns differ" in text)
+rc, text, _ = drifted(lambda t: t[0]["time"].update(live_span="1h"))
+check("a changed window is drift", rc == 1 and "window 1h in the org, 4h in leaderboard.yaml" in text)
+rc, text, _ = drifted(lambda t: next(q for q in t[1]["queries"] if q["name"] == "c1").update(
+    search={"query": "  " + board_queries["c1"]["search"]["query"].replace(" ", "  ") + " "}))
+check("whitespace alone is not drift", rc == 0)
+
+
+def ungrouped(o):
+    real = o.__call__
+    def call(method, url, headers, body):
+        status, resp = real(method, url, headers, body)
+        if url.endswith("/api/v2/query/scalar"):
+            cols = resp["data"]["attributes"]["columns"]
+            resp["data"]["attributes"]["columns"] = [c for c in cols if c["type"] != "group"]
+        return status, resp
+    return call
+
+
+o = board_org(played(PLAYED))
+rc, text = run(BOARD_ARGS, ungrouped(o), env={})
+check("a joined answer with no kube_cluster_name column fails: the table would have no row per cluster",
+      rc == 1 and "without a kube_cluster_name column" in text)
+
+org = FakeOrg()
+rc, text = run(["--board"], org, env={}, keys=keys_unread)
+check("--board without a --cluster exits 1 and calls nothing",
+      rc == 1 and "--board needs every cluster that has walked challenges 1 to 6" in text and org.calls == [])
+rc, text = run(["--board", "--cluster", "watch-it-burn-private"], org, env={}, keys=keys_unread)
+check("a --board --cluster outside the queries' filter is refused", rc == 1 and "could never fill" in text and org.calls == [])
+try:
+    rc, _ = run(["--board", "--data", "--cluster", PLAYED], org, env={}, keys=keys_unread)
+except SystemExit as e:  # argparse refuses two modes before main returns
+    rc = e.code
+check("--board and --data are separate modes", rc == 2 and org.calls == [])
+check("--data still reads no leaderboard query (its cells are blank until the room plays)",
+      fm.DATA_DASHBOARDS == ("fleet dashboard",))
+
 print("== validation: a bad-news monitor needs a signal on its own source ==")
 def broken_signal(key, **over):
     d = json.loads(json.dumps(defs))
@@ -596,6 +757,7 @@ verb = fleet_src.split("monitors) exec python3", 1)[1].split(";;", 1)[0] if "mon
 check("it passes the account and region explicitly", '--profile "${WIB_DEFAULT_ACCOUNT}"' in verb and '--region "${WIB_REGION}"' in verb)
 check("usage documents it", "monitors [--apply|--check]" in fleet_src)
 check("usage documents the data check", "monitors --data --cluster NAME" in fleet_src)
+check("usage documents the leaderboard check", "monitors --board --cluster NAME" in fleet_src)
 
 print()
 if failures:

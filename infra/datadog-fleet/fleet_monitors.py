@@ -22,6 +22,12 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
                        dashboard answers for each cluster over its widget's window. Exit 1 on any blank. A
                        `scope: org` monitor (#810), on a metric with no cluster tag, must be in a state other
                        than No Data as a whole.
+    --board --cluster NAME [--cluster NAME ...]
+                       read-only, once a cluster has been walked through challenges 1 to 6 (#489, #862): the
+                       challenge leaderboard is in the org with the table this repo defines, and the table's
+                       request, sent whole the way the widget sends it, fills every column for every named cluster
+                       over the widget's window. Filled means the cell the room reads as done: green under the
+                       column's conditional format, or above 0 for the bill. Exit 1 on any blank cell.
 
 The org. For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student
 orgs, so both clusters ship there (#629, #454), and its keys are Secrets Manager watch-it-burn/datadog (the secret
@@ -44,6 +50,7 @@ Usage (fleet.sh passes the profile and region; it is the normal way in):
     WIB_FLEET_MONITORS_APP_KEY=<key> fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
     fleet.sh monitors --check
     fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private   # after a /chat on each
+    fleet.sh monitors --board --cluster burritobot-private        # after walking that cluster through 1 to 6
     python3 infra/datadog-fleet/fleet_monitors.py --profile accen-dev --region us-west-2 [--apply|--check]
 """
 from __future__ import annotations
@@ -85,8 +92,11 @@ TYPES = ("metric alert", "query alert", "log alert")
 ORG_SCOPE_METRICS = ("ml_obs.",)
 ORG_SCOPE = "org"
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-# The dashboards --data reads. The leaderboard counts challenge outcomes, so it is blank until the room plays.
+# The dashboards --data reads. The leaderboard counts challenge outcomes, so it is blank until the room plays;
+# --board reads it, for clusters that have played (#862).
 DATA_DASHBOARDS = ("fleet dashboard",)
+BOARD_LABEL = "challenge leaderboard"
+COMPARATORS = {">=": lambda a, b: a >= b, ">": lambda a, b: a > b, "<=": lambda a, b: a <= b, "<": lambda a, b: a < b}
 # A widget without its own time follows the dashboard's time picker, which opens on the last hour.
 DEFAULT_SPAN_S = 3600
 SPAN_RE = re.compile(r"^([0-9]+)([mhd])$")
@@ -643,6 +653,135 @@ def data_check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], clusters
     return 1 if blank else 0
 
 
+def board_table(dash: dict) -> tuple[dict, dict]:
+    """(widget definition, request) of the leaderboard's one per-cluster table."""
+    tables = [(w.get("definition") or {}) for w in dash.get("widgets") or []
+              if (w.get("definition") or {}).get("type") == "query_table"]
+    if len(tables) != 1 or len(tables[0].get("requests") or []) != 1:
+        raise RuntimeError(f"'{dash.get('title')}' must hold exactly one query_table with one request, "
+                           f"holds {len(tables)} table(s)")
+    return tables[0], tables[0]["requests"][0]
+
+
+def table_shape(dash: dict) -> dict:
+    """What decides the leaderboard's cells, comparable between the repo and the org: the window, each query's
+    source, filter, aggregator and grouping, and each column's formula, title and green rule. Whitespace aside."""
+    d, req = board_table(dash)
+    queries = {}
+    for q in req.get("queries") or []:
+        src = q.get("data_source", "metrics")
+        queries[q.get("name")] = (src, norm(query_text(q)), q.get("aggregator") if src == "metrics" else
+                                  tuple(g.get("facet") for g in q.get("group_by") or []))
+    columns = [(f.get("formula"), f.get("alias"),
+                tuple((c.get("comparator"), float(c.get("value")), c.get("palette"))
+                      for c in f.get("conditional_formats") or []))
+               for f in req.get("formulas") or []]
+    return {"window": (d.get("time") or {}).get("live_span"), "queries": queries, "columns": columns}
+
+
+def table_drift(live: dict, repo: dict) -> list[str]:
+    """How the org's leaderboard table differs from leaderboard.yaml. Empty is the same board."""
+    try:
+        have = table_shape(live)
+    except RuntimeError as e:
+        return [f"the org's leaderboard: {e}"]
+    want = table_shape(repo)
+    out = []
+    if have["window"] != want["window"]:
+        out.append(f"window {have['window']} in the org, {want['window']} in leaderboard.yaml")
+    for name in sorted(set(want["queries"]) | set(have["queries"]), key=str):
+        if name not in have["queries"]:
+            out.append(f"query {name} is in leaderboard.yaml, not in the org")
+        elif name not in want["queries"]:
+            out.append(f"query {name} is in the org, not in leaderboard.yaml")
+        elif have["queries"][name] != want["queries"][name]:
+            out.append(f"query {name} differs: the org has {have['queries'][name]}")
+    if have["columns"] != want["columns"]:
+        out.append(f"columns differ: the org has {[c[1] or c[0] for c in have['columns']]} and its green rules, "
+                   f"leaderboard.yaml {[c[1] or c[0] for c in want['columns']]}")
+    return out
+
+
+def table_scalar(dd: Datadog, req: dict, span: int, now: dt.datetime) -> dict[str, dict[str, float | None]]:
+    """The table's whole request in one POST /api/v2/query/scalar, every query and formula together, which is how
+    query_table joins its metrics, logs and spans on kube_cluster_name. Returns {cluster: {formula: value}}."""
+    queries = []
+    for q in req["queries"]:
+        q = dict(q)
+        if q.get("data_source", "metrics") == "metrics":
+            q.setdefault("aggregator", "avg")
+        queries.append(q)
+    to_ms = int(now.timestamp() * 1000)
+    body = {"data": {"type": "scalar_request", "attributes": {
+        "from": to_ms - span * 1000, "to": to_ms, "queries": queries,
+        "formulas": [{"formula": f["formula"]} for f in req["formulas"]]}}}
+    resp = dd.call("POST", "/api/v2/query/scalar", body)
+    cols = ((resp.get("data") or {}).get("attributes") or {}).get("columns")
+    if cols is None:
+        raise RuntimeError(f"scalar answer has no data.attributes.columns: {json.dumps(resp)[:200]}")
+    if not cols:
+        return {}
+    groups = [c for c in cols if c.get("type") == "group" and c.get("name") == GROUP_BY]
+    if not groups:
+        raise RuntimeError(f"the joined table answered without a {GROUP_BY} column, so it has no row per cluster: "
+                           f"{[c.get('name') for c in cols]}")
+    numbers = {c.get("name"): c.get("values") or [] for c in cols if c.get("type") == "number"}
+    absent = [f["formula"] for f in req["formulas"] if f["formula"] not in numbers]
+    if absent:
+        raise RuntimeError(f"the joined table answered no column for {absent}; it answered {sorted(numbers)}")
+    rows: dict[str, dict[str, float | None]] = {}
+    for i, g in enumerate(groups[0].get("values") or []):
+        name = g[0] if isinstance(g, list) and g else g
+        if isinstance(name, str):
+            rows[name] = {f: (float(v[i]) if i < len(v) and v[i] is not None else None) for f, v in numbers.items()}
+    return rows
+
+
+def filled(formula: dict, value: float | None) -> bool:
+    """Is the cell what the room reads as done? Green under the column's conditional format, or, for a column with
+    no green rule (the bill), a value above 0."""
+    if value is None:
+        return False
+    greens = [c for c in formula.get("conditional_formats") or [] if "green" in str(c.get("palette", ""))]
+    if not greens:
+        return value > 0
+    return any(COMPARATORS[c["comparator"]](value, float(c["value"])) for c in greens)
+
+
+def board_check(dd: Datadog, dashes: list[tuple[str, dict]], clusters: list[str], now: dt.datetime,
+                say=print) -> int:
+    """Read-only (#489, #862): the leaderboard is in the org with this repo's table, and every column of that table
+    is filled for every named cluster over the widget's window. Exit 1 on a missing or drifted board or a blank
+    cell. Run it after walking each named cluster through challenges 1 to 6 inside that window."""
+    dash = dict(dashes)[BOARD_LABEL]
+    found = find_dashboard(dd, dash["title"])
+    if found is None:
+        say(f"  MISSING  {BOARD_LABEL} '{dash['title']}': not in the org (run fleet.sh monitors --apply)")
+        return 1
+    live = dd.call("GET", f"/api/v1/dashboard/{found['id']}")
+    drift = table_drift(live, dash)
+    for line in drift:
+        say(f"  DRIFT    {BOARD_LABEL}: {line}")
+    if drift:
+        say("  the org's table is not leaderboard.yaml's, so its cells say nothing about the repo's; re-apply first")
+        return 1
+    say(f"  OK       {BOARD_LABEL} https://app.{dd.site}{found.get('url') or live.get('url', '')}")
+    widget, req = board_table(dash)
+    rows = table_scalar(dd, req, span_seconds(widget), now)
+    blank = 0
+    for f in req["formulas"]:
+        column = f.get("alias") or f["formula"]
+        values = {c: (rows.get(c) or {}).get(f["formula"]) for c in clusters}
+        empty = [c for c in clusters if not filled(f, values[c])]
+        if empty:
+            say(f"  BLANK    {BOARD_LABEL} / {column}: "
+                + ", ".join(f"{c} ({'no value' if values[c] is None else f'{values[c]:g}'})" for c in empty))
+            blank += 1
+        else:
+            say(f"  FILLED   {BOARD_LABEL} / {column}")
+    return 1 if blank else 0
+
+
 def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--profile", required=True, help="AWS profile that can read the instructor org secret")
@@ -652,8 +791,11 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     mode.add_argument("--check", action="store_true", help="read-only: compare the live org with this repo")
     mode.add_argument("--data", action="store_true",
                       help="read-only: every monitor and fleet-dashboard query returns data for every --cluster")
+    mode.add_argument("--board", action="store_true",
+                      help="read-only: the leaderboard is applied and every column is filled for every --cluster")
     p.add_argument("--cluster", action="append", default=[],
-                   help="a kube_cluster_name that must be shipping, for --data (repeatable, at least one)")
+                   help="a kube_cluster_name that must be shipping, for --data, or that has walked challenges 1 to 6, "
+                        "for --board (repeatable, at least one)")
     p.add_argument("--session", help="START/END in ISO-8601 UTC; session monitors are muted outside it")
     p.add_argument("--notify", action="append", default=[],
                    help="a Datadog handle to page, e.g. @someone@example.com (repeatable; default: none)")
@@ -674,8 +816,10 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     flt_prefix = str(defs.get("cluster_filter", "")).split(":", 1)[-1].rstrip("*")
     if a.data and not a.cluster:
         problems.append("--data needs every cluster that should be shipping, one --cluster each")
-    if a.cluster and not a.data:
-        problems.append("--cluster only means something with --data")
+    if a.board and not a.cluster:
+        problems.append("--board needs every cluster that has walked challenges 1 to 6, one --cluster each")
+    if a.cluster and not (a.data or a.board):
+        problems.append("--cluster only means something with --data or --board")
     outside = [c for c in a.cluster if not c.startswith(flt_prefix)]
     if outside:
         problems.append(f"--cluster {outside} is outside the queries' filter {defs.get('cluster_filter')}, "
@@ -686,10 +830,11 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
             print(f"  - {pr}", file=sys.stderr)
         return 1
 
-    label = "APPLY" if a.apply else "CHECK" if a.check else "DATA" if a.data else "DRY-RUN"
+    label = ("APPLY" if a.apply else "CHECK" if a.check else "DATA" if a.data else "BOARD" if a.board
+             else "DRY-RUN")
     print(f"[{label}] {len(defs['monitors'])} monitor(s) and dashboards "
           + ", ".join(f"'{d['title']}'" for _, d in dashes))
-    if not (a.apply or a.check or a.data):
+    if not (a.apply or a.check or a.data or a.board):
         for m in defs["monitors"]:
             print(f"  P{m.get('priority', '-')} {m['key']:<22} {m['type']:<12} {m['name']}")
         windows = mute_windows(session, now or dt.datetime.now(dt.timezone.utc))
@@ -720,6 +865,9 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
         if a.data:
             print(f"  every query must answer for: {', '.join(a.cluster)}")
             return data_check(dd, defs, dashes, a.cluster, now or dt.datetime.now(dt.timezone.utc))
+        if a.board:
+            print(f"  every leaderboard column must be filled for: {', '.join(a.cluster)}")
+            return board_check(dd, dashes, a.cluster, now or dt.datetime.now(dt.timezone.utc))
         return apply(dd, defs, dashes, a.notify, session, now or dt.datetime.now(dt.timezone.utc))
     except RuntimeError as e:
         print(f"FAILED: {e}", file=sys.stderr)
