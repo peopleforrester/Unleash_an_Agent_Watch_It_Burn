@@ -1,6 +1,7 @@
 # ABOUTME: Live probe for #704: does the local-inference vLLM fit on a running cluster's node, and when it does, how
 # ABOUTME: long its cold start takes. Runs the manifest's own pod spec in a scratch namespace and deletes it after.
-"""Needs kubectl and CONTEXT. Not a test_*.py: it schedules a 4-CPU pod, so it is run by hand, never by a suite.
+"""Needs kubectl and CONTEXT. Not a test_*.py: it schedules a pod that requests 1500m CPU and 10Gi, so it is run by
+hand, never by a suite.
 
 Why it exists. #704 asks for the local-inference profile's cold build to be timed until every Application is
 Healthy, and for vLLM's cost to go into platform-baseline.yaml. That build needs a fresh t3.2xlarge cluster. A run

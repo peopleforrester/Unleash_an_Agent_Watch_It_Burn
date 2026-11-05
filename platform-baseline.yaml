@@ -363,8 +363,13 @@ components:
         watch-it-burn-community (3835m free). With the CPU request at 3500m, limits unchanged, on community's
         t3.2xlarge it went from creation to Ready in 480 s: a 143 s cold pull of the 4947778006-byte image and 335
         s of model load. cgroup memory.peak was 9.28 GiB once Ready, CPU averaged 1.34 cores over the load, and one
-        5-token completion came back from qwen3-1.7b. A profile build would leave vllm-qwen3 Pending until room is
-        made for it, so the profile's wall-clock to every Application Healthy stays unmeasured.
+        5-token completion came back from qwen3-1.7b. Question 1082 (2026-11-05) lowered the manifest's CPU
+        request to 1500m, limits unchanged. With that pod spec, unmodified, on watch-it-burn-private beside the
+        running platform (6045m of 7910m requested before it, 1865m free), the scheduler placed it at once and it
+        went from creation to Ready in 521 s: a 179 s cold pull and 341 s of model load. memory.peak was 8.86 GiB,
+        CPU averaged 1.35 cores, and qwen3-1.7b answered a 5-token completion. That leaves about 365m of CPU
+        requests free on the node. The profile's wall-clock to every Application Healthy is still unmeasured: the
+        build pulls staging, so it waits until the 1500m request is on staging.
 
   - name: kserve
     sister: [kserve, kserve-crd]

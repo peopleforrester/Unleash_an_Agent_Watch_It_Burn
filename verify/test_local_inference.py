@@ -65,9 +65,9 @@ check("the gateway-local-qwen3 ModelConfig points at the /local route",
 check("tool calling is on: kagent sends tool_choice=auto on every request",
       "--enable-auto-tool-choice" in args and "--tool-call-parser=hermes" in args)
 
-print("== it keeps the shape the sister measured on the same node type ==")
-check("requests 4 CPU / 10Gi, limits 6 CPU / 16Gi",
-      c["resources"] == {"requests": {"cpu": "4", "memory": "10Gi"}, "limits": {"cpu": "6", "memory": "16Gi"}})
+print("== it keeps the shape the sister measured on the same node type, but for the CPU request ==")
+check("requests 1500m CPU / 10Gi (question 1082: the sister's 4 CPU does not fit beside the platform), limits 6 CPU / 16Gi",
+      c["resources"] == {"requests": {"cpu": "1500m", "memory": "10Gi"}, "limits": {"cpu": "6", "memory": "16Gi"}})
 check("KV cache 2 GiB, the value paired with the 16Gi limit",
       {"name": "VLLM_CPU_KVCACHE_SPACE", "value": "2"} in c["env"])
 sc = c["securityContext"]
