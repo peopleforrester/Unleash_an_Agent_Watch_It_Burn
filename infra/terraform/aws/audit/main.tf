@@ -13,6 +13,11 @@
 #   . infra/terraform/fleet/event.sh
 #   terraform -chdir=infra/terraform/aws/audit init
 #   terraform -chdir=infra/terraform/aws/audit apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+#   terraform -chdir=infra/terraform/aws/audit apply -refresh-only -auto-approve -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+#
+# The refresh-only apply changes nothing in AWS; it settles the state on what AWS reads back for the objects just
+# made (the role's attached and inline policies, the bucket's policy and settings, empty tags), which the first
+# apply does not write. Unsettled, the next drift report lists this state as drifted (docs/floor.md).
 #
 # The IAM in it (the recorder's role, its delivery grant, the bucket policy) goes through the policy pipeline
 # like the cluster root's (infra/org/pipeline.py, suite audit). Every document is built from locals, never from a

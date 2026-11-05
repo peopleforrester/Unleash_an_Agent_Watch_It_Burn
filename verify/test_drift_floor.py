@@ -205,6 +205,12 @@ check("the recorder is turned on, not only defined", "aws_config_configuration_r
 check("floor.md gives the audit apply with its profile and event",
       "terraform -chdir=infra/terraform/aws/audit apply -state=states/<profile>.tfstate -var profile=<profile> "
       '-var event="${WIB_EVENT}"' in FLOOR)
+# A fresh apply leaves attributes AWS reads back unwritten, and the drift report then lists the new state as drifted
+# (#795, 2026-11-05); a refresh-only apply with the same arguments settles it.
+settle = ("terraform -chdir=infra/terraform/aws/audit apply -refresh-only -auto-approve -state=states/<profile>.tfstate "
+          '-var profile=<profile> -var event="${WIB_EVENT}"')
+check("floor.md settles the audit state with a refresh-only apply after the apply", settle in FLOOR)
+check("the audit root's header gives the same settle step", settle in audit)
 
 print("== the AWS register is explained, and in floor.md ==")
 reg = yaml.safe_load((REPO / "infra/terraform/drift/known-unmanaged.yaml").read_text(encoding="utf-8"))["entries"]

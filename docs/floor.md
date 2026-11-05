@@ -186,12 +186,22 @@ permissions boundary (its recorder role carries the boundary, which it looks up 
 . infra/terraform/fleet/event.sh
 terraform -chdir=infra/terraform/aws/audit init
 terraform -chdir=infra/terraform/aws/audit apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+terraform -chdir=infra/terraform/aws/audit apply -refresh-only -auto-approve -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
 ```
+
+The second apply is refresh-only: it changes nothing in AWS and writes into the state what AWS reads back
+for the objects the first apply just made. Without it, the next drift report lists the fresh audit state as
+drifted. The trail, the role and the bucket each read back attributes their sibling resources set after they
+were created: the role's managed and inline policies, the bucket's policy, lifecycle and encryption, and an
+empty `tags` map on all three. The #795 apply of 2026-11-05 showed exactly that, three resources "changed
+outside of Terraform" minutes after the apply. Settled, the report reads the state as clean, and a later
+out-of-band change to one of those attributes still shows as drift.
 
 It creates a Config recorder for the six `AWS::EKS::` types, the S3 bucket, bucket-policy and account
 public-access-block types, IAM users, user policies, roles, role policies and managed policies (where the
-attendee users and their grants live), the two Bedrock types the fleet could touch, the trail and the
-recorder itself. It also creates one multi-region CloudTrail trail with log file validation. Both deliver
+attendee users and their grants live), the two Bedrock types the fleet could touch, and the trail. The
+recorder itself is on record without being listed: `AWS::Config::` types are Config's own system types,
+recorded by default, and AWS refuses one in a recording group. It also creates one multi-region CloudTrail trail with log file validation. Both deliver
 to a private, encrypted bucket of their own. The recorder's role, its delivery grant and the trail's
 bucket policy go through the IAM policy pipeline as its `audit` suite (`infra/org/pipeline.py`,
 `infra/org/effect-tests.yaml`), like the cluster root's IAM. The permissions boundary already denies a
