@@ -270,6 +270,34 @@ module "eks" {
   vpc_id     = var.vpc_id
   subnet_ids = var.private_subnet_ids
 
+  # The control plane reaches the workshop apps on the nodes (#869). lab-platform's attendee check, and an
+  # attendee's `kubectl get --raw .../services/http:<svc>:<port>/proxy/...`, go through the API server's Service
+  # proxy, which dials the app's pod from the control-plane ENIs. Those carry this module's cluster security
+  # group, and the module's recommended node rules admit it only on 443, 4443, 6443, 8443, 9443, 10250 and
+  # 10251. The apps listen on 8080 (the five demo apps, argocd-server, kagent-ui) and 3000 (Grafana), so every
+  # probe was accepted and timed out (measured on watch-it-burn-private 2026-11-05: "dial tcp 10.0.97.64:8080:
+  # connect: connection timed out"; with these two rules added by hand all eight apps answered 200). This block
+  # is on module.eks itself, so every cluster the root builds gets it: attendee, admin and community alike.
+  # An app on another port adds its rule here; verify/test_control_plane_app_ports.py pins the set.
+  node_security_group_additional_rules = {
+    ingress_cluster_8080_workshop_apps = {
+      description                   = "Cluster API to node 8080/tcp workshop apps (Service proxy)"
+      protocol                      = "tcp"
+      from_port                     = 8080
+      to_port                       = 8080
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+    ingress_cluster_3000_grafana = {
+      description                   = "Cluster API to node 3000/tcp Grafana (Service proxy)"
+      protocol                      = "tcp"
+      from_port                     = 3000
+      to_port                       = 3000
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+  }
+
   addons = {
     vpc-cni = {
       before_compute = true

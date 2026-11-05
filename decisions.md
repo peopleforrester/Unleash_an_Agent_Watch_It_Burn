@@ -19160,3 +19160,50 @@ ran 57 checks (the offline suite and 56 tier tests, each through the aws and eks
 `ALL OFFLINE RENDER-GATE TESTS GREEN`. No tier test printed `TEST CALLED A CLOUD TOOL`. The read-only live check gave
 the same answers on `/var/lib/hecaton/runs/17434/clusters/bin/aws`: `515966504359` with the AWS variables unset, and
 exit 1 with the call named through the tier's stub.
+## 2026-11-05 · #869 · run 17432 · The control plane reaches the workshop apps on 8080 and 3000 on every cluster the root builds
+
+**What changed.** `module "eks"` in `infra/terraform/aws/cluster/main.tf` now sets
+`node_security_group_additional_rules` with two ingress rules on the nodes' security group, TCP 8080 and TCP 3000,
+each with `source_cluster_security_group = true`. The block sits on the module itself, with no role, count or variable
+gate, so every cluster `fleet.sh` applies the root for (attendee seats, the admin cluster and the community cluster)
+gets both rules on its next apply.
+
+**Why.** lab-platform's attendee check, and an attendee's `kubectl get --raw
+/api/v1/namespaces/<ns>/services/http:<svc>:<port>/proxy/<path>`, go through the API server's Service proxy, which
+opens the connection to the app's pod from the control-plane ENIs. The module's recommended node rules admit the
+cluster security group only on 443, 4443, 6443, 8443, 9443, 10250 and 10251. The workshop apps listen on 8080 (the
+five demo apps, argocd-server, kagent-ui) and 3000 (Grafana), so each probe hung.
+
+**Narrow ports, not 1025-65535.** The issue offered the wider range as an alternative that would cover apps added
+later. This run took the two measured ports: the issue's own ask, and the fix its hand-added rules proved. A new app
+on another port adds a rule here and its port to `APP_PORTS` in `verify/node_sg_rules.py`; the offline test fails a
+rule on a port that list does not name, so a port is opened together with the reason it is needed.
+
+**Read live this run (read-only, nothing changed on either cluster).**
+- `aws eks describe-cluster`: the module's cluster security group is `sg-0ca9886f5a9d4f6d3` on watch-it-burn-private
+  and `sg-04130d5989d5c1ab1` on watch-it-burn-community (the EKS-managed primary groups are `sg-004dd5dea385c0a7f`
+  and `sg-06137354364297b90`). The first is the group the issue's hand-added rules named, so
+  `source_cluster_security_group` is the right source.
+- `aws ec2 describe-security-group-rules` on the node groups `sg-011fc555e507cfb40` (private) and
+  `sg-0b7d2a0cfaed6fecd` (community): from the cluster group, only 443, 4443, 6443, 8443, 9443, 10250 and 10251. No
+  8080 or 3000 rule from it on either cluster. (A load balancer group holds 8080-8443 for target-group bindings,
+  which the API server does not carry.)
+- On watch-it-burn-private, `kubectl get --raw /healthz` answered `ok`, and
+  `kubectl get --raw /api/v1/namespaces/argocd/services/http:argocd-server:80/proxy/healthz` answered, after 133 s,
+  `Error from server (ServiceUnavailable): error trying to reach service: dial tcp 10.0.97.64:8080: connect:
+  connection timed out`, the issue's failure. kagent-ui (8080) and prometheus-grafana (3000) gave no answer within
+  a 60 s client timeout.
+
+**Tests.** `verify/test_control_plane_app_ports.py` (offline) pins the two rules, their source, that each opens one
+named port, that nothing gates them by role, and that the module's own security groups and recommended rules stay
+on. `verify/test_control_plane_app_ports_module.py` (tools tier) runs `terraform init` and `terraform validate` on a
+copy of the root and reads the pinned module 21.29.0's source: every attribute the rules set is in the variable's
+object type (Terraform drops an attribute the type does not name without an error, so a misspelling would plan a
+rule with no source), and `source_cluster_security_group` resolves to the group `vpc_config` puts on the control
+plane. Both share the parser in `verify/node_sg_rules.py`.
+
+**Not yet run on a cluster.** This run applies no terraform. Once the root is applied to a cluster:
+1. `aws ec2 describe-security-group-rules` on its node group shows TCP 8080 and TCP 3000 from the cluster group.
+2. lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive` in `internal/bootstrap`
+   (`go test -tags live`, `LAB_AWS_LIVE=1`, `LAB_APP_ACCESS_CLUSTER=<cluster>`) answers 200 for all eight apps, and
+   the argocd-server probe above answers instead of timing out.
