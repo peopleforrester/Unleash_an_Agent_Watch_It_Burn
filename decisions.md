@@ -21063,3 +21063,7 @@ follow-up above is dropped as well: `b42b7d06` (#775) makes the registry's Locat
 `watch-it-burn` recording with last status `SUCCESS`, the trail logging, and `drift-report.py --accounts accen-dev
 --region us-west-2` exit 2 with 0 drifted states, `audit accen-dev` clean and only the two KubeCon clusters unmanaged,
 as before. The audit state is still `infra/terraform/aws/audit/states/accen-dev.tfstate` in this workspace.
+
+**The suites (run 17711, at `95acc5ed`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`273 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `61 checks ran (the offline suite and 60 tier tests) in
+31m27s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
