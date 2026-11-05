@@ -20732,3 +20732,75 @@ it now has the `agent-task` label that run 17684's escalation asked for, so heca
 `uv run ruff check . && uv run pytest` green there. The real-browser chat step on `/display` that run 17684 named
 under Not yet run on a cluster is still not run, for the same reason: each chat stays in guard-proxy's feed and on
 the projector.
+## 2026-11-05 · #912 · run 17688 · The rotation waits on mrf-secrets; both terminals still open with the old login, community's on its load balancer name
+
+**mrf-secrets does not hold the new login yet, so nothing was rotated.** The delivery path is on staging since #910
+(`fleet.sh terminal-password <name>`, reading `projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and
+`WIB_TERMINAL_PASSWORD`). This host cannot read mrf-secrets (the `sources` wrapper refuses it as a data vault, and
+Michael's home here is closed to run users). Through `sources-elevated fleet`, tanjiro-wsl2 has the mrf-secrets checkout
+at `~/secrets`. It is 2 ahead and 96 behind its remote, with one modified keyring file, and was not pulled or changed. After
+a `git fetch`, the file is in neither its working tree nor `origin/main`, and no path in `origin/main` names the two keys.
+megumi-wsl2 has no `~/secrets`. Secrets Manager in accen-dev holds only `watch-it-burn/datadog`. Each check printed a
+count or a path, never a value. The agent-task issue asking for the login is the follow-up of #910's run report (run
+17644) for hecaton to file on mrf-secrets; this run cannot list that repo's issues to name its number. The waits list shows
+agents' mrf-secrets commits held on llm-coding-workflow#463, which is the human-only rule's removal.
+
+**Live check, both clusters, run 17688 (read only).** The old login was read in the shell from fleet.sh at `ce43342c^`, the
+default #910 removed, and never printed. Each curl took it on its config, not its command line.
+
+- `kubectl --context watch-it-burn-private -n agent get secret terminal-auth` and the same with
+  `--context watch-it-burn-community`: each `TTYD_CREDENTIAL` equals the old login. Neither Secret has a label, an
+  annotation or a managed-fields entry, so Argo CD does not track it. Both were created 2026-10-28.
+  `kubectl --context <ctx> -n agent get pods -l app.kubernetes.io/name=web-terminal` showed one pod on each, started
+  2026-11-03.
+- **watch-it-burn-private.** `https://burritobot-private.burritobot.co/terminal/` and its `agenticburn.com` twin answer
+  401 to no login and to a wrong one, and 200 to the old login. With the old password, `/ide/login` (code-server)
+  answers 302 into the IDE, against 200 (the login page again) for a wrong one. With the old token,
+  `/jupyter/api/status` answers 200, against 403 for a wrong one.
+- **watch-it-burn-community runs a web terminal, and it is reachable from outside.**
+  `kubectl --context watch-it-burn-community -n agent get deploy,svc` shows `web-terminal` (ttyd, code-server and
+  Jupyter in one pod) behind the same `console` LoadBalancer Service the private cluster has, and the console's nginx
+  (`kubectl --context watch-it-burn-community -n agent exec deploy/console -- cat /etc/nginx/conf.d/...`) routes
+  `/terminal/`, `/ide/` and `/jupyter/` to it on any host. `https://attackme.burritobot.co` and
+  `https://attackme.agenticburn.com` answer 404 on `/terminal/`, `/ide/` and `/jupyter/`, which is what kubecon.html's
+  "terminal-less" means. But the load balancer's own AWS name, which this entry does not write out, answers like the
+  private host: 401 to no login or a wrong one, 200 to the old login on `/terminal/`, and code-server and Jupyter open
+  with the old password. This is the fleet.sh note's point (bootstrap_terminal_auth): the NLB answers on its own name,
+  so neither the router nor a hostname is a control, and only the login is. Its login is the old private one, which
+  `is_instructor_name` gives every roster cluster. It carries no other login, and that one is in this repo's history, so
+the community terminal fails this issue's second criterion until the rotation reaches it too.
+
+**What a re-sync or bring-up writes.** The pod reads `terminal-auth` as an optional `secretRef`
+(`gitops/ai-layer/resources.yaml`), and git defines no such Secret, so an Argo CD sync neither writes nor restores it.
+Its only writers are fleet.sh's `bootstrap_terminal_auth` (a new cluster, leaving an existing Secret alone) and
+`terminal_password_one`. Both take a roster cluster's login from `presenter_login`, which has no default since #910,
+so once the Secret holds the mrf-secrets login, nothing in this repo puts the old one back.
+
+**What changed: `verify/terminal-login-live.sh <kube-context> <base-url>...`.** It is the check the rotation ends with, so
+the next step is one command, and it never prints a value. It reads the new login through fleet.sh's own
+`presenter_login` and the old one from git at `ce43342c^`, checked against the digest `verify/test_no_presenter_login.py`
+holds. It fails before any cluster call when either is missing or mrf-secrets still holds the old one. Then it checks
+that the Secret holds the mrf-secrets login. On each URL, `/terminal/` must answer 401 with no login, 401 with the old
+login and 200 with the new. `/ide/login` must refuse the old password and take the new, and `/jupyter/api/status` the
+same. Each credential reaches curl on a config on a file descriptor. Run here with a throwaway
+`WIB_TERMINAL_USER`/`WIB_TERMINAL_PASSWORD` against `watch-it-burn-private https://burritobot-private.burritobot.co`
+and against `watch-it-burn-community` on its load balancer name, it printed on each `FAIL  terminal-auth holds the
+presenter login from mrf-secrets (got the old login, ...)`, then `PASS  /terminal/ refuses no login (got 401)` and six
+FAILs (the old login opens all three, the throwaway opens none), `1 passed, 7 failed`, exit 1. With no login present it
+named the missing file and keys and exited 1 before any call. `verify/test_terminal_login_live.sh` (28 checks, kubectl
+and curl shimmed, both logins placeholders) covers the rotated, unrotated, half-rotated (Secret new, pod not
+restarted) and no-Secret states, every refusal before a call, two URLs, a password holding a quote and a backslash, no
+value in the output or any argv, `--context` on every kubectl call, and the default digest being the guard's. Changing
+that digest fails the last check.
+
+**Not yet run on a cluster.** Once mrf-secrets holds the login, from `infra/terraform/fleet/` on a host with the
+mrf-secrets checkout (tanjiro-wsl2, through `sources-elevated fleet`, after `git -C ~/secrets` has the file):
+`./fleet.sh terminal-password watch-it-burn-private watch-it-burn-community`, which writes both Secrets and restarts both
+terminals, then `bash verify/terminal-login-live.sh watch-it-burn-private https://burritobot-private.burritobot.co`
+and the same for `watch-it-burn-community` on its load balancer name, each ending
+`THE TERMINAL TAKES THE MRF-SECRETS LOGIN AND REFUSES THE OLD ONE`.
+
+**The question this run asks.** KubeCon runs 2026-11-09 to 11-12 (conference-knowledge `kubecon-na-2026`) on these two
+clusters. Until the rotation, two internet-facing shells with in-cluster kubectl take a login that is in this public
+repo's history. Run 17688's report asks whether to rotate both now to an interim login kept only in their Secrets, or
+to wait for mrf-secrets.
