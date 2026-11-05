@@ -19490,3 +19490,11 @@ private's Falco badge); no `joker-*` Deployment on either; community's counter a
    `c6-lands` beat, run three times.
 4. After a root apply of `infra/terraform/aws/cluster` to either cluster, `aws ec2 describe-security-group-rules` on
    its module cluster group shows TCP 443 from the lab VPC CIDR, and the two hand rules can be revoked.
+
+**The suites (run 17556, at `5d40fd08`).** The first `bash verify/run-e2e-tools.sh`, at `1cd135ea`, exited 1 on one offline
+test, `test_e2e_tools_tier.py`: its fixtures run the tier's scripts with an env that drops TMPDIR, so their `mktemp`
+went to the host's `/tmp`, which had been removed mid-run on this host (`ls -ld /tmp` showed link count 0, and
+`touch /tmp/x` answered "No such file or directory"). `5d40fd08` gives each fixture run its own scratch as TMPDIR.
+The second run printed `267 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline
+suite and 57 tier tests) in 31m33s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, so #883's command is green on
+this branch. No dependency was added.
