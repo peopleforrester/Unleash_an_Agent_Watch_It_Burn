@@ -21284,3 +21284,8 @@ checks `resources.yaml` sets no `PROFANITY_LIST`, and checks `cocViolation` only
 sha256, and its env names no `PROFANITY_LIST` (no `envFrom` either), so the wall masks the default list the page
 copies. The page change itself reaches the clusters through Argo CD once hecaton promotes it; nothing calls
 `cocViolation` until the next child wires it into `save()`.
+
+**The suites (run 17731, at `05bd8c2d`).** `bash verify/run-e2e-tools.sh` printed `275 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `62 checks ran (the offline suite
+and 61 tier tests) in 30m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_chat_coc.py` ran in the
+offline suite and `test_chat_coc_e2e.py` in the tools tier, both green.
