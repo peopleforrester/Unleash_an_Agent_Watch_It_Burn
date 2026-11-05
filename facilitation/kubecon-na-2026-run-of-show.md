@@ -41,7 +41,9 @@ forecast date: it is built straight through, in this order.
    clusters from 2026-10-24 are spun up, tested and torn down in one session, on
    the smallest instances.
 2. **Every abstract point READY, or cut with Whitney's agreement** (#456).
-3. **The recorded fallback** (#452), recorded the moment the live run works.
+3. **The recorded fallback** (#452). Michael dropped its milestone (M4, #613) on
+   2026-11-01 as handled outside this repo and not a blocker; the repo keeps the
+   replayable prompt set, its replay script and the screenshots deck.
 
 Dates are for people only:
 
@@ -964,11 +966,10 @@ saying the same thing.
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); Challenge 2 has no seed yet (#843), so segment 3 shows its live trace in the `burritobot-private` tab; the Grafana view carries it without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the replay and the screenshots deck are built, the segment videos wait for the first full rehearsal |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Yes: the live input, and the replay and the screenshots deck in `facilitation/kubecon-na-2026/fallback/`; the segment videos left this repo with M4 (#613) |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
-ready: the pre-seeded traces (#648) and
-the segment videos of point 9 (#452).
+ready: the pre-seeded traces (#648).
 
 ## Challenges shown live, and challenges cut
 
@@ -1262,10 +1263,9 @@ is merely slow rather than rebuilding:
     the first prompt that does not land. Every line should end `ok`, then `DONE: 5 of 5
     delivered`; read the replies against each prompt's `expect`. Run it before the
     community bot's last `reset-bot`, so its five turns are off the counter.
-  - Every segment video and screenshot is in place:
-    `python3 scripts/check-fallback-assets.py`. It exits 1 until the rehearsal's
-    videos are copied in (they are not in git; the README says where they go) and
-    the deck's by-hand shots are committed.
+  - The deck and every screenshot it lists are in place:
+    `python3 scripts/check-fallback-assets.py`, which ends `recorded fallback ready`
+    and exits 1 if any shot is missing, empty or not a PNG.
   - Open `facilitation/kubecon-na-2026/fallback/screenshots/deck.html` from disk
     with Wi-Fi off and step through it: no red MISSING card.
 - [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
@@ -1351,12 +1351,9 @@ is merely slow rather than rebuilding:
    laptop on the phone hotspot, replay the segment on stage,
    `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment <N>`.
    If it stops, do not retry it; go to step 3.
-3. Nothing live works at all: play the recorded fallback (#452). The segment's
-   video is in `facilitation/kubecon-na-2026/fallback/videos/`
-   (`segment-<N>-*.mp4`, one for each of segments 1 to 6, copied onto both laptops
-   the Night Before). If video will not play either, open the screenshots deck from
-   disk, `facilitation/kubecon-na-2026/fallback/screenshots/deck.html`, and narrate
-   over it.
+3. Nothing live works at all: show the recorded fallback (#452). Open the
+   screenshots deck from disk, `facilitation/kubecon-na-2026/fallback/screenshots/deck.html`,
+   step to the segment on stage, and narrate over it.
 4. Any beat over its time budget by half: cut it to a sentence and move on. The room
    never watches unrehearsed troubleshooting.
 
@@ -1430,20 +1427,19 @@ number and says who settled it and when, so references to it elsewhere still lan
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and
    Whitney's wording. This is the biggest content risk in the cut.
-2. **The recorded fallback is half recorded (#452).** The replayable prompt set,
-   its replay script, the screenshots deck and its capture script are in
+2. **The recorded fallback is built (#452).** The replayable prompt set, its
+   replay script, the screenshots deck and its capture script are in
    `facilitation/kubecon-na-2026/fallback/` and `scripts/`, and the Night Before and
-   rollback steps name them. The deck holds 12 of its 15 shots, captured on the live
-   clusters on 2026-11-04. The six segment videos, and the deck's two by-hand shots
-   (a signed-in Datadog trace and the `guardrails-on` terminal), are recorded at the
-   first full rehearsal and do not exist until then. The third missing shot is
-   Challenge 2's public image: on 2026-11-04 the Tron ask did not deploy on the
-   community bot, because the model passed `deploy_app` the bare name "Tron" for its
-   manifest, three times out of three, and again on 2026-11-05. The manifest the
-   model then offered names the Docker Hub image `tron`, which `deploy_app` refuses
-   because the cantina pulls only its listed public images. Where the videos are kept is
-   open: the default keeps them out of git and on both laptops plus a USB stick
-   (`facilitation/kubecon-na-2026/fallback/README.md`).
+   rollback steps name them. The deck holds 12 shots, every segment from 1 to 6,
+   captured on the live clusters on 2026-11-04. The segment videos, and the two
+   shots that were to be taken by hand at the first full rehearsal, left this repo
+   when Michael dropped M4 (#613) on 2026-11-01. Challenge 2's public-image shot is
+   not in the deck: on 2026-11-04 the Tron ask did not deploy on the community bot,
+   because the model passed `deploy_app` the bare name "Tron" for its manifest,
+   three times out of three, and again on 2026-11-05. The manifest the model then
+   offered names the Docker Hub image `tron`, which `deploy_app` refuses because the
+   cantina pulls only its listed public images. That is a live risk for Challenge 2
+   itself, not only for the deck.
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet

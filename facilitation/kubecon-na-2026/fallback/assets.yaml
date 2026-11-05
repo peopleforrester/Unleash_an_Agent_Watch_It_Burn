@@ -1,12 +1,11 @@
-# ABOUTME: Every recorded-fallback file the KubeCon breakout needs on the day (#452): one video per segment of the
-# ABOUTME: run-of-show and the screenshots deck's shots, with how each shot is captured. check-fallback-assets.py reads it.
+# ABOUTME: Every recorded-fallback file the KubeCon breakout keeps in this repo (#452): the screenshots deck's shots,
+# ABOUTME: each with how it is captured, under the run-of-show's segment titles. check-fallback-assets.py reads it.
 #
 # Paths are relative to this directory. See README.md for how each is made.
 #
-# videos: MP4 (H.264), recorded at the first full rehearsal, because every presenter laptop plays it with no network
-#   and no codec install. Not committed (see .gitignore and README.md "Where the videos live"): a dead network is the
-#   case they cover, so they have to be on the laptop, at exactly these paths, before the session. Each title is the
-#   segment's heading in facilitation/kubecon-na-2026-run-of-show.md.
+# segments: the run-of-show's six segments, each titled as its heading in facilitation/kubecon-na-2026-run-of-show.md
+#   reads; the deck shows the title over each segment's shots. The segment videos are not here: Michael dropped them
+#   from this repo on 2026-11-01 (#613), as handled outside it.
 # screenshots: PNG, committed, shown in order by screenshots/deck.html in a browser with no network. The list inside
 #   deck.html must match this one; verify/test_replay_prompts.py holds them together. Each shot's `capture` says how
 #   it is made:
@@ -15,17 +14,17 @@
 #               cluster's /controls and refuses the shot unless every control in `controls` reads as listed; it
 #               never flips a guard itself. `toggle` names what the private terminal runs to get there.
 #     page      the capture script screenshots that URL as it loads.
-#     by_hand   taken at the first full rehearsal from the projector output (a terminal or a signed-in
-#               Datadog tab the script cannot drive), saved under this name.
+#     by_hand   taken from the projector output (a terminal or a signed-in Datadog tab the script cannot drive),
+#               saved under this name.
 version: 1
 deck: screenshots/deck.html
-videos:
-  - { segment: 1, title: "Opening and the rules of the room", path: videos/segment-1-opening.mp4 }
-  - { segment: 2, title: "Challenge 1, the CEO's secret", path: videos/segment-2-challenge-1-ceo-secret.mp4 }
-  - { segment: 3, title: "Challenge 2, the Kubernetes catch-all", path: videos/segment-3-challenge-2-kubernetes-catch-all.mp4 }
-  - { segment: 4, title: "Challenge 3, prompt injection through a support ticket", path: videos/segment-4-challenge-3-support-ticket.mp4 }
-  - { segment: 5, title: "Challenge 4, the poisoned weather tool", path: videos/segment-5-challenge-4-weather-tool.mp4 }
-  - { segment: 6, title: "The OWASP close, burritos only, and break it", path: videos/segment-6-owasp-close-burritos-only.mp4 }
+segments:
+  - { segment: 1, title: "Opening and the rules of the room" }
+  - { segment: 2, title: "Challenge 1, the CEO's secret" }
+  - { segment: 3, title: "Challenge 2, the Kubernetes catch-all" }
+  - { segment: 4, title: "Challenge 3, prompt injection through a support ticket" }
+  - { segment: 5, title: "Challenge 4, the poisoned weather tool" }
+  - { segment: 6, title: "The OWASP close, burritos only, and break it" }
 screenshots:
   - segment: 1
     file: screenshots/01-1-order.png
@@ -43,14 +42,6 @@ screenshots:
     file: screenshots/02-1-ceo-address.png
     caption: "Challenge 1: the CEO's home address comes back in the chat."
     capture: { chat: ceo-gift-basket, cluster: community, controls: { infra.rbac_scoped: false, ai.output: false } }
-  - segment: 2
-    file: screenshots/02-2-ceo-trace.png
-    caption: "Challenge 1's trace: the agent read the CEO's Secret."
-    capture: { by_hand: "the Datadog Challenge 1 tab (burritobot-private) after Whitney's attack: the get_vault_entry span" }
-  - segment: 3
-    file: screenshots/03-1-c2-public-image.png
-    caption: "Challenge 2: the bot deploys an image straight off the public internet."
-    capture: { chat: c2-tron-public-image, cluster: community, controls: { infra.kyverno: false } }
   - segment: 3
     file: screenshots/03-2-c3-recipe-read.png
     caption: "Challenge 2: the house recipe, read back out of a file on the box."
@@ -59,10 +50,6 @@ screenshots:
     file: screenshots/03-3-c1-beacon-posted.png
     caption: "Challenge 2: the customer breakdown, posted to an outside webhook."
     capture: { chat: c1-beacon, cluster: community, controls: { infra.networkpolicy: false } }
-  - segment: 3
-    file: screenshots/03-4-guardrails-on.png
-    caption: "guardrails-on: RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, on both clusters."
-    capture: { by_hand: "the private terminal after guardrails-on, ending \"all four Kubernetes guardrails are on.\"" }
   - segment: 3
     file: screenshots/03-5-ceo-forbidden.png
     caption: "After the switch, Challenge 1 again: the scoped Role keeps the CEO's record out of reach."

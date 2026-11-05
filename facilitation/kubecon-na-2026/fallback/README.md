@@ -1,18 +1,21 @@
 <!-- ABOUTME: The KubeCon NA 2026 breakout's recorded fallback for the live input (#452): the replayable prompt set,
-     ABOUTME: the per-segment videos and the screenshots deck, where each lives, how each is made and when each is used. -->
+     ABOUTME: and the screenshots deck, where each lives, how each is made and when each is used. -->
 
 # Recorded fallback for the KubeCon breakout
 
 Point 9 of the accepted abstract has the room bring its weirdest off-topic question
 and send it live from their phones. A ballroom's venue Wi-Fi is the likeliest thing
-to fail, so this directory holds three fallbacks, one per thing that can break. They
+to fail, so this directory holds two fallbacks, one per thing that can break. They
 go with the rollback steps in `facilitation/kubecon-na-2026-run-of-show.md`.
 
 | What broke | Fallback | Where |
 |---|---|---|
 | The venue network cannot carry the room, but the clusters answer | Replay the room's prompts from a laptop on a phone hotspot | `prompts.yaml`, sent by `scripts/replay-prompts.py` |
-| Nothing live works, video plays | One video per segment of the run-of-show, from the first full rehearsal | `videos/segment-<N>-*.mp4`, listed in `assets.yaml` |
-| Nothing live works and video will not play | The screenshots deck | `screenshots/deck.html` |
+| Nothing live works | The screenshots deck | `screenshots/deck.html`, its shots listed in `assets.yaml` |
+
+The segment videos the issue first asked for are not kept here. Michael dropped the
+recorded-fallback milestone (M4, #613) on 2026-11-01, as handled outside this repo
+and not a blocker, so the rollback steps go from the replay straight to the deck.
 
 This is not what `challenges/<beat>/fallback.*.sh` does. Those replace one agent
 call that wandered; they need the cluster and the network. Everything here is for
@@ -66,34 +69,7 @@ ask and its follow-up are one conversation.
   post to the beacon, deploy a Joker. Only replay them in the session, or on a
   bring-up that is reset afterwards. The Night Before replays segment 1 alone.
 
-## 2. The segment videos
-
-One video for each segment of the run-of-show, 1 to 6, recorded at the first full
-rehearsal on the KubeCon clusters. Segment 1 is in the set because the room's first
-minute on the bot and the prompt wall are on screen in it. The exact files are in
-`assets.yaml`:
-
-```
-videos/segment-1-opening.mp4
-videos/segment-2-challenge-1-ceo-secret.mp4
-videos/segment-3-challenge-2-kubernetes-catch-all.mp4
-videos/segment-4-challenge-3-support-ticket.mp4
-videos/segment-5-challenge-4-weather-tool.mp4
-videos/segment-6-owasp-close-burritos-only.mp4
-```
-
-Record each as a screen capture of the projector output at 1920x1080, MP4 (H.264),
-with the presenters' audio. Each one starts at the segment's first screen and ends
-at its hand-off line, so the next one can be cued from the run-of-show.
-
-**Where the videos live.** Not in git: `.gitignore` keeps `videos/*.mp4` out. Six
-rehearsal captures are hundreds of megabytes that every clone would carry forever,
-and a dead network is the case they cover, so a link is useless on the day. After
-the rehearsal, copy them to these paths on both presenter laptops, and keep a
-second copy on a USB stick in the presenter bag. Storing them elsewhere (Git LFS, a
-release asset) is open for Michael (#452).
-
-## 3. The screenshots deck
+## 2. The screenshots deck
 
 `screenshots/deck.html` opens from disk in any browser, with no network, and steps
 through one PNG per beat: right arrow, space or a click forward, left arrow back,
@@ -102,6 +78,14 @@ the same list, written into it by `python3 scripts/check-fallback-assets.py
 --write-deck` after any edit to `assets.yaml` (the offline suite fails if the two
 differ). A shot that is not there shows as a red MISSING card. The PNGs are committed
 into `screenshots/`.
+
+The deck holds 12 shots, every segment from 1 to 6, taken on the two live clusters
+on 2026-11-04. Three planned shots are not in it. Two were to be taken by hand at the
+first full rehearsal (Challenge 1's Datadog trace and the `guardrails-on` terminal),
+and that rehearsal's recording left this repo with M4. The third is Challenge 2's
+public image: the room's Tron ask did not deploy on the public bot in four tries
+on 2026-11-04 and 2026-11-05, so there is no screen to take. Each segment's
+narration covers its missing beat.
 
 Each shot says how it is made (`capture` in `assets.yaml`):
 
@@ -113,8 +97,9 @@ Each shot says how it is made (`capture` in `assets.yaml`):
   for that command on the private terminal, then `--shot` takes it; put the guards
   back after (`guards-off`, `guardrails-off`).
 - **page:** the same script screenshots the URL.
-- **by_hand:** taken at the rehearsal from the projector output, for screens the
-  script cannot drive: the signed-in Datadog trace and the `guardrails-on` terminal.
+- **by_hand:** taken from the projector output, for a screen the script cannot
+  drive, such as a signed-in Datadog tab or a terminal. No shot in the deck is taken
+  this way now.
 
 ```bash
 python3 scripts/capture-fallback-screenshots.py --list \
@@ -134,12 +119,12 @@ The Night Before, on each presenter laptop:
 
 ```bash
 python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1   # over the hotspot
-python3 scripts/check-fallback-assets.py      # every video and screenshot in place, of the right type
+python3 scripts/check-fallback-assets.py      # the deck and every screenshot in place, each a real PNG
 ```
 
 The first is the one rehearsal of the replay that the run-of-show's Night Before step
-asks for; it costs five Bedrock calls. The second exits 1 until the rehearsal's videos
-are copied in and the by-hand shots are committed.
+asks for; it costs five Bedrock calls. The second exits 1 if any shot the deck lists is
+missing, empty, or not a PNG.
 
 `bash verify/run-tests.sh` covers the replay offline: it drives the real guard-proxy
 `/chat` handler on loopback and checks the replay stops on its rate limits, its cost
