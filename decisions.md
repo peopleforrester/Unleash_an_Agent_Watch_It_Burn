@@ -20302,3 +20302,72 @@ the new base from ghcr.io: test_joker_web_busybox, test_c6_joker_public and test
 Staging moved to `c4d8c186` (#867's records) while that ran. The commit rebased onto it with only this file's append
 to merge, and `bash verify/run-tests.sh` on the rebased branch ran 254 tests and printed
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
+
+## 2026-11-05 · #714 · Run 17572 ports run 17238's build-side change, deletes agent/tron, and adds the live Docker Hub check
+
+**Why run 17238's work is here.** Run 17238 ended failed with an executor error on hecaton's side (a missing
+`config/publication.yaml` in hecaton's own release), not on anything in this repo, so its two commits never reached
+staging. `bash verify/prior-drafts.sh 714 origin/staging` named its draft with three in-place drifts, so this run
+cherry-picked both commits onto staging `92dfea31`. Two things differ from the draft:
+
+- images.lock conflicted on the node and debian rows. Staging had dated them 2026-11-05 (the second netcup save, run
+  17393) under their Docker Hub names. They now name lab-platform#353's ghcr.io copies, which no save has held, so they
+  read `-`, and the header says so.
+- Staging had since added `verify/images_live.py` and `verify/test_images_lock_live_judge.py` (#603's live judge),
+  whose nine docker.io lines failed the draft's check 2. images_live.norm now reads Docker Hub's host names from
+  `docker_hub.HUB_HOSTS` instead of spelling three of them, so its fixtures pass unchanged. The judge's fixture file
+  joins GATE, because its docker.io names are the ones a node reports for an image it cached, which the judge has to
+  read. Putting a docker.io comment back in images_live.py made check 2 fail by name; it was reverted.
+
+**The live acts (2026-11-05, KUBECONFIG of run 17572, both contexts named on every call).** Escalation 806 asked for
+agent/tron's delete; hecaton dropped it and handed the act to the run.
+
+1. `kubectl --context watch-it-burn-community -n agent get deploy tron -o yaml --show-managed-fields`: created
+   2026-11-01T16:22:34Z by field manager `workshop-mcp` (deploy_app), image `trongame/tron:latest`, no Service, no Argo
+   CD Application tracking it, pod `tron-6447f57c8d-fhnj8` in ImagePullBackOff, uid 7b62bc15-04a2-4b60-b16a-e1f0c3085abb.
+2. `kubectl --context watch-it-burn-community -n agent delete deployment tron --wait=true`: `deployment.apps "tron"
+   deleted from agent namespace`; a `get deploy,rs,pod` after it listed no tron object. Nothing in git deploys it, so
+   Argo CD does not bring it back.
+3. The KubeArmor leftover run 17238 found on watch-it-burn-private is gone without an act: the enforcer, controller
+   and relay pods there started at 03:34 to 03:35 UTC on 2026-11-05 on the ghcr.io copies, and the operator was already
+   on its copy. Run 17238 read require-resource-limits' Deny as a fault a fresh admin build would repeat. It is not:
+   the policy is Audit in git (`policies/kyverno/require-resource-limits.yaml`), and Deny on the private cluster is
+   the Beat 1 toggle, a demo prop. No follow-up is needed for it.
+
+**A live check that holds it: `verify/test_no_docker_hub_live.py` (SUITE: e2e, the live-cluster suite).** It reads
+every Pod, ReplicaSet, Deployment, StatefulSet, DaemonSet, Job and CronJob on COMMUNITY_CONTEXT and PRIVATE_CONTEXT
+and fails on any container whose spec image is a Docker Hub pull. `docker_hub.live_hub_images` is the judge, and
+the judgement section of test_no_docker_hub.py holds it to fixtures offline: a Pod, a Deployment at 0 replicas and a CronJob are
+read, and a ghcr.io spec passes whatever cached name its status shows. It leaves out a Deployment's old ReplicaSets
+at 0 replicas and finished Jobs, which start no pod. The first live run judged them too and found 18 and 19 such
+revisions from before #623 and #714 (old demo-app nginx, kagent's grafana-mcp and postgres, KubeArmor, Grafana,
+falcosidekick, Backstage's old postgres). Every one of them was at 0 replicas.
+
+`COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_no_docker_hub_live.py`
+printed, exit 0:
+
+```
+== watch-it-burn-community ==
+  PASS  watch-it-burn-community runs pods (58)
+        0 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-community names a Docker Hub image (0 found)
+== watch-it-burn-private ==
+  PASS  watch-it-burn-private runs pods (75)
+        16 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-private names a Docker Hub image (0 found)
+No pod or pod template on either cluster names a Docker Hub image.
+```
+
+The events on both clusters, read the same hour, held one Docker Hub pull event, a BackOff for the tron pod from
+before its delete, and none on the private cluster. The 16 status names on the private cluster are the Falco,
+falcoctl, falcosidekick, Grafana, Tempo, KubeArmor, Postgres, grafana-mcp and collector copies, each reported under
+the Docker Hub name its node pulled before the move.
+
+**Not yet run on a cluster.** A fresh cluster build, on a new nodegroup, where `verify/test_no_docker_hub_live.py`
+passes and prints 0 cached status names. A run cannot bring a cluster or nodegroup up.
+
+**Left, outside #714's Docker Hub work.** The villain shell banner Michael added on 2026-10-30 is not started. Of the
+three image groups it covers, only the two Jokers are built here (the C2 covers and the roster are lab-platform's
+promo/ build). A banner changes both Joker digests. push-jokers.yml (#775) pushes a new pin on promotion, but
+`verify/test_c6_joker_public.py` in the tools tier reads the published layer against the checkout first. So the
+change goes red before it can be promoted, and the banner needs its own issue to sequence the pin and the push.
