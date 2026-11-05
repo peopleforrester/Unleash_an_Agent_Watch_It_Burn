@@ -19473,3 +19473,8 @@ missing `/tmp` is what failed 17449's gate is not known, since that output was n
 
 **Not yet run on a cluster.** The same as run 17449's entry above: the next seat build plans the entry, and
 `aws eks describe-access-entry` on that seat plus one `labctl harvest` across the accounts show it working.
+
+**The suites (run 17536, at `580d292f`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `59 checks ran (the offline suite and 58 tier
+tests) in 31m00s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_lab_platform_operator_entry.py` passed its
+four cases and printed `ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN`.
