@@ -146,17 +146,36 @@ def nlb_listeners(profile: str, region: str, host: str) -> tuple[str, list[dict]
                                       "--load-balancer-arn", lb["LoadBalancerArn"])["Listeners"]
 
 
-def terminal_upgrade(host: str, name: str, cafile: str | None, port: int = 443) -> tuple[int, int]:
+def terminal_upgrade(host: str, name: str, cafile: str | None, port: int = 443,
+                     deadline: float | None = None) -> tuple[int, int]:
     """The terminal's websocket upgrade through host:port for name: the plain upgrade's HTTP status, then the
-    status ttyd's `tty` subprotocol gets with no credential (0 when the socket is dropped, nginx's 502 otherwise)."""
+    status ttyd's `tty` subprotocol gets with no credential (0 when the socket is dropped, nginx's 502 otherwise).
+    A connection that times out, is refused, or is closed with no answer before the deadline is tried again: a new
+    NLB's DNS name lists a node in each zone, cross-zone balancing is off, and the node in the zone with no healthy
+    target yet accepts the connection, completes the handshake itself and closes the stream (the plain upgrade's
+    0 is that; the tty one's 0 cannot be told apart from nginx dropping it, so it is tried again too). A
+    certificate that does not verify is raised, as it is the finding."""
     codes = []
     for protocol in (None, "tty"):
-        try:
-            sock, status, _ = ttyd_ws.connect(host, port, WS_PATH, tls=True, server_name=name, protocol=protocol,
-                                              cafile=cafile, timeout=15)
-            sock.close()
-        except ConnectionError:
-            status = 0
+        while True:
+            try:
+                sock, status, _ = ttyd_ws.connect(host, port, WS_PATH, tls=True, server_name=name,
+                                                  protocol=protocol, cafile=cafile, timeout=15)
+                sock.close()
+                why = "closed with no answer" if status == 0 else ""
+            except ssl.SSLCertVerificationError:
+                raise
+            except OSError as e:
+                status, why = 0, f"failed before an answer ({type(e).__name__}: {e})"
+                if deadline is None and not isinstance(e, ConnectionError):
+                    raise
+            if not why:
+                break
+            if deadline is not None and time.monotonic() < deadline:
+                print(f"  {name}: the {protocol or 'plain'} upgrade's connection {why}; trying again", flush=True)
+                time.sleep(15)
+                continue
+            break
         codes.append(status)
     return codes[0], codes[1]
 
@@ -245,7 +264,7 @@ def main() -> int:
               f"policy {lst.get('SslPolicy')}; listeners {shape}", flush=True)
 
         for name in a.name:
-            plain, tty = terminal_upgrade(host, name, a.cafile)
+            plain, tty = terminal_upgrade(host, name, a.cafile, deadline=deadline)
             if not upgrade_ok(plain, tty):
                 fail(f"the terminal's websocket through the TLS listener for {name}: the plain upgrade on {WS_PATH} "
                      f"got {plain} (wanted 101, or 401 when credentialed) and the tty subprotocol with no "
