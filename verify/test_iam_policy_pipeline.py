@@ -293,8 +293,25 @@ check("check 4: an implicit deny is not the explicit deny a case asks for", p.ef
 check("check 4: 'denied' takes either deny", p.effect_failure({**case, "expect": "denied"}, ev("implicitDeny")) is None)
 check("check 4: no answer is a failure, not a pass", p.effect_failure(case, {"EvaluationResults": []}) is not None)
 
+print("an IAM call refused for its session token names the cause")
+import os, stat, tempfile  # noqa: E402,E401
+with tempfile.TemporaryDirectory() as stubdir:
+    stub = pathlib.Path(stubdir) / "aws"
+    stub.write_text("#!/bin/sh\necho 'An error occurred (InvalidClientTokenId) when calling the SimulateCustomPolicy "
+                    "operation: The security token included in the request is invalid' >&2\nexit 254\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+    saved_path = os.environ["PATH"]
+    os.environ["PATH"] = f"{stubdir}{os.pathsep}{saved_path}"
+    try:
+        check("iam: the error says IAM refuses a get-session-token session taken without MFA",
+              raises(lambda: p.aws("prof", "us-west-2", "iam", "simulate-custom-policy"), "taken without MFA"))
+        check("accessanalyzer: the same error carries no IAM hint",
+              not raises(lambda: p.aws("prof", "us-west-2", "accessanalyzer", "validate-policy"), "without MFA")
+              and raises(lambda: p.aws("prof", "us-west-2", "accessanalyzer", "validate-policy"), "InvalidClientTokenId"))
+    finally:
+        os.environ["PATH"] = saved_path
+
 print("conftest discovery")
-import os  # noqa: E402
 saved = os.environ.get("CONFTEST")
 os.environ["CONFTEST"] = "/nonexistent/conftest"
 try:

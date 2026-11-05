@@ -58,11 +58,12 @@ def with_agent_policy(mutate):
 # check-no-new-access rightly passes it (seen on its first run, #203).
 wider = with_agent_policy(lambda st: st["Resource"].append("arn:aws:bedrock:*::foundation-model/*"))
 got = p.diff(wider, base, PROFILE, REGION, accept_new=[])
-check("a widening identity policy fails check 2, naming the policy",
-      len(got) == 1 and got[0].startswith("aws_iam_policy.bedrock_invoke.policy: grants new access"), got)
+check("a widening identity policy fails check 2, naming the policy and the statement",
+      len(got) == 1 and got[0].startswith("aws_iam_policy.bedrock_invoke.policy: grants new access")
+      and "Statement[0]" in got[0], repr(got))
 narrower = with_agent_policy(lambda st: st["Action"].remove("bedrock:InvokeModelWithResponseStream"))
 got = p.diff(narrower, base, PROFILE, REGION, accept_new=[])
-check("a narrowing identity policy passes check 2", got == [], got)
+check("a narrowing identity policy passes check 2", got == [], repr(got))
 
 print("check 4: effect tests (iam simulate-custom-policy)")
 for root, suite in (("boundary", "boundary"), ("cluster", "cluster"), ("audit", "audit")):

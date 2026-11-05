@@ -131,7 +131,10 @@ Checks 1, 2 and 4 call AWS and are not in that job. They run from the command li
   repo's real cluster, boundary and audit plans pass, and a plan with the agent's Condition removed fails at
   `Statement[0]`. `verify/iam_plan_render.py` renders those plans without an AWS account.
 - `verify/test_iam_policy_aws.py` (E2E; aws CLI, `IAM_PIPELINE_PROFILE`, `IAM_PIPELINE_REGION`): checks 1
-  and 4 on the real documents, and check 2 failing a widened agent policy.
+  and 4 on the real documents, and check 2 failing a widened agent policy (every foundation model, not the
+  four on the menu) at `Statement[0]`. Check 4 calls IAM, and IAM refuses a session from
+  `sts get-session-token` taken without MFA, so the profile needs long-term keys, an MFA session or an
+  assumed role. Checks 1 and 2 accept such a session.
 
 ## Not here yet, and why
 

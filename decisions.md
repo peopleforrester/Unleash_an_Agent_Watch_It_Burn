@@ -16873,3 +16873,45 @@ tag line and sum, recorded-only runs, eight refusals, and for both saved files: 
 **The suites (run 17307, at `43412a1c`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
 tier tests) in 28m45s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_delivery_cost.py` passed all
 86 checks in it.
+
+## 2026-11-05 · #207 · Checks 1, 2 and 4 of the IAM policy pipeline have all run on AWS; the in-account pipeline is complete
+
+**What was owed.** Check 4, the policy simulator over `infra/org/effect-tests.yaml`, had never run: IAM refuses the
+`GetSessionToken` session hecaton hands a run, while Access Analyzer accepts it (#203's entry of 2026-11-05 above).
+Michael ran the test with the `accen-dev` profile's long-term keys in us-west-2 at staging `30d52fb`, escalation 810,
+posted on #207 on 2026-11-05. Every check passed: check 1 on the boundary (1 document), cluster (11) and audit (3)
+plans; check 2's three cases (an unchanged plan sends nothing, a widened agent policy fails naming the policy, a
+narrowed one passes); and check 4's cases for the boundary, cluster and audit suites. `0 failure(s)`, `exit=0`.
+
+**Ported from run 17271's draft.** Run 17271 ended in a rebase conflict, so its commits (c3417d3f, fec7920f, a6e9fb40)
+are not on staging. `verify/prior-drafts.sh 207 origin/staging` named four drifted paths, all edited in place by
+415aa574 (#203), which made the same Bedrock and check 2 fixes the draft made. What 415aa574 lacks is ported here, by
+hand on the current files:
+
+- `infra/org/pipeline.py`: an IAM call that fails with `InvalidClientTokenId` now says IAM refuses a session from
+  `sts get-session-token` taken without MFA and names the profile, so a run that reaches check 4 with such a session
+  reads the cause and not a bare token error. An Access Analyzer call gets no such hint.
+  `verify/test_iam_policy_pipeline.py` holds both halves with a stub `aws` on PATH.
+- `verify/test_iam_policy_aws.py`: check 2's widening case now also asserts the failure names `Statement[0]`, the
+  statement index, and prints `repr()` of a failing answer. Staging's comment on the case is kept over the draft's.
+- `infra/org/README.md`: the test's line says what the widening is and which credential check 4 needs.
+
+The draft's terraform, lab copy and `test_agent_cloud_credential.py` changes are not taken: 415aa574 already holds them.
+
+**Live check, this run (17310, at `1f07d4cd` plus this change).** `IAM_PIPELINE_PROFILE=accen-dev
+IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py` with the run's session: check 1 PASS on 1, 11 and
+3 documents; check 2 PASS on all three cases, among them `a widening identity policy fails check 2, naming the policy
+and the statement`. Check 4 stopped, as expected with this session, on `aws iam simulate-custom-policy failed: ...
+(InvalidClientTokenId) ... (IAM refuses a session token from sts get-session-token taken without MFA; run as profile
+'accen-dev' with long-term keys, an MFA session or an assumed role)`. The hint reads as designed. This change does
+not touch `effect()` or `effect-tests.yaml`, so escalation 810's check 4 result stands for it.
+
+**Where #207 stands.** Acceptance 1, an Allow with no Condition failing with its statement index: held by
+`verify/test_iam_policy_structural.py` and by the `iam-policy.yml` workflow on every PR. Acceptance 2, a widening
+identity policy failing check 2: passed live in escalation 810 and in this run, now asserting `Statement[0]`.
+Acceptance 3, the console explicit deny from an SCP, is not built: on #202 on 2026-10-31 Michael ruled that we have
+no org-level access to these accounts and will not pursue it, as `infra/org/README.md` records. With that scope the
+issue's work is done.
+
+**Not yet run on a cluster.** Nothing: the change is to the pipeline and its tests, which run from the command line,
+and no cluster reads them.
