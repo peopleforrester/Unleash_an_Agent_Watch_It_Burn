@@ -17601,3 +17601,7 @@ with an empty action log. Against the previous `stage_traces.py` the new checks 
 KubeCon bring-up on the `kubecon-private` profile, or the Night Before (2026-11-11). There, in order: the retention
 filter in the UI, `seed` ending `SEEDED GREEN`, Whitney saving the views on Past 7 Days, and `check` the morning of.
 The pinned-window parameters are first seen working when Whitney opens the printed links.
+
+**The suites (run 17365, at `882b1db`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m20s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_stage_traces.py` ran in the
+offline suite and passed.
