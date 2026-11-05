@@ -19048,3 +19048,51 @@ No dependency was added.
 **After merging staging (run 17422, at 797b242b).** Staging moved during the run, and its decisions.md appends conflicted
 with this entry, so 797b242b merges origin/staging at `f31971f5`, staging's entries first and this one after. No other
 file conflicted. `bash verify/run-tests.sh` on the merge: 263 tests, ALL OFFLINE RENDER-GATE TESTS GREEN, exit 0.
+
+## 2026-11-05 · #833 · agent-obs-silent is in Whitney's org and reads Agent Observability's count: `--data` printed it OK within 10 minutes of the chat
+
+This follows the 2026-11-03 #810 entry, whose "Not yet run on a cluster or in the org" paragraph owed three commands:
+the apply, a chat per bot, and `verify/test_fleet_monitors_live.py`. Hecaton run 17428 had a readable session
+(hecaton#508 is fixed), so it ran what was left of them, from the repo root after `. "$HECATON_CLUSTER_ENV"`.
+
+**The apply had already run, so this run did not repeat it.** `infra/terraform/fleet/fleet.sh monitors --check` at
+11:30:15Z, with the read pair in `watch-it-burn/datadog` (accen-dev, us-west-2, org `Datadog`), found all seven
+monitors and both dashboards matching the repo and exited 0. A GET on `/api/v1/monitor?monitor_tags=managed-by:wib-fleet-monitors`
+names agent-obs-silent as monitor 341119673, created 2026-11-05T06:20:25Z by `michaelrishiforrester@gmail.com` and not
+modified since. That is the apply the 2026-11-05 #485 entry records, run with the write key only Michael's home holds.
+This run has no write key (the secret's application key is read-only, #759), and the monitor's query already matched
+the repo, so a second apply would have changed nothing. Before the chat, agent-obs-silent read `No Data`, because the
+org had been quiet for more than 10 minutes.
+
+**The chat.** `python3 verify/agent_obs_flow.py chat --profile accen-dev` sent one chat per KubeCon bot with
+guard-proxy's probe marker and exited 0:
+
+```
+PASS  attackme.burritobot.co: 4 ml_app:burritobot span(s) on burritobot-public since the chat, traces 4a2efe6ea36a5391af4da804d5925ccd; 4 carry its session wib-aoflow-burritobot-public-20261105113030
+PASS  burritobot-private.burritobot.co: 4 ml_app:burritobot span(s) on burritobot-private since the chat, traces fdb282bff8bf5cbbb6808d1f9e8c1f17; 4 carry its session wib-aoflow-burritobot-private-20261105113030
+AGENT OBSERVABILITY GREEN
+```
+
+The chats were sent at 11:30:30Z (attackme.burritobot.co) and 11:34:35Z (burritobot-private.burritobot.co).
+
+**The live test.** `python3 verify/test_fleet_monitors_live.py` ran from 11:38:43Z to 11:38:52Z, 8 minutes after the
+first chat, and exited 0. `--check` printed agent-obs-silent `OK` (it had read `No Data` at 11:30:15Z), and the
+`--data` half printed the line #810 owed:
+
+```
+  DATA     monitor agent-obs-silent (OK, the whole org: no cluster tag)
+```
+
+Every other line of `--data` read DATA for burritobot-public and burritobot-private: the five absence monitors, the
+signals of guard-proxy-erroring and node-not-ready, and the eight fleet-dashboard queries. `--check` printed
+node-not-ready `No Data`, its healthy state, as the #485 entry explains. So `ml_obs.trace{ml_app:burritobot}` is the
+name Datadog files Agent Observability's trace count under, and the monitor moved from `No Data` to `OK` on these
+two chats. No name in `infra/datadog-fleet/` changes.
+
+**Left as found.** The two probe-marked chats are the only change, one per bot. Nothing was written to the org: every
+Datadog call used the read-only pair. The read key still answers 403 on `/api/v2/downtime`, so the session window the
+apply set is not read back here; the run-of-show names `2026-11-12T20:50Z/2026-11-12T21:20Z`.
+
+**Not yet run on a cluster.** Nothing. The issue's work was live, and it has run.
+
+No dependency was added.
