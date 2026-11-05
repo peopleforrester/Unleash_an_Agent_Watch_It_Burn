@@ -28,7 +28,15 @@ py_mask = "[redacted]" if "[redacted]" in proxy.moderate("Go fuck yourself.") el
 check("display.js hides the mask both guard-proxies write",
       js_mask is not None and go_mask is not None and js_mask.group(1) == go_mask.group(1) == py_mask)
 check("display.js matches the mask in any case", "String(p).toLowerCase().indexOf(MASK) === -1" in disp_js)
-check("display.js filters the feed before it renders a row",
-      re.search(r"\(data\.prompts \|\| \[\]\)\.filter\(shown\)[^;]*\.forEach\(", disp_js) is not None)
+# #927 put a holding slot between the feed and the screen; a prompt enters it, or the first snapshot, only filtered.
+check("display.js filters the first snapshot before it renders a row",
+      re.search(r"rows = feed\.filter\(shown\)", disp_js) is not None)
+check("display.js filters each new arrival before it is held or counted",
+      re.search(r"newEntries\(last, feed\)\.filter\(shown\)\.forEach\(", disp_js) is not None)
+# #927: the card interval is one named constant, 1.5 s, which the card tick runs on (the fake-clock behaviour is
+# test_display_throttle_e2e.py in the tools tier).
+check("display.js names its card interval (var CARD_INTERVAL_MS = 1500;)", "var CARD_INTERVAL_MS = 1500;" in disp_js)
+check("display.js ticks cards on CARD_INTERVAL_MS", "setInterval(tick, CARD_INTERVAL_MS)" in disp_js)
+check("display page carries the +N more count", 'id="more"' in disp_html)
 if failures: print(f"\nFAILED: {len(failures)}"); sys.exit(1)
 print("\nAll prompt-stream checks passed.")

@@ -22,8 +22,9 @@ function element() {
   return el;
 }
 
-const els = { stream: element(), off: element() };
+const els = { stream: element(), off: element(), more: element() };
 els.off.hidden = true; // display.html ships #off with the hidden attribute
+els.more.hidden = true; // and #more (#927)
 let fetched = null;
 const sandbox = {
   document: {
@@ -36,6 +37,7 @@ const sandbox = {
     return Promise.resolve({ json: () => Promise.resolve(payload) });
   },
   setInterval: () => 0,
+  setTimeout: () => 0, // the card tick (#927) never runs here: this harness reads only the first poll
 };
 vm.createContext(sandbox);
 vm.runInContext(js, sandbox, { filename: "display.js" });

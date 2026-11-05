@@ -19832,3 +19832,47 @@ No live check: the change is a record of earlier runs, and nothing in it runs on
 **The suites (run 17651, at `ff497d0b`).** `bash verify/run-tests.sh` printed `266 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, exit 0. `bash verify/run-e2e-tools.sh` printed `58 checks ran (the offline suite and 57 tier
 tests) in 32m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #927 · run 17659 · /display adds one card per 1.5 s, the newest, with a "+N more" count
+
+**Why this repo, and what is left.** #927 is the throttle half of #924 (Michael's decision of 2026-11-05: about one
+new card every 1.5 s, the newest, with a "+N more" count that resets when a card appears). Its criteria name the
+prompt wall, `templates/wall.html` in peopleforrester/prompts-agenticburn, which this repo's runs do not change.
+Run 17650 read that page and filed nothing here, and its gate failed with no commits. This run does what #915 did
+for the mask: it puts the same throttle on this repo's own `/display` page (`gitops/ai-layer/web/display.js`), the
+wall's fallback on the projector, and hands the wall's change to prompts-agenticburn as a follow-up issue with the
+same spec. #927's five criteria stay open until that issue lands there.
+
+**What changed.** At 500 people the feed takes 8 to 17 prompts a second, and `/display` redrew the whole 50-deep
+list every 1.5 s poll, so about 25 new rows pushed everything down each time. Now the first answer the page gets
+goes up at once, newest first, as before, so a reloaded projector is not blank. After that, each poll's new
+entries (the longest-suffix diff that prompts-agenticburn's `new_entries()` uses, since the feed has no ids) pass
+#915's mask filter and go into a holding slot. Once per `CARD_INTERVAL_MS` (1500, the one named constant for the
+load test and the pause to read), if anything arrived since the last card, the newest goes up as a card and the
+rest are dropped, never queued. A `+N more` line under the heading counts what arrived since the last card and
+reads `+0 more` when a card appears. The card tick runs half a window after the poll; with both on 1.5 s and in
+step, a poll's count would be cleared by the card that follows it before anyone could read it. The screen keeps 50
+rows, as the deque does. guard-proxy, its feed and its poll interval are unchanged: every viewer still gets every
+prompt, and only what is drawn is sampled. The pause and the load test are #924's other children.
+
+**Tests.** `verify/test_display_throttle_e2e.py` (tools tier, needs node) runs the real `display.js` in node
+through `verify/display-clock-harness.js`, a fake clock that fires the page's own `setInterval` and `setTimeout`,
+a stub DOM and a scripted `/prompts` fetch, with no real timer and no network. It checks the constant is 1500 and
+the tick runs on it; a burst of 10 then 5 reads `+10 more`, one card (the 10th), `+0 more`, then `+5 more`, one
+card (the 5th), and quiet ticks after add nothing; masked arrivals are neither shown nor counted; 80 arrivals
+between two polls read `+50 more` and show the newest; and 17 prompts a second for 60 s give cards at least 1.5 s
+apart, each the newest the page had, with the count right at every 250 ms frame. Three mutations of `display.js`
+(keep the oldest, never reset the count, draw every arrival) fail it on 6, 6 and 11 checks. #915's runner,
+`verify/display-feed-harness.js`, gained the `#more` element and a `setTimeout` stub, and its test passes
+unchanged. Offline, `verify/test_stream.py` now checks the mask filter at both places a prompt enters (the
+first snapshot and the new arrivals), the constant, the tick and the `#more` element.
+
+**Live, before the change (run 17659, read only).** `https://attackme.burritobot.co/display` and
+`https://burritobot-private.burritobot.co/display` both answer 200 and serve #915's `display.js` (`var MASK`, no
+`CARD_INTERVAL_MS`); `/prompts` reads `"enabled": true` on both, with 0 entries on the public one and 4 on the
+private one.
+
+**Not yet run on a cluster.** After hecaton promotes this run and Argo CD syncs the console's ConfigMap:
+`curl -s https://attackme.burritobot.co/display.js | grep -c 'var CARD_INTERVAL_MS = 1500;'` prints 1, and with
+`/display` open, a handful of chats sent within a second show in `+N more` and then as one card, the last one sent.
+The same on `https://burritobot-private.burritobot.co/display`.
