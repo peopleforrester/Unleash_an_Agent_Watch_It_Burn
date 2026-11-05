@@ -19329,3 +19329,53 @@ on each trace: each llm row must still read `cost_estimate_status:success`.
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57 tier
 tests) in 34m57s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_collector_llmobs_model.py` and
 `test_collector_llmobs_model_e2e.py` passed in it.
+
+## 2026-11-05 · #870 · A timed-out /chat turn's root reads error in APM and in Agent Observability on attackme with guard-proxy main's proxy.py
+
+**What was checked.** guard-proxy-agenticburn#53 (commit f842ec3 there) sets ERROR on the POST /chat root span and
+the chat span when a failed forward answers the turn with 502. Before it, a turn that ran past PROXY_TIMEOUT on
+attackme read ok on both views (APM trace 39650c741689e7a7ce8f992660b2a24d; Agent Observability trace
+4d1090dc79e250aab8709ad05a7e83e2, whose root, guard-proxy's POST span, still reads `status ok`,
+`otel.status_code:unset`, `http.response.status_code:502` when read with `verify/dd_traces.py --trace` today). The
+issue asked whether, with f842ec3 running, both roots read error, or whether the collector's Agent Observability copy
+drops the status and needs its own fix.
+
+**How, without the repin.** The workshop still pins guard-proxy at 0f0c809, which predates f842ec3: `checksum/proxy-py`
+on guard-proxy read `dfca2b1fe758` on watch-it-burn-community and watch-it-burn-private, and a run cannot move a
+submodule pin (the #382 entry above). So run 17439 ran f842ec3's code beside the live proxy on attackme
+(watch-it-burn-community) for about two minutes and left the live one alone:
+- ConfigMap `guard-proxy-src-check870` held guard-proxy-agenticburn main's proxy.py (d3fc4d5, which contains
+  f842ec3; sha256 prefix `e66685f983fc`, read back from the pod's /app/proxy.py).
+- Pod `guard-proxy-check870` was the live Deployment's pod template as `kubectl get deploy guard-proxy -o yaml` printed
+  it (same image, service account, env, OTel Python injection, ambient label and Datadog tags), with three changes:
+  PROXY_TIMEOUT 1 instead of 120, that ConfigMap mounted at /app, and a readiness probe that always fails. It kept
+  `app.kubernetes.io/name: guard-proxy` so the agentgateway-ingress NetworkPolicy admitted its forward; the probe kept
+  it out of the guard-proxy Service (its EndpointSlice listed it `ready=false`), so no visitor reached it.
+- One POST /chat through `kubectl port-forward`, session `sess-check870-1793879628`, asking for every filling and
+  topping with prices. It answered `HTTP 502 in 1.26s`, "BurritoBot's kitchen isn't answering", and the pod logged
+  `chat forward failed: the 1s forward deadline (PROXY_TIMEOUT) passed` and cancelled the agent's task.
+- Pod and ConfigMap were then deleted. guard-proxy stayed at generation 13 with `checksum/proxy-py` `dfca2b1fe758`,
+  its EndpointSlice listed only `guard-proxy-6cccbdff5c-nwlxd ready=true`, and Argo CD read ai-layer
+  `Synced Healthy`. A first try with PROXY_TIMEOUT 3 finished inside the deadline (200 in 5s) and was discarded.
+
+**What Datadog showed (read with the watch-it-burn/datadog read-only pair, GET only).**
+- APM, env burritobot-kubecon-na-26, trace `cd34510692488aa4078bc98053c8f488`: the root `POST` (parent 0) reads
+  `status error`, `http.status_code 502`, `otel.status_code Error`, error message "the 1s forward deadline
+  (PROXY_TIMEOUT) passed"; the `chat` span and the agent.forward `POST` client span read error with the same message.
+- Agent Observability, ml_app burritobot, trace `83b0932cdac55b4abf2d07ee922252c2` (about two and a half minutes after
+  the turn): the root `POST`, kind agent, `trace_root:1`, `k8s.pod.name:guard-proxy-check870`, reads `status error`,
+  `otel.status_code:error`, `http.response.status_code:502`. Its `otel.trace_id` tag is
+  `cf054e30408f85552d4c7f932d78212d`, the first 32 hex digits of sha256 of the APM trace id's hex text, which is the
+  #783 copy's derived id. Its children (the agent's `invocation` and `workshop_agent`, one `generate_content`) read ok,
+  which is right: the agent did not fail, guard-proxy gave up on it.
+
+**Verdict.** Both roots read error. The collector's Agent Observability copy carries the root's status through
+(`transform/llmobs_apm_off` and the #783 trace id rewrite leave status alone), so it needs no fix of its own. The
+reasoning-only retry case was not provoked: it answers 200 and stays ok by design (guard-proxy-agenticburn
+decisions.md, 2026-11-05).
+
+**Not yet run on a cluster.** The deployed guard-proxy itself: once guard-proxy is repinned to a commit that contains
+f842ec3 (main is d3fc4d5, `checksum/proxy-py` becomes `e66685f983fc`) and Argo CD syncs ai-layer, a timed-out turn
+through the live proxy should read the same. The repin is a submodule move, which only Michael's commit can make
+(the #382 entry), and is filed as a follow-up. It runs the same proxy.py this check ran, so nothing else is expected
+to change.
