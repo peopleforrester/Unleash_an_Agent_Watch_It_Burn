@@ -21228,3 +21228,9 @@ shows Challenges 1 to 4 unchanged on both and the new `topic-on-3` beat passing.
 
 **Left as it is.** The menu board in `gitops/ai-layer/web/burritbot.html` shows no allergen tags. The issue asked
 only for the bot to answer, and the board's items are unchanged.
+
+**The suites (run 17720, at `5abab15c`).** `bash verify/run-e2e-tools.sh` printed `275 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `verify/test_allergen_card.py` among
+them. Then it printed `61 checks ran (the offline suite and 60 tier tests) in 30m32s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`. So the real PromptInjection and PII Regex scanners passed all 18 new asks. The prose gate printed
+`prose gate: pass`. No dependency was added.
