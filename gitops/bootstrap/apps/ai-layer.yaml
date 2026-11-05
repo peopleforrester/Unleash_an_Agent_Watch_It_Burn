@@ -31,6 +31,14 @@ spec:
       # verify/test_llm_guard_image.py holds the reference.
       images:
         - "llm-guard=ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791"
+      # The KubeCon presenter page, withheld from the community cluster (#909). With console.kubeconBrief false, the
+      # burn and kubecon-community profiles' value, the no-kubecon-brief component takes kubecon.html out of the
+      # console-src ConfigMap, so /kubecon on attackme is a 404 while the private cluster still serves it. The guard
+      # sits in YAML comments, as the front door's below does; verify/test_kubecon_community_gate.py renders it.
+      # {{- if not .Values.console.kubeconBrief }}
+      components:
+        - components/no-kubecon-brief
+      # {{- end }}
       # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
       # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which
       # verifies against the system roots, accepts it. Unset, these patches are not rendered and 443 stays the TCP

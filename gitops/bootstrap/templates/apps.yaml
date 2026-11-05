@@ -19,6 +19,9 @@ ABOUTME: source takes .Values.revision and every lab-platform image .Values.imag
 {{- if not (has $action (list "Audit" "Deny")) }}
 {{- fail (printf "guardrails.validationAction is the action of the two guardrails an admin cluster arms: Audit, as policies/kyverno writes them, or Deny, lab-platform's arm parameter (got %q)" $action) }}
 {{- end }}
+{{- if not (kindIs "bool" .Values.console.kubeconBrief) }}
+{{- fail (printf "console.kubeconBrief is whether this cluster's console serves /kubecon: true, or false on a community profile (got %v)" .Values.console.kubeconBrief) }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}
