@@ -62,10 +62,11 @@ bring-up. Details in decisions.md, 2026-11-03 · #775 and 2026-11-05 · #775.
 ## KubeCon NA 2026 abstract readiness (#456)
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
-Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667):
-6 READY, 3 PARTIAL (5 the Kubernetes layers, one shown after the LLM guards and the rest named, so the bar
-"shown before the LLM-specific layer" is #456's call; 8 the BanTopics paraphrase: the guard runs cpu.5, which bakes the zero-shot model, since #719, and the scanner entry is #455's; 9
-ballroom sizing #450, phones #451 and the recorded fallback #452), 0 MISSING. The probe was green on both
+Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667),
+and since against the four-challenge one: on 2026-11-05 it is 8 READY, 1 PARTIAL (9: ballroom sizing #450, phones
+#451 and the recorded fallback #452), 0 MISSING. Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on
+2026-11-05 (#455): BanTopics is in `llm-guard-scanners`, so the on-topic guard refuses a paraphrase with no listed
+word, and a cpu.5 probe pod on watch-it-burn-private judged all 64 topic asks as written. The probe was green on both
 clusters on 2026-10-28, before the three-challenge order (#639) and C6's fetched ticket (#640). Update its rows
 and its record as fixes land.
 

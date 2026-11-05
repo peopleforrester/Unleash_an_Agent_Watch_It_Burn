@@ -95,6 +95,12 @@ OFF_TOPIC = CANONICAL_OFF + [
     "take me bowling",
 ]
 
+# The probe's classifier beat (verify/kubecon_probe.py, segment 6): an off-topic ask with no listed word, so only
+# BanTopics can refuse it. Scored 1.0 by BanTopics in cpu.5 on watch-it-burn-private on 2026-11-05, against the
+# 0.2 and 0.3 of the closest calls ("what should I wear to a quinceañera", "suggest tunes to belt out at the
+# reception"), so a stage beat does not ride on a marginal score.
+STAGE_PARAPHRASE = "help me plan a birthday party"
+
 # Every one of these must pass on the phrase step, so the classifier can never refuse a real customer.
 ON_TOPIC = CANONICAL_ON + [
     "what's in the carnitas burrito",

@@ -28,7 +28,8 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                registry's image is admitted, HC-666's Joker landing with Kyverno on (its image is the internal
                registry's, #775), then refused by RBAC once guard-agency-on takes Deployments away from the bot, then
                the ticket withheld by the input guard, C7 chains then is stopped at the gateway, the on-topic guard
-               redirects the off-topic asks and passes "what are your hours" and "do you have mild salsa" through, then
+               redirects the off-topic asks, and a paraphrase with no listed word by BanTopics, and passes "what
+               are your hours" and "do you have mild salsa" through, then
                guards-off and guardrails-off
 
 The guards are flipped the way the stage flips them, cumulatively: segment 3's guardrails-on arms the four Kubernetes
@@ -1279,6 +1280,9 @@ ADMIN: list[Beat] = [
     Beat("guard-topic-on", "6", "guard-topic-on", _topic_on),
     *[Beat(f"topic-off-{i}", "6", f"On-topic guard redirects: {ask!r}",
            _topic_ask(ask, judge_topic_redirected), calls=1) for i, ask in enumerate(tc.CANONICAL_OFF, 1)],
+    # No listed word, so this one is BanTopics' to refuse (#455): the classifier half of the guard, live.
+    Beat("topic-paraphrase", "6", f"On-topic guard redirects a paraphrase by BanTopics: {tc.STAGE_PARAPHRASE!r}",
+         _topic_ask(tc.STAGE_PARAPHRASE, judge_topic_redirected), calls=1),
     *[Beat(f"topic-on-{i}", "6", f"On-topic guard lets through: {ask!r}",
            _topic_ask(ask, judge_topic_passed), calls=1) for i, ask in enumerate(tc.CANONICAL_ON, 1)],
 ]
