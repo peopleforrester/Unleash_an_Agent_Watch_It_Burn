@@ -1,5 +1,5 @@
 <!-- ABOUTME: The #480 spike: an agentgateway ExtMCP processor that pins tool-definition hashes (the #117 rug-pull
-     ABOUTME: control), what the real v1.5.0 and v1.7.0 binaries did with it on a local bed, and what the cluster check must confirm. -->
+     ABOUTME: control), what the real v1.5.0 and v1.7.0 binaries did with it on a local bed and on the community cluster, and the badge decision. -->
 # Spike: pin tool definitions at the gateway (#480, design for #117)
 
 #117 is the rug-pull. A tool is approved, then its **description** changes while its **name** stays the
@@ -21,7 +21,13 @@ longer says why the processor failed. See "Re-measured on v1.7.0" below.
 cluster check on `watch-it-burn-community`, the public cluster, never a new one, and to leave it as found, with
 attackme answering 200 after. `live-check.sh run` now does the whole check, snapshots what it changes first and
 restores it on any exit, and tool-pin no longer needs an image of its own. It has still not run on a cluster: the run
-that made these changes had no cluster credentials. See "Still open: the cluster check".
+that made these changes had no cluster credentials.
+
+**Run live on 2026-11-05.** `live-check.sh run` ran on `watch-it-burn-community` (hecaton run 17293) and put the cluster
+back as found, attackme answering 200. kagent's discovery and the agent's own `list_tools` both pass through tool-pin,
+and strip mode works as on the bed. Deny mode does not: the cluster's kagent is now 0.10.1 with the Go agent runtime, and
+a JSON-RPC error on one toolset's `tools/list` fails the whole chat answer. See "The cluster check, 2026-11-05". The
+badge decision follows from it: the badge reads the pin's wiring, and the pin runs in strip mode.
 
 ## What is here
 
@@ -38,6 +44,7 @@ that made these changes had no cluster credentials. See "Still open: the cluster
 | `local-bed-2026-10-24.txt` | The bed's output on v1.5.0, from the run these findings come from |
 | `local-bed-2026-11-01-v1.7.0.txt` | The same bed's output on v1.7.0, the version the cluster runs since #698 |
 | `live-check.sh` | The cluster check: `run` does it all in one command; the phases are `setup`, `ask`, `observe`, `call`, `rugpull`, `deny`, `restore` |
+| `live-2026-11-05-community.txt` | What `live-check.sh run` printed on `watch-it-burn-community` on 2026-11-05, restore included |
 
 `verify/test_tool_pin.py` holds the parts that need no binary offline: the hash, the verdicts, the
 protobuf bytes, the baseline against `server.py`, and the rendered bind against the vendored schema (v1.7.0
@@ -127,9 +134,11 @@ Two consequences for the design:
   say whether tool-pin is down or its baseline is broken. Only tool-pin's own log and the gateway log say
   which, so a lesson that breaks the processor on purpose has to point the student at those logs.
 
-## kagent's side, read from the v0.9.9 source (not yet seen live)
+## kagent's side, read from the v0.9.9 source (2026-10-24)
 
-A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in this run's report):
+Seen live on 0.10.1 on 2026-11-05 (next section): discovery and the stripped tool behave as read here, and the
+JSON-RPC error does not. A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in that run's
+report):
 
 - **Discovery.** The controller lists each RemoteMCPServer's tools, keeping only name and description,
   into `status.discoveredTools`, and re-lists every 60 s. When `tools/list` returns an error it sets
@@ -141,17 +150,52 @@ A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in 
   description is therefore seen on the next chat message.
 - **A JSON-RPC error on `tools/list`.** ADK retries once, logs "Failed to get tools from toolset", and
   drops **that toolset only**. The request still succeeds; the model just has none of evil-mcp's tools.
+  **Not so on the cluster since kagent 0.10.1**: see the next section.
 - **A tool in `toolNames` missing from the list** (stripped) is dropped silently, in the controller and
   in the runtime.
 
+## The cluster check, 2026-11-05
+
+`live-check.sh run` on `watch-it-burn-community` at staging `50416777`, from 03:48 to 03:56 UTC. The full output is
+`live-2026-11-05-community.txt`. The cluster ran agentgateway v1.7.0, kagent 0.10.1 and its Go agent runtime
+(`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, which builds on `google.golang.org/adk/v2` v2.1.0).
+
+| What | Seen |
+|---|---|
+| The gateway before the check | its last reload, at 01:28, had failed: "cannot use deprecated config.tracing together with frontendPolicies.tracing". It was serving the config it started with on 2026-11-04, not its ConfigMap. `setup` restarted it on the pinned config and `restore` restarted it on its own, so it now runs what Argo CD syncs |
+| Discovery | `tools/list` lines on bind 3004 from `kagent/kagent-controller` about every 60 s, each with a tool-pin verdict |
+| The agent's `list_tools` | a `tools/list` line from the `workshop-agent` pod for each question: it lists once per request, no cache |
+| The url patch | kagent rolled `workshop-agent` by itself after evil-mcp's `spec.url` changed, both ways. No manual restart is needed |
+| Strip, evil-mcp untouched | verdict `pass` on all three tools; the agent called `get_weather` and `read_internal_config` and leaked the planted block, as on the unpinned path |
+| Strip, after the rug pull | verdict `mutated`, `changed: ["get_weather"]`. `get_weather` left `discoveredTools` within one re-list, `Accepted` stayed True, and the agent called no evil-mcp tool. It answered from `search_web` that it could not find the weather |
+| `tools/call` for the stripped tool | a tool result with `isError: true`, "tool-pin: evil-mcp tool get_weather is not an approved definition", as on the v1.7.0 bed |
+| Deny, after the rug pull | the gateway logged `mcp.error.code=-32001` for both callers. evil-mcp's RemoteMCPServer went `Accepted=False`, `ReconcileFailed`, with tool-pin's reason in the message, and `discoveredTools` kept the last list it had (the stripped two). **The chat failed**: the whole A2A answer was "failed to extract tools from the tool set "mcp_tool_set": failed to list MCP tools: calling "tools/list": tool-pin: evil-mcp tool definitions refused (changed since approval: get_weather)" |
+| Restore | every object as snapshotted, both Applications Synced and Healthy with auto-sync as it was, evil-mcp `Accepted=True` on :3003 with its three tools, attackme 200 |
+
+**Why deny fails the chat.** The Go runtime collects every toolset's tools before each model call, and returns on the
+first error: `internal/llminternal/tools_processor.go` line 43 at adk-go v2.1.0, `fmt.Errorf("failed to extract tools
+from the tool set %q: %w", ...)` and `return`. The Python runtime that the v0.9.9 reading covered dropped only the
+failing toolset. So on today's cluster, any JSON-RPC error on evil-mcp's `tools/list` takes down the agent's whole
+answer, workshop-mcp's tools included, and shows the user the error text.
+
+**What follows from the same code path, not seen.** With `failureMode: failClosed`, a tool-pin outage is also an error
+on `tools/list` (JSON-RPC `-32603` on the bed), so it would fail every chat the same way. The separate bind still
+contains it at the gateway, but no longer at the agent.
+
+Two small defects in `observe` showed up and are fixed since: a `tools/list` from the probe pod, which is gone by the
+time `observe` runs, tripped the ERR trap (the record's "failed at line 249"; the run went on), and the agent-log grep
+did not know the Go runtime's wording.
+
 ## What this means for the #117 design
 
-- **Strip or deny.** Strip is the more precise control: only the changed tool goes, and the agent keeps
-  the approved ones. Deny is the more visible one: by the source reading, the student can see it in
-  `kubectl get remotemcpserver evil-mcp`, as `Accepted=False` with tool-pin's reason ("changed since
-  approval: get_weather"). With strip, the only sign in kagent is a tool missing from `discoveredTools`.
-  For a lesson, deny's condition is the better teaching surface. That is worth confirming live before
-  choosing.
+- **Strip, not deny.** Strip is the more precise control: only the changed tool goes, and the agent keeps
+  the approved ones. Deny was the more visible one, and its `Accepted=False` condition does carry tool-pin's reason.
+  But on kagent 0.10.1 deny takes down the whole chat (above), which is the rug pull's attacker winning a denial of
+  service instead of a leak. The pin runs in strip mode. With strip, the sign in kagent is a pinned tool missing from
+  `discoveredTools`, and tool-pin's own log says `changed` and names the tool.
+- **failClosed or failOpen.** For the same reason, failClosed turns a tool-pin outage into a chat outage. Whether the
+  lesson should keep failClosed (the safe default, and a visible failure) or take failOpen (the chat survives, the pin
+  is off while tool-pin is down) is a choice for the #117 build, made knowing this.
 - **What the student configures can be one field.** The gateway config, bind 3004 included, can stay in
   GitOps. The student's action would be repointing evil-mcp's RemoteMCPServer `spec.url` at the pinned
   bind, which is the same shape as C7's `toolNames` patch. `ignoreDifferences` then covers that one
@@ -160,9 +204,10 @@ A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in 
   2026-11-02: the `agentgateway` Service port, and port 3004 in the "from anywhere" rule of #552's
   `agentgateway-ingress` NetworkPolicy (`gitops/ai-layer/chat-path-ingress.yaml`). That policy opens only the
   gateway's named ports on every profile, so without it kagent's controller and the agent cannot reach the bind at
-  all, and `verify/test_chat_path_ingress.py` would have to learn the new caller list.
-- **Blast radius.** The separate bind contains a processor outage, as measured. It does not contain a
-  config typo: all binds are one file. A bad edit is survivable while the pod runs, but crash-loops it on
+  all, and `verify/test_chat_path_ingress.py` would have to learn the new caller list. Seen live on 2026-11-05:
+  kagent rolls the agent itself after the url patch, so that one field is the whole action.
+- **Blast radius.** The separate bind contains a processor outage at the gateway, as measured, though not at the
+  agent (above). It does not contain a config typo: all binds are one file. A bad edit is survivable while the pod runs, but crash-loops it on
   the next restart. That argues for the student not editing the gateway config at all, which the
   previous point makes possible.
 - **Not covered by the pin.** The pin does not cover the tool's *output*. evil-mcp's `get_weather`
@@ -170,9 +215,9 @@ A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in 
   more reliable vector". The pin also leaves out `title`, `annotations` and `outputSchema`, which the
   issue did not ask for. A rug pull through any of those passes.
 
-## Does the badge read the pin? Recommendation, pending the live check
+## Does the badge read the pin? Decided 2026-11-05, from the live check
 
-**Yes. It should read whether the pin is wired, not what the pin last decided.** "Tool pin: on" would mean:
+**Yes. It reads whether the pin is wired, not what the pin last decided.** "Tool pin: on" means:
 
 1. evil-mcp's RemoteMCPServer `spec.url` is the pinned bind, and
 2. the `tool-pin-baseline` ConfigMap pins every name in the Agent's evil-mcp `toolNames`.
@@ -181,20 +226,18 @@ That matches how every other badge in guard-proxy's `/controls` works: each one 
 object, not an event. It needs `get` on `remotemcpservers/evil-mcp` and `configmaps/tool-pin-baseline`
 added to the `guard-proxy-reader` Role.
 
-The badge should not read `status.discoveredTools`. In deny mode kagent keeps the last good list there,
-so the badge would show the old approved list as current. In strip mode it would show a tool that quietly
-vanished. If the design picks deny, the `Accepted=False` condition could drive a second badge state,
-"pin tripped", whose message is tool-pin's reason.
+The badge does not read `status.discoveredTools`. The live check showed why: in deny mode kagent kept the
+last list it had there while `Accepted` was False, and in strip mode the changed tool simply left it. Either way the
+badge would show a list, not the pin. There is no "pin tripped" state from the `Accepted=False` condition, because
+that condition comes only from deny mode, which fails the chat on kagent 0.10.1. The wiring is also what the student
+changes (the one url field), so a badge that reads it turns on when the student's action lands.
 
-The recommendation rests on the source reading. Make the badge decision after `live-check.sh` has
-confirmed kagent's behaviour.
-
-## Still open: the cluster check
+## Rerunning the cluster check
 
 The coordinator's go on #480 (2026-11-02) is to run it on `watch-it-burn-community`, the public cluster (attackme), and
 leave that cluster as found. Michael's correction the same day allows `watch-it-burn-private` too, and never a third
 cluster. The check is one command on a host with the accen-dev AWS profile, from a checkout of staging that has this
-directory, with a kubeconfig of its own:
+directory, with a kubeconfig of its own (a hecaton run uses the `$KUBECONFIG` it is given instead):
 
 ```bash
 AWS_PROFILE=accen-dev aws eks update-kubeconfig --region us-west-2 --name watch-it-burn-community \
@@ -203,15 +246,17 @@ KUBECONFIG=/tmp/watch-it-burn-community.kubeconfig AWS_PROFILE=accen-dev CONTEXT
   bash docs/research/2026-10-24-tool-pin-spike/live-check.sh run
 ```
 
-It takes about ten minutes and writes everything it prints to `/tmp/tool-pin-live.watch-it-burn-community.record.txt`.
-Commit that record here, as `live-2026-MM-DD-community.txt`, with the findings below.
+It took eight minutes on 2026-11-05 and writes everything it prints to
+`/tmp/tool-pin-live.watch-it-burn-community.record.txt` (or `$STATE.record.txt`).
 
 **What `run` does to the cluster, and how it puts it back.** `setup` first records every object it will change in
 `$STATE` (by default `/tmp/tool-pin-live.<context>`): `lab-bootstrap`'s and `ai-layer`'s auto-sync and their sync and
 health, `agentgateway-config`'s `config.yaml`, the `agentgateway` Service's ports, `agentgateway-ingress`'s rules,
 evil-mcp's url and `server.py`,
-the agent's pods, and the public host from `cluster-identity`. It will not start unless that host answers 200, and
-it will not snapshot over an earlier snapshot. It then pauses both Applications, deploys tool-pin, adds bind 3004
+the agent's pods, the gateway's last config load, and the public host from `cluster-identity`. It will not start unless
+that host answers 200, and it will not snapshot over an earlier snapshot. When the gateway's last reload had failed, as
+on 2026-11-05, the gateway runs an older config than its ConfigMap and refuses reloads, so `setup` restarts it on the
+pinned config and `restore` restarts it again on the ConfigMap it puts back. It then pauses both Applications, deploys tool-pin, adds bind 3004
 to the gateway config the cluster runs (`gateway_bind.py extend`, not this checkout's), opens 3004 next to 3001 and
 3003 in `agentgateway-ingress`, checks the bind lists evil-mcp's three tools, and only then repoints evil-mcp's
 RemoteMCPServer at it. It asks the agent through kagent's A2A proxy
@@ -234,7 +279,7 @@ need an allow first). On 2026-11-02 this shape ran in Docker with the same image
 1000: the install took about 5 seconds, tool-pin started, passed evil-mcp's untouched list over gRPC and stripped a
 rug-pulled `get_weather`.
 
-What the record needs to show:
+What the record had to show, each seen on 2026-11-05 except where the 0.10.1 row of the table above says otherwise:
 
 1. **Discovery goes through the processor.** tool-pin logs a verdict about every 60 s, and the
    gateway's `route=default/evil-mcp-pinned` lines carry the kagent controller's pod IP.
@@ -251,7 +296,7 @@ What the record needs to show:
    stripped tool, so it cannot call one; what a model does with that refusal only matters when a list and a call
    disagree, which this check does not stage.
 
-Then decide the badge (the section above) from the record, and write it in decisions.md.
+Item 4 is where 0.10.1 differs: the condition and the stale list are as read, the chat does not answer.
 
 ## Reproduce the local bed
 

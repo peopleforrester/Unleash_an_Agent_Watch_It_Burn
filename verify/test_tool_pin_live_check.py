@@ -142,6 +142,10 @@ def events_matching(st: dict, needle: str) -> list[int]:
 with tempfile.TemporaryDirectory() as d:
     print("== run: every phase, then everything as found ==")
     bed = Bed(pathlib.Path(d) / "a")
+    # A tools/list from a pod that is gone by the time observe runs, as a probe pod is (--rm): seen on the cluster.
+    st0 = bed.st()
+    st0["logs"].append("info request route=default/evil-mcp-pinned src.addr=10.9.9.9 mcp.method=tools/list")
+    bed.state_file.write_text(json.dumps(st0))
     r = bed.live("run")
     out = r.stdout + r.stderr
     st = bed.st()
@@ -180,6 +184,8 @@ with tempfile.TemporaryDirectory() as d:
           and '"isError": true' in out)
     check("observe names the pod behind each tools/list on the pinned bind",
           "10.1.0.3 kagent/kagent-controller-0" in out)
+    check("a caller with no pod now reads as a probe, and does not trip the ERR trap",
+          "10.9.9.9 (no pod now: a probe)" in out and "live-check: failed at line" not in out)
     check("everything is as found afterwards, the rug-pulled server.py included", as_found(st) == as_found(bed.before))
     check("restore checked the public host for 200 and every object, evil-mcp's Accepted condition included",
           "ok    https://attackme.agenticburn.com/ status" in out and "ok    evil-mcp's Accepted condition" in out

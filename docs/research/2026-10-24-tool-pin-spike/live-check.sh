@@ -2,10 +2,10 @@
 # ABOUTME: The #480 spike's cluster half: puts tool-pin on evil-mcp's own gateway bind on an existing cluster, records
 # ABOUTME: what kagent's discovery and the agent's list_tools do in each mode, and puts the cluster back as it found it.
 #
-# NOT YET RUN on a cluster. The local bed (local-bed.sh) is what has been measured, on v1.5.0 and on v1.7.0, the
-# version the clusters run. Since 2026-11-02 it is written for an existing cluster (the coordinator's go on #480 names
-# watch-it-burn-community, never a new one): `setup` snapshots every object it changes, `restore` writes the snapshot
-# back and then checks it, and `run` does the whole check in one command with `restore` on any exit.
+# Run on watch-it-burn-community on 2026-11-05 (live-2026-11-05-community.txt beside this file). Since 2026-11-02 it is
+# written for an existing cluster (the coordinator's go on #480 names watch-it-burn-community, never a new one): `setup`
+# snapshots every object it changes, `restore` writes the snapshot back and then checks it, and `run` does the whole
+# check in one command with `restore` on any exit.
 #
 # Usage: CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] live-check.sh <phase>
 #   run       everything below in order, with a settle between phases, `restore` on any exit, and the output
@@ -246,12 +246,14 @@ for c in o.get("status", {}).get("conditions", []):
         while read -r line; do
             src="$(grep -oE 'src.addr=[0-9.]+' <<<"${line}" | cut -d= -f2)"
             err="$(grep -oE 'mcp.error.code=[^ ]+' <<<"${line}" || true)"
-            echo "  ${src} $(grep -m1 "^${src}=" <<<"${ips}" | cut -d= -f2) ${err}"
+            # A caller with no pod now is a probe pod, which --rm deletes when it ends (2026-11-05 on the community cluster).
+            who="$(grep -m1 "^${src}=" <<<"${ips}" | cut -d= -f2 || true)"
+            echo "  ${src} ${who:-(no pod now: a probe)} ${err}"
         done
     echo "-- the agent's pods (a new name means it rolled after the url change)"
     agent_pods
     echo "-- the agent's view: toolset failures in the workshop-agent log"
-    "${KCTL[@]}" logs deploy/workshop-agent --since=3m | grep -iE 'Failed to get tools|McpError|tool-pin|evil-mcp' | tail -5 || true
+    "${KCTL[@]}" logs deploy/workshop-agent --since=3m | grep -iE 'failed to extract tools|failed to list MCP tools|Failed to get tools|McpError|tool-pin|evil-mcp' | tail -5 || true
 }
 
 call() {

@@ -16721,3 +16721,52 @@ read above. The first read of a stored board also tests #862's DRIFT comparison.
 
 **The suites (run 17295, at `339bc305`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 27m02s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-05 · #480 · The tool-pin check ran live on the community cluster: strip mode works, deny fails the whole chat, and the badge reads the pin's wiring
+
+**What ran.** Hecaton run 17293 ran `live-check.sh run` on `watch-it-burn-community` (attackme), as the coordinator's go
+of 2026-11-02 names, from 03:48 to 03:56 UTC at `50416777`. Its output is
+`docs/research/2026-10-24-tool-pin-spike/live-2026-11-05-community.txt`, and the spike README's new section "The
+cluster check, 2026-11-05" reads it row by row. The cluster runs agentgateway v1.7.0 and kagent 0.10.1, whose agent
+runtime is now Go (`golang-adk:0.10.1`, on adk-go v2.1.0), not the Python runtime the v0.9.9 reading covered.
+
+**A fix first, before the run.** The community gateway's last hot reload, at 01:28, had failed: "cannot use deprecated
+config.tracing together with frontendPolicies.tracing". #864's ConfigMap had synced, the pod had not restarted, and
+v1.7.0 refuses that reload because the process started with `config.tracing`. So the gateway served its 2026-11-04
+config and would refuse the pinned bind too. `setup` now records the gateway's last config load, and when that was a
+failure it restarts the gateway on the pinned config, and `restore` restarts it again on the ConfigMap it writes back
+(`50416777`). The pinned config was first run through the v1.7.0 release binary's `--validate-only` ("Configuration is
+valid!"). The cluster's gateway therefore now runs its committed config: its main container logs no `config.tracing
+is deprecated` line. That is #864's intended state, and not the stale one found, which nothing could put back. The
+c7 container still logs 5, because `agentgateway-c7-config` is under ignoreDifferences on existing clusters by design.
+
+**What was seen.**
+- Discovery and the agent's `list_tools` both pass through tool-pin: bind 3004's `tools/list` lines come from the
+  kagent controller every 60 s and from the agent's pod once per question, each with a verdict.
+- kagent rolled the agent by itself after evil-mcp's url changed, both ways, so the student's one-field patch needs no
+  restart.
+- Strip mode after the rug pull: `get_weather` left `discoveredTools`, `Accepted` stayed True, and the agent called no
+  evil-mcp tool. A `tools/call` for it by name came back as an `isError` result with tool-pin's reason.
+- Deny mode: JSON-RPC `-32001` to both callers, and `Accepted=False` with tool-pin's reason, with `discoveredTools`
+  left as last listed. **The chat answer failed outright**: the A2A reply was the toolset error text. adk-go v2.1.0's
+  `internal/llminternal/tools_processor.go` line 43 returns on the first toolset whose `Tools()` errors, where the
+  Python runtime dropped only that toolset.
+- Restore: every object as snapshotted, both Applications Synced and Healthy with auto-sync as found, evil-mcp
+  `Accepted=True` on :3003 with its three tools, attackme 200.
+
+**Decided.**
+- **The pin runs in strip mode.** Deny on kagent 0.10.1 turns a rug pull into an outage of the whole agent and shows
+  the user the error. failClosed has the same consequence for a tool-pin outage (reasoned from the same code path,
+  not staged); failClosed or failOpen is left to the #117 build, with this written down.
+- **The badge reads the pin's wiring, not its verdicts**, as the spike recommended on 2026-10-24: "Tool pin: on" when
+  evil-mcp's RemoteMCPServer url is the pinned bind and `tool-pin-baseline` pins every name in the Agent's evil-mcp
+  `toolNames`. It needs `get` on those two objects in the `guard-proxy-reader` Role. It reads neither
+  `discoveredTools`, which showed a list and not the pin in both modes, nor the `Accepted` condition, which only deny
+  sets. The recommendation's second state, "pin tripped" from `Accepted=False`, is dropped with deny.
+
+**Also changed.** `observe` printed "live-check: failed at line 249" for a `tools/list` from the probe pod, which is
+gone by then (the run went on), and its agent-log grep missed the Go runtime's wording. Both are fixed, and
+`verify/test_tool_pin_live_check.py` holds the stale-gateway restarts and the gone caller; each new check fails
+against the code before it.
+
+**Not yet run on a cluster.** Nothing for #480: the issue's cluster half is this run. Building the pin into GitOps,
+the badge and the bind's Service port and ingress rule, is #117's.
