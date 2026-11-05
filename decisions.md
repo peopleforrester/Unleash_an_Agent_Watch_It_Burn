@@ -16513,3 +16513,6 @@ APM's trace id.
 `verify/test_agent_obs_flow.py` and its live test `verify/test_agent_obs_flow_live.py` in `run-e2e.sh`.
 
 **Not yet run on a cluster.** Nothing #783 asks for.
+
+**The suites (run 17261, at `f26af809`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 30m32s and printed `ALL OFFLINE RENDER-GATE TESTS GREEN` and `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
