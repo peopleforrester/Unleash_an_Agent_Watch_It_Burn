@@ -647,7 +647,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
   wall-reset          Empty the prompt wall for the room (#926): refuse while any roster cluster's
                       /prompts feed holds a prompt (reset-bot empties it), restart the wall's Railway
                       service, which keeps its prompts in memory only, and wait for it to read every
-                      roster cluster with no prompt on it. Needs a Railway login on this host.
+                      roster cluster with no prompt on it. Needs a Railway login on this host, or
+                      WIB_WALL_RAILWAY naming the command that runs railway where one is logged in.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
     scale <n>         DESIRED STATE: make exactly <n> attendee clusters exist. Creates what is missing,
@@ -5443,14 +5444,20 @@ print(f"{len(prompts)}|{ok}|" + "; ".join(parts).replace("|", "/"))' "${url}" <<
 # refuses, before it restarts anything, while any roster cluster's feed is not empty, and reset-bot is what empties a
 # feed. After the restart it waits for the wall to answer with every roster cluster read and no prompt, and fails
 # naming what it holds. A wall tab opened before the reset keeps its old cards and its cursor, past the new seq, so
-# the tab is reloaded after it. It needs a Railway login on this host, as resolve_admin_token does.
+# the tab is reloaded after it. It needs a Railway login on this host, as resolve_admin_token does, or
+# WIB_WALL_RAILWAY: the command, split on spaces, that runs railway on a host that has one. The host that reaches the
+# clusters is not always the one logged in to Railway: on 2026-11-05 a hecaton run had both clusters and no Railway
+# login, and the restart's guard, every feed empty first, has to run in the same command as the restart (#926).
 readonly WIB_WALL_RW_PROJECT="7bfe7d7e-8156-4365-9342-afd80ee55029"   # Railway project prompts-agenticburn
 readonly WIB_WALL_RW_ENV="production"
 readonly WIB_WALL_RW_SERVICE="prompts-agenticburn"
 readonly WALL_RESET_WAIT="${WIB_WALL_RESET_WAIT:-180}"                 # seconds for the restarted wall to read every cluster
 cmd_wall_reset() {
     [[ $# -eq 0 ]] || { log "usage: wall-reset"; return 2; }
-    command -v railway >/dev/null 2>&1 || { log "wall-reset: FAIL no railway CLI on this host"; return 1; }
+    local rw=()
+    read -ra rw <<<"${WIB_WALL_RAILWAY:-railway}"
+    [[ "${#rw[@]}" -gt 0 ]] && command -v "${rw[0]}" >/dev/null 2>&1 \
+        || { log "wall-reset: FAIL no railway CLI on this host (WIB_WALL_RAILWAY: '${WIB_WALL_RAILWAY:-railway}')"; return 1; }
     local entry name host body n rc=0 held ok summary missing waited=0 err
     for entry in "${INSTRUCTORS[@]}"; do
         name="${entry%%|*}"; host="$(public_host_for "${name}" | twin_rows)"
@@ -5476,7 +5483,7 @@ print(sum(1 for x in p if isinstance(x, str) and "[[wib-probe]]" not in x and x.
     [[ "${rc}" -eq 0 ]] || { log "wall-reset: refused; the wall was not restarted"; return 1; }
     IFS='|' read -r held _ summary <<<"$(wall_held)"
     log "  the wall before the reset: ${held} prompt(s); ${summary}"
-    if ! err="$(railway restart -p "${WIB_WALL_RW_PROJECT}" -e "${WIB_WALL_RW_ENV}" -s "${WIB_WALL_RW_SERVICE}" -y 2>&1)"; then
+    if ! err="$("${rw[@]}" restart -p "${WIB_WALL_RW_PROJECT}" -e "${WIB_WALL_RW_ENV}" -s "${WIB_WALL_RW_SERVICE}" -y 2>&1)"; then
         log "wall-reset: FAIL railway restart of ${WIB_WALL_RW_SERVICE} was refused (is this host logged in? railway login):"
         log "  ${err}"
         return 1

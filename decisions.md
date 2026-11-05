@@ -19937,3 +19937,47 @@ should show `mrf-secrets` and no line the guard's digest matches. Rotating the l
 267th, then `59 checks ran (the offline suite and 58 tier tests) in 31m00s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`
 printed `prose gate: pass, 7 public-prose file(s) read`.
+
+## 2026-11-05 · #926 · run 17676 · wall-reset can run railway on another host, and the live reset waits on a Railway login
+
+**Why the reset did not run.** Run 17646's `fleet.sh wall-reset` reached staging at `c84432a2`. The escalated
+`railway restart` came back to the run (question 1089): every run acts through the `sources-elevated` wrapper, and no other
+tier holds a Railway login. So this run looked for a Railway login it could use, and there is none. `railway whoami`
+answers `Unauthorized` on this host. Through `sources-elevated fleet`, tanjiro-wsl2 answers `Unauthorized. Please run
+railway login again.` (its `~/.railway/config.json` is there, so the login expired) and megumi-wsl2 answers
+`Unauthorized. Please login with railway login`. Secrets Manager in accen-dev holds no Railway secret. Michael's
+Chrome on tanjiro is signed in to Railway and shows the service (`2744f1fd-d0cf-4f6d-8611-3351e6efac85`, environment
+`f8d76627-3655-4469-95cd-793fd2e2cbd5`, active deployment `8ea9028f`). But the restart sits in a menu on the
+deployment, and the browser route presses one thing per tab, so it cannot reach the menu's item. A browserless
+`railway login` or a new Railway token is a sign-in or a credential on Michael's account. This run did neither:
+`railway login` on a fleet host is his own sign-in, and is escalated as that.
+
+**Not run before the restart can follow it.** `reset-bot` empties both feeds, but prompts come back into them: attackme
+went from 0 to 3 between 18:13Z and 19:52Z. A `reset-bot` with no restart right after it leaves the wall as it was,
+and changes both bots for nothing, so this run did not run it. Read-only, the path `reset-bot` takes works from a run:
+`_account_for_name` gave `accen-dev` for both clusters, `admin_kubeconfig` gave
+`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-community` and `.../watch-it-burn-private`, and guard-proxy
+read 1 replica, 1 ready, on each.
+
+**What changed.** `wall-reset` runs railway as `WIB_WALL_RAILWAY` names it, split on spaces, and as plain `railway`
+when that is unset. A run has the clusters and no Railway login, and a fleet host may have the login. The guard, every
+feed empty first, has to run in the same command as the restart, so the restart moves to the other host, not the guard.
+From a run, once a fleet host is logged in:
+`WIB_WALL_RAILWAY="sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2 railway" ./fleet.sh wall-reset`.
+The wrapper joins the words into the ssh command, so the restart's arguments arrive as they are. A first word that is
+not on the host fails before any feed is read. `verify/test_fleet_wall_reset.sh` gains 4 checks (35 in all): the
+restart goes through the named command with the same arguments, a feed holding a prompt still refuses before it is
+called, a missing command fails before anything is read, and a refusal on the other host is passed on.
+
+**Live check (run 17676), read-only.** At 19:52Z `./fleet.sh wall-check --empty` printed `PASS` for the health URL and
+both clusters, then `FAIL  the wall still holds 22 prompt(s) from before the room: 18 from attackme, 4 from
+burritobot-private; received 2026-11-05 18:06Z to 2026-11-05 19:28Z; seq at 22`, and exited 1. At 19:57Z
+`./fleet.sh wall-reset`, with `WIB_WALL_RAILWAY` naming tanjiro-wsl2 through the wrapper, printed that attackme's feed
+holds 3 prompts and burritobot-private's 4, each with the `reset-bot` to run, then `wall-reset: refused; the wall was
+not restarted`, and exited 1 without calling tanjiro. Nothing on either cluster or on Railway was changed.
+
+**Not yet run live.** Once `railway login` has run on tanjiro-wsl2, from `infra/terraform/fleet/` in a run, with no
+pause between the first two: `./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private`, then the
+`WIB_WALL_RAILWAY` command above, then `./fleet.sh wall-check --empty` ending "holds no prompts", and
+`curl -s https://prompts.burritobot.co/api/prompts` showing `"prompts": []`. Then one prompt on attackme shows on the
+wall within about 3 seconds.

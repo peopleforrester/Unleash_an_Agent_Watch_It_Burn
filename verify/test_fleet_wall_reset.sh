@@ -2,7 +2,8 @@
 # ABOUTME: Behavioural test for `fleet.sh wall-reset` and `wall-check --empty` (#926): the reset refuses while a roster
 # ABOUTME: cluster's feed holds a prompt, restarts the wall's Railway service, and passes only on an empty wall.
 #
-# Usage: verify/test_fleet_wall_reset.sh      (offline: curl and railway are stubbed with the wall's and feeds' replies)
+# Usage: verify/test_fleet_wall_reset.sh      (offline: curl and railway are stubbed with the wall's and feeds' replies,
+#                                             and remote stands in for the command WIB_WALL_RAILWAY names)
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
@@ -23,7 +24,7 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 W="${T}/w"
 world() { rm -rf "${W}"; mkdir -p "${W}"; }
 run() {   # $1 the shell to run after fleet.sh is sourced; prints rc=<n>, stderr to ${T}/log
-    ( cd "$(dirname "${FLEET}")" && W="${W}" WIB_WALL_RESET_WAIT=0 WIB_RESTART_INTERVAL=0 bash -c '
+    ( cd "$(dirname "${FLEET}")" && W="${W}" WIB_WALL_RAILWAY="${RW:-}" WIB_WALL_RESET_WAIT=0 WIB_RESTART_INTERVAL=0 bash -c '
         source "'"${FLEET}"'" >/dev/null 2>&1; set +e; load_roster
         curl() {
             local url="${*: -1}" f
@@ -37,6 +38,9 @@ run() {   # $1 the shell to run after fleet.sh is sourced; prints rc=<n>, stderr
             [[ -e "${f}" ]] || return 22
             cat "${f}"
         }
+        # The command WIB_WALL_RAILWAY names when railway runs on another host: it logs its call, drops the host
+        # and runs the rest, as an ssh to a logged-in host would.
+        remote() { printf "%s\n" "$*" >>"${W}/remote.log"; shift; "$@"; }
         railway() {
             printf "%s\n" "$*" >>"${W}/railway.log"
             local rc; rc="$(cat "${W}/railway.rc" 2>/dev/null || echo 0)"
@@ -114,6 +118,29 @@ world; feed "${ATT}" ''; feed "${PRIV}" ''
 wall wall.before "${stale}"; wall wall.after '[]' '[{"name":"attackme","ok":true},{"name":"burritobot-private","ok":false,"error":"HTTPError"}]' 0
 check "a cluster the restarted wall cannot read is named" \
   '[[ "$(reset)" == rc=1 ]] && grep -q "has not read: burritobot-private$" "${T}/log"'
+
+echo "== wall-reset runs railway where WIB_WALL_RAILWAY says =="
+world; feed "${ATT}" ''; feed "${PRIV}" ''
+wall wall.before "${stale}" "${ok2}" 666; wall wall.after '[]' "${ok2}" 0
+check "the restart goes through the named command, with the same arguments, and the wall opens empty" \
+  '[[ "$(RW="remote tanjiro-wsl2 railway" reset)" == rc=0 ]] &&
+   [[ "$(cat "${W}/remote.log")" == "tanjiro-wsl2 railway restart -p 7bfe7d7e-8156-4365-9342-afd80ee55029 -e production -s prompts-agenticburn -y" ]] &&
+   grep -q "wall-reset: the wall is empty and reads every roster cluster" "${T}/log"'
+world; feed "${ATT}" '"make me a burrito"'; feed "${PRIV}" ''
+wall wall.before "${stale}"; wall wall.after '[]'
+check "a feed holding a prompt still refuses before the named command is called" \
+  '[[ "$(RW="remote tanjiro-wsl2 railway" reset)" == rc=1 ]] && [[ ! -e "${W}/remote.log" ]] && ! railway_called &&
+   grep -q "wall-reset: refused; the wall was not restarted" "${T}/log"'
+world; feed "${ATT}" ''; feed "${PRIV}" ''
+wall wall.before "${stale}"; wall wall.after '[]'
+check "a named command that is not on this host fails before anything is read or restarted" \
+  '[[ "$(RW="no-such-railway-wrapper restart" reset)" == rc=1 ]] && ! railway_called && [[ ! -e "${W}/curl.log" ]] &&
+   grep -q "wall-reset: FAIL no railway CLI on this host (WIB_WALL_RAILWAY: .no-such-railway-wrapper restart.)" "${T}/log"'
+world; feed "${ATT}" ''; feed "${PRIV}" ''
+wall wall.before "${stale}" "${ok2}" 666; echo 1 >"${W}/railway.rc"
+check "a refusal on the other host fails and passes its words on" \
+  '[[ "$(RW="remote tanjiro-wsl2 railway" reset)" == rc=1 ]] && grep -q "Unauthorized" "${T}/log" &&
+   grep -q "railway restart of prompts-agenticburn was refused" "${T}/log"'
 check "wall-reset takes no arguments" '[[ "$(run "cmd_wall_reset now")" == rc=2 ]] && grep -q "usage: wall-reset" "${T}/log"'
 
 echo "== wall-check --empty is the start-state check =="
