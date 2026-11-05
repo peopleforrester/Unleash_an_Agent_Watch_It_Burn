@@ -67,8 +67,9 @@ params = (regex[0] if regex else {}).get("params") or {}
 check("it blocks on the first match and does not rewrite the prompt",
       params.get("is_blocked") is True and params.get("redact") is False and params.get("match_type") == "search",
       str({k: v for k, v in params.items() if k != "patterns"}))
-check("PromptInjection is still the first input scanner",
-      [s["type"] for s in scanners["input_scanners"]] == ["PromptInjection", "Regex"])
+# BanTopics (#455) is the third, and only the topic stage asks with it unsuppressed (verify/test_topic_guard.py).
+check("PromptInjection is still the first input scanner, then this Regex, then #455's BanTopics",
+      [s["type"] for s in scanners["input_scanners"]] == ["PromptInjection", "Regex", "BanTopics"])
 span_statements = burn_scrub()["trace_statements"][0]["statements"]
 scrub = [(unquote(p), label) for _, p, label in patterns(span_statements)]
 check("the burn scrub has its four labels", [label for _, label in scrub] == ["[EMAIL]", "[CARD]", "[SSN]", "[PHONE]"])

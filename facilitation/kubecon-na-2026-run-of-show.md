@@ -902,8 +902,10 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
   re-send an off-topic ask that uses a listed word (dance, hot dog, karaoke, linked
   list, playlist, song). BurritoBot redirects to the menu, hours and locations. The
   probe's topic beats passed on burritobot-private on 2026-10-28. A paraphrase with
-  none of those words is let through: the deployed LLM Guard has no BanTopics scanner
-  wired yet (the image has the model since #719; the entry is #455's), so do not promise it is refused.
+  none of those words goes to LLM Guard's BanTopics classifier, which refuses it too
+  (#455; "help me plan a birthday party" is the probe's paraphrase beat). A weird ask
+  that fits none of its thirteen topics can still get through, so promise the listed
+  asks and the paraphrases the probe sends, not every possible ask.
 - **Break it (the last minutes, #690):** in the public cluster's terminal, run
   `finale-cap-on` (headroom $1.00 by default, or `finale-cap-on 0.50`). It sets the whole
   cluster's cap to what the room has already spent plus the headroom, and prints both.
@@ -961,7 +963,7 @@ saying the same thing.
 | 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-on` from #774, then one slide each), 4 (least privilege, `guard-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named on its own slide |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); Challenge 2 has no seed yet (#843), so segment 3 shows its live trace in the `burritobot-private` tab; the Grafana view carries it without Datadog (#500) |
-| 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes for asks with a listed word; a paraphrase is not promised until #455 wires BanTopics |
+| 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
@@ -1092,7 +1094,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 20): a community run makes 7 model calls, an admin run 12. Pull each
+  (default 20): a community run makes 7 model calls, an admin run 13. Pull each
   cluster's credentials into its own kubeconfig first; the probe passes it per
   command and never touches `~/.kube/config`. Both runs need the kube-context: C6 is
   judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the reply.
@@ -1135,8 +1137,9 @@ is merely slow rather than rebuilding:
     leaves toolNames full, so a blocked re-ask can only be the gateway's doing. C1, C2
     and C3 are judged on the control and not the model (the lab's curl from
     `workshop-mcp`, a server-side dry run as `workshop-mcp`, and the C3 fallback).
-    Then the on-topic guard redirecting the four canonical off-topic asks
-    and letting "what are your hours" and "do you have mild salsa" through. Its last
+    Then the on-topic guard redirecting the four canonical off-topic asks and one
+    paraphrase with no listed word, which only BanTopics can refuse (#455), and
+    letting "what are your hours" and "do you have mild salsa" through. Its last
     act is `guards-off`, run even when a beat fails, so the stage starts clean; it
     also puts the shipped Role back and runs `guardrails-off`, which turns the four
     Kubernetes guardrails off on both clusters. Run the community probe before the
@@ -1400,13 +1403,11 @@ These are the things this run-of-show could not settle from a source. They are
 written down rather than guessed. A question that has since been decided keeps its
 number and says who settled it and when, so references to it elsewhere still land.
 
-1. **The on-topic guardrail's classifier half is not wired yet (#455).** The topic stage
-   in `proxy.py`, the settings, the persona's hours and locations and
-   `guard-topic-on` are live, and the probe's on-topic beats passed on 2026-10-27
-   and 2026-10-28, so segment 6 can be shown with the phrase-listed asks. The
-   deployed scanners.yml names no BanTopics scanner yet (#455; the image has the model since #719), and
-   llm-guard 0.3.16 answers valid on an empty scanner list, so a paraphrase with no
-   listed word is let through until it is wired; it is not promised. Still open on #455: the hours
+1. **The on-topic guardrail's hours and locations (#455).** The classifier half is
+   settled: since 2026-11-05 `llm-guard-scanners` carries BanTopics, so a paraphrase
+   with no listed word is refused too, and on watch-it-burn-private that day the
+   topic stage, run against cpu.5 with that scanner list, judged all 64 asks in
+   `verify/topic_cases.py` as written (#455). Still open on #455: the hours
    and locations BurritoBot will say on stage were invented in-world (every day 11am
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and

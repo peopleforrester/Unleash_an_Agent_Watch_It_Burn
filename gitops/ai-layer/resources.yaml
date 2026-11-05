@@ -195,7 +195,7 @@ spec:
       # reads scanners.yml once, at start, and the ConfigMap's name is stable, so without it a scanner change
       # syncs green on a running cluster and the old scanners keep answering (guard-proxy's checksum/proxy-py
       # below is the same fix). verify/test_input_pii_guard.py fails when it is not sha256(scanners.yml)[:12].
-      annotations: { checksum/scanners-yml: "930c89356533" }
+      annotations: { checksum/scanners-yml: "f121b6e2e7bb" }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
@@ -270,6 +270,34 @@ data:
           is_blocked: true
           redact: false
           match_type: search
+      - type: BanTopics
+        # The on-topic guard's classifier step (#455). guard-proxy's topic stage asks /analyze/prompt with
+        # PromptInjection suppressed, after its phrase lists (TOPIC_OFF_LIST, TOPIC_ON_LIST) have decided every
+        # ask with a listed word, so this scores only what no phrase decides: an off-topic paraphrase it must
+        # refuse, or a vague menu ask ("do you deliver") it must pass. Every other caller suppresses BanTopics:
+        # guard-proxy's injection stage, read_support_ticket's check and verify/stage_traces.py, so it never
+        # runs when TOPIC_GUARD is off. Topics and threshold are verify/topic_cases.py's CLASSIFIER, measured
+        # by verify/test_topic_classifier.py; narrow labels, because a broad "entertainment" took vague menu
+        # asks. The zero-shot model (deberta-v3-base-zeroshot-v2.0 at 8e7e5af5) is baked into cpu.5 here, so
+        # it loads at start with no network; verify/test_llm_guard_bantopics_image.py fails this entry on an
+        # image not known to carry it, which would stop LLM Guard at start (lazy_load is off).
+        params:
+          topics:
+            - dancing
+            - music and singing
+            - party planning
+            - computer programming
+            - weather
+            - sports
+            - travel and geography
+            - school homework
+            - movies and television
+            - books and novels
+            - cocktails and alcohol
+            - poetry and creative writing
+            - fashion and clothing
+          threshold: 0.5
+          model_path: /home/user/models/zero-shot
     output_scanners:
       - type: Regex
         params:
@@ -480,7 +508,7 @@ spec:
             - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
             # On-topic guard (#455): BurritoBot sells burritos only. OFF at the wide-open start, because the
-            # KubeCon talk opens on the bot answering anything; the run-of-show turns it on alone in segment 7
+            # KubeCon talk opens on the bot answering anything; the run-of-show turns it on alone in segment 6
             # (guard-topic-on). guards-on leaves it off: every challenge prompt is off-topic by design.
             # Decides in three steps: an off phrase refuses, an on phrase passes, and the rest goes to LLM
             # Guard's BanTopics scanner. Phrases match as whole words, any case, with an optional plural "s".

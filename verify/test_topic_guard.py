@@ -118,20 +118,37 @@ check("guards-on leaves the on-topic guard off (it would refuse every challenge 
 check("guards-off turns the on-topic guard off too", '_px "topic=off"' in guards_off)
 check("guards-status lists the on-topic guard", '"topic":"On-topic guard' in terminal)
 
-print("== the classifier, when it is wired ==")
+print("== the classifier step: BanTopics in llm-guard-scanners ==")
+# A phrase list alone misses paraphrases (the issue's own words), so the classifier half is required, not armed
+# when present. Whether the pinned image can load it is verify/test_llm_guard_bantopics_image.py's check.
 bt = [s for s in scanners.get("input_scanners", []) if s.get("type") == "BanTopics"]
-if bt:
-    params = bt[0].get("params", {})
-    check("BanTopics topics are the measured set", params.get("topics") == tc.CLASSIFIER["topics"])
-    check("BanTopics threshold is the measured one", params.get("threshold") == tc.CLASSIFIER["threshold"])
-    check("BanTopics loads from a baked directory, never the Hub", bool(params.get("model_path")))
-    src = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
-    check("guard-proxy suppresses scanners per stage, so the injection classifier does not also ban topics",
-          "scanners_suppress" in src)
-else:
-    # Not wired yet: the offline image does not carry the zero-shot model, and with lazy_load off a scanner
-    # whose model is missing stops LLM Guard from starting, which would fail the injection classifier closed.
-    print("  (BanTopics is not in scanners.yml yet; these checks arm when it is)")
+check("exactly one BanTopics input scanner is configured", len(bt) == 1, f"{len(bt)} found")
+params = bt[0].get("params", {}) if bt else {}
+check("BanTopics topics are the measured set", params.get("topics") == tc.CLASSIFIER["topics"],
+      f"{params.get('topics')!r}")
+check("BanTopics threshold is the measured one", params.get("threshold") == tc.CLASSIFIER["threshold"],
+      f"{params.get('threshold')!r}")
+check("BanTopics loads from the baked zero-shot directory, never the Hub",
+      params.get("model_path") == "/home/user/models/zero-shot", f"{params.get('model_path')!r}")
+check("BanTopics is an input scanner only (an output scan would ban topics in every reply)",
+      all(s.get("type") != "BanTopics" for s in scanners.get("output_scanners") or []))
+# BanTopics runs on every /analyze/prompt call that does not suppress it, so each caller outside the topic stage
+# must, or the injection stage (C6), the ticket check and the trace stage would refuse off-topic asks too.
+src = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
+suppress_bt = '{"prompt": text, "scanners_suppress": ["BanTopics"]}'
+suppress_pi = '{"prompt": text, "scanners_suppress": ["PromptInjection"]}'
+check("guard-proxy's injection stage suppresses BanTopics", suppress_bt in src)
+check("guard-proxy's topic stage suppresses PromptInjection, so only BanTopics (and the PII Regex) speak there",
+      suppress_pi in src)
+calls = [(p, ln) for p in ("gitops/ai-layer/workshop-mcp-server.py", "verify/stage_traces.py")
+         for ln in (REPO / p).read_text().splitlines() if "/analyze/prompt" in ln]
+check("read_support_ticket and stage_traces.py ask /analyze/prompt", {p for p, _ in calls} == {
+    "gitops/ai-layer/workshop-mcp-server.py", "verify/stage_traces.py"}, f"{calls}")
+mcp = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text()
+traces = (REPO / "verify/stage_traces.py").read_text()
+check("read_support_ticket's check suppresses BanTopics",
+      '"scanners_suppress": ["BanTopics"]' in mcp.split("def _ticket_flagged", 1)[-1].split("\ndef ", 1)[0])
+check("stage_traces.py's guard verdict suppresses BanTopics", "'scanners_suppress': ['BanTopics']" in traces)
 
 if failures:
     print(f"\n{len(failures)} check(s) FAILED")

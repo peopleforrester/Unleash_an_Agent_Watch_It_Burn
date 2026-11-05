@@ -492,7 +492,10 @@ check("the CEO prompt is /brief's Community beat 2", kp.CEO_PROMPT.startswith("I
 check("the off-topic ask is the abstract's linked list", kp.OFF_TOPIC_PROMPT == "how do I reverse a linked list")
 check("the topic asks are topic_cases' canonical ones",
       [b.title.split(": ", 1)[1].strip("'") for b in kp.ADMIN if b.key.startswith("topic-")]
-      == tc.CANONICAL_OFF + tc.CANONICAL_ON)
+      == tc.CANONICAL_OFF + [tc.STAGE_PARAPHRASE] + tc.CANONICAL_ON)
+check("the paraphrase beat's ask is off-topic with no listed word, so only BanTopics can refuse it",
+      tc.STAGE_PARAPHRASE in tc.OFF_TOPIC
+      and tc.phrase_verdict(tc.STAGE_PARAPHRASE, tc.split_list(kp.ENV["TOPIC_OFF_LIST"]), kp.ON_TERMS) is None)
 lab = (REPO / "gitops/ai-layer/web/lab.html").read_text()
 check("C1 is the lab's curl from workshop-mcp to the beacon, six seconds",
       "deploy/workshop-mcp -- curl -s -m 6" in lab and kp.BEACON in lab and "-m" in kp.C1_CHECK)
@@ -787,9 +790,9 @@ print("== run order, the call ceiling, and guards-off last ==")
 class Fake:
     """kubectl and HTTPS for one well-behaved admin cluster, recording what the probe did."""
 
-    def __init__(self, identity: str = host, topic: bool = True) -> None:
+    def __init__(self, identity: str = host, topic: bool = True, bantopics: bool = True) -> None:
         self.host, self.calls, self.log = host, 0, []
-        self.identity, self.topic = identity, topic
+        self.identity, self.topic, self.bantopics = identity, topic, bantopics
         self.c6_tool_calls = 0
         self.g = {k: False for k in kp.AI_GUARDS}
         if not topic:
@@ -933,6 +936,9 @@ class Fake:
             return chat(C7_DENIED if gone else C7_LEAK)
         if self.g.get("topic") and tc.phrase_verdict(p, tc.split_list(kp.ENV["TOPIC_OFF_LIST"]), []) == "off":
             return chat(kp.TOPIC_REFUSAL, True)
+        # BanTopics' half (#455): an off-topic ask with no listed word, refused before the model when it is wired
+        if self.g.get("topic") and self.bantopics and p in tc.OFF_TOPIC:
+            return chat(kp.TOPIC_REFUSAL, True)
         if p == kp.OFF_TOPIC_PROMPT:
             return chat(LINKED_LIST)
         return chat(HOURS if "hours" in p else SALSA if "salsa" in p else ORDER)
@@ -950,7 +956,8 @@ check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.P
 want = ["identity", "start-state", "badges", "gateway", "c5-off", "guardrails-on", "armed", "badges-lit", "c5-on",
         "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guard-agency-on", "c6-forbidden",
         "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
-        "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2",
+        "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-paraphrase",
+        "topic-on-1", "topic-on-2",
         "guards-off"]
 check("the beats run in stage order (Challenge 1 to 4: C5, C1 C2 C3, C6, C7; the on-topic guard; guards-off)",
       keys == want, str(keys))
@@ -963,7 +970,7 @@ check("each challenge reports its run-of-show segment",
       == ["2", "3", "4", "4", "4", "5", "3", "3", "3", "6"], str(seg))
 check("no admin beat reports a segment the 30-minute run-of-show does not have",
       {r["segment"] for r in res} <= {"-", "2", "3", "4", "5", "6", "end"}, str(seg))
-check("a full admin run spends 12 model calls", f.calls == 12, str(f.calls))
+check("a full admin run spends 13 model calls", f.calls == 13, str(f.calls))
 _asks = [i for i, e in enumerate(f.log) if e == f"chat {kp.ROOM_PROMPT[:30]}"]
 check("Challenge 3 lands with Kyverno on, then guard-agency-on, then the input guard before the last ask (#775)",
       len(_asks) == 2 and f.log.index("guardrails on") < _asks[0] < f.log.index(f"role {kp.AGENCY_FIX}")
@@ -1114,9 +1121,19 @@ check("and nothing is toggled, patched or sent", f.log == [] and f.calls == 0)
 f = Fake(topic=False)
 res = {r["key"]: r for r in run_admin(f)}
 check("a guard-proxy without the topic stage fails guard-topic-on", res["guard-topic-on"]["verdict"] == kp.FAIL)
-check("and the six topic asks are FAIL without spending a call",
-      all(res[k]["verdict"] == kp.FAIL and "not run" in res[k]["note"] for k in res if k.startswith("topic-"))
+check("and the seven topic asks are FAIL without spending a call",
+      sum(k.startswith("topic-") for k in res) == 7
+      and all(res[k]["verdict"] == kp.FAIL and "not run" in res[k]["note"] for k in res if k.startswith("topic-"))
       and f.calls == 6)
+
+f = Fake(bantopics=False)
+res = {r["key"]: r for r in run_admin(f)}
+check("an LLM Guard without BanTopics fails the paraphrase beat, the model answering it",
+      res["topic-paraphrase"]["verdict"] == kp.FAIL and "ANSWERED" in res["topic-paraphrase"]["note"],
+      res["topic-paraphrase"]["note"])
+check("and only that beat: the phrase-listed asks still redirect and the customers' asks still pass",
+      [k for k, r in res.items() if r["verdict"] != kp.PASS] == ["topic-paraphrase"],
+      str([(k, r["note"]) for k, r in res.items() if r["verdict"] != kp.PASS]))
 
 
 class InputGuardIgnored(Fake):
@@ -1415,8 +1432,8 @@ check("Night Before runs the probe on the community cluster, with its kube-conte
 check("Night Before runs the probe on the private cluster the presenters share",
       "kubecon_probe.py admin burritobot-private.burritobot.co" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
-check("Night Before counts the community run's 7 model calls and the admin run's 12",
-      "a community run makes 7 model calls, an admin run 12" in nb)
+check("Night Before counts the community run's 7 model calls and the admin run's 13",
+      "a community run makes 7 model calls, an admin run 13" in nb)
 check("Night Before runs no guard-rbac-on: Challenge 1's retry comes after guardrails-on, probe and seed alike (#855)",
       "guard-rbac-on" not in nb and "C5 asked again and out of reach" in nb
       and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-on`" in nb)
