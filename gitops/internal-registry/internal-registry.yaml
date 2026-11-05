@@ -81,8 +81,11 @@ spec:
           image: ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9
           ports: [{ name: http, containerPort: 5000 }]
           env:
-            # Location headers name the public host, not the pod, for a client that follows one.
-            - { name: REGISTRY_HTTP_HOST, value: "https://registry.burritobot.co" }
+            # Location headers are relative, so a client that follows one stays on the host it called (#775). With
+            # REGISTRY_HTTP_HOST set to the public name, the seed's POST to localhost was answered with an upload
+            # URL on https://registry.burritobot.co; regctl sent its PATCH there, the public side refused it with
+            # 405 (only GET and HEAD go through), and the seed never filled the registry (live on 2026-11-05).
+            - { name: REGISTRY_HTTP_RELATIVEURLS, value: "true" }
           readinessProbe:
             httpGet: { path: /v2/, port: http }
             periodSeconds: 5

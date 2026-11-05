@@ -19384,3 +19384,57 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
+## 2026-11-05 · #775 · Run 17584: the breakout Joker is on ghcr.io, and the internal registry's seed is fixed to push over localhost
+
+**Where #775 stood.** `bash verify/prior-drafts.sh 775 origin/staging` printed NONE: every #775 draft is in staging
+except run 16043's decisions.md records, which later work follows. Item 1 of run 17397's "Not yet run on a cluster"
+list is now done. push-jokers.yml ran on staging at 10:22 UTC (run 42010178866, success), on staging again at 10:40
+and on main at 11:10. Read anonymously, ghcr.io's tags list for `festival-ops/maintenance-shell` is
+`["busybox-1.38.0","busybox-1.38.0-internal"]`, and the `-internal` manifest answers 200 with
+`docker-content-digest: sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf`, the digest
+images.lock pins. This run cannot read the workflow's log (`gh run view --log` is refused to runs), so the push is
+confirmed from the registry side.
+
+**Found live: the seed never filled the registry.** Both clusters moved to the KubeCon profiles at 15:25 UTC on
+2026-11-05 (lab-bootstrap reads `values-kubecon-private.yaml` on watch-it-burn-private and
+`values-kubecon-community.yaml` on watch-it-burn-community, at staging `92dfea31`). That brought the internal registry
+up for the first time with the breakout Joker on ghcr.io. The `internal-registry` Application read Degraded: the
+registry container was Ready, and the seed container was in CrashLoopBackOff after 15 restarts in 59 minutes. Its log
+ended `failed to send blob (chunk), ref localhost:5000/burritobot/maintenance-shell:busybox-1.38.0: ... Method Not
+Allowed [http 405]`. The registry's own log showed the HEAD and POST requests from the seed and no PATCH. The cause is
+`REGISTRY_HTTP_HOST=https://registry.burritobot.co`. Distribution builds every Location header from that host, so the
+POST to localhost was answered with an upload URL on the public name. regctl sent its PATCH there, and the public side
+answered 405: the apex router has no route for that name yet, and the console that will serve it passes only GET and
+HEAD. A PATCH to `https://registry.burritobot.co/v2/burritobot/maintenance-shell/blobs/uploads/x` from this host
+answers 405 too. With the seed down the pod never reads Ready, the Service has no endpoints, and every HC-666 Joker
+would sit in ImagePullBackOff.
+
+**Decided here: relative Location headers.** `REGISTRY_HTTP_HOST` is replaced by `REGISTRY_HTTP_RELATIVEURLS=true`.
+A client that follows a Location header stays on the host it called: the seed on localhost, and a node or the console
+on the public name. A pull from the filesystem store follows no Location header, so pulls do not change. Distribution
+uses `http.relativeurls` only when `http.host` is unset, so the host setting goes.
+`verify/test_guardrails_switch.py` checks both: the registry container sets `REGISTRY_HTTP_RELATIVEURLS` to `true` and
+does not set `REGISTRY_HTTP_HOST`. On the old manifest that check fails and the rest pass.
+
+**Live check (run 17584), on watch-it-burn-private.** The manifest's ConfigMap and Deployment, with only the registry
+container's env changed to `REGISTRY_HTTP_RELATIVEURLS=true`, were applied in a scratch namespace `check-775-17584`.
+The pod read 2/2 Ready within the rollout. The seed's log printed `copying ghcr.io/.../maintenance-shell:busybox-1.38.0-internal@sha256:0dbe92d4... ->
+localhost:5000/burritobot/maintenance-shell:busybox-1.38.0` and `seeded; serving`. Inside the pod,
+`regctl image digest localhost:5000/burritobot/maintenance-shell:busybox-1.38.0` printed `sha256:0dbe92d4...`,
+`regctl tag ls` printed `busybox-1.38.0`, and a POST to `/v2/burritobot/x/blobs/uploads/` answered with
+`Location: /v2/burritobot/x/blobs/uploads/<uuid>?_state=...`, a relative URL. The scratch namespace was then deleted,
+and `kubectl get ns check-775-17584` answers NotFound. The `registry` namespace itself was not touched; Argo CD puts
+the fix there once hecaton promotes this run.
+
+**Not yet run on a cluster.** In order:
+1. After promotion, on watch-it-burn-private: the `internal-registry` Application reads Healthy, and the registry
+   pod in `registry` reads 2/2 with the seed's log ending `seeded; serving`.
+2. The apex router routes `registry.burritobot.co` and `deployments.burritobot.co`. On 2026-11-05 both still serve the
+   router's fallback page (404), while `attackme.burritobot.co` and `burritobot-private.burritobot.co` answer 200.
+   `fleet.sh routes` publishes those rows (`bare_rows`, `WIB_VILLAIN_HOSTS`) on a KubeCon bring-up. Publishing routes
+   is a deploy, which a run may not make. Then
+   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` lists `busybox-1.38.0`.
+3. The rest of the 2026-11-03 #775 entry's list: both KubeCon probe runs (`verify/kubecon_probe.py`) ending
+   `KUBECON PROBE GREEN`, a visitor's HC-666 ask after `guardrails-on`, and `stage_traces.py seed` ending
+   `SEEDED GREEN`. Each needs items 1 and 2 first: until a node can pull the Joker, `c6-lands` cannot pass.
