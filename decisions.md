@@ -15887,3 +15887,10 @@ Application. On `watch-it-burn-private`, `lab-bootstrap` renders `values-admin.y
 
 **Not yet run on a cluster.** Nothing is built. The fix's three owed checks stay as the design note lists them, for
 attendee and admin clusters only.
+
+**The suites (run 17178, at `f01cd719`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m05s. The offline suite inside it printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. Two tier tests
+went red, `test_datadog_log_services_render.py` and `test_enforce_floor.py`. Both failed on the same line: GitHub
+answered the download of the external-secrets chart 2.10.0 with `504 Gateway Time-out`. Run again alone with the
+tier's PATH and environment, both passed (exit 0). The change is prose and one YAML comment, so it
+touches nothing either test renders. The logs are `/var/lib/hecaton/runs/17178/e2e-tools.log` and `rerun.log`.
