@@ -1070,8 +1070,12 @@ is merely slow rather than rebuilding:
   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
   lists the seeded tag.
 - [ ] **Hostnames serve over HTTPS and websocket:**
-  `./fleet.sh check-tls attackme.burritobot.co burritobot-private.burritobot.co attackme.agenticburn.com burritobot-private.agenticburn.com`.
-  The last two are the agenticburn.com twins, kept for redundancy (#651): neither is shown, and both must pass.
+  `./fleet.sh check-tls --closed-terminal attackme.burritobot.co attackme.agenticburn.com`, then
+  `./fleet.sh check-tls burritobot-private.burritobot.co burritobot-private.agenticburn.com`.
+  Each second name is the agenticburn.com twin, kept for redundancy (#651): neither is shown, and both must pass.
+  The router closes the public bot's terminal and `/lab` on both domains (apex-agenticburn#43, #44), so on
+  attackme `--closed-terminal` asserts both websocket upgrades get its 404; the private bot's terminal must
+  upgrade and still refuse a shell with no credential.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
 - [ ] **The pinned model answers in the delivery region.** From the repo root:
   `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`. It

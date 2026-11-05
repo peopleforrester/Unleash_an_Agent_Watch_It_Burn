@@ -64,9 +64,9 @@ line_of() { grep -nF -- "$1" "${ROS}" | head -1 | cut -d: -f1; }
 # had more to send at that moment (seen once in a full run-tests.sh on 2026-10-29, not reproducible alone).
 section() { awk -v h="$1" '$0 ~ "^#+ "h { on=1; next } on && /^#+ / { exit } on' "${ROS}"; }   # to the next heading
 check "the Night Before runs wall-check after router-check and before check-tls" \
-  '[[ -n "$(line_of "./fleet.sh wall-check")" ]] &&
+  '[[ -n "$(line_of "./fleet.sh wall-check")" && -n "$(line_of "./fleet.sh check-tls --closed-terminal attackme")" ]] &&
    (( $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh wall-check") &&
-      $(line_of "./fleet.sh wall-check") < $(line_of "./fleet.sh check-tls attackme") ))'
+      $(line_of "./fleet.sh wall-check") < $(line_of "./fleet.sh check-tls --closed-terminal attackme") ))'
 check "the Night Before step names the health URL of the wall" 'section "Night Before" | grep -F "${WALL}/healthz" >/dev/null'
 check "the Night Before keeps the wall off the lab-platform roster until after the event" \
   'section "Night Before" | tr "\n" " " | grep "lab-platform#137" >/dev/null'

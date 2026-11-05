@@ -17652,3 +17652,69 @@ except the KubeCon probe's community run, whose `c6-lands` beat now asks HC-666 
 **The suites (run 17374, on f14328e).** `bash verify/run-e2e-tools.sh` printed "56 checks ran (the offline suite and
 55 tier tests) in 25m31s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash verify/run-tests.sh`,
 printed "257 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #651 · run 17370 checks the two-domain work live; attackme's terminal is closed on purpose, so check-tls holds it closed
+
+`verify/prior-drafts.sh 651 origin/staging` printed NONE: run 16718's port (`d2264c1d` to `c53f7954`) is in staging
+and on main, so this run took nothing from the older drafts. It ran the live steps the two entries above owe.
+
+**Argo CD.** On both clusters the `ai-layer` Application is Synced at staging `d4f69132`. The live console
+config's `server_name` patterns are grafana, argocd, backstage, deployments, maintenance-shell, registry and support,
+each on `(agenticburn\.com|burritobot\.co)`: no kagent or party-app host. A request for kagent-attackme now reaches
+the console's default server, the storefront, which is why it still reads 200 at the router.
+
+**Read-only curl, 2026-11-05 07:30Z.** On both domains, with `ssl_verify_result` 0: attackme, burritobot-private,
+start and `/roster.json`, prompts and `/healthz`, feedback and `/quick`, rounds (302), grafana-, argocd- and
+backstage- on both clusters (grafana-burritobot-private 302 to its login), maintenance-shell-attackme,
+support-attackme, `beacon.burritobot.co/beacon/view`, `agenticburn.com/beacon/view`, bare burritobot.co and
+support.burritobot.co. The router's 404 on both domains: provisioning, walkthrough, round1, michael-round1, mystery,
+bare backstage, monitoring, standalone grafana and argocd, harbor, s, x, brave-badger and michael-admin. Still 200 on
+both: the kagent, hedgehog, wombat, unicorn, spider and mantis-shrimp prefixes on both clusters. The live pages
+(`/`, `/lab`, `/kubecon`, `/brief`, `/platform`, `/links` on both burritobot.co clusters) carry no visible
+"agenticburn" once scripts, styles and comments are stripped.
+
+**The routes table is the one step left, and it is not this run's to publish.** apex main's `routes.map` (`b0c97e8`,
+2026-11-01) is 48 hosts and predates #651's retirement and #773's and #774's deployments and registry rows; the
+deployments and registry hosts get the router's 404 today. This run rendered `fleet.sh routes roster` read-only:
+fleet.sh sourced, real kubectl reads of both console load balancers, apex's main table as the published one, the
+record and the reload stubbed. The shrink guard passed, and it wrote 33 hosts on the same two upstreams: the 24
+retired kagent and party-app rows leave, and deployments- and registry- on both clusters and domains, and bare
+registry.burritobot.co, arrive. Publishing pushes to apex-agenticburn main and reloads the live router over Railway
+SSH, which a run's governance forbids, so the report escalates
+`./fleet.sh routes roster && ./fleet.sh router-check && ./fleet.sh wall-check`. `router-check` and `wall-check`
+pass today on the current table.
+
+**check-tls on four names: the router closes attackme's terminal by design.** The Night Before line #651 wrote
+ran check-tls on attackme and burritobot-private on both domains. burritobot-private passed every check on both.
+attackme failed the websocket upgrade on both with a 404, because apex-agenticburn's Caddyfile answers 404 for
+`/terminal`, `/lab`, `/ide` and `/jupyter` when the host is attackme on either domain (`@terminal_on_public_bot`,
+apex#43, #44). Straight to attackme's load balancer, `/terminal/` answers 401 and `/lab` 200, so the closure is the
+router's. `check-tls.sh` gains `--closed-terminal`: both upgrades, the plain one and ttyd's `tty` one, must get
+404, and anything else fails, so a router that stops closing the public bot's terminal turns the line red instead
+of passing. `--no-ws` with it is a usage error. The Night Before step now runs
+`check-tls --closed-terminal` on the attackme pair and the plain check on the burritobot-private pair; both print
+`TLS CHECKS GREEN` live. `verify/test_check_tls_shell_probe.sh` gains five checks for the flag, and the two
+ordering checks in `verify/test_fleet_routes_roster.sh` and `verify/test_fleet_wall_check.sh` anchor on the new
+line and check it is there before comparing.
+
+**The probes.** Community, `attackme.burritobot.co`: 11 PASS, 1 FAIL, $4.1274 to $4.1574 over 7 model calls. The
+FAIL is the off-topic linked-list beat at 1 of 3, the last miss a Bedrock 424 `ModelErrorException: Model produced
+invalid sequence as part of ToolUse`, the model variance #749 worked on. Every beat that reads a hostname passed,
+and the probe removed the Joker Deployment it made. Admin, `burritobot-private.burritobot.co`: the kube-context
+check, the `/controls` badges, the agentgateway pin and the Challenge 1 leak passed; the start state failed before
+any guard moved, because the private cluster has no `deny-external-registries` (the `kyverno-breakout` Application
+is not on it) and `block-recipe-snoop` and `agent-egress-allowlist` were already applied, 3h17m old, by something
+other than this run. `guardrails-on` then switched this cluster and failed on the missing guardrails-peer link
+(`fleet.sh guardrails-link` has not been run on this pair). This run stopped the probe there, since its closing
+`guardrails-off` would delete the two policies it found applied.
+
+**Left as found.** `guardrails-on` had scoped the workshop-agent Role and set restrict-image-registries to Deny on
+the private cluster. This run applied `~/challenges/c8-broad-role.yaml` and patched restrict-image-registries back
+to Audit from the terminal pod, the two halves of `guardrails-off` that touch them. `/controls` reads
+`kyverno false, rbac_scoped false, kubearmor true, networkpolicy true`, every AI guard off, as the probe's start
+check found it. Nothing changed on the community cluster beyond the probe's own chats and its deleted Deployment.
+
+**Not yet run on a cluster.** After the routes table is published: the retired prefixes must get the router's 404
+on both domains, `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` must list the
+seeded tag, and `CONTEXT=watch-it-burn-community python3 verify/test_service_hosts_live.py` covers the kept service
+hosts. The admin probe runs once the private cluster has its `kyverno-breakout` policies, `fleet.sh guardrails-link`
+has linked the pair, and its guardrails are off.
