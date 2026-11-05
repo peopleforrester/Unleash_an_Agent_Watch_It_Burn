@@ -15849,3 +15849,41 @@ run's report.
 tier tests) in 27m10s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 251
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. `test_images_lock_render.py` rendered chart 10.11.7 with
 the new values and found a row for each of the 57 images.
+
+## 2026-11-05 · #860 · question 1077: the community cluster never carries the C1 DNS-exfil fix, so the burn profile gains no Istio
+
+**Decision.** The community cluster never carries the fix for Challenge 1's stage 2b, the DNS-exfiltration beat.
+The burn profile (`gitops/bootstrap/values-burn.yaml`) gains no Istio, and the fix's forced egress proxy is not
+rebuilt without the mesh. Option B from question 1009 (#724) is built once, on the Istio ambient layer of attendee
+and admin clusters.
+
+**Who decided.** Decided by hecaton's research under Michael's standing rules, not by Michael. This entry records
+that answer to question 1077, which run 17167 asked. The run made no choice of its own.
+
+**Background.** Question 1009 (#724, 2026-11-04) chose option B, an egress proxy that all `agent` namespace
+traffic is forced through, over a locked resolver. Run 17027 found that the planned proxy uses Istio ambient as an
+egress waypoint, and that the community cluster runs no Istio. Issue #860 asked whether the burn profile gains
+Istio or the proxy is built without the mesh. Question 1077 added a third option, that the community cluster
+never carries the fix, and that is the answer.
+
+**Why.** The burn profile's header says it is deliberately bare, with nothing defending the agent, and that this
+stays as it is. The design note (`docs/research/2026-10-31-c1-dns-exfil-beat.md`) already sets the community
+cluster at stage 1, egress open, and puts the policy and the fix on admin and attendee clusters, which run Istio.
+So nothing is added to the cluster built to burn, and no Istio upgrade is forced. The upgrade question is still
+open for attendee and admin clusters: the repo pins 1.30.4, and Istio's ambient egress page shows 1.31 samples.
+
+**What it changes.**
+- `docs/research/2026-10-31-c1-dns-exfil-beat.md` gains a "Where the fix runs" paragraph under the fix's options.
+- `gitops/bootstrap/values-burn.yaml` gains a header comment saying the profile carries no Istio and why. Its app
+  list is unchanged, so the rendered profile and `verify/test_bootstrap_chart.py`'s counts are unchanged.
+- `values-kubecon-community.yaml` (#774) is unchanged. Its guardrails-on egress step still applies
+  `challenges/c1-network-policy.yaml`, the L3/L4 stage 2 policy, which leaves the DNS path open. A later breakout
+  profile that wants the full fix on its community cluster makes that choice in its own issue.
+
+**Live check (run 17167, 2026-11-05, read-only, explicit `--context` on every call).** On `watch-it-burn-community`
+the `lab-bootstrap` Application renders `values-burn.yaml`, and there is no `istio-system` namespace and no Istio
+Application. On `watch-it-burn-private`, `lab-bootstrap` renders `values-admin.yaml`, and `istio-base`,
+`istio-cni`, `istio-mesh-config`, `istiod` and `ztunnel` are present. Run 17178 changed neither cluster.
+
+**Not yet run on a cluster.** Nothing is built. The fix's three owed checks stay as the design note lists them, for
+attendee and admin clusters only.

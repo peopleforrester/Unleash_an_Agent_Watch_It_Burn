@@ -86,6 +86,11 @@ and stays open here.
   collector for the demo) and refuses recursion for everything else, or NodeLocal DNSCache does the same with an
   allowlist. C pairs with A or B; on its own it closes the relay and leaves egress decisions at L3/L4.
 
+**Where the fix runs (question 1077, #860, 2026-11-05).** The community cluster never carries the fix. It stays the
+stage 1 cluster, egress open, on the bare burn profile, which gains no Istio and no proxy. The fix is built for
+attendee and admin clusters, which run Istio ambient, so B is built once, on the mesh. A later breakout profile
+that wants the full fix on its community cluster makes that choice in its own issue.
+
 ## Build pieces and cost
 
 | Piece | Size | Notes |
