@@ -18974,3 +18974,46 @@ The one probe turn, marked `[[wib-probe]]`, cost about half a cent of Bedrock an
 "ALL OFFLINE RENDER-GATE TESTS GREEN". The tools tier then ran "57 checks ran (the offline suite and 56 tier tests)
 in 27m18s", ended "ALL E2E TOOLS TIER CHECKS GREEN" and exited 0. The ghcr.io 404 that held run 16809's tier red
 (#814) no longer appears. The prose gate passed on this entry.
+## 2026-11-05 · #871 · Check 4 still cannot run: no credential a run holds or can make is one IAM accepts
+
+Run 17445 took #871, which asks for check 4 of `verify/test_iam_policy_aws.py` (the IAM policy simulator over
+`infra/org/effect-tests.yaml`) to run with a credential IAM accepts. `verify/prior-drafts.sh 871 origin/staging`
+printed NONE and the issue has no comments, so there was nothing to port.
+
+**What the run holds.** The run's `accen-dev` session is a session token for the IAM user `nwuser` in 515966504359
+(`sts get-caller-identity` returns `arn:aws:iam::515966504359:user/nwuser`), taken without MFA and expiring
+2026-11-06 00:27 UTC. Check 4, run alone for each of the three roots (boundary, cluster, audit) through
+`pipeline.effect`, failed the same way for all three:
+
+```
+aws iam simulate-custom-policy failed: aws: [ERROR]: An error occurred (InvalidClientTokenId) when calling the
+SimulateCustomPolicy operation: The security token included in the request is invalid
+```
+
+**Routes tried from inside the run, and what each returned.**
+
+- A session token taken without MFA may still call `sts:AssumeRole`, and an assumed role's credential is one IAM
+  accepts. That needs a role that trusts `nwuser` and holds `iam:SimulateCustomPolicy`. No such role is named in this
+  repo (the only role ARNs in it are test fixtures on 123456789012 and 111122223333), and CloudTrail's last 50
+  `AssumeRole` events in us-west-2 and us-east-1 are all made by AWS services into service roles, cluster roles and
+  pod roles, none of which trusts a user.
+- The roles in the account cannot be listed: `iam list-roles` is an IAM call. `cloudcontrol list-resources
+  --type-name AWS::IAM::Role` was refused too (`AccessDenied ... The security token included in the request is
+  invalid (Service: Iam)`), so IAM refuses this token even when another service calls it on the run's behalf.
+  AWS Config holds no IAM roles in this account.
+- That last answer also rules out making a role from inside the run: CloudFormation or any other service would reach
+  IAM the same way, and `iam create-role` is refused outright.
+- `sts get-session-token` again, with MFA, is not open to a run: it answered "Cannot call GetSessionToken with
+  session credentials", and a run has no MFA device.
+
+**So the change is hecaton's.** The session is minted by `sources eks-session` (hecaton#496), which only the
+dispatcher user may call. For check 4 to run in a run, it would have to mint the session as an assumed role (for
+example, `nwuser` assumes a role in 515966504359 that holds the access a run already has plus
+`iam:SimulateCustomPolicy`, and the run gets that role's credential), or give the run a second profile with that
+role. This run filed that as a follow-up on hecaton and escalated the one check, run once from the host that holds
+`nwuser`'s long-term keys: `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3
+verify/test_iam_policy_aws.py`. Nothing in this repo changes: the test and `pipeline.py` already name the cause
+(their error says to use long-term keys, an MFA session or an assumed role) and fail loudly.
+
+**Not yet run on a cluster or account.** Check 4 of `verify/test_iam_policy_aws.py`. It has still never passed
+anywhere.
