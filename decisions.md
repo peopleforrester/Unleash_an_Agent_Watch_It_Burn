@@ -19438,3 +19438,13 @@ the fix there once hecaton promotes this run.
 3. The rest of the 2026-11-03 #775 entry's list: both KubeCon probe runs (`verify/kubecon_probe.py`) ending
    `KUBECON PROBE GREEN`, a visitor's HC-666 ask after `guardrails-on`, and `stage_traces.py seed` ending
    `SEEDED GREEN`. Each needs items 1 and 2 first: until a node can pull the Joker, `c6-lands` cannot pass.
+
+**A test fix found by the suites (run 17584).** The first `bash verify/run-e2e-tools.sh` at `b42b7d06` printed `266
+tests ran`, then `58 checks ran (the offline suite and 57 tier tests) in 30m35s`, and exited 1 on one offline test,
+`test_e2e_tools_tier.py`. Its #865 case failed six checks, each on `mktemp: failed to create directory via template
+'/tmp/tmp.XXXXXXXXXX': No such file or directory`. On this host `/tmp` had stopped taking new files partway through
+the run, and the run's `TMPDIR` points into the worktree. The test starts the runner with an env it builds itself,
+`PATH` and `HOME` and its logs, so `TMPDIR` was dropped and the runner's `mktemp` fell back to the host's `/tmp`, which
+the test does not own. The three fixture envs in the test now set `TMPDIR` to the test's own temporary directory, as
+they already did for `HOME`. Run alone after that, the test passed all 314 of its checks. The runner and the scripts
+are unchanged.
