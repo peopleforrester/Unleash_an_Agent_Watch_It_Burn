@@ -20208,3 +20208,18 @@ ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `bash verify/run-tests.sh` at `3cfb3c4a`, which adds only this
 entry and the run-of-show's record, printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. No
 dependency was added.
+
+## 2026-11-05 · #906 · run 17652 · Run 17628's commits rebased onto staging `cb3367d2`
+
+Run 17628 ended failed at the merge on a rebase conflict: #775's run 17584 reached staging first with two of the same
+fixes. `b42b7d06` sets `REGISTRY_HTTP_RELATIVEURLS=true` on the internal registry, as `11b86302` did, and adds its own
+relative-Location check to `verify/test_guardrails_switch.py`. `fa53301d` hands `verify/test_e2e_tools_tier.py`'s
+fixtures their own TMPDIR, as `3470f5c3` did. Both conflicts were resolved to staging's side: the registry manifest is
+staging's, and the TMPDIR commit, with nothing left after the resolution, dropped out. The one check run 17556 had and
+staging did not, that the seed copies to `localhost:5000` and never names `registry.burritobot.co`, is kept beside
+staging's check as `1bbab60e`. The other commits applied as they were: `13c1f1cc` is now `6c477927`, `44cc9be5` is
+`92d27d8d`, and the records follow. The run-of-show names the new hashes and `b42b7d06` for the registry seed.
+
+Per the coordinator's comment of 18:48Z, this run did not repeat the live recheck. Run 17628's results above stand,
+and #918 and #920 own the routes publish and the HC-666 check on the new server. One read: on watch-it-burn-private,
+Argo CD's `internal-registry` reads Synced and Healthy at `cb3367d2`, so #775's seed fix is live there.

@@ -339,13 +339,13 @@ The runs before those, all model variance, not the platform:
 
 | Run | Result | The FAILs |
 |---|---|---|
-| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once `13c1f1cc` (#906) reaches the cluster. |
+| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once `6c477927` (#906) reaches the cluster. |
 | Admin 1 | cut off | guardrails-on timed out at 300 s: every call to the other cluster's API hung on its private endpoint. Fixed by the security group rule above. |
 | Admin 3 | 31 PASS of 32 | Challenge 4's re-ask: "no sign it tried", as on 2026-10-29. |
 
 Not shown by the probe: `registry.burritobot.co` and `deployments.burritobot.co` still answer the router's 404,
 because the routes table with their rows is not published yet. The private cluster's registry seed failed with a 405
-until `11b86302` (#906) reaches it, so HC-666's Joker there is admitted but its image cannot be pulled before both.
+until `b42b7d06` (#775) reaches it, so HC-666's Joker there is admitted but its image cannot be pulled before both.
 
 **2026-11-05, the run-through day, rechecked (#906).** Hecaton run 17628, on run 17556's commits (ported onto staging
 `92dfea31`), with neither cluster changed since 16:31Z. Both roots still render `kubecon-community` and
