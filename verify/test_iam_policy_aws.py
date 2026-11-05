@@ -53,11 +53,14 @@ def with_agent_policy(mutate):
     return head
 
 
-wider = with_agent_policy(lambda st: st["Action"].append("s3:GetObject"))
+# The widening is the one #138 closed: every foundation model in the account, not the four on the menu. An
+# action from another service would not do: s3:GetObject on Bedrock-only resources grants nothing, and
+# check-no-new-access rightly passes it (seen on its first run, #203).
+wider = with_agent_policy(lambda st: st["Resource"].append("arn:aws:bedrock:*::foundation-model/*"))
 got = p.diff(wider, base, PROFILE, REGION, accept_new=[])
 check("a widening identity policy fails check 2, naming the policy",
       len(got) == 1 and got[0].startswith("aws_iam_policy.bedrock_invoke.policy: grants new access"), got)
-narrower = with_agent_policy(lambda st: st["Action"].remove("bedrock:ConverseStream"))
+narrower = with_agent_policy(lambda st: st["Action"].remove("bedrock:InvokeModelWithResponseStream"))
 got = p.diff(narrower, base, PROFILE, REGION, accept_new=[])
 check("a narrowing identity policy passes check 2", got == [], got)
 

@@ -491,11 +491,13 @@ resource "aws_iam_policy" "bedrock_invoke" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
+      # Two actions, not four. The Converse API is authorized by bedrock:InvokeModel and ConverseStream by
+      # bedrock:InvokeModelWithResponseStream; IAM has no bedrock:Converse or bedrock:ConverseStream action,
+      # and Access Analyzer's validate-policy failed the policy with ERROR INVALID_ACTION while it named
+      # them (#203). The same holds for tutor_bedrock_invoke below.
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       # SCOPED, was Resource = "*" (#138). An attendee holds cluster-admin on their own cluster, so they
       # can schedule a pod under the agent's service account and reach Bedrock directly, around the
@@ -531,8 +533,6 @@ resource "aws_iam_policy" "bedrock_invoke" {
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
       Condition = {
@@ -604,8 +604,6 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       # Both halves are required for a cross-region inference profile: the profile itself, and the
       # foundation models in whichever region it routes to (hence the wildcard region on the second).
@@ -629,8 +627,6 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
       Condition = {

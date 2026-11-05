@@ -16338,3 +16338,61 @@ the new form from git and should log the same 0 and 0; the next bring-up's own c
 **The suites (run 17248, at `652c3548`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 28m02s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 254 tests and
 printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #203 · The live proof ran on watch-it-burn-private, and Access Analyzer's first run dropped two actions IAM does not have
+
+Run 17262 ran #203's live half for the first time, on the two clusters a dispatched run now has (CLAUDE.md, Dispatched
+runs, point 1). The code is run 10971's, on staging since `024c19ae` and `7c96ce83`, with #743's pod-spec read;
+`verify/prior-drafts.sh 203 origin/staging` printed NONE, so nothing was ported.
+
+**Which cluster.** watch-it-burn-private renders `values-admin.yaml`, which lists `cluster-network-policies` as the
+attendee profile does, so it carries `agent-deny-imds`. watch-it-burn-community renders `values-burn.yaml`, which
+leaves the deny off on purpose (that file says why), so the IMDS step of the live test cannot pass there and was not
+run there.
+
+**The live check.** `CONTEXT=watch-it-burn-private python3 verify/test_agent_cloud_credential_live.py` passed every
+check and printed `All live agent cloud-credential checks passed.` agent-sa has no `eks.amazonaws.com/` annotation and
+`automountServiceAccountToken: false`; BurritoBot's pod runs as agent-sa with
+`AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/v1/credentials`, no static key and no default token mount;
+workshop-mcp runs as its own account and mounts its token; `agent-deny-imds` is on the cluster with the committed spec.
+The probe Job, applied from `challenge-fixes` as the lab applies it, printed:
+
+```
+  who am I (sts get-caller-identity)   UNREACHABLE (network policy)
+  Bedrock: Nova Pro (on the list)      ALLOWED   Ok.
+  Bedrock: a model NOT on the list     DENIED by IAM
+      User: arn:aws:sts::515966504359:assumed-role/watch-it-burn-private-bedrock-f6b983a70663c80a8ff9a04e96/... is not authorized to perform: bedrock:InvokeModel
+  S3: list buckets                     UNREACHABLE (network policy)
+  EC2: describe instances              UNREACHABLE (network policy)
+  IAM: look up any role or policy      UNREACHABLE (network policy)
+  curl -m 2 http://169.254.169.254/    BLOCKED (curl exit 28)
+  IMDSv2 token request                 BLOCKED (curl exit 28)
+```
+
+So from a pod holding agent-sa's credential, `sts get-caller-identity` and IMDS both fail, Nova Pro answers, and the
+one thing the credential reaches past the egress allowlist is refused by IAM for any model off the list. The test
+deletes its Job, and none was left in `agent` afterwards.
+
+**What Access Analyzer found.** `verify/test_iam_policy_aws.py` had never run (#207's entry above says so). Its first
+run, as `accen-dev`, failed check 1 on the cluster root: `ERROR INVALID_ACTION: The action bedrock:Converse does not
+exist` and the same for `bedrock:ConverseStream`, in both statements of `aws_iam_policy.bedrock_invoke` and of
+`aws_iam_policy.tutor_bedrock_invoke`. IAM has no such actions: the Converse API is authorized by
+`bedrock:InvokeModel` and ConverseStream by `bedrock:InvokeModelWithResponseStream`, which both policies already
+grant. They are removed from the four statements in `infra/terraform/aws/cluster/main.tf` and from the staged copy
+the lab shows (`agent-bedrock-policy.json` in `challenge-fixes`), and `verify/test_agent_cloud_credential.py` now
+holds the agent policy to the two actions. The effect is unchanged, since IAM never matched the two names; the live
+probe above ran under the old document and Nova Pro answered. After the change check 1 passes on every document:
+boundary 1, cluster 11, audit 3, no ERROR or SECURITY_WARNING, and no Resource in the agent policy is a bare `*`.
+
+**A broken case in check 2.** The widening case added `s3:GetObject` to the agent statement, whose resources are
+Bedrock ARNs alone. That grants nothing, and check-no-new-access answered PASS, so the test failed on a true answer.
+The case now appends `arn:aws:bedrock:*::foundation-model/*`, the widening #138 closed, and fails check 2 naming
+`aws_iam_policy.bedrock_invoke.policy` as it should. The narrowing case drops `InvokeModelWithResponseStream` now
+that `ConverseStream` is gone. All three check 2 cases pass.
+
+**Not yet run.** Check 4 of `verify/test_iam_policy_aws.py`, the simulator over `infra/org/effect-tests.yaml`.
+The run's `accen-dev` session is a session token, and IAM refuses every call made with it
+(`InvalidClientTokenId` on `iam simulate-custom-policy`, `iam simulate-principal-policy` and
+`iam list-account-aliases` alike), while Access Analyzer accepts it. It needs a credential IAM accepts:
+`IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`. The live
+probe covers the same boundary for the credential the cluster hands out. The two-action policy reaches AWS at the next
+`terraform apply` of a cluster root; until then both clusters hold the four-action document, which grants the same.

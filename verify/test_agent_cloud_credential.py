@@ -108,8 +108,10 @@ policy = re.search(r'resource "aws_iam_policy" "bedrock_invoke" \{(.*?)\n\}', TF
 body = re.sub(r"#[^\n]*", "", policy.group(1)) if policy else ""
 check("bedrock_invoke policy found", bool(body))
 check('no Resource is a bare "*"', bool(body) and not re.search(r'Resource\s*=\s*"\*"', body))
-ACTIONS = ["bedrock:Converse", "bedrock:ConverseStream", "bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-check("its actions are the four invoke actions and nothing else",
+# IAM has no bedrock:Converse or bedrock:ConverseStream action: Converse is authorized by InvokeModel and
+# ConverseStream by InvokeModelWithResponseStream, and Access Analyzer fails a policy that names them (#203).
+ACTIONS = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+check("its actions are the two invoke actions and nothing else",
       sorted(set(re.findall(r'"([a-z0-9-]+:[A-Za-z*]+)"', body))) == ACTIONS)
 check("it names both the profile ARN and the foundation-model ARN (cross-region needs both)",
       "inference-profile/${p}" in body and "foundation-model/${m}" in body)
