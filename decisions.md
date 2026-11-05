@@ -18024,3 +18024,7 @@ that were then restored.
 **Not yet run on a cluster.** The check before each timed run-through (by 2026-11-08) and the night before the talk:
 `python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json`, recorded in the run-of-show's
 run-through record. Those are live rehearsal steps; none has happened yet.
+
+**The suites (run 17404, at `28f2774e`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 26m31s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 259 tests, all green,
+`test_challenge_traces.py` among them; `test_challenge_traces_live.py` is listed in the E2E suite.
