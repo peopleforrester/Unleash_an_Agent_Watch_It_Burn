@@ -17047,3 +17047,8 @@ the pod logs. The `app-profile-effect` Jobs need these labels before their run's
 **Not yet run on a cluster.** `verify/test_datadog_sandbox_live.py` with WIB_DD_LOOKBACK_MIN=60, once this branch is
 on staging, Argo CD has synced `backstage` on private, and an hour has passed with no untagged probe pod. That run
 also records whether check 2 passes on both clusters, which closes #629.
+
+**The suites (run 17338, at 5d7239a8).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 28m01s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_datadog_sandbox_names.py` and
+`verify/test_probe_pod_admission.py`, which runs the newly labelled probe pod through every workshop Kyverno policy,
+passed in it.
