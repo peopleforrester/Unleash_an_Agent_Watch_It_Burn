@@ -85,11 +85,22 @@ instance-role name, so the theft lands (ASI03). On 2026-10-31 the same script ag
 `watch-it-burn-private` node (hop limit 1) printed `IMDS: BLOCKED`, and `verify/test_bedrock_profile_live.py`
 confirmed Pod Identity / Bedrock still answers on the community cluster at hop limit 2.
 
-**Still owed on a build with AWS access.** The 2026-11-01 run used the pre-#748 script, whose closing line
-was the (now removed) `aws sts get-caller-identity`, so the current script's instance-identity-document
-output (the node role name plus its AWS account and region) has not yet been seen live; and `IMDS: BLOCKED`
-has so far been shown only on the guarded cluster, not a fresh attendee cluster. At the next
-community/attendee bring-up (`fleet.sh instructors up community`), re-run `CONTEXT=<community-ctx>
-challenges/imds-node-creds/steal-node-creds.sh` and confirm it names the node role and its AWS account and
-region, then run it against a fresh attendee cluster and confirm `IMDS: BLOCKED`. This is the live half of
-`verify/test_imds_credential_theft.py` (offline today).
+**Validated live by a dispatched run (hecaton 17381, 2026-11-05, recorded on #717).** On
+`watch-it-burn-community` (node IMDS hop limit 2), `CONTEXT=watch-it-burn-community
+challenges/imds-node-creds/steal-node-creds.sh` from the tool pod REACHED IMDS and printed the current (#748)
+instance-identity-document output: node instance role `default-eks-node-group-76537b4635771d8599caba617c`, AWS
+account `515966504359`, region `us-west-2` (the 2026-11-01 run used the pre-#748 script, so this output had not
+been seen live before). The same script against the guarded `watch-it-burn-private` node (hop limit 1,
+`agent-deny-imds` present) printed `IMDS: BLOCKED`, and `CONTEXT=watch-it-burn-community python3
+verify/test_bedrock_profile_live.py` exited 0 (`BEDROCK PROFILE GREEN`), so Pod Identity / Bedrock still answers
+at hop limit 2. The guarded side was shown on the admin cluster, the dispatched-run equivalent of a student seat
+(a run is handed only `watch-it-burn-community` and `watch-it-burn-private`, and the `admin / attendee` column of
+the table above is one guarded case): the real attendee provisioning path (`fleet.sh up`) needs sibling repos and
+a handout database a run's worktree does not carry, the attendee seat maps to the same node hop limit 1
+(`verify/test_cluster_roles.sh`) and the same `agent-deny-imds` off the burn profile, and the one live variable,
+a real node refusing the token PUT at hop limit 1, is what the guarded run proves.
+
+**Only the full attendee provisioning path is still unexercised live.** A `fleet.sh up <attendee>` end to end from
+the provisioning box (with its sibling repos and handout database) would show the same `IMDS: BLOCKED` on a student
+seat; a session there can record it if a seat-specific trace is wanted. The IMDS result is identical to the guarded
+admin run above and the wiring is already proven offline by `verify/test_imds_credential_theft.py`.

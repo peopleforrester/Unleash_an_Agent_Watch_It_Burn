@@ -18718,3 +18718,60 @@ explorer's Views control is, and whether a view named Every prompt exists.
 **The suites (run 17415, at `7101abd0`).** `bash verify/run-e2e-tools.sh` printed `258 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `56 checks ran (the
 offline suite and 55 tier tests) in 27m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #717 · Run 17381 ran the IMDS credential-theft beat live on both KubeCon clusters: the theft lands on community at hop limit 2 and is blocked on the guarded cluster, and Bedrock still answers
+
+The live half of the IMDS credential-theft beat (#113, OWASP Agentic ASI03: a compromised pod on the unguarded
+community cluster reads the node instance-role credentials off `169.254.169.254` and pivots into the AWS account,
+while every guarded cluster keeps the pod one hop short of node IMDS) is now run on a build with AWS access. Run 17381
+was handed the two KubeCon clusters and an `accen-dev` session under the 2026-11-02 ruling (#809), so it ran the beat
+itself rather than waiting on the coordinator.
+
+**The node state, read first.** The community node `i-025f8d430b31eb8e4` carries
+`HttpPutResponseHopLimit=2`, `HttpTokens=required`; the guarded admin node `i-0280f58a8684e7bb0` carries
+`HttpPutResponseHopLimit=1`. The community `agent` namespace ships no `agent-deny-imds` ClusterNetworkPolicy (correct
+for the burn profile); the guarded `watch-it-burn-private` has `agent-deny-imds` present (age 6d14h). Both clusters run
+a `workshop-mcp` deployment, which is what the beat execs into.
+
+**The theft lands on community (gap 1 closed).** `CONTEXT=watch-it-burn-community
+challenges/imds-node-creds/steal-node-creds.sh` from the tool pod printed the current (#748)
+instance-identity-document output, seen live for the first time (the 2026-11-01 coordinator run used the pre-#748
+script whose closing line was the removed `aws sts get-caller-identity`):
+
+```
+IMDS: REACHED. The node handed out its instance-role name: default-eks-node-group-76537b4635771d8599caba617c
+Stolen node credentials: AccessKeyId=ASIAXQIQ... a real, usable key for the node role.
+Who are we now? The stolen key is the node instance role default-eks-node-group-76537b4635771d8599caba617c,
+   in AWS account 515966504359, region us-west-2 (from the node instance-identity document).
+That is a NODE ROLE in a real AWS account. The blast radius just left the cluster (ASI03).
+```
+
+**The theft is blocked on the guarded cluster (gap 2).** `CONTEXT=watch-it-burn-private
+challenges/imds-node-creds/steal-node-creds.sh` printed `IMDS: BLOCKED. No IMDSv2 token (the node is one hop out of
+reach). The theft FAILS here.` The guarded side is shown on the admin cluster, which is the dispatched-run equivalent
+of a student seat (CLAUDE.md, Dispatched runs point 1: a step written for a fresh attendee cluster runs on one of the
+two handed to the run instead; FACILITATOR.md's control table treats `admin / attendee` as one guarded column). A run
+is handed only `watch-it-burn-community` and `watch-it-burn-private`, and the real attendee provisioning path
+(`fleet.sh up`) needs the sibling repos `provisioning-agenticburn` and `apex-agenticburn`, `deploy-full-idp.sh`,
+`labctl` and a `DATABASE_URL`, none of which a run's worktree carries, so a `fleet.sh up` would fail partway and
+orphan AWS resources. The attendee seat maps to the same node hop limit 1 off `fleet.sh`
+(`verify/test_cluster_roles.sh`) and the same `agent-deny-imds` off the burn profile
+(`verify/test_imds_credential_theft.py`); the one live variable, a real node refusing the token PUT at hop limit 1, is
+what the guarded run proves, and the block is the hop limit alone (the PUT times out before the deny policy is
+reached).
+
+**Bedrock still answers at hop limit 2 (gap 3).** `CONTEXT=watch-it-burn-community WIB_CLUSTER=watch-it-burn-community
+python3 -I verify/test_bedrock_profile_live.py` printed `BEDROCK PROFILE GREEN: watch-it-burn-community's agent
+answers through its tagged application profile`, exit 0. Pod Identity uses `169.254.170.23`, a different endpoint the
+IMDS hop limit does not touch, so the theft knob and the agent's Bedrock reach are independent.
+
+**What it leaves.** Nothing. The beat only reads IMDS (GET and a token PUT) and execs read commands in the tool pod;
+no cluster object changed, and the two clusters are as found. No fresh cluster was created or torn down.
+
+**Not yet run on a cluster.** Nothing is owed that needs a promoted change. The one validation a dispatched run cannot
+perform is the full attendee provisioning path end to end (`fleet.sh up` from the provisioning box with its sibling
+repos and handout database), whose IMDS result is identical to the guarded admin run above and whose wiring is already
+proven offline; a session on the provisioning box can run it if a seat-specific live record is wanted.
+
+**Tests.** `python3 -I verify/test_imds_credential_theft.py` prints `ALL IMDS CREDENTIAL-THEFT CHECKS PASSED`;
+`bash verify/run-tests.sh` is green; `verify/prose_gate.py` against `origin/staging` is clean.
