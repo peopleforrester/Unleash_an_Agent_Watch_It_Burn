@@ -16365,7 +16365,7 @@ Run 17271 had a readable `accen-dev` session (`arn:aws:iam::515966504359:user/nw
    it now prints `repr(got)`.
 3. **Check 4 (iam simulate-custom-policy) cannot run on this session.** Every IAM call, `iam get-account-summary`
    included, gave `InvalidClientTokenId`. The run's credentials are a session token from `sts get-session-token`
-   (the caller is the user, not an assumed role), and IAM refuses those when they were taken without MFA, while
+   (the caller ARN is the user itself), and IAM refuses those when they were taken without MFA, while
    Access Analyzer and STS accept them. `sts assume-role` as nwuser was denied for every role tried. So
    `pipeline.aws` now adds that cause to an IAM `InvalidClientTokenId`, and `verify/test_iam_policy_pipeline.py`
    checks the hint with a stubbed `aws`. `infra/org/README.md` says what the profile needs.
