@@ -149,6 +149,8 @@ KEYWORDS = {
                         "guarded": False}, "http_502"),
     "EFIVEOFOUR": (504, {"reply": "BurritoBot's kitchen isn't answering: that one took too long."}, "http_504"),
     "ETOOMANY": (429, None, "http_429"),
+    # A 502 from a hop in front of the console, as the public host's Caddy or Railway's edge sends one: no /chat body.
+    "GATEWAYHOP": (502, "<html><body>502 Bad Gateway</body></html>", "http_502"),
     "SLOW": (200, {"reply": "late", "guarded": False}, "timeout"),
 }
 # The client timeout has to outlast an ordinary reply from 500 user threads and as many server threads sharing one
@@ -156,6 +158,8 @@ KEYWORDS = {
 # where the server sent 95 SLOW ones, and the tally checks failed. SLOW stays well past the timeout, and a user's three
 # turns all SLOW still end in 12s, inside the 60s ceiling below.
 SLOW_S = 10.0
+# How many times the fake answered each keyword; two keywords share http_502, so the tally alone cannot split them.
+KEYWORD_COUNT: dict[str, int] = {}
 CLIENT_TIMEOUT = "4"
 
 
@@ -170,17 +174,23 @@ class Fake:
         self.usd = 0.5  # spend already on the cluster before the run
         self.requests = 7
         self.usd_per_served = usd_per_served
+        KEYWORD_COUNT.clear()
         fake = self
 
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a):  # keep the suite's output to its PASS lines
                 pass
 
-            def _reply(self, code: int, body: dict | None) -> None:
-                raw = b"Too Many Requests" if body is None else json.dumps(body).encode()
+            def _reply(self, code: int, body: dict | str | None) -> None:
+                if isinstance(body, dict):
+                    raw, ctype = json.dumps(body).encode(), "application/json"
+                else:
+                    raw, ctype = (body or "Too Many Requests").encode(), "text/html" if body else "text/plain"
                 try:
                     self.send_response(code)
-                    self.send_header("Content-Type", "application/json" if body is not None else "text/plain")
+                    if not isinstance(body, dict):
+                        self.send_header("Via", "1.1 Caddy")
+                    self.send_header("Content-Type", ctype)
                     self.send_header("Content-Length", str(len(raw)))
                     self.end_headers()
                     self.wfile.write(raw)
@@ -207,6 +217,7 @@ class Fake:
                                        "session_header": self.headers.get("X-BurritoBot-Session"),
                                        "content_type": self.headers.get("Content-Type")})
                     fake.tally[outcome] = fake.tally.get(outcome, 0) + 1
+                    KEYWORD_COUNT[key] = KEYWORD_COUNT.get(key, 0) + 1
                     if outcome == "served":
                         fake.usd += fake.usd_per_served
                         fake.requests += 1
@@ -374,6 +385,24 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
         check("502, 504 and 429 counted by status",
               st.get("502") == fake.tally.get("http_502") and st.get("504") == fake.tally.get("http_504")
               and st.get("429") == fake.tally.get("http_429"), str(st))
+        _bad = s.get("unreadable", [])
+        _errs = sum(fake.tally.get(k, 0) for k in lr.ERROR_OUTCOMES)
+        check("every unreadable turn is listed on its own, with its time and session",
+              len(_bad) == _errs and all(u["at"].endswith("+00:00") and u["session"].startswith("wib-load-")
+                                         for u in _bad)
+              and [u["at"] for u in _bad] == sorted(u["at"] for u in _bad), f"{len(_bad)} listed, {_errs} errors")
+        _src = s.get("unreadable_by_source", {})
+        _edge = [k for k in _src if k.startswith("not chat json")]
+        check("an unreadable turn names what answered it: guard-proxy or nginx, a hop in front, or the client",
+              _src.get("chat json, with a reply") == fake.tally.get("http_502", 0) - KEYWORD_COUNT.get("GATEWAYHOP", -1)
+              + fake.tally.get("http_504", 0)
+              and len(_edge) == 1 and _edge[0].endswith("via 1.1 Caddy)") and "server BaseHTTP" in _edge[0]
+              and _src[_edge[0]] == KEYWORD_COUNT.get("GATEWAYHOP", -1) + fake.tally.get("http_429", 0)
+              and _src.get("client timeout") == fake.tally.get("timeout")
+              and _src.get("chat json, no reply") == fake.tally.get("empty"), str(_src))
+        check("the report prints each unreadable turn, at most 40, and points at the JSON for the rest",
+              sum(1 for ln in lines if ln.startswith("  2") and " session wib-load-" in ln) == min(40, _errs)
+              and (_errs <= 40 or f"and {_errs - 40} more" in p.stdout), p.stdout[-600:])
         check("rate-limit refusals are nginx's plus guard-proxy's two",
               s.get("rate_limit_refusals") == sum(fake.tally.get(k, 0) for k in lr.LIMIT_OUTCOMES))
         lat = s.get("latency_s", {}).get("all", {})

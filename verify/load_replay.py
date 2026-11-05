@@ -30,11 +30,14 @@ the tool stops there. During the run /cost is read every --progress seconds, and
 cluster's spend has risen by --max-usd or --deadline seconds have passed. The spend lands on the cluster's
 own COST_CAP_USD tally, so on attackme this runs before `./fleet.sh reset-bot watch-it-burn-community`.
 
-Results hold no prompt or reply text: outcome, HTTP status, latency, tokens.
+Results hold no prompt or reply text: outcome, HTTP status, latency, tokens. Every turn that did not come back
+as a sentence a phone can read is also listed on its own, with the UTC time it was sent, its session and what
+answered it (see answered_by), so each one can be found in guard-proxy's and the console's logs and given a cause.
 """
 from __future__ import annotations
 
 import argparse
+import datetime
 import glob
 import json
 import math
@@ -66,6 +69,8 @@ USD_PER_CALL = 0.005
 TIMEOUT_S = 320.0
 # A recorded prompt longer than this is left out; the harvest holds a handful of pasted walls of text.
 MAX_PROMPT_CHARS = 8000
+# The report prints this many unreadable turns one per line; the --json-out report lists every one.
+UNREADABLE_PRINTED = 40
 
 # Outcomes, by what the phone would see. The refusal texts are guard-proxy's and the console nginx's own
 # (proxy.py _chat_turn, internal/server/chat.go in its Go build, and console.conf @chat_slow_down);
@@ -242,6 +247,21 @@ def classify(status: int | None, body: dict | None, error: str = "") -> str:
     return "http_other"
 
 
+def answered_by(error: str, body: object, headers: dict) -> str:
+    """Who answered a turn, read from the reply's shape and headers, never its text. guard-proxy and the console
+    nginx answer every /chat error in the /chat JSON shape (proxy.py's 502, console.conf's @chat_kitchen_down and
+    @chat_kitchen_slow), so a body without it came from a hop in front of the console, such as the public host's
+    Caddy or Railway's edge, whose Server and Via headers are kept to say which."""
+    if error:
+        return f"client {error}"
+    if isinstance(body, dict) and str(body.get("reply") or "").strip():
+        return "chat json, with a reply"
+    if isinstance(body, dict) and body:
+        return "chat json, no reply"
+    hops = ", ".join(f"{k} {headers[k]}" for k in ("server", "via") if headers.get(k))
+    return "not chat json" + (f" ({hops})" if hops else "")
+
+
 @dataclass
 class Result:
     outcome: str
@@ -249,20 +269,26 @@ class Result:
     latency: float
     input_tokens: int = 0
     output_tokens: int = 0
+    at: str = ""
+    session: str = ""
+    source: str = ""
 
 
 def send_chat(base: str, prompt: str, session: str, timeout: float) -> Result:
     data = json.dumps({"prompt": f"{prompt} {PROBE_MARKER}", "session": session}).encode()
     req = urllib.request.Request(f"{base}/chat", data=data, method="POST", headers={
         "Content-Type": "application/json", "X-BurritoBot-Session": session})
+    at = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds")
     t0 = time.monotonic()
-    status, body, error = None, None, ""
+    status, body, error, headers = None, None, "", {}
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             status = r.status
+            headers = {k.lower(): v for k, v in r.headers.items()}
             raw = r.read()
     except urllib.error.HTTPError as exc:
         status = exc.code
+        headers = {k.lower(): v for k, v in (exc.headers or {}).items()}
         raw = exc.read()
     except TimeoutError:
         raw, error = b"", "timeout"
@@ -275,9 +301,10 @@ def send_chat(base: str, prompt: str, session: str, timeout: float) -> Result:
             body = json.loads(raw or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError):
             body = {}
+    source = answered_by(error, body, headers)
     body = body if isinstance(body, dict) else {}
     return Result(classify(status, body, error), status, latency,
-                  int(body.get("input_tokens") or 0), int(body.get("output_tokens") or 0))
+                  int(body.get("input_tokens") or 0), int(body.get("output_tokens") or 0), at, session, source)
 
 
 def get_cost(base: str) -> dict | None:
@@ -433,6 +460,10 @@ def summarize(run: Run, elapsed: float, cost_before: dict | None, cost_after: di
         statuses[key] = statuses.get(key, 0) + 1
         tin += r.input_tokens
         tout += r.output_tokens
+    unreadable = sorted((r for r in run.results if r.outcome in ERROR_OUTCOMES), key=lambda r: r.at)
+    by_source: dict[str, int] = {}
+    for r in unreadable:
+        by_source[r.source] = by_source.get(r.source, 0) + 1
     usd_before = float(cost_before["usd"]) if cost_before and "usd" in cost_before else None
     usd_after = float(cost_after["usd"]) if cost_after and "usd" in cost_after else None
     spend = usd_after - usd_before if usd_before is not None and usd_after is not None else None
@@ -444,6 +475,9 @@ def summarize(run: Run, elapsed: float, cost_before: dict | None, cost_after: di
         "stop_reason": run.stop_reason, "sessions": len(run.sessions),
         "outcomes": counts, "statuses": dict(sorted(statuses.items())),
         "rate_limit_refusals": sum(counts[o] for o in LIMIT_OUTCOMES),
+        "unreadable_by_source": dict(sorted(by_source.items())),
+        "unreadable": [{"at": r.at, "outcome": r.outcome, "status": r.status, "latency_s": round(r.latency, 2),
+                        "session": r.session, "answered_by": r.source} for r in unreadable],
         "latency_s": {"all": latency_block([r.latency for r in run.results]),
                       "served": latency_block([r.latency for r in run.results if r.outcome == "served"])},
         "tokens": {"input": tin, "output": tout},
@@ -469,6 +503,14 @@ def report_lines(s: dict) -> list[str]:
         f"errors: 502 {o['http_502']}, 504 {o['http_504']}, 429 {o['http_429']}, other HTTP {o['http_other']}, "
         f"timeout {o['timeout']}, transport {o['transport']}, empty reply {o['empty']}",
     ]
+    if s["unreadable"]:
+        lines.append("unreadable turns by what answered: "
+                     + "; ".join(f"{k} {v}" for k, v in s["unreadable_by_source"].items()))
+        for u in s["unreadable"][:UNREADABLE_PRINTED]:
+            lines.append(f"  {u['at']} {u['outcome']} status {u['status']} after {u['latency_s']:.2f}s, "
+                         f"session {u['session']}, {u['answered_by']}")
+        if len(s["unreadable"]) > UNREADABLE_PRINTED:
+            lines.append(f"  and {len(s['unreadable']) - UNREADABLE_PRINTED} more, each in the --json-out report")
     for name in ("all", "served"):
         b = s["latency_s"][name]
         lines.append(f"latency {name} (n={b['n']}): p50 {b['p50']:.2f}s p90 {b['p90']:.2f}s p95 {b['p95']:.2f}s "
