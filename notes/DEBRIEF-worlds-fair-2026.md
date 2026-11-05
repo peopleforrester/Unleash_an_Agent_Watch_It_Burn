@@ -172,9 +172,16 @@ at 12:35 to 12:51. Whether every punch-list item closed before the doors opened 
 **After the session:** zero feedback, above. The June Datadog orgs were left in place until they expired
 under the next delivery's walkthroughs, also above.
 
-## Cost: no workshop figure
+## Cost: measured from the bill by date, not by tag
 
-**Workshop-only cost: unrecorded.** Every resource carried `project=watch-it-burn` and
+**Measured on 2026-11-05: 1,776.60 USD** of billed usage across the five fleet accounts for 2026-06-25 to
+06-30 (UTC days), tax left out, at 0.91 USD per EKS cluster hour over 1,959.7 cluster hours. That is accen-dev
+787.39 USD, and aws1-student31 to 34 at 249.39, 245.85, 245.33 and 248.64 USD. It is each whole account's bill
+for those days, so a co-tenant's spend on the same days is inside it, and it is below the 2,000 USD planning
+estimate further down. The run is `cost/measured/ai-engineer-worldsfair-2026.txt` (#392), and
+`cost/measured/README.md` gives the window.
+
+**Tag-filtered cost: unrecorded.** Every resource carried `project=watch-it-burn` and
 `event=ai-engineer-worldsfair-2026` (`f3d6ab3`), but neither tag was ever activated on the payer
 account. So no tag-filtered query has ever returned the World's Fair's cost (`767e97a`;
 `teardown/cost-report.sh`).
@@ -194,9 +201,9 @@ largest lines were:
 **Planning estimate: about 2,000 USD** for an overnight run of 261 clusters (`ec9804b`). It was written
 before the event, and it is a forecast, not a cost.
 
-**Still recoverable.** `teardown/activate-cost-tags.sh` (`05b8f8f`, #392, 2026-10-24) activates the tags
-on the payer account and backfills up to twelve months, which reaches back to June. Until someone with
-payer credentials runs it, no backfill result is recorded.
+**The tag route is closed.** `teardown/activate-cost-tags.sh` (`05b8f8f`, #392, 2026-10-24) would activate
+the tags on the payer account and backfill up to twelve months. The payer is the lab-account provider's, and
+Michael ruled on 2026-11-01 that the provider is not asked, so it stays unrun and the figure above is by date.
 
 ## What changed afterward
 

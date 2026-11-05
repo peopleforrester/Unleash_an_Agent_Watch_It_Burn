@@ -1359,10 +1359,13 @@ hosts at peak, down to 1 within three hours).
   day). APM spans have no delete-by-query, so ask Datadog support to remove them or
   let retention expire them. Then post on #647 what was deleted and what is left to
   retention.
-- Record the real spend for the delivery window with
-  `teardown/cost-report.sh --start <YYYY-MM-DD> --end <YYYY-MM-DD>` once the `event`
-  or `project` cost-allocation tag is activated on the payer account (Portland could
-  not, because the tag was never activated; #392 and #454 track it here).
+- Record the real spend once the fleet is down, with `teardown/delivery-cost.py
+  --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
+  and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`
+  (#872). It reads each account's bill by date. `teardown/cost-report.sh` filters on the
+  `event` and `project` tags, which only the payer account can activate, and the
+  provider is not asked, so it prints 0.00 (#392). Portland measured 2,865.86 USD
+  across the five accounts, 0.76 USD per cluster hour (`cost/measured/`).
 
 ---
 

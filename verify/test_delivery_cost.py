@@ -211,12 +211,163 @@ same = dict(DATA, **{"acct-c": dict(DATA["acct-a"])})
 p, _ = run(*WINDOW, "--profile", "acct-a", "--profile", "acct-c", data=same)
 check("two profiles on one account are refused", p.returncode == 3 and "same account 111111111111" in p.stderr, p.stderr)
 
+print("== --recorded: an account read from saved replies gives the live figures ==")
+
+
+def day_range(a, b):
+    import datetime as dt
+    t, out = dt.date.fromisoformat(a), []
+    while t < dt.date.fromisoformat(b):
+        out.append(t.isoformat())
+        t += dt.timedelta(days=1)
+    return out
+
+
+def nxt(d):
+    import datetime as dt
+    return (dt.date.fromisoformat(d) + dt.timedelta(days=1)).isoformat()
+
+
+def usd(v, unit="USD"):
+    return {"Amount": str(v), "Unit": unit}
+
+
+def record(root, profile, d, cost_days=("2026-08-30", "2026-09-04"), eks_days=("2026-08-29", "2026-09-04"),
+           cost_groups=("SERVICE", "RECORD_TYPE"), token=None, account=None):
+    """Write DATA[profile] as the two saved replies and meta.json, in the shape the escalation posted them.
+
+    The EKS reply is daily and runs a day either side of the window, with perCluster hours on those days that the
+    script must leave out; the window's hours sit on its first day."""
+    out = pathlib.Path(root) / profile
+    out.mkdir(parents=True)
+    days = []
+    for k in day_range(*cost_days):
+        gs = [{"Keys": [s, "Usage"], "Metrics": {"UnblendedCost": usd(v)}} for s, v in d["usage"].get(k, {}).items()]
+        gs += [{"Keys": ["Tax", r], "Metrics": {"UnblendedCost": usd(v)}} for r, v in d["other"].get(k, {}).items()]
+        days.append({"TimePeriod": {"Start": k, "End": nxt(k)}, "Total": {}, "Groups": gs, "Estimated": False})
+    cost = {"GroupDefinitions": [{"Type": "DIMENSION", "Key": g} for g in cost_groups], "ResultsByTime": days,
+            "DimensionValueAttributes": []}
+    if token:
+        cost["NextPageToken"] = token
+    eks = []
+    for k in day_range(*eks_days):
+        if k == "2026-08-31":
+            gs = [{"Keys": [u], "Metrics": {"UsageQuantity": usd(v, "Hrs")}} for u, v in d["eks_usage_types"].items()]
+        else:
+            gs = [{"Keys": ["USW2-AmazonEKS-Hours:perCluster"], "Metrics": {"UsageQuantity": usd(999.0, "Hrs")}}]
+            gs = gs if k < "2026-08-31" or k >= "2026-09-03" else []
+        eks.append({"TimePeriod": {"Start": k, "End": nxt(k)}, "Total": {}, "Groups": gs, "Estimated": False})
+    (out / "cost-by-service-record-type.json").write_text(json.dumps(cost))
+    (out / "eks-usage-by-usage-type.json").write_text(json.dumps(
+        {"GroupDefinitions": [{"Type": "DIMENSION", "Key": "USAGE_TYPE"}], "ResultsByTime": eks}))
+    (out / "meta.json").write_text(json.dumps({"profile": profile, "account": account or d["account"],
+                                               "read_on": "2026-11-05", "source": f"https://example.test/{profile}"}))
+    return str(out)
+
+
+def summary_line(out, profile):
+    m = re.search(rf"^  {re.escape(profile)}\s+\d{{12}}\s+[\d,]+\.\d\d USD$", out, re.M)
+    return m.group(0) if m else None
+
+
+live, _ = run(*WINDOW, "--profile", "acct-a", "--profile", "acct-b")
+with tempfile.TemporaryDirectory() as root:
+    rb = record(root, "acct-b", DATA["acct-b"])
+    p, calls = run(*WINDOW, "--profile", "acct-a", "--recorded", rb)
+    out = p.stdout
+    check("exits 0", p.returncode == 0, p.stderr)
+    check("no AWS call for the recorded account", all(c["profile"] == "acct-a" for c in calls), calls)
+    block_b = out.split("== acct-b")[1].split("\n\n")[0]
+    check("the recorded account's block is the live one's, but for the source and the tag line",
+          [ln for ln in block_b.splitlines() if "tag-filtered" not in ln and "recorded" not in ln]
+          == [ln for ln in live.stdout.split("== acct-b")[1].split("\n\n")[0].splitlines() if "tag-filtered" not in ln],
+          block_b)
+    check("its summary line is the live one's", summary_line(out, "acct-b") == summary_line(live.stdout, "acct-b")
+          and summary_line(out, "acct-b") is not None, out)
+    check("EKS hours outside the window are not counted, nor non-perCluster types",
+          "EKS cluster hours: 100.0;" in block_b, block_b)
+    check("the all-accounts figures match the live run", re.search(r"all accounts \(2\)\s+575\.25 USD", out)
+          and "EKS cluster hours, all accounts: 700.0; 0.82 USD per cluster hour" in out, out)
+    check("names where the replies came from", "not asked by this run: https://example.test/acct-b (read 2026-11-05)"
+          in block_b, block_b)
+    check("its tag figure is not read, never 0.00",
+          "tag-filtered total (project=watch-it-burn, event=devopsdays-portland-2026): not read" in block_b, block_b)
+    check("the tag sum counts only the live account and names the recorded one",
+          "tag-filtered, the 1 account(s) asked live: 0.00 USD; not read on acct-b" in out, out)
+    check("the footnote says a recorded account was not asked", "was not asked by this run" in out, out)
+
+    # Recorded only: no AWS call at all, and no payer footnote, since no tag figure was read.
+    ra = record(root, "acct-a", DATA["acct-a"])
+    p, calls = run(*WINDOW, "--recorded", ra, "--recorded", rb)
+    check("recorded only: exits 0 with no AWS call", p.returncode == 0 and not calls, p.stderr + str(calls))
+    check("recorded only: the live total", re.search(r"all accounts \(2\)\s+575\.25 USD", p.stdout) is not None, p.stdout)
+    check("recorded only: no payer footnote without a tag figure", "only the payer account" not in p.stdout, p.stdout)
+
+    def refused(name, path, needle, extra=()):
+        p, _ = run(*WINDOW, "--profile", "acct-a", *extra, "--recorded", path)
+        check(name, p.returncode == 3 and needle in p.stderr and "all accounts" not in p.stdout, p.stderr + p.stdout)
+
+    refused("a cost reply that misses the day after the window is refused",
+            record(root, "short", DATA["acct-b"], cost_days=("2026-08-30", "2026-09-03")),
+            "does not cover 2026-09-03")
+    refused("an EKS reply that misses a window day is refused",
+            record(root, "eks-short", DATA["acct-b"], eks_days=("2026-09-02", "2026-09-04")),
+            "does not cover 2026-08-31 and 1 more day(s)")
+    refused("a reply with a NextPageToken is refused", record(root, "paged", DATA["acct-b"], token="abc"),
+            "carries a NextPageToken")
+    refused("a cost reply grouped otherwise is refused",
+            record(root, "grouped", DATA["acct-b"], cost_groups=("SERVICE",)), "is grouped by ['SERVICE']")
+    monthly = record(root, "monthly", DATA["acct-b"])
+    f = pathlib.Path(monthly) / "eks-usage-by-usage-type.json"
+    f.write_text(json.dumps(dict(json.loads(f.read_text()), ResultsByTime=[
+        {"TimePeriod": {"Start": "2026-08-01", "End": "2026-09-01"}, "Total": {}, "Groups": []}])))
+    refused("a reply that is not daily is refused", monthly, "is not daily")
+    nometa = record(root, "nometa", DATA["acct-b"])
+    (pathlib.Path(nometa) / "meta.json").write_text(json.dumps({"profile": "nometa", "account": "333333333333"}))
+    refused("a meta.json without its source is refused", nometa, "meta.json has no read_on")
+    refused("a recorded account that is a live one too is refused",
+            record(root, "dup", DATA["acct-b"], account="111111111111"), "same account 111111111111")
+    p, calls = run(*WINDOW)
+    check("no account at all is refused", p.returncode == 2 and not calls, p.stderr)
+
 print("== the recorded runs are the script's output ==")
 MEASURED = REPO / "cost/measured"
-for f in ("devopsdays-portland-2026.txt", "ai-engineer-worldsfair-2026.txt"):
+RECORDED = MEASURED / "recorded"
+fleet = re.search(r'WIB_ATTENDEE_ACCOUNTS="\$\{WIB_ATTENDEE_ACCOUNTS:-([^}]*)\}"',
+                  (REPO / "infra/terraform/fleet/fleet.sh").read_text())
+check("fleet.sh names the fleet accounts", fleet is not None)
+FLEET = fleet.group(1).split(",") if fleet else []
+saved = sorted(d.name for d in RECORDED.iterdir() if d.is_dir()) if RECORDED.is_dir() else []
+check("each recorded account is a fleet account", saved and set(saved) <= set(FLEET), saved)
+for name in saved:
+    meta = json.loads((RECORDED / name / "meta.json").read_text())
+    check(f"{name}: meta.json names it, a 12-digit account and a source",
+          meta.get("profile") == name and re.fullmatch(r"\d{12}", meta.get("account", "")) is not None
+          and meta.get("source", "").startswith("https://"), meta)
+WINDOWS = {"devopsdays-portland-2026.txt": ["--start", "2026-08-26", "--end", "2026-09-10",
+                                            "--event", "devopsdays-portland-2026"],
+           "ai-engineer-worldsfair-2026.txt": ["--start", "2026-06-25", "--end", "2026-07-01"]}
+for f, window in WINDOWS.items():
     text = (MEASURED / f).read_text() if (MEASURED / f).is_file() else ""
     check(f"{f} is recorded", text.startswith("DELIVERY COST, MEASURED FROM COST EXPLORER IN EACH MEMBER ACCOUNT"))
     check(f"{f} has no WINDOW CUTS SPEND line", text and "WINDOW CUTS SPEND" not in text)
+    check(f"{f} names its window", f"window: {window[1]} (incl) .. {window[3]} (excl)" in text, text[:200])
+    missing = [a for a in FLEET if summary_line(text, a) is None]
+    check(f"{f} measures every fleet account in fleet.sh", FLEET and not missing, missing)
+    check(f"{f} sums {len(FLEET)} accounts", f"all accounts ({len(FLEET)})" in text)
+    # Replaying the saved replies gives the figures the file holds for those accounts, block and summary line.
+    p, calls = run(*window, "--today", "2026-11-05", *[x for n in saved for x in ("--recorded", str(RECORDED / n))])
+    check(f"{f}: the saved replies replay with no AWS call", p.returncode == 0 and not calls, p.stderr)
+    for n in saved:
+        replay_block = p.stdout.split(f"== {n} ")[1].split("\n\n")[0] if f"== {n} " in p.stdout else None
+        file_block = text.split(f"== {n} ")[1].split("\n\n")[0] if f"== {n} " in text else ""
+        check(f"{f}: {n}'s block and total are its saved replies replayed",
+              replay_block == file_block and summary_line(p.stdout, n) == summary_line(text, n), replay_block)
+    total = re.search(r"all accounts \(\d+\)\s+([\d,]+\.\d\d) USD", text)
+    lines = [summary_line(text, a) for a in FLEET]
+    check(f"{f}: the total is the sum of its account lines", total and all(lines) and abs(
+        sum(float(ln.split()[-2].replace(",", "")) for ln in lines) - float(total.group(1).replace(",", ""))) < 0.011,
+        total)
 
 if failures:
     print(f"\n{len(failures)} delivery-cost check(s) failed")

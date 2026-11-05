@@ -28,16 +28,123 @@ tag filter: project=watch-it-burn
     2026-06-29      395.75
     2026-06-30      204.10
 
+== aws1-student31  948731545609
+  read from recorded Cost Explorer replies, not asked by this run: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/392#issuecomment-6649176803 (read 2026-11-05)
+  tag-filtered total (project=watch-it-burn): not read (the recorded replies hold no tag-filtered query)
+  billed usage on the window's dates, by service (the whole account):
+    Amazon Elastic Compute Cloud - Compute                    85.27
+    EC2 - Other                                               56.59
+    Amazon Elastic Load Balancing                             34.63
+    AmazonCloudWatch                                          30.01
+    Amazon Elastic Container Service for Kubernetes           27.46
+    Amazon Virtual Private Cloud                              14.95
+    AWS Key Management Service                                 0.49
+    Amazon Simple Storage Service                              0.00
+    AWS Secrets Manager                                        0.00
+    AWS Glue                                                   0.00
+  usage total                                                249.39 USD
+  EKS cluster hours: 274.6; usage per cluster hour: 0.91 USD per cluster hour
+  day before the window (2026-06-24): 0.00 USD; first day after it (2026-07-01): 0.00 USD
+  usage by day:
+    2026-06-25        0.00
+    2026-06-26        0.00
+    2026-06-27       39.52
+    2026-06-28       63.80
+    2026-06-29      110.85
+    2026-06-30       35.22
+
+== aws1-student32  891472436879
+  read from recorded Cost Explorer replies, not asked by this run: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/392#issuecomment-6649177240 (read 2026-11-05)
+  tag-filtered total (project=watch-it-burn): not read (the recorded replies hold no tag-filtered query)
+  billed usage on the window's dates, by service (the whole account):
+    Amazon Elastic Compute Cloud - Compute                    85.42
+    EC2 - Other                                               54.78
+    Amazon Elastic Load Balancing                             33.37
+    AmazonCloudWatch                                          29.95
+    Amazon Elastic Container Service for Kubernetes           27.42
+    Amazon Virtual Private Cloud                              14.40
+    AWS Key Management Service                                 0.50
+    Amazon Simple Storage Service                              0.00
+    AWS Secrets Manager                                        0.00
+    AWS Glue                                                   0.00
+  usage total                                                245.85 USD
+  EKS cluster hours: 274.2; usage per cluster hour: 0.90 USD per cluster hour
+  day before the window (2026-06-24): 0.00 USD; first day after it (2026-07-01): 0.00 USD
+  usage by day:
+    2026-06-25        0.00
+    2026-06-26        0.00
+    2026-06-27       39.29
+    2026-06-28       64.91
+    2026-06-29      107.22
+    2026-06-30       34.42
+
+== aws1-student33  250699659274
+  read from recorded Cost Explorer replies, not asked by this run: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/392#issuecomment-6649177654 (read 2026-11-05)
+  tag-filtered total (project=watch-it-burn): not read (the recorded replies hold no tag-filtered query)
+  billed usage on the window's dates, by service (the whole account):
+    Amazon Elastic Compute Cloud - Compute                    85.22
+    EC2 - Other                                               54.83
+    Amazon Elastic Load Balancing                             33.06
+    AmazonCloudWatch                                          30.11
+    Amazon Elastic Container Service for Kubernetes           27.34
+    Amazon Virtual Private Cloud                              14.30
+    AWS Key Management Service                                 0.48
+    Amazon Simple Storage Service                              0.00
+    AWS Secrets Manager                                        0.00
+    AWS Glue                                                   0.00
+  usage total                                                245.33 USD
+  EKS cluster hours: 273.4; usage per cluster hour: 0.90 USD per cluster hour
+  day before the window (2026-06-24): 0.00 USD; first day after it (2026-07-01): 0.00 USD
+  usage by day:
+    2026-06-25        0.00
+    2026-06-26        0.00
+    2026-06-27       39.02
+    2026-06-28       63.52
+    2026-06-29      108.47
+    2026-06-30       34.32
+
+== aws1-student34  783241407859
+  read from recorded Cost Explorer replies, not asked by this run: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/392#issuecomment-6649178097 (read 2026-11-05)
+  tag-filtered total (project=watch-it-burn): not read (the recorded replies hold no tag-filtered query)
+  billed usage on the window's dates, by service (the whole account):
+    Amazon Elastic Compute Cloud - Compute                    85.71
+    EC2 - Other                                               55.66
+    Amazon Elastic Load Balancing                             34.45
+    AmazonCloudWatch                                          30.03
+    Amazon Elastic Container Service for Kubernetes           27.35
+    Amazon Virtual Private Cloud                              14.92
+    AWS Key Management Service                                 0.51
+    Amazon Simple Storage Service                              0.00
+    AWS Secrets Manager                                        0.00
+    AWS Glue                                                   0.00
+  usage total                                                248.64 USD
+  EKS cluster hours: 273.5; usage per cluster hour: 0.91 USD per cluster hour
+  day before the window (2026-06-24): 0.00 USD; first day after it (2026-07-01): 0.00 USD
+  usage by day:
+    2026-06-25        0.00
+    2026-06-26        0.00
+    2026-06-27       39.48
+    2026-06-28       63.46
+    2026-06-29      111.12
+    2026-06-30       34.58
+
 == DELIVERY COST, BILLED USAGE ON THE WINDOW'S DATES
   accen-dev            515966504359       787.39 USD
-  all accounts (1)                        787.39 USD
-  EKS cluster hours, all accounts: 864.0; 0.91 USD per cluster hour
-  tag-filtered, all accounts: 0.00 USD
+  aws1-student31       948731545609       249.39 USD
+  aws1-student32       891472436879       245.85 USD
+  aws1-student33       250699659274       245.33 USD
+  aws1-student34       783241407859       248.64 USD
+  all accounts (5)                      1,776.60 USD
+  EKS cluster hours, all accounts: 1,959.7; 0.91 USD per cluster hour
+  tag-filtered, the 1 account(s) asked live: 0.00 USD; not read on aws1-student31, aws1-student32, aws1-student33, aws1-student34
 
 What the figure is:
   * Each account's billed usage (Cost Explorer record type Usage, unblended) on the window's UTC days. It is
     measured, not estimated, and it is the whole account: a co-tenant's spend on the same days is inside it.
   * Only the accounts listed above. A fleet account left off the command line is not in it.
+  * An account marked as read from recorded replies was not asked by this run: its figures come from the
+    saved replies of the same daily queries, made in that account by someone holding its credentials, and
+    the source named under it says who and when.
   * Tax, credits and refunds are left out. Tax is posted on the bill's own days, mostly the 1st of the month,
     not on the usage days it is for.
   * The tag-filtered total is 0.00 because only the payer account can activate cost-allocation tags, and the

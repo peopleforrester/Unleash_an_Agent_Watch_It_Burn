@@ -21,15 +21,23 @@
 # Tax is posted on the bill's own days (mostly the 1st of the month), not on the usage days it is for, so it, credits
 # and refunds are listed and left out.
 #
+# An account this session cannot sign into is given as --recorded DIR instead of --profile: DIR holds the replies to
+# the same daily queries, saved from a read made in that account by someone who holds its credentials (an
+# escalation, #392), with a meta.json naming the account and where the replies came from. A recorded reply must be
+# one page, daily, grouped as the live query is, and cover the window (and the day either side for the cost query),
+# or the run ends with exit 3. It holds no tag-filtered query, so its tag figure prints as not read.
+#
 # Usage:
 #   teardown/delivery-cost.py --start 2026-08-26 --end 2026-09-10 --event devopsdays-portland-2026 \
 #       --profile accen-dev --profile aws1-student31 ...
+#   teardown/delivery-cost.py ... --profile accen-dev --recorded cost/measured/recorded/aws1-student31 ...
 # Every AWS call carries its profile (AWS_PROFILE, per call) and region explicitly; Cost Explorer is us-east-1. Any
 # call that fails ends the run with exit 3: an account dropped quietly is the 0.00 problem again.
 import argparse
 import datetime as dt
 import json
 import os
+import pathlib
 import re
 import subprocess
 import sys
@@ -91,20 +99,79 @@ def day(s):
     return dt.date.fromisoformat(s)
 
 
-def measure(profile, args):
+def window_days(start, end):
+    """The UTC days from start (incl) to end (excl), as ISO strings."""
+    out, t = [], day(start)
+    while t < day(end):
+        out.append(t.isoformat())
+        t += dt.timedelta(days=1)
+    return out
+
+
+def live_replies(profile, args, before, after_end):
+    """The three Cost Explorer queries, asked of the account the profile signs into."""
+    account = aws(profile, "sts", "get-caller-identity").get("Account", "?")
+    tagged = cost_and_usage(profile, args.start, args.end, "MONTHLY", ["UnblendedCost"],
+                            filt=tag_filter(args.tag_key, args.tag_value, args.event))
+    daily = cost_and_usage(profile, before, after_end, "DAILY", ["UnblendedCost"], group_by=("SERVICE", "RECORD_TYPE"))
+    eks = cost_and_usage(profile, args.start, args.end, "MONTHLY", ["UsageQuantity"],
+                         filt={"Dimensions": {"Key": "SERVICE", "Values": [EKS_SERVICE]}}, group_by=("USAGE_TYPE",))
+    return {"profile": profile, "account": account, "recorded": None,
+            "tagged": sum(amount(r.get("Total", {})) for r in tagged)}, daily, eks
+
+
+def recorded_reply(path, groups, need_days, what):
+    """One saved get-cost-and-usage reply: a single page, grouped as the script groups, daily, covering need_days."""
+    try:
+        reply = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise AwsError(f"recorded {what} {path} cannot be read: {e}")
+    if reply.get("NextPageToken"):
+        raise AwsError(f"recorded {what} {path} is one page of several (it carries a NextPageToken)")
+    got = [g.get("Key") for g in reply.get("GroupDefinitions", [])]
+    if got != list(groups):
+        raise AwsError(f"recorded {what} {path} is grouped by {got}, not {list(groups)}")
+    results, seen = reply.get("ResultsByTime", []), set()
+    for r in results:
+        s, e = r["TimePeriod"]["Start"], r["TimePeriod"]["End"]
+        if day(e) - day(s) != dt.timedelta(days=1):
+            raise AwsError(f"recorded {what} {path} is not daily: it has the period {s} .. {e}")
+        seen.add(s)
+    missing = [d for d in need_days if d not in seen]
+    if missing:
+        raise AwsError(f"recorded {what} {path} does not cover {missing[0]}"
+                       f"{f' and {len(missing) - 1} more day(s)' if len(missing) > 1 else ''}; "
+                       f"the window needs {need_days[0]} .. {need_days[-1]}")
+    return results
+
+
+def recorded_replies(directory, args, before, after_end):
+    """The same queries' answers, saved from a read made in the account by someone holding its credentials.
+
+    A recorded account carries no tag-filtered query, so its tag figure is "not read", never a 0.00."""
+    d = pathlib.Path(directory)
+    try:
+        meta = json.loads((d / "meta.json").read_text())
+    except (OSError, ValueError) as e:
+        raise AwsError(f"recorded account {d}: meta.json cannot be read: {e}")
+    for key in ("profile", "account", "read_on", "source"):
+        if not meta.get(key):
+            raise AwsError(f"recorded account {d}: meta.json has no {key}")
+    daily = recorded_reply(d / "cost-by-service-record-type.json", ("SERVICE", "RECORD_TYPE"),
+                           window_days(before, after_end), "daily cost")
+    eks = recorded_reply(d / "eks-usage-by-usage-type.json", ("USAGE_TYPE",),
+                         window_days(args.start, args.end), "EKS usage")
+    return {"profile": meta["profile"], "account": meta["account"], "tagged": None,
+            "recorded": f"{meta['source']} (read {meta['read_on']})"}, daily, eks
+
+
+def measure(acct, daily_results, eks_results, args):
     start, end = args.start, args.end
     before = (day(start) - dt.timedelta(days=1)).isoformat()
-    after_end = (day(end) + dt.timedelta(days=1)).isoformat()
-    acct = {"profile": profile, "account": aws(profile, "sts", "get-caller-identity").get("Account", "?")}
 
-    tagged = cost_and_usage(profile, start, end, "MONTHLY", ["UnblendedCost"],
-                            filt=tag_filter(args.tag_key, args.tag_value, args.event))
-    acct["tagged"] = sum(amount(r.get("Total", {})) for r in tagged)
-
-    # One daily query over the window plus a day on each side, by service and record type.
+    # The daily query spans the window plus a day on each side, by service and record type.
     by_service, other, daily = {}, {}, {}
-    for r in cost_and_usage(profile, before, after_end, "DAILY", ["UnblendedCost"],
-                            group_by=("SERVICE", "RECORD_TYPE")):
+    for r in daily_results:
         d = r["TimePeriod"]["Start"]
         for g in r.get("Groups", []):
             service, record = g["Keys"]
@@ -125,15 +192,24 @@ def measure(profile, args):
     limit = max(EDGE_FLOOR_USD, EDGE_SHARE * peak)
     acct["cuts"] = [f"{d} carries {v:,.2f} USD" for d, v in (acct["before"], acct["after"]) if v > limit]
 
+    # Live, one MONTHLY period per month starting inside the window; recorded, daily periods that may run past it.
     hours = 0.0
-    for r in cost_and_usage(profile, start, end, "MONTHLY", ["UsageQuantity"],
-                            filt={"Dimensions": {"Key": "SERVICE", "Values": [EKS_SERVICE]}},
-                            group_by=("USAGE_TYPE",)):
+    for r in eks_results:
+        if not start <= r["TimePeriod"]["Start"] < end:
+            continue
         for g in r.get("Groups", []):
             if EKS_CLUSTER_HOURS.search(g["Keys"][0]):
                 hours += amount(g["Metrics"], "UsageQuantity")
     acct["cluster_hours"] = hours
     return acct
+
+
+def read_account(source, args):
+    kind, where = source
+    before = (day(args.start) - dt.timedelta(days=1)).isoformat()
+    after_end = (day(args.end) + dt.timedelta(days=1)).isoformat()
+    fetch = live_replies if kind == "profile" else recorded_replies
+    return measure(*fetch(where, args, before, after_end), args)
 
 
 def per_hour(usd, hours):
@@ -153,7 +229,11 @@ def render(args, accts):
     for a in accts:
         name = f"{a['profile']}  {a['account']}"
         w(f"== {name}")
-        w(f"  tag-filtered total ({tag}): {a['tagged']:,.2f} USD")
+        if a["recorded"]:
+            w(f"  read from recorded Cost Explorer replies, not asked by this run: {a['recorded']}")
+            w(f"  tag-filtered total ({tag}): not read (the recorded replies hold no tag-filtered query)")
+        else:
+            w(f"  tag-filtered total ({tag}): {a['tagged']:,.2f} USD")
         w("  billed usage on the window's dates, by service (the whole account):")
         for svc, usd in sorted(a["by_service"].items(), key=lambda kv: -kv[1]):
             w(f"    {svc:<52} {usd:>10,.2f}")
@@ -171,22 +251,32 @@ def render(args, accts):
             w(f"    {d}  {usd:>10,.2f}")
         w("")
     usage = sum(a["usage"] for a in accts)
-    tagged = sum(a["tagged"] for a in accts)
+    live = [a for a in accts if a["tagged"] is not None]
+    recorded = [a for a in accts if a["tagged"] is None]
+    tagged = sum(a["tagged"] for a in live)
     hours = sum(a["cluster_hours"] for a in accts)
     w("== DELIVERY COST, BILLED USAGE ON THE WINDOW'S DATES")
     for a in accts:
         w(f"  {a['profile']:<20} {a['account']:<14} {a['usage']:>10,.2f} USD")
     w(f"  {'all accounts (' + str(len(accts)) + ')':<35} {usage:>10,.2f} USD")
     w(f"  EKS cluster hours, all accounts: {hours:,.1f}; {per_hour(usage, hours)}")
-    w(f"  tag-filtered, all accounts: {tagged:,.2f} USD")
+    if not recorded:
+        w(f"  tag-filtered, all accounts: {tagged:,.2f} USD")
+    else:
+        w(f"  tag-filtered, the {len(live)} account(s) asked live: {tagged:,.2f} USD; not read on "
+          + ", ".join(a["profile"] for a in recorded))
     w("")
     w("What the figure is:")
     w("  * Each account's billed usage (Cost Explorer record type Usage, unblended) on the window's UTC days. It is")
     w("    measured, not estimated, and it is the whole account: a co-tenant's spend on the same days is inside it.")
     w("  * Only the accounts listed above. A fleet account left off the command line is not in it.")
+    if recorded:
+        w("  * An account marked as read from recorded replies was not asked by this run: its figures come from the")
+        w("    saved replies of the same daily queries, made in that account by someone holding its credentials, and")
+        w("    the source named under it says who and when.")
     w("  * Tax, credits and refunds are left out. Tax is posted on the bill's own days, mostly the 1st of the month,")
     w("    not on the usage days it is for.")
-    if tagged == 0:
+    if live and tagged == 0:
         w("  * The tag-filtered total is 0.00 because only the payer account can activate cost-allocation tags, and the")
         w("    payer is the lab-account provider's, which is not asked (#392). It is printed so the day the tags are")
         w("    active, the per-delivery figure is in this report without a code change.")
@@ -199,8 +289,12 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--start", required=True, help="window start, YYYY-MM-DD, inclusive (UTC)")
     ap.add_argument("--end", required=True, help="window end, YYYY-MM-DD, exclusive (UTC), the Cost Explorer convention")
-    ap.add_argument("--profile", action="append", required=True,
+    ap.add_argument("--profile", action="append", default=[],
                     help="an AWS profile per fleet account; repeat it for each account")
+    ap.add_argument("--recorded", action="append", default=[], metavar="DIR",
+                    help="a fleet account this run cannot sign into, read from saved Cost Explorer replies "
+                         "(meta.json, cost-by-service-record-type.json, eks-usage-by-usage-type.json; see "
+                         "cost/measured/README.md); repeat it for each account")
     ap.add_argument("--event", help="also require event=<value> in the tag-filtered query (e.g. devopsdays-portland-2026)")
     ap.add_argument("--tag-key", default="project")
     ap.add_argument("--tag-value", default="watch-it-burn")
@@ -216,21 +310,28 @@ def main(argv=None):
     # The day after the window is read too, and it has to be over, or a fleet still running reads as a closed window.
     if end >= today:
         ap.error(f"--end {args.end} is not in the past: the window and the day after it must be over (today is {today})")
-    if len(set(args.profile)) != len(args.profile):
-        ap.error("a --profile is given twice, which would count its account twice")
+    if not args.profile and not args.recorded:
+        ap.error("name at least one account, with --profile or --recorded")
+    if len(set(args.profile)) != len(args.profile) or len(set(args.recorded)) != len(args.recorded):
+        ap.error("a --profile or --recorded is given twice, which would count its account twice")
+    sources = [("profile", p) for p in args.profile] + [("recorded", d) for d in args.recorded]
     try:
-        accts = [measure(p, args) for p in args.profile]
+        accts = [read_account(src, args) for src in sources]
     except AwsError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         print("Nothing printed: a total missing an account would read as the delivery's cost.", file=sys.stderr)
         return 3
-    seen = {}
+    seen, names = {}, set()
     for a in accts:
         if a["account"] in seen:
             print(f"ERROR: profiles {seen[a['account']]} and {a['profile']} are the same account {a['account']}, "
                   "which would count it twice", file=sys.stderr)
             return 3
+        if a["profile"] in names:
+            print(f"ERROR: two accounts are both named {a['profile']}", file=sys.stderr)
+            return 3
         seen[a["account"]] = a["profile"]
+        names.add(a["profile"])
     sys.stdout.write(render(args, accts))
     return 0
 

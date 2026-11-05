@@ -16811,3 +16811,61 @@ grep -n "APM trace root" /app/proxy.py` should print nothing.
 
 **Suites (run 17303, at ad173efe).** `bash verify/run-e2e-tools.sh` ran the offline suite (253 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier: 55 checks in 27m42s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
+## 2026-11-05 · #392 · Both deliveries measured on all five fleet accounts: Portland 2,865.86 USD, the World's Fair 1,776.60 USD
+
+Run 17257 (the entry above for #392 on this date) measured each delivery on accen-dev alone. Escalation 809 of run
+17297 then read the four student accounts' Cost Explorer from a higher hecaton tier that holds their credentials and posted the replies on #392,
+one comment per account (aws1-student31 948731545609, 32 891472436879, 33 250699659274, 34 783241407859), each
+confirmed with `sts get-caller-identity`, each reply one page. This run, 17307, completes both figures from them.
+`verify/prior-drafts.sh 392 origin/staging` printed NONE: every earlier draft is on staging, and run 17297 committed
+nothing.
+
+- **`--recorded DIR` in `teardown/delivery-cost.py`.** This run's session holds only accen-dev, so the student
+  accounts are read from their saved replies. `cost/measured/recorded/<profile>/` holds each comment's two JSON
+  blocks byte for byte, plus `meta.json` naming the account and the comment. `measure()` is split into fetching
+  (live, three Cost Explorer queries; or recorded, two files) and computing, so both sources go through the same
+  sums. A recorded reply that carries a NextPageToken, is not daily, is grouped otherwise or does not cover the
+  window (and the day either side, for the cost reply) ends the run with exit 3. The recorded EKS reply is daily over
+  both windows, so only the periods starting inside the window count. A recorded account has no tag-filtered query,
+  so its tag figure prints as not read, never 0.00, and the tag sum names the accounts it leaves out.
+- **Why replay rather than hand sums.** Each file in `cost/measured/` stays the script's own output, and the test
+  replays the saved replies and checks each student account's block and summary line in both files against the
+  replay, so the recorded figures cannot drift from their source.
+- **Not read: the student accounts' tag-filtered total.** The escalation asked only the two daily queries. It would
+  be 0.00 for the same reason as on accen-dev (only the payer activates tags), and the report prints it as not read
+  rather than assume that.
+
+**Live run, 2026-11-05**, `. "$HECATON_CLUSTER_ENV"` then the two commands in `cost/measured/README.md`
+(`--profile accen-dev` and four `--recorded`), both exit 0, output saved unedited:
+
+| Delivery | Window | accen-dev | student31 | student32 | student33 | student34 | All five | Cluster hours | Per cluster hour |
+|---|---|---|---|---|---|---|---|---|---|
+| devopsdays-portland-2026 | 2026-08-26 .. 2026-09-10 | 2,104.01 | 260.90 | 154.84 | 162.11 | 183.99 | 2,865.86 USD | 3,764.6 | 0.76 USD |
+| ai-engineer-worldsfair-2026 | 2026-06-25 .. 2026-07-01 | 787.39 | 249.39 | 245.85 | 245.33 | 248.64 | 1,776.60 USD | 1,959.7 | 0.91 USD |
+
+accen-dev's live read matched run 17257's to the cent in both windows (a diff of the accen-dev block was empty). No
+account printed `WINDOW CUTS SPEND`: the student accounts' edge days billed 0.01 USD or less. Tax posted inside
+Portland's window and left out is 306.08 USD across the five. The student accounts' other spend in 2026-06-24 ..
+2026-09-12 is the Packt workshop (2026-07-22 .. 07-24, 145.24 to 148.76 USD an account), a different talk on the same
+accounts, outside both windows. aws1-student31's Portland figure carries 86.90 USD of Bedrock, the largest Bedrock
+line of any account in either delivery. The World's Fair's "roughly 2,000 USD" was a forecast; it measured 1,776.60.
+The planning rate of 0.50 USD per cluster hour was low on both deliveries: 0.76 for Portland, 0.91 for the World's
+Fair.
+
+**What the issue's criterion reads as here.** The payer-side activation is off the table (Michael's ruling of
+2026-11-01; the coordinator's comment of 2026-11-03 dropping escalation 227 and replacing the criterion with each
+delivery costed from our own member accounts' Cost Explorer by tag or by date). That is now met for both past
+deliveries on every fleet account, with non-zero figures. KubeCon NA (2026-11-09 to 12) is measured the same way
+once its fleet is down, on #872; the run-of-show's cost step now names `teardown/delivery-cost.py` and that file.
+
+**Also changed.** `notes/DEBRIEF-worlds-fair-2026.md`'s cost section gives the measured figure and says the
+payer-tag backfill stays unrun. `cost/measured/README.md` gives both tables, the `recorded/` layout and the commands
+as run.
+
+**Tests.** `verify/test_delivery_cost.py` gains 45 checks (86 in all): a recorded account gives the live account's block and
+totals for the same data, EKS hours outside the window are left out, no AWS call is made for a recorded account, the
+tag line and sum, recorded-only runs, eight refusals, and for both saved files: every fleet account in
+`WIB_ATTENDEE_ACCOUNTS` is measured, the total is the sum of the account lines, and the student blocks replay from
+`recorded/`.
+
+**Not yet run on a cluster.** Nothing: the change reads Cost Explorer, which this run did on accen-dev.

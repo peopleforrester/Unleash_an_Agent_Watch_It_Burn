@@ -1,0 +1,12 @@
+{
+  "profile": "aws1-student34",
+  "account": "783241407859",
+  "read_on": "2026-11-05",
+  "source": "https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/392#issuecomment-6649178097",
+  "read_by": "escalation 809 of hecaton run 17297, run in the account by a higher hecaton tier that holds its credentials on 2026-11-05 with --region us-east-1; its comment confirms the account with sts get-caller-identity and says neither reply carried a NextPageToken",
+  "replies": {
+    "cost-by-service-record-type.json": "1. Daily UnblendedCost by SERVICE and RECORD_TYPE, Start=2026-06-24, End=2026-09-12 (80 days)",
+    "eks-usage-by-usage-type.json": "2. Daily UsageQuantity for Amazon Elastic Container Service for Kubernetes by USAGE_TYPE, Start=2026-06-25, End=2026-09-10 (77 days)"
+  },
+  "note": "Each reply file is the JSON block from the source comment, byte for byte, with a trailing newline."
+}
