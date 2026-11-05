@@ -18371,3 +18371,12 @@ must pass the benign prompt and block the injection through the deployed guard.
 **Suites (run 17384, at d5eaa03f).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN, `test_llm_guard_bantopics_image.py` among them) and then the tools tier: 56 checks in 27m00s,
 ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
+
+**Suites again, after merging staging (at a5bac7a1).** Staging moved during the run and its decisions.md appends
+conflicted with this entry, so a5bac7a1 merges origin/staging, keeping staging's entries and then #719's. The E2E command
+ran again on it: the offline suite 259 tests, ALL OFFLINE RENDER-GATE TESTS GREEN, and the tools tier 56 checks in
+28m01s with four red, each on a `504 Gateway Time-out` from github.com while fetching a pinned Helm chart (falco 9.2.1,
+tempo 3.0.0, opentelemetry-operator 0.122.0) or the datadog provider's signature. A direct fetch of the falco chart
+answered 200 straight after. Run alone with the tier's pinned tools and environment, `test_terraform_lock_init.py`,
+`test_enforce_floor.py` and `test_image_registry_render.py` passed on the first try and
+`test_datadog_log_services_render.py` on the second, its first try failing on another chart 504.
