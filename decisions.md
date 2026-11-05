@@ -18970,3 +18970,80 @@ No dependency was added.
 **After merging staging (run 17422, at 797b242b).** Staging moved during the run, and its decisions.md appends conflicted
 with this entry, so 797b242b merges origin/staging at `f31971f5`, staging's entries first and this one after. No other
 file conflicted. `bash verify/run-tests.sh` on the merge: 263 tests, ALL OFFLINE RENDER-GATE TESTS GREEN, exit 0.
+## 2026-11-03 · #830 · Run 16809 could not run the live audience-path test: the run's session files are unreadable
+
+**What #830 asks.** Run `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py` once the
+community cluster's ai-layer Application has synced a staging revision carrying #786 (console nginx's per-network
+/chat zone removed, the limit held per conversation) and #787 (the test's tighter checks). Both are in staging:
+`803b84ec` and `9b0b4a01` are ancestors of `origin/staging` `7159717e`, this run's base.
+
+**Why it did not run.** Every file in `/var/lib/hecaton/runs/16809/clusters/` (`kubeconfig`, `env`,
+`aws-credentials`, `aws-config`, `bin/`) is owner `hecaton`, group `hecaton`, mode 0640 or 0750. This run's user,
+`hecaton-s2-claude-certkraken`, is in groups `hecaton-s2-claude-certkraken`, `hecaton-runs` and `hecaton-tools`, not
+`hecaton`, so it can read neither the kubeconfig nor `$HECATON_CLUSTER_ENV`. That is hecaton#508, the same fault
+runs 16758 and 16784 recorded above. The test, run as the issue writes it, failed on its first cluster read and
+exited 1:
+
+    == prerequisites ==
+      FAIL  the cluster records its public host (cluster-identity public-host)
+            error: error loading config file "/var/lib/hecaton/runs/16809/clusters/kubeconfig": open
+            /var/lib/hecaton/runs/16809/clusters/kubeconfig: permission denied
+
+For the same reason this run could not read which revision the ai-layer Application has synced, so whether #786 is
+live on the cluster is not known from here.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, off the
+venue network while no room is chatting. It must end "All live audience-path checks passed." The next run on #830
+runs it once its session files are readable, after first confirming with
+`kubectl --context watch-it-burn-community -n argocd get application ai-layer -o jsonpath='{.status.sync.revision}'`
+that the synced revision contains `803b84ec`. The #644 load replay reruns wait on the same sync.
+
+**The suites, on this branch.** `bash verify/run-e2e-tools.sh` ran the offline suite first: 240 tests, "ALL OFFLINE
+RENDER-GATE TESTS GREEN". The tools tier ran 53 checks (the offline suite and 52 tier tests) in 24m22s and exited 1
+on `test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `watch-it-burn:sample-app-nginx-1.27.5`,
+the tag staging records under #814. This change is a decisions.md entry and touches no image.
+
+## 2026-11-05 · #830 · The live audience-path test passes on watch-it-burn-community with #786's per-conversation limit synced
+
+**Port of run 16809's draft.** Run 16809's two commits (the blocked attempt and its suite results) are cherry-picked
+above as they were written; their only drift from staging was decisions.md, where both sides appended, so both
+entries are kept. Since hecaton#508 was fixed, this run, 17425, reads its own kubeconfig and session, which is what
+stopped 16809.
+
+**The sync.** `kubectl --context watch-it-burn-community -n argocd get application ai-layer` read, at 2026-11-05
+11:25 UTC: target revision `staging`, synced revision `c733dba2`, Synced and Healthy. `803b84ec` (#786, console
+nginx's per-network /chat zone removed) and `9b0b4a01` (#787, the test's tighter checks) are both ancestors of
+`c733dba2`. The console and llm-guard pods had restarted 44 minutes before; guard-proxy had run for 6h15m.
+
+**The live run.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, from hecaton's host
+(not the venue network), with no workshop room in session. It exited 0 and printed:
+
+    == prerequisites ==
+      PASS  the cluster records its public host (cluster-identity public-host)
+    == the cluster runs this commit's audience path ==
+      PASS  the console's nginx runs git's console.conf
+      PASS  guard-proxy runs git's PROXY_TIMEOUT 120 (got 120)
+      PASS  guard-proxy runs git's TURN_TIMEOUT 270 (got 270)
+      PASS  guard-proxy runs git's RATE_LIMIT_SESSION_RPM 10 (got 10)
+      PASS  guard-proxy runs git's RATE_LIMIT_RPM 150 (got 150)
+      PASS  guard-proxy runs git's COST_CAP_USD 25 (got 25)
+      PASS  git's console.conf gives /chat the wib_chat_session zone with a burst (burst=9)
+    == one conversation through https://attackme.agenticburn.com ==
+      PASS  10 of 12 at once get through, the other 2 are refused in a sentence
+      PASS  every refusal names 10 a minute per conversation and says to wait and send that again
+    == one network, many conversations, through https://attackme.agenticburn.com ==
+      PASS  all 80 fresh conversations sent at once from one address get through nginx (got 80, nginx refused 0), so a room on one venue NAT address is not one bucket
+    == a guarded turn fits its per-call timeout ==
+      one probe turn took 2.2s against PROXY_TIMEOUT 120s per call
+      PASS  the probe turn is answered
+      PASS  it took under half of PROXY_TIMEOUT, so a retry still fits (2.2s < 60s)
+
+    All live audience-path checks passed.
+
+The one probe turn, marked `[[wib-probe]]`, cost about half a cent of Bedrock and counts on the community bot's
+/cost until the counter is reset (run-of-show, "Reset the community bot"). The run changed no cluster state.
+
+**The suites, on this branch (run 17425).** `bash verify/run-e2e-tools.sh` ran the offline suite first: 261 tests,
+"ALL OFFLINE RENDER-GATE TESTS GREEN". The tools tier then ran "57 checks ran (the offline suite and 56 tier tests)
+in 27m18s", ended "ALL E2E TOOLS TIER CHECKS GREEN" and exited 0. The ghcr.io 404 that held run 16809's tier red
+(#814) no longer appears. The prose gate passed on this entry.
