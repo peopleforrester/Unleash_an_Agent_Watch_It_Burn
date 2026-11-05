@@ -19454,3 +19454,11 @@ else is not this render. The registry tags list answers 200 with `busybox-1.38.0
 
 **Not yet run on a cluster.** Everything after the publish: `router-check` and `wall-check` against the 33-host
 table, the registry tags list, `deployments.burritobot.co`, and `/`, `/prompts` and `/cost` on both bot hosts again.
+
+**The suites (run 17619).** The first `bash verify/run-e2e-tools.sh`, at `4a3885d8`, failed one offline test,
+`test_e2e_tools_tier.py`, which stopped after its third section: this host's `/tmp` was removed again
+(`touch /tmp/x918` answered "No such file or directory"), the fault #906's `5d40fd08` fixed on
+`agent/906-17556`, not yet on staging. That commit is cherry-picked here unchanged as `0e4efaa5` (staging has not
+touched the file, so it lands the same either way). The second run printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite and 57 tier tests) in 31m43s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
