@@ -20617,3 +20617,11 @@ the draft itself was changed for it.
 - `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 13 files in place`.
 
 **Not yet run on a cluster:** nothing this change needs.
+
+**The suites (run 17547, at `46b09b4a`).** The first `bash verify/run-e2e-tools.sh` ran 59 checks in 31m02s and
+exited 1 on one: `test_terraform_lock_init.py`, whose fresh `terraform init` of `infra/terraform/dashboards` got
+`github.com: bad response code: 504` while downloading datadog/datadog v3.91.0. Run again alone with the pinned
+terraform, it printed `ALL TERRAFORM LOCK-INIT CHECKS GREEN`. The second full run ran 59 checks (the offline suite
+and 58 tier tests) in 30m54s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran
+267 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` among them; the tier ran
+`test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
