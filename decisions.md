@@ -21139,3 +21139,9 @@ the guard back off so each cluster is left as found, and run it a third time to 
 **Workshop.** The page is the same one attendee clusters serve; the change only sets a heading from a count the page
 already computed, so the 2-hour format (`delivered/devopsdays-portland-2026`) gets the same card with an honest heading.
 No dependency was added.
+
+**The suites (run 17722, at `651dd937`).** `bash verify/run-e2e-tools.sh` printed `275 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `test_guardrails_heading.py` among them,
+then `62 checks ran (the offline suite and 61 tier tests) in 30m30s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`,
+with `test_guardrails_heading_e2e.py` printing `All rendered guardrails-heading checks passed.` The prose gate printed
+`prose gate: pass`.
