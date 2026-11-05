@@ -50,6 +50,19 @@ spec:
   template:
     metadata:
       labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway, tags.datadoghq.com/service: burritobot-gateway, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      # checksum/agentgateway-config FORCES A ROLLOUT WHEN agentgateway-config's config.yaml CHANGES, and it is bumped
+      # by hand (#878): the first 12 hex digits of sha256 of the ConfigMap's config.yaml string, as written below.
+      # The ConfigMap is a plain resource with a stable name, so a committed content change alters nothing in this
+      # pod template on its own, and the binary hot-reloads only what v1.7.0 can take at runtime: a `config:` edit
+      # is not applied by a reload, and a migration it refuses is logged as `Failed to reload config` while the old
+      # config goes on serving (watch-it-burn-community, 2026-11-05, on #864's tracing move). A change to the annotation
+      # changes the pod template, Argo CD rolls the pod, and the new pod reads the file at startup.
+      # agentgateway-c7-config is NOT in this checksum on purpose: its rule line is flipped live on an admin cluster
+      # (guard-mcp-on / guard-mcp-off), the agentgateway-c7 container reloads it without a restart, and ai-layer
+      # ignores drift on it. A C7 rule flip must never roll this pod. verify/test_agentgateway_config_checksum.py
+      # fails when the value is not sha256(config.yaml)[:12], and prints the value to set.
+      annotations:
+        checksum/agentgateway-config: "7b5736c88625"
     spec:
       serviceAccountName: agentgateway
       automountServiceAccountToken: false
