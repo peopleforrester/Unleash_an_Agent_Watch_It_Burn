@@ -20240,3 +20240,6 @@ seed-to-localhost check to `verify/test_guardrails_switch.py` that this branch k
 dropped too and staging's copy stands; the sentence above that names it as kept is superseded. #919's paragraph and
 #906's land side by side in the run-of-show's Probe record. What #906 still adds on staging is the deploy_app
 manifest-shape fix, the lab VPC's rule on each cluster API, and these records.
+On `4c9329dd`, `bash verify/run-e2e-tools.sh` at `b559d890` printed `269 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, then `59 checks ran (the offline suite and 58 tier tests) in 30m32s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`.
