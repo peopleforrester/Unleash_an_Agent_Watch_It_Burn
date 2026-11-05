@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Offline tests for verify/terminal-login-live.sh (#912): with kubectl and curl shimmed, it passes only when the
-# ABOUTME: Secret and all three tools take the mrf-secrets login and refuse the old one, and never prints or argv's a value.
+# ABOUTME: Secret and all three tools take the presenter login and refuse the old one, and never prints or argv's a value.
 #
 # Usage: verify/test_terminal_login_live.sh      (no cloud access; kubectl and curl are shims, both logins are placeholders)
 set -uo pipefail
@@ -83,7 +83,8 @@ printf '%s:%s' "${NEW_USER}" "${NEW_PW}" >"${T}/secret"; printf '%s:%s' "${NEW_U
 run "${T}/new.env" ctx-a "${B1}"
 check "exits 0" '[[ "${rc}" -eq 0 ]]'
 check "8 checks pass, none fails" 'grep -q "^8 passed, 0 failed$" "${T}/out"'
-check "it says the terminal takes the mrf-secrets login" 'grep -q "TAKES THE MRF-SECRETS LOGIN AND REFUSES THE OLD ONE on ctx-a" "${T}/out"'
+check "it says the terminal takes the presenter login, from mrf-secrets" \
+    'grep -qF "TAKES THE PRESENTER LOGIN AND REFUSES THE OLD ONE on ctx-a (login from mrf-secrets)" "${T}/out"'
 check "no value in the output or in any argv" 'novalue'
 check "every kubectl call names --context ctx-a" \
     '[[ -n "$(grep "^kubectl" "${CALLS}")" ]] && ! grep "^kubectl" "${CALLS}" | grep -qv -- "--context ctx-a "'
@@ -92,11 +93,20 @@ run "${T}/new.env" ctx-a "${B1}" "${B2}"
 check "two base URLs (one with a trailing slash): 15 checks pass" '[[ "${rc}" -eq 0 ]] && grep -q "^15 passed, 0 failed$" "${T}/out"'
 check "the trailing slash is not doubled" 'grep -q "two.example.test/terminal/" "${CALLS}" && ! grep -q "test//" "${CALLS}"'
 
+echo "== an interim login given in the environment (question 1090) =="
+: >"${CALLS}"; rc=0
+WIB_OLD_FLEET_SH="${T}/old-fleet.sh" WIB_OLD_LOGIN_SHA256="${OLD_SHA}" WIB_TERMINAL_ENV="${T}/missing.env" \
+    WIB_TERMINAL_USER="${NEW_USER}" WIB_TERMINAL_PASSWORD="${NEW_PW}" bash "${LIVE}" ctx-a "${B1}" >"${T}/out" 2>&1 || rc=$?
+check "exits 0 and names the environment as the login's source" \
+    '[[ "${rc}" -eq 0 ]] && grep -qF "PASS  terminal-auth holds the presenter login from the environment (WIB_TERMINAL_USER, WIB_TERMINAL_PASSWORD)" "${T}/out" && grep -qF "(login from the environment" "${T}/out"'
+check "  and prints no value" 'novalue'
+
 echo "== not rotated: the Secret and the tools still take the old login =="
+
 printf '%s:%s' "${OLD_WORD}" "${OLD_WORD}" >"${T}/secret"; printf '%s:%s' "${OLD_WORD}" "${OLD_WORD}" >"${T}/accept"
 run "${T}/new.env" ctx-a "${B1}"
 check "exits 1" '[[ "${rc}" -eq 1 ]]'
-check "names the Secret as the old login" 'grep -q "FAIL  terminal-auth holds .*(got the old login, want the mrf-secrets login)" "${T}/out"'
+check "names the Secret as the old login" 'grep -q "FAIL  terminal-auth holds .*(got the old login, want the presenter login)" "${T}/out"'
 check "the old login opening /terminal/ fails" 'grep -q "FAIL  /terminal/ refuses the old login (got 200, want 401)" "${T}/out"'
 check "the old password opening code-server fails" 'grep -q "FAIL  /ide/login refuses the old password (got 302, want 200)" "${T}/out"'
 check "the old token opening Jupyter fails" 'grep -q "FAIL  /jupyter/ refuses the old token (got 200, want 403)" "${T}/out"'

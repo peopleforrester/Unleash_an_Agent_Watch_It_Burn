@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: Live check for #912: a roster cluster's terminal takes the presenter login from mrf-secrets and refuses the
-# ABOUTME: old one, on ttyd (/terminal/), code-server (/ide/) and Jupyter (/jupyter/). Prints verdicts, never a value.
+# ABOUTME: Live check for #912: a roster cluster's terminal takes the presenter login (mrf-secrets, or the environment) and
+# ABOUTME: refuses the old one, on ttyd (/terminal/), code-server (/ide/) and Jupyter (/jupyter/). Prints verdicts, never a value.
 #
 # Usage: verify/terminal-login-live.sh <kube-context> <base-url> [<base-url> ...]
 #   e.g. verify/terminal-login-live.sh watch-it-burn-private https://burritobot-private.burritobot.co
@@ -8,12 +8,13 @@
 #
 # Run it where mrf-secrets is checked out: the new login is read by fleet.sh's own presenter_login (#910), from
 # WIB_TERMINAL_USER and WIB_TERMINAL_PASSWORD when set, else from WIB_TERMINAL_ENV (default
-# ~/secrets/projects/watch-it-burn-terminal.env). The old login is the one fleet.sh carried as its default before
+# ~/secrets/projects/watch-it-burn-terminal.env). The output names which of the two it came from, since an interim login
+# written before mrf-secrets holds one (question 1090) is checked by setting the two variables. The old login is the one fleet.sh carried as its default before
 # #910 (ce43342c), read from git history, which is public; it is checked against the digest
 # verify/test_no_presenter_login.py guards, so a wrong revision fails here rather than passing a check on the wrong
 # value. Both reach curl through a config on a file descriptor, never on its command line, and neither is printed.
 #
-# Checks: the cluster's terminal-auth Secret holds the mrf-secrets login (and not the old one); each base URL answers
+# Checks: the cluster's terminal-auth Secret holds that presenter login (and not the old one); each base URL answers
 # /terminal/ with 401 unauthenticated, 401 to the old login and 200 to the new; /ide/login refuses the old password
 # (no redirect) and takes the new (302); /jupyter/api/status answers 403 to the old token and 200 to the new.
 # Exits 1 on any failed check, 2 on a usage error, and fails loudly when either login cannot be read.
@@ -57,8 +58,12 @@ new="$(bash -c 'source "$1" >/dev/null 2>&1 </dev/null; presenter_login' _ "${FL
     exit 1
 }
 new_pw="${new#*:}"
+if [[ -n "${WIB_TERMINAL_USER:-}" && -n "${WIB_TERMINAL_PASSWORD:-}" ]]; then src="the environment (WIB_TERMINAL_USER, WIB_TERMINAL_PASSWORD)"
+elif [[ -n "${WIB_TERMINAL_USER:-}${WIB_TERMINAL_PASSWORD:-}" ]]; then src="mrf-secrets and the environment"
+else src="mrf-secrets"
+fi
 if [[ "${new}" == "${old}" || "${new_pw}" == "${old_pw}" ]]; then
-    echo "FAIL  the presenter login in mrf-secrets is still the old one; generate a new one there first" >&2
+    echo "FAIL  the presenter login from ${src} is still the old one; generate a new one first" >&2
     exit 1
 fi
 
@@ -74,11 +79,11 @@ echo "== ${CONTEXT}: the terminal-auth Secret =="
 cur="$(kubectl --context "${CONTEXT}" -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null \
     | base64 -d 2>/dev/null)"
 if [[ -z "${cur}" ]]; then which="no Secret (the terminal is open)"
-elif [[ "${cur}" == "${new}" ]]; then which="the mrf-secrets login"
+elif [[ "${cur}" == "${new}" ]]; then which="the presenter login"
 elif [[ "${cur}" == "${old}" ]]; then which="the old login"
 else which="another login"
 fi
-check "terminal-auth holds the presenter login from mrf-secrets" "${which}" "the mrf-secrets login"
+check "terminal-auth holds the presenter login from ${src}" "${which}" "the presenter login"
 
 for base in "$@"; do
     base="${base%/}"
@@ -99,4 +104,4 @@ done
 echo
 echo "${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || exit 1
-echo "THE TERMINAL TAKES THE MRF-SECRETS LOGIN AND REFUSES THE OLD ONE on ${CONTEXT}"
+echo "THE TERMINAL TAKES THE PRESENTER LOGIN AND REFUSES THE OLD ONE on ${CONTEXT} (login from ${src})"

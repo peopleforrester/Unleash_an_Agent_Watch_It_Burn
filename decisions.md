@@ -20813,3 +20813,69 @@ RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `ve
 them with `28 passed, 0 failed`, then `60 checks ran (the offline suite and 59 tier tests) in 31m10s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `python3 verify/prose_gate.py
 /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging` printed `prose gate: pass`. No dependency was added.
+## 2026-11-05 · #912 · run 17705 · question 1090: both KubeCon terminals now take an interim presenter login, and the old login is refused
+
+**The decision.** Question 1090 asked whether to rotate the presenter terminal login on watch-it-burn-private and
+watch-it-burn-community now, to an interim login kept only in the clusters, instead of waiting for mrf-secrets to store
+the new one. Answer: rotate now to an interim login. Decided by hecaton's research under Michael's standing rules, not by
+Michael. The research cited #908 (its purpose is to end the exposure of the known login), this repo's change-cadence
+rules, the data-vault rule that keeps every run out of mrf-secrets, and the rule that a human commits rotations there,
+which llm-coding-workflow#463 would remove. So the mrf-secrets value arrives only when Michael commits it. What it
+changes: the old login stops opening either terminal now, and until mrf-secrets holds a login, the clusters hold one
+that it does not.
+
+**What ran (run 17705, 2026-11-05 about 21:35Z).** A script in the run's own temp directory, which printed no value:
+
+- For each context it checked that the kubeconfig's server is the endpoint `aws eks describe-cluster` gives for
+  `arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private` and `.../watch-it-burn-community`. hecaton's
+  kubeconfig names its clusters by short name, so the first form of the guard, a match on the ARN, refused, and nothing
+  had been written. It also checked `kubectl --context <ctx> auth can-i patch secrets -n agent` and `delete pods`.
+- It generated one login in memory (`presenter-` and six random characters as the user, 24 random letters and digits as
+  the password) and wrote the same one to both clusters, as the presenter login fleet.sh gives every roster cluster:
+  `kubectl --context <ctx> -n agent create secret generic terminal-auth --from-env-file=<(...) --dry-run=client -o yaml
+  | kubectl --context <ctx> -n agent apply -f -`, the value on a file descriptor rather than argv. A read-back on each
+  equalled what was written.
+- It deleted each cluster's one web-terminal pod (`kubectl --context <ctx> -n agent delete pod <name>`), as fleet.sh's
+  `restart_pods` does, rather than a `rollout restart`, which would leave a pod-template change for Argo CD to see as
+  drift. The replacements, `web-terminal-78f4fb569f-xfp4m` on private and `-r9f2v` on community, were Ready in under a
+  minute.
+- `kubectl apply` had added a `kubectl.kubernetes.io/last-applied-configuration` annotation. On a Secret that annotation
+  is a second copy of the data, so `kubectl --context <ctx> -n agent annotate secret terminal-auth
+  kubectl.kubernetes.io/last-applied-configuration-` removed it on both. Each Secret again has no annotations and no
+  labels. fleet.sh's `terminal_password_one` writes the Secret the same way and leaves the same annotation, with the
+  value on `--from-literal` in argv. That is this run's follow-up, not changed here.
+
+**The check.** With `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD` set, for that command only, from the private
+Secret read back in the shell, `bash verify/terminal-login-live.sh watch-it-burn-private
+https://burritobot-private.burritobot.co https://burritobot-private.agenticburn.com` printed `15 passed, 0 failed` and
+`THE TERMINAL TAKES THE PRESENTER LOGIN AND REFUSES THE OLD ONE on watch-it-burn-private`. The Secret holds the login. On
+both hosts `/terminal/` answers 401 to no login and to the old login, and 200 to the interim one. `/ide/login` answers
+200 (the login page again) to the old password and 302 to the interim one. `/jupyter/api/status` answers 403 to the old
+token and 200 to the interim one. The same check on `watch-it-burn-community`, against its console load balancer's own
+name, printed `8 passed, 0 failed` with the same verdicts. The two Secrets hold the same login. `attackme.burritobot.co`
+and `attackme.agenticburn.com` still answer 404 on `/terminal/`.
+
+**The script now names the login's source.** `verify/terminal-login-live.sh` said "the mrf-secrets login" even when the
+login came from the environment, which misdescribes an interim run. It now says the login is from mrf-secrets, from
+the environment, or from both, and the closing line reads `... (login from <source>)`. `git grep` found the old
+wording read only by `verify/test_terminal_login_live.sh`, which changes in the same commit and gains a case with the
+login in the environment and no env file (30 checks).
+
+**Where presenters find the interim login.** Michael reads it from the cluster:
+`kubectl --context watch-it-burn-private -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`
+(the community cluster holds the same one). The pages and the #908 comment point at mrf-secrets, where the login will
+live. Whitney reached it only through Michael before, and that is still so.
+
+**The criteria now.** On both clusters the old login is refused and the presenter login opens the terminal, the IDE and
+the notebook. The community terminal carries no login that is in the repo. Two things are still owed until mrf-secrets
+holds the login. First, "the new login from mrf-secrets" and "the Secret is the one delivered from mrf-secrets": the
+interim login is not in mrf-secrets. Second, a roster bring-up in that window gets no presenter login at all, since
+fleet.sh refuses to build one without it. No path writes the old login back: Argo CD does not own the Secret, and
+fleet.sh has no default.
+
+**Not yet run.** Once Michael has committed `projects/watch-it-burn-terminal.env` (keys `WIB_TERMINAL_USER`,
+`WIB_TERMINAL_PASSWORD`) to mrf-secrets: on tanjiro-wsl2, through `sources-elevated fleet`, from
+`infra/terraform/fleet/` with `~/secrets` holding the file, `./fleet.sh terminal-password watch-it-burn-private
+watch-it-burn-community`. Then `bash verify/terminal-login-live.sh watch-it-burn-private
+https://burritobot-private.burritobot.co` and the community one, with neither variable set, each ending `(login from
+mrf-secrets)`.
