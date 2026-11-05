@@ -21406,3 +21406,68 @@ issue's own command, which this run ran green at 19 of 20.
 repeated short polls of the log, not a failing test), so run 17741 ran it again. `bash verify/run-e2e-tools.sh`
 printed `271 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `60 checks ran (the offline suite and 59 tier
 tests) in 29m58s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #890 · run 17742 · A test fails unless watch-it-burn/datadog's pair is new, made for the secret, and neither rotated nor revoked
+
+**Why.** Test review run 17398 found that no test checked the second half of #759's criterion, "The credential has
+read-only scopes and is new. No existing key was used, rotated or revoked." `--scopes` covers the read-only half. The
+key's `created_at` was only printed. `verify/prior-drafts.sh 890 origin/staging` printed NONE, and the issue has no
+comments.
+
+**What the criterion can mean now.** Read literally, "new" and "no existing key was used" never held. The 2026-11-05
+#759 entry records that the run used the pair handed to runs on 2026-11-02, under the coordinator's note on #759 of
+2026-11-03, and that the criterion's wording was written for run 15550's route of a fresh key behind a hecaton verb.
+So a test of the literal words would fail from its first run, against a ruling already made. The test checks what the
+ruling leaves of the criterion, the parts that can stop holding:
+
+- The credential is new in the sense that each key was made for the secret: both keys were created within one hour
+  before the secret was (`NEW_WINDOW`). An older key would be one copied into it.
+- It was not rotated. Neither key was created after the secret was, the API key's `modified_at` equals its
+  `created_at`, and the secret is not set to rotate.
+- It was not revoked. The org lists each key exactly once (a revoked key is not listed), and the API key's status is
+  `active`.
+- The run uses no other existing key and can rotate or revoke nothing. Every Datadog request in every mode is a GET
+  to one of five read paths, the only AWS calls are `get-secret-value` and `describe-secret` on the secret, and the
+  headers carry the secret's `api-key` and `app-key` only.
+
+The last point matters more now than in #759's run. Since 2026-11-05T14:59Z the secret's current version also holds
+a `write-app-key` (its previous version, from 2026-10-28, does not; the `api-key` and `app-key` digests are equal in
+both). The reader must never send it, and a test checks that it does not.
+
+**What changed.** `verify/dd_traces.py --credential` runs `--scopes`. If every scope is read-only, it then finds the
+API key in `/api/v2/api_keys` by its last four characters (the pair's key holds `api_keys_read`), reads the secret's
+`CreatedDate` and `RotationEnabled` with `describe-secret` (no value), and exits 1 naming each problem.
+`credential_problems` holds the rule. `key_record` now takes the listing path, so the same lookup serves both keys.
+`verify/test_dd_traces_live.py` runs `--credential` after `--scopes`.
+
+**Tests.** `verify/test_dd_traces.py` adds these cases against the fake org:
+- The live pair's times pass, with GETs only, to the org, the application key and the API key listings.
+- Each of these exits 1 and says why: either key made more than an hour before the secret, either key made after it,
+  an API key modified after it was made, an API key that is disabled or has no status, a missing API key or
+  application key, an application key with no creation time, a secret set to rotate or with no creation time, a 403
+  on the API key listing (naming `api_keys_read`), and a secret that cannot be described.
+- At the edge of the window, 59 minutes passes and 61 fails.
+- A write scope fails before anything else is read.
+- `stamp` reads Datadog's and the AWS CLI's time forms and refuses a time with no zone.
+- Across all five modes, with `DD_API_KEY`, `DD_APP_KEY` and `WIB_FLEET_MONITORS_APP_KEY` set in the environment and
+  a `write-app-key` in the secret, only the secret's read pair is sent, only GETs go out, only the five read paths are
+  asked, and only `get-secret-value` and `describe-secret` run.
+- `dd_traces.py` calls Datadog in one place, with GET.
+
+Mutations to `credential_problems` and to `read_keys` failed the suite each time (from 2 to 6 FAIL lines): a 10000-hour
+window, no after-the-secret check, no status, modified or rotation check, and `read_keys` preferring `write-app-key`.
+
+**Live check, run 17742 (GETs and describe-secret only; nothing changed).** At 2026-11-05T23:04Z, after
+`. "$HECATON_CLUSTER_ENV"`, `python3 verify/test_dd_traces_live.py` exited 0. It read trace
+f6b9e9d3fe7e52248d48d8f506d53800 (2026-11-05T22:52:35Z, 6 spans) and 50 APM spans, then `--scopes` printed 145
+scopes and `Every scope is read-only.`, then `--credential` printed:
+
+    API key 'BurritoBot', created 2026-10-28T10:36:34.828511+00:00, modified 2026-10-28T10:36:34.828511+00:00, active; watch-it-burn/datadog created 2026-10-28T11:39:34.153000+01:00, rotation off
+    The pair is new: both keys were made for watch-it-burn/datadog, and neither was rotated or revoked.
+
+So the API key was made three minutes before the secret and the application key (2026-10-28T10:37:27Z) two minutes
+before it.
+
+**Not yet run on a cluster.** Nothing is owed. The check reads only the sandbox org and Secrets Manager.
+
+No dependency was added.

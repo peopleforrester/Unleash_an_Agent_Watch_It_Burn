@@ -1,17 +1,20 @@
 # ABOUTME: Offline tests for verify/dd_traces.py (#759): it reads the newest ml_app:burritobot traces with GETs only,
-# ABOUTME: with watch-it-burn/datadog's pair as the named profile, only in the sandbox org, and names a refused scope.
+# ABOUTME: with watch-it-burn/datadog's pair as the named profile, only in the sandbox org, and names a refused scope;
+# ABOUTME: --credential fails unless the pair is new, made for the secret, and neither rotated nor revoked (#890).
 """Nothing here reaches Datadog or AWS. The org is a fake transport answering the four paths the reader uses,
 /api/v2/current_user, the LLM Observability span listing, the APM span listing and the org's application key
-listing (for --scopes), and refusing anything else; the
+and API key listings (for --scopes and --credential), and refusing anything else; the
 key pair comes from a fake `keys` that records the profile and region it was asked for, and a fake `aws` run that
-answers as Secrets Manager does.
+answers as Secrets Manager does. The secret's metadata for --credential comes from a fake `describe`.
 """
 from __future__ import annotations
 
 import contextlib
 import io
 import json
+import os
 import pathlib
+import re
 import sys
 import urllib.parse
 
@@ -57,11 +60,24 @@ def keyrec(last4, scopes, name="Burritobot-app-key"):
                                                        "created_at": "2026-10-28T10:37:27Z"}}
 
 
+# The live pair's times (run 17742, 2026-11-06): the API key, then the application key, then the secret two minutes on.
+API_MADE = "2026-10-28T10:36:34.828511+00:00"
+SECRET_MADE = "2026-10-28T11:39:34.153000+01:00"
+
+
+def apirec(last4, created=API_MADE, modified=None, status="active", name="BurritoBot"):
+    return {"type": "api_keys", "attributes": {"name": name, "last4": last4, "created_at": created,
+                                               "modified_at": created if modified is None else modified,
+                                               "status": status}}
+
+
 class Org:
-    def __init__(self, name="Datadog Sandbox Whitney", refuse=(), keys=None):
+    def __init__(self, name="Datadog Sandbox Whitney", refuse=(), keys=None, api_keys=None):
         self.name, self.refuse, self.calls = name, set(refuse), []
         self.keys = [keyrec("-app", READ_SCOPES), keyrec("zzzz", ["dashboards_write"], "someone-else")] \
             if keys is None else keys
+        self.api_keys = [apirec("-api"), apirec("yyyy", "2025-01-01T00:00:00+00:00", name="someone-else")] \
+            if api_keys is None else api_keys
 
     def http(self, method, url, headers, body):
         parts = urllib.parse.urlsplit(url)
@@ -79,9 +95,10 @@ class Org:
         if parts.path == dd_traces.APM_PATH:
             return 200, {"data": [{"attributes": {"service": "burritobot-guard-proxy", "resource_name": "POST /chat",
                                                   "trace_id": "abc", "start_timestamp": "2026-11-01T12:00:00Z"}}]}
-        if parts.path == dd_traces.KEYS_PATH:
+        if parts.path in (dd_traces.KEYS_PATH, dd_traces.API_KEYS_PATH):
             size, number = int(q["page[size]"]), int(q["page[number]"])
-            return 200, {"data": self.keys[size * number:size * (number + 1)]}
+            listed = self.keys if parts.path == dd_traces.KEYS_PATH else self.api_keys
+            return 200, {"data": listed[size * number:size * (number + 1)]}
         return 404, {"errors": [f"fake org: no {parts.path}"]}
 
 
@@ -93,11 +110,19 @@ def fake_keys(profile, region):
     return "sec-api", "sec-app", "datadoghq.com"
 
 
-def run_main(argv, org, env=None, keys=fake_keys):
+described = []
+
+
+def fake_describe(profile, region, meta=None):
+    described.append((profile, region))
+    return {"Name": "watch-it-burn/datadog", "CreatedDate": SECRET_MADE} if meta is None else meta
+
+
+def run_main(argv, org, env=None, keys=fake_keys, describe=fake_describe):
     err = io.StringIO()
     lines = []
     with contextlib.redirect_stderr(err):
-        rc = dd_traces.main(argv, env=env or {}, keys=keys, http=org.http, say=lines.append)
+        rc = dd_traces.main(argv, env=env or {}, keys=keys, http=org.http, say=lines.append, describe=describe)
     return rc, "\n".join(lines), err.getvalue()
 
 
@@ -251,6 +276,123 @@ for s in ("logs_write_archives", "logs_modify_indexes", "monitors_write", "dashb
     check(f"{s} is not read-only", not dd_traces.read_only(s))
 for s in ("logs_read_data", "logs_read_archives", "apm_read", "ndm_device_profiles_view", "timeseries_query"):
     check(f"{s} is read-only", dd_traces.read_only(s))
+
+print("== --credential: the pair is new, made for the secret, and neither rotated nor revoked (#890) ==")
+org = Org()
+described.clear()
+rc, text, err = run_main(BASE + ["--credential"], org)
+check("the live pair's shape: exit 0, both keys and the secret's creation printed, and said new",
+      rc == 0 and "API key 'BurritoBot', created 2026-10-28T10:36:34" in text and "rotation off" in text
+      and "Every scope is read-only." in text and "The pair is new" in text and err == "")
+check("the secret is described as the named profile and region", described == [("accen-dev", "us-west-2")])
+check("--credential sends only GETs, to the org, the application key and the API key listings",
+      all(c[0] == "GET" and c[4] is None for c in org.calls)
+      and {c[1] for c in org.calls} == {dd_traces.ME_PATH, dd_traces.KEYS_PATH, dd_traces.API_KEYS_PATH})
+check("another user's API key in the listing is not the one judged", "someone-else" not in text)
+cases = [
+    ("an application key made a day before the secret (an existing key reused)",
+     dict(keys=[{**keyrec("-app", READ_SCOPES), "attributes": {**keyrec("-app", READ_SCOPES)["attributes"],
+                                                                "created_at": "2026-10-27T10:37:27Z"}}]),
+     "application key was created 2026-10-27T10:37:27Z, more than 1:00:00 before the secret"),
+    ("an API key made a month before the secret (an existing key reused)",
+     dict(api_keys=[apirec("-api", "2026-09-28T10:36:34+00:00")]), "an existing key, not one made for it"),
+    ("an application key made after the secret (the pair replaced)",
+     dict(keys=[{**keyrec("-app", READ_SCOPES), "attributes": {**keyrec("-app", READ_SCOPES)["attributes"],
+                                                                "created_at": "2026-11-05T14:59:01Z"}}]),
+     "after the secret (2026-10-28T11:39:34.153000+01:00): the pair was replaced"),
+    ("an API key made after the secret (the pair replaced)",
+     dict(api_keys=[apirec("-api", "2026-11-05T14:59:01+00:00")]), "API key was created 2026-11-05T14:59:01"),
+    ("an API key modified after it was made", dict(api_keys=[apirec("-api", modified="2026-11-01T09:00:00+00:00")]),
+     "the API key was modified 2026-11-01T09:00:00+00:00"),
+    ("an API key that is not active", dict(api_keys=[apirec("-api", status="disabled")]),
+     "status is disabled, not active"),
+    ("an API key with no status (Datadog dropped the field)", dict(api_keys=[{"attributes": {
+        "last4": "-api", "created_at": API_MADE, "modified_at": API_MADE}}]), "status is None, not active"),
+    ("a revoked API key (not listed)", dict(api_keys=[apirec("yyyy")]), "0 API keys"),
+    ("a revoked application key (not listed)", dict(keys=[keyrec("zzzz", READ_SCOPES)]), "0 application keys"),
+    ("an application key with no creation time", dict(keys=[{"attributes": {"last4": "-app",
+                                                                            "scopes": READ_SCOPES}}]),
+     "the application key has no creation time"),
+]
+for name, kw, said in cases:
+    rc, text, err = run_main(BASE + ["--credential"], Org(**kw))
+    check(f"{name}: exit 1, said so", rc == 1 and said in err and "The pair is new" not in text)
+for name, meta, said in (
+        ("the secret set to rotate", {"CreatedDate": SECRET_MADE, "RotationEnabled": True}, "is set to rotate"),
+        ("the secret with no creation time", {"Name": "watch-it-burn/datadog"}, "has no creation time")):
+    rc, text, err = run_main(BASE + ["--credential"], Org(), describe=lambda p, r, m=meta: fake_describe(p, r, m))
+    check(f"{name}: exit 1, said so", rc == 1 and said in err)
+for minutes, ok in ((59, True), (61, False)):
+    made = (dd_traces.stamp(SECRET_MADE) - dd_traces.dt.timedelta(minutes=minutes)).isoformat()
+    rc, _, _ = run_main(BASE + ["--credential"], Org(api_keys=[apirec("-api", made)]))
+    check(f"an API key made {minutes} minutes before the secret: {'new' if ok else 'not new'}", (rc == 0) == ok)
+org = Org(keys=[keyrec("-app", READ_SCOPES + ["monitors_write"])])
+described.clear()
+rc, text, err = run_main(BASE + ["--credential"], org)
+check("a write scope still fails --credential, before any API key or secret is read",
+      rc == 1 and "monitors_write" in err and described == []
+      and dd_traces.API_KEYS_PATH not in {c[1] for c in org.calls})
+org = Org(refuse=[dd_traces.API_KEYS_PATH])
+rc, text, err = run_main(BASE + ["--credential"], org)
+check("403 on the API key listing: exit 1, api_keys_read named", rc == 1 and "api_keys_read" in err)
+rc, text, err = run_main(BASE + ["--credential"], Org(), describe=lambda p, r: dd_traces.secret_meta(
+    p, r, run=lambda argv, **kw: Done(255, "", "AccessDeniedException: DescribeSecret")))
+check("a secret that cannot be described: exit 1 with AWS's reason", rc == 1 and "DescribeSecret" in err)
+for s, want in (("2026-10-28T10:37:27.418955Z", "2026-10-28T10:37:27.418955+00:00"),
+                ("2026-11-05T23:01:50.211479335Z", "2026-11-05T23:01:50.211479+00:00"),
+                (SECRET_MADE, SECRET_MADE)):
+    check(f"stamp reads {s}", dd_traces.stamp(s).isoformat() == want)
+for s in ("2026-10-28T10:37:27", None, ""):
+    try:
+        dd_traces.stamp(s)
+        refused = False
+    except ValueError:
+        refused = True
+    check(f"stamp refuses {s!r} (no zone, or no time)", refused)
+
+print("== nothing the reader runs can make, rotate or revoke a key, and it sends only the secret's read pair ==")
+aws_argvs = []
+SECRET = {"api-key": "sec-api", "app-key": "sec-app", "site": "datadoghq.com", "write-app-key": "WRITE-KEY-wxyz"}
+
+
+def aws_all(argv, **kw):
+    aws_argvs.append(argv)
+    if argv[:3] == ["aws", "secretsmanager", "get-secret-value"]:
+        return Done(0, json.dumps(SECRET))
+    if argv[:3] == ["aws", "secretsmanager", "describe-secret"]:
+        return Done(0, json.dumps({"Name": "watch-it-burn/datadog", "CreatedDate": SECRET_MADE}))
+    return Done(1, "", f"fake aws: no {argv[1:3]}")
+
+
+saved_env = dict(os.environ)
+os.environ.update({"DD_API_KEY": "ENV-API-KEY", "DD_APP_KEY": "ENV-APP-KEY",
+                   "WIB_FLEET_MONITORS_APP_KEY": "ENV-WRITE-KEY"})
+sent, paths, methods = set(), set(), set()
+try:
+    for mode in (["--traces", "2"], ["--trace", "new"], ["--apm", "--json"], ["--scopes"], ["--credential"]):
+        org = Org()
+        rc, _, err = run_main(BASE + mode, org, keys=lambda p, r: dd_traces.fm.read_keys(p, r, run=aws_all),
+                              describe=lambda p, r: dd_traces.secret_meta(p, r, run=aws_all))
+        check(f"{' '.join(mode)}: exit 0 with the secret's pair", rc == 0)
+        sent |= {(c[3]["DD-API-KEY"], c[3]["DD-APPLICATION-KEY"]) for c in org.calls}
+        paths |= {c[1] for c in org.calls}
+        methods |= {c[0] for c in org.calls}
+finally:
+    os.environ.clear()
+    os.environ.update(saved_env)
+check("every mode sends the secret's api-key and app-key, never its write-app-key or a key from the environment",
+      sent == {("sec-api", "sec-app")})
+check("every mode only GETs, and only the five read paths (no key's own path, where a rotate or revoke would go)",
+      methods == {"GET"} and paths == {dd_traces.ME_PATH, dd_traces.LLMOBS_PATH, dd_traces.APM_PATH,
+                                       dd_traces.KEYS_PATH, dd_traces.API_KEYS_PATH})
+check("the only AWS calls are get-secret-value and describe-secret on watch-it-burn/datadog, as the named profile",
+      aws_argvs and {tuple(a[:5]) for a in aws_argvs} == {
+          ("aws", "secretsmanager", verb, "--secret-id", "watch-it-burn/datadog")
+          for verb in ("get-secret-value", "describe-secret")}
+      and all(a[a.index("--profile") + 1] == "accen-dev" for a in aws_argvs))
+src = (HERE / "dd_traces.py").read_text()
+check("dd_traces.py calls Datadog in one place, with GET (so no write path can be added beside it)",
+      re.findall(r"\.call\(\s*\"?(\w+)", src) == ["GET"])
 
 if failures:
     print(f"\nFAILED: {len(failures)}")
