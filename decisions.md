@@ -16980,3 +16980,6 @@ After that and once this change is in staging, the next run on #485 runs, within
 `fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private` and
 `python3 verify/test_fleet_monitors_live.py`, which must print DATA for the five absence monitors too, and reads the
 fleet dashboard's URL that the apply prints.
+
+**The suites (run 17318, at `f758b715`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 27m44s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
