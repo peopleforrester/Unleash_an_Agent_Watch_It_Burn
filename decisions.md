@@ -19828,3 +19828,7 @@ cover", and the answer to #924 is written from it.
 
 No live check: the change is a record of earlier runs, and nothing in it runs on a cluster. No test reads this doc
 (`git grep -n kubecon-na-2026-load-test -- verify scripts` finds none).
+
+**The suites (run 17651, at `ff497d0b`).** `bash verify/run-tests.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, exit 0. `bash verify/run-e2e-tools.sh` printed `58 checks ran (the offline suite and 57 tier
+tests) in 32m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
