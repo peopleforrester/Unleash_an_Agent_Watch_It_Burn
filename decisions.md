@@ -26479,3 +26479,7 @@ rows from 20:34:56 to 20:39:15.
 (the six Agatha asks, then six new names, deleted after) should each add one `ok: true` row. The workshop-mcp log
 should show no `field not declared in schema` error, and any "dropped top-level field(s)" or "refused as written
 (HTTP 500)" line names a shape this change covered.
+
+**The suites (run 17687, at `44b167bb`).** `bash verify/run-e2e-tools.sh` printed `60 checks ran (the offline suite and
+59 tier tests) in 30m20s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite inside it ran 270 tests,
+`test_deploy_app_undeclared_fields.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
