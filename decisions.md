@@ -19207,3 +19207,7 @@ plane. Both share the parser in `verify/node_sg_rules.py`.
 2. lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive` in `internal/bootstrap`
    (`go test -tags live`, `LAB_AWS_LIVE=1`, `LAB_APP_ACCESS_CLUSTER=<cluster>`) answers 200 for all eight apps, and
    the argocd-server probe above answers instead of timing out.
+
+**The suites (run 17432, at `eb1aa498`).** `bash verify/run-e2e-tools.sh` printed `263 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 29m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
