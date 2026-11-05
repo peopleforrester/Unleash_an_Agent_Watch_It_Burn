@@ -398,7 +398,7 @@ check("no --target is a usage error: the replay never guesses its cluster", r.re
 r = cli("--target", "https://attackme.burritobot.co", "--interval", "0.5", "--dry-run")
 check("an interval that would take over half guard-proxy's window is refused", r.returncode == 2 and "half" in r.stderr)
 r = cli("--target", "https://attackme.burritobot.co", "--only", "nope", "--dry-run")
-check("an unknown --only id is exit 2", r.returncode == 2)
+check("an unknown --only id is a usage error", r.returncode == 2)
 r = cli("--target", f"http://127.0.0.1:{closed_port()}", "--tag", "smoke")
 check("a real run against a dead address exits 1 and says STOPPED", r.returncode == 1 and "STOPPED" in r.stdout, r.stdout)
 r = cli("--target", "https://attackme.burritobot.co", "--witch", "replay raven", "--dry-run")
