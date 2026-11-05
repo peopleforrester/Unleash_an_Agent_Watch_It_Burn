@@ -87,7 +87,9 @@ These are the limits, measured on 2026-11-05 with #450's change live, from one a
   Each matched a guard-proxy `forward_error` at the 120 s deadline. Within 60 ms each was followed by a
   `task_cancel` of the agent's task with state `canceled`, and no `task_cancel_failed`. The two traces
   looked up in Datadog APM (`988bfbb5...`, `caa8a7c7...`) are there with guard-proxy's `chat` span, the agent's
-  `invoke_agent` span and its `run_shell` spans.
+  `invoke_agent` span and its `run_shell` spans. Since #885 workshop-mcp refuses a turn's third identical tool call
+  and every call after its twentieth, keyed on the turn's trace id (`gitops/ai-layer/tool_audit.py`). The replay
+  that should show none of these 502s runs once that change is on attackme.
 - **Nothing in front of the console failed.** No turn came back without guard-proxy's or nginx's body, so the
   public host's Caddy and Railway's edge answered every turn. The first run's 11 unexplained 502s did not recur.
 - **Served latency stays phone-friendly.** p50 4 to 5 s and p95 9 to 14 s at both sizes. The slowest served turn

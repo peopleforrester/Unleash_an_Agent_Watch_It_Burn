@@ -20732,3 +20732,79 @@ it now has the `agent-task` label that run 17684's escalation asked for, so heca
 `uv run ruff check . && uv run pytest` green there. The real-browser chat step on `/display` that run 17684 named
 under Not yet run on a cluster is still not run, for the same reason: each chat stays in guard-proxy's feed and on
 the projector.
+## 2026-11-05 · #885 · run 17697 · workshop-mcp refuses a turn's third identical tool call and every call past twenty, keyed on the turn's trace id
+
+**What the record shows.** Datadog Logs keeps workshop-agent's `Tool execution started` lines for #644's two load
+replays (2026-11-05, 06:30Z to 07:30Z): 1,188 tool calls in 504 turns, one turn per ADK `invocationID`. 345 turns made
+one call and 101 made two. The 13 turns that ran on for 100 s or more, the 13 that guard-proxy cut at PROXY_TIMEOUT,
+made 21 to 83 calls each, and in all but one a single call was most of them: the marketing-intel `curl -X POST` resent
+20 to 30 times, a `curl -LO` of kubectl 30 times, and `echo ... | grep -o ... | sort | uniq | wc -l` 80 times, all of
+it inside one turn. The 525 failed calls read, most often, `command FAILED with exit code 2: /bin/sh: 1: Syntax error:
+Unterminated quoted string` (254), then a curl exit 23 writing a file (70) and deploy_app's "must be a single object"
+(43). The busiest turns that were not loops made 14 distinct reorder_supply calls and 12 distinct deploy_app calls.
+
+**Where the limit can live.** Not in the agent. kagent v0.10.1's Agent CRD has no limit on a turn's tool or model
+calls (#742's entry), and the Go runtime builds ADK-go v2.1.0's `RunConfig`, which holds only StreamingMode and
+SaveInputBlobsAsArtifacts (read in kagent `go/adk/pkg/a2a/executor.go` and adk-go `agent/run_config.go` at those
+tags). So workshop-mcp limits it, in `AuditedFastMCP.call_tool` (gitops/ai-layer/tool_audit.py), the one place every
+tools/call passes.
+
+**The key is the turn's trace id.** workshop-mcp's MCP session is no key: ADK-go's mcptoolset keeps one session per
+toolset (`tool/mcptoolset/client.go`), and five session ids carried the replay's 504 turns in workshop-mcp's audit
+lines. What does mark a turn is guard-proxy's /chat span. guard-proxy injects its traceparent on every A2A request
+(`internal/server/chat.go`, agentRPC), so a turn's message/send, its tasks/get polls and its cancel share one trace
+id. On watch-it-burn-community today agentgateway logged 975 A2A requests from guard-proxy under 121 trace ids, none
+spanning more than 120 s. a2a-go v0.3.15 builds the call context from the message/send's HTTP headers
+(`a2asrv/jsonrpc.go`) and runs the turn under `context.WithoutCancel` of it, and kagent forwards a header listed in a
+tool's `allowedHeaders` from that context onto each MCP request (`go/adk/pkg/mcp/registry.go`, headerRoundTripper,
+on go-sdk v1.6.1's per-call POST). So the workshop-mcp entry in gitops/workshop-agent/agent.yaml now lists
+`allowedHeaders: [traceparent]`, and evil-mcp's entry lists nothing.
+
+**The rules.** In one turn, the third call of a tool with the same arguments is refused and not run
+(`MAX_SAME_CALLS` 2), and once 20 calls have run every further call is refused (`MAX_TURN_CALLS`). A refusal is
+raised, so FastMCP answers it as an error result. Its text starts "refused, not run", says how often the call already
+ran, quotes the failure it would repeat (clipped to 300 characters), and tells the model to change the call or tell
+the guest what happened. Past the cap it says to answer the guest now. A refused call writes a `refused` audit line
+and no `pre` line, because the leaderboard's C1 column and `verify/kubecon_probe.py` count `pre` lines as calls that
+reached a tool. Every audit line now carries `turn`, the trace id, which is also the turn's trace in Datadog APM.
+Turns are forgotten 900 s after their last call. A call with no valid traceparent is not limited, and behind
+agentgateway each such call gets a fresh trace id (randomSampling true), so before the Agent change syncs every call
+is a turn of one and nothing is refused: the 176 workshop-mcp tools/calls agentgateway logged today had 176 trace ids.
+
+**Does #463's error result invite the retries?** Not on its own. The 80-call loop got a successful result every time,
+and the failing loops got errors, so both shapes loop. #463 stays: a failed command has to read as failed, or the
+agent tells the guest it worked. What changes is what the model is told. A dash parse error (exit 2, `/bin/sh: N:
+Syntax error:`) now adds that none of the command ran, that the same text fails the same way, that an unclosed quote is
+the usual cause, and to send JSON from a quoted here-document file with `curl -d @/tmp/body.json`. The systemMessage
+gains three sentences: an unchanged call gets the same answer, change it after a failure, and after two tries that
+did not work stop and tell the guest.
+
+**Replayed offline.** `verify/fixtures/load-replay-2026-11-05-turns.json` is the 504 turns as Datadog logged them,
+holding only tool names and an argument id per turn, no argument text. Through the guard, each of the 13 long turns is
+refused by its 16th call, and 9 of them by their 5th. 17 turns are touched in all, and each one resent a workshop-mcp
+call more than twice; the other 487 run as they did.
+
+**Tests.** `verify/test_turn_guard.py` (offline) holds the traceparent parsing, the rules on a fake clock, the audited
+server's refusal path (raises, the tool is not called, a `refused` line and no `pre`), the Agent's allowedHeaders on
+workshop-mcp alone, the prompt's sentences, the parse hint on dash's recorded output, and the replay.
+`verify/test_turn_guard_e2e.py` (tools tier) runs the real workshop-mcp on mcp 1.29.1 behind the pinned agentgateway
+v1.7.0 on the committed :3001 bind and tracing, with one MCP session whose traceparent changes per request, as
+kagent's does. It shows the gateway keeps each turn's trace id on the way to workshop-mcp, that the third identical
+run_shell comes back isError and does not run (a counted command ran 7 times, as expected), that dash's message and
+the hint come back for an unclosed quote, that two interleaved turns on one session keep separate counts, and that the
+21st call in a turn is refused.
+
+**Live (2026-11-05, this run's KUBECONFIG, `--context` on every call).** `kubectl --context <ctx> -n agent apply
+--server-side --dry-run=server --force-conflicts --field-manager=dryrun-885 -f gitops/workshop-agent/agent.yaml` on
+watch-it-burn-community and watch-it-burn-private exited 0 and returned `workshop-mcp: allowedHeaders=["traceparent"]`
+and `evil-mcp: allowedHeaders=`; the live Agents still read no allowedHeaders after it. The agentgateway counts above
+are from `kubectl --context watch-it-burn-community -n agent logs deploy/agentgateway -c agentgateway --since=12h`.
+
+**Not yet run on a cluster.** Both need this change synced on attackme (watch-it-burn-community):
+
+- `kubectl --context watch-it-burn-community -n agent logs deploy/workshop-mcp | grep tool_invocation` shows a `turn`
+  on each line equal to the guard-proxy trace id agentgateway logs for that turn's A2A requests, which proves kagent
+  forwards the header.
+- `python3 verify/load_replay.py attackme.burritobot.co --yes --users 150 --harvest <harvest prompts dir>`, run before
+  `./fleet.sh reset-bot watch-it-burn-community` as its docstring says, ends with 0 PROXY_TIMEOUT 502s, and
+  workshop-mcp's log shows the `refused` lines that stopped the loops.
