@@ -18714,3 +18714,7 @@ explorer's Views control is, and whether a view named Every prompt exists.
    list is filtered by it, with the root's INPUT in the CONTENT column.
 3. The warning in the page itself: the `generate_content` rows' preview shows the system prompt, not the student's
    question. The API settles the input's order; only the page settles what its preview shows.
+
+**The suites (run 17415, at `7101abd0`).** `bash verify/run-e2e-tools.sh` printed `258 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `56 checks ran (the
+offline suite and 55 tier tests) in 27m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
