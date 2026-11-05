@@ -20749,6 +20749,14 @@ and the unreadable profile to the start state's failing cases, checks that run 1
 profile named first, and has both of its stand-in clusters answer the label. Both new failing cases pass on the old
 judge, which ignored the profile, so the checks fail without the change.
 
+`verify/stage_traces.py seed` runs the same start state before it sends anything, and its header already counts a
+private cluster on another profile as off the stage's start. The first `bash verify/run-e2e-tools.sh` of this run
+(at `1c6b93ee`) went red on `test_stage_traces.py`, whose stand-in private cluster did not answer the label, so seed
+refused it. Its stand-in now carries the label, the left-armed case carries the `admin` profile its docstring
+describes, and a new case has a cluster whose root renders `admin` with every guardrail off: seed exits 1 before
+any /chat or flip and writes no views file. A grep for every caller of `_start_state`, `judge_start_state` and
+`measure` finds no third.
+
 **The live check.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
 watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`, at 21:43Z on this run's commit `1f4f3f07`:
 `32 beats: 32 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $0.2914 to $0.3343 over 13 model calls. The start state read

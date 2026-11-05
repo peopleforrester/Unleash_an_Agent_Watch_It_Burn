@@ -63,6 +63,7 @@ class FakePrivate(st.StageCluster):
         self.g = {k: False for k in kp.AI_GUARDS}
         self.tools, self.rule, self.role = list(kp.EVIL_ALL), kp.C7_OPEN, kp.RBAC_SHIPPED
         self.armed = False
+        self.profile = kp.PRIVATE_PROFILE  # the lab-bootstrap root's lab-platform/profile label (#888)
         self.joker, self.log, self.sent, self.witches = False, [], [], []
         self.audit: list[dict] = []
         self.pii_guard = pii_guard  # whether LLM Guard's input scanners include the PII Regex
@@ -100,7 +101,7 @@ class FakePrivate(st.StageCluster):
 
     def measure(self):
         action = ["Deny"] if self.armed else ["Audit"]
-        return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
+        return {"profile": self.profile, "guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
                 "kyverno_actions": action, "breakout_actions": action, "networkpolicy": self.armed,
                 "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX}
 
@@ -407,6 +408,7 @@ with tempfile.TemporaryDirectory() as tmp:
         def __init__(self) -> None:
             super().__init__()
             self.armed = True
+            self.profile = "admin"
 
         def toggle(self, q):
             raise AssertionError(f"toggled {q} on a cluster off its start state")
@@ -418,6 +420,13 @@ with tempfile.TemporaryDirectory() as tmp:
     check("and flips nothing: no guardrails-off, no AI guard, Role or gateway change, the guardrails left as found",
           la.log == [] and la.armed is True, str(la.log))
     check("and writes no views file, since nothing was seeded", not out_la.exists())
+    # The root alone on another profile, every guardrail reading off (#888): still not the stage's cluster.
+    off_root = LeftArmed()
+    off_root.armed = False
+    out_or = pathlib.Path(tmp, "stage-traces-root.json")
+    check("seed exits 1 on a private cluster whose root renders the admin profile, before any /chat or flip",
+          run_seed(off_root, FakeDatadog(), out_or) == 1 and off_root.calls == 0 and not off_root.sent
+          and off_root.log == [] and not out_or.exists(), str(off_root.log))
 
     print("== a trace that never reaches Datadog ==")
     out2 = pathlib.Path(tmp, "stage-traces-2.json")
