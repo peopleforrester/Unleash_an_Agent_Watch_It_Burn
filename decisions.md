@@ -20223,3 +20223,7 @@ staging's check as `1bbab60e`. The other commits applied as they were: `13c1f1cc
 Per the coordinator's comment of 18:48Z, this run did not repeat the live recheck. Run 17628's results above stand,
 and #918 and #920 own the routes publish and the HC-666 check on the new server. One read: on watch-it-burn-private,
 Argo CD's `internal-registry` reads Synced and Healthy at `cb3367d2`, so #775's seed fix is live there.
+
+**The suites (run 17652).** `bash verify/run-e2e-tools.sh` at `27f3bcab`, rebased on staging `cb3367d2`, printed `267
+tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite and 57 tier tests) in
+33m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
