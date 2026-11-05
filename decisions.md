@@ -20025,3 +20025,11 @@ test's three `env=` to a `tmp` directory inside the scratch tree (`ad0d0130`). S
 independently under #775 (`fa53301d`, run 17584), which sets `TMPDIR` to the scratch root itself in all three. The
 two collided when hecaton rebased run 17610's branch, so run 17678 dropped `ad0d0130`'s edit to the test and kept
 staging's.
+'/tmp/tmp.XXXXXXXXXX'`), while `TMPDIR` named a directory in the worktree. Each of the test's three `env=` now
+sets `TMPDIR` to a `tmp` directory inside its own scratch tree, so the test owns that input. Nothing in the test
+scans the scratch root. Rerun alone, it exits 0.
+
+**The suites (run 17534, at `ad0d0130`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 28m15s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+`test_iam_policy_structural.py` ended `0 failure(s)` in it, and in the first full run at `39600ce0` as well.
