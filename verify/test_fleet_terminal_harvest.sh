@@ -112,6 +112,7 @@ src() { # $1: bash snippet to run after sourcing
       DATABASE_URL="${TEST_DATABASE_URL-postgresql://lab@db.test/lab}" USER="${TEST_USER-tester}" WIB_EVENT=test-event \
       WIB_PROVISION_DIR="${PROVISION_DIR_OVERRIDE:-${PROV}}" WIB_DEFAULT_ACCOUNT=acct-default WIB_REGION=us-west-2 \
       WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" WIB_AWS_POOL_DIR="${POOL}" WIB_INGEST_LB_WAIT=10 \
+      WIB_TERMINAL_USER="${WIB_TERMINAL_USER-placeholder-presenter}" WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD-placeholder-presenter-pw}" \
       bash -c "source '${FLEET}' >/dev/null 2>&1; POOL1='[]'; POOL2='[]'; sleep() { :; }; $1" 2>>"${T}/stderr" )
 }
 reset() { : >"${CALLS}"; : >"${T}/stderr"; rm -f "${T}"/imports/* "${POOL}"/*.terminal "${T}"/logs/.failures.*; }
@@ -154,6 +155,42 @@ HARVEST_RC=1 src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-q
 check "a failed harvest is recorded by name and leaves no file" \
   'ledger | grep -qx "${A}:terminal-harvest" && [[ ! -e "${POOL}/${A}.terminal" ]]'
 
+echo "== a roster cluster's Secret is the presenter login from mrf-secrets, and its absence fails loudly (#910) =="
+reset
+HARVEST_CRED='placeholder-presenter:placeholder-presenter-pw' \
+  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${ADMIN} acct-default ${T}/kcfg"
+check "a new admin Secret gets the test's presenter login" \
+  'grep -q "create secret generic terminal-auth -n agent --from-literal=TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}" && [[ -z "$(ledger)" ]]'
+printf 'export WIB_TERMINAL_USER=placeholder-file-user\nWIB_TERMINAL_PASSWORD=placeholder-file-pw\r\n' >"${T}/terminal.env"
+reset
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/terminal.env" \
+  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${COMMUNITY} acct-default ${T}/kcfg"
+check "the community cluster's login is read from WIB_TERMINAL_ENV, an export prefix and a CR dropped" \
+  'grep -q "TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw \[" "${CALLS}"'
+reset
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
+  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${ADMIN} acct-default ${T}/kcfg"
+check "with the login absent no Secret is created, so no fallback login is written" '! grep -q "create secret" "${CALLS}"'
+check "and the cluster fails the run by name" 'ledger | grep -qx "${ADMIN}:terminal-login"'
+check "and the log names the file the login is read from and says the terminal is open" \
+  'grep -q "terminal-auth NOT created for ${ADMIN}: the presenter login is not in mrf-secrets (${T}/no-such.env)" "${T}/stderr" && grep -q "UNAUTHENTICATED" "${T}/stderr"'
+check "and nothing is harvested" '! grep -q "^harvest" "${CALLS}"'
+reset
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
+  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-qa ${T}/kcfg"
+check "an attendee bootstrap does not need the presenter login" \
+  'grep -q "TTYD_CREDENTIAL=agentic:agentic" "${CALLS}" && [[ -z "$(ledger)" ]]'
+reset
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
+  src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "instructors up with the login absent exits 1 before anything is built" \
+  'grep -qx "rc=1" "${T}/out" && grep -q "REFUSING instructors up: the roster clusters. terminal login is unavailable; nothing was built" "${T}/stderr" && ! grep -q "BUILD-RAN" "${T}/stderr"'
+reset
+WIB_NO_BOOTSTRAP=1 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
+  src "_provision_spec_fleet() { echo BUILD-RAN >&2; }; print_bootstrap_hints() { :; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "a bare build, which writes no Secret, does not need it" 'grep -qx "rc=0" "${T}/out" && grep -q "BUILD-RAN" "${T}/stderr"'
+check "no presenter login reaches the log" '! grep -q "placeholder-presenter-pw\|placeholder-file-pw" "${T}/stderr"'
+
 echo "== ingest sends terminal_user and terminal_password exactly as the Secret holds them =="
 reset
 HARVEST_CRED='agentic:pa:ss' src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${A} accen-qa"
@@ -163,10 +200,10 @@ check "the user and password are the harvested value, split on the first colon" 
 check "the harvest ran in the cluster's account" 'grep -qxF "harvest ${A} us-west-2 ${POOL} [AWS_PROFILE=accen-qa]" "${CALLS}"'
 check "ingest does not read the Secret itself" '! grep -q "get secret terminal-auth" "${CALLS}"'
 reset
-HARVEST_CRED='sprouts:sprouts' src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${ADMIN} acct-default"
+HARVEST_CRED='placeholder-presenter:placeholder-presenter-pw' src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${ADMIN} acct-default"
 check "an admin cluster sends what its Secret holds" \
-  'ctrue "${T}/imports/1.csv" "d[\"terminal_user\"] == \"sprouts\" and d[\"terminal_password\"] == \"sprouts\""'
-reset; echo "sprouts" >"${POOL}/${A}.terminal"
+  'ctrue "${T}/imports/1.csv" "d[\"terminal_user\"] == \"placeholder-presenter\" and d[\"terminal_password\"] == \"placeholder-presenter-pw\""'
+reset; echo "placeholder-presenter-pw" >"${POOL}/${A}.terminal"
 HARVEST_RC=1 src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${A} accen-qa"
 check "an unreadable cluster is not registered" '[[ "$(ls "${T}/imports" | wc -l)" -eq 0 ]]'
 check "and is a retryable ingest failure" 'ledger | grep -qx "ingest:${A}"'

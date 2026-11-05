@@ -25,6 +25,9 @@ T="$(mktemp -d -p "${HERE}/.." .fleet-roles-test.XXXX)"; trap 'rm -rf "${T}"' EX
 # even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
+# A test-owned presenter terminal login (#910): `instructors up` refuses to build without one, and the guard above
+# shields the real one in mrf-secrets. A placeholder, never a real login.
+export WIB_TERMINAL_USER=placeholder-presenter WIB_TERMINAL_PASSWORD=placeholder-presenter-pw
 FIX="${T}/roster.tsv"
 printf '%s\n' "watch-it-burn-community|community|||-1|burn|" \
     "watch-it-burn-alpha-admin|admin||||admin|alpha" "watch-it-burn-beta-admin|admin||||admin|beta" >"${FIX}"

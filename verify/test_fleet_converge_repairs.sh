@@ -14,6 +14,9 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 # even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
+# A test-owned presenter terminal login (#910): `instructors up` refuses to build without one, and the guard above
+# shields the real one in mrf-secrets. A placeholder, never a real login.
+export WIB_TERMINAL_USER=placeholder-presenter WIB_TERMINAL_PASSWORD=placeholder-presenter-pw
 
 # ---- canned Datadog secrets, as Secrets Manager would answer ----
 ADMIN='{"api-key":"ADMIN_API","app-key":"ADMIN_APP","org":"devops-days-portland-090826-001","role":"admin-instructor"}'

@@ -78,7 +78,13 @@ no_cloud_run() {
 NO_CLOUD_UNSET=(HECATON_CLUSTER_ENV AWS_PROFILE AWS_DEFAULT_PROFILE AWS_REGION AWS_DEFAULT_REGION
     AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN AWS_ROLE_ARN
     AWS_ROLE_SESSION_NAME AWS_WEB_IDENTITY_TOKEN_FILE AWS_CONTAINER_CREDENTIALS_FULL_URI
-    AWS_CONTAINER_CREDENTIALS_RELATIVE_URI AWS_CONTAINER_AUTHORIZATION_TOKEN)
+    AWS_CONTAINER_CREDENTIALS_RELATIVE_URI AWS_CONTAINER_AUTHORIZATION_TOKEN
+    WIB_TERMINAL_USER WIB_TERMINAL_PASSWORD)
+
+# The presenter terminal login (#910) is a secret too: fleet.sh reads it from mrf-secrets through WIB_TERMINAL_ENV,
+# default ~/secrets/projects/watch-it-burn-terminal.env, so a test run on a presenter's machine would read the real
+# one. The guard clears the two variables above and points WIB_TERMINAL_ENV at a file that does not exist under
+# <dir>; a test that needs a presenter login sets its own placeholder (Tests own their inputs).
 
 # no_cloud_guard <dir>: no_cloud_setup, put the stubs first on PATH and clear the cloud environment, for this shell
 # and everything it starts.
@@ -87,7 +93,8 @@ no_cloud_guard() {
     no_cloud_setup "${dir}" || return 1
     unset "${NO_CLOUD_UNSET[@]}"
     export KUBECONFIG="${dir}/no-kubeconfig" AWS_CONFIG_FILE="${dir}/no-aws-config" \
-        AWS_SHARED_CREDENTIALS_FILE="${dir}/no-aws-credentials" AWS_EC2_METADATA_DISABLED=true
+        AWS_SHARED_CREDENTIALS_FILE="${dir}/no-aws-credentials" AWS_EC2_METADATA_DISABLED=true \
+        WIB_TERMINAL_ENV="${dir}/no-terminal-login.env"
     export PATH="${NO_CLOUD_BIN}:${PATH}"
 }
 

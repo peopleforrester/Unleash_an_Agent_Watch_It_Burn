@@ -22,6 +22,9 @@ T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 # even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
+# A test-owned presenter terminal login (#910): `instructors up` refuses to build without one, and the guard above
+# shields the real one in mrf-secrets. A placeholder, never a real login.
+export WIB_TERMINAL_USER=placeholder-presenter WIB_TERMINAL_PASSWORD=placeholder-presenter-pw
 
 # Run one expression against a sourced fleet.sh with the workers stubbed out. Nothing here touches AWS,
 # kubectl, terraform or the router: the point is the exit code, not the work.

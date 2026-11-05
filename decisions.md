@@ -19493,3 +19493,56 @@ same page; whichever lands later keeps the `.filter(shown)` step ahead of the re
 **The suites (run 17639, at `2a508c41`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
 and 58 tier tests) in 31m49s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new tier test is the 58th.
+## 2026-11-05 · #910 · run 17594 · fleet.sh reads the presenter terminal login from mrf-secrets and has no default for it
+
+**What changed.** `infra/terraform/fleet/fleet.sh` no longer carries a literal default for `WIB_TERMINAL_USER` or
+`WIB_TERMINAL_PASSWORD`, the presenter login every roster cluster (the community and private clusters, their
+standbys and the presenter clusters, `is_instructor_name`) gets as its `terminal-auth` Secret. A new
+`presenter_login` reads each half from the environment when set, else from the line of the same name in
+`WIB_TERMINAL_ENV`, by default `~/secrets/projects/watch-it-burn-terminal.env`, the mrf-secrets file beside the
+`watch-it-burn-provisioning.env` that `resolve_admin_token` already reads. It strips one pair of quotes, an `export `
+prefix and a trailing CR, and refuses a user holding a colon or whitespace (ttyd splits `TTYD_CREDENTIAL` on the
+first colon) or a password holding whitespace. When either half is absent it returns 1 and logs the file, the
+missing keys and that the value lives in mrf-secrets, and never logs either value. `terminal_password_one` now logs
+"the presenter login" in place of the user it wrote; the student user is still named. Comments in fleet.sh that
+named the old value are reworded. The student login, `agentic`, is unchanged.
+
+**Fails loudly, at three points.** `instructors up` checks the login before anything is built and exits 1 with
+"REFUSING instructors up ... nothing was built", because the bootstrap brings the web terminal up before it writes
+the Secret and a login found missing then leaves a billing cluster whose terminal is open. A bare build
+(`WIB_NO_BOOTSTRAP`) writes no Secret and is not checked. `bootstrap_terminal_auth` (also reached by a standby build)
+writes no Secret for a roster cluster without the login, logs that its terminal is open until `terminal-password`
+runs, and records `<name>:terminal-login`, so the run exits non-zero. `terminal-password` on a roster cluster
+without it fails and writes nothing. An attendee bring-up never needs the presenter login.
+
+**Why a file read and not an ExternalSecret.** The issue allowed either. The login is written by fleet.sh, which
+already reads two values from `~/secrets`, on the presenter's machine, and the clusters' ESO install has no store
+that reaches mrf-secrets, which is a git repo; a store would need the value copied into AWS Secrets Manager first, a
+second copy to keep in step. The file read keeps one copy.
+
+**The mrf-secrets request.** mrf-secrets is a data vault this run cannot open or file on (`gh` refuses it), so the
+agent-task issue asking for a new presenter login to be generated and stored at `projects/watch-it-burn-terminal.env`
+under the keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD` goes in this run's report as a follow-up for hecaton
+to file. It carries no value, old or new.
+
+**Tests own their inputs.** `verify/test_admin_actions.sh` and `verify/test_fleet_terminal_harvest.sh` now expect a
+placeholder login they set themselves (`placeholder-presenter`), and between them cover: the login read from a
+test-owned env file (quotes, `export` and a CR stripped); a missing file and a file missing one key each failing,
+naming the file and key, with no Secret written, nothing harvested, no terminal restart and `<name>:terminal-login`
+recorded; a user holding a colon refused; `instructors up` exiting 1 before the build with the login absent; a bare
+build and an attendee cluster not needing it; no presenter value in the log; and fleet.sh's two assignments holding
+no default. Reverting the preflight and putting a default back fails five of those checks. `verify/no-cloud.sh` and
+`verify/no_cloud.py` now clear the two variables and point `WIB_TERMINAL_ENV` at a file that does not exist, so a
+guarded test run on a presenter's machine never reads the real login. Five tests that run `instructors up`
+(`test_cluster_roles.sh`, `test_fleet_apply_failure_exit.sh`, `test_fleet_converge_repairs.sh`,
+`test_fleet_exit_codes.sh`, `test_offline_suite_no_cloud.sh`) and `test_hostname_tag.py` set the same placeholder.
+
+**Live check, both clusters, run 17594 (read only).** `kubectl -n agent get secret terminal-auth` on
+watch-it-burn-private and watch-it-burn-community, compared in the shell against the old default read from git and
+never printed: each holds a `user:password` value equal to the old repo default. So both terminals still take the
+known login, and the community cluster shares it, since `is_instructor_name` counts the community cluster as a roster
+cluster. Rotating it on both is #912's live step.
+
+**Not yet run on a cluster.** Once mrf-secrets holds the new login, `fleet.sh terminal-password watch-it-burn-private`
+(and `watch-it-burn-community`, if #912 keeps the two on one login) writes it; #912 then checks that the old login no
+longer opens the terminal and the new one does.
