@@ -34,7 +34,9 @@ judged by the controls that do catch them:
   * a Pod running as agentgateway, the gateway's Bedrock identity -> refused
   * a Pod labelled app.kubernetes.io/name=console, whose egress platform-console-egress opens -> refused
 "No egress to the internet" is read off the live NetworkPolicies: some Egress policy selects the pod, and no
-policy that selects it allows a peer outside private address space. No packet is sent for that.
+policy that selects it allows a peer outside private address space. No packet is sent for that. On the KubeCon
+pair (values-kubecon-private.yaml) the agent egress set is one of the four guardrails and starts off, so these
+three fail until `guardrails-on` (or a `kubectl apply` of challenge-fixes' c1-network-policy.yaml) arms it (#886).
 
 Why (#552). A pod the policy admits could still reach the model through agentgateway's :3002 bind, or the agent
 over A2A through agentgateway :3000 or workshop-agent :8080, all around guard-proxy. chat-path-ingress admits those
@@ -326,7 +328,8 @@ def internet_paths(pod_labels: dict) -> list[str]:
     egress = [np for np in nps if "Egress" in (np["spec"].get("policyTypes") or [])
               and selects(np["spec"].get("podSelector") or {}, pod_labels)]
     if not egress:
-        return ["no Egress NetworkPolicy selects it, so its egress is unrestricted"]
+        return ["no Egress NetworkPolicy selects it, so its egress is unrestricted (on a KubeCon cluster the "
+                "agent egress set is a guardrail that starts off: arm it with guardrails-on first)"]
     out = []
     for np in egress:
         for rule in np["spec"].get("egress") or []:

@@ -17627,6 +17627,46 @@ above was on the same values set by hand.
 **Suites (run 17353, at 3ba5016).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN, `test_collector_config.py` among them) and then the tools tier: 55 checks in 25m37s,
 ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
+
+**The committed values, live (#886, hecaton run 17704, 2026-11-05).** Run 17704 ran the check the "Not yet run"
+line above names, against watch-it-burn-private (`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private`,
+ACTIVE), from staging `dd3e291`. `verify/prior-drafts.sh 886 origin/staging` printed NONE.
+
+- **Synced.** Every Argo CD Application read Synced and Healthy, the git-sourced ones at `dd3e291`, kyverno at chart
+  3.9.1. `kubectl --context watch-it-burn-private -n kyverno get deploy kyverno-reports-controller -o yaml` showed
+  `--backgroundScanInterval=1h`, limit `cpu: "1"` and request `cpu: 50m` at generation 7, observed. Its pod
+  `kyverno-reports-controller-57b649888-dptsj` had run since 07:52Z with no restart, so its startup scan was long over.
+- **First run (run id 9caae8): 54 PASS, 3 FAIL, exit 1. The five PolicyReport checks all passed** inside the 150 s
+  wait: the bare Pod, the Deployment's Pod, the guard-proxy-named Deployment's Pod and the init-container Pod read
+  FAIL, and the guard-proxy-routed Pod read PASS. So did guard-proxy's and agentgateway's own reports. The three
+  that failed were #490's "the default-endpoint / envfrom / valuefrom pod exists and no NetworkPolicy allows it a
+  public API", each with "no Egress NetworkPolicy selects it". Nothing in the PolicyReport path caused them.
+- **Why those three failed.** watch-it-burn-private runs `values-kubecon-private.yaml`, where the agent egress set is
+  one of the four guardrails (#774), and it starts off until `guardrails-on` arms it. All four were off: the agent
+  namespace held only agentgateway-ingress, workshop-agent-ingress and platform-console-egress,
+  restrict-image-registries and deny-external-registries read Audit, no KubeArmor policy was installed, and the
+  workshop-agent Role was the broad one. That is the start state the KubeCon probe runs end on (`guardrails-off`), so
+  run 17353's passes on these three were taken while the set was armed. These three test the egress guardrail, not
+  the Kyverno change.
+- **Second run, egress armed (run id bcb58e): 57 PASS, no FAIL, exit 0**, "All live deny-llm-endpoint-bypass and
+  restrict-agent-spawned-workloads checks passed." The run applied the cluster's own staged egress set (the
+  `c1-network-policy.yaml` key of the agent/challenge-fixes ConfigMap, the file `guardrails-on` applies) at 21:38:35Z,
+  ran the suite, and deleted the same six NetworkPolicies at 21:43:21Z. The five PolicyReport checks passed again,
+  and the whole suite took under five minutes. Both runs ended `cleanup ... done`, and afterwards
+  `kubectl get pods,deploy,rs,cm -A -l wib.test/run` found nothing and the agent namespace held its three policies
+  as before. The other three guardrails were not touched. Nothing called a model.
+- **Prometheus no longer shows the controller throttled.** On the cluster's Prometheus at 21:44Z, for the
+  controller container: `rate(container_cpu_cfs_throttled_periods_total{namespace="kyverno",pod=~"kyverno-reports.*"}[1h])`
+  was 0.022 throttled periods/s out of 4.23 CFS periods/s, so 0.52% of periods (99.9% at 200m and 30 s). CPU used was
+  0.058 cores averaged over the hour, against the limit of 1 that kube-state-metrics reads. Prometheus holds data from
+  16:04Z. In that window the 5-minute throttled share peaked at 6.5% (16:09Z) and otherwise rose above 1% only for
+  a few minutes near each hourly rescan, at about 2 to 4%. Both test runs fall inside the hour measured.
+- **The test's message.** `verify/test_llm_bypass_live.py` now says, in its docstring and in that failure's
+  reason, that on a KubeCon cluster the agent egress set is a guardrail that starts off and is armed with
+  `guardrails-on`, so a later run reading the three failures goes straight to the cause. No check changed.
+
+**Not yet run on a cluster:** nothing. The committed Kyverno values have now run live and pass.
+
 ## 2026-11-05 · #648 · Run 17365: the input guard refuses PII live, `seed` stops off the start state, and the seed links outlast the night
 
 **Live, on watch-it-burn-private (accen-dev, us-west-2), at staging `a2c7309`, which Argo CD had synced.** This is
