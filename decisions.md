@@ -18571,3 +18571,11 @@ collector change on both clusters:
 3. In APM, the same chat's guard-proxy `chat` span (service `burritobot`) carries both counts, and they equal the sum of
    the turn's `generate_content` counts.
 #876 is the same change; once step 2 is green on both clusters it is done too.
+
+**The suites (run 17406, at `d309d60c`).** `bash verify/run-e2e-tools.sh` printed "57 checks ran (the offline suite and
+56 tier tests) in 27m02s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite printed "259 tests ran"
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_collector_llmobs_model.py`, `test_collector_no_datadog.py` and
+`test_pin_bedrock_profiles.sh` among them; in the tier, `test_collector_llmobs_model_e2e.py`,
+`test_collector_act2_redaction_e2e.py` and `test_trace_shape_e2e.py` passed. The first run, at `21d85e16`, failed only
+the two offline checks the second commit answers (the no-Datadog collector's envFrom and env rules, and the fleet.sh
+guard); its 56 tier tests passed.
