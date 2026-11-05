@@ -18534,3 +18534,9 @@ reach Ready, then `python3 verify/kubecon_probe.py admin burritobot-private.burr
 watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev` must pass `topic-paraphrase` with the other
 topic beats, and `bash verify/input-guard.sh <host> watch-it-burn-private accen-dev` must still pass the benign
 prompt and block the injection.
+
+**Suites (run 17422, at f62a267f).** `bash verify/run-e2e-tools.sh` ran the offline suite (260 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 26m35s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
+`verify/test_topic_classifier.py` among them ran llm-guard 0.3.16's BanTopics off-cluster over the 20 asks the phrase
+step leaves to it and judged all 20 as the live probe did, with the same risks on the two closest calls (0.2 and 0.3).
+No dependency was added.
