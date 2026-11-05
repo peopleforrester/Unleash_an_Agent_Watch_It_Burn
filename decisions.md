@@ -19378,3 +19378,9 @@ the attendee profile (community is burn, private is admin). On the next attendee
 `kubectl get role,rolebinding -A -l app.kubernetes.io/managed-by=lab-platform` shows four of each, and with #869's
 rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive` (`go test -tags live`,
 `LAB_AWS_LIVE=1`, `LAB_APP_ACCESS_CLUSTER=<seat>`) answers 200 for all eight apps.
+
+**The suites (run 17465, at `ca883d38`).** `bash verify/run-e2e-tools.sh` printed `265 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
+`07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
+Application; `ca883d38` adds that entry.
