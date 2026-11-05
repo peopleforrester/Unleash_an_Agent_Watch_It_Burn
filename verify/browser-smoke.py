@@ -103,6 +103,13 @@ async def check(page, host: str) -> tuple[bool, str]:
         return False, f"{rendered} badges rendered but /controls implies {want_lit}"
     if rendered and not all_on:
         return False, "a rendered badge is not lit; only installed controls should render"
+    # The heading follows the same count (#923): NO GUARDRAILS INSTALLED over an empty strip, GUARDRAILS
+    # INSTALLED once a badge shows. innerText is what the room reads, with the CSS uppercase applied.
+    heading = await page.evaluate(
+        "() => { const h=document.getElementById('badgeshead'); return h ? h.innerText.trim() : null; }")
+    want_heading = "GUARDRAILS INSTALLED" if rendered else "NO GUARDRAILS INSTALLED"
+    if heading != want_heading:
+        return False, f"the guardrails heading reads {heading!r} over {rendered} badge(s), want {want_heading!r}"
 
     # Send a prompt through the PAGE's own fetch, so the browser attaches Origin exactly as it does for a
     # student. This is the check the 403 would have failed.

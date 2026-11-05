@@ -395,9 +395,11 @@
       <div id="privatebanner" class="combanner" hidden>This is the private (administrator) BurritoBot.</div>
       <!-- Guardrails the student has installed. A badge APPEARS only when its control is on; nothing is
            shown grayed-out, because dim placeholders telegraph how many controls exist and spoil the arc
-           (Whitney, 2026-09-05, #211). The empty-state header is shown until the first control goes in. -->
+           (Whitney, 2026-09-05, #211). The empty-state header is shown until the first control goes in.
+           The heading starts as "No guardrails installed" and becomes "Guardrails installed" when the first
+           badge appears (#923): the old fixed heading read as a claim that guardrails were on. -->
       <div class="card">
-        <h3>Guardrails installed</h3>
+        <h3 id="badgeshead">No guardrails installed</h3>
         <div id="badges" class="badges" aria-live="polite"></div>
         <div id="badgesnote" class="badgesnote">Guardrails will appear here when you install them.</div>
       </div>
@@ -502,6 +504,11 @@
     });
     var note=document.getElementById('badgesnote');
     if(note) note.hidden = shown>0;            // header shows only while the panel is empty
+    // The heading follows the same count as the badges (#923), never the hostname: it reads "No guardrails
+    // installed" until the first badge appears and goes back to it if every badge goes off. Only the text
+    // changes, so the styling is the same .card h3 either way.
+    var head=document.getElementById('badgeshead');
+    if(head) head.textContent = shown>0 ? 'Guardrails installed' : 'No guardrails installed';
   }
   // Back-compat alias: earlier code and any external caller referenced applyGuardState.
   function applyGuardState(g){ applyControls(g); }

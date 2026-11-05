@@ -21101,3 +21101,41 @@ No code changed in this run and no dependency was added.
 **The suites (run 17716, at `27ec3092`).** `bash verify/run-e2e-tools.sh` printed `274 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `61 checks ran (the offline suite and
 60 tier tests) in 28m35s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+## 2026-11-05 · #923 · run 17722 · The guardrails heading reads NO GUARDRAILS INSTALLED until the first badge shows
+
+**What was wrong.** The Backend Insights panel's guardrails card had a fixed `<h3>Guardrails installed</h3>`, which the
+`.card h3` rule uppercases, so the room read GUARDRAILS INSTALLED over an empty badge strip on a bot with nothing on.
+
+**The change.** The heading is `<h3 id="badgeshead">No guardrails installed</h3>`, so the page as loaded, before the
+first poll, makes no claim. `applyControls()`, which `checkBackend()` calls with every `/controls` (or older `/guards`)
+reply, sets its text from `shown`, the count of badges it just rendered: "Guardrails installed" when `shown>0`, "No
+guardrails installed" otherwise. So it switches exactly when the first badge appears and back when every badge goes
+off, and it follows the measured state, never the hostname (the comment above `CHAT_ENDPOINT` says why). Only
+`textContent` changes: no class, inline style or `hidden`, so the styling is the same either way. The italic note
+("Guardrails will appear here when you install them.") keeps its text and still hides only once a badge shows. Falco
+alone shows no badge (it pairs with KubeArmor, #211, #486), so it leaves the heading at NO GUARDRAILS INSTALLED too.
+
+**Tests.** `git grep -niF 'guardrails installed'` found the words only in the page, so no test read them before.
+`verify/test_guardrails_heading.py` (offline) holds the starting text, the bare `<h3>`, the uppercase rule, the note,
+and the `shown`-driven line, and fails on the old page. `verify/test_guardrails_heading_e2e.py` (tools tier) loads the
+page in Chromium with the network aborted and calls its own `applyControls()` with eight bodies: as loaded, nothing on,
+Falco alone, one AI guard, one infra control, every control, the flat `/guards` shape, and every badge off again. Each
+zero-badge case reads `NO GUARDRAILS INSTALLED` with the italic note shown, each other case reads `GUARDRAILS INSTALLED`
+with the note hidden, and the heading's computed font, size, weight, letter case, spacing, color and margins match the
+page as loaded in all eight. On the old page it fails. `verify/browser-smoke.py` now also fails a cluster whose heading
+does not match its rendered badge count.
+
+**Live, before the change reaches the clusters.** Read on 2026-11-05 with `curl`: both
+`https://attackme.agenticburn.com/` (the public bot) and `https://burritobot-private.agenticburn.com/` (the private bot)
+serve `<h3>Guardrails installed</h3>`. Their `/controls` report every AI guard false and every infra control false,
+except `infra.falco: true` on the private bot with `kubearmor: false`, so both show zero badges under the old heading.
+
+**Not yet run on a cluster.** Once hecaton promotes this run and Argo CD syncs the page: on the public bot and the
+private bot, before a guard is turned on, `uv run --with playwright verify/browser-smoke.py attackme burritobot-private`
+must pass with the heading reading NO GUARDRAILS INSTALLED and the italic note shown. Then turn one guard on (for
+example the C4 budget guard's toggle on each cluster), run it again and see GUARDRAILS INSTALLED over one badge, turn
+the guard back off so each cluster is left as found, and run it a third time to see NO GUARDRAILS INSTALLED again.
+
+**Workshop.** The page is the same one attendee clusters serve; the change only sets a heading from a count the page
+already computed, so the 2-hour format (`delivered/devopsdays-portland-2026`) gets the same card with an honest heading.
+No dependency was added.
