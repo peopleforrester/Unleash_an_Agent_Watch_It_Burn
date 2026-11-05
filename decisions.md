@@ -20953,3 +20953,8 @@ drops it without a refusal or a log line, while private's own registry host stay
 guard's discount taken out, the two new checks on it fail. `verify/test_guardrails_switch.py` reads attackme's rows
 for no registry host, and `verify/test_c6_villain_endpoint.py` reads the loop's new form.
 Its Night Before order check now reads inside the Night Before section, as `verify/test_fleet_wall_check.sh` does: the Probe record entry above names `./fleet.sh router-check` earlier in the file, and the first suite run read that line as the Night Before's and failed the order.
+
+**The suites (run 17670, at `ad508eb2`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
+and 58 tier tests) in 29m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The first run, at `1572ee6a`, failed
+only `test_fleet_routes_roster.sh`'s Night Before order check, fixed in `ad508eb2`.
