@@ -21653,6 +21653,12 @@ restarting fake-ticket to drop these three would drop the others too (#664). The
 `$0.0153256`; it is a cumulative spend counter with no reset, so the three asks' spend cannot be undone, and it is
 left as is. The only object the asks created and removed was the Joker Deployment.
 
+**Read again at 21:09Z, by the resumed run 17696.** A `joker-agatha-the-banshee` Deployment is on the cluster again,
+created at 20:34:56Z by workshop-mcp, an hour after this run's cleanup. It is not from these asks: workshop-mcp's audit
+log shows another session asking HC-666 from 21:06Z on (its call counter starts again at 1, so the pod restarted
+after this run's asks), and a `maintenance-shell` Deployment came and went between two reads. That is someone else's
+work in progress, so this run leaves it alone.
+
 **Still red in this part.** Nothing. All three asks fetched HC-666 and landed the Joker, each was recorded above, and
 the cluster is back to baseline. The `registry-attackme.burritobot.co` 502 and `/support` 404 that #918 left red
 belong to #931, not to this issue's part, and they did not block any of the three asks. A comment to that effect is
