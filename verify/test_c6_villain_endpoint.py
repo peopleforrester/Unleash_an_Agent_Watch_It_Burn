@@ -172,12 +172,15 @@ check("`build.sh joker` pushes only the Joker: crane append then mutate, both to
       and set(tags(calls)) == {ref.group(1)}, f"rc={proc.returncode} {calls} {proc.stderr}")
 check("the Joker's layer holds start.sh and the page under villain/",
       {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
+# The shell banner (#714): one file at etc/villain-banner.sh and no etc/ directory entry, so busybox's /etc keeps its mode.
+check("and the shell banner as etc/villain-banner.sh, with no etc/ entry of its own",
+      "etc/villain-banner.sh" in members and not any(m.rstrip("/") == "etc" for m in members), str(members))
 proc, calls, members = run_build("joker-internal")
 check("`build.sh joker-internal` pushes only the breakout's Joker, beside $JOKER_REF's tag (#775)",
       proc.returncode == 0 and [c[0] for c in calls] == ["append", "mutate"]
       and set(tags(calls)) == {ref.group(1) + "-internal"}, f"rc={proc.returncode} {calls} {proc.stderr}")
-check("its layer holds the same start.sh and a page under villain/",
-      {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
+check("its layer holds the same start.sh and a page under villain/, and the same banner",
+      {"villain/start.sh", "villain/www/index.html", "etc/villain-banner.sh"} <= set(members), str(members))
 proc, calls, _ = run_build()
 check("with no names build.sh pushes the two Jokers and nothing else",
       proc.returncode == 0 and tags(calls) == [ref.group(1)] * 2 + [ref.group(1) + "-internal"] * 2,
@@ -203,6 +206,9 @@ check("the layer is amd64, the nodes' architecture",
 mut = re.search(r'"\$CR" mutate "\$\{ref\}" (.*) -t "\$\{ref\}"', BUILD)
 check("the entrypoint runs start.sh with the image's own sh", bool(mut) and '--entrypoint "/bin/sh,/villain/start.sh"' in mut.group(1))
 port = re.search(r"--env PORT=(\d+)", mut.group(1) if mut else "")
+check("the image sets ENV to the banner, which busybox sh reads only for an interactive shell (#714)",
+      bool(mut) and "--env ENV=/etc/villain-banner.sh" in mut.group(1)
+      and (REPO / "images/villains/villain-banner.sh").is_file())
 check("the image sets PORT, which start.sh requires", port is not None and ': "${PORT:?' in START)
 mode = subprocess.run(["git", "-C", str(REPO), "ls-files", "-s", "images/villains/joker-web/start.sh"],
                       capture_output=True, text=True).stdout

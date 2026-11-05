@@ -20379,3 +20379,69 @@ sandbox at 17:09 CET (`touch /tmp/x` answered "No such file or directory"), alth
 Each of its three environments now sets TMPDIR to the test's own scratch directory (`756dad44`), and the test passed
 alone. The second run, at `756dad44`, printed `266 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `58 checks ran (the offline suite and 57 tier tests) in 29m51s` and `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #714 · run 17681 · Run 17572's draft ported, and both Jokers get the shell banner
+
+**The port.** Run 17572's five commits had not reached staging when this run started. `bash verify/prior-drafts.sh 714
+origin/staging` named `origin/agent/714-17572` as START, with one in-place drift (`verify/test_e2e_tools_tier.py`,
+staging's `be97ab92` for #909) and a decisions.md APPEND. Four commits were cherry-picked onto staging `4c9329dd`, with
+decisions.md resolved by keeping staging's entries and then the draft's. The fifth, `756dad44`, was skipped: it set
+TMPDIR in the tier test's three fixture environments, and `be97ab92` and #775 had already put the same three settings
+on staging, so the pick left nothing to change. The 17572 entry above names `756dad44`; on staging the fix is
+`be97ab92`'s.
+
+**The banner (Michael's comment of 2026-10-30).** Run 17572 left it as a follow-up, reading that a banner moves both
+Joker digests and that `verify/test_c6_joker_public.py` would go red before push-jokers.yml could push the new ones.
+That test compares only the published layer's `villain/start.sh` and `villain/www/index.html` with the checkout, and
+the banner changes neither. So it passes against the tag as it is now and after the push, and the change can be
+promoted green. What it adds:
+
+- `images/villains/villain-banner.sh`: three green lines of hacker text, then "ACCESS GRANTED... just kidding, you
+  deployed me. Why so trusting about admission control?" and the Joker's sign-off. Every line is one `printf` of
+  quoted text.
+- `build.sh` puts it in the Joker layer as the single member `etc/villain-banner.sh`, with no `etc/` directory entry,
+  so busybox's `/etc` keeps its mode, and adds `--env ENV=/etc/villain-banner.sh` beside `PORT=8080`. Both Jokers get
+  it, since both are built by `build_joker_web`. The ten C2 villains are lab-platform's build and get theirs from
+  lab-platform#372.
+- Re-pinned from the rebuild: the workshop Joker `busybox-1.38.0` moves from `d8dae795` to `0765b359552b`, the
+  breakout's `busybox-1.38.0-internal` from `0dbe92d4` to `793db2995eee`. The new digests are in images.lock (the
+  workshop row's saved date goes back to `-`, since no save holds the new digest), `games/villain-apps/deploy-villain.yaml`
+  and the internal registry's seed. push-jokers.yml pushes each build to its tag when this reaches staging, because
+  `scripts/ghcr_version_tag.py` copies a crane build to a pinned digest ghcr.io lacks when the build has exactly that
+  digest. It ran green three times on 2026-11-05.
+
+**Tests.** `verify/test_joker_web_busybox.py` (tools tier) now runs the banner on the pinned busybox's own `sh`.
+On a pty, as `kubectl exec -it <pod> -- sh` gives it, the shell prints the banner and then answers `echo
+still-$((40+2))` with `still-42`. The arithmetic is the proof the shell still runs, because the pty echoes what is
+typed. `sh -c 'echo ok'` and a `sh` fed from a pipe print only `ok`. `start.sh` run with ENV set logs the laugh and no
+banner text. Appending `exit 0` to the banner made the printf-only check and the still-a-shell check fail, and an
+empty ENV made the tty check fail; both were reverted. `verify/test_joker_build_digest.py` now reads the built
+config's ENV and the exported `/etc/villain-banner.sh`, and checks that busybox's `etc/passwd` is still there. With
+crane 0.22.1 it rebuilt both new pins under umask 002 and 022. `verify/test_c6_villain_endpoint.py` (offline) holds
+build.sh's layer member and its `--env ENV=` flag.
+
+**Live (2026-11-05, this run's KUBECONFIG, `--context` on every call).** `COMMUNITY_CONTEXT=watch-it-burn-community
+PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_no_docker_hub_live.py` printed, exit 0:
+
+```
+  PASS  watch-it-burn-community runs pods (58)
+        0 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-community names a Docker Hub image (0 found)
+  PASS  watch-it-burn-private runs pods (76)
+        16 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-private names a Docker Hub image (0 found)
+No pod or pod template on either cluster names a Docker Hub image.
+```
+
+A read of every pod's images on both clusters found no `maintenance-shell` or `registry.burritobot.co` image running,
+so there was no Joker to open a shell in.
+
+**Not yet run on a cluster.**
+
+- A fresh cluster build, on a new nodegroup, where `verify/test_no_docker_hub_live.py` passes and prints 0 cached
+  status names (as in run 17572's entry). A run cannot bring a cluster or nodegroup up.
+- The banner on the published Joker, after push-jokers.yml has pushed `0765b359552b` and `793db2995eee`: `crane digest
+  ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0` returns the new pin, and on a cluster a
+  ticket-made Joker answers `kubectl --context <ctx> -n agent exec -it deploy/maintenance-shell -- sh` with the banner
+  while `kubectl logs` shows only the laugh. Once the push is done, `verify/test_c6_joker_public.py` can also hold the
+  published `etc/villain-banner.sh` and ENV (filed as a follow-up).

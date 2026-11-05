@@ -40,7 +40,7 @@ metadata:
   namespace: registry
 data:
   images.txt: |
-    ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf burritobot/maintenance-shell:busybox-1.38.0
+    ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 burritobot/maintenance-shell:busybox-1.38.0
   seed.sh: |
     #!/bin/sh
     # Waits for the registry, copies every line of images.txt into it, marks the pod ready, then stays up.
