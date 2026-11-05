@@ -20977,3 +20977,7 @@ bare desk and private's. `/`, `/prompts` and `/cost` read 200 on both bot hosts,
 wall shows every roster cluster", both exit 0. #916's body now carries the corrected support criterion, and run
 17670's router-check and wall-check comment is on #931. The live table still carries `registry-attackme` until the
 routes are published from a staging that has this change.
+
+**The suites (run 17710, at `6b5e6493`, on staging `32472d80`).** `bash verify/run-e2e-tools.sh` printed `273 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `61 checks ran
+(the offline suite and 60 tier tests) in 31m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
