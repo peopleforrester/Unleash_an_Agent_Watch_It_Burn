@@ -18156,3 +18156,241 @@ a staging clone that holds this change.
 **Suites (run 17411, at c1c1b971).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 27m04s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No
 dependency was added.
+## 2026-11-05 · #775 · Run 17397: the breakout Joker's push moves into CI, held to the pinned digest, and least privilege is checked live
+
+**Where #775 stood.** Run 16464's build is on staging and `bash verify/prior-drafts.sh 775 origin/staging` printed NONE:
+every #775 draft is in staging except run 16043's, which is decisions.md alone and followed by later work. What was owed
+was the 2026-11-03 #775 entry's "Not yet run on a cluster" list, which starts with pushing
+`festival-ops/maintenance-shell:busybox-1.38.0-internal`. Read anonymously on 2026-11-05, ghcr.io's tags list for the
+package is still `["busybox-1.38.0"]`, and a manifest request for the `-internal` tag, and for its pinned digest
+`sha256:0dbe92d4...`, answers 404. Runs 16464 and 16733 escalated the push, and both escalations were dropped as stale
+on 2026-11-05 with "a fresh run works this issue now and does them itself". This run still has no ghcr.io write
+credential (`gh auth token` is refused to runs, and no registry login is on the host), so the push could not be made
+by hand here.
+
+**Decided here: CI pushes it, from the same pinned build.** The repo already writes pinned tags from CI with the
+`GHCR_TOKEN` secret: keep-sample-app-tag.yml (#828) was written because a run may not write to ghcr.io, and its staging
+and main runs on 2026-11-05 succeeded. `verify/test_workflow_registry_writes.py` allows a workflow to write only through
+`scripts/ghcr_version_tag.py`, so the new path goes through it too:
+- `scripts/ghcr_version_tag.py` takes a build as `crane:<ref>`, an image in a registry crane reads. Its one new row:
+  when a pin file pins the tag at D, the registry has no manifest at D, and the build's digest is D, crane copies the
+  build to the tag and the tag must then serve D. A build at any other digest is refused, naming both, with nothing
+  pushed. Every other row acts as before, so a tag that serves its pin is left alone and a moved one is put back.
+- `images/villains/build-loopback.sh <127.0.0.1:port>` runs `build.sh`, unchanged, with its festival-ops references
+  sent to a registry on loopback. It refuses any address but loopback before building.
+- `.github/workflows/push-jokers.yml` runs on a push to staging or main that touches `images/villains/`, `images.lock`,
+  the crane pin, the script or itself. It fetches crane 0.22.1 from `verify/e2e-tools.lock`'s row and checks its
+  SHA-256, builds both Jokers on loopback in a step that holds no credential, and then hands both tags to the script
+  in the one step that holds `GHCR_TOKEN`. The workshop's Joker serves its pin, so for it the step only says so.
+This run adds the workflow, so the staging push that promotes it is the one that pushes the breakout's Joker.
+
+**Checked here, without a cluster.** `CRANE=verify/.tools/bin/crane python3 verify/test_joker_build_digest.py` now
+builds through `build-loopback.sh`. It passed: both Jokers at their images.lock digests (`d8dae795...` and
+`0dbe92d4...`), and `ghcr_version_tag.crane_digest` reads the same digests the workflow compares to the pins. The
+workflow's fetch step, run locally from the YAML, checked crane's SHA-256 (`OK`) and printed `0.22.1`. A `crane copy` of
+the loopback build to a second loopback registry kept the digest, `sha256:0dbe92d4...`, which is the copy the
+workflow makes to ghcr.io. `verify/test_ghcr_version_tag.py` has six new cases for the row: a build at the pin is
+pushed once, whether the tag is missing or moved; a build at another digest is refused with nothing pushed; a push
+that lands another digest is refused; a tag at its pin is left alone; a moved tag whose pin the registry has is put
+back without pushing. It also has a case for the command line, and checks on push-jokers.yml: its triggers, that
+only the script's step holds the token, the crane fetch, and that the tags it keeps are the two build.sh builds,
+each pinned in images.lock.
+`verify/test_workflow_registry_writes.py` names push-jokers.yml with the other two writers.
+
+**Live check (run 17397), on watch-it-burn-community.** Both clusters run staging `7fa73630` in Argo CD, on the burn and
+admin profiles. Neither runs the internal registry, which is in `values-kubecon-private.yaml` only. On both, the
+headless `jokers` Service selects `burritobot.co/room-joker=true`, and the `challenge-fixes` ConfigMap is there. The
+least-privilege Role, read from that ConfigMap with its namespace changed, was applied in a scratch namespace
+`check-775-17397` and bound to a scratch service account. `kubectl auth can-i` as that account answered no for create
+and patch on deployments and on pods, and yes for get on deployments, for create on configmaps and services, and for
+patch on deployments with `--subresource=scale`, the reaper's path. A server-side dry-run apply of
+`joker-agatha-the-banshee` on `registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0` as that account came
+back `Forbidden ... cannot patch resource "deployments"`, which is what `c6-forbidden` expects of `deploy_app`'s
+server-side apply. Both scratch namespaces were deleted, and `kubectl get ns` confirmed both gone. Nothing else on either
+cluster was changed.
+
+**Not yet run on a cluster.** In order:
+1. After promotion, push-jokers.yml's staging run (`gh run list --workflow push-jokers.yml`) prints
+   `... busybox-1.38.0-internal was not on the registry; the build, at the pinned sha256:0dbe92d4..., is pushed to it`,
+   and ghcr.io serves the tag at that digest. #829 then adds the tag to `verify/test_c6_joker_public.py`.
+2. The rest of the 2026-11-03 #775 entry's list, on a KubeCon bring-up of the private cluster (the internal registry
+   runs only there): the registry's tags list, both KubeCon probe runs ending `KUBECON PROBE GREEN`, a visitor's
+   HC-666 ask after `guardrails-on`, and `stage_traces.py seed` ending `SEEDED GREEN`.
+
+No dependency was added: crane 0.22.1 was already pinned in `verify/e2e-tools.lock` by #775.
+
+**The suites (run 17397, at `57eaf9c3`).** The first `bash verify/run-e2e-tools.sh` ran 56 checks in 28m02s and exited
+1 on `test_no_docker_hub_render.py` alone: six chart downloads from GitHub release assets answered `504 Gateway
+Time-out`. Run again alone with the tier's environment, that test passed (155 checks). The second full run printed
+`258 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `56 checks ran (the offline suite and 55 tier tests) in
+26m38s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #771 · A live judge of #746's five checks, read from the LLM Observability spans API
+
+**What was asked.** Whitney's done-when list on #746 was read by eye in her sandbox org: one root row per chat; the
+prompt and the final reply on it; `read_support_ticket` and `deploy_app` under it; a duration covering the whole chat;
+tokens and an estimated cost, with no `cost_estimate_status:skipped_tokens_missing`. #771 asks for that look as a
+SUITE: e2e live test on the read-only key path, written against a real response once #759 gave runs read access, with
+an offline test that judges a recorded payload. `verify/prior-drafts.sh 771 origin/staging` printed NONE. #759 is
+done (run 17391, `b499c839`), and run 17405 read with its session.
+
+**The response, as read.** Datadog's API reference has no response schema for `/api/v2/llm-obs/v1/spans/events`, so
+the fields were read off a real response first (trace `098fcb005cbe5ed190ad9022a96b03c0`). Each `data[].attributes`
+holds trace_id, span_id, parent_id (the string `undefined` on a root), name, span_kind, start_ns, duration in ns,
+status, `input` and `output` as `{"value": ..., "messages": [...]}`, `metrics` and `tags` as `key:value` strings.
+guard-proxy's root carries `url.path:/chat`, `span.kind:server` and `session_id`. The llm rows' metrics carry
+input_tokens, output_tokens and total_tokens. No row carried a cost metric; Datadog's cost docs name it
+`estimated_total_cost`, in nanodollars, and the llm rows carry the tag
+`cost_estimate_status:skipped_unsupported_model_pricing`. `filter[from]` and `filter[to]` take ISO 8601 times, and
+`filter[tags]` and `filter[session_id]` are ignored (both returned the whole window).
+
+**The judge.** `verify/llmobs_chat_judge.py` lists the window (`--minutes`, default 1440), takes the traces holding a
+`url.path:/chat` span, and judges the newest that called both tools; with none, the newest chat, which then fails
+check 3 by name; with no `/chat` at all, it fails and says to send the HC-666 prompt. It reads that trace whole by
+its id, and lists every span in the root's own interval, one second each side. The checks:
+1. exactly one root, guard-proxy's `/chat` server span, with a session_id, and no span of another trace in the
+   interval carrying that session (a second row for the chat); a listing that fills a page fails, since a second row
+   could be past it;
+2. the root's input is not empty, and its output is not empty and not the prompt again (the old "No content" root);
+3. a tool row of each name whose parent chain reaches the root;
+4. the root starts no later than the first span and ends no earlier than the last, with 100 ms of slack for the
+   three pods' clocks (kagent's own 14 ms server span, the root #746 replaced, fails it by seconds);
+5. at least one llm row, every one with input and output tokens and `estimated_total_cost` above zero, and no row
+   with `cost_estimate_status:skipped_tokens_missing`. A failed cost check names the status and the issue that owns
+   it (#784 for missing tokens, #876 for an unpriced model).
+
+The root's reply is not required to equal the last model reply, though on both chats below it does: Act 2's output
+guard can rewrite the reply on guard-proxy's span, and that would read as a failure that is not one.
+
+**Tests.** `verify/test_llmobs_chat_judge_live.py` (SUITE: e2e) runs the judge as `WIB_DEFAULT_ACCOUNT` in
+`WIB_REGION`, as `test_datadog_sandbox_live.py` does, over `WIB_LLMOBS_JUDGE_MINUTES` (default 1440). The offline
+`verify/test_llmobs_chat_judge.py` serves `verify/fixtures/llmobs-chat-judge/chat-098fcb00.json`, two real responses
+recorded by this run (the trace by id, and its interval), through a fake transport. Only the `messages` lists and
+`tool_definitions` are cut to a count. As recorded it fails the cost check alone, as the org did; with a cost put on
+the llm rows it passes all five; and each of 15 breaks (a second root, a second trace with the session, a full page,
+a root that is not `/chat`, no session, an empty output, an echoed prompt, an empty prompt, no `deploy_app`, a 14 ms
+root, a late root, no output tokens, no cost, `skipped_tokens_missing`, no llm row) fails exactly its check. It also
+covers the choice of chat, the empty window, GETs only, and a key that reaches another org.
+
+**Live, 2026-11-05.** `. "$HECATON_CLUSTER_ENV"` then `python3 verify/test_llmobs_chat_judge_live.py` at 09:26:44Z
+picked trace `098fcb005cbe5ed190ad9022a96b03c0` (the newest of 37 `/chat` traces that called both tools; run 17389's
+HC-666 chat on `burritobot-public`, 08:29:02Z) and exited 1:
+
+    PASS  the chat's trace has exactly one root row
+    PASS  the root is guard-proxy's /chat server span (url.path:/chat, span.kind:server)
+    PASS  the root carries the chat's session_id
+    PASS  the listing of the chat's interval is complete (under 500 spans)
+    PASS  no other trace in the chat's interval carries its session_id (no second row for the chat)
+    PASS  the root's input is the prompt (not empty)
+    PASS  the root's output is the reply (not empty, not the prompt)
+    PASS  a tool row read_support_ticket sits under the root
+    PASS  a tool row deploy_app sits under the root
+    PASS  the root starts with the chat and ends after its last span (100 ms slack)
+          root 4886 ms; the chat's spans span 4886 ms
+    PASS  the chat has model-call (llm) rows
+    PASS  every llm row carries input and output tokens
+    FAIL  every llm row has an estimated cost (metrics.estimated_total_cost)
+          3 of 3 llm rows have none; cost_estimate_status: skipped_unsupported_model_pricing
+          16666 tokens over 3 model calls, estimated cost 0.000000 USD
+    PASS  no row reads cost_estimate_status:skipped_tokens_missing
+
+`--trace e9fb58989b865e2c9ce24f338cd16c71` (the same chat on `burritobot-private`, 08:27:48Z, root 5878 ms, 17282
+tokens) read the same: four checks green, the cost check red on `skipped_unsupported_model_pricing`. `--trace
+39fba3d0574259a99e1a646ed1e89818`, the community send guard-proxy answered with a 502, failed the reply, both tool
+checks and the llm-row check, so the dropped chat that reads as a green row in the UI reads red here.
+
+**What this says about #746.** Four of the five checks hold on live traces from both clusters, as run 17389's look
+found. The fifth holds for tokens and for `skipped_tokens_missing`, and fails for the estimated cost: Datadog has no
+price for the cluster's Bedrock application inference-profile ARN, which is the model name. That is #876, already
+open. The live test stays red until #876's change reaches the clusters; it is the check #876's run can close on.
+
+**The suites (run 17405, at `0868c17d`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 27m25s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 259 tests, the
+new `test_llmobs_chat_judge.py` among them, all green.
+
+## 2026-11-05 · #733 · #707's live check passes on watch-it-burn-community, and the audit log shows how the first move went on both clusters
+
+**No code changed.** Hecaton run 17386 is the first #733 run that could read its cluster session (hecaton#508 is
+fixed). It ran every read the 2026-11-02 entries name, on watch-it-burn-community (the public burn cluster), and the
+first-move reads on watch-it-burn-private (the admin cluster) as well. EKS control-plane audit logging is on for both
+clusters, and their CloudWatch log groups (`/aws/eks/<cluster>/cluster`) keep events with no expiry, so the first
+move of 2026-10-31 was read from the API server's own record, not inferred from timestamps.
+
+**Synced and Healthy at a revision carrying 4cd52ed.** On community, `workshop-agent` read `Synced Healthy` at
+`ad18f774`, and `lab-bootstrap` read `Synced Healthy` at `f709b00e`, this run's base. `813404e` (4cd52ed as it reached
+staging) and `a29bb91` (the swap) are both ancestors of `ad18f774`. The Agent's tracking-id is
+`workshop-agent:kagent.dev/Agent:agent/workshop-agent`.
+
+**The git change reached the cluster with no converge.** Run 15968's swap, `a29bb91`, put `reorder_supply` before
+`check_inventory`. `workshop-agent`'s history records it as an automated sync at 2026-11-02T10:40:10Z, and the audit
+log has the matching server-side apply patches by `argocd-application-controller` at 10:40:10.7. The issue's read
+printed git's list, in git's order:
+
+    $ kubectl --context watch-it-burn-community -n agent get agent workshop-agent \
+        -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'
+    ["lookup_customer_records","reorder_supply","check_inventory","get_order_history","get_marketing_intel",
+     "search_web","read_support_ticket","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]
+
+A converge could not have done it: `repair_agent_tools` compares sorted lists and deletes the Agent when they differ,
+and the audit log has no create or delete of the Agent from 2026-10-31 08:52Z to this run. Every write to it in that
+time is by `argocd-application-controller` (seven syncs, each matching a history entry), by kagent's and the garbage
+collector's service accounts, or by the web terminal's `kubectl patch` (the C7 toggle, on 11-02 at 10:45 and 10:47
+and in this run). No user identity wrote it.
+
+**guard-mcp-on survives a reconcile.** Before: evil-mcp's toolNames read
+`["get_weather","read_internal_config","apply_optimization"]`. At 08:27:48Z this run ran
+`kubectl --context watch-it-burn-community -n agent exec deploy/web-terminal -c ttyd -- bash -c '"$HOME/guard-mcp-on"'`.
+It took the `toolnames` branch, patched `/spec/declarative/tools/1/mcpServer/toolNames` to `["get_weather"]`, and
+exited 0. Argo CD's reconciliation period here is 120s with 60s of jitter. `workshop-agent` next reconciled at
+08:30:40Z and stayed `Synced Healthy`, with no new operation (its last is still the 2026-11-04T20:45:56Z sync). At
+08:32:05Z, 85 seconds past that reconcile, evil-mcp still read `["get_weather"]` and workshop-mcp's list was unchanged.
+Then `guard-mcp-off` in the same terminal put the list back to all three, the Application read `Synced Healthy`, and
+the agent Deployment read 1/1 ready: the cluster is as this run found it.
+
+**How the first move went: the two clusters raced, and each went a different way.**
+- *watch-it-burn-community: ai-layer pruned the Agent, and workshop-agent made it again.* ai-layer's sync to
+  `813404e` began at 08:50:10Z on 2026-10-31. At 08:50:27.5 `argocd-application-controller` deleted the Agent; the
+  `workshop-agent` Application did not exist yet (the root created it at 08:51:03.9), so the delete was ai-layer's
+  prune. Argo CD prunes with foreground propagation, so the Agent stayed, marked for deletion, until the garbage
+  collector had removed its dependents. kagent's controller kept making the agent Deployment again, and the
+  collector kept deleting it: 30 Deployment creates and 30 pods scheduled between 08:50:30.5 and 08:51:34.6, about
+  one every two seconds. workshop-agent's first sync at 08:51:04.7 applied to the Agent while it was still being
+  deleted, which did not stop the delete. The collector released the Agent at 08:51:34.1, and workshop-agent's next
+  sync created it at 08:51:34.6 (HTTP 201). The current Agent and Deployment both date from 08:51:34Z. So the agent
+  was down for about 67 seconds and its pod cycled about thirty times, where the #707 entry expected one cycle. Any C7
+  state live then was reset.
+- *watch-it-burn-private: workshop-agent took the Agent over first.* The root created `workshop-agent` at 08:49:04Z,
+  and its sync patched the Agent at 08:49:05.6, changing its tracking-id before ai-layer's sync (which began at
+  08:49:02.9) reached its prune. The audit log has no delete of the Agent and no create of the agent Deployment
+  there, and the Agent still carries its 2026-10-28T11:59:00Z creation time. On private `workshop-agent` reads
+  `Synced Healthy` at `9c9c414a`, with the same twelve tools in git's order.
+
+Both clusters have moved, and a cluster built from now on gets the Agent from `workshop-agent` alone, so neither
+outcome can recur from #707. The finding is general: when a kagent Agent changes Application on a running cluster
+and the old one's prune wins, the agent is down for about a minute while kagent and the collector loop on its
+Deployment.
+
+**Reads, for a later run.** The first-move queries are CloudWatch Logs Insights on
+`/aws/eks/watch-it-burn-community/cluster`, over 2026-10-31 08:40Z to 09:05Z:
+
+    fields @timestamp, verb, objectRef.resource, responseStatus.code, user.username
+    | filter objectRef.namespace="agent" and objectRef.name="workshop-agent"
+      and objectRef.resource in ["agents","deployments"] and verb in ["create","delete","patch"]
+    | sort @timestamp asc
+
+The audit policy is at Metadata level, so request bodies (the delete's propagation policy among them) are not
+recorded. The collector's two patches of the Agent just before it vanished are what foreground deletion does when
+it removes its own finalizer.
+
+**Tests.** No code changed; this run's suite results follow in the next entry.
+
+## 2026-11-05 · #733 · Run 17386's suite results: offline 258 green, the tools tier 56 checks green on the third run
+
+At `a57cf167`, `bash verify/run-e2e-tools.sh` ran three times. Each time the offline suite ran 258 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. The first two tier runs went red only on Helm chart fetches from GitHub release
+downloads that answered `504 Gateway Time-out`. In the first, the only red was `test_no_docker_hub_render.py`, on
+falcosidekick 0.14.0. In the second, `test_datadog_log_services_render.py`, `test_enforce_floor.py` and
+`test_image_registry_render.py` went red on falco, falco-talon, falcosidekick, opentelemetry-collector and argo-cd
+charts. A plain `curl` of the falco 9.2.1 release URL from the host answered 504 twice and then 200, and each failing
+test passed when rerun alone. The third run printed `56 checks ran (the offline suite and 55 tier tests) in 27m26s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with no 504 in its log. No test changed.

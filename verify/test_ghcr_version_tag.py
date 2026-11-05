@@ -1,5 +1,5 @@
 # ABOUTME: scripts/ghcr_version_tag.py never pushes a build over a version tag (#816), puts a pinned tag on its digest (#828),
-# ABOUTME: and pushes new source to web-terminal-ttyd-<v>-<n> (#838). Offline: a fake registry on loopback, docker stubbed.
+# ABOUTME: pushes new source to web-terminal-ttyd-<v>-<n> (#838), and a Joker build only to its pin (#775). Offline, docker stubbed.
 """Offline. The live half is verify/test_image_version_tags.py (tools tier): ghcr.io must serve
 web-terminal-ttyd-<v> at the digest gitops/ai-layer/resources.yaml pins.
 
@@ -362,6 +362,81 @@ out, pushes, _ = shipping("#838: pinned at a digest the registry lacks", fake, [
 check("it refuses, naming the missing digest", out.startswith("REFUSED") and gone in out, out)
 check("nothing is pushed or put", pushes == [] and fake.puts == [], f"{pushes} {fake.puts}")
 
+# 6g. #775: a reproducible build ("crane:<ref>", push-jokers.yml). A pinned digest the registry lacks is pushed from the
+# build only when the build's digest is that pin; every other row acts as it does with any build.
+LOCAL = "127.0.0.1:5000/festival-ops/maintenance-shell:busybox-9.9.9-internal"
+
+
+def reproducible(fake: Fake, body: bytes, digest_of_build: str, lands: bytes | None = None):
+    """keep() with a crane build whose digest is digest_of_build; a push lands `lands` (default: body) at the tag."""
+    def run(reg, files, push):
+        def landing(a, b):
+            push(a, b)
+            fake.add(lands if lands is not None else body, MANIFEST, TAG)
+        return gvt.keep(LOCAL, REF, files, reg, push=landing, built=lambda local: digest_of_build)
+    return run
+
+
+built_body = b'{"schemaVersion":2,"mediaType":"' + MANIFEST.encode() + b'","layers":[{"joker":"internal"}]}'
+pin = digest(built_body)
+for title, moved in (("#775: pinned, the registry lacks the pin, and the build is the pin", False),
+                     ("#775: pinned, the tag has moved, the registry lacks the pin, and the build is the pin", True)):
+    fake = Fake()
+    if moved:
+        fake.add(b'{"moved":1}', MANIFEST, TAG)
+    out, pushes = case(title, fake, [f"{REF}@{pin} {pin} repo:x -\n"], run=reproducible(fake, built_body, pin))
+    check("the build is pushed to the tag, once", pushes == [(LOCAL, REF)], str(pushes))
+    check("no manifest is put by hand", fake.puts == [], str(fake.puts))
+    check("the tag serves the pin", fake.tags.get(TAG) == pin, str(fake.tags))
+    check("it says the build at the pin was pushed", "is pushed to it" in out and pin in out, out)
+
+fake = Fake()
+other_build = "sha256:" + "12" * 32
+out, pushes = case("#775: pinned, the registry lacks the pin, and the build is another digest", fake,
+                   [f"{REF}@{pin} {pin} repo:x -\n"], run=reproducible(fake, built_body, other_build))
+check("it refuses, naming the pin and the build's digest", out.startswith("REFUSED") and pin in out and other_build in out,
+      out)
+check("nothing is pushed or put", pushes == [] and fake.puts == [] and fake.tags == {}, f"{pushes} {fake.puts}")
+
+fake = Fake()
+out, pushes = case("#775: the push lands a digest other than the pin", fake, [f"{REF}@{pin} {pin} repo:x -\n"],
+                   run=reproducible(fake, built_body, pin, lands=b'{"recompressed":1}'))
+check("it refuses, saying what the tag serves", out.startswith("REFUSED") and "it serves" in out, out)
+
+fake = Fake()
+fake.add(built_body, MANIFEST, TAG)
+out, pushes = case("#775: the tag already serves the pin (the workshop Joker)", fake, [f"{REF}@{pin} {pin} repo:x -\n"],
+                   run=reproducible(fake, built_body, "sha256:" + "34" * 32))
+check("nothing is pushed or put, and the build is not even compared", pushes == [] and fake.puts == [], str(pushes))
+check("it says the tag serves the pin", "serves the pinned" in out, out)
+
+fake = Fake()
+body, want = pinned_index(fake)
+fake.add(b'{"moved":1}', MANIFEST, TAG)
+out, pushes = case("#775: the tag moved and the registry has the pin", fake, [f"{REF}@{want}\n"],
+                   run=reproducible(fake, built_body, pin))
+check("the pinned manifest is put back, and the build is not pushed", pushes == [] and fake.puts == [(TAG, want)],
+      f"{pushes} {fake.puts}")
+
+fake = Fake()
+out, pushes = case("#775: a build with no digest reader (docker) and a pin the registry lacks still refuses", fake,
+                   [f"{REF}@{pin}\n"])
+check("it refuses, naming the missing digest, and pushes nothing", out.startswith("REFUSED") and pin in out
+      and pushes == [], out)
+
+# The command line: "crane:<ref>" reaches keep() with crane's push and digest reader, not ship().
+seen = []
+gvt.keep = lambda local, ref, files, reg, **kw: seen.append(("keep", local, ref, files, kw)) or "ok"
+gvt.ship = lambda *a, **kw: seen.append(("ship",)) or "ok"
+gvt.Registry = lambda *a: None
+try:
+    rc = gvt.main([f"crane:{LOCAL}", REF, "images.lock"])
+finally:
+    gvt.keep, gvt.ship, gvt.Registry = real_keep, real_ship, real_registry
+check("\"crane:<ref>\" reaches keep() with the ref behind the prefix, crane_push and crane_digest",
+      rc == 0 and seen == [("keep", LOCAL, REF, ["images.lock"], {"push": gvt.crane_push, "built": gvt.crane_digest})],
+      f"{rc} {seen}")
+
 # 7. The workflow runs the script on the pin files, and runs when the script changes.
 print("== the workflow ==")
 workflow = (REPO / ".github/workflows/build-web-terminal.yml").read_text(encoding="utf-8")
@@ -414,6 +489,51 @@ if step:
     check("with two sample-app-nginx tags pinned, the pin step fails", r.returncode != 0 and "not one" in r.stderr,
           f"{r.returncode} {r.stderr}")
 
+# 7c. push-jokers.yml (#775): builds both Jokers on loopback with no credential, then hands each tag to the script.
+print("== push-jokers.yml ==")
+import yaml
+jokers_text = (REPO / ".github/workflows/push-jokers.yml").read_text(encoding="utf-8")
+jokers = yaml.safe_load(jokers_text)
+steps = jokers["jobs"]["jokers"]["steps"]
+for path in ("images/villains/**", "images.lock", "verify/e2e-tools.lock", ".github/workflows/push-jokers.yml",
+             "scripts/ghcr_version_tag.py"):
+    check(f"it runs on a change to {path}", f"- '{path}'" in jokers_text)
+check("it runs on pushes to staging and main", "branches: [staging, main]" in jokers_text)
+check("one run at a time", re.search(r"^concurrency:\n  group: push-jokers\n  cancel-in-progress: false$", jokers_text,
+                                     re.M) is not None)
+build_steps = [s for s in steps if "build-loopback.sh" in str(s.get("run", ""))]
+check("one step builds with images/villains/build-loopback.sh on 127.0.0.1:5000",
+      len(build_steps) == 1 and "bash images/villains/build-loopback.sh 127.0.0.1:5000" in build_steps[0]["run"])
+holders = [s.get("name") for s in steps if "GHCR_TOKEN" in str(s.get("env", ""))]
+check("only the step that calls the script holds GHCR_TOKEN, and the build step does not",
+      len(holders) == 1 and build_steps and "GHCR_TOKEN" not in str(build_steps[0]) and
+      "python3 scripts/ghcr_version_tag.py" in next(str(s["run"]) for s in steps if s.get("name") == holders[0]),
+      str(holders))
+fetch = next((str(s["run"]) for s in steps if "e2e-tools.lock" in str(s.get("run", ""))), "")
+check("it fetches crane from e2e-tools.lock's row and checks its SHA-256 before running it",
+      "grep -E '^crane[[:space:]]' verify/e2e-tools.lock" in fetch and "sha256sum -c -" in fetch)
+loop = re.search(r"for tag in ([^;]+); do\n\s+(python3 scripts/ghcr_version_tag\.py .+)\n", jokers_text)
+call = ('python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/festival-ops/maintenance-shell:${tag}" '
+        '"ghcr.io/peopleforrester/festival-ops/maintenance-shell:${tag}" images.lock')
+check(f"each tag goes to the script as a crane: build, pinned by images.lock ({call})", bool(loop) and loop.group(2) == call)
+build_sh = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
+joker_ref = re.search(r'^JOKER_REF="([^"]+)"$', build_sh, re.M)
+internal_suffix = re.search(r'^JOKER_INTERNAL_REF="\$\{JOKER_REF\}(-[a-z0-9.-]+)"$', build_sh, re.M)
+if joker_ref and internal_suffix:
+    ref_tags = [joker_ref.group(1).rsplit(":", 1)[1], joker_ref.group(1).rsplit(":", 1)[1] + internal_suffix.group(1)]
+else:
+    ref_tags = []
+check(f"the tags it keeps are the two build.sh builds ({ref_tags})", bool(loop) and loop.group(1).split() == ref_tags,
+      loop.group(1) if loop else "no loop")
+lock_text = (REPO / "images.lock").read_text(encoding="utf-8")
+for tag in ref_tags:
+    ref = f"ghcr.io/peopleforrester/festival-ops/maintenance-shell:{tag}"
+    try:
+        d = gvt.pinned(ref, {"images.lock": lock_text})
+    except gvt.Refused:
+        d = None
+    check(f"images.lock pins {tag} at one digest, so the script has a pin to keep", d is not None)
+
 # 8. The repo's own pins: the tag the workflow builds today is pinned at one digest across both pin files.
 print("== the repo's pins ==")
 texts = {p: (REPO / p).read_text(encoding="utf-8") for p in ("gitops/ai-layer/resources.yaml", "images.lock")}
@@ -449,4 +569,4 @@ if failures:
         print(f"  - {name}")
     raise SystemExit(1)
 print("The web-terminal build pushes new source to a tag ghcr.io lacks and keeps a pinned one on its digest; keep-sample-app-tag")
-print("puts sample-app's pinned tag on its digest with no build.")
+print("puts sample-app's pinned tag on its digest with no build; push-jokers pushes a reproducible Joker only to its pin.")

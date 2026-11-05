@@ -1,8 +1,8 @@
 # ABOUTME: The web-terminal build's push step (#816, #838), and sample-app's tag keeper (#828): a pinned version tag stays on
-# ABOUTME: its pinned digest, and a build of new source is pushed to a tag ghcr.io lacks, web-terminal-ttyd-<v>[-<n>].
+# ABOUTME: its pinned digest, a build of new source goes to a tag ghcr.io lacks, and a reproducible one to its pin (#775).
 """Push a version tag once, and keep it on the digest the repo pins.
 
-    GHCR_USER=... GHCR_TOKEN=... python3 scripts/ghcr_version_tag.py <local-image|-> <ghcr.io/owner/repo:tag> <pin-file>...
+    GHCR_USER=... GHCR_TOKEN=... python3 scripts/ghcr_version_tag.py <local-image|crane:<ref>|-> <ghcr.io/owner/repo:tag> <pin-file>...
 
 Why (#816). The web-terminal tag names the ttyd inside (#714): web-terminal-ttyd-1.7.7. Its build is not
 reproducible, so every run of .github/workflows/build-web-terminal.yml used to push a new digest over that same tag.
@@ -41,6 +41,18 @@ A pinned tag passed on the way is kept on its pinned digest by the table's rows 
 version before it is still the one ttyd reports (#714), and verify/test_image_version_tags.py holds a pinned -<n> tag
 to the label. A workflow-only edit leaves the tree as it was, so it pushes nothing; the main promotion of a source
 staging already pushed finds staging's tag. The workflow runs one build at a time, so two runs cannot take one -<n>.
+
+A local image of "crane:<ref>" is a reproducible build (#775): <ref> is an image in a registry crane reads, the
+loopback one .github/workflows/push-jokers.yml has images/villains/build.sh build both Jokers into. crane reads its
+digest, and one row is added to the table for it:
+
+  a pin file pins <tag>@D, the registry has no     the build's digest is read: when it is D, crane copies the
+  manifest at D, and the build is crane:<ref>      build to the tag, so it serves D; when it is not, nothing is
+                                                   pushed and the script exits 1 naming both digests
+
+Every other row acts as above, so a Joker tag that serves its pin is left alone and a moved one is put back. That row
+is how the breakout's Joker, festival-ops/maintenance-shell:busybox-1.38.0-internal, reaches ghcr.io: images.lock
+pinned its digest before its first push, and no run may write to ghcr.io.
 
 A local image of "-" means there is no build (#828). .github/workflows/keep-sample-app-tag.yml runs the script that
 way for sample-app-nginx-<v>, which #814 pinned in backstage/k8s/templated-test-svc.yaml and images.lock at the
@@ -166,11 +178,33 @@ def docker_labels(local: str) -> dict[str, str]:
     return json.loads(out) or {}
 
 
+def crane_bin() -> str:
+    return os.environ.get("CRANE") or "crane"
+
+
+def crane_digest(local: str) -> str:
+    """The digest of a build in a registry crane reads (the workflow's loopback one)."""
+    r = subprocess.run([crane_bin(), "digest", local], capture_output=True, text=True)
+    if r.returncode != 0 or not re.fullmatch(r"sha256:[0-9a-f]{64}", r.stdout.strip()):
+        raise Refused(f"crane could not read the digest of the build {local}: {(r.stdout + r.stderr).strip()[:300]}")
+    return r.stdout.strip()
+
+
+def crane_push(local: str, ref: str) -> None:
+    """Copy the build to ref, manifest and layers byte for byte, as GHCR_USER with GHCR_TOKEN."""
+    host, _, _ = split(ref)
+    subprocess.run([crane_bin(), "auth", "login", host, "-u", os.environ["GHCR_USER"], "--password-stdin"],
+                   input=os.environ["GHCR_TOKEN"], text=True, check=True)
+    subprocess.run([crane_bin(), "copy", local, ref], check=True)
+
+
 def keep(local: str | None, ref: str, pin_files: list[str], registry: Registry,
-         push: Callable[[str, str], None] = docker_push) -> str:
+         push: Callable[[str, str], None] = docker_push,
+         built: Callable[[str], str] | None = None) -> str:
     """Act on ref as the table in the docstring says, and return the line the workflow log prints.
 
-    local is None when there is no build: then only a pinned ref is acted on."""
+    local is None when there is no build: then only a pinned ref is acted on. built reads a reproducible build's
+    digest (crane:<ref>); with it, a pinned digest the registry lacks is pushed from a build that has that digest."""
     _, _, tag = split(ref)
     texts = {p: pathlib.Path(p).read_text(encoding="utf-8") for p in pin_files}
     want = pinned(ref, texts)
@@ -179,6 +213,17 @@ def keep(local: str | None, ref: str, pin_files: list[str], registry: Registry,
         if got == want:
             return f"{ref} serves the pinned {want}; the build is not pushed over it"
         m = registry.manifest(want)
+        if m is None and local is not None and built is not None:
+            have = built(local)
+            if have != want:
+                raise Refused(f"{', '.join(pin_files)} pin {ref}@{want}, which the registry lacks, and the build "
+                              f"{local} is {have}: nothing is pushed. Fix the build or re-pin, not both blindly")
+            push(local, ref)
+            after = registry.served(tag)
+            if after != want:
+                raise Refused(f"the build at {want} was pushed to {ref}, and it serves {after}")
+            before = "was not on the registry" if got is None else f"served {got}"
+            return f"{ref} {before}; the build, at the pinned {want}, is pushed to it"
         if m is None:
             raise Refused(f"{', '.join(pin_files)} pin {ref}@{want}, and the registry has no manifest at {want}")
         registry.put(tag, *m)
@@ -239,7 +284,10 @@ def main(argv: list[str]) -> int:
     try:
         host, repo, _ = split(ref)
         registry = Registry(f"https://{host}", repo, user, password)
-        print(ship(local, ref, pin_files, registry) if local else keep(None, ref, pin_files, registry))
+        if local and local.startswith("crane:"):
+            print(keep(local[len("crane:"):], ref, pin_files, registry, push=crane_push, built=crane_digest))
+        else:
+            print(ship(local, ref, pin_files, registry) if local else keep(None, ref, pin_files, registry))
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1
