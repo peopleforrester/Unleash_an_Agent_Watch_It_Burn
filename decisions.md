@@ -39234,3 +39234,88 @@ error in APM and in Agent Observability.
 
 **Tests.** This entry changes no code and no test. The prose gate is the only check that reads it; validation runs
 it after this report.
+## 2026-11-05 · #877 · run 17501 · Each MCP tool call leaves one APM trace now; guard-proxy's polls stay in the turn's trace until guard-proxy stops recording them
+
+**What was asked.** #265's live look on watch-it-burn-private (Datadog names it `burritobot-private`) found two kinds
+of APM noise around one BurritoBot turn. Item 1: every MCP tool call showed as two parentless 2-span traces from
+`burritobot-gateway`. Item 2: while the blocked `run_shell` waited out its 20 seconds, guard-proxy's root gained one
+`POST` subtree a second. `verify/prior-drafts.sh 877 origin/staging` printed NONE.
+
+**Item 1, why each call appears twice: #746's copy.** The second trace is Agent Observability's copy. Its id is the
+first 32 hex digits of the SHA-256 of the first trace's id, which is what `transform/llmobs_one_root` gives the copy
+(#783):
+
+    sha256("ba4d717c4482c8c0598202c7238ecc7f")[:32] = be12f808f25277a4fcbe7c7c993df2c2   (run_shell)
+    sha256("9840e3d8a8c2a8744a9a72ac68d613cf")[:32] = db8cd88a968eb3e40aad00540dd9cc0d   (get_marketing_intel)
+
+Read from Datadog's APM spans API (`trace_id:<id>`, the `watch-it-burn/datadog` read pair), both traces hold the
+same two span ids, so "both name the same parent" is one span seen twice:
+
+    ba4d717c...  burritobot-gateway http.server.request POST                        span 6808981640647919951 parent 0  port 3001  dd_llmobs_enabled false
+    ba4d717c...  burritobot-gateway client.request tools/call workshop-mcp_run_shell span 10960010734812753812 parent 6808981640647919951
+    be12f808...  burritobot-gateway http.server.request POST                        span 6808981640647919951 parent 0  port 3001  (no dd_llmobs_enabled)
+    be12f808...  burritobot-gateway client.request tools/call workshop-mcp_run_shell span 10960010734812753812 parent 6808981640647919951
+
+Tempo, which gets only the traces pipeline, holds ba4d717c and not be12f808. The copy keeps every span with a
+`gen_ai.*` attribute, and the gateway puts `gen_ai.tool.name` on both spans of the pair, so the pair went to the
+llmobs intake, and the intake wrote it into APM. `python3 verify/dd_traces.py --trace` found no Agent Observability
+row for either id: the copy's gateway spans showed nowhere but APM. That is the second root for each call.
+
+**Item 1, why the call does not join the turn: kagent's MCP client sends no traceparent.** In Tempo, trace
+`9d352dffa84e5674a6af3f4b10662808` (110 spans) has `execute_tool run_shell` and `execute_tool get_marketing_intel`
+with no child at all: the agent records no HTTP span for its MCP call. The workshop-agent runs
+`ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, whose MCP transport is a plain `http.Transport` with a header
+round-tripper and no OTel propagation (`go/adk/pkg/mcp/registry.go`, `createTransport`, read at tag v0.10.1).
+The gateway does follow a context on :3001: a one-shot pod (`verify/probe_pod.py`'s manifest, the workshop-mcp
+shim image, deleted after) sent initialize, notifications/initialized and `tools/call check_inventory` to
+`agentgateway.agent.svc.cluster.local:3001/mcp` at 13:59:18Z, each with `traceparent:
+00-dfa13e56bb6242e88bfb8adabc7163a7-ca6a60695c1240dd-01`, and Tempo had:
+
+    burritobot-gateway tools/call                         SERVER id 17e68f086af19c31 parent ca6a60695c1240dd  server.port 3001
+    burritobot-gateway tools/call workshop-mcp_check_inventory CLIENT id 6a82f2194f6b246b parent 17e68f086af19c31
+
+So the gap is on kagent's side. The collector sees one span at a time and cannot give the gateway's span the
+agent's parent, so it cannot be joined from this repo. A follow-up asks kagent to wrap that transport in
+`otelhttp.NewTransport`.
+
+**Item 1, the change.** `filter/llmobs_one_root` gains a fourth rule that drops every gateway span from Agent
+Observability's copy. The copy loses nothing: the same call is kagent's `execute_tool` row there. APM keeps the
+gateway's own pair, the `tools/call` evidence #265's rule kept on purpose. So each MCP tool call is one parentless
+APM trace instead of two, and the four extra roots around the #265 interaction become two. The other two stay until
+kagent sends a traceparent, because dropping them from `filter/drop_noise` would drop that evidence.
+
+**Item 2, decided: dropped at source, not collapsed or dropped in the collector.** guard-proxy's `/chat` forward
+(`proxy.py` `_handle_chat` at pin 0f0c809) sends `message/send` non-blocking and then polls `tasks/get`, from
+0.25 s doubling to once a second, under one `agent.forward` span. The urllib instrumentation records each poll as a
+`POST` with its own traceparent, so each one is four spans: guard-proxy's `POST`, the gateway's `POST /*` SERVER and
+`POST workshop-agent...:8080` CLIENT, and the agent's `POST /` server span. Trace `9d352dff...` has 23 of them.
+They are inside the turn's one trace, not roots, and the copy already drops them (no `gen_ai.*`). Read span by span
+from Tempo, a poll's guard-proxy and gateway spans have the names and attributes of the `message/send` hop the
+turn hangs from. Only the agent's end differs: `message/send`'s server span carries `gen_ai.conversation.id` and
+`gen_ai.task.id` and a 428-byte body, and a poll's carries neither and a 113-byte body. A collector rule can
+therefore drop only the poll's last span, which collapses four spans to three and leaves a gateway call with no
+server under it. Every other rule would cut the path #320 restored. The drop belongs in guard-proxy: send each
+poll under an unsampled traceparent (flags `00`) with urllib's span suppressed. The gateway then records nothing
+(`TraceSampler` in `crates/agentgateway/src/telemetry/log.rs`, read at v1.7.0, applies `parent_not_sampled`, unset
+and so false, to an unsampled parent), and kagent's otelhttp server follows the parent's flag. A follow-up in
+guard-proxy-agenticburn asks for it. No run can push there (#521), so the pin moves when it lands. The poll hops'
+comment beside the gateway rule in `filter/drop_noise` says why the collector keeps them.
+
+**Tests.** `verify/test_collector_one_root_e2e.py` (tools tier) now also runs each profile's `traces/llmobs` on the
+forwarded copy. Its fixtures add a `tasks/get` poll, four spans under `agent.forward` named as Tempo had them, and
+the live tools/call pair in place of the one-span `tools/call`. New checks on instructor, attendee and burn: the
+poll stays whole in the one-root trace; APM keeps the pair; the copy has the turn's model calls; the copy has no
+gateway span. Against staging's `values.yaml` the last check fails on all three profiles (`in the copy:
+['burritobot-gateway tools/call', 'burritobot-gateway tools/call workshop-mcp_run_shell']`), and with this change
+every check passes.
+
+**Live, on watch-it-burn-private (run 17501).** `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`
+passed all 12 checks on trace `59bab2cf0e4b43d2b8e9a90a2d5ef44b`: `One interaction, one root.` The probe pods are
+deleted and the cluster is as found. The collector there still runs staging's config, which this change touches only
+in `traces/llmobs`, a pipeline that does not feed Tempo.
+
+**Not yet run on a cluster.** Once Argo CD has rolled this change onto the collector: send one Challenge 1 turn
+(`bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`), then read APM for
+`trace_id:<sha256 of the tools/call trace id>[:32]` for each tool call's gateway trace. It should find nothing, and
+the gateway's own trace should still hold the pair. Also rerun `CONTEXT=watch-it-burn-private python3
+verify/one_root_probe.py`.
