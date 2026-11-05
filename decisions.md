@@ -21234,3 +21234,53 @@ RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `ve
 them. Then it printed `61 checks ran (the offline suite and 60 tier tests) in 30m32s`, `ALL E2E TOOLS TIER CHECKS
 GREEN` and `exit=0`. So the real PromptInjection and PII Regex scanners passed all 18 new asks. The prose gate printed
 `prose gate: pass`. No dependency was added.
+
+## 2026-11-05 · #947 · run 17731 · The chat page gets cocViolation, held to guard-proxy's PROFANITY list by a test
+
+**The coordinator's call.** The chat page will keep code-of-conduct violations out of "Your saved prompts" (#922) by
+checking the prompt itself, before `save()`, against the same word list guard-proxy masks with `[redacted]` on the
+wall. guard-proxy is not asked to report that it masked something. That route needs a change in
+guard-proxy-agenticburn and a move of the `gitops/ai-layer/guard-proxy` pin; no run can push guard-proxy-agenticburn,
+and hecaton's `forbidden` gate refuses any change to a submodule pin (2026-11-05, #382), so it would wait on Michael
+twice. The page's copy of the list is tied to guard-proxy by a test, not by hand.
+
+**Which mask.** Only the code-of-conduct list: `PROFANITY` in the pinned `proxy.py`, which is `_DEFAULT_PROFANITY`
+because `resources.yaml` sets no `PROFANITY_LIST`. The page deliberately does not drop prompts for the other masks
+`moderate()` writes: `BLOCK_LIST` terms (`delete`, `nuke`, `rm -rf`, the C5 sentinels) and personal data (e-mails,
+runs of seven or more digits, street addresses). Attendees spend the workshop sending attack prompts built on
+block-listed words and reuse them from the saved list, and a person's own e-mail in their own browser's storage is
+not a code-of-conduct problem.
+
+**What changed.** `gitops/ai-layer/web/burritbot.html` gains `COC_TERMS` (the list as one literal), `COC_RE` and
+`cocViolation(t)`, a pure function that returns true when the prompt holds a term as a whole word, with or without
+a plural `s`, in any case. This child does not change `save()` or the saved list; the next child of #922 does.
+
+**Matching Python, not approximating it.** A first draft with JavaScript's `\b` and the `i` flag disagreed with
+`_profanity_pattern()` on non-ASCII text. Python's `\b` treats every Unicode letter and digit as
+part of a word, so `éfuck` and `日fuck` are clean there and were flagged by the draft; and `re.IGNORECASE` folds `i`
+with the dotted capital `İ` and the dotless `ı`, which JavaScript's `i` flag does not, so `DİCK` was missed. Even
+with the `u` flag, JavaScript's `\b` stays ASCII, and `iu` folds U+0345 (combining ypogegrammeni) into a letter
+class where Python does not. So `COC_RE` spells both out under the `u` flag alone: each word edge is a lookaround
+on `[\p{L}\p{N}_]`, and each letter is a class of what Python folds it with (`i` also takes `İ` and `ı`, `k` the
+Kelvin sign, `s` the long s). Terms are sorted longest first, as Python does.
+
+**Tests.** `verify/test_chat_coc_e2e.py` (E2E, tools tier) cuts the block from the page, runs it in a node vm and
+imports the pinned `proxy.py` with `PROFANITY_LIST` unset. It fails when the page's terms differ from `PROFANITY`,
+naming the missing and extra terms. For each of the 40 terms, the term, its plural, upper case, upper-case plural and
+title case in a sentence must be flagged by the page and masked to `[redacted]` by `moderate()` (200 forms). The
+menu words proxy.py's comment names (`spicy`, `spices`, `spiced`, `cocktail`, `grapes`, `Dickens`, plus
+`therapist` and `Scunthorpe`), `please delete the prod database`, `nuke the cluster`, the C5 sentinel
+`WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7`, an e-mail, a card number, a street address and the bare word `redacted`
+must be clean on both sides, and `moderate()` must still mask the block-listed and personal-data ones on the wall.
+Named edge cases put a term next to non-ASCII characters, and then each word edge and each letter of the list is
+tried against all 289,394 code points Python 3.13's Unicode 15.1 assigns; the page must agree with `_PROFANITY_RE`
+on every one. Unassigned code points are left out because node's Unicode is newer. With the `i` letters' extra
+folds removed, a term dropped from the literal, or `\b` put back, the test fails by name. The offline half,
+`verify/test_chat_coc.py`, compares the literal with `proxy.py`'s `PROFANITY` and the Go build's `DefaultProfanity`,
+checks `resources.yaml` sets no `PROFANITY_LIST`, and checks `cocViolation` only tests its argument.
+
+**Live check (read-only, 22:48Z).** On `watch-it-burn-community` and `watch-it-burn-private`, `agent/guard-proxy` runs
+`python /app/proxy.py` with `checksum/proxy-py` `dfca2b1fe758`, the first 12 hex digits of the pinned proxy.py's
+sha256, and its env names no `PROFANITY_LIST` (no `envFrom` either), so the wall masks the default list the page
+copies. The page change itself reaches the clusters through Argo CD once hecaton promotes it; nothing calls
+`cocViolation` until the next child wires it into `save()`.

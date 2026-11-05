@@ -597,6 +597,22 @@
     var items=s.querySelectorAll('.saved-item');
     while(items.length>10){s.removeChild(items[items.length-1]);items=s.querySelectorAll('.saved-item');}
   }
+  // The code-of-conduct check for "Your saved prompts" (#947, the first half of #922). COC_TERMS is guard-proxy's
+  // PROFANITY list, the words its wall feed masks with [redacted], and cocViolation matches them the way
+  // proxy.py's _profanity_pattern() does: whole words, an optional plural s, longest term first, case-blind.
+  // JavaScript's \b and i flag are not Python's, so both are spelled out: a word edge is any character that is
+  // not a Unicode letter, digit or underscore, and each letter matches what re.IGNORECASE folds it with (i also
+  // takes the dotted and dotless i, k the Kelvin sign, s the long s). Only this list: BLOCK_LIST attack words and
+  // personal data are masked on the wall but are not code-of-conduct problems in the attendee's own saved list.
+  // verify/test_chat_coc_e2e.py runs this against the pinned proxy.py on every assigned code point.
+  const COC_TERMS='fuck,fucks,fucked,fucker,fucking,fuckin,motherfucker,motherfucking,shit,shitty,shitting,bullshit,shithead,cunt,bitch,bitches,bitching,bastard,dick,dickhead,cock,pussy,asshole,dumbass,jackass,wanker,twat,nigger,faggot,retard,retarded,tranny,slut,whore,rape,raped,rapist,kike,spic,chink';
+  const COC_FOLD={i:'iI\u0130\u0131',k:'kK\u212A',s:'sS\u017F'};
+  function cocLetter(c){return '['+(COC_FOLD[c]||c+c.toUpperCase())+']';}
+  const COC_RE=new RegExp('(?<![\\p{L}\\p{N}_])(?:'+COC_TERMS.split(',')
+    .sort(function(a,b){return b.length-a.length;})
+    .map(function(w){return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/[a-z]/g,cocLetter);})
+    .join('|')+')'+cocLetter('s')+'?(?![\\p{L}\\p{N}_])','u');
+  function cocViolation(t){return COC_RE.test(String(t==null?'':t));}
   function save(t){const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   // Reset clears the CONVERSATION and the saved-prompt rail, and says so. Previously it cleared only the
