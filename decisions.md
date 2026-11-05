@@ -16157,3 +16157,7 @@ release and changed nothing on either cluster. Every call named its `--context` 
 `fee7dbd7` is on main, and main's replay go.mod requires argo-cd v3.5.7.
 
 **Not yet run on a cluster:** nothing for #858. The issue closes with this entry.
+
+**The suites (run 17211, at `1023f240`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m50s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
