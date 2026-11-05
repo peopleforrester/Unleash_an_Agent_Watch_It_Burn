@@ -18469,3 +18469,101 @@ a staging clone that holds this change.
 **Suites (run 17411, at c1c1b971).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 27m04s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No
 dependency was added.
+## 2026-11-05 · #784 · Run 17406's live look: tokens and tool definitions arrive, cost did not, and Agent Observability's copy now names the system id Datadog prices
+
+**Where the issue stood.** Every earlier #784 draft is in staging (`verify/prior-drafts.sh 784 origin/staging` printed
+NONE). The redaction, the v1.41.1 pin and `gen_ai.tool.definitions` landed with run 16777's port, and Michael's
+`a65f748d` repin put the token counts on guard-proxy's `chat` span (#839). This is the first #784 run that could read
+its cluster session and the sandbox org (#759), so it ran the checks the 2026-11-03 entry names under "Not yet run on
+a cluster".
+
+**What the clusters run.** On both clusters guard-proxy's `checksum/proxy-py` is `dfca2b1fe758`, the pin's
+(0f0c809), and the live `guard-proxy-src` ConfigMap's proxy.py sets `gen_ai.usage.input_tokens` and
+`gen_ai.usage.output_tokens` on `chat_span` (its lines 1669 and 1670). `ai-layer` and `otel-collector` are Synced and
+Healthy on both.
+
+**Check 1, a fresh chat on each bot.** `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session` at
+09:22Z printed `AGENT OBSERVABILITY GREEN`: community's chat is trace `0eba6a5bf5f05b829889b54b77ce5469` and private's
+`f4993fe8952a5106bb9262eb0b7b0793`, four rows each (`POST`, `invocation`, `workshop_agent`, one `generate_content`).
+Read back with `verify/dd_traces.py --trace <id> --json`:
+- *Tokens:* present. Community's `generate_content` row has 5312 in and 44 out, private's 5312 in and 43 out, split by
+  role (system 4353, tool definitions 948, user 11).
+- *Tool definitions:* present. Both llm rows carry `tool_definitions`, 16 entries with name and description each.
+- *Cost:* missing. Both llm rows read `cost_estimate_status:skipped_unsupported_model_pricing`, with no
+  `estimated_*_cost` metric. Their model name is the cluster's application profile ARN (`.../5l72jg8rnz71` on
+  community, `.../88hce5o0zw45` on private), which #513 pins so the spend carries its tags, and Datadog has no price for
+  it. #265's run saw the same on 2026-11-05 and filed it as #876.
+Datadog's own history settles what a priced row needs. Over the last 15 days the sandbox org's `ml_app:burritobot` llm
+rows fall into three groups: every row named by an ARN reads `skipped_unsupported_model_pricing`; guard-proxy's
+token-less `chat` rows named `us.amazon.nova-pro-v1:0` (dropped from the copy since #746) read
+`skipped_tokens_missing`; and one kagent `generate_content` row named `us.amazon.nova-pro-v1:0` with its tokens
+(burritobot-public, 2026-11-03, session `wib-verify-450-...`, while its ModelConfig still called the system id) reads
+`success` with `estimated_total_cost` 4351200, in units of 1e-9 USD: 4947 in at 0.80 and 123 out at 3.20 USD per million.
+
+**The change: the copy names the system id.** `transform/llmobs_model` (gitops/otel-collector/values.yaml) runs in
+`traces/llmobs` only, after `transform/llmobs_one_root`. For each Bedrock ModelConfig it renames a model call whose
+`gen_ai.request.model`, `gen_ai.response.model` or span name is that tier's profile ARN to the system id the
+ModelConfig commits in resources.yaml. It keeps the ARN as `witb.bedrock.application_profile`, as #876 asks. APM's copy keeps the ARN,
+which is what the bill's tags trace. The ARNs are per cluster and known only after apply, so they come from the
+environment: `fleet.sh pin_bedrock_profiles`, which already reads `bedrock_application_profiles` from the cluster's
+state, now writes `monitoring/bedrock-profile-models`, one `WIB_BEDROCK_PROFILE_<TIER>` key per Bedrock ModelConfig
+it has pinned. It restarts the collector pods only when the map changed, since they read their environment at start.
+The collector loads the ConfigMap with `extraEnvsFrom`, optional. A cluster without it reads every key as
+`unpinned`, which no model name equals, so nothing is renamed and the collector starts as before. A map the cluster
+refuses fails the pin into the ledger. agentgateway's backend is left out: kagent names those calls by the gateway's
+backend name (`bedrock-nova`), not the ARN. The `gen_ai.client.cost` metric, the dashboards and the leaderboard are
+unchanged, and so is everything a workshop attendee sees.
+
+**Checked against Datadog before it reaches a cluster.** The rename runs on no cluster until hecaton promotes this
+branch, so this run ran the branch's own `traces` and `traces/llmobs` pipelines (instructor profile, as
+`collector_render.py` builds them with datadog-secret present, plus Act 2's `transform/redact_sentinel` appended as
+the overlay says) in the pinned otelcol-contrib 0.160.0 on this host. It exported the copy to Datadog's real
+`otlp_http/llmobs` intake with the `watch-it-burn/datadog` pair, under services of its own, so nothing lands in
+`ml_app:burritobot`. The map named four made-up profile ARNs, and a fifth ARN outside the map was the control. Read
+back through the LLM Observability API at 10:01Z (Agent Observability traces `6d4b941557b352638ad0ebc8f3034a3d` and
+`3cd4975613e25ec2a55f2952b747d0e6`; a first send at 09:45Z, before the ARN attribute was added, read the same):
+- *Pricing* (service `wib-784-pricing`, 1000 tokens in and 100 out on each call): `us.amazon.nova-pro-v1:0` success,
+  1120000; `us.anthropic.claude-haiku-4-5-20251001-v1:0` success, 1650000; `us.anthropic.claude-sonnet-4-6` success,
+  4950000; `us.anthropic.claude-opus-4-8` success, 8250000; the control ARN `skipped_unsupported_model_pricing`. Each
+  priced row carries its ARN as the `witb.bedrock.application_profile` tag, and the control row carries none. Nova's
+  estimate is the price table's in proxy.py exactly. For the three Claude tiers, Datadog's estimate is 10 percent
+  above proxy.py's table (1.10 and 5.50 USD per million for Haiku against 1.00 and 5.00), which reads as the
+  cross-region `us.` profile price; the `gen_ai.client.cost` metric the dashboards read stays on proxy.py's table.
+- *Act 2* (service `wib-784-act2`, `DEMO-SENTINEL-ACT1-9f3c2a` in the root's prompt and reply, in the model call's
+  messages and in a `run_shell` call's arguments and result): the sentinel is in no stored span, and the agent, llm
+  and tool rows' input and output all read `[DEMO-REDACTED]` (8 places). That is check 2's question answered at
+  Datadog's intake without a flip on a cluster: the flip is a Git commit to staging (the overlay's steps), which a run
+  does not make.
+The probe was a script outside the repo, since the checks after promotion are the repo's own
+(`agent_obs_flow.py`, `dd_traces.py`). It leaves those two traces in Whitney's org under `wib-784-pricing` and
+`wib-784-act2`, as #647's check left `wib-pii-scrub-check`. Nothing on either cluster changed.
+
+**Check 3, the APM `chat` span and the totals.** The clusters already run the repin, and Agent Observability's copy
+drops the `chat` span (#746), so the turn's total there is the `generate_content` rows' sum and nothing else: one llm
+row per chat above, 5356 and 5355 tokens, no second count. The APM read of the `chat` span's two counts is left for
+the next run below; `verify/test_chat_span_token_counts.py` holds it offline at the pin.
+
+**Tests.** `verify/test_collector_llmobs_model.py` (offline) holds the rules to the four Bedrock ModelConfigs and their
+system ids, each keyed as fleet.sh's `profile_models_key` writes it, the ARN kept before the rename, the `unpinned`
+default on every key, the ConfigMap fleet.sh writes loaded optionally on every profile, and the rules in
+`traces/llmobs` only on every profile with and without datadog-secret. `verify/test_collector_llmobs_model_e2e.py`
+(tools tier) runs a nova, an opus and an unmapped call through the real collector on every profile: the copy names
+the system id on all three fields, keeps the tokens and the ARN, APM keeps the ARN, the unmapped call is untouched,
+and with no map nothing is renamed. With `transform/llmobs_model` taken out of `traces/llmobs` it fails 18 checks
+across the three profiles. `verify/test_pin_bedrock_profiles.sh` adds the ConfigMap: written on a fresh pin with the
+four keys and a collector restart, left alone and no restart on a second pass, written for a cluster pinned before
+#784, rewritten with a standby's own ARNs, holding only the three pinned tiers when one has no profile, and a refused
+write that fails the pin and restarts nothing.
+
+**Not yet run on a cluster.** The rename needs this change running, and the ConfigMap. Once Argo CD has synced the
+collector change on both clusters:
+1. Write the map on each cluster. The next `fleet.sh converge` does it. Without the cluster state, the same map can be read from
+   the live ModelConfigs, which hold the ARNs fleet.sh pinned:
+   `for c in watch-it-burn-community watch-it-burn-private; do kubectl --context $c -n monitoring create configmap bedrock-profile-models $(for t in nova haiku sonnet opus; do echo --from-literal=WIB_BEDROCK_PROFILE_${t^^}=$(kubectl --context $c -n agent get modelconfig bedrock-$t -o jsonpath='{.spec.model}'); done) --dry-run=client -o yaml | kubectl --context $c apply -f -; kubectl --context $c -n monitoring delete pod -l app.kubernetes.io/name=opentelemetry-collector; done`
+2. `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session`, then
+   `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json` on each trace: every llm row must name
+   `us.amazon.nova-pro-v1:0`, read `cost_estimate_status:success` with an `estimated_total_cost`, and carry
+   `witb.bedrock.application_profile` with the cluster's nova ARN.
+3. In APM, the same chat's guard-proxy `chat` span (service `burritobot`) carries both counts, and they equal the sum of
+   the turn's `generate_content` counts.
+#876 is the same change; once step 2 is green on both clusters it is done too.

@@ -1348,8 +1348,38 @@ _set_bedrock_model() {
     fi
 }
 
+# The collector's Agent Observability copy names each model call by the system id its ModelConfig commits, which
+# Datadog can price, where kagent's span names this cluster's application profile ARN, which it cannot (#784). The ARN
+# is per cluster, so the collector reads it from this ConfigMap, one WIB_BEDROCK_PROFILE_<TIER> key per Bedrock
+# ModelConfig (extraEnvsFrom in gitops/otel-collector/values.yaml; transform/llmobs_model).
+PROFILE_MODELS_CM=bedrock-profile-models
+profile_models_key() { # bedrock-nova -> WIB_BEDROCK_PROFILE_NOVA
+    local tier="${1#bedrock-}"
+    tier="${tier^^}"
+    echo "WIB_BEDROCK_PROFILE_${tier//-/_}"
+}
+# Writes the ConfigMap when it differs from what the cluster holds, and then restarts the collector pods, which read
+# their environment only at start. An unchanged map touches nothing, so a converge pass does not restart them.
+_write_profile_models() {
+    local name="$1" kcfg="$2" data="$3" live want
+    want="$(jq -cS . <<<"${data}")"
+    live="$(KUBECONFIG="${kcfg}" kubectl -n monitoring get configmap "${PROFILE_MODELS_CM}" -o json 2>/dev/null \
+        | jq -cS '.data // {}' 2>/dev/null || true)"
+    [[ "${live}" == "${want}" ]] && return 0
+    if ! jq -n --argjson d "${want}" --arg n "${PROFILE_MODELS_CM}" \
+            '{apiVersion: "v1", kind: "ConfigMap", metadata: {name: $n, namespace: "monitoring"}, data: $d}' \
+            | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1; then
+        log "  ${name}: could not write monitoring/${PROFILE_MODELS_CM}; Agent Observability keeps naming the profile ARNs, which Datadog cannot price"
+        return 1
+    fi
+    log "  ${name}: monitoring/${PROFILE_MODELS_CM} names $(jq length <<<"${want}") tagged profile(s); restarting the collector so Agent Observability can price the model calls"
+    KUBECONFIG="${kcfg}" kubectl -n monitoring delete pod -l app.kubernetes.io/name=opentelemetry-collector \
+        --ignore-not-found --wait=false >/dev/null 2>&1 \
+        || log "  ${name}: the collector restart failed; it reads monitoring/${PROFILE_MODELS_CM} on its next start"
+}
+
 pin_bedrock_profiles() {
-    local name="$1" kcfg="$2" map targets gateway kind target model label arn live region bad=0 deadline
+    local name="$1" kcfg="$2" map targets gateway kind target model label arn live region bad=0 deadline profiles='{}'
     map="$(terraform -chdir="${CLUSTER_DIR}" output -state="${STATE_DIR}/${name}.tfstate" \
         -json bedrock_application_profiles 2>/dev/null || true)"
     if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<<"${map}"; then
@@ -1390,17 +1420,23 @@ pin_bedrock_profiles() {
         done
         # arn:aws:bedrock:<region>:<account>:application-inference-profile/<id>
         region="$(cut -d: -f4 <<<"${arn}")"
-        [[ "${live}" == "${arn}" && "$(_live_bedrock_region "${kcfg}" "${kind}" "${target}")" == "${region}" ]] && continue
-        if [[ -z "${live}" ]]; then
+        if [[ "${live}" == "${arn}" && "$(_live_bedrock_region "${kcfg}" "${kind}" "${target}")" == "${region}" ]]; then
+            :
+        elif [[ -z "${live}" ]]; then
             log "  ${name}: ${label} never appeared in agent; its tagged profile is not pinned"
             bad=1; continue
-        fi
-        if _set_bedrock_model "${kcfg}" "${kind}" "${target}" "${arn}" "${region}"; then
+        elif _set_bedrock_model "${kcfg}" "${kind}" "${target}" "${arn}" "${region}"; then
             log "  ${name}: ${label} now calls ${arn} (tagged copy of ${model}) in ${region}"
         else
-            log "  ${name}: could not point ${label} at ${arn}"; bad=1
+            log "  ${name}: could not point ${label} at ${arn}"; bad=1; continue
+        fi
+        # A ModelConfig that calls its profile now: the collector's copy names its model calls by ${model} (#784).
+        # agentgateway's backend is left out: kagent names those calls by the gateway's backend name, not the ARN.
+        if [[ "${kind}" == modelconfig ]]; then
+            profiles="$(jq -c --arg k "$(profile_models_key "${target}")" --arg a "${arn}" '.[$k] = $a' <<<"${profiles}")"
         fi
     done <<<"${targets}"$'\n'"${gateway}"
+    _write_profile_models "${name}" "${kcfg}" "${profiles}" || bad=1
     [[ "${bad}" -eq 0 ]] || { record_fail "${name}:bedrock-profiles"; return 1; }
 }
 
