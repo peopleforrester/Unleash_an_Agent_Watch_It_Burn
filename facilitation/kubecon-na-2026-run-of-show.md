@@ -1155,7 +1155,12 @@ is merely slow rather than rebuilding:
   student accounts, which have no lab VPC for this session, so the unscoped form
   fails on them. The count is clusters per account, and the roster is three
   clusters, so the quota check covers all three. It also prints the `event` tag this
-  run bills to.
+  run bills to. It reads each Bedrock model the clusters bind (the four agent tiers
+  and the tutor) and fails any whose Marketplace agreement is not AVAILABLE in the
+  account, because Bedrock refuses every call to such a model even when IAM allows
+  it (#882). That FAIL prints the offers and accept commands. Accepting is a
+  subscription on the account, so Michael runs them; on 2026-11-05 the opus tier,
+  `anthropic.claude-opus-4-8`, read NOT_AVAILABLE in accen-dev.
 - [ ] **Platform up on AWS.** Bring up the roster (the community cluster and both
   admin clusters) on the KubeCon delivery accounts and region:
   `./fleet.sh instructors up all`. The attendee pool is not provisioned for this

@@ -20,6 +20,8 @@ FLEET_DIR="${T}/infra/terraform/fleet"; NET="${T}/infra/terraform/aws/network"; 
 SHIM="${T}/bin"; CALLS="${T}/calls"
 mkdir -p "${FLEET_DIR}" "${NET}/states" "${BOUNDARY}" "${SHIM}"
 cp "${SRC}/preflight.sh" "${SRC}/event.sh" "${FLEET_DIR}/"
+# preflight reads the models it checks agreements for from the cluster root (#882); the shim reports each AVAILABLE.
+mkdir -p "${T}/infra/terraform/aws/cluster"; cp "${SRC}/../aws/cluster/main.tf" "${T}/infra/terraform/aws/cluster/"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
 
@@ -40,6 +42,7 @@ case "$1 $2" in
       *) echo watch-it-burn-permissions-boundary ;;
     esac ;;
   "ec2 describe-vpcs") echo vpc-0abc ;;
+  "bedrock get-foundation-model-availability") echo AVAILABLE ;;
 esac
 exit 0
 S

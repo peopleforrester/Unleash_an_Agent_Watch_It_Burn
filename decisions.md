@@ -22994,3 +22994,59 @@ which shows guard-proxy's and read_support_ticket's calls still get through.
 which printed `284 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_llm_guard_auth.py` and
 `test_input_pii_guard.py` among them. Then the tier: `65 checks ran (the offline suite and 64 tier tests) in 54m46s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #882 · run 17542 · The tutor moves to Sonnet 4.6, and preflight fails any bound model without a Bedrock agreement
+
+**What was found.** Run 17336 (#562) saw Bedrock refuse the tutor's calls on both clusters with "not authorized to
+perform the required AWS Marketplace actions" after IAM had allowed them: `anthropic.claude-sonnet-5`, the
+`tutor_model` default, has no Marketplace agreement in accen-dev. This run read
+`aws bedrock get-foundation-model-availability` for every model the cluster root binds, as accen-dev in us-west-2:
+
+    amazon.nova-pro-v1:0                       AVAILABLE      (tier nova, the workshop default)
+    anthropic.claude-haiku-4-5-20251001-v1:0   AVAILABLE      (tier haiku)
+    anthropic.claude-sonnet-4-6                AVAILABLE      (tier sonnet)
+    anthropic.claude-opus-4-8                  NOT_AVAILABLE  (tier opus)
+    anthropic.claude-sonnet-5                  NOT_AVAILABLE  (the tutor)
+
+All five read `authorizationStatus` AUTHORIZED and `entitlementAvailability` AVAILABLE; only the agreement is missing.
+The opus tier is new: the bedrock-opus ModelConfig would be refused the same way if the Agent were swapped to it.
+
+**Which of the issue's two ways.** The issue offers accepting the Sonnet 5 agreement in each fleet account, or moving
+`var.tutor_model` to a model the accounts already have one for. Accepting is a Marketplace subscription on Michael's
+account, which a run does not make. Moving is a one-line default this run can make, nothing calls the tutor today
+(#89), and the tutor's grant already allows `anthropic.claude-sonnet-*`, so "Sonnet only" still holds. So the
+default is now `us.anthropic.claude-sonnet-4-6`, the sonnet tier's model, whose agreement reads AVAILABLE. Whether a
+tutor returns at all stays open; when it does, it works in accen-dev as the tree stands. Going back to Sonnet 5 is
+the one-line default plus the agreement in every account, and the comment above the variable says so. The two
+running clusters keep their Sonnet 5 `-tutor` profile until their next cluster-root apply replaces it, which costs
+nothing and changes nothing live, since nothing calls it.
+
+**The check.** `infra/terraform/fleet/preflight.sh` (the `fleet.sh preflight` gate, run at the Night Before) reads the
+`local.bedrock_tiers` values and the `tutor_model` default from `infra/terraform/aws/cluster/main.tf`, drops the geo
+prefix, and asks `get-foundation-model-availability` for each, once per account, as that account in `WIB_REGION`.
+AVAILABLE passes; NOT_AVAILABLE fails with the offers and `create-foundation-model-agreement` commands for that
+account; PENDING fails with "re-run in 15 minutes"; an error, an empty answer or `None` fails as unreadable; a
+cluster root it cannot read fails rather than passing on an empty list. It never runs the accept commands. It went
+in preflight rather than `verify/model_pin_check.py` because the agreement is per account, preflight already walks
+every fleet account, and the pin check is about the one pinned model in the delivery account. The run-of-show's
+Night Before preflight bullet says what the new FAIL means and whose act fixes it.
+
+**Tests.** `verify/test_preflight_model_agreements.sh` (offline, aws is a shim) holds: one read per bound model per
+account, without the `us.` prefix; a tutor sharing a tier's model is one read naming both; NOT_AVAILABLE, PENDING,
+an AccessDenied, an empty answer and a missing or tutor-less cluster root each fail; only the account without the
+agreement fails; preflight never calls the offers or accept commands; and against the real cluster root it asks about
+exactly `bedrock_tiers` plus the `tutor_model` default, after checking both anchors are there.
+`verify/test_preflight_boundary.sh` now copies the cluster root into its temp tree and its shim answers AVAILABLE.
+
+**Live check, accen-dev, run 17542 (read-only).** `WIB_ATTENDEE_ACCOUNTS=accen-dev WIB_REGION=us-west-2 bash
+infra/terraform/fleet/preflight.sh 2` printed PASS for identity 515966504359, every quota and the boundary, then:
+
+    PASS  Bedrock agreement for amazon.nova-pro-v1:0 (tier:nova): AVAILABLE
+    PASS  Bedrock agreement for anthropic.claude-haiku-4-5-20251001-v1:0 (tier:haiku): AVAILABLE
+    FAIL  Bedrock agreement for anthropic.claude-opus-4-8 (tier:opus): NOT_AVAILABLE in accen-dev; ...
+    PASS  Bedrock agreement for anthropic.claude-sonnet-4-6 (tier:sonnet,tutor): AVAILABLE
+
+and a FAIL for "no lab VPC state", since this worktree carries no lab VPC tfstate. Only accen-dev is in the run's
+session, so the four student accounts were not read; preflight reads them when it runs with their profiles.
+
+**Left open.** The opus agreement in accen-dev, and the agreements in the four student accounts, are Michael's to
+accept; until opus is accepted the Night Before preflight reads FAIL on that one line. Filed as a follow-up.

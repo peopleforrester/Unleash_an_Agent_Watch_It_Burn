@@ -28,7 +28,17 @@
 #      2026-10-24 that is how both roster clusters in accen-dev failed, after the lab VPC was already
 #      billing (#526). It is one policy per account, applied once, and this checks it is there.
 #
-# Everything here is a read: sts, service-quotas, iam get-policy, terraform output, and ec2 describe-vpcs.
+#   5. A Bedrock model the account has no Marketplace agreement for (#882). IAM can allow a call that
+#      Bedrock then refuses with "not authorized to perform the required AWS Marketplace actions
+#      (aws-marketplace:ViewSubscriptions, aws-marketplace:Subscribe)", which reads like an IAM gap and is
+#      not one. On 2026-11-05 the tutor's model (anthropic.claude-sonnet-5) and the opus tier
+#      (anthropic.claude-opus-4-8) both read NOT_AVAILABLE in accen-dev. The agreement is per account, so
+#      every model the cluster root binds (bedrock_tiers, and the tutor_model default) is checked in every
+#      account. Accepting one is a subscription on the account owner's behalf: this prints the commands and
+#      never runs them.
+#
+# Everything here is a read: sts, service-quotas, iam get-policy, bedrock get-foundation-model-availability,
+# terraform output, and ec2 describe-vpcs.
 # It never mutates.
 set -euo pipefail
 
@@ -36,6 +46,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly LAB_VPC_DIR="${SCRIPT_DIR}/../aws/network"
 readonly BOUNDARY_DIR="${SCRIPT_DIR}/../../org/boundary"
+# The cluster root, where the models every cluster binds are named: local.bedrock_tiers and var.tutor_model.
+readonly CLUSTER_TF="${SCRIPT_DIR}/../aws/cluster/main.tf"
 # Keep in step with local.boundary_name in infra/org/boundary/main.tf and the cluster root's lookup.
 readonly BOUNDARY_NAME="watch-it-burn-permissions-boundary"
 WIB_REGION="${WIB_REGION:-us-west-2}"
@@ -86,6 +98,8 @@ Read-only preflight for a fleet run. Verifies, per account:
   * the profile resolves to the EXPECTED account id (hard failure on mismatch)
   * vCPU / NLB / EKS / VPC / EIP quota headroom for <clusters-per-account>
   * the permissions boundary (${BOUNDARY_NAME}) exists; every cluster plan looks it up by name
+  * every Bedrock model the cluster root binds (bedrock_tiers and the tutor_model default) reports
+    agreementAvailability AVAILABLE; without the Marketplace agreement Bedrock refuses the call
   * the shared lab VPC exists: its id is read from the tfstate output AND confirmed live in the
     account (a file-existence test passes on a destroyed state, which once hid four missing VPCs)
 and, once, that the local tooling is present.
@@ -125,12 +139,58 @@ quota_at_least() {
     fi
 }
 
+# bound_models: one "<foundation model id> <who binds it>" line per model the cluster root binds, read from
+# CLUSTER_TF: each local.bedrock_tiers value (an agent tier) and the tutor_model default. The "us."-style geo
+# prefix of a cross-region profile is dropped, since the agreement is on the foundation model. A model two
+# consumers share is one line naming both, so it is asked about once per account.
+bound_models() {
+    awk '
+        /^[[:space:]]*bedrock_tiers[[:space:]]*=[[:space:]]*\{/ { tiers = 1; next }
+        tiers && /^[[:space:]]*\}/ { tiers = 0 }
+        tiers && match($0, /^[[:space:]]*[a-z0-9_]+[[:space:]]*=[[:space:]]*"[^"]+"/) {
+            line = substr($0, RSTART, RLENGTH); tier = line; sub(/^[[:space:]]*/, "", tier); sub(/[[:space:]]*=.*/, "", tier)
+            id = line; sub(/^[^"]*"/, "", id); sub(/"$/, "", id); print id, "tier:" tier
+        }
+        /^variable "tutor_model"/ { tutor = 1 }
+        tutor && match($0, /default[[:space:]]*=[[:space:]]*"[^"]+"/) {
+            id = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", id); sub(/"$/, "", id); print id, "tutor"; tutor = 0
+        }
+        tutor && /^\}/ { tutor = 0 }
+    ' "${CLUSTER_TF}" | sed -E 's/^(us|eu|apac|global|jp|au|ca)\.//' \
+      | awk '{ if ($1 in who) who[$1] = who[$1] "," $2; else who[$1] = $2 } END { for (m in who) print m, who[m] }' | sort
+}
+
+# model_agreements <profile>: each bound model's agreementAvailability in this account and WIB_REGION.
+model_agreements() {
+    local profile="$1" model who status offers accept
+    while read -r model who; do
+        status="$(AWS_PROFILE="${profile}" aws bedrock get-foundation-model-availability --model-id "${model}" \
+            --region "${WIB_REGION}" --query 'agreementAvailability.status' --output text 2>&1)" || status="unreadable: ${status//$'\n'/ }"
+        offers="AWS_PROFILE=${profile} aws bedrock list-foundation-model-agreement-offers --model-id ${model} --region ${WIB_REGION}"
+        accept="AWS_PROFILE=${profile} aws bedrock create-foundation-model-agreement --model-id ${model} --offer-token <token from the offers call> --region ${WIB_REGION}"
+        case "${status}" in
+            AVAILABLE) ok "Bedrock agreement for ${model} (${who}): AVAILABLE" ;;
+            PENDING)   bad "Bedrock agreement for ${model} (${who}): PENDING, accepted and still propagating; re-run in 15 minutes" ;;
+            NOT_AVAILABLE)
+                bad "Bedrock agreement for ${model} (${who}): NOT_AVAILABLE in ${profile}; every call to it is refused. Accepting it is a Marketplace subscription for the account owner to make: ${offers}, then ${accept}" ;;
+            *)  bad "Bedrock agreement for ${model} (${who}) could not be read in ${profile} (${status:-empty answer}); verify by hand: AWS_PROFILE=${profile} aws bedrock get-foundation-model-availability --model-id ${model} --region ${WIB_REGION}" ;;
+        esac
+    done <<<"${MODELS}"
+}
+
 echo "== tooling =="
 for t in terraform kubectl aws jq curl helm; do
     if command -v "${t}" >/dev/null 2>&1; then ok "${t} present"; else bad "${t} NOT found"; fi
 done
 # Printed so the night-before check can read which event this run bills to (change it in event.sh).
 note "event tag: event=${WIB_EVENT}"
+
+# Read once: the same models are checked in every account. A cluster root this cannot read is a failure, not an
+# empty list, or every account would pass the agreement check on nothing.
+MODELS="$(bound_models 2>/dev/null || true)"
+if ! grep -q 'tier:' <<<"${MODELS}" || ! grep -q 'tutor' <<<"${MODELS}"; then
+    bad "Bedrock models: could not read bedrock_tiers and the tutor_model default from ${CLUSTER_TF}; the agreement check has nothing to check"
+fi
 
 IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
 for acct in "${accounts[@]}"; do
@@ -180,6 +240,8 @@ for acct in "${accounts[@]}"; do
     else
         bad "permissions boundary ${BOUNDARY_NAME} could not be read in ${acct} (${boundary_err//$'\n'/ }) — verify by hand; if it is missing, apply: ${boundary_apply}"
     fi
+
+    [[ -n "${MODELS}" ]] && model_agreements "${acct}"
 
     # The lab VPC check reads the state's OUTPUT and then confirms the VPC still exists in the
     # account. A file-existence test is not enough and was actively misleading: `terraform destroy`

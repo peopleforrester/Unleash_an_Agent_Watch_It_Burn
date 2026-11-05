@@ -696,10 +696,13 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
   })
 }
 
+# Sonnet 4.6, the sonnet tier's model, since #882. It was us.anthropic.claude-sonnet-5, which has no Bedrock
+# Marketplace agreement in accen-dev: IAM allowed the tutor's call and Bedrock refused it. Moving back to Sonnet 5
+# means accepting its agreement in every fleet account first; fleet.sh preflight fails any account without it.
 variable "tutor_model" {
-  description = "Bedrock inference profile the workshop tutor uses. Verified ACTIVE in us-west-2 on 2026-08-24."
+  description = "Bedrock inference profile the workshop tutor uses. Its Marketplace agreement read AVAILABLE in accen-dev on 2026-11-05 (#882)."
   type        = string
-  default     = "us.anthropic.claude-sonnet-5"
+  default     = "us.anthropic.claude-sonnet-4-6"
 }
 
 # The tutor's spend is tagged the same way as the agent's (#513). No tutor runs today (the web terminal's
