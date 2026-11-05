@@ -19616,3 +19616,7 @@ internal-registry part is still red. The routes publish (`registry.burritobot.co
 #916's other part and is not read here.
 
 **Not yet run on a cluster.** Nothing: the added check is offline only.
+
+**The suites (run 17626, at `bf811401`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite and 57 tier tests) in 32m02s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
