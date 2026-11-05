@@ -13,7 +13,9 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
                        of them pass write the dashboards, the monitors and the session downtimes. One bad
                        definition aborts the load before any write.
     --check            read-only against the live org: every defined monitor and both dashboards exist, the
-                       monitors with the queries in this repo. Prints each monitor's state. Exit 1 on any drift.
+                       monitors with the queries in this repo, and each dashboard with this repo's widgets: type,
+                       title, window, queries and formulas, read from its stored body, since a title says nothing
+                       about a widget edited in the UI (#485). Prints each monitor's state. Exit 1 on any drift.
     --data --cluster NAME [--cluster NAME ...]
                        read-only: every query returns data for every named cluster (#706). Each monitor that
                        fires on absence has a group per cluster in a state other than No Data; each monitor that
@@ -561,9 +563,46 @@ def check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], say=print) ->
         if d is None:
             say(f"  MISSING  {label} '{dash['title']}'")
             drift += 1
+            continue
+        # The title alone does not say the widgets are the repo's, and --data reads the repo's queries, not the
+        # org's: a widget edited in the UI would pass both (#485). So the stored body is read and compared.
+        lines = dashboard_drift(dd.call("GET", f"/api/v1/dashboard/{d['id']}"), dash)
+        for line in lines:
+            say(f"  DRIFT    {label}: {line}")
+        if lines:
+            drift += 1
         else:
             say(f"  OK       {label} https://app.{dd.site}{d.get('url', '')}")
     return 1 if drift else 0
+
+
+def widget_shape(w: dict) -> tuple:
+    """What decides what a widget shows, comparable between the repo and the org: its type, title and window, each
+    query's name, source, filter, aggregator and grouping, each formula and its column name, and a manage_status
+    widget's monitor search. Whitespace in a filter aside; anything Datadog adds on storing is not read."""
+    d = w.get("definition") or {}
+    queries, formulas = [], []
+    for r in d.get("requests") or []:
+        for q in r.get("queries") or []:
+            queries.append((q.get("name"), q.get("data_source", "metrics"), norm(query_text(q)), q.get("aggregator"),
+                            tuple(g.get("facet") for g in q.get("group_by") or [])))
+        formulas += [(f.get("formula"), f.get("alias")) for f in r.get("formulas") or []]
+    return (d.get("type"), d.get("title"), (d.get("time") or {}).get("live_span"), tuple(queries), tuple(formulas),
+            norm(d.get("query")))
+
+
+def dashboard_drift(live: dict, repo: dict) -> list[str]:
+    """How the org's dashboard differs from the repo's file, widget by widget in order. Empty is the same board."""
+    have = [widget_shape(w) for w in live.get("widgets") or []]
+    want = [widget_shape(w) for w in repo.get("widgets") or []]
+    out = []
+    if len(have) != len(want):
+        out.append(f"{len(have)} widget(s) in the org, {len(want)} in the repo")
+    for i, (h, r) in enumerate(zip(have, want), 1):
+        if h != r:
+            out.append(f"widget {i} ('{r[1] or r[0]}') differs: the org has a {h[0]} '{h[1] or ''}' with "
+                       f"queries {[q[0] for q in h[3]]}")
+    return out
 
 
 def span_seconds(widget: dict) -> int:

@@ -17233,3 +17233,52 @@ as michael.
 **The suites (run 17350, at `b824ca5f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 26m36s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 257 tests, all green,
 `test_images_lock_live_judge.py` among them, and listed `test_images_lock_live.py` under the E2E suite.
+
+## 2026-11-05 · #485 · The fleet monitors are applied in Whitney's org, every query answers for both clusters, and --check now compares each dashboard's widgets
+
+**The apply ran.** Run 17318 handed the apply to the custodian, with the write key that only Michael's home holds.
+It ran at 06:20Z: `fleet_monitors.py --check` at 06:25Z, with the read pair in `watch-it-burn/datadog` (accen-dev,
+us-west-2, org `Datadog`), found all seven monitors and both dashboards. The monitor ids run from 341119640 to 341119673,
+each created at 06:20:19Z to 06:20:25Z by `michaelrishiforrester@gmail.com`. The fleet dashboard is
+https://app.datadoghq.com/dashboard/fdv-zsp-9b3/watch-it-burn-fleet and the challenge leaderboard is
+https://app.datadoghq.com/dashboard/a8n-wrt-7zn/watch-it-burn-challenge-leaderboard, both written at 06:20:17Z to
+06:20:18Z. The read key answers 403 on /api/v2/downtime, so this run could not read back the session window the
+apply muted around. The run-of-show names `2026-11-12T20:50Z/2026-11-12T21:20Z`.
+
+**Every query, live.** One chat per KubeCon bot went through `verify/agent_obs_flow.py chat --profile accen-dev`:
+attackme.burritobot.co at 06:26:16Z and burritobot-private.burritobot.co at 06:30:20Z, both with guard-proxy's probe
+marker. Both read PASS, with 4 ml_app:burritobot spans each carrying the chat's own session (traces
+7017d7392497509491cd8fc518105ff4 and 6dfca051d527554fb318053884508d4c). Then `python3 verify/test_fleet_monitors_live.py`
+at 06:34:53Z exited 0:
+
+| what | state |
+|---|---|
+| `--check`: cluster-silent, console-unavailable, burritobot-not-ready, guard-proxy-erroring, no-traces, agent-obs-silent | OK |
+| `--check`: node-not-ready | No Data, its healthy state: by_condition with `!status:true` has a series only while a node is NotReady |
+| `--check`: fleet dashboard, challenge leaderboard | OK |
+| `--data`: the 5 absence monitors, both signals, all 8 fleet-dashboard queries, for burritobot-public and burritobot-private | DATA |
+
+Before the chats, at 06:27Z, `--data` printed NO DATA for agent-obs-silent alone, because the org was quiet.
+`sum:ml_obs.trace{ml_app:burritobot}` had nothing in the last 10 minutes, and its newest 5-minute bucket was 05:30Z.
+After the chats it had 1 at 06:25Z and 1 at 06:30Z, and the monitor read OK. That is the monitor working: during
+a session, silence is the thing it reports. No name in infra/datadog-fleet/ was wrong, so verify/test_fleet_monitors.py
+keeps its name checks.
+
+**What --check did not prove, now fixed.** `--check` found each dashboard by title alone, and `--data` sends the
+repo's widget queries, not the org's. A widget edited in the UI would have passed both, and then "every column fills"
+would describe the repo's dashboard, not the one the room sees. This run read both stored bodies through
+/api/v1/dashboard/<id> and compared them with dashboard.yaml and leaderboard.yaml: 6 and 3 widgets, 8 and 8
+queries, all the same. `check()` now does that on every run. `dashboard_drift()` compares, widget by widget in
+order, the type, title, window, each query's name, source, filter (whitespace aside), aggregator and grouping, each
+formula and its column name, and a manage_status widget's search. It ignores fields Datadog adds when it stores a
+widget (id, layout, title_size). A difference prints `DRIFT  <label>: widget N ('<title>') differs`, and so does a
+change in the number of widgets. After the change, `--check` against the live org still prints OK for both
+dashboards and exits 0. verify/test_fleet_monitors.py gains six checks: the stored body is read, the applied body is
+the repo's, Datadog's own fields are not drift, an edited query and a deleted widget are drift, and a restored board
+passes. Against the old loader the first one fails, and the file then stops on the missing `dashboard_drift`.
+
+**Left as found.** Two chats were sent, one per bot. Nothing else was changed on either cluster, and nothing was
+written to the org: every call in this run used the read-only pair.
+
+**Not yet run on a cluster.** Nothing. The issue's work, the apply and the confirmation, has run. The changed
+`--check` ran live from this run's tree.

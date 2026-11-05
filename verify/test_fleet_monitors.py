@@ -11,6 +11,7 @@ session monitors stay muted outside the declared window.
 """
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import io
 import json
@@ -417,6 +418,31 @@ org.monitors[victim]["query"] = "max(last_5m):max:something.else{*} < 1"
 rc, text = run(["--check"], org)
 check("a monitor edited in the UI is drift", rc == 1 and "DRIFT    console-unavailable" in text)
 check("check never writes", all(m == "GET" for m, _, _ in org.calls[-6:]))
+org.monitors[victim]["query"] = mons["console-unavailable"]["query"]
+fleet_id = next(d["id"] for d in org.dashboards if d["title"] == dash["title"])
+board_id = next(d["id"] for d in org.dashboards if d["title"] != dash["title"])
+check("check reads each dashboard's stored body, not only its title (#485)",
+      all(any(m == "GET" and p == f"/api/v1/dashboard/{i}" for m, p, _ in org.calls) for i in (fleet_id, board_id)))
+check("dashboard_drift: the body the apply wrote is the repo's", all(
+    fm.dashboard_drift(org.bodies[i], d) == [] for i, d in ((fleet_id, dash), (board_id, fm.load_dashboard(fm.LEADERBOARD_FILE)))))
+check("dashboard_drift: Datadog's own fields on a stored widget are not drift", fm.dashboard_drift(
+    {"widgets": [{**w, "id": 7, "layout": {"x": 0}, "definition": {**w["definition"], "title_size": "16"}}
+                 for w in dash["widgets"]]}, dash) == [])
+fleet_body = copy.deepcopy(org.bodies[fleet_id])
+table_widget = next(w for w in org.bodies[fleet_id]["widgets"] if w["definition"]["type"] == "query_table")
+traces_q = next(q for q in table_widget["definition"]["requests"][0]["queries"] if q["name"] == "traces")
+traces_q["query"] = traces_q["query"].replace("traces.span.metrics.calls", "trace.renamed.calls")
+rc, text = run(["--check"], org, env={})
+check("a widget's query edited in the UI is drift, naming the widget",
+      rc == 1 and "DRIFT    fleet dashboard: widget" in text and f"'{table_widget['definition']['title']}'" in text
+      and "OK       challenge leaderboard" in text)
+org.bodies[fleet_id] = copy.deepcopy(fleet_body)
+org.bodies[fleet_id]["widgets"].pop()
+rc, text = run(["--check"], org, env={})
+check("a widget deleted in the UI is drift", rc == 1 and f"{len(dash['widgets']) - 1} widget(s) in the org" in text)
+org.bodies[fleet_id] = fleet_body
+rc, text = run(["--check"], org, env={})
+check("the restored dashboard passes again", rc == 0 and "DRIFT" not in text)
 rc, text = run(["--check"], FakeOrg())
 check("an empty org fails the check, naming every monitor and both dashboards",
       rc == 1 and text.count("MISSING") == len(mons) + 2 and "MISSING  challenge leaderboard" in text)

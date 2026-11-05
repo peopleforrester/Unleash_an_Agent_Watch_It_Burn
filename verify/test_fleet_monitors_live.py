@@ -5,7 +5,9 @@
 # The offline half (test_fleet_monitors.py) proves the definitions are right. This proves they are LOADED:
 # a monitor that only exists in the repo watches nothing, and "No Monitors" on the Datadog page is exactly
 # the state #267 was filed from. It runs `fleet.sh monitors --check`, which compares every monitor's query
-# and the dashboard title with the repo and prints each monitor's current state.
+# and each dashboard's widgets with the repo and prints each monitor's current state. The widgets matter here:
+# --data below sends the repo's dashboard queries, so it speaks for the org's dashboard only once --check has
+# shown the two are the same (#485).
 #
 # Then it proves they are FED, which a loaded monitor on a wrong name is not: it runs `fleet.sh monitors --data`
 # for every cluster in WIB_FLEET_CLUSTERS (default burritobot-public,burritobot-private, the two KubeCon

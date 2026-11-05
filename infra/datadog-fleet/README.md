@@ -27,7 +27,10 @@ infra/terraform/fleet/fleet.sh monitors --board \
   --cluster burritobot-private                                            # read-only, after challenges 1 to 6
 ```
 
-`--check` says the org holds what the repo defines; `--data` says it is fed (#706). It fails on any blank:
+`--check` says the org holds what the repo defines: each monitor's query, and each dashboard's widgets read
+from its stored body (type, title, window, queries, formulas), so a widget edited in the UI is drift (#485).
+`--data` says it is fed (#706), and since it sends the repo's dashboard queries, it speaks for the org's
+dashboard only after `--check` passes. `--data` fails on any blank:
 a monitor that fires on absence must have a group for every `--cluster` in a state other than No Data, a
 monitor that fires on a rising count (empty when healthy) must have its `signal` answer for every cluster, and
 every query on the fleet dashboard must answer for every cluster over its widget's window. A signal is read over
