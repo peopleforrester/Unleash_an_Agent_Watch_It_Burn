@@ -17132,3 +17132,6 @@ about 20 five-token Converse calls, well under 0.05 USD.
 
 **Not yet run on a cluster.** Check 4 of `verify/test_iam_policy_aws.py`, the simulator over
 `infra/org/effect-tests.yaml`, from a credential IAM accepts: that is #871.
+
+**The suites (run 17336, at `d9cd6032`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests) in 28m33s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
