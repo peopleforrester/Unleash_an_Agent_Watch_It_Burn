@@ -1,5 +1,5 @@
 # ABOUTME: Live check of #759: the newest ml_app:burritobot trace is readable from Whitney's sandbox org with
-# ABOUTME: watch-it-burn/datadog's read-only pair, as a dispatched run reads it. Read-only, GETs only.
+# ABOUTME: watch-it-burn/datadog's pair, as a dispatched run reads it, and every scope of its key is read-only. GETs only.
 # SUITE: e2e (needs AWS access to watch-it-burn/datadog, and a BurritoBot /chat on either KubeCon cluster in the last day)
 """The live half of #759. The offline half is test_dd_traces.py.
 
@@ -23,5 +23,9 @@ print(f"== the newest ml_app:{dd_traces.ML_APP} trace in the sandbox org, as {pr
 rc = dd_traces.main(["--profile", profile, "--region", region, "--minutes", minutes, "--traces", "1", "--apm"])
 if rc != 0:
     print("FAIL: no BurritoBot trace could be read from the sandbox org (reason above)", file=sys.stderr)
+    sys.exit(1)
+print("== the pair's application key, as the org lists it ==")
+if dd_traces.main(["--profile", profile, "--region", region, "--scopes"]) != 0:
+    print("FAIL: the pair's application key is not shown read-only (reason above)", file=sys.stderr)
     sys.exit(1)
 print("A BurritoBot trace and its APM spans were read from the sandbox org with the read-only pair.")

@@ -17774,3 +17774,67 @@ lab-platform#122 has moved the wildcard. #660's websocket check through the TLS 
 **Suites (run 17383, at 097e1498).** `bash verify/run-e2e-tools.sh` ran the offline suite (258 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier, `test_front_door_cert.sh` and `test_front_door_tls_live_logic.py`
 among it: 56 checks in 26m05s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
+
+## 2026-11-05 · #759 · A run reads BurritoBot's traces from the sandbox org with watch-it-burn/datadog's pair, and every scope of its key is read-only
+
+**What this run did.** Run 17391 started from staging 9c9c414, which holds run 16653's reader (`verify/dd_traces.py`
+and its tests). `verify/prior-drafts.sh 759 origin/staging` printed NONE: runs 16653, 16658 and 16670 are in staging
+and run 15550's draft is superseded by them. The two earlier #759 entries above owed the live read, which hecaton#508
+had blocked. This run's session files have the run's own group (`hecaton-run-claude-certkraken`, mode 0640), so
+`. "$HECATON_CLUSTER_ENV"` worked and the read ran.
+
+**The command and what it printed.** At 2026-11-05T08:29Z, from the repo root:
+
+    . "$HECATON_CLUSTER_ENV"
+    python3 verify/dd_traces.py --profile accen-dev --minutes 1440 --traces 1 --apm
+
+It exited 0 and printed, first, the newest `ml_app:burritobot` trace in LLM Observability:
+
+    == Datadog: ml_app:burritobot, last 1440 minutes ==
+    trace 0d630795c18555edbaca6bf41eece528  2026-11-05T07:49:47+00:00  4 spans  1 root(s)  env=burritobot-kubecon-na-26
+      agent POST  1806 ms  ok
+        agent invocation  1425 ms  ok
+          agent workshop_agent  1408 ms  ok
+            llm generate_content arn:aws:bedrock:us-west-2:{num}:application-inference-profile/5l72jg8rnz71  1346 ms  ok  5366 tokens
+
+and then 50 APM spans under `env:burritobot-kubecon-na-26 service:burritobot*`, the newest at 2026-11-05T08:27:54Z
+on `burritobot` and `burritobot-gateway` (trace 4b1ceefd75306244eddcc14aa0b470d4), with `burritobot-agent`'s
+`invocation`, `invoke_agent workshop_agent` and `generate_content` spans for trace 93b770f06d2b5fac190403f91b59486c.
+So the pair's application key carries `llm_observability_read` and `apm_read`, the open question of both earlier
+entries. `python3 verify/test_dd_traces_live.py` then passed at 08:32Z, its newest trace by then
+39fba3d0574259a99e1a646ed1e89818 (08:27:54Z, one `agent POST` span).
+
+**The credential.** It is the pair in accen-dev's Secrets Manager `watch-it-burn/datadog` (api-key, app-key, site),
+created 2026-10-28 for #629 and never changed since (`aws secretsmanager describe-secret`: created and last changed
+2026-10-28T10:39Z). The org lists its application key as `Burritobot-app-key`, created 2026-10-28T10:37:27Z, owned
+by a user and scoped to 145 permissions. No key was created, rotated or revoked. This follows the coordinator's note on
+#759 of 2026-11-03: a new key was owed only if this pair were refused, and it was not. The issue's "the credential
+is new" line was written for run 15550's route, a new pair behind a hecaton verb; under the note the credential is
+BurritoBot's own read pair, the one the KubeCon clusters' checks already read. It touches nothing outside BurritoBot's
+data: every call is a GET, and `--apm` asks only for `env:burritobot-kubecon-na-26 service:burritobot*`.
+
+**New: `--scopes` shows the key is read-only.** The earlier entries took "read-only" from #629's word. This run read
+the key's own scope list. A GET probe first showed the key can read `/api/v2/application_keys` (org_app_keys_read)
+but not `/api/v2/current_user/application_keys` or `/api/v1/org`. `python3 verify/dd_traces.py --profile accen-dev
+--scopes` now names the org, finds the pair's application key in the org's key listing by its last four characters
+(all the listing shows of a key), prints its name, creation time and every scope, and exits 1 when any scope is not
+read-only, when the key is unscoped, or when no key or two keys end in those four characters. A scope is read-only
+when one of the words its name splits into at each `_` is `read` or `view` and none is a write word (`write`, `manage`, `modify`,
+`create`, `delete`, `edit`, `run`, `execute`, `admin`, `share`, `generate`, `revoke`, `unarchive`), or when it is one
+of six named scopes that read, query or resolve and write nothing: `logs_live_tail`, `timeseries_query`,
+`connections_resolve`, `data_scanner_unmask`, `assistant_access` and `agent_builder_external_mcp_resolve`. The first
+version matched only a trailing `_read` or `_view`, and the live run refused `logs_read_data` and four other
+`logs_read_*` scopes; the word match is what stands. Live, at 08:31Z, it printed `application key
+'Burritobot-app-key', created 2026-10-28T10:37:27.418955Z, 145 scopes`, the list, and `Every scope is read-only.`
+`verify/test_dd_traces_live.py` now runs `--scopes` after the trace read and fails unless it exits 0. Of the 145, the
+ones near a sensitive surface are all reads: `api_keys_read`, `org_app_keys_read`, `user_access_read`, `billing_read`,
+`audit_logs_read`, `data_scanner_unmask` and `connections_resolve` (running a workflow needs `workflows_run`, which
+the key lacks).
+
+**Tests.** `verify/test_dd_traces.py` adds the `--scopes` cases against the fake org: a read-only key prints its name,
+creation and scopes and exits 0, another user's key in the listing is not printed, only GETs are sent and no span is
+read, a write scope and an unscoped key each exit 1 naming why, a missing key and two keys with the same last four each
+exit 1, a key on the listing's second page is found, a 403 on the listing names `org_app_keys_read`, and nine write
+scopes are refused while five read scopes pass the rule.
+
+**Not yet run on a cluster.** Nothing is owed. The read needs no change running on a cluster, only the sandbox org.

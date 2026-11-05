@@ -1,7 +1,8 @@
 # ABOUTME: Offline tests for verify/dd_traces.py (#759): it reads the newest ml_app:burritobot traces with GETs only,
 # ABOUTME: with watch-it-burn/datadog's pair as the named profile, only in the sandbox org, and names a refused scope.
-"""Nothing here reaches Datadog or AWS. The org is a fake transport answering the three paths the reader uses,
-/api/v2/current_user, the LLM Observability span listing and the APM span listing, and refusing anything else; the
+"""Nothing here reaches Datadog or AWS. The org is a fake transport answering the four paths the reader uses,
+/api/v2/current_user, the LLM Observability span listing, the APM span listing and the org's application key
+listing (for --scopes), and refusing anything else; the
 key pair comes from a fake `keys` that records the profile and region it was asked for, and a fake `aws` run that
 answers as Secrets Manager does.
 """
@@ -47,9 +48,20 @@ SPANS = [
 ]
 
 
+READ_SCOPES = ["apm_read", "llm_observability_read", "ai_guard_view", "timeseries_query", "user_self_profile_read",
+               "logs_read_data", "logs_read_index_data"]
+
+
+def keyrec(last4, scopes, name="Burritobot-app-key"):
+    return {"type": "application_keys", "attributes": {"name": name, "last4": last4, "scopes": scopes,
+                                                       "created_at": "2026-10-28T10:37:27Z"}}
+
+
 class Org:
-    def __init__(self, name="Datadog Sandbox Whitney", refuse=()):
+    def __init__(self, name="Datadog Sandbox Whitney", refuse=(), keys=None):
         self.name, self.refuse, self.calls = name, set(refuse), []
+        self.keys = [keyrec("-app", READ_SCOPES), keyrec("zzzz", ["dashboards_write"], "someone-else")] \
+            if keys is None else keys
 
     def http(self, method, url, headers, body):
         parts = urllib.parse.urlsplit(url)
@@ -67,6 +79,9 @@ class Org:
         if parts.path == dd_traces.APM_PATH:
             return 200, {"data": [{"attributes": {"service": "burritobot-guard-proxy", "resource_name": "POST /chat",
                                                   "trace_id": "abc", "start_timestamp": "2026-11-01T12:00:00Z"}}]}
+        if parts.path == dd_traces.KEYS_PATH:
+            size, number = int(q["page[size]"]), int(q["page[number]"])
+            return 200, {"data": self.keys[size * number:size * (number + 1)]}
         return 404, {"errors": [f"fake org: no {parts.path}"]}
 
 
@@ -198,6 +213,44 @@ check("--json prints the org, the traces by id and the APM spans",
       got.get("org") == "Datadog Sandbox Whitney" and list(got.get("traces", {})) == ["new"]
       and got.get("apm", [{}])[0].get("service") == "burritobot-guard-proxy")
 check("still nothing but GETs", all(c[0] == "GET" for c in org.calls))
+
+print("== --scopes: the pair's own key, every scope read-only ==")
+org = Org()
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("a read-only key: exit 0, its name, creation and every scope printed",
+      rc == 0 and "'Burritobot-app-key', created 2026-10-28T10:37:27Z, 7 scopes" in text
+      and all(f"\n  {s}" in text for s in READ_SCOPES) and "Every scope is read-only." in text)
+check("only the pair's own key is printed, matched by its last four characters", "dashboards_write" not in text
+      and "someone-else" not in text)
+check("--scopes names the org first, lists keys with GETs only, and reads no span",
+      org.calls[0][1] == dd_traces.ME_PATH and all(c[0] == "GET" for c in org.calls)
+      and {c[1] for c in org.calls[1:]} == {dd_traces.KEYS_PATH})
+org = Org(keys=[keyrec("-app", READ_SCOPES + ["monitors_write", "user_access_manage"])])
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("a write scope: exit 1, each one named", rc == 1 and "monitors_write" in err and "user_access_manage" in err)
+org = Org(keys=[keyrec("-app", None)])
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("an unscoped key (scopes null): exit 1, said so", rc == 1 and "unscoped" in err)
+org = Org(keys=[keyrec("zzzz", READ_SCOPES)])
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("the pair's key is not in the listing: exit 1, said so", rc == 1 and "0 application keys" in err)
+org = Org(keys=[keyrec("-app", READ_SCOPES), keyrec("-app", ["dashboards_write"])])
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("two keys share the last four: exit 1 rather than guess", rc == 1 and "2 application keys" in err)
+org = Org(keys=[keyrec(f"k{i:03d}", READ_SCOPES) for i in range(150)] + [keyrec("-app", READ_SCOPES)])
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("the key on the second page of the listing is found",
+      rc == 0 and [c[2].get("page[number]") for c in org.calls if c[1] == dd_traces.KEYS_PATH] == ["0", "1"])
+org = Org(refuse=[dd_traces.KEYS_PATH])
+rc, text, err = run_main(BASE + ["--scopes"], org)
+check("403 on the key listing: exit 1, org_app_keys_read named", rc == 1 and "org_app_keys_read" in err)
+check("each read-only extra is a scope the read/view rule would otherwise refuse",
+      all(not ({"read", "view"} & set(s.split("_"))) for s in dd_traces.READ_ONLY_EXTRAS))
+for s in ("logs_write_archives", "logs_modify_indexes", "monitors_write", "dashboards_public_share", "workflows_run",
+          "user_access_manage", "api_keys_delete", "logs_read_write", "synthetics_global_variable_write"):
+    check(f"{s} is not read-only", not dd_traces.read_only(s))
+for s in ("logs_read_data", "logs_read_archives", "apm_read", "ndm_device_profiles_view", "timeseries_query"):
+    check(f"{s} is read-only", dd_traces.read_only(s))
 
 if failures:
     print(f"\nFAILED: {len(failures)}")
