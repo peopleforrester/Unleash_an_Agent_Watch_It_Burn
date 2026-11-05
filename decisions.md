@@ -20879,3 +20879,8 @@ fleet.sh has no default.
 watch-it-burn-community`. Then `bash verify/terminal-login-live.sh watch-it-burn-private
 https://burritobot-private.burritobot.co` and the community one, with neither variable set, each ending `(login from
 mrf-secrets)`.
+
+**The suites (run 17705, at `119e1f3c`).** `bash verify/run-e2e-tools.sh` printed `270 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `verify/test_terminal_login_live.sh`
+among them with `30 passed, 0 failed`, then `60 checks ran (the offline suite and 59 tier tests) in 30m48s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
