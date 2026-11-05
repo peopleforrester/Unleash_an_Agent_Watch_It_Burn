@@ -137,7 +137,8 @@ spec:
 # Sized from the sister platform's measured deployment rather than guessed: vLLM runs CPU-ONLY there
 # (vllm-openai-cpu, no GPU), the Qwen3-1.7B weights are BAKED INTO THE IMAGE with HF_HUB_OFFLINE so
 # nothing is pulled at runtime, and it asks 4 CPU / 16Gi on the SAME t3.2xlarge node type this fleet
-# already uses. That is why local inference is affordable here and does not imply bigger nodes.
+# already uses. That is why local inference is affordable here and does not imply bigger nodes. Beside this
+# platform 4 CPU did not fit, so the request here is 1500m with the same limits (question 1082, #704).
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:

@@ -9,8 +9,13 @@
 # kserve entry). Every flag, env var, limit and volume below is carried over with the reason the sister
 # recorded for it, because each one was found by a pod that failed without it.
 #
-# Cost, as known before this platform's own cold build times it: requests 4 CPU / 10Gi, limits 6 CPU / 16Gi,
-# a measured 12.52 GiB peak, and an image of 4.95 GB compressed (12 layers, read from the registry
+# One departure from the sister, question 1082 (2026-11-05, #704): the CPU request is 1500m, not the sister's 4.
+# At 4 it does not fit beside this platform on one t3.2xlarge (7910m allocatable, about 5975m already requested on
+# the admin build), and a pod at 3500m averaged 1.34 cores from start to Ready. The 6 CPU limit is unchanged, so
+# vLLM still bursts into idle CPU; under contention its guaranteed share is smaller than the sister's.
+#
+# Cost, as known before this platform's own cold build times it: requests 1500m CPU / 10Gi, limits 6 CPU / 16Gi,
+# a measured 12.52 GiB peak on the sister, and an image of 4.95 GB compressed (12 layers, read from the registry
 # 2026-10-24). The weights are baked into the image, so nothing downloads at start, but that pull is the
 # largest single item in this profile's build time.
 #
@@ -80,7 +85,8 @@ spec:
               protocol: TCP
           resources:
             requests:
-              cpu: "4"
+              # Question 1082: 1500m fits the ~1935m a t3.2xlarge leaves beside the platform; the sister asks 4.
+              cpu: 1500m
               memory: 10Gi
             limits:
               cpu: "6"

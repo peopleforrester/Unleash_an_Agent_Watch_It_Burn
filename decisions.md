@@ -36112,3 +36112,47 @@ the answer lowers the request.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_vllm_fit_probe.py` among them) and then 55 tier tests: "56
 checks ran (the offline suite and 55 tier tests) in 26m18s", `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No
 dependency was added.
+
+## 2026-11-05 · #704 · question 1082: vLLM's CPU request goes to 1500m so it fits beside the platform on one t3.2xlarge
+
+**Question 1082.** How should the local-inference profile make room for its vLLM model server, which does not fit
+on one t3.2xlarge node as written? **Answer:** Lower vLLM's CPU request to 1500m. Decided by hecaton's research
+under Michael's standing rules, not by Michael. The research read the sister's manifest
+(packt-agentic-devops `solution/platform/2-ai-plane/vllm/manifests/inferenceservice.yaml`), which tunes the pod to
+share one t3.2xlarge with the whole platform rather than moving to a bigger node.
+
+**What it changes.** Run 17565 is #704's sixth dispatch. `verify/prior-drafts.sh 704 origin/staging` printed START
+from run 17379's branch, whose two commits (`2f81ce6f`, `3dbc1a37`) ended on this question and never reached
+staging. Both were cherry-picked; staging had only appended to decisions.md (both entries kept) and added the
+learner-apps-access entry to platform-baseline.yaml (`ac72f4c4`), which does not touch the vllm entry. Run 16409's
+draft, a guard-proxy pin staging has since moved, is not reused. On top of the draft:
+
+- `gitops/manifests/vllm-qwen3/vllm-qwen3.yaml`: `requests.cpu` is `1500m` (was `"4"`). Memory 10Gi, limits 6 CPU
+  and 16Gi, the 2 GiB KV cache and every other flag stay the sister's. The header names the one departure and why.
+- `verify/test_local_inference.py` holds `1500m` in the same commit, and its heading says the CPU request is the
+  one difference from the sister's shape.
+- The headers of `values-local-inference.yaml` and `gitops/ai-layer/resources.yaml`, the probe's docstring, and
+  the vllm entry's `known` say the same. The entry keeps `measured: false`: its header defines measuring as a cold
+  build timed to Healthy, and that has still not run.
+
+**The live check, run 17565.** `CONTEXT=watch-it-burn-private python3 verify/vllm_fit_probe.py`, no CPU_REQUEST,
+so the probe ran the new manifest's pod unmodified, in its own `vllm-fit-probe` namespace beside the running
+platform. It printed: "CPU 6045m of 7910m requested, 1865m free; memory 11932Mi of 30729Mi requested, 18797Mi free;
+vLLM image already on the node: no", "the manifest's requests (1500m CPU, 10Gi): CPU fits, memory fits",
+"scheduled: vllm-qwen3-694569889c-kphtt", "creation to scheduled: 0 s", "image pull (kubelet): 178.679 s",
+"container start to Ready (model load): 341 s", "creation to Ready: 521 s", "cgroup memory.peak: 8.86 GiB", "CPU
+used since start: 495 CPU-seconds over 367 s (mean 1.35 cores)", one completion "HTTP 200: 21.3s" from model
+`qwen3-1.7b`, "PASS: vLLM came up from a cold start and answered as qwen3-1.7b", and "namespace gone: True". The
+platform's requests rose 70m since run 17379 read 5975m, so after vLLM the node has about 365m of CPU requests
+left, the margin question 1082's cons named. The cluster is as found but for the vLLM image, now in private's
+containerd cache, so a later pull on that node is warm. One Application was Degraded after the probe,
+`internal-registry`: its pod `registry-9f696f77c-tg79x` was created at 15:25:21Z, 35 minutes before the probe
+started, and its `seed` container had restarted 12 times, so it predates this check and is not from it.
+
+**Not yet run on a cluster.** The timed build of the whole profile with the 1500m request,
+`CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference` timed to every Application Healthy, then
+`CONTEXT=<ctx> python3 verify/local-inference-live.py`. `deploy-full-idp.sh` points lab-bootstrap at
+`targetRevision: staging`, so either run before this change is promoted would deploy the 4 CPU pod and leave it
+Pending. Once it is on staging, the next run on #704 runs the 2026-11-04 sheet (a fresh cluster where the grant
+admits one, else the fallback on watch-it-burn-private, restored after), sets the vllm entry to `measured: true`
+with `build_seconds` and `requests` 1500m CPU / 10Gi (limits 6 CPU / 16Gi), and records the wall-clock.
