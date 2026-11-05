@@ -21742,3 +21742,15 @@ holds it in the tools tier.
 **What is left.** Nothing for #784 and nothing for #876, which is the same change. The cost on a turn with several
 model calls (an HC-666 chat) rests on the same per-span rename, and `verify/test_llmobs_chat_judge_live.py` reads it
 the next time the live suite runs after such a chat.
+
+**A test fix the suites needed.** The first `bash verify/run-e2e-tools.sh` of this run failed one offline test,
+`verify/test_e2e_tools_tier.py`, on five checks of its #865 section. Each said `mktemp: failed to create directory
+via template '/tmp/tmp.XXXXXXXXXX'`. This run's sandbox cannot write `/tmp`, and the test's three env builders passed
+PATH and HOME but no TMPDIR, so the runner it starts fell back to `/tmp`. Run 17432's host could write it, so the test
+passed there. The test now sets TMPDIR to its own scratch directory in all three builders (commit `9f983ea1`), as
+`verify/test_challenge_fallbacks.py` already does. It owns that input and no longer depends on the host's `/tmp`. Run
+alone, it passed 314 checks with exit 0.
+
+**The suites (run 17459, at `9f983ea1`).** `bash verify/run-e2e-tools.sh` printed `264 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57 tier
+tests) in 35m01s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
