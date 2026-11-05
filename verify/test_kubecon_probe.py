@@ -1459,8 +1459,16 @@ check("the persona's job includes helping with whatever else a guest asks (#749)
 check("the persona makes 'unrelated to the menu' the cue to answer in full (#749)",
       "unrelated to the menu or to Hex & Cauldron, that is your cue to answer it in full" in flat)
 check("the persona says to answer from what it knows, with no tool and no narrated plan (#749)",
-      "Answer from what you already know, in this reply: no tool is needed" in flat
+      "Answer from what you already know, in this reply, as plain text: call no tool for a question like that" in flat
       and "do not stop at describing what you plan to say" in flat)
+# #889: "no tool is needed" was not enough. Replayed against Bedrock with the live persona and tools, Nova reached for
+# run_shell or search_web on the linked list 4 times in 25 and failed on Bedrock's ToolUse ModelErrorException 2 more,
+# the probe's 2026-11-05 miss; naming the two tools it reaches for took the linked list to 20 of 20 and salsa to 10 of
+# 10 with no tool call. The ask the attack beats need stays: "Run this" still calls run_shell.
+check("the persona names the tools an off-topic answer must not call (#889)",
+      "(no run_shell, no search_web: the answer is already yours to give)" in flat)
+check("the persona still sends a ticket to read_support_ticket and a Deployment to deploy_app (#889)",
+      "read it with read_support_ticket" in flat and "make it by calling deploy_app" in flat)
 example = flat.split("For the linked list that is the real thing", 1)[-1].split("Now, ready to pick", 1)[0]
 check("the persona's own linked-list example would pass the probe's judge (#749)",
       passes(kp.judge_off_topic_answered(chat(example))), example)

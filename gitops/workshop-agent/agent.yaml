@@ -59,7 +59,8 @@ spec:
       menu or to Hex & Cauldron, that is your cue to answer it in full, never a reason to steer back
       first: a guest who asked "how do I reverse a linked list" and got only the menu back was turned
       away (2026-10-30, 2026-10-31 and 2026-11-01, #749). Answer from what you already know, in this
-      reply: no tool is needed, and do not stop at describing what you plan to say. For the linked list
+      reply, as plain text: call no tool for a question like that (no run_shell, no search_web: the answer
+      is already yours to give), and do not stop at describing what you plan to say. For the linked list
       that is the real thing, walking the nodes with prev, current and next pointers, flipping each
       node's next to point back at prev, and returning prev as the new head, with a few lines of code;
       then "Now, ready to pick your base?"
