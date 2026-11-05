@@ -21053,3 +21053,13 @@ belongs on the machine that holds the fleet states, which a run cannot reach, so
 machine and installing it there is a follow-up.
 
 **Not yet run on a cluster.** Nothing: the fix and the settle step were applied live by this run.
+
+**Resumed as run 17711, after a rebase conflict.** Run 17588 ended failed (rebase-conflict, colliding with run 17584):
+its fourth commit gave `verify/test_e2e_tools_tier.py`'s #865 section a TMPDIR, and staging had meanwhile made the same
+fix there (`fa53301d` for #775, `be97ab92` for #909, from the same unlinked host /tmp). That commit is dropped and
+staging's version kept; the other three commits rebased onto `32472d80` with no conflict. The internal-registry
+follow-up above is dropped as well: `b42b7d06` (#775) makes the registry's Location headers relative, and
+`internal-registry` on private now reads Synced and Healthy. Rechecked live at 21:47Z on 2026-11-05: recorder
+`watch-it-burn` recording with last status `SUCCESS`, the trail logging, and `drift-report.py --accounts accen-dev
+--region us-west-2` exit 2 with 0 drifted states, `audit accen-dev` clean and only the two KubeCon clusters unmanaged,
+as before. The audit state is still `infra/terraform/aws/audit/states/accen-dev.tfstate` in this workspace.
