@@ -18152,3 +18152,7 @@ names cpu.5 as deployed while keeping both archive dates. decisions.md keeps sta
 them. So `verify/test_images_saved.py`, run as michael on netcup, will name four more unsaved rows (the cpu.5 llm-guard
 row, cpu.4, cpu.5 and the zero-shot image) besides the breakout Joker until `mirror-images.sh save .` runs there on
 a staging clone that holds this change.
+
+**Suites (run 17411, at c1c1b971).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 27m04s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No
+dependency was added.
