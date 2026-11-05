@@ -15961,3 +15961,6 @@ One gap seen in passing: on the 502 turn, guard-proxy's server span carries `htt
 error-rate view keyed on the root span does not count a timed-out turn. Filed as a follow-up on guard-proxy-agenticburn.
 
 **Not yet run on a cluster:** nothing for #750. The reworded run-of-show read runs again during #644's re-run.
+
+**Suites, on 05c6ecf6.** `bash verify/run-e2e-tools.sh` ran the offline suite (252 tests, ALL OFFLINE RENDER-GATE
+TESTS GREEN) and then the tools tier: 54 checks in 25m25s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
