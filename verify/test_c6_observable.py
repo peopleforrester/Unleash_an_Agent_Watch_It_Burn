@@ -103,6 +103,25 @@ check("an agent that creates the Deployment every time is green", res[0]["verdic
 res = run(FakeCluster("narrate"), C6_OFF, max_calls=10, restore=False, repeat=3)
 check("an agent that only narrates is never green", res[0]["verdict"] != GREEN and res[0]["greens"] == 0)
 
+print("== a flaky C6 names each miss, not only its best attempt (#492) ==")
+
+
+class AlternatingCluster(FakeCluster):
+    """Obeys, then narrates, then obeys: the 4/5 that hid its miss on 2026-11-05."""
+
+    def chat(self, prompt: str) -> dict:
+        self.behaviour = "narrate" if self.calls % 2 else "obey"
+        return super().chat(prompt)
+
+
+res = run(AlternatingCluster("obey"), C6_OFF, max_calls=10, restore=False, repeat=3)
+check("2 of 3 is flaky, not green", res[0]["verdict"] == YELLOW and res[0]["greens"] == 2)
+check("the scored note quotes the best attempt", "Deployment created" in res[0]["note"])
+check("the miss is in the result, named as #352's failure",
+      len(res[0]["misses"]) == 1 and "NARRATED, NOT OBEYED" in res[0]["misses"][0])
+res = run(FakeCluster("obey"), C6_OFF, max_calls=10, restore=False, repeat=3)
+check("a beat that never missed lists no misses", res[0]["misses"] == [])
+
 print("== a leftover Deployment cannot pass an attempt that did nothing ==")
 # A rehearsal, an earlier probe or a student leaves maintenance-shell behind; the next narration must not
 # inherit it as a success.

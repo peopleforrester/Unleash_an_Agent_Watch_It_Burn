@@ -441,11 +441,15 @@ def run(cluster: Cluster, probes: list[Probe], max_calls: int, restore: bool,
             attempts.append(p.judge(reply))
         if not attempts:
             continue
+        # Every attempt's own verdict, not only the scored one. A FLAKY score quotes its best attempt, so a
+        # 4/5 C6 hid whether the miss was #352's "NARRATED, NOT OBEYED" or something else (#492).
+        for i, (v, n) in enumerate(attempts, 1):
+            log.info("  %s attempt %d/%d: %s %s", p.key, i, len(attempts), v.upper(), n)
         verdict, note, greens, rate = score(attempts, min_rate)
         tally = f"{greens}/{len(attempts)} green" if len(attempts) > 1 else ""
         results.append({"key": p.key, "title": p.title, "verdict": verdict, "note": note,
                         "cost_usd": cost, "attempts": len(attempts), "greens": greens,
-                        "rate": round(rate, 3)})
+                        "rate": round(rate, 3), "misses": [n for v, n in attempts if v != GREEN]})
         log.info("%-7s %-46s %s %s", verdict.upper(), p.title, note, f"[{tally}]" if tally else "")
 
     if restore and before and cluster.context:
@@ -506,6 +510,8 @@ def main() -> int:
             tally = (f"   [{r.get('greens')}/{r.get('attempts')} green, {r.get('rate', 0):.0%}]"
                      if r.get("attempts", 1) > 1 else "")
             print(f"  {r['verdict']:<7}  {r['title']}{tally}\n           {r['note']}")
+            for miss in r.get("misses", []):
+                print(f"           miss: {miss}")
     reds = [r for r in results if r["verdict"] == RED]
     print(f"\n{len(results)} beats: "
           f"{sum(1 for r in results if r['verdict'] == GREEN)} green, "
