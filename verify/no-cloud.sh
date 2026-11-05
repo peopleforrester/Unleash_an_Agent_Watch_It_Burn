@@ -20,7 +20,8 @@
 # caller's environment holds, and the tier pins no aws or eksctl. So it stubs just those two, ahead of its pinned
 # tools on PATH (#865).
 #
-# Sourced, not run: each runner calls no_cloud_setup once and runs each test through no_cloud_run.
+# Sourced, not run: each runner calls no_cloud_setup once and runs each test through no_cloud_run, and a test run
+# by hand guards itself with no_cloud_guard, below (#859).
 
 NO_CLOUD_TOOLS=(aws kubectl eksctl helm terraform)
 

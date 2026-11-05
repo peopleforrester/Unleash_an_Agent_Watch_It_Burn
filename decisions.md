@@ -19143,3 +19143,13 @@ first on PATH printed `TEST CALLED A CLOUD TOOL (#857, #865)` and the call, exit
 tier tests, each through the new aws and eksctl stubs) in 26m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit
 0. The offline suite inside it ran 253 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. No tier test printed
 `TEST CALLED A CLOUD TOOL`.
+
+**Ported onto staging `46d8c798` (run 17434).** Run 17230 committed the two commits above and wrote a `done` report,
+then ended `executor-error`: hecaton's own finalizer read `config/publication.yaml` from its release `75b830090afe`,
+which had been replaced (`/var/lib/hecaton/app/current` now names `413e095ef9c6`). Nothing in this repo caused it, and
+nothing reached staging. Staging had moved 93 commits since. `verify/draft-drift.sh` named two in-place edits:
+decisions.md, an append on both sides, kept both; and `verify/no-cloud.sh`, where #859 (`041c7a6a`) added
+`no_cloud_guard` and `no_cloud_clean` for a test run by hand. Both call `no_cloud_setup <dir>` with no tool list, so
+they still get all five stubs, and `test_no_cloud_by_hand.sh`'s grep for `aws is stubbed here` still matches the
+reworded stub. The header's last line now names `no_cloud_guard` as well. Staging's tier is now 56 tests; none of
+the new ones calls aws or eksctl, and none runs fleet.sh or event.sh.
