@@ -9,7 +9,7 @@
     python3 verify/stage_traces.py seed burritobot-private.burritobot.co \\
         --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
 
-    # the next morning: every seeded trace is still in LLM Observability
+    # the next morning: every seeded trace is still in LLM Observability, read back to the seed's own start
     python3 verify/stage_traces.py check --profile accen-dev
 
 Each challenge shows its trace after the presenters' attack and again after its fix (the 2026-11-01 slide-by-slide
@@ -51,8 +51,12 @@ guardrails-off, run even when a seed fails. The prompts carry no probe
 marker, so a seeded trace reads as the prompt Whitney shows; they do appear in the private bot's feed on the prompt
 wall, as the presenters' own stage prompts will.
 
+`seed` first reads the identity and the stage's start state, and sends and flips nothing unless both pass: on
+2026-11-05 the private cluster ran the admin profile, KubeArmor's and the egress guardrails applied by Argo CD, and a
+seed there would have failed and then had its guards-off strip them.
+
 The session ids, the Datadog query for each and the room and presenter views are written to --out
-(tmp/stage-traces.json) and printed. Datadog is read with the repo's read-only key (infra/datadog-fleet).
+(tmp/stage-traces.json) and printed. Each seed's link is pinned to the seed's own window; the two live tabs are not. Datadog is read with the repo's read-only key (infra/datadog-fleet).
 """
 from __future__ import annotations
 
@@ -365,26 +369,43 @@ def seed_beats(stamp: str) -> list[kp.Beat]:
     ]
 
 
-def llmobs_url(site: str, query: str) -> str:
-    return f"https://app.{site}/llm/traces?" + urllib.parse.urlencode({"query": f"ml_app:{ML_APP} {query}"})
+# A seed's link opens on the seed's own window, paused, so it finds the trace whenever it is opened; with no window
+# Datadog opens on its live default (minutes), which is empty the next day. A saved view keeps only a live range
+# (Datadog's saved-views page: a fixed range is converted to a live one when saved), so the Night Before step has the
+# seed views saved on Past 7 Days, which each session filter keeps to one trace.
+SEED_MARGIN_MS = 5 * 60 * 1000
 
 
-def apm_url(site: str, query: str) -> str:
-    return f"https://app.{site}/apm/traces?" + urllib.parse.urlencode({"query": query})
+def _window_params(window, historical: bool) -> dict:
+    if not window:
+        return {}
+    return {"start": str(window[0]), "end": str(window[1]), "paused": "true",
+            **({"historicalData": "true"} if historical else {})}
 
 
-def pii_view(site: str, stamp: str) -> dict:
+def llmobs_url(site: str, query: str, window=None) -> str:
+    return f"https://app.{site}/llm/traces?" + urllib.parse.urlencode(
+        {"query": f"ml_app:{ML_APP} {query}", **_window_params(window, False)})
+
+
+def apm_url(site: str, query: str, window=None) -> str:
+    return f"https://app.{site}/apm/traces?" + urllib.parse.urlencode({"query": query, **_window_params(window, True)})
+
+
+def pii_view(site: str, stamp: str, window=None) -> dict:
     key, challenge, what = PII_SEED
     q = f"service:{PROXY_SERVICE} @session.id:{session_id(key, stamp)}"
     return {"key": key, "challenge": challenge, "shows": what, "session": session_id(key, stamp), "source": "apm",
-            "query": q, "url": apm_url(site, q)}
+            "query": q, "url": apm_url(site, q, window)}
 
 
-def views(site: str, stamp: str) -> list[dict]:
+def views(site: str, stamp: str, window=None) -> list[dict]:
+    """The seed views, pinned to `window` (epoch ms, start and end) when given, then the two live tabs, unpinned."""
     out = [{"key": k, "challenge": c, "shows": what, "session": session_id(k, stamp),
             "query": f"session_id:{session_id(k, stamp)}", "must": list(must), "must_not": list(must_not),
-            "url": llmobs_url(site, f"session_id:{session_id(k, stamp)}")} for k, c, what, must, must_not in SEEDS]
-    out.insert([r["key"] for r in out].index("c3-fixed") + 1, pii_view(site, stamp))
+            "url": llmobs_url(site, f"session_id:{session_id(k, stamp)}", window)}
+           for k, c, what, must, must_not in SEEDS]
+    out.insert([r["key"] for r in out].index("c3-fixed") + 1, pii_view(site, stamp, window))
     for key, cluster, what in (("room", ROOM_CLUSTER, "the room's prompts, the public bot"),
                                ("presenters", PRESENTER_CLUSTER, "the presenters' prompts, the private bot")):
         q = f"k8s.cluster.name:{cluster}"
@@ -436,22 +457,29 @@ def judge_pii_trace(roots: list[dict], spans: list[dict]) -> tuple[bool, str]:
     return True, f"{len(spans)} spans, refused by input_classifier, no agent span, none of the PII"
 
 
-def pii_trace(dd, query: str) -> tuple[bool, str]:
+def pii_trace(dd, query: str, hours: int = 48) -> tuple[bool, str]:
     """Read through APM's span search, which the read-only key may not be allowed: a refusal is this view's FAIL,
     not the end of the run, so the other views are still reported and written."""
     try:
-        roots = search_apm(dd, query)
+        roots = search_apm(dd, query, hours)
         tids = sorted({str((r.get("attributes") or {}).get("trace_id")) for r in roots
                        if (r.get("attributes") or {}).get("trace_id")})
-        return judge_pii_trace(roots, [s for t in tids for s in search_apm(dd, f"trace_id:{t}")])
+        return judge_pii_trace(roots, [s for t in tids for s in search_apm(dd, f"trace_id:{t}", hours)])
     except RuntimeError as e:
         return False, f"could not search APM spans: {e}"
 
 
-def read_seeds(dd, rows: list[dict]) -> dict[str, tuple[bool, str]]:
-    return {r["session"]: pii_trace(dd, r["query"]) if r.get("source") == "apm"
-            else judge_spans(spans_for(dd, r["session"]), r["must"], r["must_not"])
+def read_seeds(dd, rows: list[dict], hours: int = 48) -> dict[str, tuple[bool, str]]:
+    return {r["session"]: pii_trace(dd, r["query"], hours) if r.get("source") == "apm"
+            else judge_spans(spans_for(dd, r["session"], hours), r["must"], r["must_not"])
             for r in rows if r["session"]}
+
+
+def lookback_hours(seeded_at: str, now: dt.datetime) -> int:
+    """How far back `check` reads: from the seed's start, plus two hours, and never under 48. A fixed 48 hours read
+    'no spans' for the 2026-10-31 seeds on 2026-11-05, while LLM Observability and APM both still held them."""
+    start = dt.datetime.fromisoformat(seeded_at)
+    return max(48, int((now - start).total_seconds() // 3600) + 2)
 
 
 def wait_for(dd, rows: list[dict], deadline_s: float, poll_s: float = 30.0,
@@ -498,18 +526,32 @@ def cmd_seed(args) -> int:
     if args.host in kp.COMMUNITY_HOSTS:
         log.error("seed runs on the private bot only; %s is the room's", args.host)
         return 2
-    stamp = args.stamp or dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M")
+    started = dt.datetime.now(dt.timezone.utc)
+    stamp = args.stamp or started.strftime("%Y%m%d%H%M")
     cluster = StageCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)
+    # The stage's start state first, read only: a cluster that is not there (another profile, or guardrails left on)
+    # would fail the seeds, and the closing guards-off would then change a cluster this run never armed. So nothing
+    # is sent and nothing is flipped.
+    pre = kp.Probe(cluster, 0)
+    for key, step in (("identity", kp._identity), ("start-state", kp._start_state)):
+        ok, note = step(pre)
+        if not ok:
+            log.error("%s  %s: %s", kp.FAIL, key, note)
+            log.error("SEEDED RED: not at the stage's start state, so nothing was sent and nothing was flipped")
+            return 1
     probe = StageProbe(cluster, args.max_calls, settle=args.settle)
     results = probe.run(seed_beats(stamp), final=kp.GUARDS_OFF_BEAT)
     seeded_ok = all(r["verdict"] == kp.PASS for r in results)
     dd, site = datadog(args.profile, args.region)
-    rows = views(site, stamp)
+    end = dt.datetime.now(dt.timezone.utc)
+    window = (int(started.timestamp() * 1000) - SEED_MARGIN_MS, int(end.timestamp() * 1000) + 2 * SEED_MARGIN_MS)
+    rows = views(site, stamp, window)
     log.info("== waiting up to %ds for the traces to reach Datadog ==", args.wait)
     verdicts = wait_for(dd, rows, args.wait)
     found = report(rows, verdicts)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({"host": args.host, "stamp": stamp, "site": site, "views": rows,
+    args.out.write_text(json.dumps({"host": args.host, "stamp": stamp, "seeded_at": started.isoformat(),
+                                    "site": site, "views": rows,
                                     "spans": {k: v[1] for k, v in verdicts.items()}, "beats": results},
                                    indent=2) + "\n")
     log.info("written: %s", args.out)
@@ -548,9 +590,14 @@ def cmd_check(args) -> int:
         log.error("no %s: run seed first", args.out)
         return 2
     saved = json.loads(args.out.read_text())
+    if not saved.get("seeded_at"):
+        log.error("%s has no seeded_at, so check cannot tell how far back to read: run seed again", args.out)
+        return 2
+    hours = lookback_hours(saved["seeded_at"], dt.datetime.now(dt.timezone.utc))
     dd, _ = datadog(args.profile, args.region)
     rows = saved["views"]
-    ok = report(rows, read_seeds(dd, rows))
+    log.info("reading the last %d hours, back to the seed at %s", hours, saved["seeded_at"])
+    ok = report(rows, read_seeds(dd, rows, hours))
     log.info("STAGE TRACES %s", "GREEN" if ok else "RED")
     return 0 if ok else 1
 

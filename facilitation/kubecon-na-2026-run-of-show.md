@@ -1190,10 +1190,25 @@ is merely slow rather than rebuilding:
   PII seed's trace in APM is stamped `input_classifier` with no agent span and none
   of the PII in it. Then it prints one link per seed plus the room's and the
   presenters' views, and writes them to `tmp/stage-traces.json`. It must end
-  `SEEDED GREEN`. Whitney opens each link in her org and saves it as a view, in that
-  order: `c1-attack`, `c1-fixed`, `c2-attack`, `c2-fixed`, `c3-attack`, `c3-fixed`,
-  `c3-pii`, `c4-attack`, `c4-fixed`, then the room's and the presenters' (the `c3-pii`
-  link opens Trace Explorer, the others LLM Observability). The
+  `SEEDED GREEN`. Each seed's link opens paused on the seed's own window, so it finds
+  its trace whenever it is opened. Whitney opens each link in her org and saves it as a
+  view, in that order: `c1-attack`, `c1-fixed`, `c2-attack`, `c2-fixed`, `c3-attack`,
+  `c3-fixed`, `c3-pii`, `c4-attack`, `c4-fixed`, then the room's and the presenters'
+  (the `c3-pii` link opens Trace Explorer, the others LLM Observability). Before she
+  presses Save on a seed view, she sets the time picker to Past 7 Days: a saved view
+  keeps only a live range, and Datadog turns a fixed range into a live one when it is
+  saved, so a view saved on the seed's own window would read the last half hour on
+  stage and find nothing. The session in each query keeps a week's range to that one
+  trace. The room's and the presenters' views are live tabs: save them on Past 15
+  Minutes.
+
+  `seed` starts only from the stage's start state: every AI guard off and the four
+  Kubernetes guardrails off, as the `kubecon-private` profile deploys them. Anywhere
+  else it stops before the first prompt, prints `SEEDED RED`, and sends and flips
+  nothing. On 2026-11-05 `watch-it-burn-private` ran the `admin` profile, whose Argo CD
+  applies KubeArmor's `block-recipe-snoop` and the agent egress allowlist, so it stopped
+  there. Seeded traces outlast the night: the 2026-10-31 seeds were still in LLM
+  Observability and APM on 2026-11-05. The
   morning of: `python3 verify/stage_traces.py check --profile accen-dev` must end
   `STAGE TRACES GREEN`. A red `c3-pii` there means the retention filter did not keep
   it: check the filter and run `seed` again.

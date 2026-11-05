@@ -17552,3 +17552,52 @@ above was on the same values set by hand.
 **Suites (run 17353, at 3ba5016).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN, `test_collector_config.py` among them) and then the tools tier: 55 checks in 25m37s,
 ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
+## 2026-11-05 · #648 · Run 17365: the input guard refuses PII live, `seed` stops off the start state, and the seed links outlast the night
+
+**Live, on watch-it-burn-private (accen-dev, us-west-2), at staging `a2c7309`, which Argo CD had synced.** This is
+the first #648 run that could read its cluster session (hecaton#508 is fixed). `python3 verify/stage_traces.py pii
+burritobot-private.burritobot.co --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`
+printed CAUGHT for the card, the SSN, the e-mail, the phone number and the stage prompt, each by `Regex` at 1.0, then
+"OK order a plain order passes both input stages", and ended `PII GREEN: THE INPUT GUARD REFUSES 5 OF 5`. No model
+call, nothing toggled. The skipped `REFUSES 0 OF 5` baseline is moot: the scanner has been on staging since `53b2c9c`.
+
+**Read from Whitney's org with the repo's key (`watch-it-burn/datadog`).** The key reads APM retention filters, APM
+span search and LLM Observability spans. It may not write: creating the `@session.id:wib-stage-*` retention filter
+answered 403, so that filter stays the Night Before click in the UI. The org has no such filter today, only Datadog's
+four defaults. `@session.id` is the facet APM finds guard-proxy's root span by: `service:burritobot
+@session.id:wib-stage-*` found the 13 sessions of the 2026-10-31 seeds on `burritobot-private`. LLM Observability
+still held every one of those seeds five days on (c1-attack 7 spans with `get_vault_entry`, c3-attack 13 with
+`read_support_ticket` and `deploy_app`, c4-attack 9 with `get_weather` and `read_internal_config`). The browser route
+could not save views: Michael's Chrome on tanjiro-wsl2 opened app.datadoghq.com on its sign-in page.
+
+**What the live reads found, and the three changes.**
+- `check` read a fixed 48 hours, so on the 2026-10-31 seeds it printed "no spans" nine times and `STAGE TRACES RED`
+  while Datadog held them. `seed` now writes `seeded_at`, and `check` reads back to it plus two hours, never under 48
+  (`lookback_hours`). A views file without `seeded_at` is status 2, naming the field.
+- Datadog's saved-views page (docs.datadoghq.com/logs/explorer/saved_views, read 2026-11-05): "Saved View is meant to
+  track live time ranges", and a fixed range is converted to a live one when saved. A seed view saved on its own
+  window would read the last half hour on stage and find nothing. Each seed's link now carries `start`, `end` and
+  `paused=true` (and `historicalData=true` on the Trace Explorer one), from five minutes before the seed starts to ten
+  minutes after it ends, so the link finds its trace whenever it is opened. The run-of-show has Whitney set Past 7 Days before saving a seed
+  view, and Past 15 Minutes for the two live tabs, which stay unpinned. These are the parameters run 10444's draft
+  used; whether LLM Observability honors them is not measured, since no browser here is signed in. A page that
+  ignores them opens on its live default, as every link did before.
+- The private cluster was not at the stage's start state: `lab-bootstrap` renders `values-admin.yaml` there (and
+  `values-burn.yaml` on the community cluster), so Argo CD applies KubeArmor's `block-recipe-snoop` and
+  `agent-egress-allowlist`, and `deny-external-registries` is not installed. The probe records a failed start-state
+  and goes on, so a seed there would have spent eight model calls on wrong seeds and then had its closing
+  `guardrails-off` strip two Argo-managed guardrails. `seed` now reads the identity and the start state first and,
+  when either fails, prints `SEEDED RED`, sends nothing, flips nothing and writes no views file. Live, on
+  watch-it-burn-private: it printed the start-state FAIL above and `SEEDED RED: not at the stage's start state, so
+  nothing was sent and nothing was flipped`, exit 1, no views file; `block-recipe-snoop` and `agent-egress-allowlist`
+  were still applied after it. Nothing on the cluster changed.
+
+`verify/test_stage_traces.py` gains the checks: a five-day-old seed found by `check` over a window reaching back to it
+(a fake Datadog that answers empty to a shorter window), the 48-hour floor, the missing `seeded_at`, every seed link
+paused on a window around the seed and the live tabs unpinned, and a cluster left armed refused before any `/chat`
+with an empty action log. Against the previous `stage_traces.py` the new checks fail.
+
+**Not yet run on a cluster.** The seed itself needs the stage's start state, which neither cluster has today: the
+KubeCon bring-up on the `kubecon-private` profile, or the Night Before (2026-11-11). There, in order: the retention
+filter in the UI, `seed` ending `SEEDED GREEN`, Whitney saving the views on Past 7 Days, and `check` the morning of.
+The pinned-window parameters are first seen working when Whitney opens the printed links.
