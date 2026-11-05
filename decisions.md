@@ -19562,3 +19562,7 @@ failed on `/tmp`. Its two remaining failures, the Playwright directory it cannot
 they come from the simulation and not from `/tmp`. This branch takes `fa53301d`'s copy of
 `verify/test_e2e_tools_tier.py` unchanged, so it matches staging's and merges with no conflict. fleet.sh and the
 tests above are unchanged.
+
+**The suites (run 17644, at `e30952b7`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 32m17s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
