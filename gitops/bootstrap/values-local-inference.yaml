@@ -16,9 +16,11 @@
 #
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
+egressProxy: true
 apps:
   - ai-layer-otel
   - agent-dns
+  - egress-proxy
   - ai-layer
   - backstage
   - cert-manager

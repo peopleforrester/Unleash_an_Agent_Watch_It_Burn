@@ -8,7 +8,7 @@ What it proves, with the repo's own bytes. It builds the option B pieces in a na
 c1-dns-lock-check-<pid>, so the agent namespace, its pods and its policies are never touched:
 
 - agent-dns from gitops/agent-dns/resolver.yaml (the Corefile as committed), and egress-proxy from
-  gitops/ai-layer/egress_proxy.py with the Deployment's ALLOWED_HOSTS;
+  gitops/egress-proxy/egress_proxy.py with the Deployment's ALLOWED_HOSTS;
 - agent-dns-resolver from gitops/agent-dns/agent-dns-resolver.yaml, renamed and scoped to the scratch namespace, with
   the scratch resolver's address in place of 172.20.0.53, so a pod created there is pointed at it by the live
   Kyverno engine, as an agent pod is;
@@ -48,10 +48,11 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = f"c1-dns-lock-check-{os.getpid()}"
 MP_NAME = f"agent-dns-resolver-check-{os.getpid()}"
-RES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if isinstance(d, dict)]
+RES = [d for d in yaml.safe_load_all((REPO / "gitops/egress-proxy/egress-proxy.yaml").read_text()) if isinstance(d, dict)]
 DNS = [d for d in yaml.safe_load_all((REPO / "gitops/agent-dns/resolver.yaml").read_text()) if d]
 MP = yaml.safe_load((REPO / "gitops/agent-dns/agent-dns-resolver.yaml").read_text())
-FIXES = next(d for d in RES if d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "challenge-fixes")["data"]
+FIXES = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text())
+             if isinstance(d, dict) and d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "challenge-fixes")["data"]
 LIMITS = {"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "200m", "memory": "128Mi"}}
 failures: list[str] = []
 
@@ -154,7 +155,7 @@ try:
     proxy = into_scratch(one(RES, "Deployment", "egress-proxy"))
     proxy_svc = into_scratch(one(RES, "Service", "egress-proxy"))
     proxy_src = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "egress-proxy-src", "namespace": NS},
-                 "data": {"egress_proxy.py": (REPO / "gitops/ai-layer/egress_proxy.py").read_text()}}
+                 "data": {"egress_proxy.py": (REPO / "gitops/egress-proxy/egress_proxy.py").read_text()}}
     apply([cm, dep, svc, proxy_src, proxy, proxy_svc])
     resolver_ip = kubectl("-n", NS, "get", "svc", "agent-dns", "-o", "jsonpath={.spec.clusterIP}").stdout.strip()
     check("the resolver's Service has an address", bool(resolver_ip), resolver_ip)

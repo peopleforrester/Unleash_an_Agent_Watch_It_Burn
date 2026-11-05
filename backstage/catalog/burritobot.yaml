@@ -310,7 +310,7 @@ metadata:
   annotations:
     backstage.io/kubernetes-label-selector: app.kubernetes.io/name=egress-proxy
     backstage.io/kubernetes-namespace: agent
-    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/egress_proxy.py
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/egress-proxy/egress_proxy.py
   tags: [egress]
 spec:
   type: service

@@ -94,16 +94,17 @@ that wants the full fix on its community cluster makes that choice in its own is
 ## As built: option B over floor C (#861)
 
 The #724 decision (question 1009) chose B over floor C. #861 carried its four build items, and this is what was
-built for them. Nothing in it uses the mesh.
+built for them. It is built on the mesh clusters only, as question 1077 sets: the burn profile carries no proxy.
 
-- **The proxy.** `egress-proxy` runs in `agent` from `gitops/ai-layer/egress_proxy.py`, a standard-library CONNECT
-  proxy on the pinned workshop-mcp image. It opens a tunnel only to a hostname on `ALLOWED_HOSTS` and port 443, and
+- **The proxy.** `egress-proxy` runs in `agent` from `gitops/egress-proxy` (its own Argo CD app,
+  `gitops/bootstrap/apps/egress-proxy.yaml`), a standard-library CONNECT proxy on the pinned workshop-mcp image. It opens a tunnel only to a hostname on `ALLOWED_HOSTS` and port 443, and
   it refuses any other name before it looks the name up. Each decision is one JSON line in its log.
   `agent-allow-egress-proxy` admits this pod alone to 443 and to kube-dns.
 - **The weather feed (item 2).** `ALLOWED_HOSTS` is `geocoding-api.open-meteo.com` and `api.open-meteo.com`, the
-  two hosts `weather_feed.py` calls. The feed sets `HTTPS_PROXY`, and `agent-allow-weather-feed-egress` now points
-  it at the proxy on 3128 instead of 443 to anywhere. No pod in `agent` but the proxy has a direct path out on 443,
-  in the stage 2 file and in the fix (item 1).
+  two hosts `weather_feed.py` calls. `ai-layer.yaml` sets the feed's `HTTPS_PROXY` only where `egressProxy` is set,
+  and `agent-allow-weather-feed-egress` now points the feed at the proxy on 3128 instead of 443 to anywhere. No pod
+  in `agent` but the proxy has a direct path out on 443, in the stage 2 file and in the fix (item 1). On the burn
+  profile the feed has no proxy setting and calls Open-Meteo directly, as before #861.
 - **The locked resolver (item 1).** `agent-dns` is CoreDNS in `agent` (`gitops/agent-dns`). It answers
   `cluster.local` and `bedrock-runtime.us-west-2.amazonaws.com` through kube-dns, and sends every other name to the
   VPC resolver at 169.254.169.253. The Kyverno MutatingPolicy `agent-dns-resolver` points every new `agent` pod at
@@ -118,12 +119,19 @@ built for them. Nothing in it uses the mesh.
 - **Istio 1.30.4 (item 4).** The 1.30 documentation has no ambient egress page. The page was added on 2026-09-17
   and first ships with the 1.31 docs. The 1.30 waypoint page does document binding a `ServiceEntry` to a waypoint
   through `istio.io/use-waypoint`. The private cluster has no Gateway API CRDs, which a waypoint needs, and the
-  burn profile has no Istio at all (#860). So the proxy is a plain Deployment, and the pin does not have to support
-  the pattern.
-- **Profiles.** `agent-dns` is listed on attendee, admin, full and local-inference. The admin profile's armed set
-  (`policies/network-policies`) is the fixed state. The KubeCon and burn profiles do not list it, so the fix is not
-  for those clusters, and applying `c1-dns-lock.yaml` there would cut every lookup. The proxy is part of ai-layer
-  and runs on every profile.
+  burn profile has no Istio at all (#860). So the proxy is a plain Deployment on the mesh clusters, not enrolled as
+  an ambient waypoint, and the build does not depend on the pin supporting the pattern. Whether it should be enrolled
+  is a follow-up question.
+- **Profiles.** `agent-dns` is listed on attendee, admin, full and local-inference. `egress-proxy` and its
+  `egressProxy` flag are listed on those four and on kubecon-private, the profiles with Istio ambient. The admin
+  profile's armed set (`policies/network-policies`) is the fixed state. The KubeCon community and burn profiles list
+  neither, so the fix is not for those clusters, applying `c1-dns-lock.yaml` there would cut every lookup, and
+  their weather feed calls Open-Meteo directly.
+- **Open point, the community cluster's weather.** The community cluster's guardrails-on step applies the stage 2
+  file (`decisions.md`, question 1077). That file's feed policy now sends the feed to a proxy the community cluster
+  does not run, so `get_weather` there reports a failed lookup after that step. Before #861 the feed had a direct 443
+  allow in that file, and it worked. Whether to restore a direct allow for the community cluster only is a question
+  for the coordinator, recorded on #861.
 
 `verify/test_egress_lock.py` holds the stage 2 and fixed sets, the Corefile and the allowlist.
 `verify/test_egress_proxy.py` runs the proxy. `verify/test_agent_dns_mutation.py` runs the mutation through the

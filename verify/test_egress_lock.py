@@ -31,6 +31,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
 PER_NS = REPO / "policies/network-policies/per-namespace"
 RES = [d for d in yaml.safe_load_all((AI / "resources.yaml").read_text()) if isinstance(d, dict)]
+PROXY_RES = [d for d in yaml.safe_load_all((REPO / "gitops/egress-proxy/egress-proxy.yaml").read_text()) if d]
 DNS_DIR = REPO / "gitops/agent-dns"
 DNS_DOCS = [d for f in sorted(DNS_DIR.glob("*.yaml")) for d in yaml.safe_load_all(f.read_text()) if d]
 VPC_RESOLVER = "169.254.169.253/32"
@@ -218,7 +219,7 @@ check("both skipped labels are on egressLabels, so the agent cannot wear one",
       "'agent-dns'" in kyv and "'egress-proxy'" in kyv)
 
 print("== item 2: the proxy's allowlist is exactly the weather feed's hosts ==")
-proxy = one(RES, "Deployment", "egress-proxy")
+proxy = one(PROXY_RES, "Deployment", "egress-proxy")
 pc = (proxy.get("spec", {}).get("template", {}).get("spec", {}).get("containers") or [{}])[0]
 env = {e["name"]: e.get("value") for e in pc.get("env") or []}
 feed_src = (AI / "weather_feed.py").read_text()
@@ -231,7 +232,7 @@ check("ALLOWED_PORTS is 443 alone", env.get("ALLOWED_PORTS") == "443")
 check("the proxy pods carry the label agent-allow-egress-proxy selects",
       PROXY.items() <= proxy["spec"]["template"]["metadata"]["labels"].items())
 check("it runs egress_proxy.py from its generated ConfigMap", pc.get("command") == ["python", "/app/egress_proxy.py"])
-svcp = one(RES, "Service", "egress-proxy")
+svcp = one(PROXY_RES, "Service", "egress-proxy")
 check("its Service is egress-proxy:3128, the address the feed's HTTPS_PROXY names",
       svcp.get("spec", {}).get("ports", [{}])[0].get("port") == 3128)
 
@@ -243,6 +244,15 @@ values = {p.stem.removeprefix("values-"): yaml.safe_load(p.read_text())["apps"]
 check("agent-dns is on attendee, admin, full and local-inference, and on no KubeCon or burn profile",
       sorted(p for p, apps in values.items() if "agent-dns" in apps) == ["admin", "attendee", "full", "local-inference"],
       repr(sorted(p for p, apps in values.items() if "agent-dns" in apps)))
+MESH = ["admin", "attendee", "full", "kubecon-private", "local-inference"]
+check("egress-proxy is on the mesh profiles and on no other: burn and the community cluster run no proxy (question 1077)",
+      sorted(p for p, apps in values.items() if "egress-proxy" in apps) == MESH,
+      repr(sorted(p for p, apps in values.items() if "egress-proxy" in apps)))
+flags = {}
+for p in (REPO / "gitops/bootstrap").glob("values-*.yaml"):
+    flags[p.stem.removeprefix("values-")] = bool((yaml.safe_load(p.read_text()) or {}).get("egressProxy"))
+check("egressProxy is set on exactly the profiles that list the proxy, so the feed points at a proxy that runs",
+      sorted(p for p, on in flags.items() if on) == MESH, repr(sorted(p for p, on in flags.items() if on)))
 check("the admin profile, which syncs the fixed set, also runs agent-dns, so its pods can resolve",
       "network-policies" in values["admin"] and "agent-dns" in values["admin"])
 check("no profile syncs the fixed set without agent-dns",

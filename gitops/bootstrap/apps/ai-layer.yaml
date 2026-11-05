@@ -33,11 +33,18 @@ spec:
         - "llm-guard=ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791"
       # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
       # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which
-      # verifies against the system roots, accepts it. Unset, these patches are not rendered and 443 stays the TCP
-      # pass-through to nginx's self-signed certificate (#139). The if and end sit in YAML comments so the file
-      # still parses as written; tpl renders them, and verify/test_bootstrap_chart_render.py renders both ways.
-      # {{- if .Values.frontDoor.certificateArn }}
+      # verifies against the system roots, accepts it. Unset, that patch is not rendered and 443 stays the TCP
+      # pass-through to nginx's self-signed certificate (#139).
+      #
+      # The weather feed's proxy (#861, question 1077). With egressProxy set, the feed sends its Open-Meteo calls
+      # through egress-proxy, which runs only on the mesh profiles (gitops/bootstrap/apps/egress-proxy.yaml). Unset,
+      # as on the burn profile, which runs no proxy, the feed calls Open-Meteo directly, as it did before #861.
+      #
+      # The if and end sit in YAML comments so the file still parses as written; tpl renders them, and
+      # verify/test_bootstrap_chart_render.py renders each way. The patches key is there only when one of the two is set.
+      # {{- if or .Values.frontDoor.certificateArn .Values.egressProxy }}
       patches:
+        # {{- if .Values.frontDoor.certificateArn }}
         - target:
             kind: Service
             name: console
@@ -54,6 +61,18 @@ spec:
             - op: add
               path: /metadata/annotations/service.beta.kubernetes.io~1aws-load-balancer-ssl-negotiation-policy
               value: ELBSecurityPolicy-TLS13-1-2-2021-06
+        # {{- end }}
+        # {{- if .Values.egressProxy }}
+        - target:
+            kind: Deployment
+            name: weather-feed
+          patch: |-
+            - op: add
+              path: /spec/template/spec/containers/0/env
+              value:
+                - name: HTTPS_PROXY
+                  value: "http://egress-proxy:3128"
+        # {{- end }}
       # {{- end }}
   destination:
     server: https://kubernetes.default.svc

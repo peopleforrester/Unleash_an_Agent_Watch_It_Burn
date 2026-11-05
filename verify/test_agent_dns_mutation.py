@@ -21,6 +21,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 POLICY = REPO / "gitops/agent-dns/agent-dns-resolver.yaml"
 RES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if isinstance(d, dict)]
 DNS = [d for d in yaml.safe_load_all((REPO / "gitops/agent-dns/resolver.yaml").read_text()) if d]
+PROXY = [d for d in yaml.safe_load_all((REPO / "gitops/egress-proxy/egress-proxy.yaml").read_text()) if d]
 WANT_VERSION = "1.19.1"
 WANT_DNS = {"nameservers": ["172.20.0.53"], "searches": ["agent.svc.cluster.local", "svc.cluster.local", "cluster.local"],
             "options": [{"name": "ndots", "value": "5"}]}
@@ -52,7 +53,7 @@ def pod_from(dep: dict, ns: str) -> dict:
             "spec": t["spec"]}
 
 
-deployments = {d["metadata"]["name"]: d for d in RES + DNS if d.get("kind") == "Deployment"}
+deployments = {d["metadata"]["name"]: d for d in RES + DNS + PROXY if d.get("kind") == "Deployment"}
 for want in ("workshop-mcp", "weather-feed", "guard-proxy", "egress-proxy", "agent-dns"):
     check(f"the {want} Deployment is in the manifests", want in deployments)
 pods = [pod_from(deployments[n], "agent") for n in ("workshop-mcp", "weather-feed", "guard-proxy", "egress-proxy",

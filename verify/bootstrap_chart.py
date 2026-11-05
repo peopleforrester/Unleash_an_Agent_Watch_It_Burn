@@ -31,6 +31,10 @@ LAB_PLATFORM_GHCR = "ghcr.io/peopleforrester/lab-platform"
 FRONT_DOOR_IF = "{{- if .Values.frontDoor.certificateArn }}"
 FRONT_DOOR_ARN = "{{ .Values.frontDoor.certificateArn }}"
 FRONT_DOOR_END = "{{- end }}"
+# The weather feed's proxy (#861, question 1077): ai-layer.yaml alone holds a block between these guards, rendered
+# only when a root passes egressProxy, which sets HTTPS_PROXY on the feed. The patches key sits between the two ORs.
+EGRESS_OR_IF = "{{- if or .Values.frontDoor.certificateArn .Values.egressProxy }}"
+EGRESS_IF = "{{- if .Values.egressProxy }}"
 
 
 # Where Challenge 7's control sits (#679): values.yaml's c7Control, toolnames unless a profile's values file says
@@ -50,6 +54,23 @@ def for_c7_control(raw: str, control: str) -> str:
     if control == "toolnames":
         return raw
     return re.sub(r" \{\{- if ne \.Values\.c7Control \"gateway\" \}\}.*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
+def egress_proxy(profile: str) -> bool:
+    """Whether the profile's values file sets egressProxy: the weather feed's proxy runs on it (#861, question 1077)."""
+    return bool((yaml.safe_load(values_path(profile).read_text(encoding="utf-8")) or {}).get("egressProxy"))
+
+
+def rendered_patches(raw: str, egress: bool) -> str:
+    """ai-layer.yaml as the chart renders it with no frontDoor.certificateArn and egressProxy as given: the front door's
+    patch left out, the weather feed's patch left out unless egress, and the patches key left out when nothing is in it."""
+    raw = re.sub(r"\n {8}# \{\{- if \.Values\.frontDoor\.certificateArn \}\}\n.*?\n {8}# \{\{- end \}\}", "", raw,
+                 flags=re.S)
+    if not egress:
+        raw = re.sub(r"\n {8}# \{\{- if \.Values\.egressProxy \}\}\n.*?\n {8}# \{\{- end \}\}", "", raw, flags=re.S)
+        raw = re.sub(r"\n {6}# \{\{- if or \.Values\.frontDoor\.certificateArn \.Values\.egressProxy \}\}\n.*?\n {6}# \{\{- end \}\}",
+                     "", raw, flags=re.S)
+    return raw
 
 
 def without_front_door(raw: str) -> str:

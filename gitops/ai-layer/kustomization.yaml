@@ -29,10 +29,7 @@ configMapGenerator:
       - server.py
   - name: weather-feed-src
     files:
-      - weather_feed.py # C7's live weather (#642), out through egress-proxy since #861
-  - name: egress-proxy-src
-    files:
-      - egress_proxy.py # #861: the forced egress proxy, the one way out of the agent namespace on 443
+      - weather_feed.py # C7's live weather (#642), through egress-proxy on the mesh profiles since #861
   - name: fake-ticket-src
     files:
       - ticket_site.py # C6's fake ticket site (#640): read_support_ticket fetches the ticket from it

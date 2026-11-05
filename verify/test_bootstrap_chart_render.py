@@ -25,7 +25,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, CHART, FRONT_DOOR_ARN,  # noqa: E402
                              FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO, LAB_PLATFORM_GHCR, REPO_URL, REVISION,
                              UNARMED_IF, all_profiles, app_names, c7_control, for_c7_control, for_guardrails, profiles,
-                             values_path, kustomize_images, without_front_door)
+                             values_path, kustomize_images, egress_proxy, rendered_patches)
 
 failures: list[str] = []
 
@@ -79,7 +79,7 @@ for profile in all_profiles():
     want = []
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
-        raw = without_front_door(for_guardrails(raw, "Audit")).replace(REVISION, COMMIT) \
+        raw = rendered_patches(for_guardrails(raw, "Audit"), egress_proxy(profile)).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
         want += [d for d in yaml.safe_load_all(raw) if d]
@@ -169,6 +169,54 @@ check("a certificateArn that is not an ACM ARN: the render fails, naming it", r.
 for guard in (FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END):
     check(f"no rendered Application keeps {guard}", guard not in render(
         "-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", f"frontDoor.certificateArn={CERT}").stdout)
+
+print("== the weather feed's proxy, set only where egressProxy is (#861, question 1077) ==")
+
+
+def ai_layer_on(profile: str, *args: str) -> dict:
+    r = render("-f", str(values_path(profile)), "--set", f"revision={COMMIT}", *args)
+    return next((d for d in yaml.safe_load_all(r.stdout) if d and d["metadata"]["name"] == "ai-layer"), {}) \
+        if r.returncode == 0 else {}
+
+
+def feed_patches(app: dict) -> list:
+    return [p for p in ((app.get("spec") or {}).get("source") or {}).get("kustomize", {}).get("patches") or []
+            if p.get("target") == {"kind": "Deployment", "name": "weather-feed"}]
+
+
+for profile in ("attendee", "admin", "full", "local-inference", "kubecon-private"):
+    app = ai_layer_on(profile)
+    got = feed_patches(app)
+    check(f"{profile}: the weather feed's patch sets HTTPS_PROXY to egress-proxy:3128",
+          len(got) == 1 and "http://egress-proxy:3128" in got[0]["patch"] and "HTTPS_PROXY" in got[0]["patch"],
+          repr(got)[:200])
+for profile in ("burn", "kubecon-community"):
+    app = ai_layer_on(profile)
+    check(f"{profile}: no proxy patch, so the feed calls Open-Meteo directly, as before #861",
+          not feed_patches(app) and "patches" not in ((app.get("spec") or {}).get("source") or {}).get("kustomize", {}),
+          repr(((app.get("spec") or {}).get("source") or {}).get("kustomize"))[:200])
+both = ai_layer_on("attendee", "--set", f"frontDoor.certificateArn={CERT}")
+both_patches = (((both.get("spec") or {}).get("source") or {}).get("kustomize") or {}).get("patches") or []
+check("attendee with a certificate too: the console patch and the feed's proxy patch, both",
+      sorted(p["target"]["name"] for p in both_patches) == ["console", "weather-feed"], repr(both_patches)[:200] if both_patches else "none")
+
+if KUBECTL:
+    feed_app = ai_layer_on("attendee")
+    kz = ((feed_app.get("spec") or {}).get("source") or {}).get("kustomize") or {}
+    if kz.get("patches"):
+        (REPO / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+            (pathlib.Path(d) / "kustomization.yaml").write_text(yaml.safe_dump({
+                "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+                "resources": [os.path.relpath(REPO / "gitops/ai-layer", d)], "patches": kz["patches"]}), encoding="utf-8")
+            k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
+        feed = next((x for x in yaml.safe_load_all(k.stdout) if x and x.get("kind") == "Deployment"
+                     and x["metadata"]["name"] == "weather-feed"), {}) if k.returncode == 0 else {}
+        env = ((feed.get("spec") or {}).get("template") or {}).get("spec", {}).get("containers", [{}])[0].get("env") or []
+        check("kustomize applies the feed's proxy: the feed's container carries HTTPS_PROXY and its other settings",
+              env == [{"name": "HTTPS_PROXY", "value": "http://egress-proxy:3128"}]
+              and feed["spec"]["template"]["spec"]["containers"][0]["command"] == ["python", "/app/weather_feed.py"],
+              k.stderr.strip()[:300] or repr(env))
 
 print("== the guardrails, armed by lab-platform's arm parameter (#638, lab-platform#310) ==")
 ARMING = ("--set", f"{ARM_PARAMETER}={ARM_VALUE}")

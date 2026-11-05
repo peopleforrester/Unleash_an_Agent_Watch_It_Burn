@@ -2,7 +2,7 @@
 # ABOUTME: the proxy's allowlist, and the feed keeps no direct path to the internet.
 #
 # Until #861 this allowed the feed TCP 443 to anywhere, because a NetworkPolicy cannot name Open-Meteo's hosts. Now
-# the feed sets HTTPS_PROXY (gitops/ai-layer/resources.yaml) and egress-proxy opens tunnels only to
+# the feed sets HTTPS_PROXY (ai-layer.yaml, on the mesh profiles) and egress-proxy opens tunnels only to
 # geocoding-api.open-meteo.com and api.open-meteo.com, so the name check the policy could not make is made by the
 # proxy. agent-allow-intra-namespace already admits this hop; the policy keeps its name so that applying it replaces
 # the 443 version on a cluster that still has it, and it says where the feed's traffic is meant to go. The Kyverno

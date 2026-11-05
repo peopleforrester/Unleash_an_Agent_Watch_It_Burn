@@ -1,4 +1,4 @@
-# ABOUTME: Runs gitops/ai-layer/egress_proxy.py on localhost (#861) and holds what it decides: a tunnel to an allowed
+# ABOUTME: Runs gitops/egress-proxy/egress_proxy.py on localhost (#861) and holds what it decides: a tunnel to an allowed
 # ABOUTME: name, 403 for any other name, an address literal, another port or a plain request, and no lookup on refusal.
 """Offline checks for the forced egress proxy, option B of the #724 decision.
 
@@ -22,7 +22,7 @@ import threading
 import time
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-PROXY = REPO / "gitops/ai-layer/egress_proxy.py"
+PROXY = REPO / "gitops/egress-proxy/egress_proxy.py"
 failures: list[str] = []
 
 

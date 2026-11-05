@@ -1,0 +1,38 @@
+# ABOUTME: Argo CD Application for the forced egress proxy (#861, option B of the #724 decision): the one way out of the
+# ABOUTME: agent namespace on 443, which opens tunnels only to the weather feed's Open-Meteo hosts.
+#
+# Listed on attendee, admin, full, local-inference and kubecon-private, the profiles with Istio ambient (question 1077,
+# #860). Not on burn or kubecon-community: the community cluster runs no proxy, and its weather feed calls Open-Meteo
+# directly (ai-layer.yaml sets HTTPS_PROXY only where egressProxy is set).
+#
+# Wave -3, with agent-dns: the proxy is up before ai-layer (3) starts the weather feed that calls it. Its Deployment and
+# Service are in gitops/egress-proxy, a kustomize directory that sets namespace agent.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: egress-proxy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/egress-proxy
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

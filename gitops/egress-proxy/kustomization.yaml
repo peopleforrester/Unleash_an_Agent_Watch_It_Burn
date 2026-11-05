@@ -1,0 +1,14 @@
+# ABOUTME: Kustomize bundle for the forced egress proxy (#861): one Deployment and Service in namespace agent, with the
+# ABOUTME: proxy's source as a generated ConfigMap. Its own Argo CD app, so only the mesh profiles carry it (#860, question 1077).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agent
+
+resources:
+  - egress-proxy.yaml
+
+configMapGenerator:
+  - name: egress-proxy-src
+    files:
+      - egress_proxy.py

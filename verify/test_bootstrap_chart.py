@@ -18,7 +18,8 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, C7_TOOLNAMES_END,  # noqa: E402
                              C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES, UNARMED_IF,
-                             FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL,
+                             EGRESS_IF, EGRESS_OR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY,
+                             LAB_PLATFORM_GHCR, REPO, REPO_URL,
                              REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, profiles, values_path)
 
 failures = []
@@ -159,9 +160,13 @@ check("apps.yaml fails a frontDoor.certificateArn that is not an ACM certificate
       'regexMatch "^arn:aws[a-z-]*:acm:[a-z0-9-]+:[0-9]{12}:certificate/[0-9a-f-]+$" $cert' in tpl
       and 'fail (printf "frontDoor.certificateArn is the ARN' in tpl)
 ai_layer = (APPS / "ai-layer.yaml").read_text(encoding="utf-8")
-check("ai-layer.yaml patches the console Service only when frontDoor.certificateArn is set, the guard in comments",
-      "      # {{- if .Values.frontDoor.certificateArn }}\n      patches:\n" in ai_layer
+check("ai-layer.yaml's patches key is there only when frontDoor.certificateArn or egressProxy is set, the guard in comments",
+      "      # {{- if or .Values.frontDoor.certificateArn .Values.egressProxy }}\n      patches:\n" in ai_layer
       and "      # {{- end }}\n  destination:" in ai_layer)
+check("ai-layer.yaml patches the console Service only when frontDoor.certificateArn is set (#638)",
+      "        # {{- if .Values.frontDoor.certificateArn }}\n        - target:\n            kind: Service\n" in ai_layer)
+check("ai-layer.yaml patches the weather feed's proxy only when egressProxy is set (#861)",
+      "        # {{- if .Values.egressProxy }}\n        - target:\n            kind: Deployment\n            name: weather-feed\n" in ai_layer)
 check("apps.yaml fails a c7Control that is neither toolnames nor gateway, by name (#679)",
       '{{- if not (has $c7 (list "toolnames" "gateway")) }}' in tpl and 'fail (printf "c7Control is where' in tpl)
 check("apps.yaml fails a guardrails.validationAction that is neither Audit nor Deny, by name (#638)",
@@ -202,7 +207,8 @@ for profile in all_profiles():
     # admin, and the KubeCon private profile that stands in for it (#774), also say where their C7 control sits
     # (#679): agentgateway's rule, which the web terminal's _c7gw picks by the root's lab-platform/profile label.
     gateway = profile in ("admin", "kubecon-private")
-    want_keys = ["c7Control", "apps"] if gateway else ["apps"]
+    proxy = profile in ("attendee", "admin", "full", "kubecon-private", "local-inference")
+    want_keys = (["c7Control"] if gateway else []) + (["egressProxy"] if proxy else []) + ["apps"]
     check(f"{profile}: the values file holds only {' and '.join(want_keys)}", list(doc) == want_keys)
     if gateway:
         check(f"{profile}: c7Control is gateway", doc.get("c7Control") == "gateway")
@@ -224,11 +230,14 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
 # plus backstage, which #244 brought back from gitops/apps-disabled on attendee, admin and full,
 # plus agent-dns, the agent namespace's locked resolver, which #861 added to attendee, admin and full.
 WANT = {
-    "attendee": 30, "burn": 19, "admin": 34, "full": 32,
+    "attendee": 31, "burn": 19, "admin": 35, "full": 33,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203, #707, #244 and #861",
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203, #707, #244, #861 and the proxy",
           len(app_names(profile)) == n)
+for profile in WANT:
+    check(f"{profile} {'does not list' if profile == 'burn' else 'lists'} egress-proxy (#861, question 1077)",
+          ("egress-proxy" in app_names(profile)) == (profile != "burn"))
 for profile in WANT:
     check(f"{profile} {'does not list' if profile == 'burn' else 'lists'} agent-dns (#861)",
           ("agent-dns" in app_names(profile)) == (profile != "burn"))
@@ -253,7 +262,8 @@ for f in app_files:
     # ai-layer.yaml alone also holds the front door's guarded certificate patch (#638).
     # kyverno-policies.yaml alone holds the guardrails' armed and unarmed blocks (#638).
     # workshop-agent.yaml alone holds the c7Control guard on the Agent's evil-mcp toolNames ignore (#679, #707).
-    allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END) if f == "ai-layer.yaml" else ()) \
+    allowed = (REVISION, IMAGE_REGISTRY) + ((EGRESS_OR_IF, EGRESS_IF, FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END)
+                                           if f == "ai-layer.yaml" else ()) \
         + ((C7_TOOLNAMES_IF, C7_TOOLNAMES_END) if f == "workshop-agent.yaml" else ()) \
         + ((ARMED_IF, UNARMED_IF, ARM_END) if f == "kyverno-policies.yaml" else ())
     stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))

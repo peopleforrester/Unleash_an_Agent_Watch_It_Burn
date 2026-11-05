@@ -666,10 +666,10 @@ spec:
 ---
 # The weather feed (#642). get_weather on evil-mcp-shim returns a REAL reading, which it asks for here. All it
 # does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps Challenge 1's
-# egress lock-down true for every pod that can run a tool. Since #861 it reaches Open-Meteo through egress-proxy
-# (HTTPS_PROXY below), which opens a tunnel only to the two Open-Meteo hostnames, so no pod in the namespace but
-# the proxy has a direct path out on 443. Its label is on the Kyverno egressLabels list, so the agent cannot mint
-# a pod that wears the label agent-allow-weather-feed-egress selects.
+# egress lock-down true for every pod that can run a tool. On the mesh profiles the feed reaches Open-Meteo through
+# egress-proxy (#861): ai-layer.yaml sets HTTPS_PROXY there, and gitops/egress-proxy opens a tunnel only to the two
+# Open-Meteo hostnames. The burn profile runs no proxy and keeps the feed's direct path (decisions.md, #861, question
+# 1077). Its label is on the Kyverno egressLabels list, so the agent cannot mint a pod that wears it.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -688,10 +688,6 @@ spec:
           image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
           imagePullPolicy: Always
           command: ["python", "/app/weather_feed.py"]
-          # urllib reads HTTPS_PROXY, so both Open-Meteo calls go out as CONNECT tunnels through egress-proxy (#861).
-          # In-cluster names never pass through it: the feed calls nothing in the cluster.
-          env:
-            - { name: HTTPS_PROXY, value: "http://egress-proxy:3128" }
           resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
           ports: [{ name: http, containerPort: 8080 }]
           readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
@@ -707,52 +703,6 @@ metadata:
 spec:
   selector: { app.kubernetes.io/name: weather-feed }
   ports: [{ name: http, port: 8080, targetPort: http }]
----
-# The forced egress proxy (#861, option B of the #724 decision). Challenge 1's egress policy leaves no direct path
-# from namespace `agent` to the internet; this pod is the one way out on 443, and it opens a CONNECT tunnel only to
-# a hostname on ALLOWED_HOSTS. The list is the two Open-Meteo names weather_feed.py calls, so C7's get_weather keeps
-# working under the lock and nothing else leaves. It decides on the name before any lookup, so a refused name is
-# never resolved. agent-allow-egress-proxy lets this pod alone reach 443 and the cluster DNS; its label is on the
-# Kyverno egressLabels list, so the agent cannot mint a pod that borrows that egress. Not built on the mesh: the
-# burn profile has no Istio (#860) and the 1.30 pin documents no ambient egress gateway (decisions.md, #861).
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: egress-proxy
-  labels: { app.kubernetes.io/name: egress-proxy }
-spec:
-  replicas: 1
-  selector: { matchLabels: { app.kubernetes.io/name: egress-proxy } }
-  template:
-    metadata: { labels: { app.kubernetes.io/name: egress-proxy, tags.datadoghq.com/service: burritobot-egress-proxy, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
-    spec:
-      automountServiceAccountToken: false # it needs no cluster API, so it holds no token
-      enableServiceLinks: false # no injected EGRESS_PROXY_* variables beside its own settings
-      containers:
-        - name: proxy
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
-          imagePullPolicy: Always
-          command: ["python", "/app/egress_proxy.py"]
-          env:
-            # Exactly the hosts weather_feed.py's GEOCODE and FORECAST URLs name (verify/test_egress_lock.py).
-            - { name: ALLOWED_HOSTS, value: "geocoding-api.open-meteo.com,api.open-meteo.com" }
-            - { name: ALLOWED_PORTS, value: "443" }
-          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
-          ports: [{ name: proxy, containerPort: 3128 }]
-          readinessProbe: { httpGet: { path: /healthz, port: proxy }, periodSeconds: 10 }
-          livenessProbe: { httpGet: { path: /healthz, port: proxy }, periodSeconds: 20 }
-          volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
-      volumes:
-        - name: src
-          configMap: { name: egress-proxy-src }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: egress-proxy
-spec:
-  selector: { app.kubernetes.io/name: egress-proxy }
-  ports: [{ name: proxy, port: 3128, targetPort: proxy }]
 ---
 # The fake ticket site (#640). C6's ticket is fetched from here by workshop-mcp's read_support_ticket, so the
 # attendee names a ticket and never sees the text the bot acts on. It serves fixed tickets from memory and calls

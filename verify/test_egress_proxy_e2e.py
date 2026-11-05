@@ -1,4 +1,4 @@
-# ABOUTME: Runs the weather feed through egress-proxy with the allowlist resources.yaml deploys (#861), against the real
+# ABOUTME: Runs the weather feed through egress-proxy with the allowlist its Deployment sets (#861), against the real
 # ABOUTME: Open-Meteo: C7's reading still arrives, both hosts are tunnelled, and the beacon host is refused.
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: network to Open-Meteo)
@@ -24,7 +24,8 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
-RES = [d for d in yaml.safe_load_all((AI / "resources.yaml").read_text()) if isinstance(d, dict)]
+PROXY_DIR = REPO / "gitops/egress-proxy"
+RES = [d for d in yaml.safe_load_all((PROXY_DIR / "egress-proxy.yaml").read_text()) if isinstance(d, dict)]
 failures: list[str] = []
 
 
@@ -52,7 +53,7 @@ def wait(port: int) -> None:
 dep = next(d for d in RES if d.get("kind") == "Deployment" and d["metadata"]["name"] == "egress-proxy")
 env = {e["name"]: e["value"] for e in dep["spec"]["template"]["spec"]["containers"][0]["env"]}
 proxy_port, feed_port = free_port(), free_port()
-proxy = subprocess.Popen([sys.executable, "-I", str(AI / "egress_proxy.py")],
+proxy = subprocess.Popen([sys.executable, "-I", str(PROXY_DIR / "egress_proxy.py")],
                          env={"ALLOWED_HOSTS": env["ALLOWED_HOSTS"], "ALLOWED_PORTS": env["ALLOWED_PORTS"],
                               "LISTEN_PORT": str(proxy_port)},
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

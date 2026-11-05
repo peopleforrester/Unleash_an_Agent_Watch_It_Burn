@@ -156,7 +156,7 @@ for d in sorted((REPO / "gitops/manifests").glob("demo-app-*")):
                 pods.append((o["metadata"]["namespace"], o["metadata"]["name"], o["spec"]["template"]["metadata"]["labels"]))
 # The AI layer and, since #707, the Agent's own bundle. Both set the namespace in their kustomization. Jobs (the
 # ordering gates) are infrastructure and not catalogued.
-for bundle in (REPO / "gitops/ai-layer", REPO / "gitops/workshop-agent"):
+for bundle in (REPO / "gitops/ai-layer", REPO / "gitops/workshop-agent", REPO / "gitops/egress-proxy"):
     kz = docs(bundle / "kustomization.yaml")[0]
     for f in kz["resources"]:
         for o in docs(bundle / f):

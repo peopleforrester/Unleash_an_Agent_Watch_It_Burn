@@ -64,9 +64,17 @@ svc = one("Service", "weather-feed")
 check("a weather-feed Service on 8080", svc.get("spec", {}).get("ports", [{}])[0].get("port") == 8080
       and svc.get("spec", {}).get("selector") == LABEL)
 
-print("== the feed goes out through egress-proxy, not on 443 itself (#861) ==")
-env = {e["name"]: e.get("value") for e in c.get("env") or []}
-check("the feed sets HTTPS_PROXY to egress-proxy:3128, which urllib reads", env.get("HTTPS_PROXY") == "http://egress-proxy:3128")
+print("== the feed goes out through egress-proxy on the mesh profiles, not on 443 itself (#861, question 1077) ==")
+check("the feed's own Deployment sets no proxy: the setting is per profile, in ai-layer.yaml", not any(
+    e.get("name") == "HTTPS_PROXY" for e in c.get("env") or []))
+# The chart renders this patch only where egressProxy is set. verify/test_bootstrap_chart_render.py renders both ways.
+APP_TEXT = (REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text()
+gate = re.search(r"# \{\{- if \.Values\.egressProxy \}\}\n(.*?)# \{\{- end \}\}", APP_TEXT, re.S)
+check("ai-layer.yaml patches the weather feed only where egressProxy is set", gate is not None)
+block = gate.group(1) if gate else ""
+check("the patch targets the weather-feed Deployment", "name: weather-feed" in block and "kind: Deployment" in block)
+check("and sets HTTPS_PROXY to egress-proxy:3128, which urllib reads",
+      "name: HTTPS_PROXY" in block and 'value: "http://egress-proxy:3128"' in block)
 np = yaml.safe_load(NP_FILE.read_text()) if NP_FILE.exists() else {}
 check("the shipped policy exists", bool(np))
 check("it selects only the feed", np.get("spec", {}).get("podSelector", {}).get("matchLabels") == LABEL)
