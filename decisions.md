@@ -19529,3 +19529,13 @@ terraform, it printed `ALL TERRAFORM LOCK-INIT CHECKS GREEN`. The second full ru
 and 58 tier tests) in 30m54s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran
 267 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` among them; the tier ran
 `test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
+
+## 2026-11-05 · #452 · Run 17599: the skip-markers gate read a check label as an exit-as-skip
+
+Run 17547 failed hecaton's `skip-markers` gate, which counts per line the markers in
+`hecaton/run/skipmarks.py`, among them the pattern `\bexit\s+2\b`. Line 401 of `verify/test_replay_prompts.py`
+labelled a check `"an unknown --only id is exit 2"`: a string naming the usage-error exit code the check asserts,
+not a skip, but the pattern cannot tell the two apart. The same line was in runs 16962's and 17082's drafts, so it
+is most likely also why run 17082 failed validation. The label now reads `"an unknown --only id is a usage error"`,
+as its neighbours do; the assertion (`r.returncode == 2`) is unchanged. The gate's own `count()`, run over every
+file this branch changes against base `92dfea31`, finds no added marker in any of the 26.
