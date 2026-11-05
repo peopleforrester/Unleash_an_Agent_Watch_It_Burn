@@ -176,7 +176,7 @@ for name, ref in m.PUBLIC_IMAGES.items():
 
 print("== a plain name, any way the model writes it, becomes the pinned image ==")
 for asked, want in (("nginx", "nginx"), ("nginx:latest", "nginx"), ("NGINX", "nginx"), ("library/nginx", "nginx"),
-                    ("docker.io/library/nginx:1.27-alpine", "nginx"), ("docker.io/nginx", "nginx"),
+                    ("docker.io/library/nginx:1.27-alpine", "nginx"), ("docker.io/nginx", "nginx"),  # refused (#714)
                     ("apache", "httpd"), ("httpd:2.4", "httpd"), ("redis:7", "redis"), ("alpine", "alpine"),
                     ("2048", "2048"), ("docker-2048", "2048"), ("busybox@sha256:" + "0" * 64, "busybox"),
                     ("public.ecr.aws/docker/library/nginx:latest", "nginx"),
@@ -186,7 +186,7 @@ for asked, want in (("nginx", "nginx"), ("nginx:latest", "nginx"), ("NGINX", "ng
           err or str(container(out).get("image")))
 
 print("== a Docker Hub name the list does not carry is refused, naming the list ==")
-for asked in ("tron", "someone/tron:latest", "docker.io/someone/tron", "index.docker.io/library/tron"):
+for asked in ("tron", "someone/tron:latest", "docker.io/someone/tron", "index.docker.io/library/tron"):  # refused (#714)
     reply, out, err = deploy(workload("tron", asked))
     check(f"{asked!r} raises before any apply", bool(err) and not out and not [c for c in calls if c[0] == "PATCH"],
           reply or err)

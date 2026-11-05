@@ -19384,3 +19384,56 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
+
+## 2026-11-05 · #714 · The build side leaves Docker Hub: the Joker, web-terminal and Backstage build on lab-platform's ghcr.io copies, and the gate reads every tracked line
+
+**What changed.** lab-platform#353's three build-base copies answered an anonymous pull from ghcr.io on 2026-11-05,
+each at the linux/amd64 digest of the Docker Hub index this repo had pinned (read with crane 0.22.1 from both sides):
+`mirror/library/busybox:1.38.0-f97baa533a26`, `mirror/library/debian:bookworm-slim-a3bba7dc7dbc` and
+`mirror/library/node:24.22.2-trixie-slim-e053394f1551`. So the last three Docker Hub names move:
+
+- `images/villains/build.sh`'s JOKER_BASE is the busybox copy by digest. `verify/test_joker_build_digest.py` rebuilt
+  both Jokers on it into a loopback registry and got the digests images.lock pins (d8dae795 and 0dbe92d4), so nothing
+  needs a push. `test_joker_web_busybox.py` and `test_c6_joker_public.py` read the base from ghcr.io anonymously now,
+  and `test_c6_villain_endpoint.py` requires the copy.
+- `images/web-terminal/Dockerfile` builds FROM the debian copy, pinned by digest (it was a floating
+  `debian:bookworm-slim`). The copy is amd64 only, which is what the workflow builds and the nodes run.
+- The Backstage Dockerfile and its README's `buildah from` name the node copy by digest.
+  `test_backstage_catalog.py` requires the copy and still reads the Node version (24.22 or later) from its tag.
+- images.lock's two base rows name the copies at their digests.
+- `verify/test_no_docker_hub.py` now holds the build side, as the issue asks. Check 1 also reads Dockerfile FROM
+  lines, `buildah from` lines and shell NAME_BASE= assignments. Check 2 reads images/, images.lock and verify/ too,
+  so `git grep docker.io` outside the dated records finds only the REFUSED lines, each carrying a `(#714)` comment
+  that says it names Docker Hub to refuse it. The gate's own three files (docker_hub.py and the two gate tests) are
+  the one exception, since their fixtures are what they detect. Putting a bare `debian:bookworm-slim` FROM back, a
+  bare busybox JOKER_BASE, a `buildah from node:...`, a docker.io row in images.lock, or dropping one comment each
+  made it fail by name; each was reverted.
+- Two docstring lines that named docker.io as history are reworded (test_demo_app_web_image.py, and deploy_app's
+  `_public_image_name`, whose `_DOCKER_HUB` tuple gets its comment).
+
+**Live check (2026-11-05, read only).** Every pod's spec image on both clusters, judged by `verify/docker_hub.py`:
+
+- watch-it-burn-community: 54 pods, 47 images, none from Docker Hub that this repo deploys. The one Docker Hub name
+  is `agent/tron` (`trongame/tron:latest`), a Deployment deploy_app made on 2026-11-01, before #773 made it refuse
+  a Docker Hub name PUBLIC_IMAGES does not carry. It has been in ImagePullBackOff for three days, so the node retries
+  an anonymous Docker Hub pull every few minutes. It is left as found; its delete is escalated.
+- watch-it-burn-private: 75 pods, 69 images. Every image Argo CD renders names ghcr.io or another non-Docker Hub
+  registry. Thirteen containers report a docker.io name in status.image while their spec names the ghcr.io copy:
+  containerd reports the first name it holds for an image, and these nodes pulled the Docker Hub name before #623
+  and #714 moved them, so the status name comes from that cache and shows no new pull. Four KubeArmor pods (the enforcer DaemonSet,
+  its init container, the controller and the relay) still run Docker Hub images in their spec. Their
+  KubeArmorConfig names the four ghcr.io copies, and the community cluster runs exactly those, but on the private
+  cluster require-resource-limits is Deny, and the operator's snitch Job and the controller's new ReplicaSet carry
+  containers with no limits (KubeArmorConfig has no resources field), so Kyverno refuses them and the pods from
+  2026-10-28 stay. The operator's log says so: `Cannot run snitch on node ... Policy require-resource-limits failed`.
+  That is a policy bug of its own, filed as a follow-up: on a fresh admin-profile build the same denial would keep
+  KubeArmor from starting at all.
+
+**Not yet run on a cluster.** A fresh cluster build that pulls every pod with no Docker Hub name in a spec or in
+status: it needs the follow-up's KubeArmor fix on the admin profile, and the nodes' cached Docker Hub names gone,
+which only a new nodegroup gives.
+
+**Left on Docker Hub outside this repo's tree.** llm-guard-cpu-offline, the submodule at images/llm-guard, builds
+FROM `python:3.12-slim` (follow-up there). images.lock's `laiyer/llm-guard-api:0.3.16` row is #603's retention copy
+of the archived upstream, which nothing pulls or builds on; lab-platform has no mirror/ copy of it (follow-up).

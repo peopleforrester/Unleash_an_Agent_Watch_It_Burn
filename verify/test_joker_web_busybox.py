@@ -1,9 +1,10 @@
 # ABOUTME: Runs C6's Joker entrypoint (#664) on the busybox the image is built from: images/villains/build.sh's pinned
-# ABOUTME: JOKER_BASE, pulled from Docker Hub by digest. The page must be served, the laugh logged, and SIGTERM obeyed.
-# SUITE: e2e (needs the network: Docker Hub is asked for the pinned busybox)
+# ABOUTME: JOKER_BASE, pulled from lab-platform's ghcr.io copy by digest. The page must be served, the laugh logged, and
+# ABOUTME: SIGTERM obeyed.
+# SUITE: e2e (needs the network: ghcr.io is asked for the pinned busybox)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it, #572)
 #
-# Why. build.sh needs the Docker Hub Team credentials, so a run cannot push the image and see it serve. What can be
+# Why. build.sh needs a ghcr.io write credential, so a run cannot push the image and see it serve. What can be
 # checked without them is everything the image adds to its base: start.sh and www/, run by the base's own busybox
 # (its sh, its httpd), exactly as the layer build.sh appends lays them out. The busybox is fetched by the digest
 # build.sh pins, every blob checked against its sha256, and only bin/busybox is taken from the layer.
@@ -28,7 +29,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
 JOKER = REPO / "images/villains/joker-web"
 PAGE = (JOKER / "www/index.html").read_bytes()
-REGISTRY = "https://registry-1.docker.io"
+REGISTRY = "https://ghcr.io"
 ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
                     "application/vnd.docker.distribution.manifest.list.v2+json",
                     "application/vnd.docker.distribution.manifest.v2+json"))
@@ -95,26 +96,31 @@ def fetch(url: str) -> tuple[int, str, bytes]:
 
 
 print("== the pinned base ==")
-m = re.search(r'^JOKER_BASE="docker\.io/(library/busybox)@(sha256:[0-9a-f]{64})"', BUILD, re.M)
-check("build.sh pins JOKER_BASE to a busybox digest", m is not None)
+m = re.search(r'^JOKER_BASE="ghcr\.io/(peopleforrester/lab-platform/mirror/library/busybox):[^@"]+@(sha256:[0-9a-f]{64})"',
+              BUILD, re.M)
+check("build.sh pins JOKER_BASE to lab-platform's ghcr.io busybox copy by digest", m is not None)
 if not m:
     finish()
-repo, index_digest = m.group(1), m.group(2)
+repo, base_digest = m.group(1), m.group(2)
 try:
-    with urllib.request.urlopen(f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull",
-                                timeout=30) as r:
+    # Anonymously, as a node with no pull secret would: the copy is public (lab-platform#353).
+    with urllib.request.urlopen(f"https://ghcr.io/token?scope=repository:{repo}:pull", timeout=30) as r:
         token = json.load(r)["token"]
-    index = json.loads(get(repo, token, "manifests", index_digest))
-    amd64 = next(d["digest"] for d in index.get("manifests", [])
-                 if d.get("platform", {}).get("os") == "linux" and d["platform"].get("architecture") == "amd64")
-    manifest = json.loads(get(repo, token, "manifests", amd64))
+    manifest = json.loads(get(repo, token, "manifests", base_digest))
+    if "manifests" in manifest:  # an index: build.sh's crane append takes its linux/amd64 image
+        amd64 = next(d["digest"] for d in manifest["manifests"]
+                     if d.get("platform", {}).get("os") == "linux" and d["platform"].get("architecture") == "amd64")
+        manifest = json.loads(get(repo, token, "manifests", amd64))
+    config = json.loads(get(repo, token, "blobs", manifest["config"]["digest"]))
     layers = manifest.get("layers", [])
     blobs = [get(repo, token, "blobs", layer["digest"]) for layer in layers]
 except (urllib.error.URLError, OSError, ValueError, KeyError, StopIteration) as e:
-    check(f"Docker Hub serves {repo}@{index_digest} for linux/amd64, every blob matching its digest", False,
+    check(f"ghcr.io serves {repo}@{base_digest} anonymously, every blob matching its digest", False,
           f"{type(e).__name__}: {e}")
     finish()
-check(f"Docker Hub serves {repo}@{index_digest[:19]}... for linux/amd64, every blob matching its digest", True)
+check(f"ghcr.io serves {repo}@{base_digest[:19]}... anonymously, every blob matching its digest", True)
+check("the base is linux/amd64, the nodes' platform", (config.get("os"), config.get("architecture")) == ("linux", "amd64"),
+      f"{config.get('os')}/{config.get('architecture')}")
 
 work = pathlib.Path(tempfile.mkdtemp(prefix="joker-web-"))
 try:

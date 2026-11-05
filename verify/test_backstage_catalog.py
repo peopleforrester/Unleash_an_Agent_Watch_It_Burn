@@ -271,11 +271,11 @@ check(f"the backstage Application sets it, alone, to {copy.path} by its digest, 
 
 print("== the image is built on a Node whose node-fetch can read the API server ==")
 df = (REPO / "images/watch-it-burn-backstage/packages/backend/Dockerfile").read_text(encoding="utf-8")
-m = re.search(r"^FROM node:(\d+)\.(\d+)\.(\d+)-", df, re.M)
-check("the base is pinned to a Node version", m is not None)
+m = re.search(r"^FROM ghcr\.io/peopleforrester/lab-platform/mirror/library/node:(\d+)\.(\d+)\.(\d+)-", df, re.M)
+check("the base is pinned to a Node version, from lab-platform's ghcr.io copy, not Docker Hub (#714)", m is not None)
 check("and it is 24.22 or later (24.17.0 fails every Kubernetes tab with 'Premature close')",
       m is not None and tuple(map(int, m.groups())) >= (24, 22, 0))
-check("by digest too", re.search(r"^FROM node:\S+@sha256:[0-9a-f]{64}", df, re.M) is not None)
+check("by digest too", re.search(r"^FROM \S+/node:\S+@sha256:[0-9a-f]{64}$", df, re.M) is not None)
 
 print("== the Deployment runs our image, by digest, under a tag that names what is inside ==")
 APP = REPO / "images/watch-it-burn-backstage"

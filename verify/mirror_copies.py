@@ -31,7 +31,7 @@ class Copy:
 
 # Docker Hub, where each copy came from: named once, as the charts name it, so a render can be checked for the
 # upstream reference the copy replaces. Nothing here pulls from it (#714).
-HUB = "docker.io"
+HUB = "docker.io"  # refused: a render must not carry the upstream reference a copy replaces (#714)
 
 COLLECTORS = ("otel-collector", "otel-collector-attendee", "otel-collector-burn")
 
