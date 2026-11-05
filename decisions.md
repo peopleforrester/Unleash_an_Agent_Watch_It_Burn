@@ -21666,5 +21666,9 @@ escalated to #916, because a run cannot write issue comments.
 
 **Not yet run on a cluster.** Nothing is owed. The three live asks were run in this run and are recorded above.
 
-**The suites.** Offline `bash verify/run-tests.sh` and the tools tier `bash verify/run-e2e-tools.sh` were run with no
-code change in this run; their results are recorded below.
+**The suites (run 17696, at `812a9304`, no code changed).** `bash verify/run-e2e-tools.sh` printed `266 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the
+offline suite and 58 tier tests) in 28m19s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Run 17665's first try at
+the suites was stopped for repeating one short poll of the log word for word. Its 110-second waits were cut off by
+the shell tool's 120-second default, so the same command ran again and again. Run 17696 gave each wait the full
+10-minute limit and numbered each poll, so no two commands matched.
