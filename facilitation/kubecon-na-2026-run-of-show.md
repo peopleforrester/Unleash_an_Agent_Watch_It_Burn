@@ -1267,23 +1267,30 @@ is merely slow rather than rebuilding:
   a 502, 504, timeout or empty reply fails. Record the run on #644. `--source catalog`
   replays the stage's own asks instead when the harvest is not on this machine.
 
-  Then, before the reset, read whether a turn that ran past `PROXY_TIMEOUT` (120 s)
-  stopped the agent (#750). The last run had 4 such turns. With attackme's credentials
+  Then, before the reset, read whether each turn that ran past `PROXY_TIMEOUT` (120 s)
+  stopped the agent. #750 confirmed this on attackme on 2026-11-04 with two such
+  turns; this read checks it again under the room's load. With attackme's credentials
   in their own kubeconfig, as the probe step above has them:
 
   ```bash
   KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-context> -n agent logs deploy/guard-proxy -c proxy --since=30m | grep -E '"event": "(forward_error|task_cancel|task_cancel_failed)"'
-  KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-context> -n agent logs deploy/workshop-mcp -c shim --since=30m | grep '"event":"tool_invocation"'
+  KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-context> -n agent logs deploy/workshop-agent -c kagent --since=30m | grep -F '<task id from a task_cancel line>'
+  KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-context> -n agent logs deploy/workshop-agent -c kagent --since=30m | grep -F '"sessionID":"<contextID from the Execute line above>"' | grep '"Tool execution started"' | tail -n 1
   ```
 
-  Each `forward_error` reading `chat forward failed: timed out` should be followed by
-  one `task_cancel` and no `task_cancel_failed`. The workshop-mcp log should show no
-  `tool_invocation` later than a minute after the last `task_cancel`. A
-  `forward_error` with no `task_cancel` after it is a forward that failed before the
-  agent took the turn, which leaves nothing to cancel. Then search Datadog APM for
-  the `trace_id` on a timed-out turn's `forward_error` line. The 2026-10-31 14:45 UTC
-  sighting found that such a turn's trace never reached Datadog. Record all three
-  readings on #750.
+  Each `forward_error` reading `chat forward failed: the 120s forward deadline
+  (PROXY_TIMEOUT) passed` should be followed, within a second and under the same
+  `trace_id`, by one `task_cancel` that names the task and reads `state canceled`, and
+  no `task_cancel_failed`. A `forward_error` with no `task_cancel` after it is a forward
+  that failed before the agent took the turn, which leaves nothing to cancel. For each
+  cancelled task, the agent's last `Tool execution started` in that conversation should
+  be earlier than the `task_cancel` (guard-proxy writes UTC with a comma before the
+  milliseconds, the agent ISO 8601 with a Z). Do not read workshop-mcp's log for
+  this: its `mcp_session_id` is the agent's connection, shared by every conversation,
+  so under load it always shows other turns' tool calls in the minute after a cancel.
+  Then search Datadog APM for `trace_id:<the forward_error's trace_id>`: the trace
+  should be there, with guard-proxy's `chat` span and the agent's `invoke_agent` span,
+  and its last span should end at the cancel. Record the readings on #644.
 - [ ] **Reset the community bot, last (#539).** The probe, the phone check and any
   rehearsal all spend on attackme, and guard-proxy keeps that spend in memory (the Go
   build keeps it on its volume: see "After the Go cutover" in the run-through record). Once

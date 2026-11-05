@@ -15894,3 +15894,70 @@ went red, `test_datadog_log_services_render.py` and `test_enforce_floor.py`. Bot
 answered the download of the external-secrets chart 2.10.0 with `504 Gateway Time-out`. Run again alone with the
 tier's PATH and environment, both passed (exit 0). The change is prose and one YAML comment, so it
 touches nothing either test renders. The logs are `/var/lib/hecaton/runs/17178/e2e-tools.log` and `rerun.log`.
+
+## 2026-11-05 · #750 · Checked live on attackme: both turns that passed `PROXY_TIMEOUT` logged `task_cancel`, the agent stopped, and both traces reached Datadog
+
+**What ran.** Hecaton run 17184, the sixth dispatch of #750, is the first that could read its cluster session
+(hecaton#508 no longer bites: the files are group `hecaton-s2-claude-certkraken`, this run's own). It ran read-only
+checks on `watch-it-burn-community` (attackme) and `watch-it-burn-private` and changed neither cluster. It did not
+run #644's load replay: attackme had already served two /chat turns past the 120 s `PROXY_TIMEOUT` on 2026-11-04, which
+is the condition the replay was only a means to produce, and the replay itself stays #644's work under its own
+criteria. guard-proxy on both clusters runs proxy.py from ConfigMap `guard-proxy-src-mfk8mghfc8` (pin c2eb4cf, #803;
+attackme's ai-layer reads Synced Healthy at 7783f256, this run's base) with `PROXY_TIMEOUT=120` and
+`TURN_TIMEOUT=270`; the agent is kagent `golang-adk:0.10.1`.
+
+**guard-proxy's log on attackme** (pod `guard-proxy-7f65586f4b-gmcjs`, up 24 h), every line of the three events:
+
+```
+2026-11-04 20:04:05,065 forward_error  chat forward failed: the 120s forward deadline (PROXY_TIMEOUT) passed   trace 592d3d3438a16a45bcd666c38df2fdac
+2026-11-04 20:04:05,093 task_cancel    cancelled the agent's task 01a1a827-868d-7e4a-b768-a6bacc525420 (state canceled) ...   trace 592d3d3438a16a45bcd666c38df2fdac
+2026-11-04 21:20:34,907 forward_error  chat forward failed: the 120s forward deadline (PROXY_TIMEOUT) passed   trace 39650c741689e7a7ce8f992660b2a24d
+2026-11-04 21:20:34,939 task_cancel    cancelled the agent's task 01a1a86d-8fa0-7dff-ad0e-692c513bc8bb (state canceled) ...   trace 39650c741689e7a7ce8f992660b2a24d
+```
+
+Two `forward_error` lines, each followed 28 ms and 32 ms later by one `task_cancel` with the same `trace_id` and the
+agent's answer `state canceled`, and no `task_cancel_failed`. The private cluster's guard-proxy has none of the three
+events. The first turn was run 16959's #856 probe (conversation `check-856-16959-probe1`): its first agent call came
+back reasoning-only after 27 s, guard-proxy retried at 20:02:05, the retry hit the deadline, and the room saw the
+surfaced reasoning (HTTP 200, `thinking_only_surfaced`). The second (conversation `sess-cls4fbrfbo6mw2mck8c`) was a
+`run_shell` loop that answered the caller with HTTP 502.
+
+**The agent stopped.** For the 21:20 cancel, the agent's log (pod `workshop-agent-5fb8888bf6-s4t8q`) puts task
+`01a1a86d-8fa0…` in context `sess-cls4fbrfbo6mw2mck8c`; that conversation's last `Tool execution started` is
+21:20:34.066, 0.87 s before the cancel, and it has none after. The agent and workshop-mcp pods restarted at 21:14 and
+20:47, so neither log reaches the 20:04 cancel; Datadog APM does, for both. Trace `592d3d34…` ends at 20:04:05.092
+(last tool span 20:04:03.579) and trace `39650c74…` at 21:20:34.937 (last tool span 21:20:34.067); in each, the
+agent's `invocation` and `invoke_agent` spans last 120.0 s, ending at the cancel, and the last model call is cut short
+(1.5 s and 0.86 s against about 4 to 10 s for the others). The tool spans APM has in the two minutes after each
+cancel all belong to new turns in other conversations (`check-856-16959-probe2` from 20:04:15; `sess-ozldzx7…` and
+`sess-daft3…` from 21:20:36; and one turn on the private cluster, which reports to the same env).
+
+**The issue's workshop-mcp read would have misled.** workshop-mcp logged tool calls 3 to 49 s after the 21:20 cancel,
+under the same `mcp_session_id` (`81958b03…`) as the cancelled turn's calls. That id is the agent's MCP connection, not
+the conversation, so every turn shares it, and under a 500-session replay the read "no `tool_invocation` a minute
+later" fails whatever the cancel did. The run-of-show's Night Before #644 step now reads the agent's own log by the
+cancelled task's context instead, and its APM trace. The step also had the old `forward_error` message
+(`chat forward failed: timed out`), which proxy.py now writes as `the 120s forward deadline (PROXY_TIMEOUT) passed`,
+and `task_cancel` now names the task, so the readings no longer pair lines by order. Both commands were run on attackme
+as written (with this run's kubeconfig) and printed the Execute line and the 21:20:34.066 tool start above. The step
+now records its readings on #644, since #750 closes with this entry.
+
+**The trace reaches Datadog now** (the 2026-10-31 14:45 UTC sighting found it did not). Read with
+`verify/dd_traces.py`'s key pair and calls (GET only, org `Datadog`, env `burritobot-kubecon-na-26`):
+
+- APM `trace_id:592d3d3438a16a45bcd666c38df2fdac`: 635 spans, services burritobot, burritobot-gateway and
+  burritobot-agent, one root, guard-proxy's `chat` span (147.1 s), two `invocation`/`invoke_agent` pairs, 14 model
+  calls, and the `agent.forward` client span in error with `TimeoutError: the 120s forward deadline (PROXY_TIMEOUT)
+  passed`.
+- APM `trace_id:39650c741689e7a7ce8f992660b2a24d`: 548 spans, the same shape, `chat` 120.0 s, 30 model calls, the
+  forward span in error the same way.
+- Agent Observability (`ml_app:burritobot`): one tree for each, under #783's new trace ids, `be48fde3…` (33 spans,
+  root 147,097 ms) and `4d1090dc…` (62 spans, root 120,002 ms), whose `otel.trace_id` tags (`a0b3fef4…`, `3beb2109…`)
+  are APM traces of the same spans ending at the cancel. `dd_traces.py --trace` with guard-proxy's logged id finds
+  nothing in Agent Observability, by that design, so the APM search is the read to make.
+
+One gap seen in passing: on the 502 turn, guard-proxy's server span carries `http.status_code 502` but OTel status
+`Unset`, and so does its `chat` span, so Datadog lists both as `ok`; only the `agent.forward` child is an error. An
+error-rate view keyed on the root span does not count a timed-out turn. Filed as a follow-up on guard-proxy-agenticburn.
+
+**Not yet run on a cluster:** nothing for #750. The reworded run-of-show read runs again during #644's re-run.
