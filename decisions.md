@@ -19271,3 +19271,8 @@ then `--apply`, with the env file sourced. Its output names the template or its 
 2. The link fills in the query, and the list shows the root's INPUT in CONTENT. The API settled what the spans carry
    (run 17415); only the page shows how it lays them out, and the thread rules out the browser route.
 3. The `generate_content` rows' preview shows the system prompt. Same limit as 2.
+
+**The suites (run 17464, at `d88f7ab1`).** `bash verify/run-e2e-tools.sh` printed `265 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), with
+`test_every_prompt_view.py` among them, then `58 checks ran (the offline suite and 57 tier tests) in 34m17s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
