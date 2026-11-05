@@ -16334,3 +16334,7 @@ register.
 
 **Not yet run on a cluster.** Nothing for this issue. A cluster built from staging at or after `e9634b38` starts c7 on
 the new form from git and should log the same 0 and 0; the next bring-up's own checks cover that.
+
+**The suites (run 17248, at `652c3548`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 28m02s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 254 tests and
+printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
