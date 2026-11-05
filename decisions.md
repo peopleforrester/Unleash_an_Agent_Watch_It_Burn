@@ -26482,3 +26482,8 @@ needs a cluster build, and that needs a session that can call IAM.
 timed to every Application Healthy) and `CONTEXT=<ctx> python3 verify/local-inference-live.py`, after that decision,
 on a fresh cluster built with a session that can call IAM, or by the 2026-11-04 fallback on watch-it-burn-private if
 the answer lowers the request.
+
+**The suites (run 17379, at `2f81ce6f`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`258 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_vllm_fit_probe.py` among them) and then 55 tier tests: "56
+checks ran (the offline suite and 55 tier tests) in 26m18s", `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No
+dependency was added.
