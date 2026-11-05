@@ -17285,3 +17285,63 @@ written to the org: every call in this run used the read-only pair.
 
 **The suites (run 17358, at `9b00065a`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 26m26s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #638 · The front door certificate is requested in accen-dev, and its NLB listener is checked live
+
+Every earlier draft of #638 is on staging (`verify/prior-drafts.sh 638 origin/staging` prints NONE), so this run
+started from it. What was left was live: the certificate, and a check that an NLB built from the chart's patch serves
+it. The run has the accen-dev session and both clusters (hecaton#508), so it did both instead of waiting on
+lab-platform#344.
+
+**The certificate is requested.** `infra/front-door-cert.sh accen-dev us-west-2` found no certificate in the account
+and requested one: `arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8`, for
+`*.agenticburn.com` and `*.burritobot.co`, PENDING_VALIDATION. It is issued once these two CNAMEs resolve:
+
+- agenticburn.com: `_4d348e16229f1796413ec16e36e29d56` to `_a29fcc4eb94adc0bce08cab3decf1f70.wzccmgtwzk.acm-validations.aws`
+- burritobot.co: `_90187e86eafa67a1d14cbd74ee24810d` to `_e7304390c80b79c4d4e72c7ed42df78a.wzccmgtwzk.acm-validations.aws`
+
+Both zones are on Namecheap (`dig NS` answers registrar-servers.com), whose API answers only netcup's allowlisted
+address with the key in Michael's `~/secrets/dns/namecheap.env`, which a run cannot read. So the two writes go to the
+custodian as `infra/dns/set-demo-dns.py --apply` commands run as Michael from his checkout, whose copy of the script
+is the same as staging's. ACM gives up on a pending certificate after 72 hours. If that happens first, the helper
+requests a new one, and ACM's validation names are the same for the same account and domain, so the records still
+serve it.
+
+**The patch is checked live, on its own NLB.** `verify/front_door_tls_live.py` (new) renders the chart for the burn
+profile with an ARN, applies the ai-layer patch with kustomize as Argo CD does, and creates the patched console
+Service as `agent/front-door-check`, so the console Service Argo CD manages, the community cluster's real front door,
+is never touched. It waits for that Service's NLB, connects to 443 with the roster name as SNI, verifies chain and
+name against the system roots (or `--cafile`), sends `GET /`, and deletes the Service on every exit. Since the real
+certificate is still pending, the run imported a self-signed certificate for attackme and burritobot-private into
+ACM and ran the check with that certificate as the CA, on watch-it-burn-community:
+
+```
+created agent/front-door-check on watch-it-burn-community with arn:aws:acm:us-west-2:515966504359:certificate/97e88746-9db6-4279-bf8f-304353e7f69d
+its NLB: k8s-agent-frontdoo-806507b0e5-d17b722eb434d81e.elb.us-west-2.amazonaws.com
+PASS: 443 verifies for attackme.agenticburn.com against /tmp/fdc-17359/cert.pem: subject attackme.agenticburn.com, SANs ['attackme.agenticburn.com', 'burritobot-private.agenticburn.com'], issuer attackme.agenticburn.com
+PASS: through the NLB's re-encrypt to nginx, GET / for attackme.agenticburn.com answers HTTP/1.1 200 OK
+deleted agent/front-door-check
+```
+
+So the four annotations give an NLB that terminates TLS with the ACM certificate and re-encrypts to nginx, and
+nginx answers through it. The first attempt read an empty answer to `GET /` right after the handshake: the NLB
+completes the handshake itself before its targets are healthy. The check now keeps asking until its deadline. As the
+control, the live console NLB on the same cluster (TCP pass-through) was refused against the system roots for
+attackme.agenticburn.com: `self-signed certificate`, which is the refusal the issue describes.
+
+**Left as found.** `front-door-check` and its NLB are gone (`aws elbv2 describe-load-balancers` lists only the two
+console NLBs). The imported certificate was deleted once ACM dropped the deleted NLB from its in-use list, a few
+minutes later; `aws acm list-certificates` then listed only the pending one. The pending
+certificate stays: it is the one the event uses.
+
+`verify/test_front_door_tls_live_logic.py` (new, tools tier) checks without a cluster that the Service the live
+check creates is the kustomize build's console Service with the four annotations, under its own name and label, and
+that its handshake verifies a local server's certificate for the roster name, refuses it for another name, and
+refuses a self-signed one against the system roots.
+
+**Not yet run on a cluster.** Once the two CNAMEs are written and `infra/front-door-cert.sh accen-dev us-west-2`
+exits 0, the same check against the system roots:
+`python3 verify/front_door_tls_live.py --context watch-it-burn-community --arn arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8 --name attackme.agenticburn.com`.
+Then the definition of done's own leg, lab-platform#344: `labctl event up ... --front-door-cert=<that ARN>` logging
+`front doors: 2 roster clusters recorded`, and `labctl tls-check attackme.agenticburn.com` through lab-platform's
+gateway, which is lab-platform's to run once lab-platform#122 moves the wildcard.
