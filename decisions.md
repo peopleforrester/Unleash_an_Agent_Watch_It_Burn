@@ -17014,3 +17014,6 @@ this is the shape the 2026-11-04 Datadog read recorded, not a new measurement of
 verify/test_kubecon_c3_live.py`: "guard-proxy runs git's proxy.py" PASS and every other check PASS, "All live
 Challenge 3 probe checks passed", exit 0. It spent one marked model call on the public bot and left no Joker
 behind, so the cluster is as found.
+
+**Suites (run 17330, at 574fc5e5).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier: 55 checks in 27m32s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
