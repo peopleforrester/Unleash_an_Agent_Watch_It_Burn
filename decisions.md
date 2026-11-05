@@ -18929,3 +18929,43 @@ that the synced revision contains `803b84ec`. The #644 load replay reruns wait o
 RENDER-GATE TESTS GREEN". The tools tier ran 53 checks (the offline suite and 52 tier tests) in 24m22s and exited 1
 on `test_image_version_tags.py` alone, on one check: ghcr.io answers 404 for `watch-it-burn:sample-app-nginx-1.27.5`,
 the tag staging records under #814. This change is a decisions.md entry and touches no image.
+
+## 2026-11-05 · #830 · The live audience-path test passes on watch-it-burn-community with #786's per-conversation limit synced
+
+**Port of run 16809's draft.** Run 16809's two commits (the blocked attempt and its suite results) are cherry-picked
+above as they were written; their only drift from staging was decisions.md, where both sides appended, so both
+entries are kept. Since hecaton#508 was fixed, this run, 17425, reads its own kubeconfig and session, which is what
+stopped 16809.
+
+**The sync.** `kubectl --context watch-it-burn-community -n argocd get application ai-layer` read, at 2026-11-05
+11:25 UTC: target revision `staging`, synced revision `c733dba2`, Synced and Healthy. `803b84ec` (#786, console
+nginx's per-network /chat zone removed) and `9b0b4a01` (#787, the test's tighter checks) are both ancestors of
+`c733dba2`. The console and llm-guard pods had restarted 44 minutes before; guard-proxy had run for 6h15m.
+
+**The live run.** `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`, from hecaton's host
+(not the venue network), with no workshop room in session. It exited 0 and printed:
+
+    == prerequisites ==
+      PASS  the cluster records its public host (cluster-identity public-host)
+    == the cluster runs this commit's audience path ==
+      PASS  the console's nginx runs git's console.conf
+      PASS  guard-proxy runs git's PROXY_TIMEOUT 120 (got 120)
+      PASS  guard-proxy runs git's TURN_TIMEOUT 270 (got 270)
+      PASS  guard-proxy runs git's RATE_LIMIT_SESSION_RPM 10 (got 10)
+      PASS  guard-proxy runs git's RATE_LIMIT_RPM 150 (got 150)
+      PASS  guard-proxy runs git's COST_CAP_USD 25 (got 25)
+      PASS  git's console.conf gives /chat the wib_chat_session zone with a burst (burst=9)
+    == one conversation through https://attackme.agenticburn.com ==
+      PASS  10 of 12 at once get through, the other 2 are refused in a sentence
+      PASS  every refusal names 10 a minute per conversation and says to wait and send that again
+    == one network, many conversations, through https://attackme.agenticburn.com ==
+      PASS  all 80 fresh conversations sent at once from one address get through nginx (got 80, nginx refused 0), so a room on one venue NAT address is not one bucket
+    == a guarded turn fits its per-call timeout ==
+      one probe turn took 2.2s against PROXY_TIMEOUT 120s per call
+      PASS  the probe turn is answered
+      PASS  it took under half of PROXY_TIMEOUT, so a retry still fits (2.2s < 60s)
+
+    All live audience-path checks passed.
+
+The one probe turn, marked `[[wib-probe]]`, cost about half a cent of Bedrock and counts on the community bot's
+/cost until the counter is reset (run-of-show, "Reset the community bot"). The run changed no cluster state.
