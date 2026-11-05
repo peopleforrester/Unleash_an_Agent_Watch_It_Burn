@@ -15841,7 +15841,8 @@ and then watch-it-burn-community:
 Private's release is at revision 3, `failed`; Helm upgrades from a failed last release. The check after it:
 `kubectl -n argocd get deploy,sts` shows every argocd image at v3.5.7, `helm history argocd` ends `deployed`
 argo-cd-10.11.7, every Application on the cluster reads Synced and Healthy as it did before, and
-`https://argocd-<cluster>.agenticburn.com/api/version` answers v3.5.7. The roll is handed on as an escalation in this
+`/api/version` answers v3.5.7 at `https://argocd-burritobot-private.agenticburn.com` and
+`https://argocd-attackme.agenticburn.com` (both answered v3.5.2 on 2026-11-05). The roll is handed on as an escalation in this
 run's report.
 
 **The suites (run 17110, at `e25e699a`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
