@@ -19801,3 +19801,10 @@ each exited 0.
 
 **Not yet run on a cluster.** Unchanged from run 17593's entry: the post-promotion curls on attackme and the private
 host, for the next run on #908.
+
+**The suites (run 17653, at `ebecf752`, rebased on `cb3367d2`).** `bash verify/run-e2e-tools.sh` printed `267 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57
+tier tests) in 34m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Live, read-only, with both clusters' ai-layer
+at `cb3367d2` and `console-src-2f7h5t7cf7`: `/kubecon` printed `200` on attackme and on the private host, where the
+title was `KubeCon brief: Watch It Burn`, and `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` printed `404`
+on both. That is the pre-promotion baseline again.
