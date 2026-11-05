@@ -17648,3 +17648,7 @@ belongs to #775 and #829.
 
 **Not yet run on a cluster.** Nothing is owed by #664. The checks the two earlier #664 entries listed are done above,
 except the KubeCon probe's community run, whose `c6-lands` beat now asks HC-666 and so belongs to #775.
+
+**The suites (run 17374, on f14328e).** `bash verify/run-e2e-tools.sh` printed "56 checks ran (the offline suite and
+55 tier tests) in 25m31s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash verify/run-tests.sh`,
+printed "257 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
