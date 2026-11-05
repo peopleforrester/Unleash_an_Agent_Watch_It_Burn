@@ -17718,3 +17718,6 @@ on both domains, `curl -fsS https://registry.burritobot.co/v2/burritobot/mainten
 seeded tag, and `CONTEXT=watch-it-burn-community python3 verify/test_service_hosts_live.py` covers the kept service
 hosts. The admin probe runs once the private cluster has its `kyverno-breakout` policies, `fleet.sh guardrails-link`
 has linked the pair, and its guardrails are off.
+
+**The suites (run 17370, at `2de86c80`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m08s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
