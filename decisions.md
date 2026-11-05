@@ -19747,3 +19747,7 @@ The next run on #908 runs, and records here:
 - `curl -s https://burritobot-private.burritobot.co/kubecon` answers 200 with `<title>KubeCon brief: Watch It
   Burn</title>`.
 - `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` still print `404` on both hosts.
+
+**The suites (run 17593, at `79f2acfd`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 31m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
