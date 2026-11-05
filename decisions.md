@@ -17349,3 +17349,58 @@ gateway, which is lab-platform's to run once lab-platform#122 moves the wildcard
 **Suites (run 17359, at a41023e4).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier, `test_front_door_tls_live_logic.py` among it with all 8 checks
 passing: 56 checks in 26m54s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
+## 2026-11-05 · #644 · The replay ran at 500 and 150 phones with #450 live: the 150-a-minute cluster window is the only limit a room meets, and every failed turn was an agent tool loop cut at PROXY_TIMEOUT
+
+Run 17361 ran both runs Michael's go of 2026-11-01 asked for, from this run's host against
+`attackme.burritobot.co` (watch-it-burn-community), with the Portland harvest copied read-only out of
+`~/repos/talks/Unleash_an_Agent_Watch_It_Burn/.harvest/devopsdays-portland/prompts` through the sources route.
+`verify/prior-drafts.sh 644 origin/staging` printed NONE: run 16392's record had landed, and the two older drafts
+predate it. So this run started from staging and took nothing from them.
+
+**Before sending.** The live console's `default.conf` carried only `wib_chat_session` (10 a minute, burst 9) on
+`/chat` and no `wib_chat_address`. Argo CD's ai-layer read Synced Healthy at `f4e1273`. guard-proxy ran
+`RATE_LIMIT_RPM` 150, `RATE_LIMIT_SESSION_RPM` 10, `COST_CAP_USD` 25, `PROXY_TIMEOUT` 120. `/cost` read $0.2373.
+
+**The replay tool's change.** `verify/load_replay.py` now lists every turn that did not come back as a readable
+sentence on its own: the UTC time it was sent, its session, and what answered it, read from the body's shape and
+the Server and Via headers, never its text. That names the cause of each one against guard-proxy's log, which
+the first run could not do for 11 of its 15 502s. The report prints 40 of them and the JSON keeps all.
+`verify/test_load_replay.py` adds a fixture 502 from a hop in front of the console (no `/chat` body, `Via: 1.1
+Caddy`) and checks the ledger against what the fake server answered. The fixture key is `GATEWAYHOP` because the
+fake matches keywords by substring, and a name holding `EDGE` was answered as nginx's refusal.
+
+**Run A, 500 sessions (run 202611050635).** 1,500 turns in 352 s: served 339, guard-proxy per cluster 1,153,
+nginx per conversation 0, guard-proxy per session 0, HTTP 502 8. Served latency p50 5.30 s, p95 13.84 s, p99
+20.70 s, max 40.03 s. `/cost` rose $2.0399, $0.00602 a served turn. `LOAD REPLAY RED`, exit 1, on the 8 502s.
+
+**Run B, 150 sessions (run 202611050643).** 450 turns in 405 s: served 307, guard-proxy per cluster 138, nginx 0,
+per session 0, HTTP 502 5. Served latency p50 4.09 s, p95 9.13 s, p99 17.96 s, max 26.13 s. `/cost` rose $1.8501,
+$0.00603 a served turn. `LOAD REPLAY RED`, exit 1, on the 5 502s.
+
+**The 13 failed turns.** Every one was `chat json, with a reply`, answered after 120.3 to 122.9 s. guard-proxy's
+log has 8 and 5 `forward_error` lines reading "the 120s forward deadline (PROXY_TIMEOUT) passed", at each turn's
+send time plus 120 s. Each is followed within 60 ms by a `task_cancel` with `state canceled`, with no
+`task_cancel_failed`. The agent's log for those sessions shows why the turns ran long: 12 retried one failing
+`run_shell` 22 to 74 times (254 of the failures read `Syntax error: Unterminated quoted string`), and session
+0011 of run B ran one working `echo ... | grep | sort | uniq | wc -l` 80 times. Datadog APM holds traces
+`988bfbb55622b2861974da5dbe6e2831` and `caa8a7c7c13d58f68b6004a0704aa55f` with guard-proxy's `chat`, the agent's
+`invoke_agent` and its `execute_tool run_shell` spans. The storefront shows a non-2xx `/chat` body's reply
+(`burritbot.html`), so each phone read "BurritoBot's kitchen isn't answering. Try again in a moment." after two
+minutes. `load_replay.py` still counts those turns as failures, as the run-of-show says, because the turn went
+unanswered. No turn came back without guard-proxy's or nginx's body, so nothing in front of the console failed.
+The first run's 11 unexplained 502s did not recur, and their source stays unknown.
+
+**What the replay left on the cluster.** The Portland prompts include the room's attacks, so the bot ran 147
+`deploy_app` calls over the two runs. 15 Deployments and 7 Pods from run A, and 3 objects from run B, all in
+`agent`, applied by field manager `workshop-mcp` and none managed by Argo CD, were deleted after each run, by the
+same rule `clear_bot_workloads` in `fleet.sh` uses, limited to objects created after the run began. `tron`
+(2026-11-01) was older and was left. No bot write landed outside `agent`, the node stayed Ready, and every Argo CD
+application read Synced Healthy afterwards. The `/cost` tally was left at $4.1274 of the $25 cap rather than reset
+by a guard-proxy restart, which other runs using attackme would feel. The Night Before's `reset-bot` zeroes it.
+
+**Prompt wall.** Every send carried `[[wib-probe]]`. proxy.py appends to the feed only when `_is_probe` is
+false, and the live `/prompts` read after both runs held 40 copies of another run's HC-7731 ask and no harvest
+prompt.
+
+**Room sizing.** At 150 phones, 31 % of turns met the cluster window from about a minute in. Whether to raise
+`RATE_LIMIT_RPM` for the ballroom is #450's call (the audience path), and these figures are its input.

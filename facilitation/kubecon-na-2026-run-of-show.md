@@ -1264,7 +1264,11 @@ is merely slow rather than rebuilding:
   conversation's budget), errors by
   HTTP status (502, 504, 429), timeouts, and the `/cost` spend before and after. It
   must end `LOAD REPLAY GREEN`: a refusal is a sentence a phone can read and passes,
-  a 502, 504, timeout or empty reply fails. Record the run on #644. `--source catalog`
+  a 502, 504, timeout or empty reply fails. It lists each failed turn with its time,
+  session and what answered it. On 2026-11-05 both sizes ended RED only on turns the
+  agent spent repeating one shell command until `PROXY_TIMEOUT` (8 of 1,500 and 5 of
+  450, `facilitation/kubecon-na-2026-load-test.md`), so read each listed turn's cause
+  before judging the run. Record the run on #644. `--source catalog`
   replays the stage's own asks instead when the harvest is not on this machine.
 
   Then, before the reset, read whether each turn that ran past `PROXY_TIMEOUT` (120 s)
