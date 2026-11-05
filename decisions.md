@@ -20981,3 +20981,75 @@ routes are published from a staging that has this change.
 **The suites (run 17710, at `6b5e6493`, on staging `32472d80`).** `bash verify/run-e2e-tools.sh` printed `273 tests
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `61 checks ran
 (the offline suite and 60 tier tests) in 31m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #795 · Run 17588: the audit root applies once its recorded types drop the Config system type, and all five of #205's live checks pass
+
+**Context.** Run 17588 is #795's third working dispatch, on staging `92dfea31`. `bash verify/prior-drafts.sh 795
+origin/staging` printed NONE: run 17417's work is on staging (its entry above), and run 16469's draft only appended
+to decisions.md, which run 17417 already carried. Escalation 822 (run 17438) ran steps 2 to 5 on tanjiro-wsl2: step 2
+failed on the recorder, AWS refusing `AWS::Config::ConfigurationRecorder` in a recording group ("a system resource type
+of AWS Config ... enabled by default"), and its partial apply was torn down. Hecaton dropped the escalation as run
+work: fix the default, test it, and apply with the run's own accen-dev session. This run's session is the role
+`hecaton-run` (session `hecaton-run-17588`) in 515966504359, which IAM accepts.
+
+**The fix.** `recorded_resource_types` in `infra/terraform/aws/audit/main.tf` no longer lists
+`AWS::Config::ConfigurationRecorder`; Config records its own recorder by default. `verify/test_drift_floor.py` now
+fails when the default carries any `AWS::Config::` type, and it failed on the old default with
+`found ['AWS::Config::ConfigurationRecorder']`. docs/floor.md says why the recorder is on record without being listed.
+
+**Step 2, the audit root apply, in accen-dev.** Before it: no recorder, no delivery channel, no trail, and the
+permissions boundary `watch-it-burn-permissions-boundary` present. `. infra/terraform/fleet/event.sh` gave
+`WIB_EVENT=kubecon-na-2026`; init, then a plan of 13 to add, then the apply:
+`Apply complete! Resources: 13 added, 0 changed, 0 destroyed.` Read back: recorder `watch-it-burn` with 17 types,
+`allSupported` false, recording, last status `SUCCESS`; delivery channel to `watch-it-burn-audit-515966504359-us-west-2`;
+trail `watch-it-burn` logging. Every other listed type, the two Bedrock types and `AWS::S3::BucketPolicy` included,
+was accepted. The audit root is left standing for the KubeCon session, as step 2 intends, and its cost is cents a day.
+Its state is `infra/terraform/aws/audit/states/accen-dev.tfstate` in this run's worktree on hecaton's host, which is
+gitignored and is retired with the workspace 14 days after the run; moving it to the machine that holds the fleet
+states is a follow-up. Every resource carries `Purpose=fleet-audit`, so it can be found by tag if the state is lost.
+
+**A finding from step 5, fixed: a fresh audit state reads as drifted.** The first drift report after the apply
+(16:41Z) listed `audit accen-dev` with `aws_cloudtrail.fleet`, `aws_iam_role.config` and `aws_s3_bucket.audit`
+changed outside of Terraform: an empty `tags` map on all three, the role's managed and inline policies, and the
+bucket's policy, lifecycle and encryption. Escalation 822 saw the same on its partial apply. These are attributes
+that sibling resources set after each object was made, which the apply does not write back. They cannot be filtered
+in the report, since an out-of-band attach of a policy to the role would look the same. So the apply is now followed by
+`terraform -chdir=infra/terraform/aws/audit apply -refresh-only -auto-approve -state=states/<profile>.tfstate -var
+profile=<profile> -var event="${WIB_EVENT}"`, which changes nothing in AWS and writes into the state what AWS reads
+back. docs/floor.md and the root's header give it, and `verify/test_drift_floor.py` checks both. Run here, it applied
+`0 added, 0 changed, 0 destroyed`, a normal plan then said `No changes`, and the next report read the audit state as
+clean. Whether the lab VPC, boundary and cluster roots show the same once-only noise needs their states, which are
+kept only on the operator machine; that is a follow-up.
+
+**Step 1, the NetworkPolicy drill, on both clusters.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`,
+exit 0 on each, `Self-heal drill passed.`: community back after 3.1 s, private after 5.0 s, each
+`healed by a selective self-heal of 9 resource(s), no hooks run`, and the sync after it `Succeeded`. Argo CD reports
+24 of 24 applications on community Synced and Healthy, and 38 of 39 on private. The one left is `internal-registry`,
+Synced and Degraded: its pod's `seed` container is in CrashLoopBackOff (19 restarts), because each blob push to
+`localhost:5000` ends in `405 Method Not Allowed`. The registry log shows the uploads' POSTs answered 202 and no PATCH
+arriving, which fits `REGISTRY_HTTP_HOST=https://registry.burritobot.co` sending the upload's Location to the public
+host. That is the live state matching git, so it is no drift; it is #775's internal registry, and it is filed as a
+follow-up.
+
+**Step 3, the attendee key and the out-of-band bucket.** The attendee CSV is kept only on the operator machine, so
+this run minted a second, temporary access key for `wib-community` (the user's own key was not
+touched) into a gitignored CSV, ran
+`DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community WIB_ATTENDEE_ACCOUNTS=accen-dev
+ATTENDEE_KEY_CSV=<that csv> python3 verify/test_drift_aws_live.py`, then deleted the key and the CSV. Exit 0,
+`AWS-plane drift acceptance passed.`: the attendee's CreateBucket was refused with AccessDenied (`no identity-based
+policy allows the s3:CreateBucket action`); after 114 s Config had a configuration item for the operator's
+`wib-drift-oob-515966504359-20261105164743` and CloudTrail had the attendee's refused call; the next report exited 2
+with the bucket in its Unmanaged table, the operator as creator and Config's record; the bucket was deleted. Read
+back after: `wib-community` holds only its own key, and no `wib-drift` bucket is left.
+
+**Step 4, the IAM pipeline.** `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3
+verify/test_iam_policy_aws.py`, exit 0, `0 failure(s)`, nine checks passed, check 4 included: every
+effect-tests.yaml case for the boundary, cluster and audit suites gets the decision it expects.
+
+**Step 5, the drift report by hand, after the settle.** `python3 infra/terraform/drift/drift-report.py --accounts
+accen-dev --region us-west-2`, exit 2: 0 drifted states, `audit accen-dev` clean, `accen-dev: ok: recorder
+watch-it-burn is recording`, and the two KubeCon clusters unmanaged, now `recorded` by Config at 16:50:41Z. They read
+unmanaged because their fleet states are not on this host, which floor.md already explains; no drift. The cron line
+belongs on the machine that holds the fleet states, which a run cannot reach, so it is not installed; deciding that
+machine and installing it there is a follow-up.
+
+**Not yet run on a cluster.** Nothing: the fix and the settle step were applied live by this run.
