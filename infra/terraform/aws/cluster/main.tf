@@ -785,7 +785,8 @@ resource "aws_eks_access_policy_association" "attendee_admin" {
 #
 # The entry carries the Kubernetes group lab-platform:learner-apps and no access policy, so all it can do is
 # what that group's RBAC grants: get on the eight workshop apps' Service proxies, the read an attendee's check
-# makes. That RBAC is #874's; until it is on the seat the entry authenticates and is granted nothing.
+# makes. That RBAC is gitops/learner-apps-access, synced on the attendee profile (#874); until it is on the seat
+# the entry authenticates and is granted nothing.
 #
 # Seats only (role=attendee): the harvest pools nothing else, and lab-platform refuses the community and admin
 # clusters at its own entries. The role is never made in the base account, and EKS refuses an entry for a

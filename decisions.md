@@ -19384,6 +19384,7 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
 ## 2026-11-05 · #873 · run 17449 · Attendee seats admit lab-platform-operator in the group lab-platform:learner-apps
 
 **What changed.** `infra/terraform/aws/cluster/main.tf` gives every attendee seat (`role=attendee`) an EKS access
@@ -19405,9 +19406,10 @@ account once its event is over. A role made again under the same name has a new 
 admits it while its ARN, which is all Terraform compares, is unchanged. A `terraform_data` holding the role's
 `unique_id` is in the entry's `replace_triggered_by`, so the next apply replaces the entry.
 
-**What the entry grants.** Nothing yet: it authenticates the role and binds it to a group no RBAC on the seat names.
-#874 applies lab-platform's learner-apps RBAC on every seat; after that the group reads the eight workshop apps'
-Service proxies, as an attendee's check does, and nothing else.
+**What the entry grants.** Only what the group's RBAC grants. #874 (now in staging, `gitops/learner-apps-access`,
+synced on the attendee profile) binds `lab-platform:learner-apps` to get on the eight workshop apps' Service
+proxies, as an attendee's check does, and nothing else. On a seat without that Application the entry authenticates
+and is granted nothing.
 
 **Test.** `verify/test_lab_platform_operator_entry.py` (E2E tools tier) copies the root into an empty directory,
 initialises it against the committed lock, and runs `terraform test` with the cases in
@@ -19445,3 +19447,29 @@ No dependency was added.
 tests) in 32m31s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 263 tests,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, and `verify/test_lab_platform_operator_entry.py` printed
 `ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN` with its four cases passed.
+
+## 2026-11-05 · #873 · run 17536 · Run 17449's draft ported onto staging, and the tier test owns its temp directory
+
+**The port.** Run 17449's two commits (`agent/873-17449`) did not land: its `tests` gate failed and the gate's output
+was not quoted on the issue. `verify/prior-drafts.sh 873 origin/staging` named the draft CLEAN apart from a
+decisions.md append, so both commits were cherry-picked onto staging at `92dfea31`, keeping both sides' entries.
+Two things differ from the draft. #874 reached staging between the two runs, so the main.tf comment and the entry
+above now name its RBAC (`gitops/learner-apps-access`, group `lab-platform:learner-apps`, the same group the access
+entry carries) instead of calling it a follow-up. And `verify/test_e2e_tools_tier.py` changed, as below.
+
+**Why the tier test changed.** This run's first offline suite failed one test, `test_e2e_tools_tier.py`, six checks
+in its #865 case, each with `mktemp: failed to create directory via template '/tmp/tmp.XXXXXXXXXX': No such file or
+directory`. The run's `/tmp` had been removed from outside its sandbox at 14:54:53Z (`stat /tmp` showed a directory
+with zero links; no file in this repo removes it), and that case's fixture environment carries no `TMPDIR`, so the
+runner's `mktemp -d` fell back to `/tmp` even though the run's own `TMPDIR` pointed at a working directory. The three
+fixture environments in that test now set `TMPDIR` to the case's own scratch directory, so the test no longer
+depends on the host's `/tmp`. With that change the test passes on this host (317 checks, exit 0). Whether the same
+missing `/tmp` is what failed 17449's gate is not known, since that output was not quoted.
+
+**Live check (accen-dev, us-west-2, 15:05Z, read-only).** `aws eks list-clusters` listed only
+`watch-it-burn-community` and `watch-it-burn-private`, so no attendee seat is up to plan the entry on.
+`aws eks list-access-entries --cluster-name watch-it-burn-private` listed the same five entries run 17449 left
+(the EKS service role, the node group role, `hecaton-run`, `nwuser`, `wib-private`), so its test entry is gone.
+
+**Not yet run on a cluster.** The same as run 17449's entry above: the next seat build plans the entry, and
+`aws eks describe-access-entry` on that seat plus one `labctl harvest` across the accounts show it working.
