@@ -18380,3 +18380,17 @@ tempo 3.0.0, opentelemetry-operator 0.122.0) or the datadog provider's signature
 answered 200 straight after. Run alone with the tier's pinned tools and environment, `test_terraform_lock_init.py`,
 `test_enforce_floor.py` and `test_image_registry_render.py` passed on the first try and
 `test_datadog_log_services_render.py` on the second, its first try failing on another chart 504.
+
+**Second staging merge (run 17411).** Run 17384 ended failed on a rebase conflict: staging's `e8bf001e` (#603, run 17393)
+dated the nine rows netcup's second save wrote, laiyer/llm-guard-api:0.3.16 among them, and edited the images.lock header,
+the laiyer row and VERSIONS.lock's llm-guard-api note, the same lines this change edits. This run merged origin/staging
+at `9b391659` and kept both: the laiyer row carries its 2026-11-05 date with #719's declared rows after it, the header
+names the second save and adds cpu.5 and the three llm-guard-cpu-offline rows to what is still `-`, and VERSIONS.lock
+names cpu.5 as deployed while keeping both archive dates. decisions.md keeps staging's entries whole and #719's after
+them. So `verify/test_images_saved.py`, run as michael on netcup, will name four more unsaved rows (the cpu.5 llm-guard
+row, cpu.4, cpu.5 and the zero-shot image) besides the breakout Joker until `mirror-images.sh save .` runs there on
+a staging clone that holds this change.
+
+**Suites (run 17411, at c1c1b971).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 27m04s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No
+dependency was added.
