@@ -8547,7 +8547,9 @@ check-tls ran again at 10:17 UTC and is green, the same seven PASS lines, the ce
 
 Both of #785's checks are now done and nothing for #785 is owed on a cluster. This run cherry-picked run 16748's two
 commits, which never reached staging because that run ended blocked, and added only this paragraph and the closing
-sentence in the #770 entry; the draft's text is unchanged.
+sentence in the #770 entry; the draft's text is unchanged. In this run `bash verify/run-e2e-tools.sh` ran 56 checks,
+the offline suite's 258 tests and 55 tier tests, in 25m36s, and ended "ALL E2E TOOLS TIER CHECKS GREEN" with exit 0.
+`test_image_version_tags.py`, the one red run 16748 saw, passes in it now.
 
 ## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
 
