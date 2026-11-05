@@ -17770,3 +17770,7 @@ collected during lab-platform#130's `labctl event up`/`labctl dry-run` with
 line `front doors: N roster clusters recorded` (lab-platform#130's last report expects N=3 on burn@2.1.0, where
 this issue was written for 2), and `labctl tls-check attackme.agenticburn.com` through the gateway once
 lab-platform#122 has moved the wildcard. #660's websocket check through the TLS listener belongs to that run too.
+
+**Suites (run 17383, at 097e1498).** `bash verify/run-e2e-tools.sh` ran the offline suite (258 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier, `test_front_door_cert.sh` and `test_front_door_tls_live_logic.py`
+among it: 56 checks in 26m05s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
