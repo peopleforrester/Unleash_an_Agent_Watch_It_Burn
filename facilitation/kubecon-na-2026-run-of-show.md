@@ -111,7 +111,8 @@ they arrived, while the wall holds any prompt, so a wall still showing what came
 before the reset reads as a FAIL here and not in the room. The same read by eye:
 `curl -s https://prompts.burritobot.co/api/prompts` shows `"prompts": []`. Then
 reload the wall's tab, or open it now: a tab opened before the reset keeps its old
-cards and shows nothing new until the wall's count passes its own. A prompt sent
+cards and shows nothing new until the restarted wall's sequence number passes the
+one that tab last saw. A prompt sent
 after the reset shows within about 3 seconds.
 
 **After the Go cutover (#738, #778), the reset is the same command and does more.** The Go
@@ -643,9 +644,9 @@ The opening order:
   presenters switch to it at set moments, during segment 1's opening minute of play
   and, optionally, during each challenge's play time after its call-to-action slide.
   The wall is `https://prompts.burritobot.co`: open it full screen before the session
-  starts (#637), after `wall-reset` has emptied it (#926, "Run-through record"). It reads each cluster's feed, picks a new prompt up within about 3
-  seconds, and lists the clusters named in `start.burritobot.co/roster.json`, so
-  the Night Before's `wall-check` is what proves both clusters are on it. If the
+  starts (#637), after `wall-reset` has emptied it (#926, "Run-through record"). It
+  reads each cluster's feed, picks a new prompt up within about 3 seconds, and
+  lists the clusters named in `start.burritobot.co/roster.json`, so the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
 - **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain),
