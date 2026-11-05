@@ -1,0 +1,22 @@
+# ABOUTME: Takes kubecon.html out of the console-src ConfigMap, so this cluster's /kubecon is nginx's 404 (#909).
+# ABOUTME: The ai-layer Application adds it on a profile whose values set console.kubeconBrief false: the community ones.
+#
+# /kubecon is the KubeCon breakout's presenter page. The apex router's brief_not_roster matcher keeps it off attendee
+# clusters and passes every roster host, and the community host (attackme) is a roster host, so the room got the page
+# (#909, from Whitney's review, #908). With this component the page is not on the community cluster at all: console.conf's
+# `location = /kubecon { try_files /kubecon.html =404; }` finds no file and answers 404, and no Host header an
+# attendee sends to the community load balancer can reach a page that is not there. The private cluster's profile
+# does not set the value, so it keeps the file and serves the page.
+#
+# A patch on the generated ConfigMap, applied after configMapGenerator: kustomize hashes the patched data, so the
+# ConfigMap's name changes and the console Deployment rolls onto it (measured with kubectl v1.36.2's kustomize,
+# 2026-11-05). verify/test_kubecon_community_gate.py holds it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: ConfigMap
+      name: console-src
+    patch: |-
+      - op: remove
+        path: /data/kubecon.html

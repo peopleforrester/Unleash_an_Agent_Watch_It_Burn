@@ -57,6 +57,27 @@ def without_front_door(raw: str) -> str:
     return re.sub(r" \{\{- if \.Values\.frontDoor\.certificateArn \}\}.*? \{\{- end \}\}", "", raw, flags=re.S)
 
 
+# The KubeCon presenter page (#909): values.yaml's console.kubeconBrief, true unless a profile's values file says false.
+# ai-layer.yaml alone holds a block between these two guards, rendered on false, which adds the no-kubecon-brief
+# component that takes kubecon.html out of the console-src ConfigMap.
+KUBECON_WITHHELD_IF = "{{- if not .Values.console.kubeconBrief }}"
+KUBECON_WITHHELD_END = "{{- end }}"
+NO_KUBECON_COMPONENT = "components/no-kubecon-brief"
+
+
+def kubecon_brief(profile: str) -> bool:
+    """Whether a profile's console serves /kubecon: its values file's console.kubeconBrief, else values.yaml's."""
+    shared = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) or {}
+    return (values(profile).get("console") or {}).get("kubeconBrief", shared["console"]["kubeconBrief"])
+
+
+def for_kubecon_brief(raw: str, serve: bool) -> str:
+    """An app file as the chart renders it at this console.kubeconBrief: the withholding block left out on true."""
+    if not serve:
+        return raw
+    return re.sub(" " + re.escape(KUBECON_WITHHELD_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
 # The guardrails' action (#638, lab-platform#310): values.yaml's guardrails.validationAction, Audit unless lab-platform's
 # arm step sets Deny. kyverno-policies.yaml alone holds a block between each pair: the Deny patches when armed, the
 # /spec/validationActions ignore when not.

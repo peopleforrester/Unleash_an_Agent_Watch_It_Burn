@@ -22,7 +22,9 @@ the C1 beacon collector only, for C1 on deck (open question 9).
   (checkout `~/repos/agenticburn/rounds-agenticburn`). Issue rounds-agenticburn#38
   cuts that deck from this run-of-show, beat for beat.
 - The prompts the presenters send are not reproduced here. They live, copy-ready,
-  on `/kubecon` on each cluster (`gitops/ai-layer/web/kubecon.html`): the demo-only
+  on `/kubecon` on the private cluster, `https://burritobot-private.burritobot.co/kubecon`
+  (`gitops/ai-layer/web/kubecon.html`). The community cluster serves no `/kubecon`
+  since #909: attackme is the room's host, so its console answers `404`. It is the demo-only
   cut laid out by the segments below, with each beat's prompt, who sends it, the
   admin-terminal toggle where one applies, the success marker and the deterministic
   fallback, and no provisioning or student-lab content. The 2-hour workshop's own
@@ -1077,11 +1079,14 @@ is merely slow rather than rebuilding:
   must print `200`. Anything else means the provisioning service, which stays up
   for this session as the beacon collector (open question 9), is down; bring it back
   before the day. The router 404s `/kubecon` on any host outside the roster (#511),
-  so confirm the gate lets the stage through: for each of attackme and
-  burritobot-private,
-  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.burritobot.co/kubecon`
-  must print `200`. A `404` means the router's roster matcher does not know that
-  host, and the presenters have nothing to drive from.
+  and the community console withholds it from the room (#909), so confirm both
+  gates:
+  `curl -fsS -o /dev/null -w '%{http_code}\n' https://burritobot-private.burritobot.co/kubecon`
+  must print `200`. A `404` there means the router's roster matcher does not know
+  that host, and the presenters have nothing to drive from.
+  `curl -s -o /dev/null -w '%{http_code}\n' https://attackme.burritobot.co/kubecon`
+  must print `404`. A `200` there means the room can read the presenter page: the
+  community cluster's ai-layer has not synced the commit that withholds it.
 - [ ] **The prompt wall shows both clusters (#637).** Segment 1 projects
   `https://prompts.burritobot.co`, and the wall builds its cluster list from the same
   `roster.json` that `router-check` just read, so run it once the routes are right:
