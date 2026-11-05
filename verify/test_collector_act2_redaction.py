@@ -10,7 +10,8 @@ them onto kagent's model calls) and in the tool call's attributes. This holds th
     keeps for its scrub (#647), the two lists naming the conversation;
   - replacing, never deleting, each one only where it is present, the messages with a semconv-shaped envelope that
     still parses as JSON;
-  - naming none of the dropped event names;
+  - naming none of the dropped event names, and no processor in any other collector config under gitops/ naming
+    them either (#949);
   - being wired into no value file, so every profile starts in Act 1.
 
 verify/test_collector_act2_redaction_e2e.py runs it through the real collector.
@@ -83,6 +84,61 @@ check("no statement deletes a key (Datadog has to show that the redaction happen
       "delete_key" not in body and "delete_matching_keys" not in body)
 check("BurritoBot's own system prompt and its tool definitions are left alone",
       "gen_ai.system_instructions" not in body and "gen_ai.tool.definitions" not in body)
+
+print("== no collector config under gitops/ keys redaction on the dropped event names ==")
+# A collector config is any YAML mapping under gitops/ with a `processors` map (the overlay at the top level, the
+# chart's value files under `config:`). The guard-proxy submodule is its own repo and carries no collector config.
+DROPPED = ("gen_ai.content.prompt", "gen_ai.content.completion")
+SUBMODULE = REPO / "gitops/ai-layer/guard-proxy"
+
+
+def processor_maps(node):
+    if isinstance(node, dict):
+        if isinstance(node.get("processors"), dict):
+            yield node["processors"]
+        for v in node.values():
+            yield from processor_maps(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from processor_maps(v)
+
+
+def strings(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            yield str(k)
+            yield from strings(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from strings(v)
+
+
+configs: dict[str, list] = {}
+unparsed: list[str] = []
+for p in sorted((REPO / "gitops").rglob("*.y*ml")):
+    if SUBMODULE in p.parents:
+        continue
+    rel = str(p.relative_to(REPO))
+    try:
+        loaded = [d for d in yaml.safe_load_all(p.read_text(encoding="utf-8")) if d]
+    except yaml.YAMLError:
+        unparsed.append(rel)
+        continue
+    found = [m for d in loaded for m in processor_maps(d)]
+    if found:
+        configs[rel] = found
+EXPECTED = {"gitops/otel-collector/values.yaml", "gitops/otel-collector/values-burn.yaml",
+            "gitops/otel-collector/otel-collector-act2-overlay.yaml"}
+check("the scan finds the chart's value files and the overlay as collector configs",
+      EXPECTED <= set(configs), str(sorted(configs)))
+not_config = [r for r in unparsed if re.search(r"^\s*processors:", (REPO / r).read_text(encoding="utf-8"), re.M)]
+check("no YAML under gitops/ that does not parse (a Helm template) holds a processors map the scan would miss",
+      not not_config, str(not_config))
+for rel, maps in sorted(configs.items()):
+    named = sorted({name for m in maps for s in strings(m) for name in DROPPED if name in s})
+    check(f"{rel}: no processor names {' or '.join(DROPPED)}", not named, str(named))
 
 wired = [str(p.relative_to(REPO)) for p in sorted((REPO / "gitops").rglob("*.yaml"))
          if p != OVERLAY and "redact_sentinel" in p.read_text(encoding="utf-8")]

@@ -91,6 +91,14 @@ for name in NOT_ADOPTED:
     check(f"and no collector config writes it", f'attributes["{name}' not in collector)
 check("no collector rule names an invoke_agent span kind other than the 1.37 shape (no client/internal split)",
       not re.search(r'invoke_agent.{0,80}SPAN_KIND_CLIENT|SPAN_KIND_CLIENT.{0,80}invoke_agent', collector))
+check("no registry group declares an invoke_agent span (the v1.41 client/internal split is not adopted)",
+      not [g.get("id") for g in groups if "invoke_agent" in str(g.get("id", "")) + str(g.get("name", ""))])
+# v1.39's MCP conventions define their own spans as well as the mcp.* attributes; neither is declared here (#949).
+mcp_groups = [g.get("id") for g in groups if re.search(r'(^|[._])mcp([._]|$)', str(g.get("id", "")).lower())
+              or re.search(r'(^|[._])mcp([._]|$)', str(g.get("name", "")).lower())]
+check("no registry group declares an MCP span (v1.39's MCP spans are not adopted)", not mcp_groups, str(mcp_groups))
+check("no collector rule renames a span to MCP's span shape or sets mcp.method.name",
+      "mcp.method.name" not in collector and not re.search(r'set\(\s*name\s*,[^)]*mcp', collector, re.I))
 
 print()
 if failures:
