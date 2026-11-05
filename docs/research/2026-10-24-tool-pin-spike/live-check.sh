@@ -64,7 +64,8 @@ kubectl config get-contexts "${CONTEXT}" >/dev/null 2>&1 || die "no context ${CO
 # An MCP client inside the cluster, on the image evil-mcp-shim runs (it has mcp 1.29.1, probe.py's pin).
 probe() {
     "${KCTL[@]}" run "tool-pin-probe-${RANDOM}" --rm -i --quiet --restart=Never --pod-running-timeout=180s \
-        --labels=app.kubernetes.io/name=tool-pin-probe --image="$(cat "${STATE}/probe-image")" \
+        --labels=app.kubernetes.io/name=tool-pin-probe,tags.datadoghq.com/service=burritobot-tool-pin-probe,tags.datadoghq.com/env=burritobot-kubecon-na-26 \
+        --image="$(cat "${STATE}/probe-image")" \
         --command -- python -c "$(cat "${HERE}/probe.py")" "$@"
 }
 
@@ -194,6 +195,7 @@ ask() {
     local id out
     id="tool-pin-$(date +%s)-${RANDOM}"
     out="$("${KCTL[@]}" run "tool-pin-ask-${RANDOM}" --rm -i --quiet --restart=Never --pod-running-timeout=180s \
+        --labels=tags.datadoghq.com/service=burritobot-tool-pin-ask,tags.datadoghq.com/env=burritobot-kubecon-na-26 \
         --image=curlimages/curl:8.10.1 --command -- curl -sS -m 150 -X POST "${ASK_URL}" \
         -H 'Content-Type: application/json' \
         -d "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"messageId\":\"${id}\",\"parts\":[{\"kind\":\"text\",\"text\":\"What is the weather in Salt Lake City right now?\"}]}}}" || true)"
