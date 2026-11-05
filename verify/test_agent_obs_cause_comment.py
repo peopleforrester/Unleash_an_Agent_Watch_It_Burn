@@ -1,6 +1,6 @@
-# ABOUTME: Reads #783's comments from GitHub anonymously and checks one names why Agent Observability got no BurritoBot
+# ABOUTME: Reads #783's comments with gh's token (#863) and checks one names why Agent Observability got no BurritoBot
 # ABOUTME: spans from 2026-11-01: the copy kept APM's trace id, whose spans carry dd_llmobs_enabled false (#811).
-# SUITE: e2e (needs the network: api.github.com is asked for the issue's comments)
+# SUITE: e2e (needs the network and gh with a token: `gh api` is asked for the issue's comments)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why. #783's first criterion is "The cause of Agent Observability receiving no BurritoBot spans since 2026-11-01
@@ -8,24 +8,26 @@
 # decisions.md's #783 entry holds the cause, but nothing in the tree is the comment. Hecaton's run report and merge
 # comment on #783 name it: #746's collector change (241f8e6) sent Agent Observability a copy of each trace under the
 # original trace id and marked every APM span dd_llmobs_enabled false, and an explicit false on any span stops
-# conversion of the whole trace. This asks GitHub for the issue's comments, as anyone may (the repo is public), and
-# fails when no comment by hecaton or Michael names that cause, or names another commit than decisions.md does.
+# conversion of the whole trace. This asks GitHub for the issue's comments through verify/gh_comments.py, with
+# gh's token and not the host's shared anonymous quota (#863), and fails when no comment by hecaton or Michael
+# names that cause, or names another commit than decisions.md does.
 from __future__ import annotations
 
-import json
 import pathlib
 import re
 import sys
-import urllib.error
-import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+import gh_comments  # noqa: E402
+
 DECISIONS = REPO / "decisions.md"
 VALUES = REPO / "gitops" / "otel-collector" / "values.yaml"
 ISSUE = "peopleforrester/Unleash_an_Agent_Watch_It_Burn#783"
 OWNER_REPO, _, NUMBER = ISSUE.partition("#")
 # Who may name the cause on the issue: the dispatcher that posts each run's report, and the repo's owner.
-AUTHORS = {"hecatongithub[bot]", "peopleforrester"}
+# gh issue view reads them through GraphQL, which names the hecatongithub app's bot without REST's "[bot]".
+AUTHORS = {"hecatongithub", "peopleforrester"}
 
 failures: list[str] = []
 
@@ -39,25 +41,6 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 def flat(text: str) -> str:
     return re.sub(r"\s+", " ", text.replace("`", ""))
 
-
-def comments() -> tuple[list[dict], str]:
-    """Every comment on the issue, following the Link header's next pages, or [] and why not."""
-    url = f"https://api.github.com/repos/{OWNER_REPO}/issues/{NUMBER}/comments?per_page=100"
-    out: list[dict] = []
-    try:
-        while url:
-            req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
-                                                       "User-Agent": "verify-agent-obs-cause-comment"})
-            with urllib.request.urlopen(req, timeout=30) as r:
-                out += json.load(r)
-                nxt = re.search(r'<([^>]+)>;\s*rel="next"', r.headers.get("Link", ""))
-                url = nxt.group(1) if nxt else ""
-    except urllib.error.HTTPError as e:
-        left = e.headers.get("X-RateLimit-Remaining") if e.headers else None
-        return [], f"HTTP {e.code} {e.reason}" + (f", {left} anonymous requests left this hour" if left else "")
-    except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        return [], f"{type(e).__name__}: {e}"
-    return out, ""
 
 
 # The cause as decisions.md records it, so the comment and the record name the same change.
@@ -97,13 +80,15 @@ def names_cause(body: str) -> list[str]:
 
 
 print(f"== a comment on {ISSUE} names the cause ==")
-got, why = comments()
-check(f"GitHub answers an anonymous read of {ISSUE}'s comments with at least one", bool(got), why or "none")
-ours = [c for c in got if c.get("user", {}).get("login") in AUTHORS]
-check(f"at least one comment is by {' or '.join(sorted(AUTHORS))}", bool(ours) or not got,
-      ", ".join(sorted({c.get("user", {}).get("login", "?") for c in got})))
+read = gh_comments.read(OWNER_REPO, NUMBER)
+gh_comments.check_read(read, ISSUE, check)
+got = read.comments
+ours = [c for c in got if c["login"] in AUTHORS]
+if got:
+    check(f"at least one comment is by {' or '.join(sorted(AUTHORS))}", bool(ours),
+          ", ".join(sorted({c["login"] for c in got})))
 if ours:
-    missing = [(c.get("html_url", "?"), names_cause(flat(c.get("body") or ""))) for c in ours]
+    missing = [(c["url"], names_cause(flat(c.get("body") or ""))) for c in ours]
     named = [url for url, left in missing if not left]
     closest = min(missing, key=lambda x: len(x[1]))
     check(f"one comment names the cause: #746's change ({commit}) sent the copy under the original trace id, APM's "

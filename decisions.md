@@ -16018,3 +16018,43 @@ tier tests) in 25m24s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The
 tests, `test_fleet_monitors.py` (198 checks, 34 of them new for `--board`) and `test_leaderboard.py`
 among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. `test_leaderboard_live.py` is `# SUITE: e2e`, so
 the offline suite leaves it to `run-e2e.sh`.
+## 2026-11-05 · #863 · The cause-comment tests read an issue's comments with gh's token, not GitHub's anonymous quota
+
+**What happened.** In run 17065 (#814) the tools tier failed on one check alone: GitHub answered
+`verify/test_dispatched_runs_cause_comment.py`'s anonymous read of #633's comments with 403, "0 anonymous requests
+left this hour". Every dispatched run on the host shares one IP and so one quota of 60 anonymous requests an hour,
+and the test printed it as "GitHub answers an anonymous read ... with at least one" failing, which reads as a missing
+comment. Its result hung on a quota other runs spend, which "Tests own their inputs" forbids.
+
+**The change.** `verify/gh_comments.py` (new) reads an issue's comments with `gh issue view <n> -R <owner/repo>
+--json comments`, which sends gh's token (`gh auth login`, or GH_TOKEN or GITHUB_TOKEN) and refuses to read without
+one. There is no anonymous read left to fall back to. Its `check_read` prints the read's checks in order, each only
+when the one before it held: gh on PATH with a token (no gh, or gh's exit 4, names the missing token and how to give
+one), the rate limit not spent (gh's "rate limit" or HTTP 429 is its own named failure), gh answering, and at least
+one comment. So a spent quota now reads as a spent quota. All three cause-comment tests had the same anonymous
+`urllib` read, so all three move to the helper: `test_dispatched_runs_cause_comment.py` (#633),
+`test_agent_obs_cause_comment.py` (#783) and `test_prose_gate_e2e_wait_cause_comment.py` (#796).
+
+**Why `gh issue view` and not `gh api`.** The issue offered either. On this host gh is a wrapper that runs gh as
+michael. Dispatched runs get the wider form, which allows `gh api` GETs, but the promotion gate's user gets the
+read-only `/var/lib/hecaton/cli/sources`, which refuses `gh api` ("gh api is not a read-only command this allows")
+and allows `gh issue view`. The gate runs the tools tier, so `gh api` would have turned it red on every promotion.
+`gh issue view --json comments` reads every comment through GraphQL, which names a GitHub App's bot by its slug,
+`hecatongithub`, without the REST API's `[bot]`; the three tests' AUTHORS sets now read `hecatongithub`.
+
+**The token's quota is shared too, but not with anonymous readers.** gh runs as michael, so its 5,000 requests an
+hour are shared with every tool on his token. Each test spends one GraphQL query per run, and a spent token quota
+fails as its own named check rather than as a missing comment.
+
+**Tests.** `verify/test_gh_comments.py` (offline, new) puts a stub gh alone on PATH and checks: every comment comes
+back as login, body and url, with a null author read as "?"; gh is called as `issue view 7 -R owner/repo --json
+comments`; an empty issue fails "has at least one comment" alone; no gh, and gh's exit 4, fail the token check and
+print nothing after it; a primary, a secondary and a 429 rate limit each fail the rate-limit check after a passing
+token check; a 404, output that is not JSON, JSON with no comments list and a list holding what is not a comment are
+errors; and the three cause-comment tests call the helper and hold no `urllib` read of their own.
+
+**Live check (run 17195).** Through the host's gh, all three cause-comment tests passed: #633's cause at
+issuecomment-6483003262, #783's at issuecomment-6578827445, #796's at issuecomment-6595960290. With PATH
+`/usr/bin:/bin`, whose gh has no token, `test_dispatched_runs_cause_comment.py` exited 1 on the one check "gh is on
+PATH with a token, so the read does not spend the host's shared anonymous quota (#863)", quoting gh's
+"please run: gh auth login". No cluster is touched by this change.
