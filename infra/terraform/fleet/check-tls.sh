@@ -22,10 +22,11 @@ note() { printf '  note  %s\n' "$*"; }
 WS_PATH="${WIB_WS_PATH:-/terminal/}"
 CHECK_WS=1
 CLOSED_TERMINAL=0
+CONNECT_TO=""
 
 usage() {
     cat >&2 <<EOF
-Usage: ${0##*/} [--no-ws | --closed-terminal] <hostname> [hostname...]
+Usage: ${0##*/} [--no-ws | --closed-terminal] [--connect-to <host>] <hostname> [hostname...]
 
   --no-ws   Skip the websocket probe. Use for hosts that legitimately have no terminal (the
             provisioning app, the apex router), where a 404 there means "correct", not "broken".
@@ -34,6 +35,10 @@ Usage: ${0##*/} [--no-ws | --closed-terminal] <hostname> [hostname...]
             The host is a cluster console whose terminal the router closes: the public bot,
             attackme, on either domain (apex-agenticburn#43, #44). Both upgrade probes must get
             the router's 404, so a router that stops closing it fails here instead of passing.
+  --connect-to <host>
+            Send every probe to <host> instead of what the hostname resolves to, still asking for
+            the hostname (SNI, Host header, SAN). For a front door whose NLB (#638, #660) does not
+            yet answer the roster name in DNS: --connect-to <nlb-dns-name> attackme.agenticburn.com.
 
 Asserts, per hostname:
   * https:// returns 200
@@ -52,10 +57,20 @@ while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --no-ws) CHECK_WS=0; shift ;;
         --closed-terminal) CLOSED_TERMINAL=1; shift ;;
+        --connect-to) [[ -n "${2:-}" ]] || { echo "--connect-to needs a host" >&2; usage; }; CONNECT_TO="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) echo "unknown flag: $1" >&2; usage ;;
     esac
 done
+
+# With --connect-to, every curl call carries the two mappings and openssl connects there; without it both are empty
+# and the hostname resolves as usual. The arrays expand to nothing when empty.
+connect_args=()
+[[ -n "${CONNECT_TO}" ]] && connect_args=(--connect-to "::${CONNECT_TO}:")
+probe() {   # curl, printing the status code: probe <url> [curl args...]
+    local url="$1"; shift
+    curl -s -o /dev/null -w '%{http_code}' --max-time 15 "${connect_args[@]}" "$@" "${url}" 2>/dev/null
+}
 
 [[ "${CHECK_WS}" -eq 0 && "${CLOSED_TERMINAL}" -eq 1 ]] \
     && { echo "--no-ws and --closed-terminal contradict: one skips the probe the other asserts" >&2; usage; }
@@ -65,11 +80,11 @@ command -v openssl >/dev/null 2>&1 || { echo "openssl not found" >&2; exit 1; }
 for host in "$@"; do
     echo "== ${host} =="
 
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://${host}/" 2>/dev/null)"
+    code="$(probe "https://${host}/")"
     [[ "${code}" == "200" ]] && ok "https 200" || bad "https returned '${code:-no response}'"
 
     # -verify_return_error turns a chain failure into a non-zero exit instead of a printed warning.
-    if cert="$(echo | openssl s_client -servername "${host}" -connect "${host}:443" \
+    if cert="$(echo | openssl s_client -servername "${host}" -connect "${CONNECT_TO:-${host}}:443" \
                  -verify_return_error 2>/dev/null | openssl x509 -noout -dates -ext subjectAltName 2>/dev/null)"; then
         ok "TLS chain validates"
         # A wildcard (*.agenticburn.com) legitimately covers bane-sabrina.agenticburn.com, so compare on the
@@ -95,7 +110,7 @@ for host in "$@"; do
         bad "TLS chain does NOT validate"
     fi
 
-    redirect="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "http://${host}/" 2>/dev/null)"
+    redirect="$(probe "http://${host}/")"
     case "${redirect}" in
         30[1278]) ok "http redirects to https (${redirect})" ;;
         200)      note "http serves 200 directly (no redirect); fine behind a TLS-terminating router" ;;
@@ -108,17 +123,15 @@ for host in "$@"; do
         echo
         continue
     fi
-    ws="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --http1.1 \
+    ws="$(probe "https://${host}${WS_PATH}" --http1.1 \
         -H "Connection: Upgrade" -H "Upgrade: websocket" \
-        -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
-        "https://${host}${WS_PATH}" 2>/dev/null)"
+        -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)")"
     if [[ "${CLOSED_TERMINAL}" -eq 1 ]]; then
         # The public bot (#651's Night Before line). The router answers 404 on the terminal's path before the
         # console sees it, so both upgrades, the plain one and the shell's own tty one, must get that 404.
-        shell="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --http1.1 \
+        shell="$(probe "https://${host}${WS_PATH}" --http1.1 \
             -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Protocol: tty" \
-            -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
-            "https://${host}${WS_PATH}" 2>/dev/null)" || true
+            -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)")" || true
         if [[ "${ws}" == 404 && "${shell}" == 404 ]]; then
             ok "the router closes the terminal: both websocket upgrades on ${WS_PATH} get 404"
         else
@@ -140,10 +153,9 @@ for host in "$@"; do
     # socket, which the console's nginx turns into a 502). A 101 means the terminal hands a shell to anyone who can
     # reach the host. verify/test_ttyd_ws_auth.py holds ttyd's side of this. `|| true` because curl exits non-zero
     # on a dropped socket; what it printed is still the code.
-    shell="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --http1.1 \
+    shell="$(probe "https://${host}${WS_PATH}" --http1.1 \
         -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Protocol: tty" \
-        -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
-        "https://${host}${WS_PATH}" 2>/dev/null)" || true
+        -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: $(openssl rand -base64 16)")" || true
     if [[ "${shell}" == "101" ]]; then
         bad "the terminal's shell protocol (tty) accepted an upgrade with NO credential (101): anyone who knows ${host} gets a shell"
     else

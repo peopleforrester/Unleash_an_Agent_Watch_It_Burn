@@ -33,7 +33,7 @@ cat >"${T}/bin/openssl" <<'EOF'
 #!/usr/bin/env bash
 case "$1" in
   rand)     echo "c3R1YmJlZC1rZXktMTIzNA==" ;;
-  s_client) cat >/dev/null ;;
+  s_client) cat >/dev/null; printf '%s\n' "$*" >>"${OPENSSL_LOG:-/dev/null}" ;;
   x509)     cat >/dev/null; echo "notAfter=$(date -u -d '+365 days' '+%b %d %H:%M:%S %Y GMT')"; echo "DNS:*.agenticburn.com, DNS:*.burritobot.co" ;;
 esac
 EOF
@@ -41,8 +41,8 @@ chmod +x "${T}/bin/curl" "${T}/bin/openssl"
 
 run() {   # $1 the plain upgrade's code, $2 the tty upgrade's code, $3 curl's exit on the tty probe; prints rc=<n>
     : >"${T}/curl.log"
-    PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" WS_CODE="$1" TTY_CODE="$2" TTY_RC="${3:-0}" \
-        bash "${CHECK_TLS}" burritobot-private.agenticburn.com >"${T}/log" 2>&1
+    PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" OPENSSL_LOG="${T}/openssl.log" WS_CODE="$1" TTY_CODE="$2" \
+        TTY_RC="${3:-0}" bash "${CHECK_TLS}" burritobot-private.agenticburn.com >"${T}/log" 2>&1
     echo "rc=$?"
 }
 
@@ -88,6 +88,28 @@ check "--closed-terminal sends both upgrades, pinned to HTTP/1.1, to the termina
 check "--no-ws with --closed-terminal is refused as a usage error" \
   'PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" bash "${CHECK_TLS}" --no-ws --closed-terminal attackme.burritobot.co >"${T}/log" 2>&1;
    [[ $? -eq 2 ]] && grep -q "contradict" "${T}/log"'
+
+# --connect-to (#660): a front door's NLB does not yet answer the roster name in DNS, so every probe goes to the NLB
+# while still asking for the roster name, as curl's --connect-to and openssl's -connect with -servername do.
+via() {   # prints rc=<n>; the logs hold every curl and openssl call
+    : >"${T}/curl.log"; : >"${T}/openssl.log"
+    PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" OPENSSL_LOG="${T}/openssl.log" WS_CODE=101 TTY_CODE=502 \
+        bash "${CHECK_TLS}" --connect-to nlb.example.elb.amazonaws.com attackme.agenticburn.com >"${T}/log" 2>&1
+    echo "rc=$?"
+}
+echo "== --connect-to sends every probe to the NLB and asks for the roster name =="
+check "the checks pass through the NLB with the roster name" \
+  '[[ "$(via)" == rc=0 ]] && grep -q "TLS CHECKS GREEN" "${T}/log"'
+check "every curl call carries --connect-to ::<nlb>: and a URL on the roster name" \
+  '[[ "$(grep -c "" "${T}/curl.log")" == 4 ]] && ! grep -v -- "--connect-to ::nlb.example.elb.amazonaws.com: .*attackme.agenticburn.com/" "${T}/curl.log" | grep -q .'
+check "openssl connects to the NLB with the roster name as SNI" \
+  'grep -q -- "-servername attackme.agenticburn.com -connect nlb.example.elb.amazonaws.com:443" "${T}/openssl.log"'
+check "without --connect-to, no curl call carries it and openssl connects to the host" \
+  ': >"${T}/openssl.log"; [[ "$(run 101 502)" == rc=0 ]] && ! grep -q -- "--connect-to" "${T}/curl.log" &&
+   grep -q -- "-connect burritobot-private.agenticburn.com:443" "${T}/openssl.log"'
+check "--connect-to with no host is refused as a usage error" \
+  'PATH="${T}/bin:${PATH}" CURL_LOG="${T}/curl.log" bash "${CHECK_TLS}" --connect-to >"${T}/log" 2>&1;
+   [[ $? -eq 2 ]] && grep -q "needs a host" "${T}/log"'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }

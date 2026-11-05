@@ -81,12 +81,13 @@ def _read_frame(sock: socket.socket) -> tuple[int, bytes]:
 
 def connect(host: str, port: int, path: str, *, tls: bool = False, server_name: str | None = None,
             headers: dict[str, str] | None = None, protocol: str | None = "tty",
-            timeout: float = 10.0) -> tuple[socket.socket, int, bytes]:
+            timeout: float = 10.0, cafile: str | None = None) -> tuple[socket.socket, int, bytes]:
     """Opens the upgrade, asking for `protocol` (none when None). Returns the socket, the HTTP status (0 when the
-    server dropped the connection without answering) and any bytes read past the response head."""
+    server dropped the connection without answering) and any bytes read past the response head. With tls, the
+    server's certificate is verified for server_name against the system roots, or against `cafile` when given."""
     sock = socket.create_connection((host, port), timeout=timeout)
     if tls:
-        sock = ssl.create_default_context().wrap_socket(sock, server_hostname=server_name or host)
+        sock = ssl.create_default_context(cafile=cafile).wrap_socket(sock, server_hostname=server_name or host)
     key = base64.b64encode(os.urandom(16)).decode()
     lines = [f"GET {path} HTTP/1.1", f"Host: {server_name or host}", "Upgrade: websocket", "Connection: Upgrade",
              f"Sec-WebSocket-Key: {key}", "Sec-WebSocket-Version: 13"]
