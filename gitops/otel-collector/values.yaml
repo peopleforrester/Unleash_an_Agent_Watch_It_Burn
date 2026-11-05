@@ -475,7 +475,10 @@ config:
     # and known only after apply, so they come from the environment:
     # fleet.sh pin_bedrock_profiles writes them to the monitoring/bedrock-profile-models ConfigMap, one
     # WIB_BEDROCK_PROFILE_<TIER> key per Bedrock ModelConfig, which extraEnvsFrom below loads. A cluster without the
-    # ConfigMap gets the default "unpinned", which no model name equals, so the copy goes out as it came.
+    # ConfigMap gets the default "unpinned", which no model name equals, so the copy goes out as it came. A key that is
+    # present but empty reads as "", not as the default (otelcol-contrib 0.160.0), so each rule first requires its key
+    # to be non-empty: a map written by hand from a ModelConfig that was missing never renames a call with no model
+    # to that tier (#876).
     # verify/test_collector_llmobs_model.py holds the tiers against resources.yaml and fleet.sh, and
     # verify/test_collector_llmobs_model_e2e.py runs a turn through the real collector.
     transform/llmobs_model:
@@ -483,22 +486,22 @@ config:
       trace_statements:
         - context: span
           statements:
-            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
-            - 'set(attributes["gen_ai.request.model"], "us.amazon.nova-pro-v1:0") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
-            - 'set(attributes["gen_ai.response.model"], "us.amazon.nova-pro-v1:0") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
-            - 'set(name, "generate_content us.amazon.nova-pro-v1:0") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
-            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
-            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-haiku-4-5-20251001-v1:0") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
-            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-haiku-4-5-20251001-v1:0") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
-            - 'set(name, "generate_content us.anthropic.claude-haiku-4-5-20251001-v1:0") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
-            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
-            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-sonnet-4-6") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
-            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-sonnet-4-6") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
-            - 'set(name, "generate_content us.anthropic.claude-sonnet-4-6") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
-            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
-            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-opus-4-8") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
-            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-opus-4-8") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
-            - 'set(name, "generate_content us.anthropic.claude-opus-4-8") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.amazon.nova-pro-v1:0") where "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.amazon.nova-pro-v1:0") where "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}" != "" and attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(name, "generate_content us.amazon.nova-pro-v1:0") where "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}" != "" and name == "generate_content ${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-haiku-4-5-20251001-v1:0") where "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-haiku-4-5-20251001-v1:0") where "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}" != "" and attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(name, "generate_content us.anthropic.claude-haiku-4-5-20251001-v1:0") where "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}" != "" and name == "generate_content ${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-sonnet-4-6") where "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-sonnet-4-6") where "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}" != "" and attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(name, "generate_content us.anthropic.claude-sonnet-4-6") where "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}" != "" and name == "generate_content ${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-opus-4-8") where "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}" != "" and attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-opus-4-8") where "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}" != "" and attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(name, "generate_content us.anthropic.claude-opus-4-8") where "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}" != "" and name == "generate_content ${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
     # What else leaves the Agent Observability copy. guard-proxy's chat span is the storefront turn's inner wrapper: the
     # same prompt and reply as its root, an llm row with no tokens. kagent's server span is the 14 ms message/send row
     # whose invocation now hangs from the root. Every span with no gen_ai.* attribute is one Datadog would drop anyway,

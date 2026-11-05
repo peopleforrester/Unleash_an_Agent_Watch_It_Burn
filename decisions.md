@@ -19276,3 +19276,51 @@ then `--apply`, with the env file sourced. Its output names the template or its 
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), with
 `test_every_prompt_view.py` among them, then `58 checks ran (the offline suite and 57 tier tests) in 34m17s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #876 · Agent Observability prices BurritoBot's model calls on both clusters, and an empty profile key renames nothing
+
+**Where the issue stood.** #784 (run 17406, `ea709dbe`, in this run's base `c96c9e3b`) made the change #876 proposes:
+`transform/llmobs_model` in `traces/llmobs` only, the ARN kept as `witb.bedrock.application_profile`, and the map
+written by `fleet.sh pin_bedrock_profiles` to `monitoring/bedrock-profile-models`. Its entry names #876 as done once
+its step 2 is green on both clusters. `bash verify/prior-drafts.sh 876 origin/staging` printed NONE, and the issue has
+no comments, so nothing was ported.
+
+**What the clusters run.** On both clusters `otel-collector` is Synced and Healthy, the rendered relay config holds
+`transform/llmobs_model`, the DaemonSet loads `bedrock-profile-models` with `optional: true`, and the ConfigMap names
+the four tiers with the same ARNs the live ModelConfigs call (nova is `.../5l72jg8rnz71` on community and
+`.../88hce5o0zw45` on private). The ConfigMaps were created at 12:38:16Z and 12:38:26Z by `kubectl create`, which is
+#784's hand step 1, not fleet.sh. The collector pods started at 12:56Z, after it, so they read the map.
+
+**The live check, 13:03Z.** `. "$HECATON_CLUSTER_ENV"`, then
+`python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session` printed `AGENT OBSERVABILITY GREEN`:
+community's chat is trace `f097b82e087d528084a4f47a022d8d44` and private's `9933714230605bb7b27a7ecf38ea29bf`, four
+rows each. `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json` on each:
+- community: the llm row is `generate_content`, model `us.amazon.nova-pro-v1:0`, 5312 tokens in and 77 out,
+  `estimated_total_cost` 4496000 (1e-9 USD), tags `cost_estimate_status:success`, `matched_model_name:amazon.nova-pro-v1:0`,
+  `model_match:exact` and `witb.bedrock.application_profile:arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/5l72jg8rnz71`.
+- private: the same with 76 out, `estimated_total_cost` 4492800, and the profile `.../88hce5o0zw45`, the one #876 names.
+The issue asked for "no cost_estimate_status tag". Datadog writes the tag on a priced row too, as `success`, so the
+check read is that no row reads a `skipped_*` status. Nothing on either cluster changed.
+
+**The change: an empty key renames nothing.** #876 asks that the model name never be matched against an empty
+pattern. A missing key reads as `unpinned`, but the pinned otelcol-contrib 0.160.0 reads a key that is present and
+empty as "", not as its default: a two-line config that set `${env:WIB_P:-unpinned}` on a span read `unpinned` with
+`WIB_P` unset and "" with `WIB_P=` set. fleet.sh never writes an empty key, but #784's hand step 1 does when a
+ModelConfig is missing (`jsonpath='{.spec.model}'` prints nothing). With such a key, a call whose model is "" or whose
+row is `generate_content ` was renamed to that tier and given an empty `witb.bedrock.application_profile`. Each of
+the 16 statements now begins `where "${env:<KEY>:-unpinned}" != "" and`. Nothing changes for a pinned or an unpinned
+cluster.
+
+**Tests.** `verify/test_collector_llmobs_model.py` (offline) now parses the guard as part of every statement and
+checks that it names the same key and default as the comparison after it; on the old rules it fails 18 checks.
+`verify/test_collector_llmobs_model_e2e.py` (tools tier) adds a call with no model, which the pinned and unpinned
+passes leave as sent, and a third pass per profile with every key present and empty, in which nothing is renamed; on
+the old rules that pass fails on all three profiles, naming the blank call. Its unchanged-call check now also reads
+`gen_ai.response.model`. #876 proposed extending `verify/test_trace_shape_e2e.py` with an ARN-named row; #784 put that
+row in `test_collector_llmobs_model_e2e.py` instead, which runs the same pipelines through the same binary, and this
+run left that layout as it is. The live judge of cost is already `verify/llmobs_chat_judge.py`'s check 5, which
+fails when any llm row has no `estimated_total_cost` and names the skipped status.
+
+**Not yet run on a cluster.** The guard reaches the clusters once hecaton promotes this run. A pinned cluster behaves
+the same with or without it, so the live check above stands. After Argo CD syncs `otel-collector`, rerun
+`python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session` and `verify/dd_traces.py --trace <id> --json`
+on each trace: each llm row must still read `cost_estimate_status:success`.

@@ -16,7 +16,9 @@ pipelines as built with datadog-secret present (collector_render.py), and reads 
     witb.bedrock.application_profile (#876);
   - APM's copy keeps the ARN on all three, since the profile is what the bill's tags trace;
   - a call to an ARN the map does not name (another cluster's profile) goes out unchanged;
-  - with no map at all, a cluster that fleet.sh has not pinned yet, nothing is renamed and the collector still starts.
+  - with no map at all, a cluster that fleet.sh has not pinned yet, nothing is renamed and the collector still starts;
+  - with every key present and empty, as a map written by hand from missing ModelConfigs reads, nothing is renamed,
+    not even a call that names no model: the collector reads an empty key as "", not as its default (#876).
 
 The offline half, verify/test_collector_llmobs_model.py, holds the rules against resources.yaml and fleet.sh.
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
@@ -78,6 +80,7 @@ CALLS = [
     ("nova", MAP["WIB_BEDROCK_PROFILE_NOVA"], NOVA, 5312, 44),
     ("opus", MAP["WIB_BEDROCK_PROFILE_OPUS"], OPUS, 2015, 31),
     ("other", OTHER, None, 1702, 12),
+    ("blank", "", None, 640, 9),  # a call that names no model, which an empty key would otherwise match (#876)
 ]
 
 
@@ -132,7 +135,8 @@ def read_spans(out: pathlib.Path) -> dict[str, dict]:
 
 
 def values(span: dict) -> dict:
-    return {a["key"]: next(iter(a["value"].values())) for a in span.get("attributes", [])}
+    # An empty string may be written as an empty value; it reads as "".
+    return {a["key"]: next(iter(a["value"].values()), "") for a in span.get("attributes", [])}
 
 
 def run_collector(profile: str, env_map: dict[str, str]) -> tuple[dict[str, dict], dict[str, dict], str]:
@@ -194,6 +198,15 @@ def run_collector(profile: str, env_map: dict[str, str]) -> tuple[dict[str, dict
         return got, lgot, log_file.read_text()
 
 
+def unchanged(lgot: dict[str, dict]) -> list[str]:
+    """The calls Agent Observability's copy did not get as sent: a model, a row name or a profile attribute changed."""
+    return sorted(key for key, model, *_ in CALLS
+                  if values(lgot.get(sid(key), {})).get("gen_ai.request.model") != model
+                  or values(lgot.get(sid(key), {})).get("gen_ai.response.model") != model
+                  or "witb.bedrock.application_profile" in values(lgot.get(sid(key), {}))
+                  or lgot.get(sid(key), {}).get("name") != f"generate_content {model}")
+
+
 for profile in PROFILES:
     print(f"== {profile}: a pinned cluster, monitoring/bedrock-profile-models loaded ==")
     got, lgot, collector_log = run_collector(profile, MAP)
@@ -224,11 +237,14 @@ for profile in PROFILES:
 
     print(f"== {profile}: a cluster fleet.sh has not pinned, no map ==")
     got, lgot, collector_log = run_collector(profile, {})
-    renamed = sorted(key for key, model, *_ in CALLS
-                     if values(lgot.get(sid(key), {})).get("gen_ai.request.model") != model
-                     or "witb.bedrock.application_profile" in values(lgot.get(sid(key), {}))
-                     or lgot.get(sid(key), {}).get("name") != f"generate_content {model}")
+    renamed = unchanged(lgot)
     check(f"{profile}: every call reaches Agent Observability as sent, nothing renamed",
+          all(sid(key) in lgot for key, *_ in CALLS) and not renamed, f"{renamed}\n{collector_log[-1500:]}")
+
+    print(f"== {profile}: a map with every key present and empty ==")
+    got, lgot, collector_log = run_collector(profile, {k: "" for k in MAP})
+    renamed = unchanged(lgot)
+    check(f"{profile}: every call reaches Agent Observability as sent, the blank one too, nothing renamed (#876)",
           all(sid(key) in lgot for key, *_ in CALLS) and not renamed, f"{renamed}\n{collector_log[-1500:]}")
 
 print()

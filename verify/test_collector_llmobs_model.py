@@ -70,12 +70,16 @@ contexts = [group["context"] for group in vals["config"]["processors"][PROC]["tr
 check(f"{PROC} runs in span context", contexts == ["span"], str(contexts))
 check(f"{PROC} ignores a statement error rather than dropping the batch",
       vals["config"]["processors"][PROC].get("error_mode") == "ignore")
+# Each rule first requires its key to be non-empty (#876): a key present but empty reads as "", not the default, and
+# would match a call with no model. The guard names the same key, with the same default, as the comparison after it.
+GUARD = r'"\$\{env:(?P<gkey>[A-Z0-9_]+):-(?P<gdefault>[^}]*)\}" != "" and '
 RULE = re.compile(r'^set\((?P<target>attributes\["gen_ai\.(?:request|response)\.model"\]|name), "(?P<new>[^"]+)"\) '
-                  r'where (?P<field>attributes\["gen_ai\.(?:request|response)\.model"\]|name) == '
+                  r'where ' + GUARD + r'(?P<field>attributes\["gen_ai\.(?:request|response)\.model"\]|name) == '
                   r'"(?P<prefix>(?:generate_content )?)\$\{env:(?P<key>[A-Z0-9_]+):-(?P<default>[^}]*)\}"$')
 # The ARN is kept on the copy under an attribute of its own (#876), before the rename overwrites it.
 KEEP = re.compile(r'^set\(attributes\["witb\.bedrock\.application_profile"\], attributes\["gen_ai\.request\.model"\]\) '
-                  r'where attributes\["gen_ai\.request\.model"\] == "\$\{env:(?P<key>[A-Z0-9_]+):-(?P<default>[^}]*)\}"$')
+                  r'where ' + GUARD + r'attributes\["gen_ai\.request\.model"\] == '
+                  r'"\$\{env:(?P<key>[A-Z0-9_]+):-(?P<default>[^}]*)\}"$')
 kept = [KEEP.match(st) for st in statements]
 parsed = [RULE.match(st) for st in statements]
 check(f"every statement keeps the ARN or renames one field, each from one key ({len(statements)} statements)",
@@ -97,6 +101,9 @@ check("and nothing else: four rules per Bedrock ModelConfig", len(statements) ==
 defaults = {m["default"] for m in parsed + kept if m}
 check("every key falls back to a value no model name equals, so an unpinned cluster renames nothing",
       defaults == {"unpinned"}, str(defaults))
+unguarded = [m.group(0) for m in parsed + kept if m and (m["gkey"], m["gdefault"]) != (m["key"], m["default"])]
+check("every statement requires its own key to be non-empty first, so an empty key renames nothing (#876)",
+      not unguarded, str(unguarded))
 
 print("== every profile loads the map and runs the rules on Agent Observability's copy only ==")
 for profile in PROFILES:
