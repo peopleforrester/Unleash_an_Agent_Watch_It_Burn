@@ -16125,3 +16125,7 @@ ConfigMap content changes), `kubectl --context watch-it-burn-private -n agent lo
 agentgateway | grep -c 'config.tracing is deprecated'` and the same for `-c agentgateway-c7` print 0, and
 `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passes with the gateway's A2A spans in the trace. The
 next run on #864 runs them.
+
+**The suites (run 17196, at `17158b7d`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests, `test_agentgateway_tracing_e2e.py` the new one) in 26m09s and printed `ALL E2E TOOLS TIER CHECKS GREEN`,
+exit 0. The offline suite inside it ran 252 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
