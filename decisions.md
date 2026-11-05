@@ -16869,3 +16869,7 @@ tag line and sum, recorded-only runs, eight refusals, and for both saved files: 
 `recorded/`.
 
 **Not yet run on a cluster.** Nothing: the change reads Cost Explorer, which this run did on accen-dev.
+
+**The suites (run 17307, at `43412a1c`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests) in 28m45s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_delivery_cost.py` passed all
+86 checks in it.
