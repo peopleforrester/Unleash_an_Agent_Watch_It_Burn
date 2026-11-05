@@ -19504,3 +19504,15 @@ started, and its `seed` container had restarted 12 times, so it predates this ch
 Pending. Once it is on staging, the next run on #704 runs the 2026-11-04 sheet (a fresh cluster where the grant
 admits one, else the fallback on watch-it-burn-private, restored after), sets the vllm entry to `measured: true`
 with `build_seconds` and `requests` 1500m CPU / 10Gi (limits 6 CPU / 16Gi), and records the wall-clock.
+
+**The suites (run 17565, at `203cca45`).** Two fixes to the tools tier came first, each found by this run's own
+suite failing on this host, and neither tied to the vLLM change. `verify/run-e2e-tools.sh` now gives helm a
+config, cache and data directory of its own under the tier's scratch directory: left at the pool's home, helm read a
+`repositories.yaml` with a `cilium` repo and no index for it, and `test_images_lock_render.py` failed 18 checks on
+"no cached repo found ... cilium-index.yaml". `verify/test_e2e_tools_tier.py` now passes `TMPDIR` to its three
+fixture runs: they built their environment from PATH and HOME alone, the run's sandbox cannot write `/tmp`, and the
+fixture runner's `mktemp` failed 6 checks. Then `bash verify/run-e2e-tools.sh` printed `267 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `58 checks ran (the offline suite and 57 tier tests) in 31m08s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `internal-registry` on watch-it-burn-private was still Degraded
+at 17:20Z: the `seed` container's push to the in-pod registry answers "Method Not Allowed [http 405]", filed as a
+follow-up.
