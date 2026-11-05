@@ -8417,7 +8417,9 @@ to anyone who knows the hostname.
 
 **Not yet run on a cluster:** `CONTEXT=<a cluster you own> python3 verify/test_terminal_ws_auth_live.py` (it is in
 `bash verify/run-e2e.sh`), and `./fleet.sh check-tls burritobot-private.agenticburn.com` with the new probe. This run
-has no cluster. The live test starts one shell, its positive control, and closes it at once.
+has no cluster. The live test starts one shell, its positive control, and closes it at once. Both have since run
+green on burritobot-private, the live test on 2026-11-05 by hecaton run 17412; the #785 entry below holds both
+outputs.
 
 ## 2026-11-03 · #785 · #770's two live checks on burritobot-private: check-tls's shell probe is green, the websocket test could not read the cluster
 
@@ -8490,6 +8492,62 @@ command above is still the one to run. In this run `bash verify/run-e2e-tools.sh
 exits 1 on `test_image_version_tags.py` alone; the offline suite inside it passes. ghcr.io now serves
 `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:cb00c5b7e716…`, a third digest after `d6acd503…` and
 `0b72ecc7…`, against the pinned `sha256:68004fb5ed2d…`. That tag overwrite is #714's, not this change's.
+
+**Run 17412: the live websocket test passes on burritobot-private.** By this run hecaton#508 was fixed: the run's
+`clusters/` files are group `hecaton-run-claude-certkraken`, the run user's own group, and `kubectl --context
+watch-it-burn-private` reached the API server. The context's `cluster-identity` ConfigMap records
+`burritobot-private.agenticburn.com` as its public host, so this is the presenters' cluster the issue names. At
+10:16 UTC on 2026-11-05:
+
+    $ CONTEXT=watch-it-burn-private python3 verify/test_terminal_ws_auth_live.py
+    == prerequisites ==
+      PASS  the cluster records its public host (cluster-identity public-host)
+      PASS  the terminal-auth Secret holds a user:password TTYD_CREDENTIAL (without it the terminal is open)
+      PASS  exactly one web-terminal pod is running
+      PASS  ttyd's log in that pod can be read
+      probing wss://burritobot-private.agenticburn.com/terminal/ws; pod web-terminal-78f4fb569f-25flk, 0 shell starts in its log so far
+    == the tty subprotocol without the Basic credential is refused at the upgrade ==
+      PASS  tty, no Basic credential, even with the right AuthToken: no 101 and no output
+      PASS  tty, a wrong Basic credential, even with the right AuthToken: no 101 and no output
+    == with the Basic credential, an empty or wrong AuthToken is closed 1008 ==
+      PASS  an empty AuthToken: 101, then closed 1008 with no output
+      PASS  a wrong AuthToken: 101, then closed 1008 with no output
+      PASS  no AuthToken at all: 101, then closed 1008 with no output
+    == no subprotocol, as tls-check sends: whatever the status, no shell ==
+      PASS  no subprotocol, no Basic credential, an empty AuthToken: no output (status 101)
+      PASS  no subprotocol, no Basic credential, a wrong AuthToken: no output (status 101)
+      PASS  no subprotocol, no Basic credential, the right AuthToken: no output (status 101)
+      PASS  no probe so far started a shell (0 -> 0 starts in ttyd's log)
+    == the positive control: the right credential and AuthToken start one shell ==
+      PASS  101 and output from the shell
+      PASS  ttyd logged exactly that one start (0 -> 1)
+      PASS  the web-terminal pod is the same one throughout (no restart hid a start)
+
+    All live terminal websocket auth checks passed.
+
+ttyd's log added exactly one "started process", the positive control's, and its next line has that shell ended by
+signal 1 at 10:16:59 when the socket closed (`process killed with signal 1, pid: 779`). A `ps -ef` in the pod
+afterwards showed ttyd, the entrypoint, code-server and JupyterLab and no bash, so the cluster was left as found.
+So the end-to-end path through the public host, the router, the console's nginx and the pod agrees with what #770
+measured on the binary: no credential, a wrong one or an empty AuthToken starts no shell.
+
+check-tls ran again at 10:17 UTC and is green, the same seven PASS lines, the cert now valid 75 more days:
+
+    $ infra/terraform/fleet/check-tls.sh burritobot-private.agenticburn.com
+    == burritobot-private.agenticburn.com ==
+      PASS  https 200
+      PASS  TLS chain validates
+      PASS  SAN covers burritobot-private.agenticburn.com
+      PASS  cert valid 75 more day(s)
+      PASS  http redirects to https (301)
+      PASS  websocket upgrade accepted (101)
+      PASS  the terminal's shell protocol (tty) refuses an upgrade with no credential (502)
+
+    TLS CHECKS GREEN for 1 host(s).
+
+Both of #785's checks are now done and nothing for #785 is owed on a cluster. This run cherry-picked run 16748's two
+commits, which never reached staging because that run ended blocked, and added only this paragraph and the closing
+sentence in the #770 entry; the draft's text is unchanged.
 
 ## 2026-11-02 · #201 · question 899: hold the PR-gated fleet apply until a live fleet event is confirmed
 
