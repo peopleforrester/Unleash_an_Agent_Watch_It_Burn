@@ -339,13 +339,30 @@ The runs before those, all model variance, not the platform:
 
 | Run | Result | The FAILs |
 |---|---|---|
-| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once `d25d21da` (#906) reaches the cluster. |
+| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once `13c1f1cc` (#906) reaches the cluster. |
 | Admin 1 | cut off | guardrails-on timed out at 300 s: every call to the other cluster's API hung on its private endpoint. Fixed by the security group rule above. |
 | Admin 3 | 31 PASS of 32 | Challenge 4's re-ask: "no sign it tried", as on 2026-10-29. |
 
 Not shown by the probe: `registry.burritobot.co` and `deployments.burritobot.co` still answer the router's 404,
 because the routes table with their rows is not published yet. The private cluster's registry seed failed with a 405
-until `02404d1d` (#906) reaches it, so HC-666's Joker there is admitted but its image cannot be pulled before both.
+until `11b86302` (#906) reaches it, so HC-666's Joker there is admitted but its image cannot be pulled before both.
+
+**2026-11-05, the run-through day, rechecked (#906).** Hecaton run 17628, on run 17556's commits (ported onto staging
+`92dfea31`), with neither cluster changed since 16:31Z. Both roots still render `kubecon-community` and
+`kubecon-private`, the pair is still linked, and every Argo CD application reads Synced and Healthy but private's
+`internal-registry`, as above.
+
+Admin, 18:06Z: 32 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.2479 to $0.2914 over 13 model calls. guardrails-on from the
+private terminal armed both clusters, and guards-off and guardrails-off left both at the start state.
+
+Community, 18:08Z: 11 PASS of 12, `KUBECON PROBE RED`, $0.0769 to $0.1309 over 7 model calls. The one FAIL was the
+linked-list ask, 2 of 3: the bot wrote out its plan to answer and stopped there. HC-666 landed on the first send.
+Community again, 18:09Z: 12 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.1309 to $0.1655 over 7 model calls.
+
+At 18:10Z `./fleet.sh reset-bot watch-it-burn-community` read `$0.0000 over 0 requests`. Both `/controls` read every
+guard false, but private's Falco badge, which reads the Falco DaemonSet that `kubecon-private` installs (#486). No
+`joker-*` Deployment is left on either cluster. `registry.burritobot.co` and `deployments.burritobot.co` still
+answer the router's 404, for the reason above.
 
 ## The one platform, and the two clusters on it
 

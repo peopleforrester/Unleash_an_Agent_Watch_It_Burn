@@ -20160,3 +20160,45 @@ went to the host's `/tmp`, which had been removed mid-run on this host (`ls -ld 
 The second run printed `267 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline
 suite and 57 tier tests) in 31m33s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, so #883's command is green on
 this branch. No dependency was added.
+
+## 2026-11-05 · #906 · run 17628 · Run 17556's work ported, both probes GREEN again, the bot reset, the routes still owed
+
+`verify/prior-drafts.sh 906 origin/staging` printed START from `origin/agent/906-17556`, CLEAN: staging had not
+touched any of its 11 paths. The issue's only comment is that run's own report (outcome partial), and no comment says
+why it did not merge, so this run cherry-picked all six commits and redid only the live checks. Their hashes here:
+`02404d1d` is `11b86302`, `d25d21da` is `13c1f1cc`, `e6f34a90` is `44cc9be5`, `1cd135ea` is `f3a6da86`, `5d40fd08`
+is `3470f5c3` and `1077925e` is `4e804a67`. The run-of-show now names the new ones; the run 17556 entry above keeps
+the old ones as written.
+
+**What the clusters read at 17:47Z.** As run 17556 left them: both `lab-bootstrap` roots on `kubecon-community` and
+`kubecon-private`, the `guardrails-peer` Secret on both, `deny-external-registries` and `restrict-image-registries`
+on community and `deny-external-registries` on private, no NetworkPolicy or KubeArmor policy of the guardrails on
+either, and every Argo CD application Synced and Healthy but private's `internal-registry` (Degraded until
+`11b86302` reaches it). Community's counter had moved to $0.0482 over 9 requests: another run was replaying topic
+cases on it (`sess-replay-*` sessions in `workshop-agent`'s log at 17:48Z). This run waited until that log had been
+quiet for 6 minutes before it switched anything.
+
+**The probes.** Admin on watch-it-burn-private, 18:06Z: 32 PASS, `KUBECON PROBE GREEN`, $0.2479 to $0.2914 over 13
+model calls, guardrails-on arming both clusters from the private terminal and guardrails-off disarming both.
+Community, 18:08Z: 11 PASS of 12, RED, on the linked-list ask (2 of 3; the bot wrote out its plan and stopped), $0.0769
+to $0.1309 over 7 calls. Community again, 18:09Z: 12 PASS, `KUBECON PROBE GREEN`, $0.1309 to $0.1655 over 7 calls.
+HC-666 landed on both community runs, on the old server still, so `13c1f1cc`'s beat (Not yet run, item 3 above)
+stays owed. The run-of-show's Probe record has the three runs.
+
+**Step 8.** At 18:10Z `./fleet.sh reset-bot watch-it-burn-community` printed `counter at zero on
+https://attackme.burritobot.co/cost ($0.0000 over 0 requests)`, and `/cost` read `"requests": 0, "usd": 0.0`.
+
+**Step 5, still owed.** `registry.burritobot.co` and `deployments.burritobot.co` answer the router's 404. apex main's
+Caddyfile already looks `deployments.burritobot.co` up under `deployments-attackme.burritobot.co`'s row, beside the
+support desk's. What is missing is the table: apex main's `routes.map` was last published on 2026-11-01 (`b0c97e80`,
+24 hosts), before the deployments and registry rows existed, and it carries neither. `./fleet.sh routes roster`
+writes both, then pushes apex main and reloads the live router over Railway SSH. A run may not push or deploy, so this
+run escalates that one step, to be run from a staging checkout once this run is promoted, so that the registry it
+routes to has seeded.
+
+**The Falco badge.** Private's `/controls` reads `falco: true`. The badge reads the Falco DaemonSet (#486), and
+`kubecon-private` installs Falco, which with Talon answers only the fork bomb, not one of the four guardrails #774
+starts off and not a beat of the breakout. This run left it, as run 17556 did, and the report names it.
+
+**Left on the clusters, at 18:10Z.** As found at 17:47Z, but community's counter at zero and community's guard-proxy
+pod replaced by reset-bot. No `joker-*` Deployment on either cluster.
