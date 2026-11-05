@@ -20202,3 +20202,9 @@ starts off and not a beat of the breakout. This run left it, as run 17556 did, a
 
 **Left on the clusters, at 18:10Z.** As found at 17:47Z, but community's counter at zero and community's guard-proxy
 pod replaced by reset-bot. No `joker-*` Deployment on either cluster.
+
+**The suites (run 17628).** `bash verify/run-e2e-tools.sh` at `4e804a67`, the six ported commits, printed `267 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite and 57 tier tests) in 35m14s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `bash verify/run-tests.sh` at `3cfb3c4a`, which adds only this
+entry and the run-of-show's record, printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. No
+dependency was added.
