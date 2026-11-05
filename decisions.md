@@ -16454,3 +16454,7 @@ usage types are not cluster hours, the edge guard on one account and not the oth
 `--event`, the refusals, read-only calls with explicit profile and region, and that each file in `cost/measured/`
 starts with the report heading and has no `WINDOW CUTS SPEND` line. `verify/test_activate_cost_tags.sh` checks that
 `cost-report.sh --help` names the new script.
+
+**The suites (run 17257, at `9a6faa36`).** `bash verify/run-tests.sh` ran 255 tests green, after `9a6faa36` took a
+retired cluster name out of `cost/measured/README.md` that `test_docs_current.py` refused. `bash verify/run-e2e-tools.sh`
+ran 55 checks (the offline suite and 54 tier tests) in 29m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
