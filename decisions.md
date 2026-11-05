@@ -21945,3 +21945,158 @@ checks fail; against one with no rules, four fail.
 ran (the offline suite and 62 tier tests) in 36m40s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
 
 No dependency was added.
+## 2026-11-05 · #921 · run 17641 · guard-proxy's /prompts gains `witches`, each prompt's witch name at its index; the change goes to guard-proxy-agenticburn
+
+**What #921 asks.** Each prompt on the prompt wall (prompts.burritobot.co) shows its sender's witch name instead of
+the cluster, and the cluster stays as metadata for the wall's "All clusters" filter. This issue is the feed half,
+in guard-proxy-agenticburn (the submodule at `gitops/ai-layer/guard-proxy`). The wall half is
+prompts-agenticburn#16. `verify/prior-drafts.sh 921 origin/staging` printed NONE.
+
+**What the feed carries today.** guard-proxy's `GET /prompts` answers `{"enabled": bool, "prompts": [str]}`, a bare
+list of moderated texts from a 50-deep deque, in both proxy.py and the Go build. The `seq`, `cluster`, `text` and
+`ts` the issue names are the wall's own entries: prompts-agenticburn's `ingest()` builds them, takes `cluster` from
+the host it polled, and stamps `ts` on receipt. So `cluster` was never in guard-proxy's feed, and it stays where it
+is, on the wall's entry. guard-proxy does not know its cluster's wall name.
+
+**Why `prompts` stays as it is.** Three readers parse `prompts` as strings, and changing it to objects would empty
+the wall rather than label it:
+- prompts-agenticburn's `parse_payload()` keeps only `isinstance(p, str)` items, so every prompt would be dropped.
+- lab-platform's `internal/promptfeed` decodes `prompts` as `*[]string`, so every cluster would read unavailable.
+- `gitops/ai-layer/web/display.js` sets each item as a card's `textContent`.
+`verify/kubecon_probe.py`'s `judge_feed` and `verify/test_prompt_wall_redaction.py` also read `prompts`. None of them
+breaks on an extra key.
+
+**Why a list of names, not a list of `{text, witch}` objects.** Run 17641 first built `entries`, a second list of
+`{"text", "witch"}` objects, and dropped it on lab-platform's read bound. lab-platform's promptfeed refuses a
+`/prompts` body over 256 KiB (`MaxBodyBytes`, 262,144 bytes) whole, and the cluster then reads unavailable. proxy.py
+writes JSON with `json.dumps`, which escapes each emoji as a 12-byte surrogate pair, so fifty 280-character emoji
+prompts are already 170,293 bytes with names. Carrying each text twice made it 339,443 bytes, so one attendee
+pasting emoji would take the community cluster off any wall lab-platform feeds. The names alone add at most about
+2 KB.
+
+**The field.** `witches`, a list of strings as long as `prompts`, where `witches[i]` is the witch name of the
+person who sent `prompts[i]`. Both lists come from one copy of the deque under one lock, so they always line up.
+The name is the one `/chat` already reads and shape-checks (#762, guard-proxy-agenticburn#34): `<First> the
+<Creature>`, where a blank, non-string or misshaped one is no name. Rules:
+- **No name is `""`, never null and never a shorter list.** That covers a `/chat` without `witch`, a blank,
+  non-string or misshaped one, and every prompt from the A2A path (the terminal and kagent), which has no name to
+  carry.
+- **A name moderation would change is dropped whole, to `""`.** The name is chosen client-side and only
+  shape-checked, so "Shit the Ghoul" or "Delete the Witch" passes the shape and would be projected. The feed's
+  moderator (personal data, block-list, profanity) runs over the name, and if anything would be masked the prompt
+  carries no name, never a half-masked label like "[redacted] the Ghoul". All 768 names the storefront deals
+  (`FIRST` by `CREATURES` in `gitops/ai-layer/ticket_site.py`) pass the moderator unchanged, checked in this run.
+- **The name never goes into the text.** `prompts` holds the prompt alone, as before.
+- Probes, the feed being off, and the 50-prompt bound apply to the names exactly as to the prompts.
+
+**What the wall shows for a prompt with no name.** The words "someone who gave no name", which the desk's
+deployments list (`gitops/ai-layer/ticket_site.py`, the "deployed by" line on `/me`) already shows for a deployment
+without a name, so the two read the same. The cluster is not shown in its place, for either bot. The wall's code is
+prompts-agenticburn#16. It reads `witches` when the list is there and as long as `prompts`, and otherwise treats
+every prompt from that cluster as having no name, for a cluster still on an older guard-proxy.
+
+**Why the change is not committed in this run.** Its code lives in guard-proxy-agenticburn, a repo this run cannot
+commit to or push. Moving this repo's pin is a change hecaton's `forbidden` gate refuses for any run (the
+2026-11-05 #382 entry). So the change goes to guard-proxy-agenticburn as a follow-up, and the repin after it is
+Michael's commit, as every repin here has been.
+
+**The change, built and tested in this run.** Run 17641 wrote it in the submodule's checkout at
+guard-proxy-agenticburn main `c5f71f3`, ran that repo's suites, and put the checkout back on its pin `0f0c809`.
+Nothing was committed there. The follow-up carries the design and the diff:
+- proxy.py: the deque holds `(moderated text, witch)` pairs. `record_prompt(text, witch="")` replaces the two
+  inline appends (the A2A path passes no name), `feed_witch()` applies the moderation rule, and `feed_payload()`
+  builds the GET body with `prompts` and `witches`.
+- Go: `Feed.Record(text, witch)` and `Feed.Snapshot()`, which returns both lists under one lock. `chat.go` passes the
+  shaped name, and the A2A path in `server.go` passes `""`.
+- Conformance (`conformance/test_prompt_feed.py`, both builds): names at their prompts' indexes beside unchanged
+  texts; the no-name case for a missing, blank, non-string or misshaped name and for the A2A path; a name
+  moderation would mask dropped whole; the 50 bound with names and prompts in step; moderation and probes; nothing
+  recorded with the feed off; and fifty named 280-character emoji prompts fit in 256 KiB. The two exact-equality
+  feed tests gain `"witches"`, and `test_chat_witch.py`'s feed test checks the name is in `witches` and not in the
+  text. Go unit tests in `internal/feed/feed_test.go` cover the same cases.
+- `conformance/mutation_check.py`: the "feed redaction reaches the bot" mutant moves to the new call, and four are
+  added: the names dropped, the names out of step with the prompts, a masked name shown, and the name put into the
+  prompt text.
+
+**Live, 2026-11-05 (read only).** `kubectl --context <ctx> -n agent exec deploy/guard-proxy -c proxy -- python3 -c
+<GET 127.0.0.1:8080/prompts, print its keys and item types>` printed `['enabled', 'prompts'] True 0 []` on
+watch-it-burn-community and `['enabled', 'prompts'] True 4 ['str']` on watch-it-burn-private. Both clusters run
+`checksum/proxy-py` `dfca2b1fe758` (pin 0f0c809), so neither carries `witches` yet. No prompt text was printed.
+Nothing on either cluster was changed.
+
+**Owed, in order.**
+1. guard-proxy-agenticburn lands the follow-up on its main.
+2. Michael repins `gitops/ai-layer/guard-proxy` here to that commit and sets `checksum/proxy-py` in
+   `gitops/ai-layer/resources.yaml` to its proxy.py's hash (`verify/test_proxy_checksum.py` holds the two
+   together). A pin at guard-proxy main also brings what landed there after 0f0c809: the span error marking of
+   guard-proxy-agenticburn#53 to #57.
+3. lab-platform relays `witches` beside `prompts` in its event prompt feed, cut to the same last 50, or an event
+   lab-platform provisions shows no names. That is a follow-up on lab-platform.
+4. prompts-agenticburn#16 reads `witches`.
+
+**Not yet run on a cluster.** After the repin syncs: on each of watch-it-burn-community and watch-it-burn-private,
+the same `kubectl exec` read prints `['enabled', 'prompts', 'witches']`, with `witches` as long as `prompts`. Then
+one `/chat` with `{"prompt": "one burrito", "witch": "Agatha the Banshee"}` to the public bot ends the lists with
+"one burrito" and "Agatha the Banshee", and one without `witch` ends them with its prompt and `""`.
+`fleet.sh wall-check` still reads every roster cluster's prompts.
+
+**Found by the suites (run 17641): the tier's Helm home was the host's.** The first `bash verify/run-e2e-tools.sh` at
+`d71a3f3c` printed `266 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite
+and 57 tier tests) in 28m41s` and exited 1 on six tier tests: test_datadog_log_services_render,
+test_enforce_floor, test_image_registry_render, test_images_lock_render, test_kubearmor_config_render and
+test_no_docker_hub_render. Each chart fetch failed with `Error: no cached repo found. (try 'helm repo update'): open
+/var/lib/hecaton/pools/claude-performantpro-8/.cache/helm/repository/cilium-index.yaml: no such file or directory`.
+That pool home's `.config/helm/repositories.yaml` has listed a `cilium` repository since 2026-10-31, and its
+`.cache/helm/repository` was emptied at 21:27 during this run, by nothing in this repo: no file under `verify/` or
+`scripts/` runs `helm repo` or touches Helm's cache. A `helm pull --repo` or `helm template --repo` loads every
+listed repository's index, so one stale entry failed all six. Run 17584's tier on the same home passed earlier the
+same day, while the index was still there. Those tests depended on Helm state they do not own, which the repo's
+rule on test inputs (#797) forbids. So `verify/run-e2e-tools.sh` now sets `HELM_CONFIG_HOME`, `HELM_CACHE_HOME`
+and `HELM_DATA_HOME` for every tier test to empty directories in its own temporary directory, removed with the
+aws and eksctl stubs when it exits. No tier test adds a repository or a plugin; each one names its chart by
+`--repo` URL or `oci://`. `verify/test_e2e_tools_tier.py` gains a case that runs the real runner, with HOME holding
+that same `cilium` repositories.yaml and `HELM_CONFIG_HOME` pointed at it, and one fixture tier test that reports
+the three variables. It checks each one is set, outside HOME and not the caller's value, is an empty directory, is
+separate from the other two, and is gone once the runner exits. Against the old runner 8 of those checks fail.
+Against the new one the whole test passes. test_kubearmor_config_render.py and test_enforce_floor.py, run alone with
+an empty Helm home, exit 0. `verify/run-e2e.sh`, the by-hand live suite, still uses the caller's Helm home. It
+runs in a presenter's own session, so it is left as it is.
+
+**The suites (run 17641, at `c635c0b3`, submodules at their pins).** `bash verify/run-e2e-tools.sh` printed `266
+tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58
+checks ran (the offline suite and 57 tier tests) in 29m21s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No
+`no cached repo` line appears in the log, while the pool home's Helm cache still lacks `cilium-index.yaml`.
+
+**Run 17717: why run 17641 did not land, and what changed.** Hecaton's rebase of run 17641's branch onto staging
+`dd3e291b` stopped on PROGRESS.md (an insert-insert conflict in one region) while applying the first commit.
+Fourteen runs that landed in between (17626 to 17686) had each put their line directly under `### Added`, which is
+where this run's line went too. Run 17717 rebased the branch onto staging `3b6a15c3`. `verify/prior-drafts.sh 921
+origin/staging` named only edits in place: PROGRESS.md and decisions.md, plus `verify/test_e2e_tools_tier.py`, where
+be97ab92 (#909) gave the `run()` fixture its own TMPDIR. The Helm-home case added here sets its own TMPDIR too, so
+nothing in it needed changing. Both conflicts were resolved by keeping staging's lines and this run's. Run 17717 put the
+#921 line below the three newest 2026-11-05 lines in `### Added`. Run 17761 found that #890 (run 17742) had since
+added its line at that same spot, after #771, and the rebase stopped on PROGRESS.md again. So the #921 line now sits
+directly after the 2026-11-01 #762 line, the chat page's witch name that this feed carries on. The runner fix sits
+after the 2026-11-01 #746 line in `### Fixed`. New lines go in at the top of a section, not among its older lines, so
+neither spot is one other runs insert at. The rebase also left run 17641's
+first heading for this entry (the `entries` one) above its replacement, with no blank line before it. That heading
+is removed. A second rebase, onto `2cb0484d`, replayed that removal wrongly and put the heading back, so the branch is now two commits on staging, one for #921's records and one for the runner fix, and the heading is written once. Staging's #927 and #915 changed `gitops/ai-layer/web/display.js`, and it still reads `data.prompts` as
+strings, so the `witches` design above is unchanged. Neither follow-up in run 17641's report was filed: on
+2026-11-05 guard-proxy-agenticburn's newest issue is #58, and lab-platform has none on `witches`. So both are in run
+17717's report again.
+
+**The suites (run 17717, on the branch rebased onto staging `3b6a15c3`, submodules at their pins).** `bash
+verify/run-e2e-tools.sh` printed `274 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite
+(`bash verify/run-tests.sh`), then `61 checks ran (the offline suite and 60 tier tests) in 27m48s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`.
+
+**After the squash onto staging `2cb0484d` (run 17717).** The tree is the one above plus that day's other staging
+commits (#795, #931) and the heading fix. `bash verify/run-tests.sh` there printed `274 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN` and `exit=0`. `bash verify/run-e2e-tools.sh` on the same tree printed `274 tests ran`, then `61
+checks ran (the offline suite and 60 tier tests) in 29m37s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**The suites (run 17761, on the branch rebased onto staging `c3da2c3d`, submodules at their pins).** `bash
+verify/run-e2e-tools.sh` printed `278 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite,
+then `63 checks ran (the offline suite and 62 tier tests) in 36m24s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+After a last rebase onto staging `9de5bb7f` (13 more commits, none touching this branch's files or calling helm),
+`bash verify/run-tests.sh` printed `280 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`.
