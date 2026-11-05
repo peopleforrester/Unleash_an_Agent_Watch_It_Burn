@@ -18365,5 +18365,9 @@ One mounted the deployed `llm-guard-scanners` ConfigMap as it is. The other moun
 
 **Not yet run on a cluster.** Once promoted, on either cluster:
 `kubectl --context <ctx> -n agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must print
-the cpu.5 reference, the rollout must reach Ready, and `bash verify/input-guard.sh <host> <kube-context> <aws-profile>`
+the cpu.5 reference, the rollout must reach Ready, and `bash verify/input-guard.sh <host> <kube-context> [aws-profile]`
 must pass the benign prompt and block the injection through the deployed guard.
+
+**Suites (run 17384, at d5eaa03f).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN, `test_llm_guard_bantopics_image.py` among them) and then the tools tier: 56 checks in 27m00s,
+ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
