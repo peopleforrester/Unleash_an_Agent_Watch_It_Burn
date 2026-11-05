@@ -16718,3 +16718,6 @@ walk of the private cluster through C1 to C6 within 4 hours of the test, with `g
 and `guard-input-on` before C6's and `guards-off` after. For column 3 the walk needs `block-recipe-snoop` off for
 the C3 read (`kubectl -n agent delete kubearmorpolicy block-recipe-snoop`, which Argo CD restores), or the decoy
 read above. The first read of a stored board also tests #862's DRIFT comparison.
+
+**The suites (run 17295, at `339bc305`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 27m02s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
