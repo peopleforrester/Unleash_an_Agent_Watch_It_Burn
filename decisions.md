@@ -16583,3 +16583,6 @@ event=kubecon-na-2026`. Then `WIB_ATTENDEE_ACCOUNTS=accen-dev DRIFT_PROFILE=acce
 ATTENDEE_CLUSTER=watch-it-burn-community python3 verify/test_drift_aws_live.py` with the cluster's attendee CSV, and
 `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`. The drill
 change itself needs nothing synced: it is a test, and it was run here on both clusters.
+
+**The suites (run 17269, at `c324d4a2`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 27m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
