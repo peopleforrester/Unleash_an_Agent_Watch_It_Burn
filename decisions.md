@@ -19489,3 +19489,7 @@ prints 1; then a chat with a cuss word (and one with a made-up e-mail) shows in 
 on `https://attackme.burritobot.co/display`, a clean chat sent after it does, and the bot answers all three. The
 same on `https://burritobot-private.burritobot.co/display` on watch-it-burn-private. #917, #921 and #924 change the
 same page; whichever lands later keeps the `.filter(shown)` step ahead of the render.
+
+**The suites (run 17639, at `2a508c41`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
+and 58 tier tests) in 31m49s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new tier test is the 58th.
