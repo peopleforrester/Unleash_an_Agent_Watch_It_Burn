@@ -16983,3 +16983,34 @@ fleet dashboard's URL that the apply prints.
 
 **The suites (run 17318, at `f758b715`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 27m44s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #382 · Michael's repin to 0f0c809 is live on both clusters, and the trace still has one root
+
+**What landed.** Michael committed the repin the previous entry handed over, as 9f2b575c on staging
+(gitlink `gitops/ai-layer/guard-proxy` c2eb4cf to 0f0c809, `checksum/proxy-py` ba8d8e2b789f to dfca2b1fe758),
+the same two lines run 17210 tested. This run made no code change; it ran the read that entry named under
+"Not yet run on a cluster" and records it here, which closes #382's fourth criterion.
+
+**Live, 2026-11-05, both clusters.** Argo CD's `ai-layer` Application reads `Synced
+9f2b575c7d882ed3cd73d80702dbe75bf75b2084 Healthy` on watch-it-burn-private and on watch-it-burn-community.
+On each, with `--context` named and `-n agent`:
+- `get deploy guard-proxy -o jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'` printed
+  `dfca2b1fe758`, and the deployment reads 1/1 ready, 1 updated (pods guard-proxy-6cccbdff5c-4sxlw on private,
+  guard-proxy-6cccbdff5c-nwlxd on community).
+- `exec deploy/guard-proxy -c proxy -- grep -n "APM trace root" /app/proxy.py` printed nothing, exit 1. The
+  container is named `proxy`, not `guard-proxy` as the previous entry wrote.
+- The sha256 of the mounted `/app/proxy.py`, first 12 characters, is `dfca2b1fe758`, equal to the annotation.
+- `grep -n "trace root" /app/proxy.py` prints lines 1188 and 1596; 1595 to 1598 read "Annotate the outer HTTP
+  span, this proxy's own SERVER span opened in do_POST, ... That span is the trace root: the proxy is a stdlib
+  http.server handler, which OTel auto-instrumentation does not touch, so there is no other root above it".
+
+**The trace after the roll.** `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` sent one chat
+under its own traceparent and read trace dc5afc9fb2d7428b9271e321f178afc7 out of Tempo: every check PASS, "One
+interaction, one root", exit 0. Its root is guard-proxy's POST /chat, the gateway's A2A span and the agent's
+server span are in it, and `invocation` hangs off the agent's server span. The change was to comments only, so
+this is the shape the 2026-11-04 Datadog read recorded, not a new measurement of it.
+
+**The rollout check the previous entry named.** `COMMUNITY_CONTEXT=watch-it-burn-community python3
+verify/test_kubecon_c3_live.py`: "guard-proxy runs git's proxy.py" PASS and every other check PASS, "All live
+Challenge 3 probe checks passed", exit 0. It spent one marked model call on the public bot and left no Joker
+behind, so the cluster is as found.
