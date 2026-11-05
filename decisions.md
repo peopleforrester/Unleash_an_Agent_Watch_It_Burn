@@ -19153,3 +19153,10 @@ decisions.md, an append on both sides, kept both; and `verify/no-cloud.sh`, wher
 they still get all five stubs, and `test_no_cloud_by_hand.sh`'s grep for `aws is stubbed here` still matches the
 reworded stub. The header's last line now names `no_cloud_guard` as well. Staging's tier is now 56 tests; none of
 the new ones calls aws or eksctl, and none runs fleet.sh or event.sh.
+
+**The suites and the live check again (run 17434, at `2d962ba3`, on staging `46d8c798`).** `bash verify/run-e2e-tools.sh`
+ran 57 checks (the offline suite and 56 tier tests, each through the aws and eksctl stubs) in 27m35s and printed
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 262 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. No tier test printed `TEST CALLED A CLOUD TOOL`. The read-only live check gave
+the same answers on `/var/lib/hecaton/runs/17434/clusters/bin/aws`: `515966504359` with the AWS variables unset, and
+exit 1 with the call named through the tier's stub.
