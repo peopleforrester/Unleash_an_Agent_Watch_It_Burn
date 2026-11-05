@@ -16919,3 +16919,88 @@ and no cluster reads them.
 **The suites (run 17310, at `a243799f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 28m09s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_iam_policy_pipeline.py` and
 `verify/test_iam_policy_structural.py` passed in it.
+
+## 2026-11-05 · #629 · Rebased onto staging; live checks run on both clusters; what is still owed is the promotion of this branch and Argo's sync
+
+**Why the branch moved.** Staging moved from 9e7070d to 15e483ed (337 commits) while the earlier commit 6eab11c sat
+unpromoted. `verify/draft-drift.sh` named 12 files that staging had since edited. Backup: `backup/629-6eab11c`. The
+design is re-made on staging's layout as ed175237, not cherry-picked.
+
+**What differs from the draft.**
+- `infra/argocd-values.yaml`: dropped. Staging's fee7dbd7 (#858) moved Argo CD to chart 10.11.7 (v3.5.7) with the limits
+  require-resource-limits needs on every container. The live releases on both clusters match it, with the burritobot
+  labels. The commit message of ed175237 still says "get private's Argo CD ... past Kyverno"; that part is superseded.
+- `infra/datadog-fleet/`: staging's #810 design is kept, in which `scope: org` is a per-monitor key for the one
+  metric with no cluster tag. The top-level key that this branch set to the env is now `env_filter`, not `scope`,
+  so the two cannot collide. Per-cluster monitors, the fleet dashboard, the leaderboard and fleet-analytics are
+  env-scoped; `validate_monitors` refuses a per-cluster query that fences on a cluster name. The org-wide
+  `agent-obs-silent` query names the env too, so another team's ml_app traffic in the shared org cannot fill it.
+- `gitops/ai-layer/workshop-mcp-server.py`, `gitops/otel-collector/values.yaml`, `backstage/k8s/backstage.yaml`,
+  `gitops/bootstrap/apps/kubearmor.yaml`, `gitops/kubearmor-config/`, `infra/aws-load-balancer-controller-values.yaml`:
+  the same change as the draft. Staging's `deploy_app` (#856) also adds selector labels to a template that has none;
+  `verify/test_c6_villain_endpoint.py` now expects those with the stamp.
+- `verify/test_burritobot_cluster_live.py` now reads `envFrom` ConfigMap and Secret references. Kagent's grafana-mcp
+  gets DD_SERVICE and DD_ENV from its ConfigMap (kagent.yaml), and the check had missed it. A container's own env still
+  overrides envFrom, as Kubernetes applies them. The logic test covers it.
+- New in this run: the tool-pin spike's one-shot pods (`tool-pin-probe-*`, `tool-pin-ask-*`) and its Deployment carry
+  the tags (d9df4378); `verify/beat-01.sh` labels its sample workload, and a failed label stops the beat (a143e951).
+  Both were logging under image names with no env.
+
+**Live state before this run's changes (2026-11-05, UTC).**
+- watch-it-burn-community: every container passed except kagent's grafana-mcp, which the check then misread (above).
+- watch-it-burn-private: KubeArmor's DaemonSet, controller and relay had no DD_SERVICE or DD_ENV. The KubeArmorConfig
+  was generation 1 and Pending. Kyverno refused the operator's new controller ReplicaSet for lack of limits.
+
+**Actions taken, both clusters, all named exactly.**
+1. Helm, both clusters: `aws-load-balancer-controller` 1.14.0 upgraded with infra/aws-load-balancer-controller-values.yaml,
+   clusterName = the cluster, region us-west-2, vpcId vpc-0607c27ee51fb233c. The labels were already there, and the
+   limits are new. Argo CD was not changed.
+2. watch-it-burn-private: LimitRange `kubearmor-default-limits` applied in namespace kubearmor from
+   gitops/kubearmor-config/templates/limitrange.yaml. Its first apply went to namespace default, which was a mistake
+   of mine; I deleted that object.
+3. watch-it-burn-private: Argo CD Applications `kubearmor` and `lab-bootstrap` have `spec.syncPolicy.automated.selfHeal`
+   set to false. `lab-bootstrap` is the parent, and it had set the child's `selfHeal` back to true, so it is paused too.
+   **Both must be set back to true after this branch reaches staging and Argo CD has synced**, because the staging
+   version carries the same globalEnv. Restoring them before that reverts the globalEnv, and the operator then drops
+   DD_ENV from the KubeArmor pods again. `lab-bootstrap` shows OutOfSync while it is paused.
+4. watch-it-burn-private: KubeArmorConfig `kubearmor-default` gets `spec.globalEnv: [{name: DD_ENV, value:
+   burritobot-kubecon-na-26}]`. The operator then updated the DaemonSet, controller and relay in place. The DaemonSet
+   has DD_SERVICE and DD_ENV, and the refused ReplicaSet is gone.
+5. Backstage was not changed. The pod annotation `ad.datadoghq.com/backstage.logs` needs a patch on the Argo-managed
+   Deployment `backstage` in namespace backstage. Kyverno's `block-argocd-drift` denied that patch from a non-Argo
+   principal. Setting the policy to Audit did not lift the denial, so the policy was restored to Deny before any
+   patch went through. Backstage's logs stay under `backstage` and `rootHttpRouter` on private until promotion.
+6. Probe chats through `verify/kubecon_probe.py` `Probe.ask`, which guard-proxy keeps out of the room's feed: one per host
+   at 03:38Z and one at 04:15Z. The hosts were matched to the clusters by each cluster's `cluster-identity` public host.
+
+**Results.**
+- `verify/test_burritobot_cluster_live.py`: PASS on watch-it-burn-community. On watch-it-burn-private it FAILED before
+  action 4 (three KubeArmor containers) and PASSES after it.
+- `verify/test_datadog_sandbox_live.py`, lookback 15 minutes, after the 04:15Z chats: checks 1, 3, 4 and 5 PASS.
+  Check 4 is `ml_obs.trace` under the env with ml_app `burritobot` only, which is the #783 fix (67c956ad) working on
+  staging. Check 5 is the key check: the org has exactly one API key named BurritoBot (the match ignores case), its
+  last four characters match watch-it-burn/datadog, and Datadog saw it used in the last 24 hours. Check 5 used
+  the secret's application key, which has `api_keys_read`, so the unscoped key in ~/secrets was not needed.
+- Check 2 FAILS on burritobot-private. Four services are still outside the rule, and each is a pod that the branch
+  fixes but staging does not yet have: `backstage` and `rootHttpRouter` (action 5, Backstage's annotation),
+  `promo-mascot` (a `promo-mascot-r17286` Deployment, created before deploy_app's stamp went live, so its pod has no
+  tags), and `watch-it-burn` (Beat 1's `beat1-sample-web`, whose label patch is in a143e951).
+
+**Still owed, in order.**
+- The dispatcher promotes this branch to staging, and Argo CD syncs `kubearmor`, `lab-bootstrap` and `backstage`.
+- Set `selfHeal` back to true on `kubearmor` and `lab-bootstrap` on watch-it-burn-private, and confirm that
+  `kubearmor-default` still has `globalEnv` after the sync.
+- Backstage's annotation applies through Argo, and the `promo-mascot` and Beat 1 workloads take the stamp and the patch
+  when they are deployed again.
+- Re-run `verify/test_burritobot_cluster_live.py` on both clusters, and `verify/test_datadog_sandbox_live.py` with
+  WIB_DD_LOOKBACK_MIN=15 at least 15 minutes after the sync. Then record the result here. #629 closes when every check
+  passes. Check 4 must stay green for the 11-11 demo; #783 is fixed on staging.
+
+**Tests.** `bash verify/run-tests.sh`: the offline suite was green at 5a935714 except `test_room_jokers.py`, which
+expected a Joker's labels without the stamp, and that test is updated. `bash verify/run-e2e-tools.sh` was green at
+5a935714 (55 checks). A final run on a143e951 is in `runs/17283/e2e-tools-final.log`.
+
+**Other things this run found.** The Argo CD sync reverted this run's `selfHeal` pauses within minutes. The
+`lab-bootstrap` Application re-enables its child's `selfHeal`, which is why it is paused as well. The `block-argocd-drift`
+policy blocks direct patches to Argo-managed Deployments even at Audit, so a Backstage annotation can only land
+through Git.
