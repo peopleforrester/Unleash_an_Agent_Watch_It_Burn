@@ -17073,3 +17073,6 @@ client's calls: 46 requests, $0.22. It was not reset here, because `fleet.sh res
 using it. The run-of-show's Night Before already runs `reset-bot` before the room plays.
 
 **Not yet run on a cluster.** Nothing. The probe change only adds reporting, and run 3 used it live.
+
+**Suites (run 17324, at a99d07bd).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier: 55 checks in 27m45s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
