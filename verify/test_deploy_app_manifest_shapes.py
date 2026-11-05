@@ -149,6 +149,13 @@ PARSE_SHAPES = (
     ("2026-11-04's shape with the name as a JSON key after it",
      json.dumps(QUOTED) + f'}}, "requested_by": "{WITCH}"}}', WITCH),
     ("a whole manifest with text after it and no name", json.dumps(QUOTED) + "}}", ""),
+    # 2026-11-05 (#906): the call's argument written as a top-level field of the Deployment, which the API server
+    # refused twice in three asks with ".requested_by: field not declared in schema".
+    ("2026-11-05: requested_by as a field of the manifest itself",
+     json.dumps({"apiVersion": "apps/v1", "kind": "Deployment", "requested_by": WITCH,
+                 **{k: v for k, v in QUOTED.items() if k not in ("apiVersion", "kind")}}), WITCH),
+    ("2026-11-05's shape with requested_by last", json.dumps({**QUOTED, "requested_by": WITCH}), WITCH),
+    ("requested_by as a field that is not a name", json.dumps({**QUOTED, "requested_by": None}), ""),
     ("2026-10-30: three closing braces short", SHORT_1030, ""),
     ("short of its braces with a comma left after the last value", json.dumps(QUOTED)[:-4] + ",", ""),
     ("JSON in a ```json fence", "```json\n" + json.dumps(QUOTED, indent=2) + "\n```", ""),
@@ -179,6 +186,10 @@ for label, manifest, who in PARSE_SHAPES:
 reply, exc = deploy(MEASURED_1104, requested_by="Hazel the Ghoul")
 check("a requested_by passed as its own argument wins over one written after the manifest",
       exc is None and reports and reports[0]["requested_by"] == "Hazel the Ghoul", f"{exc} {reports}")
+reply, exc = deploy(json.dumps({**QUOTED, "requested_by": WITCH}), requested_by="Hazel the Ghoul")
+check("a requested_by passed as its own argument wins over one written as a field of the manifest",
+      exc is None and reports and reports[0]["requested_by"] == "Hazel the Ghoul"
+      and applied and "requested_by" not in applied[0]["obj"], f"{exc} {reports}")
 
 print("== 2. the Deployments the API server refuses with a 422 are mended ==")
 
