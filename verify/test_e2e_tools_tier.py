@@ -295,7 +295,10 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
 
 
 def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path) -> subprocess.CompletedProcess:
-    env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp),
+    # Each fixture run gets its own scratch as TMPDIR too, so the scripts' mktemp lands in the test's directory and
+    # not the host's /tmp, which the test does not own (#906: run 17556's host had its /tmp removed mid-run, and
+    # every mktemp in the fixtures failed with "No such file or directory").
+    env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures")}
     return subprocess.run([BASH, str(script)], capture_output=True, text=True, timeout=120, env=env)
 
@@ -437,7 +440,8 @@ with tempfile.TemporaryDirectory() as t:
         (vdir / name).write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{body}")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24,
                              "aws": HOST_CLOUD, "eksctl": HOST_CLOUD})
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "AWS_PROFILE": "accen-dev",
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+           "AWS_PROFILE": "accen-dev",
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
            "KUBECTL_LOG": str(tmp / "kubectl.log"), "HOST_LOG": str(tmp / "host.log")}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
@@ -476,7 +480,8 @@ HOST_KUBECTL = '#!/bin/sh\necho "host $*" >>"$KUBECTL_LOG"\nexit 1\n'
 
 
 def run_live(tmp: pathlib.Path, vdir: pathlib.Path) -> subprocess.CompletedProcess:
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "KUBECONFIG": "/dev/null",
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+           "KUBECONFIG": "/dev/null",
            "CONTEXT": "wib-fixture", "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
            "KUBECTL_LOG": str(tmp / "kubectl.log")}
     return subprocess.run([BASH, str(vdir / RUN_E2E.name)], capture_output=True, text=True, timeout=120, env=env)
