@@ -314,7 +314,7 @@ module "eks" {
   # from being the one that hangs. verify/test_peer_api_rule.py pins it.
   security_group_additional_rules = {
     ingress_lab_vpc_443_api = {
-      description = "Lab VPC to the cluster API on 443/tcp (the KubeCon guardrails switch's peer link)"
+      description = "Lab VPC to the cluster API on 443/tcp (the peer link of the KubeCon guardrails switch)"
       protocol    = "tcp"
       from_port   = 443
       to_port     = 443
