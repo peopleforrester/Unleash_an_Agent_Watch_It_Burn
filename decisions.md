@@ -20371,3 +20371,11 @@ three image groups it covers, only the two Jokers are built here (the C2 covers 
 promo/ build). A banner changes both Joker digests. push-jokers.yml (#775) pushes a new pin on promotion, but
 `verify/test_c6_joker_public.py` in the tools tier reads the published layer against the checkout first. So the
 change goes red before it can be promoted, and the banner needs its own issue to sequence the pin and the push.
+
+**The suites (run 17572).** The first `bash verify/run-e2e-tools.sh`, at `58a393cb`, ran 58 checks in 31m05s. All 57
+tier tests passed; the offline suite failed on one test, test_e2e_tools_tier.py. Its fixture runs of the tier runner
+built an environment without TMPDIR, so the runner's mktemp fell back to /tmp. That stopped working in this run's
+sandbox at 17:09 CET (`touch /tmp/x` answered "No such file or directory"), although it had worked an hour before.
+Each of its three environments now sets TMPDIR to the test's own scratch directory (`756dad44`), and the test passed
+alone. The second run, at `756dad44`, printed `266 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`58 checks ran (the offline suite and 57 tier tests) in 29m51s` and `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
