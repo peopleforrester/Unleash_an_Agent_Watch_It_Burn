@@ -19566,3 +19566,53 @@ tests above are unchanged.
 **The suites (run 17644, at `e30952b7`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
 offline suite and 57 tier tests) in 32m17s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #919 · run 17626 · internal-registry on watch-it-burn-private reads Synced and Healthy at cb3367d2, with the relative-URL fix staging carries as b42b7d06
+
+**Where the fix is on staging.** At the start of the run `git branch -r --contains 02404d1d` named only
+`origin/agent/906-17556`, and `bash verify/prior-drafts.sh 906 origin/staging` printed `DRAFT origin/agent/906-17556
+... 6 of 6 commit(s) not in origin/staging`, `CLEAN` and `START`; #906's run report reads `partial` (the routes table
+was not published), so its draft was not promoted. The run cherry-picked `02404d1d` onto `92dfea31` as `d6306dd0`.
+While the suites ran, staging moved to `cb3367d2`, and #775's run 17584 had landed the same change as `b42b7d06`:
+`REGISTRY_HTTP_RELATIVEURLS=true` in place of `REGISTRY_HTTP_HOST` in `gitops/internal-registry/internal-registry.yaml`,
+and a check of it in `verify/test_guardrails_switch.py`. `git diff d6306dd0 b42b7d06` differs only in the manifest's
+comment and the test. So `b42b7d06` is the staging commit that carries #906's change, and the cherry-pick was dropped:
+this branch was rebuilt on `cb3367d2`. The one thing #906's draft had that staging lacked is its check that the seed
+copies to `localhost:5000` and never names `registry.burritobot.co`; this run adds it to
+`verify/test_guardrails_switch.py`. Pointing the seed's `regctl image copy` at `registry.burritobot.co/${dst}` fails
+it, and the file restored passes. #906's other five draft commits stay #906's.
+
+**Live, watch-it-burn-private, 17:44Z, before the fix reached it.**
+`kubectl --context watch-it-burn-private -n argocd get application internal-registry -o wide` printed:
+
+```
+NAME                SYNC STATUS   HEALTH STATUS   REVISION                                   PROJECT
+internal-registry   Synced        Degraded        92dfea3194365ec18eb808750e114388d17fe96d   default
+```
+
+`kubectl --context watch-it-burn-private -n registry get pods` printed `registry-9f696f77c-tg79x 1/2
+CrashLoopBackOff 30 (2m54s ago) 139m`, and the seed container's log ended `failed to send blob (chunk), ref
+localhost:5000/burritobot/maintenance-shell:busybox-1.38.0: http status: unexpected http status code: Method Not
+Allowed [http 405]`, the failure #906 diagnosed.
+
+**The fix in a scratch namespace (left as found).** The ConfigMap and Deployment of the fixed manifest, with only the
+namespace changed to `check-919-17626`, were applied on watch-it-burn-private. `kubectl rollout status
+deploy/registry` printed `successfully rolled out`, the pod read `2/2 Running 0`, the tags list read
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`, `regctl image digest` read
+`sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf` (the images.lock pin), and the seed's log
+ended `seeded; serving`. `kubectl delete namespace check-919-17626` then left `NotFound`, 17:47Z.
+
+**Live, watch-it-burn-private, 18:25Z, after Argo CD synced `cb3367d2`.** The Application's operation finished at
+`2026-11-05T17:55:34Z` and its health turned Healthy at `17:55:37Z`. The same `get application ... -o wide` printed:
+
+```
+NAME                SYNC STATUS   HEALTH STATUS   REVISION                                   PROJECT
+internal-registry   Synced        Healthy         cb3367d29be681d81d783fb21e9aab406e1ad1aa   default
+```
+
+`kubectl --context watch-it-burn-private -n registry get pods` printed `registry-675c5bcc-pmlq8 2/2 Running 0 30m`,
+the seed's log ended `seeded; serving`, and `wget -qO- http://localhost:5000/v2/burritobot/maintenance-shell/tags/list`
+in the pod read `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. Nothing in #916's
+internal-registry part is still red. The routes publish (`registry.burritobot.co` answering through the router) is
+#916's other part and is not read here.
+
+**Not yet run on a cluster.** Nothing: the added check is offline only.

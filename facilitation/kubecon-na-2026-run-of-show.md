@@ -279,6 +279,16 @@ Bedrock directly, with the same model settings as the private cluster, which pas
 Seen in both public runs, so this is past a watch item: the room should expect some HC-666 tries to need a
 second send, which the "keep trying" step already covers. On stage, the presenters send it until it lands.
 
+**2026-11-05, internal-registry on watch-it-burn-private (#919).** Hecaton run 17626. At 17:44Z, at staging
+`92dfea31`, `kubectl --context watch-it-burn-private -n argocd get application internal-registry -o wide` printed
+`Synced Degraded`: the registry pod read `1/2 CrashLoopBackOff`, and its seed failed with `Method Not Allowed
+[http 405]` because `REGISTRY_HTTP_HOST` sent each upload's PATCH out through the read-only console door. The
+relative-URL fix (#906's `02404d1d`) reached staging as `b42b7d06` (#775), and Argo CD synced private at `cb3367d2`
+at 17:55Z. At 18:25Z the same command printed `Synced Healthy` at `cb3367d29be681d81d783fb21e9aab406e1ad1aa`, the
+pod read `2/2 Running`, the seed's log ended `seeded; serving`, and the tags list read
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. Nothing in this part is still red; the public
+`registry.burritobot.co` still waits on the routes publish (#916).
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
