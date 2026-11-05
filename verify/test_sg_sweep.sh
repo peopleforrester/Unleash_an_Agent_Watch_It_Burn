@@ -19,6 +19,10 @@ T="$(mktemp -d -p "${HERE}/.." .sg-sweep-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 cat >"${SHIM}/aws" <<'S'
 #!/usr/bin/env bash
@@ -239,5 +243,8 @@ check "_instructors_down and the cluster down both re-check before reporting" \
       "[ \$(grep -c 'recheck_sg_leaks$' '${FLEET}') -ge 2 ]"
 
 echo
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 if [ "${fail}" -gt 0 ]; then echo "FAILED: ${fail} check(s), ${pass} passed"; exit 1; fi
 echo "All security-group sweep checks passed (${pass})."

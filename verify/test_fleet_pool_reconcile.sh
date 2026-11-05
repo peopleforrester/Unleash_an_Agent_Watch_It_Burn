@@ -12,6 +12,10 @@ T="$(mktemp -d -p "${HERE}/.." .fleet-pool-test.XXXX)"; trap 'rm -rf "${T}"' EXI
 SHIM="${T}/bin"; mkdir -p "${SHIM}"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # The pool as `labctl pool --customer <c> --event <e>` writes it (lab-platform#302, store.WritePoolCSV): Go's
 # encoding/csv under the header cluster_name,state,region,reserved_for,claimed_by. Every row carries a
@@ -161,6 +165,9 @@ check "down all reconciles the pool" 'grep -q "WIB_RECONCILE_EMPTY_FLEET=1 recon
 check "down-fleet reconciles the pool" 'grep -q "WIB_RECONCILE_EMPTY_FLEET=1 reconcile_pool" <<<"${_downfleet}"'
 check "the hygiene gate surveys the pool, dry-run" \
   'grep -q "env -u WIB_APPLY .*fleet.sh\" reconcile-pool" "${HERE}/fleet-hygiene.sh"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ -s "${T}/stderr" ]] && { echo "  (stderr from sourced runs, last lines)"; tail -5 "${T}/stderr" | sed 's/^/    /'; }

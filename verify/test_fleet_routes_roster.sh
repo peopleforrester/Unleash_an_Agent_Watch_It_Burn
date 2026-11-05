@@ -9,6 +9,10 @@ FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d -p "${HERE}/.." .fleet-roster-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 TMPDIR="${T}"
 
 # The breakout's two clusters, and every service host each one carries (console.conf, #233). The service
@@ -180,6 +184,9 @@ check "the Night Before writes the roster table and checks the router before che
       $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls attackme") ))'
 check "the C1 beat names the beacon view by URL" \
   'grep -A3 -E "^ *- C1 exfiltrate" "${ROS}" | grep -qF "https://beacon.burritobot.co/beacon/view"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }

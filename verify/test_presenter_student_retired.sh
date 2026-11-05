@@ -27,19 +27,14 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 # guardrails-link. In run 16963 that took the real `aws eks update-kubeconfig` for watch-it-burn-community and then
 # polled its guardrails-switch token for 30 x 10 s, once per call, and would have written guardrails-peer Secrets
 # on both clusters had the token been there. #616 stubbed that one call in `spec` below. This is the backstop for
-# the next one nobody has found: fleet.sh runs here with the cloud variables unset and with aws, kubectl, eksctl,
-# terraform and helm replaced by stubs that log the call and fail, and the last check reads that log.
-mkdir -p "${T}/nocloud"
-for t in aws kubectl eksctl terraform helm; do
-    printf '#!/bin/sh\necho "%s $*" >>"%s/cloud-calls"\nexit 1\n' "${t}" "${T}" >"${T}/nocloud/${t}"
-    chmod +x "${T}/nocloud/${t}"
-done
-nocloud() { env -u KUBECONFIG -u HECATON_CLUSTER_ENV -u AWS_PROFILE -u AWS_REGION -u AWS_DEFAULT_REGION \
-    -u AWS_CONFIG_FILE -u AWS_SHARED_CREDENTIALS_FILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
-    -u AWS_SESSION_TOKEN PATH="${T}/nocloud:${PATH}" "$@"; }
+# the next one nobody has found: fleet.sh runs here with the cloud variables cleared and with aws, kubectl, eksctl,
+# terraform and helm replaced by stubs that log the call and fail, and the last check reads that log. Since #859 the
+# guard is verify/no-cloud.sh's, shared with every offline test that drives fleet.sh.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 # Run one expression against a sourced fleet.sh, with state in a temp dir and no cloud access. QROSTER
 # points it at a fixture roster instead of the real one.
-q() { ( cd "$(dirname "${FLEET}")" && nocloud WIB_STATE_DIR="${T}/states" WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
+q() { ( cd "$(dirname "${FLEET}")" && WIB_STATE_DIR="${T}/states" WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
         bash -c "source '${FLEET}' >/dev/null 2>&1; load_roster; $1" 2>/dev/null ); }
 # Comments explain the retired class in prose; assertions about behaviour read the code only.
 code() { grep -vE '^[[:space:]]*#' "$1"; }
@@ -57,7 +52,7 @@ check "fleet.sh code never builds a <owner>-student name or host" \
 up() { q "_provision_spec_fleet() { shift 2; printf '%s\n' \"\$@\"; }; require_tools() { :; }; cmd_up $1"; }
 check "up refuses a presenter student name" '[[ -z "$(up watch-it-burn-alpha-student)" ]]'
 check "and says why, pointing at the claim flow" \
-  'grep -qi "claim" <<<"$( cd "$(dirname "${FLEET}")" && nocloud bash -c "source \"${FLEET}\" >/dev/null 2>&1
+  'grep -qi "claim" <<<"$( cd "$(dirname "${FLEET}")" && bash -c "source \"${FLEET}\" >/dev/null 2>&1
        _provision_spec_fleet() { :; }; cmd_up watch-it-burn-beta-student" 2>&1 )"'
 check "up refuses a roster name too: those are built by instructors up" '[[ -z "$(up watch-it-burn-private)" ]]'
 check "up still provisions attendee pool clusters by count" \
@@ -132,6 +127,6 @@ check "the attendee teardown selector does not reach a presenter cluster" '[[ "$
 
 echo "== offline means offline =="
 check "no check above called aws, kubectl, eksctl, terraform or helm" \
-  '[[ ! -s "${T}/cloud-calls" ]] || { sed "s/^/        /" "${T}/cloud-calls"; false; }'
+  'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

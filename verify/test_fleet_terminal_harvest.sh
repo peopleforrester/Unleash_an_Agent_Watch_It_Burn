@@ -12,6 +12,10 @@ SHIM="${T}/bin"; PROV="${T}/prov"; POOL="${T}/pool"
 mkdir -p "${SHIM}" "${PROV}/scripts" "${POOL}" "${T}/states" "${T}/imports"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 # ctrue <file> <python expression over d>: <file> is a pool.csv header and exactly one row, and that row, read as a
 # dict d, satisfies the expression.
 ctrue() { python3 -c 'import csv, sys
@@ -324,5 +328,8 @@ check "no printf into a .terminal file" '! grep -nE "printf .*>\"?\\\$\{(pwfile|
 check "no pwfile variable is left" '! grep -q "pwfile" "${FLEET}"'
 usage_txt="$(sed -n '/^usage() {/,/^}/p' "${FLEET}")"
 check "usage documents ingest pool" 'grep -q "ingest pool" <<<"${usage_txt}"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

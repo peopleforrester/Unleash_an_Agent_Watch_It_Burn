@@ -15,6 +15,10 @@ T="$(mktemp -d -p "${HERE}/.." .harvest-host-test.XXXX)"; trap 'rm -rf "${T}"' E
 mkdir -p "${T}/prov/scripts" "${T}/states" "${T}/logs"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # The harvester shim prints the cluster and the WIB_CONSOLE_HOST it was given, as one CSV-like row.
 cat >"${T}/prov/scripts/harvest_cluster_access.sh" <<'EOF'
@@ -76,5 +80,8 @@ out="$(q 'cmd_ingest_instructors() { :; }; labctl_ready() { :; }; require_tools(
           aws() { echo "[]"; }; cmd_ingest watch-it-burn-r2-1 watch-it-burn-michael-student; echo rc=$?')"
 check "cmd_ingest by name refuses the retired names without a failure" \
   '[[ "$(grep -c REFUSING <<<"${out}")" == 2 ]] && ! grep -qE "CURL-CALLED|LABCTL-CALLED" <<<"${out}"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

@@ -17,6 +17,10 @@ T="$(mktemp -d -t fleet-apply-fail.XXXX)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # terraform: init and the lab-VPC outputs succeed; apply fails for every cluster whose name matches
 # TF_APPLY_FAIL (an ERE; empty fails nothing). Every apply is recorded, so the test can tell an apply that
@@ -120,5 +124,8 @@ out="$( ( cd "$(dirname "${FLEET}")" && env "${env_common[@]}" WIB_NO_BOOTSTRAP=
     bash "${FLEET}" up watch-it-burn-attendee-001 ) 2>&1; echo "rc=$?")"
 check "up <name> exits non-zero when its apply fails" \
     'grep -q "FAILED: watch-it-burn-attendee-001" <<<"$out" && ! grep -qx "rc=0" <<<"$out"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

@@ -8,6 +8,10 @@ FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d -p "${HERE}/.." .fleet-zero-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}"; fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 # The shim answers each query from a file named after the query kind; missing file = empty answer.
 cat >"${SHIM}/aws" <<'S'
 #!/usr/bin/env bash
@@ -56,4 +60,7 @@ echo "== wiring =="
 check "down all ends with the audit" 'awk "/if \[\[ \"\\\$\{1:-\}\" == \"all\" \]\]; then/,/^    fi$/" "${FLEET}" | grep -q "^        audit_zero$"'
 check "down-fleet ends with the audit" 'awk "/^cmd_down_fleet\(\)/,/^}/" "${FLEET}" | grep -q "^    audit_zero"'
 check "audit-zero is a subcommand" 'grep -q "audit-zero) cmd_audit_zero" "${FLEET}"'
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 echo; echo "  ${pass} passed, ${fail} failed"; exit $(( fail > 0 ))

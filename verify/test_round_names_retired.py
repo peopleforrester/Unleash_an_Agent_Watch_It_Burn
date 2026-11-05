@@ -40,6 +40,11 @@ REPO = HERE.parent
 FLEET = REPO / "infra/terraform/fleet/fleet.sh"
 SETUP = REPO / "infra/setup-instructor-cluster.sh"
 
+# Offline means offline (#859): every subprocess below gets aws, kubectl, eksctl, terraform and helm as stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 
 
@@ -244,6 +249,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check("an explicit profile wins", "(aws1-student31/us-west-2)" in err)
 
 print()
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
+
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     for f in failures:

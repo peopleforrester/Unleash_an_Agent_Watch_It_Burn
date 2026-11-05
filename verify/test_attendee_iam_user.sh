@@ -17,6 +17,10 @@ T="$(mktemp -d -p "${HERE}/.." .attendee-user-test.XXXX)"; trap 'rm -rf "${T}"' 
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/tags" "${T}/keys" "${T}/pool" "${T}/states" "${T}/logs"; CALLS="${T}/calls"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # The shim's account. T/tags/<user>.cluster holds a user's cluster tag (no file: no such user), T/keys/<user> that
 # the user holds a key, T/describe how describe-cluster answers (live|gone|error), T/policy, T/entry and T/assoc that
@@ -156,5 +160,8 @@ check "bootstrap mints through mint_attendee_key" 'body bootstrap_student_aws | 
 check "up_one adopts before it applies" \
     "[[ \$(body up_one | grep -n 'adopt_attendee_iam_user' | head -1 | cut -d: -f1) -lt \$(body up_one | grep -n 'apply -auto-approve' | head -1 | cut -d: -f1) ]]"
 check "fleet.sh no longer runs the generator" '! grep -v "^[[:space:]]*#" "${FLEET}" | grep -q "generate_attendee_aws"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; exit $(( fail > 0 ))

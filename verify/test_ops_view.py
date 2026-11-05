@@ -30,6 +30,11 @@ sys.path.insert(0, str(REPO / "infra" / "ops-view"))
 import ops_view as ov  # noqa: E402
 
 fm = ov.fm
+# Offline means offline (#859): every subprocess below gets aws, kubectl, eksctl, terraform and helm as stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 TOKEN = "s3cret-admin-token-xyz"
 NOW = dt.datetime(2026, 9, 8, 17, 0, tzinfo=dt.timezone.utc)
@@ -315,6 +320,12 @@ check("WIB_OPS_HTML places the page, and the operator's own arguments follow",
       pairs.get("--html") == str(logs / "v.html") and argv[-3:] == ["sabrina", "--watch", "30"])
 check("fleet.sh usage documents ops and hosts", "  ops [terms...]" in FLEET.read_text()
       and "\n    hosts  " in FLEET.read_text())
+
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
 
 if failures:
     print(f"\n{len(failures)} FAILED", file=sys.stderr)

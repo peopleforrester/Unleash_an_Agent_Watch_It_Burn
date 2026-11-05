@@ -12,6 +12,10 @@ T="$(mktemp -d -p "${HERE}/.." .pool-row-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; SM="${T}/sm"; mkdir -p "${SHIM}" "${SM}"; CALLS="${T}/calls"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 [[ -f "${ROW}" ]] || { echo "FAIL: ${ROW} is missing"; exit 1; }
 
 # Secrets Manager, one file per secret id ("/" -> "__"), plus <file>.desc for a created secret's description.
@@ -149,5 +153,8 @@ check "the same profile and region defaults as fleet.sh" \
   'grep -q "WIB_DEFAULT_ACCOUNT:-accen-dev" "${ROW}" && grep -q "WIB_SECRETS_REGION:-\${WIB_HOME_REGION" "${ROW}" && grep -q "WIB_HOME_REGION:-us-west-2" "${FLEET}"'
 
 echo
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 echo "${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

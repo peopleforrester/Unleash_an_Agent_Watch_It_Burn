@@ -9,6 +9,10 @@ FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # Run cmd_wall_check against a sourced fleet.sh with curl answering $2 (HTTP code) and $1 (body), the way
 # `curl -sS -w '\n%{http_code}'` prints them. CURL_RC non-zero is a wall that cannot be reached at all.
@@ -72,6 +76,9 @@ check "the segment table shows the wall on screen from segment 1" \
   'grep -E "^\| 1 \|" "${ROS}" | grep -F "prompts.burritobot.co" >/dev/null'
 check "the /kubecon page projects the wall in segment 1, as the run-of-show does (#639)" \
   'sed -n "/SEGMENT 1:/,/<article/p" "${KUBECON}" | grep -F "href=\"${WALL}\"" >/dev/null'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }

@@ -17,6 +17,10 @@ T="$(mktemp -d -p "${HERE}/.." .student-aws-test.XXXX)"; trap 'rm -rf "${T}"' EX
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/prov/scripts" "${T}/pool" "${T}/states" "${T}/logs"; CALLS="${T}/calls"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # kubectl: every call recorded. `config current-context` answers from T/ctx (no file: no context).
 cat >"${SHIM}/kubectl" <<'S'
@@ -84,5 +88,8 @@ check "a fresh key and the pool-CSV re-push both call push_student_aws" \
 check "bootstrap no longer calls the push script itself" '! body bootstrap_student_aws | grep -q PUSH_VTT_SCRIPT'
 
 echo
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

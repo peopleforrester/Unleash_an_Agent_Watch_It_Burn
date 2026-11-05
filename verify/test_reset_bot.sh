@@ -11,6 +11,10 @@ T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/states"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # ---- shims: every external command records its argv and answers from env the test controls ----
 cat >"${SHIM}/aws" <<'S'
@@ -264,4 +268,7 @@ check "the counter is read back at zero in the run-of-show" 'grep -q "https://at
 check "the run-through record says the Go build's reset runs reset-spend and prints what it cleared (#778)" \
   'grep -q "guard-proxy reset-spend" <<<"${record}" && grep -q "reset-spend: cleared" <<<"${record}"'
 check "the run-of-show never restarts guard-proxy with rollout restart" '! grep -qE "rollout restart[^|]*guard-proxy" <<<"${ros}"'
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

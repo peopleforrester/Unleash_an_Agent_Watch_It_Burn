@@ -17,6 +17,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # Run one expression against a sourced fleet.sh with the workers stubbed out. Nothing here touches AWS,
 # kubectl, terraform or the router: the point is the exit code, not the work.
@@ -83,5 +88,8 @@ check "no hints when bootstrapping is on, and still exit 0" '! grep -q "hints pr
 echo "== a verb that builds nothing is not a failure =="
 out="$(VERIFY_RC=0 src 'cmd_instructors up nobody-by-that-name')"
 check "an empty selection exits 0 with a message" 'grep -q "rc=0" <<<"$out" && grep -q "no roster clusters" <<<"$out"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

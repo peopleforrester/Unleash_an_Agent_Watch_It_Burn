@@ -18,6 +18,11 @@ TF = REPO / "infra" / "terraform"
 ORG = REPO / "infra" / "org"
 EVENT_SH = TF / "fleet" / "event.sh"
 FLEET = TF / "fleet" / "fleet.sh"
+# Offline means offline (#859): every subprocess below gets aws, kubectl, eksctl, terraform and helm as stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
@@ -175,6 +180,12 @@ check(f"and shows -var event=kubecon-na-2026 ({line.strip() or out[-300:]})", "-
 rc, out = dry_run({"WIB_EVENT": "next-event-2027"})
 check("WIB_EVENT in the environment overrides the setting for one run",
       rc == 0 and "-var event=next-event-2027" in out and "kubecon-na-2026" not in out)
+
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)"); sys.exit(1)

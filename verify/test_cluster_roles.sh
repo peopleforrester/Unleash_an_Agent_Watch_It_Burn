@@ -21,6 +21,10 @@ q() { ( cd "$(dirname "${FLEET}")" && WIB_ROSTER_FILE="${QROSTER:-${ROSTER}}" \
 # The real roster's admin cluster is shared and has no owner, so an owner selector matches nothing in it.
 # The owner mechanism is still tested, against this fixture of generic per-owner admin clusters.
 T="$(mktemp -d -p "${HERE}/.." .fleet-roles-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 FIX="${T}/roster.tsv"
 printf '%s\n' "watch-it-burn-community|community|||-1|burn|" \
     "watch-it-burn-alpha-admin|admin||||admin|alpha" "watch-it-burn-beta-admin|admin||||admin|beta" >"${FIX}"
@@ -168,5 +172,8 @@ check "bootstrap refuses an unresolved org only for an attendee slot" \
   'grep -B1 "refusing to fall back to the shared org" <<<"$boot_src" | grep -q "if is_attendee_name \"\${name}\"; then"'
 check "converge records unresolved keys as a failure only for an attendee slot" \
   'grep -B1 "datadog-keys-unresolved" <<<"$repair_src" | grep -q "is_attendee_name \"\${name}\" ||"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

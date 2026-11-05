@@ -29,6 +29,11 @@ FLEET_DIR = REPO / "infra/terraform/fleet"
 sys.path.insert(0, str(FLEET_DIR))
 import backups as b  # noqa: E402
 
+# Offline means offline (#859): every subprocess below gets aws, kubectl, eksctl, terraform and helm as stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 
 
@@ -593,6 +598,12 @@ check("a dry run writes no roster file",
 import shutil  # noqa: E402
 shutil.rmtree(T, ignore_errors=True)
 print()
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
+
 if failures:
     print(f"FAIL: {len(failures)} check(s) failed: {failures}")
     sys.exit(1)

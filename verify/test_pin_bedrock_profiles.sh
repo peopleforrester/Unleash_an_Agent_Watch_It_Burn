@@ -17,6 +17,10 @@ T="$(mktemp -d -p "${REPO}" .pin-bedrock-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/states" "${T}/logs" "${T}/live"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 ACCT=111122223333
 arn() { echo "arn:aws:bedrock:${REGION:-us-west-2}:${ACCT}:application-inference-profile/$1"; }
@@ -243,5 +247,8 @@ check "Argo ignores agentgateway's BEDROCK_NOVA_MODEL env entry by name, so self
 check "and the region beside it: the ModelConfigs' .bedrock.region and agentgateway's BEDROCK_REGION (#643)" \
   'grep -qF ".spec | select(.provider == \"Bedrock\") | .bedrock.region" <<<"${app}" &&
    grep -qF "select(.name==\"agentgateway\") | .env[] | select(.name == \"BEDROCK_REGION\")" <<<"${app}"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

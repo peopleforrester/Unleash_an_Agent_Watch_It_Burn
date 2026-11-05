@@ -37,6 +37,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import APPS, CHART, KUBECON_PROFILES, REPO, app_names, deploys, values  # noqa: E402
 import registry_allowlist  # noqa: E402
 
+# Offline means offline (#859): every subprocess below gets aws, kubectl, eksctl, terraform and helm as stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 
 
@@ -527,6 +532,12 @@ check("routes writes it beside each roster cluster's rows, so a promoted standby
       'bare_rows "$(public_host_for "${name}")" "${h}" >> "${tmp}"' in src)
 
 print()
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
+
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     for f in failures:

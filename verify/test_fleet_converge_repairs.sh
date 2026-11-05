@@ -10,6 +10,10 @@ T="$(mktemp -d -p "${HERE}/.." .fleet-repairs-test.XXXX)"; trap 'rm -rf "${T}"' 
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/states"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # ---- canned Datadog secrets, as Secrets Manager would answer ----
 ADMIN='{"api-key":"ADMIN_API","app-key":"ADMIN_APP","org":"devops-days-portland-090826-001","role":"admin-instructor"}'
@@ -407,6 +411,9 @@ src 'wait_for_console_lbs ""; echo rc=$?' >"${T}/out"
 check "an empty name is not waited for" 'grep -qx "rc=0" "${T}/out" && [[ ! -f "${T}/k_polls" ]]'
 check "bootstrap_one resolves keys through datadog_keys_for" 'grep -q "< <(datadog_keys_for \"\${name}\")" "${FLEET}"'
 check "status, routes and converge prune empty states" '[[ "$(grep -c "^    prune_empty_states$" "${FLEET}")" -eq 3 ]]'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ -s "${T}/stderr" ]] && { echo "  (stderr, last lines)"; tail -4 "${T}/stderr" | sed 's/^/    /'; }

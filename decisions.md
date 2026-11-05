@@ -16202,3 +16202,45 @@ model call of about half a cent on the community bot's cost counter, marked as a
 **The suites (run 17220, at `33801e46`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
 tier tests) in 26m37s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 253
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #859 · Every offline test that runs fleet.sh guards itself, so a test run by hand stays offline too
+
+**What was left after #857.** #857 (run 17099, `ac98b960`) runs every test `verify/run-tests.sh` runs behind
+`verify/no-cloud.sh`'s stubs for aws, kubectl, eksctl, helm and terraform, and fails one that calls them. That covers
+the suite. It does not cover a test run on its own, `bash verify/test_x.sh` or `python3 verify/test_x.py`, which a
+run does while it iterates: that goes past the runner with the run's live KUBECONFIG and AWS session for
+watch-it-burn-community and watch-it-burn-private. That is the path #421's test took to the community cluster.
+
+**Change.**
+- `verify/no-cloud.sh` gains two per-test entry points. `no_cloud_guard <dir>` runs `no_cloud_setup`, puts the stubs
+  first on PATH for the test and everything it starts, and clears the cloud environment the way #421's backstop did:
+  the AWS profile, region, key and role variables and HECATON_CLUSTER_ENV unset, KUBECONFIG, AWS_CONFIG_FILE and
+  AWS_SHARED_CREDENTIALS_FILE pointed at files that do not exist, and AWS_EC2_METADATA_DISABLED set. A real kubectl
+  reached by an absolute path, or boto3 in a helper, then finds no context or credentials. `no_cloud_clean` passes
+  when nothing was called and otherwise prints each call and fails.
+- `verify/no_cloud.py` is the same for the Python tests. It runs `no_cloud_setup` and reads `NO_CLOUD_UNSET` from
+  no-cloud.sh, so the tool list, the stub text and the variables cleared have one source.
+- Each of the 30 offline tests that sources fleet.sh or hands it to bash (24 shell, 6 Python) calls the guard once
+  its temp dir exists and ends with the check "no check above called aws, kubectl, eksctl, terraform or helm".
+  Under the runner its stubs stand ahead of the runner's, so a leak fails the test's own last check and names the
+  call there. `test_presenter_student_retired.sh` drops its inline copy of #421's stubs and its `env -u` wrapper for
+  the shared guard, which clears the same variables and more.
+- `verify/test_no_cloud_by_hand.sh` holds the guard to blocking and logging each tool, clearing the environment and
+  giving way to a test's own fakes. It holds no_cloud.py to writing the same stubs byte for byte and clearing every
+  listed variable. It finds the tests that drive fleet.sh by what their code does and fails, naming each, on one
+  without the setup and the closing check. Like #857's test it has a second set of fakes behind the stubs, so a
+  broken guard never reaches the live session. With the closing check deleted from `test_reset_bot.sh`, the
+  coverage check fails and names it. With the `kubectl` stub taken out of `test_fleet_standbys.sh`, that test's own
+  last check fails and names `kubectl config current-context`.
+
+**What differs from the draft.** Run 17118's draft (`f8817815`, `f5067aad`) was cut from staging `64c115f6`, before
+#857 landed, and did not land: hecaton's rebase hit #857's edits to `run-tests.sh` and `test_fleet_standbys.sh`. That
+draft had its own runner guard and helpers (`verify/nocloud.sh`, `verify/nocloud.py`, `verify/test_nocloud.sh`), and
+its audit found the same one leak #857 found, the standbys test's `kubectl config current-context`. This run keeps
+#857's runner guard and its standbys stub as they are and drops the draft's runner guard and helpers. It takes the
+draft's per-test edits to the other 29 tests, which staging had not touched since `64c115f6`, and points them at
+no-cloud.sh. It adds the same guard to staging's `test_fleet_standbys.sh`. The draft's runner checks are not carried
+over, because `test_offline_suite_no_cloud.sh` covers the runner.
+
+**Live check.** None beyond the suites: the change is to tests only and touches no cluster. The suites ran in this
+run's environment, which carries the live KUBECONFIG and AWS session for both clusters, and no test was named for
+calling a cloud tool.

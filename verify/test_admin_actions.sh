@@ -10,6 +10,10 @@ T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/states" "${T}/pool"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 # jtrue <file> <python expression over d>: the JSON in <file> satisfies the expression.
 jtrue() { python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(0 if eval(sys.argv[2]) else 1)' "$1" "$2" 2>/dev/null; }
 
@@ -201,4 +205,7 @@ for v in restart-agent restart-console terminal-password serve-actions; do
 done
 check "the queue's action names are exactly the four verbs" \
   'grep -q "^readonly ADMIN_ACTIONS=\"restart-agent restart-console converge terminal-password\"" <<<"${src_txt}"'
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

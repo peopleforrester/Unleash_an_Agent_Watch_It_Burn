@@ -18,6 +18,10 @@ T="$(mktemp -d -p "${HERE}/.." .platform-floor-test.XXXX)"; trap 'rm -rf "${T}"'
 SHIM="${T}/bin"; mkdir -p "${SHIM}"; CALLS="${T}/calls"; MODE="${T}/mode"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # One shim, driven by a mode file, so each scenario is a one-line switch rather than a new fixture.
 cat >"${SHIM}/kubectl" <<'S'
@@ -123,5 +127,8 @@ run full health_one
 check "health still passes a real platform"          "grep -q 'HEALTHY' '${LOGS}'"
 
 echo
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
+
 echo "platform-floor checks: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

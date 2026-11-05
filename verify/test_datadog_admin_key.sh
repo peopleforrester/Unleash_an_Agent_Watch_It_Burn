@@ -19,6 +19,11 @@ ORGS="${HERE}/../verify/datadog-orgs.sh"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+NC="$(mktemp -d)"
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${NC}/no-cloud"
 
 # Strip comments before asserting: both files EXPLAIN the old behaviour in prose, and a check that cannot
 # tell a comment from code would fail on its own documentation.
@@ -71,7 +76,7 @@ check "the old pres- form no longer matches, so nothing silently depends on it" 
 # One org (#587): an attendee cluster whose own key is the instructor org's (question 926's one-row pool) has no
 # admin secret by design. The verifier runs against shims here: kubectl, curl and aws answer from the test.
 echo "== an attendee on the instructor org itself is one org by design, an attendee on its own org still must dual-ship =="
-SHIM="$(mktemp -d)"; trap 'rm -rf "${SHIM}"' EXIT
+SHIM="$(mktemp -d)"; trap 'rm -rf "${SHIM}" "${NC}"' EXIT
 cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
 case "$*" in
@@ -92,5 +97,8 @@ check "the instructor key is another org's: no admin secret is still a failure" 
     '[[ "${two_rc}" -ne 0 ]] && grep -q "attendee cluster without datadog-admin-secret" <<<"${two}"'
 none="$(orgs "")"; none_rc=$?
 check "the instructor key unreadable: no admin secret is still a failure" '[[ "${none_rc}" -ne 0 ]]'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

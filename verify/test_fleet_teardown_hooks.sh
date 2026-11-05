@@ -11,6 +11,10 @@ T="$(mktemp -d -p "${HERE}/.." .fleet-hooks-test.XXXX)"; trap 'rm -rf "${T}"' EX
 SHIM="${T}/bin"; mkdir -p "${SHIM}"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # ---- shims: every external command records its argv and answers from files the test controls ----
 cat >"${SHIM}/aws" <<'S'
@@ -177,6 +181,9 @@ check "release is a subcommand" 'grep -q "release) cmd_release" "${FLEET}"'
 check "no shared .failures path remains" '! grep -q "LOG_DIR}/.failures\"" "${FLEET}"'
 check "drain waits for the cluster load balancers to be gone before destroy (#269)" \
   'grep -q "cluster_lb_count \"\${name}\" \"\${acct}\"" "${FLEET}"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ -s "${T}/stderr" ]] && { echo "  (stderr from sourced runs, last lines)"; tail -5 "${T}/stderr" | sed 's/^/    /'; }

@@ -54,3 +54,38 @@ no_cloud_run() {
     fi
     return "${rc}"
 }
+
+# A test run by hand (#859). run-tests.sh guards each test it runs, but `bash verify/test_x.sh` on a dispatched run
+# goes past the runner and reaches the live session. So each offline test that sources or runs fleet.sh guards
+# itself too: it calls no_cloud_guard once its temp dir exists and ends with a check on no_cloud_clean. Under the
+# runner its stubs stand ahead of the runner's, so a call fails the test's own last check and names the call there.
+# A test's own fakes, put on PATH after no_cloud_guard, still answer first. no_cloud.py is the same for Python tests.
+
+# A test run by hand also inherits the run's KUBECONFIG and AWS variables, which #421's backstop cleared, so the
+# guard clears them too: unset, and the three config paths pointed at files that do not exist under <dir>. A real
+# kubectl reached by an absolute path, or boto3 in a helper, then finds no context, profile or credentials, and
+# AWS_EC2_METADATA_DISABLED keeps the SDKs off the host's instance role. Unset, not blanked: an empty AWS_PROFILE is
+# itself an error to the AWS CLI.
+NO_CLOUD_UNSET=(HECATON_CLUSTER_ENV AWS_PROFILE AWS_DEFAULT_PROFILE AWS_REGION AWS_DEFAULT_REGION
+    AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN AWS_ROLE_ARN
+    AWS_ROLE_SESSION_NAME AWS_WEB_IDENTITY_TOKEN_FILE AWS_CONTAINER_CREDENTIALS_FULL_URI
+    AWS_CONTAINER_CREDENTIALS_RELATIVE_URI AWS_CONTAINER_AUTHORIZATION_TOKEN)
+
+# no_cloud_guard <dir>: no_cloud_setup, put the stubs first on PATH and clear the cloud environment, for this shell
+# and everything it starts.
+no_cloud_guard() {
+    local dir="${1:?no_cloud_guard needs a directory}"
+    no_cloud_setup "${dir}" || return 1
+    unset "${NO_CLOUD_UNSET[@]}"
+    export KUBECONFIG="${dir}/no-kubeconfig" AWS_CONFIG_FILE="${dir}/no-aws-config" \
+        AWS_SHARED_CREDENTIALS_FILE="${dir}/no-aws-credentials" AWS_EC2_METADATA_DISABLED=true
+    export PATH="${NO_CLOUD_BIN}:${PATH}"
+}
+
+# no_cloud_clean: true when no stubbed tool was called since no_cloud_setup; otherwise print each call, indented,
+# and return 1.
+no_cloud_clean() {
+    [[ -s "${NO_CLOUD_LOG:?no_cloud_setup has not run, so the guard is not in place}" ]] || return 0
+    sed 's/^/        /' "${NO_CLOUD_LOG}"
+    return 1
+}

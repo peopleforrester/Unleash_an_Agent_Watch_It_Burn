@@ -15,6 +15,10 @@ T="$(mktemp -d -p "${HERE}/.." .iam-sweep-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/tags" "${T}/pool"; CALLS="${T}/calls"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # The shim's account: T/tags/<user>.<key> holds a user's tags (no file: no such user), T/live the live
 # clusters, T/users the wib-* users, T/describe how describe-cluster answers (live|gone|error).
@@ -113,5 +117,8 @@ check "down_one deletes the destroyed cluster's user" "awk '/^down_one\\(\\)/,/^
 check "down all sweeps orphans before its audit" "awk '/if \\[\\[ \"\\\$\\{1:-\\}\" == \"all\" \\]\\]; then/,/^    fi\$/' '${FLEET}' | grep -q 'sweep_orphan_iam_users'"
 check "reap-iam-users is a subcommand" "grep -q 'reap-iam-users) cmd_reap_iam_users' '${FLEET}'"
 check "audit-zero names leftover IAM users" "grep -q 'zero:\${acct}:iam-users' '${FLEET}'"
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"; exit $(( fail > 0 ))

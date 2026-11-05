@@ -17,6 +17,11 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER_TF = (REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf").read_text()
 FLEET = REPO / "infra" / "terraform" / "fleet" / "fleet.sh"
 FLEET_SH = FLEET.read_text()
+# Offline means offline (#859): every subprocess below gets aws, kubectl, eksctl, terraform and helm as stubs that
+# log the call and fail, even when the test is run by hand (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
@@ -125,6 +130,12 @@ want_roles = {l.split("|")[0]: l.split("|")[1] for l in roster.splitlines() if l
 got_roles = dry_roles(out)
 check(f"and with roster.tsv's role, community and admin, so harvest can leave them out of the pool ({got_roles})",
       got_roles == want_roles == {"watch-it-burn-community": "community", "watch-it-burn-private": "admin"})
+
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)"); sys.exit(1)

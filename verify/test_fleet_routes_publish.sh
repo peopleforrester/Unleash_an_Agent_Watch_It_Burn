@@ -9,6 +9,10 @@ FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
 T="$(mktemp -d -p "${HERE}/.." .fleet-routes-test.XXXX)"; trap 'rm -rf "${T}"' EXIT
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
+# Offline means offline (#859): aws, kubectl, eksctl, terraform and helm are stubs that log the call and fail,
+# even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
+# shellcheck source=SCRIPTDIR/no-cloud.sh
+. "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
 
 # The fixture must not read the machine's git config (signing, hooks, default branch) and fleet.sh's
 # worktree goes under TMPDIR, so both stay inside ${T}.
@@ -77,6 +81,9 @@ echo "== wiring =="
 check "cmd_routes records the table through publish_routes_table" \
   'grep -q "^    publish_routes_table \"\${out}\" \"\${lines}\"$" "${FLEET}"'
 check "nothing pushes the apex checkout's HEAD to main" '! grep -q "WIB_APEX_DIR}\" push origin HEAD:main" "${FLEET}"'
+
+echo "== offline means offline =="
+check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (publish log)"; sed 's/^/    /' "${T}/log"; }
