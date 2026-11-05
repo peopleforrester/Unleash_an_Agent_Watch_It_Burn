@@ -22,14 +22,13 @@
 # verify/test_joker_build_digest.py rebuilds it, and the festival-ops Joker above, and holds both to these rows.
 # saved is - until `mirror-images.sh save .` runs on netcup and writes the date. The first save, as michael on netcup
 # on 2026-11-04, saved 65 of the 70 rows that owe a copy into ~/repos/private/image-archive; run 17350 copied those dates
-# here from its manifest.tsv. Still -: the three Docker Hub rows (laiyer/llm-guard-api, node, debian), which that save
-# did not write, most likely on netcup's expired Docker Hub login (llm-coding-workflow#433); the breakout Joker, not
-# yet pushed (#775); Argo CD v3.5.7, whose row #858 wrote after that save; llm-guard at cpu.5 and the four
-# llm-guard-cpu-offline and lab-platform llm-guard rows (#719), written after that save; and the five run-time rows
-# at the end.
+# here from its manifest.tsv. The second save, on 2026-11-05 with Docker Hub pulled anonymously, saved the nine that
+# one left: the three Docker Hub rows (laiyer/llm-guard-api, node, debian), Argo CD v3.5.7 and the five run-time rows
+# at the end; run 17393 copied those dates the same way. Still -: the breakout Joker, not yet pushed (#775), and
+# llm-guard at cpu.5 with the three llm-guard-cpu-offline rows (#719), written after both saves.
 # verify/test_images_lock.py holds every reference to a row here.
-node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
-debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
+node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node 2026-11-05
+debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts 2026-11-05
 ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
 ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app 2026-11-04
 ${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -
@@ -59,7 +58,7 @@ ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40
 # Declared: images no tracked file names as an image: key or FROM line.
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.
-laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard -
+laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard 2026-11-05
 # llm-guard-cpu-offline's images as that repo reported them on #719, each digest read anonymously from ghcr.io on
 # 2026-11-02: cpu.4 (PromptInjection only), cpu.5 (PromptInjection and BanTopics, signed with the workshop key on
 # 2026-11-01; the deployed llm-guard row above since question 1041), and the zero-shot weights' scratch image that
@@ -125,7 +124,7 @@ quay.io/prometheus-operator/prometheus-operator:v0.94.0 sha256:cf153f64d6c38113f
 quay.io/prometheus/prometheus:v3.14.0-distroless sha256:50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a upstream:https://github.com/prometheus/prometheus 2026-11-04
 ghcr.io/jkroepke/kube-webhook-certgen:1.8.8 sha256:cd85a621724cd9043a5b46a784578fa159437712f920166389fce830554e1c44 upstream:https://github.com/jkroepke/kube-webhook-certgen 2026-11-04
 ghcr.io/peopleforrester/lab-platform/mirror/grafana/tempo:3.0.3-05321ebf1f19 sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c upstream:https://github.com/grafana/tempo 2026-11-04
-quay.io/argoproj/argocd:v3.5.7 sha256:16df57da6f223808d204cd94c67c929b931fa01670b91b0b3a2298c4647de0db upstream:https://github.com/argoproj/argo-cd -
+quay.io/argoproj/argocd:v3.5.7 sha256:16df57da6f223808d204cd94c67c929b931fa01670b91b0b3a2298c4647de0db upstream:https://github.com/argoproj/argo-cd 2026-11-05
 ecr-public.aws.com/docker/library/redis:8.6.4-alpine sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763 upstream:https://github.com/redis/docker-library-redis 2026-11-04
 # Run time (#603, run 17350): images both KubeCon clusters run that no tracked file names and no chart renders. The
 # kagent controller starts golang-adk for a runtime: go Agent, the Prometheus operator puts its config reloader beside
@@ -133,8 +132,8 @@ ecr-public.aws.com/docker/library/redis:8.6.4-alpine sha256:2cc044fc5a07c9b701f8
 # The AWS Load Balancer Controller is chart 1.14.0, which infra/deploy-full-idp.sh installs with Helm, outside Argo CD.
 # Each digest is the one its registry served anonymously on 2026-11-05, and the imageID both clusters report.
 # verify/test_images_lock_live.py holds every image the clusters run to a row here.
-ghcr.io/kagent-dev/kagent/golang-adk:0.10.1 sha256:120353200c0226b322e2830de2844eaf02ae4a4c06e778ee60014e5f6ed4a6d0 upstream:https://github.com/kagent-dev/kagent -
-quay.io/prometheus-operator/prometheus-config-reloader:v0.94.0 sha256:142a1f11df8dd165f00375b0b1826aecb9c9adeb05c39855893138d7c7575ff7 upstream:https://github.com/prometheus-operator/prometheus-operator -
-registry.datadoghq.com/agent:7.83.0 sha256:3e915817a38ad113551851015d56a0e50f83fb587bcbbb1ae703dc157b112538 upstream:https://github.com/DataDog/datadog-agent -
-registry.datadoghq.com/cluster-agent:7.83.0 sha256:27c294c40d2503c8cfd2e0a6988a85f2cd5647aa80b8866285e36e111063b41e upstream:https://github.com/DataDog/datadog-agent -
-public.ecr.aws/eks/aws-load-balancer-controller:v2.14.0 sha256:b21255725e67c112fe95888ec4cf38964950ad17800837618c30685cc6856864 upstream:https://github.com/kubernetes-sigs/aws-load-balancer-controller -
+ghcr.io/kagent-dev/kagent/golang-adk:0.10.1 sha256:120353200c0226b322e2830de2844eaf02ae4a4c06e778ee60014e5f6ed4a6d0 upstream:https://github.com/kagent-dev/kagent 2026-11-05
+quay.io/prometheus-operator/prometheus-config-reloader:v0.94.0 sha256:142a1f11df8dd165f00375b0b1826aecb9c9adeb05c39855893138d7c7575ff7 upstream:https://github.com/prometheus-operator/prometheus-operator 2026-11-05
+registry.datadoghq.com/agent:7.83.0 sha256:3e915817a38ad113551851015d56a0e50f83fb587bcbbb1ae703dc157b112538 upstream:https://github.com/DataDog/datadog-agent 2026-11-05
+registry.datadoghq.com/cluster-agent:7.83.0 sha256:27c294c40d2503c8cfd2e0a6988a85f2cd5647aa80b8866285e36e111063b41e upstream:https://github.com/DataDog/datadog-agent 2026-11-05
+public.ecr.aws/eks/aws-load-balancer-controller:v2.14.0 sha256:b21255725e67c112fe95888ec4cf38964950ad17800837618c30685cc6856864 upstream:https://github.com/kubernetes-sigs/aws-load-balancer-controller 2026-11-05

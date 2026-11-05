@@ -24,6 +24,11 @@ anything is read, so a key that reaches some other org reads nothing there.
 Usage:
     python3 verify/dd_traces.py --profile accen-dev [--region us-west-2] [--minutes 60] [--traces 3] [--apm] [--json]
     python3 verify/dd_traces.py --profile accen-dev --trace <trace id>
+    python3 verify/dd_traces.py --profile accen-dev --scopes
+
+--scopes prints the pair's application key as the org lists it (name, creation time, scopes) and exits 1 when any
+scope is not read-only: one with no `read` or `view` word and not in READ_ONLY_EXTRAS, one with a write word
+(WRITE_WORDS), or no scope list at all.
 """
 from __future__ import annotations
 
@@ -45,9 +50,24 @@ APM_QUERY = f"env:{DD_ENV} service:burritobot*"
 LLMOBS_PATH = "/api/v2/llm-obs/v1/spans/events"
 APM_PATH = "/api/v2/spans/events"
 ME_PATH = "/api/v2/current_user"
+KEYS_PATH = "/api/v2/application_keys"
 # The Datadog permission each endpoint needs (docs.datadoghq.com/account_management/rbac/permissions, read
 # 2026-11-01): named in the error when the key is refused, so a run can say which scope is missing.
-SCOPES = {ME_PATH: "user_self_profile_read", LLMOBS_PATH: "llm_observability_read", APM_PATH: "apm_read"}
+SCOPES = {ME_PATH: "user_self_profile_read", LLMOBS_PATH: "llm_observability_read", APM_PATH: "apm_read",
+          KEYS_PATH: "org_app_keys_read"}
+# Scopes --scopes accepts as read-only although no word of theirs is `read` or `view`. Each one reads, queries or
+# resolves and writes nothing; all six are on the pair's application key (read live 2026-11-05, run 17391).
+READ_ONLY_EXTRAS = {
+    "logs_live_tail",                      # stream logs as they arrive
+    "timeseries_query",                    # query metric timeseries
+    "connections_resolve",                 # resolve a workflow connection; running one needs workflows_run
+    "data_scanner_unmask",                 # see values Sensitive Data Scanner masks
+    "assistant_access",                    # open the Bits AI assistant
+    "agent_builder_external_mcp_resolve",  # resolve an external MCP server for the agent builder
+}
+# A word that fails a scope even beside `read`: Datadog names its changing permissions with these.
+WRITE_WORDS = {"write", "manage", "modify", "create", "delete", "edit", "run", "execute", "admin", "share",
+               "generate", "revoke", "unarchive"}
 # How many spans one listing reads to find the newest traces; each chosen trace is then read whole by its id.
 LISTING_LIMIT = 500
 
@@ -80,6 +100,34 @@ def apm_spans(dd: fm.Datadog, minutes: int, limit: int) -> list[dict]:
     params = {"filter[query]": APM_QUERY, "filter[from]": f"now-{minutes}m", "filter[to]": "now",
               "sort": "-timestamp", "page[limit]": limit}
     return [s.get("attributes") or {} for s in get(dd, APM_PATH, params).get("data") or []]
+
+
+def key_record(dd: fm.Datadog, app_key: str) -> dict:
+    """The org's record of this application key, found by its last four characters (all the listing shows)."""
+    found, page = [], 0
+    while True:
+        data = get(dd, KEYS_PATH, {"page[size]": 100, "page[number]": page}).get("data") or []
+        found += [k.get("attributes") or {} for k in data if (k.get("attributes") or {}).get("last4") == app_key[-4:]]
+        if len(data) < 100:
+            break
+        page += 1
+    if len(found) != 1:
+        raise RuntimeError(f"{len(found)} application keys in the org end in the pair's last four characters, "
+                           "so its scopes cannot be named")
+    return found[0]
+
+
+def not_read_only(scopes) -> list[str]:
+    """The scopes that are not read-only; an unscoped key (scopes null) carries its owner's every permission."""
+    if scopes is None:
+        return ["(unscoped: every permission of the key's owner)"]
+    return sorted(s for s in scopes if not read_only(s))
+
+
+def read_only(scope: str) -> bool:
+    """`apm_read`, `logs_read_data` and `ai_guard_view` are; `logs_write_archives` and `monitors_write` are not."""
+    words = set(scope.split("_"))
+    return not (words & WRITE_WORDS) and (bool(words & {"read", "view"}) or scope in READ_ONLY_EXTRAS)
 
 
 def newest_traces(spans: list[dict], n: int) -> list[str]:
@@ -145,6 +193,9 @@ def main(argv=None, env=None, keys=fm.read_keys, http=None, say=print) -> int:
     ap.add_argument("--trace", help="print this one trace instead of the newest")
     ap.add_argument("--apm", action="store_true", help="also print the env's newest APM spans")
     ap.add_argument("--json", action="store_true", help="print the spans as JSON instead of text")
+    ap.add_argument("--scopes", action="store_true",
+                    help="instead of traces, print the pair's application key and its scopes; exit 1 unless all "
+                         "are read-only")
     a = ap.parse_args(argv)
     env = os.environ if env is None else env
     prefix = env.get("WIB_DD_POOL_PREFIX", "Datadog")
@@ -156,6 +207,18 @@ def main(argv=None, env=None, keys=fm.read_keys, http=None, say=print) -> int:
             print(f"dd_traces: the key reaches org '{org}', not the sandbox org (prefix {prefix}); nothing read",
                   file=sys.stderr)
             return 1
+        if a.scopes:
+            rec = key_record(dd, app)
+            bad = not_read_only(rec.get("scopes"))
+            say(f"== {org}: application key '{rec.get('name', '?')}', created {rec.get('created_at', '?')}, "
+                f"{len(rec.get('scopes') or [])} scopes ==")
+            for s in sorted(rec.get("scopes") or []):
+                say(f"  {s}")
+            if bad:
+                print(f"dd_traces: the key holds scopes that are not read-only: {', '.join(bad)}", file=sys.stderr)
+                return 1
+            say("Every scope is read-only.")
+            return 0
         ids = [a.trace] if a.trace else newest_traces(llmobs_spans(dd, a.minutes, LISTING_LIMIT), a.traces)
         if not ids:
             print(f"dd_traces: no ml_app:{ML_APP} span in {org} in the last {a.minutes} minutes", file=sys.stderr)

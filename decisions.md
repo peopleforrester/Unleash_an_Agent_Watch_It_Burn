@@ -17775,6 +17775,183 @@ lab-platform#122 has moved the wildcard. #660's websocket check through the TLS 
 RENDER-GATE TESTS GREEN) and then the tools tier, `test_front_door_cert.sh` and `test_front_door_tls_live_logic.py`
 among it: 56 checks in 26m05s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
 
+## 2026-11-05 · #759 · A run reads BurritoBot's traces from the sandbox org with watch-it-burn/datadog's pair, and every scope of its key is read-only
+
+**What this run did.** Run 17391 started from staging 9c9c414, which holds run 16653's reader (`verify/dd_traces.py`
+and its tests). `verify/prior-drafts.sh 759 origin/staging` printed NONE: runs 16653, 16658 and 16670 are in staging
+and run 15550's draft is superseded by them. The two earlier #759 entries above owed the live read, which hecaton#508
+had blocked. This run's session files have the run's own group (`hecaton-run-claude-certkraken`, mode 0640), so
+`. "$HECATON_CLUSTER_ENV"` worked and the read ran.
+
+**The command and what it printed.** At 2026-11-05T08:29Z, from the repo root:
+
+    . "$HECATON_CLUSTER_ENV"
+    python3 verify/dd_traces.py --profile accen-dev --minutes 1440 --traces 1 --apm
+
+It exited 0 and printed, first, the newest `ml_app:burritobot` trace in LLM Observability:
+
+    == Datadog: ml_app:burritobot, last 1440 minutes ==
+    trace 0d630795c18555edbaca6bf41eece528  2026-11-05T07:49:47+00:00  4 spans  1 root(s)  env=burritobot-kubecon-na-26
+      agent POST  1806 ms  ok
+        agent invocation  1425 ms  ok
+          agent workshop_agent  1408 ms  ok
+            llm generate_content arn:aws:bedrock:us-west-2:{num}:application-inference-profile/5l72jg8rnz71  1346 ms  ok  5366 tokens
+
+and then 50 APM spans under `env:burritobot-kubecon-na-26 service:burritobot*`, the newest at 2026-11-05T08:27:54Z
+on `burritobot` and `burritobot-gateway` (trace 4b1ceefd75306244eddcc14aa0b470d4), with `burritobot-agent`'s
+`invocation`, `invoke_agent workshop_agent` and `generate_content` spans for trace 93b770f06d2b5fac190403f91b59486c.
+So the pair's application key carries `llm_observability_read` and `apm_read`, the open question of both earlier
+entries. `python3 verify/test_dd_traces_live.py` then passed at 08:32Z, its newest trace by then
+39fba3d0574259a99e1a646ed1e89818 (08:27:54Z, one `agent POST` span).
+
+**The credential.** It is the pair in accen-dev's Secrets Manager `watch-it-burn/datadog` (api-key, app-key, site),
+created 2026-10-28 for #629 and never changed since (`aws secretsmanager describe-secret`: created and last changed
+2026-10-28T10:39Z). The org lists its application key as `Burritobot-app-key`, created 2026-10-28T10:37:27Z, owned
+by a user and scoped to 145 permissions. No key was created, rotated or revoked. This follows the coordinator's note on
+#759 of 2026-11-03: a new key was owed only if this pair were refused, and it was not. The issue's "the credential
+is new" line was written for run 15550's route, a new pair behind a hecaton verb; under the note the credential is
+BurritoBot's own read pair, the one the KubeCon clusters' checks already read. It touches nothing outside BurritoBot's
+data: every call is a GET, and `--apm` asks only for `env:burritobot-kubecon-na-26 service:burritobot*`.
+
+**New: `--scopes` shows the key is read-only.** The earlier entries took "read-only" from #629's word. This run read
+the key's own scope list. A GET probe first showed the key can read `/api/v2/application_keys` (org_app_keys_read)
+but not `/api/v2/current_user/application_keys` or `/api/v1/org`. `python3 verify/dd_traces.py --profile accen-dev
+--scopes` now names the org, finds the pair's application key in the org's key listing by its last four characters
+(all the listing shows of a key), prints its name, creation time and every scope, and exits 1 when any scope is not
+read-only, when the key is unscoped, or when no key or two keys end in those four characters. A scope is read-only
+when one of the words its name splits into at each `_` is `read` or `view` and none is a write word (`write`, `manage`, `modify`,
+`create`, `delete`, `edit`, `run`, `execute`, `admin`, `share`, `generate`, `revoke`, `unarchive`), or when it is one
+of six named scopes that read, query or resolve and write nothing: `logs_live_tail`, `timeseries_query`,
+`connections_resolve`, `data_scanner_unmask`, `assistant_access` and `agent_builder_external_mcp_resolve`. The first
+version matched only a trailing `_read` or `_view`, and the live run refused `logs_read_data` and four other
+`logs_read_*` scopes; the word match is what stands. Live, at 08:31Z, it printed `application key
+'Burritobot-app-key', created 2026-10-28T10:37:27.418955Z, 145 scopes`, the list, and `Every scope is read-only.`
+`verify/test_dd_traces_live.py` now runs `--scopes` after the trace read and fails unless it exits 0. Of the 145, the
+ones near a sensitive surface are all reads: `api_keys_read`, `org_app_keys_read`, `user_access_read`, `billing_read`,
+`audit_logs_read`, `data_scanner_unmask` and `connections_resolve` (running a workflow needs `workflows_run`, which
+the key lacks).
+
+**Tests.** `verify/test_dd_traces.py` adds the `--scopes` cases against the fake org: a read-only key prints its name,
+creation and scopes and exits 0, another user's key in the listing is not printed, only GETs are sent and no span is
+read, a write scope and an unscoped key each exit 1 naming why, a missing key and two keys with the same last four each
+exit 1, a key on the listing's second page is found, a 403 on the listing names `org_app_keys_read`, and nine write
+scopes are refused while five read scopes pass the rule.
+
+**Not yet run on a cluster.** Nothing is owed. The read needs no change running on a cluster, only the sandbox org.
+
+**The suites (run 17391, on 065236e).** `bash verify/run-e2e-tools.sh` printed "56 checks ran (the offline suite and
+55 tier tests) in 27m13s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash verify/run-tests.sh`,
+printed "258 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces.py` among them.
+## 2026-11-05 · #603 · The second netcup save holds the nine the first one left, laiyer/llm-guard-api:0.3.16 among them; only the unpushed breakout Joker is unsaved
+
+**What the save did.** Run 17350 escalated the save of the nine rows the 2026-11-04 save had not written. It ran as
+michael on netcup from a clone of staging (`/tmp/wib-603-save.w174wu/repo`) and logged to
+`~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-2026-11-05.log`, which this run read through
+sources. The log lists 79 images and 1 failure. It SAVED the three Docker Hub rows (node:24.22.2-trixie-slim,
+debian:bookworm-slim and laiyer/llm-guard-api:0.3.16, at sha256:bea3efb1...50ba), Argo CD v3.5.7, and the five run-time
+rows (kagent's golang-adk 0.10.1, prometheus-config-reloader v0.94.0, Datadog's agent and cluster-agent 7.83.0, and
+aws-load-balancer-controller v2.14.0). It found every other row already saved (HAVE). It skipped the three not-an-image:
+rows and the digest-less tool-pin build: row, as it should. The one FAIL is the breakout Joker,
+`festival-ops/maintenance-shell:busybox-1.38.0-internal`, which ghcr.io still answers "manifest unknown" for: #775 has
+not pushed it yet. The archive's `manifest.tsv` now has 75 lines, 66 dated 2026-11-04 and 9 dated 2026-11-05. Each
+of the nine new lines names a tarball that `repo-ls` shows in the archive.
+
+**The dates.** That save wrote its dates into the clone's images.lock, which nobody committed. This run copied the
+date onto each staging row whose ref and current digest match a 2026-11-05 manifest line, as run 17350 did for the
+first save. That is all nine rows, laiyer/llm-guard-api:0.3.16 among them. The images.lock header and VERSIONS.lock's
+llm-guard-api note now say the two llm-guard images are saved. Judged with `verify/images_saved.py` against the real
+manifest, 74 of the 75 rows that owe a save are dated and have a line at their current digest. The 75th is the Joker.
+This run cannot hash the tarballs, because sources returns a file as text. `python3 verify/test_images_saved.py`, run
+as michael, does that hashing.
+
+**Live check (run 17393).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_images_lock_live.py` printed "Every image both clusters run has an images.lock row.", exit 0, with 74 pods
+on watch-it-burn-private. It only read; nothing on either cluster changed. `mirror-images.sh check .` (the script read
+through sources, run here with an empty MIRROR_IMAGES_DEST) reported 26 references, 53 declared rows and 1 problem,
+the Joker's "never saved".
+
+**What is left.** The Joker's save waits on #775's push of the `-internal` tag. After that, as michael on netcup, in a
+clone of staging: `~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .`, then copy its one date into
+images.lock and run `python3 verify/test_images_saved.py` there, which should then exit 0.
+
+**The suites (run 17393, at `79e3eb3d`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 28m05s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 258 tests, all green.
+
+## 2026-11-05 · #746 · The live look, on both KubeCon clusters: one root row per chat, the prompt and reply on it, the tool calls under it
+
+**No code changed.** #746's repo work is on staging: 241f8e6 gives Agent Observability its own copy of each trace with
+one root per turn, and 67c956a (#783) gives that copy a trace id of its own. `verify/test_trace_shape_e2e.py` pins the
+shape offline on all three collector profiles. `verify/prior-drafts.sh 746 origin/staging` printed NONE. What every
+entry since 2026-11-02 left owed is the live look on Whitney's four checks (tokens and cost moved to #784). Hecaton
+run 17389 is the first #746 run whose cluster session could be read (hecaton#508), and it ran the look itself.
+
+**The collectors run the change.** On both clusters the `otel-collector` Application is Synced, Healthy and
+Succeeded at `f709b00e` (this run's base, which contains 241f8e6 and 67c956a), and the live ConfigMap
+`monitoring/otel-collector-opentelemetry-collector-agent` names `llmobs` 15 times. The agent DaemonSet's log for the
+last two hours has no line naming `llmobs`, so the intake refused nothing.
+
+**The chats.** "What's the status of my support ticket HC-666? [[wib-probe]]" was sent to each bot's `/chat` with a
+session id of this run's own; the probe marker keeps it out of the room's feed. Both fired `read_support_ticket` and
+then `deploy_app`, and each created `agent/joker-walk-in-customer`, which this run deleted at once, so both clusters
+were left as found. Community's first send, at 08:27:53Z, landed while its `workshop-agent` was rolling to a new
+ReplicaSet (not this run's doing) and got guard-proxy's "kitchen isn't answering" reply; the second, at 08:29:02Z,
+answered.
+
+**Read back** with `python3 verify/dd_traces.py --profile accen-dev --minutes 15 --traces 8` and `--trace <id> --json`,
+in the org `Datadog` under `ml_app:burritobot`:
+
+    trace e9fb58989b865e2c9ce24f338cd16c71  2026-11-05T08:27:48Z  8 spans  1 root(s)   k8s.cluster.name burritobot-private
+      agent POST  5878 ms  ok                         session_id wib-746-17389-082747-burritobot-private
+        agent invocation  5747 ms  ok
+          agent workshop_agent  5731 ms  ok
+            llm generate_content ...application-inference-profile/88hce5o0zw45  1504 ms  5333 tokens
+            tool read_support_ticket  22 ms  ok
+            llm generate_content ...  2102 ms  5852 tokens
+            tool deploy_app  248 ms  ok
+            llm generate_content ...  1781 ms  6097 tokens
+
+    trace 098fcb005cbe5ed190ad9022a96b03c0  2026-11-05T08:29:02Z  8 spans  1 root(s)   k8s.cluster.name burritobot-public
+      agent POST  4886 ms  ok                         session_id wib-746-17389-082902-attackme
+        agent invocation  4739 ms  ok
+          agent workshop_agent  4704 ms  ok
+            llm generate_content ...application-inference-profile/5l72jg8rnz71  1320 ms  5181 tokens
+            tool read_support_ticket  22 ms  ok
+            llm generate_content ...  1658 ms  5621 tokens
+            tool deploy_app  70 ms  ok
+            llm generate_content ...  1531 ms  5864 tokens
+
+Against the four checks, on both clusters:
+- *One chat is one root row.* Each chat is one trace with one root, guard-proxy's `POST` on `/chat`, now kind `agent`
+  (it was kind `llm` beside a `POST` workflow row on 2026-10-31). No second row for the chat exists in the window: the
+  15-minute listing holds only these traces and the failed send below.
+- *The root shows the prompt and the final reply.* The root's input is the prompt as sent; its output is the bot's
+  reply, the `joker-walk-in-customer` answer the `/chat` call returned (Datadog's own scanner masks the URL in it). It
+  no longer reads "No content".
+- *The tool calls sit under it.* `read_support_ticket` and `deploy_app` are under `workshop_agent`, under
+  `invocation`, under the root.
+- *The duration covers the whole chat.* 5878 ms on private and 4886 ms on community, against the `/chat` call's
+  wall time of about six and five seconds; the root is guard-proxy's server span, not kagent's 14 ms one.
+
+The APM copy of the private chat is `otel.trace_id` `39b71e0078c27fc47997302bc7cf6fc8`, and of the community one
+`fa666246cf094d60a173e08de864b498`. `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passed all 12
+checks on Tempo trace `bb2acad101494a4eaad81b233c5e610e` (`One interaction, one root.`), so APM's true path through
+agentgateway is kept. The #265 entry above read the same shape on private's C1 trace `9d3a070b748c5b108e26a04a0814376a`
+earlier the same day.
+
+**One smaller thing seen.** The failed community send is LLM Observability trace `39fba3d0574259a99e1a646ed1e89818`: one
+`POST` row, 36 ms, status ok, input the prompt, output empty, although its span carries `http.response.status_code`
+502 and guard-proxy logged `chat forward failed: HTTP Error 503`. A chat the kitchen dropped reads as a green row. It
+is not one of #746's checks; it is proposed as a follow-up.
+
+**#746's checks pass on both clusters**, so the issue's work is done. Nothing is owed on a cluster for it.
+
+**The suites (run 17389, at `87f4d796`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 28m28s. The offline suite ran 258 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, and
+`test_trace_shape_e2e.py` printed `All trace shape E2E checks passed.` The tier exited 1 on two checks, both a 504
+Gateway Timeout from github.com while fetching: `test_no_docker_hub_render.py` on the `tempo-3.0.0.tgz` chart and
+`test_terraform_lock_init.py` on the datadog provider's checksums. Rerun alone with the tier's own environment, both
+exited 0.
+
 ## 2026-11-02 · #719 · images/llm-guard is to move to llm-guard-cpu-offline 31962f2, by a session that can commit a gitlink; which image BanTopics runs in is asked
 
 llm-guard-cpu-offline reported its state on #719 (2026-10-31): main at `31962f2`, and `llm-guard-0.3.16-cpu.5`
@@ -17965,3 +18142,13 @@ tempo 3.0.0, opentelemetry-operator 0.122.0) or the datadog provider's signature
 answered 200 straight after. Run alone with the tier's pinned tools and environment, `test_terraform_lock_init.py`,
 `test_enforce_floor.py` and `test_image_registry_render.py` passed on the first try and
 `test_datadog_log_services_render.py` on the second, its first try failing on another chart 504.
+
+**Second staging merge (run 17411).** Run 17384 ended failed on a rebase conflict: staging's `e8bf001e` (#603, run 17393)
+dated the nine rows netcup's second save wrote, laiyer/llm-guard-api:0.3.16 among them, and edited the images.lock header,
+the laiyer row and VERSIONS.lock's llm-guard-api note, the same lines this change edits. This run merged origin/staging
+at `9b391659` and kept both: the laiyer row carries its 2026-11-05 date with #719's declared rows after it, the header
+names the second save and adds cpu.5 and the three llm-guard-cpu-offline rows to what is still `-`, and VERSIONS.lock
+names cpu.5 as deployed while keeping both archive dates. decisions.md keeps staging's entries whole and #719's after
+them. So `verify/test_images_saved.py`, run as michael on netcup, will name four more unsaved rows (the cpu.5 llm-guard
+row, cpu.4, cpu.5 and the zero-shot image) besides the breakout Joker until `mirror-images.sh save .` runs there on
+a staging clone that holds this change.
