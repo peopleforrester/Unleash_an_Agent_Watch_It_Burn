@@ -22535,4 +22535,7 @@ unterminated docstring, not in base, not mine) was found in the worktree and rem
 check that KubeArmor still blocks the read after `guardrails-on`, are #925's later children; they run once this
 prompt reaches the clusters through Argo CD.
 
-**The suites (run 17734).** Recorded below once `bash verify/run-e2e-tools.sh` finishes.
+**The suites (run 17734, at `4d07cbad`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`275 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, the new one being `test_recipe_persona.py`) and then the tier:
+`61 checks ran (the offline suite and 60 tier tests) in 30m37s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
