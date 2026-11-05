@@ -16380,3 +16380,7 @@ long-term keys or a role session. The removal of the Converse names takes effect
 applied; the pin check calls Converse, and so may the agent and the tutor, so the next bring-up's Bedrock beats
 (`verify/bedrock_profile_check.py` and `verify/test_agent_cloud_credential_live.py`) are the check that those
 two actions alone still authorize it.
+
+**The suites (run 17271, at the fix's commits).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and
+54 tier tests) in 28m24s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 254
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
