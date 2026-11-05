@@ -1,0 +1,62 @@
+# ABOUTME: Keep both Joker tags of festival-ops/maintenance-shell on the digests images.lock pins (#775): build them with
+# ABOUTME: build.sh on loopback, and push one only where ghcr.io lacks the pinned digest and the build has exactly it.
+name: push-jokers
+
+# The breakout's Joker, busybox-1.38.0-internal, was pinned in images.lock (and the internal registry's seed) before its
+# first push, from a reproducible build, and ghcr.io never got it: a run may not write to ghcr.io (#775). The internal
+# registry copies it from ghcr.io by digest, so until the tag is there every HC-666 Joker sits in ImagePullBackOff.
+# This builds both Jokers on the runner's loopback, where nothing is published, and hands each tag to
+# scripts/ghcr_version_tag.py as a crane: build: a tag that serves its pin is left alone, a moved one is put back on
+# its pin, and a pinned digest ghcr.io lacks is pushed only when the build's digest is that pin.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [staging, main]
+    paths:
+      - 'images/villains/**'
+      - 'images.lock'
+      - 'verify/e2e-tools.lock'
+      - '.github/workflows/push-jokers.yml'
+      - 'scripts/ghcr_version_tag.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push-jokers
+  cancel-in-progress: false
+
+jobs:
+  jokers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The crane build.sh is pinned to (verify/e2e-tools.lock): gzip output can differ between crane releases, and the
+      # digest the build must reach was computed with this one. Its SHA-256 is checked before it runs.
+      - name: Fetch the pinned crane
+        run: |
+          read -r name version sha url member < <(grep -E '^crane[[:space:]]' verify/e2e-tools.lock)
+          [ "${name}" = crane ] || { echo "verify/e2e-tools.lock has no crane row" >&2; exit 1; }
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/crane.tar.gz" "${url}"
+          echo "${sha}  ${RUNNER_TEMP}/crane.tar.gz" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf "${RUNNER_TEMP}/crane.tar.gz" -C "${RUNNER_TEMP}/bin" "${member}"
+          echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
+          "${RUNNER_TEMP}/bin/crane" version
+      # No registry credential is in this step's environment, and build-loopback.sh refuses any address but loopback,
+      # so the build cannot reach ghcr.io.
+      - name: Build both Jokers with build.sh into crane's registry on loopback
+        run: |
+          nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &
+          for _ in $(seq 50); do curl -fsS http://127.0.0.1:5000/v2/ >/dev/null 2>&1 && break; sleep 0.2; done
+          curl -fsS http://127.0.0.1:5000/v2/ >/dev/null
+          bash images/villains/build-loopback.sh 127.0.0.1:5000
+      # The same GHCR_TOKEN keep-sample-app-tag.yml and build-web-terminal.yml write with (issue #91).
+      - name: Keep each Joker tag on its pin, pushing the build only to a pinned digest ghcr.io lacks
+        env:
+          GHCR_USER: peopleforrester
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          for tag in busybox-1.38.0 busybox-1.38.0-internal; do
+            python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/festival-ops/maintenance-shell:${tag}" "ghcr.io/peopleforrester/festival-ops/maintenance-shell:${tag}" images.lock
+          done

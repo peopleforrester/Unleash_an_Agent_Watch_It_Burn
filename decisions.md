@@ -17951,3 +17951,65 @@ tests) in 28m28s. The offline suite ran 258 tests and printed `ALL OFFLINE RENDE
 Gateway Timeout from github.com while fetching: `test_no_docker_hub_render.py` on the `tempo-3.0.0.tgz` chart and
 `test_terraform_lock_init.py` on the datadog provider's checksums. Rerun alone with the tier's own environment, both
 exited 0.
+## 2026-11-05 · #775 · Run 17397: the breakout Joker's push moves into CI, held to the pinned digest, and least privilege is checked live
+
+**Where #775 stood.** Run 16464's build is on staging and `bash verify/prior-drafts.sh 775 origin/staging` printed NONE:
+every #775 draft is in staging except run 16043's, which is decisions.md alone and followed by later work. What was owed
+was the 2026-11-03 #775 entry's "Not yet run on a cluster" list, which starts with pushing
+`festival-ops/maintenance-shell:busybox-1.38.0-internal`. Read anonymously on 2026-11-05, ghcr.io's tags list for the
+package is still `["busybox-1.38.0"]`, and a manifest request for the `-internal` tag, and for its pinned digest
+`sha256:0dbe92d4...`, answers 404. Runs 16464 and 16733 escalated the push, and both escalations were dropped as stale
+on 2026-11-05 with "a fresh run works this issue now and does them itself". This run still has no ghcr.io write
+credential (`gh auth token` is refused to runs, and no registry login is on the host), so the push could not be made
+by hand here.
+
+**Decided here: CI pushes it, from the same pinned build.** The repo already writes pinned tags from CI with the
+`GHCR_TOKEN` secret: keep-sample-app-tag.yml (#828) was written because a run may not write to ghcr.io, and its staging
+and main runs on 2026-11-05 succeeded. `verify/test_workflow_registry_writes.py` allows a workflow to write only through
+`scripts/ghcr_version_tag.py`, so the new path goes through it too:
+- `scripts/ghcr_version_tag.py` takes a build as `crane:<ref>`, an image in a registry crane reads. Its one new row:
+  when a pin file pins the tag at D, the registry has no manifest at D, and the build's digest is D, crane copies the
+  build to the tag and the tag must then serve D. A build at any other digest is refused, naming both, with nothing
+  pushed. Every other row acts as before, so a tag that serves its pin is left alone and a moved one is put back.
+- `images/villains/build-loopback.sh <127.0.0.1:port>` runs `build.sh`, unchanged, with its festival-ops references
+  sent to a registry on loopback. It refuses any address but loopback before building.
+- `.github/workflows/push-jokers.yml` runs on a push to staging or main that touches `images/villains/`, `images.lock`,
+  the crane pin, the script or itself. It fetches crane 0.22.1 from `verify/e2e-tools.lock`'s row and checks its
+  SHA-256, builds both Jokers on loopback in a step that holds no credential, and then hands both tags to the script
+  in the one step that holds `GHCR_TOKEN`. The workshop's Joker serves its pin, so for it the step only says so.
+This run adds the workflow, so the staging push that promotes it is the one that pushes the breakout's Joker.
+
+**Checked here, without a cluster.** `CRANE=verify/.tools/bin/crane python3 verify/test_joker_build_digest.py` now
+builds through `build-loopback.sh`. It passed: both Jokers at their images.lock digests (`d8dae795...` and
+`0dbe92d4...`), and `ghcr_version_tag.crane_digest` reads the same digests the workflow compares to the pins. The
+workflow's fetch step, run locally from the YAML, checked crane's SHA-256 (`OK`) and printed `0.22.1`. A `crane copy` of
+the loopback build to a second loopback registry kept the digest, `sha256:0dbe92d4...`, which is the copy the
+workflow makes to ghcr.io. `verify/test_ghcr_version_tag.py` has six new cases for the row: a build at the pin is
+pushed once, whether the tag is missing or moved; a build at another digest is refused with nothing pushed; a push
+that lands another digest is refused; a tag at its pin is left alone; a moved tag whose pin the registry has is put
+back without pushing. It also has a case for the command line, and checks on push-jokers.yml: its triggers, that
+only the script's step holds the token, the crane fetch, and that the tags it keeps are the two build.sh builds,
+each pinned in images.lock.
+`verify/test_workflow_registry_writes.py` names push-jokers.yml with the other two writers.
+
+**Live check (run 17397), on watch-it-burn-community.** Both clusters run staging `7fa73630` in Argo CD, on the burn and
+admin profiles. Neither runs the internal registry, which is in `values-kubecon-private.yaml` only. On both, the
+headless `jokers` Service selects `burritobot.co/room-joker=true`, and the `challenge-fixes` ConfigMap is there. The
+least-privilege Role, read from that ConfigMap with its namespace changed, was applied in a scratch namespace
+`check-775-17397` and bound to a scratch service account. `kubectl auth can-i` as that account answered no for create
+and patch on deployments and on pods, and yes for get on deployments, for create on configmaps and services, and for
+patch on deployments with `--subresource=scale`, the reaper's path. A server-side dry-run apply of
+`joker-agatha-the-banshee` on `registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0` as that account came
+back `Forbidden ... cannot patch resource "deployments"`, which is what `c6-forbidden` expects of `deploy_app`'s
+server-side apply. Both scratch namespaces were deleted, and `kubectl get ns` confirmed both gone. Nothing else on either
+cluster was changed.
+
+**Not yet run on a cluster.** In order:
+1. After promotion, push-jokers.yml's staging run (`gh run list --workflow push-jokers.yml`) prints
+   `... busybox-1.38.0-internal was not on the registry; the build, at the pinned sha256:0dbe92d4..., is pushed to it`,
+   and ghcr.io serves the tag at that digest. #829 then adds the tag to `verify/test_c6_joker_public.py`.
+2. The rest of the 2026-11-03 #775 entry's list, on a KubeCon bring-up of the private cluster (the internal registry
+   runs only there): the registry's tags list, both KubeCon probe runs ending `KUBECON PROBE GREEN`, a visitor's
+   HC-666 ask after `guardrails-on`, and `stage_traces.py seed` ending `SEEDED GREEN`.
+
+No dependency was added: crane 0.22.1 was already pinned in `verify/e2e-tools.lock` by #775.

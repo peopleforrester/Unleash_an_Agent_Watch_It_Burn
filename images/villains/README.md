@@ -73,9 +73,12 @@ classifier or a bot that cannot create Deployments would have stopped it. The wo
 because on a workshop cluster the allow-list does refuse it.
 
 The build is reproducible, so its digest is pinned before it is pushed: `verify/test_joker_build_digest.py` (tools tier)
-runs `build.sh` with crane 0.22.1 into a loopback registry and holds both Jokers to their `images.lock` rows. Push with
-that same crane: `CRANE=verify/.tools/bin/crane bash images/villains/build.sh joker-internal` (after
-`bash verify/fetch-e2e-tools.sh` and the `crane auth login ghcr.io` above).
+runs `build.sh` with crane 0.22.1 into a loopback registry, through `build-loopback.sh`, and holds both Jokers to their
+`images.lock` rows. `.github/workflows/push-jokers.yml` does the push: on a push to staging or main that touches this
+directory, `images.lock`, the crane pin or the workflow, it builds both Jokers the same way on the runner's loopback and
+hands each tag to `scripts/ghcr_version_tag.py`. A tag that serves its pin is left alone, a moved one is put back on
+its pin, and a pinned digest ghcr.io lacks is pushed only when the build has exactly that digest. So after a page
+change, re-pin from the test's output; the push follows the pin to staging.
 
 Each room Joker, `joker-<name>`, has its own page at `https://maintenance-shell-<cluster>.burritobot.co/joker-<name>/`:
 `deploy_app` gives its pod that hostname under the headless `jokers` Service, and the console proxies the path to it.

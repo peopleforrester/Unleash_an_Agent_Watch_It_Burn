@@ -10,11 +10,14 @@ digests images.lock pins, and the seed has to copy that one.
 
 The build is reproducible: no timestamp goes into either image, the layer's tar sets owner, mtime, order and modes,
 and crane 0.22.1 compresses it the same way each time. On 2026-11-03 the rebuild gave the festival-ops Joker's
-published digest, d8dae795, byte for byte, under umask 002 and 022. So the push owed after a page change is
-`CRANE=verify/.tools/bin/crane bash images/villains/build.sh`, and this test names any pin it would move.
+published digest, d8dae795, byte for byte, under umask 002 and 022. So after a page change this test names the pin
+that moves; re-pin it in images.lock (and the internal registry's seed), and push-jokers.yml, on the push to staging
+that carries the new pin, pushes the build to the tag only when its digest is that pin.
 
-How. crane's own registry serves on a free loopback port. build.sh runs with CRANE set to a wrapper that sends its
-ghcr.io/peopleforrester/festival-ops/ references to that registry, so nothing is pushed anywhere else. Then each tag's
+How. crane's own registry serves on a free loopback port. images/villains/build-loopback.sh runs build.sh with CRANE
+set to a wrapper that sends its ghcr.io/peopleforrester/festival-ops/ references to that registry, so nothing is
+pushed anywhere else. .github/workflows/push-jokers.yml builds with the same script before it hands each tag to
+scripts/ghcr_version_tag.py, so the build this test holds to the pins is the one the workflow pushes. Then each tag's
 digest is read back and its top layer is opened: the internal Joker carries joker-web-internal's page and joker-web's
 start.sh, and the workshop Joker joker-web's own.
 
@@ -23,6 +26,7 @@ $CRANE at it. Run by hand: CRANE=verify/.tools/bin/crane python3 verify/test_jok
 """
 from __future__ import annotations
 
+import importlib.util
 import io
 import os
 import pathlib
@@ -67,6 +71,10 @@ def pinned(ref: str) -> str | None:
     return m.group(1) if m else None
 
 
+spec = importlib.util.spec_from_file_location("ghcr_version_tag", REPO / "scripts/ghcr_version_tag.py")
+gvt = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gvt)
+
 crane = os.environ.get("CRANE", "")
 if not crane or not os.access(crane, os.X_OK):
     print(f"CRANE must name the pinned crane (verify/fetch-e2e-tools.sh puts it at verify/.tools/bin/crane); got {crane!r}")
@@ -107,21 +115,25 @@ with tempfile.TemporaryDirectory() as t:
         else:
             check(f"crane's registry answers on 127.0.0.1:{port}", False, (tmp / "registry.log").read_text()[-300:])
             finish()
-        wrapper = tmp / "crane"
-        wrapper.write_text("#!/usr/bin/env bash\nargs=()\n"
-                           f'for a in "$@"; do args+=("${{a//{PREFIX.replace("/", chr(92) + "/")}/{local}}}"); done\n'
-                           f'exec {crane} --insecure "${{args[@]}}"\n')
-        wrapper.chmod(0o755)
-        print("== build.sh, unchanged, into the loopback registry ==")
-        r = subprocess.run(["bash", str(VILLAINS / "build.sh")], env={**os.environ, "CRANE": str(wrapper)},
-                           capture_output=True, text=True, timeout=600)
-        check("build.sh builds both Jokers (exit 0)", r.returncode == 0, (r.stdout + r.stderr)[-600:])
+        print("== build.sh, unchanged, into the loopback registry, through build-loopback.sh ==")
+        r = subprocess.run(["bash", str(VILLAINS / "build-loopback.sh"), f"127.0.0.1:{port}"],
+                           env={**os.environ, "CRANE": crane}, capture_output=True, text=True, timeout=600)
+        check("build-loopback.sh builds both Jokers (exit 0)", r.returncode == 0, (r.stdout + r.stderr)[-600:])
+        check("build-loopback.sh refuses an address that is not loopback, before building",
+              subprocess.run(["bash", str(VILLAINS / "build-loopback.sh"), "ghcr.io"], env={**os.environ, "CRANE": crane},
+                             capture_output=True, text=True, timeout=60).returncode == 1)
         for name, ref in refs.items():
             here = ref.replace(PREFIX, local)
             d = subprocess.run([crane, "--insecure", "digest", here], capture_output=True, text=True, timeout=60)
             got = d.stdout.strip()
             check(f"{name}: build.sh's digest is images.lock's {str(want[name])[:19]}...", got == want[name],
-                  f"built {got or d.stderr.strip()[:200]}: push it with CRANE=verify/.tools/bin/crane and re-pin")
+                  f"built {got or d.stderr.strip()[:200]}: re-pin it, and push-jokers.yml pushes it on staging")
+            try:
+                read = gvt.crane_digest(here)
+            except gvt.Refused as err:
+                read = str(err)
+            check(f"{name}: ghcr_version_tag.py's crane: build reads the same digest push-jokers.yml compares to the pin",
+                  read == got, read)
             out = tmp / f"{name}.tar"
             e = subprocess.run([crane, "--insecure", "export", here, str(out)], capture_output=True, text=True,
                                timeout=120)
