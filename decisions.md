@@ -20958,3 +20958,22 @@ Its Night Before order check now reads inside the Night Before section, as `veri
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
 and 58 tier tests) in 29m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The first run, at `1572ee6a`, failed
 only `test_fleet_routes_roster.sh`'s Night Before order check, fixed in `ad508eb2`.
+
+**Rebase onto staging (run 17710).** Run 17670's commits did not land: hecaton's rebase onto staging `9e33dd30`
+stopped on the run-of-show's Probe record, where staging had added #906's two run-through entries (`12f5b1d2`,
+`1c58ebe2`) in the same place as this run's #931 entry. Both sides only added text, so run 17710 rebased onto staging
+`32472d80` and kept all three entries, in time order: #906's 16:21Z and 18:06Z runs, then #931's. The other drift
+`verify/draft-drift.sh` named was edits in place that do not touch this change: the `/kubecon` withhold in
+`console.conf` (`2a224578`, #909), the Joker banner in `internal-registry.yaml` and `test_c6_villain_endpoint.py`
+(`afa23d81`, #714), and `wall-reset`'s Railway host in `fleet.sh` (`656df19c`, #926). After the rebase,
+`verify/test_fleet_routes_roster.sh` (40), `test_guardrails_switch.py`, `test_c6_villain_endpoint.py`,
+`test_fleet_wall_check.sh` (21), `test_kubecon_community_gate.py` and `test_console_no_toggle.py` passed.
+
+**Re-read live (run 17710), read-only, 21:43Z.** The status codes were the same as at 19:46Z. The tags list read 200
+with `busybox-1.38.0` on `registry.burritobot.co` and `registry-burritobot-private.burritobot.co`, and 502 on
+`registry-attackme.burritobot.co`. `/support` read 404 on both bot hosts. Every desk host read 200, with HC-666 on the
+bare desk and private's. `/`, `/prompts` and `/cost` read 200 on both bot hosts, and `deployments.burritobot.co` read
+200. `./fleet.sh router-check` again ended "the router serves exactly the roster" and `./fleet.sh wall-check` "the
+wall shows every roster cluster", both exit 0. #916's body now carries the corrected support criterion, and run
+17670's router-check and wall-check comment is on #931. The live table still carries `registry-attackme` until the
+routes are published from a staging that has this change.
