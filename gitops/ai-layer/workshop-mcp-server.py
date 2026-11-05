@@ -496,7 +496,8 @@ SHELL_COMMAND = ["sleep", "3600"]
 # deployment, so a phone cannot fill the node (Michael, #773).
 ROOM_RESOURCES = {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "50m", "memory": "64Mi"}}
 SCALED_KINDS = ("Deployment", "StatefulSet", "ReplicaSet")
-_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")
+# Every name Docker Hub goes by, so deploy_app can refuse a Docker Hub image PUBLIC_IMAGES does not carry (#714).
+_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")  # refused (#714)
 
 
 def _registry_and_repo(image: str) -> tuple[str, str]:
@@ -513,8 +514,8 @@ def _registry_and_repo(image: str) -> tuple[str, str]:
 def _public_image_name(image: str) -> str | None:
     """The PUBLIC_IMAGES name an image asks for; "" for a Docker Hub image the list does not carry; None for any other.
 
-    A Docker Hub reference is read for its repository, so "nginx", "nginx:latest" and nginx under docker.io's
-    library/ all ask for nginx. The pinned image's own repository at any tag is that name too."""
+    A Docker Hub reference is read for its repository, so "nginx", "nginx:latest" and nginx in Docker Hub's library/
+    namespace, under any of its registry names, all ask for nginx. The pinned image's own repository at any tag is that name too."""
     registry, repo = _registry_and_repo(image)
     if registry in _DOCKER_HUB:
         repo = repo.removeprefix("library/")

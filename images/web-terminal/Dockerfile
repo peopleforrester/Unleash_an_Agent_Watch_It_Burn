@@ -1,6 +1,9 @@
 # ABOUTME: Browser workbench image for the attendee VTT: a shell (ttyd), a browser IDE (code-server) and
 # ABOUTME: a notebook (JupyterLab), all sharing /home/student. Runs as the scoped `student` user.
-FROM debian:bookworm-slim
+# The base is lab-platform's ghcr.io copy of Docker Hub's debian:bookworm-slim (lab-platform#353), the linux/amd64
+# image Docker Hub's index sha256:99c0b25c... served on 2026-11-02, pinned by digest: nothing here is pulled from
+# Docker Hub (#714). The copy is amd64 only, which is what the nodes run and what the workflow builds.
+FROM ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e
 
 # Base utilities the lab leans on. glibc base so AWS CLI v2 installs cleanly (it is not built for musl).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -8,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # ttyd (static binary), kubectl, AWS CLI v2, helm, eksctl, k9s, yq.
-# Arch-aware so the image builds on amd64 (the t3.2xlarge nodes) or arm64.
+# Arch-aware, though the pinned base above is the amd64 image the t3.2xlarge nodes run.
 #
 # kubectl is pinned to an EXACT version, not resolved from stable-1.35.txt at build time. A floating
 # pin means the rehearsal build and the delivery build can ship different binaries with nothing to
