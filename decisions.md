@@ -17548,3 +17548,7 @@ Pods, a 30 s rescan at 200m also cannot finish inside its interval, so Challenge
 `CONTEXT=watch-it-burn-private python3 verify/test_llm_bypass_live.py` with the Deployment reading `cpu: "1"` and
 `--backgroundScanInterval=1h`. The next run on #608, or any run on the cluster, records it here. The measured run
 above was on the same values set by hand.
+
+**Suites (run 17353, at 3ba5016).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN, `test_collector_config.py` among them) and then the tools tier: 55 checks in 25m37s,
+ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
