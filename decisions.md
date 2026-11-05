@@ -16012,3 +16012,9 @@ START/END`. Second, a cluster with Falco and without KubeArmor's `block-recipe-s
 6. Third, the test run within 4 hours of that walk. The DRIFT comparison has not yet read a board that Datadog
 stored. If Datadog rewrites a query string on save, the first run after the apply prints `DRIFT ... query <name>
 differs: the org has (...)`, and the comparison is then fixed to normalize that rewrite.
+
+**The suites (run 17194, at `2878d1fa`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m24s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
+tests, `test_fleet_monitors.py` (198 checks, the 36 new `--board` checks among them) and `test_leaderboard.py`
+among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. `test_leaderboard_live.py` is `# SUITE: e2e`, so
+the offline suite leaves it to `run-e2e.sh`.
