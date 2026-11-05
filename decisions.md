@@ -19686,3 +19686,7 @@ both bots, so the reset itself waits for a host logged in to Railway. In order, 
 `./fleet.sh wall-reset`, then `./fleet.sh wall-check --empty` ending "holds no prompts" and
 `curl -s https://prompts.burritobot.co/api/prompts` showing `"prompts": []`. Then one prompt on attackme shows on a
 reloaded wall tab within about 3 seconds.
+
+**The suites (run 17646, at `d3e3e468`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 34m40s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
