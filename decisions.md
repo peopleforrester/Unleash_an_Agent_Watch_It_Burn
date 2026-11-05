@@ -21067,3 +21067,33 @@ as before. The audit state is still `infra/terraform/aws/audit/states/accen-dev.
 **The suites (run 17711, at `95acc5ed`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`273 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `61 checks ran (the offline suite and 60 tier tests) in
 31m27s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-05 · #912 · run 17716 · Recheck: mrf-secrets still holds no login; the interim login still holds on both terminals
+
+**mrf-secrets.** Through `sources-elevated fleet tanjiro-wsl2`, after a `git -C ~/secrets fetch`, neither the working
+tree nor `origin/main` has `projects/watch-it-burn-terminal.env`, and the newest commit on `origin/main` is from
+2026-11-03. The check printed counts, never a value. This repo's run cannot list mrf-secrets issues (the wrapper refuses
+the data vault), and llm-coding-workflow#463, which would remove the rule that a human commits rotations there, is
+still open with no comments. So nothing was written to either cluster, and the two criteria that need a login delivered
+from mrf-secrets stay open.
+
+**Live check, both clusters (read only).** `kubectl --context watch-it-burn-private -n agent get pods -l
+app.kubernetes.io/name=web-terminal` and the same with `--context watch-it-burn-community` each show the pod run 17705
+started (`web-terminal-78f4fb569f-xfp4m` and `-r9f2v`), Ready. Each `terminal-auth` Secret still has no labels and no
+annotations, and the two hold the same login, compared in the shell. With `WIB_TERMINAL_USER` and
+`WIB_TERMINAL_PASSWORD` set from the private Secret for that command only, `bash verify/terminal-login-live.sh
+watch-it-burn-private https://burritobot-private.burritobot.co https://burritobot-private.agenticburn.com` printed
+`15 passed, 0 failed`, and the same check on `watch-it-burn-community` against its console load balancer's own name
+printed `8 passed, 0 failed`. On each URL `/terminal/` answers 401 to no login and to the old login and 200 to the
+interim one, `/ide/login` refuses the old password and takes the interim one, and `/jupyter/api/status` answers 403 to
+the old token and 200 to the interim one. `attackme.burritobot.co` and `attackme.agenticburn.com` still answer 404 on
+`/terminal/`.
+
+**#908 and the follow-up.** Both comments are on #908: where presenters find the lasting login (mrf-secrets,
+`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`), and that the old login is
+revoked. Neither carries a value. Run 17705's follow-up, that fleet.sh writes the login on kubectl's command line and
+leaves a copy in the last-applied annotation, is #944.
+
+**Not yet run.** As run 17705's entry says: once Michael commits the file to mrf-secrets, `./fleet.sh terminal-password
+watch-it-burn-private watch-it-burn-community` on tanjiro-wsl2 from `infra/terraform/fleet/`, then
+`bash verify/terminal-login-live.sh` on each cluster with neither variable set, each ending `(login from mrf-secrets)`.
+No code changed in this run and no dependency was added.
