@@ -17076,3 +17076,59 @@ using it. The run-of-show's Night Before already runs `reset-bot` before the roo
 
 **Suites (run 17324, at a99d07bd).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier: 55 checks in 27m45s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
+## 2026-11-05 · #562 · Live on both clusters: the agent answers through its tagged application profile
+
+**No code changed.** Run 17336 is the first #562 run that could read its cluster session (hecaton#508 is fixed), so
+it ran the 2026-11-02 entry's commands on watch-it-burn-community and watch-it-burn-private, at staging `35578c15`,
+between 05:20Z and 05:34Z. All five of #562's checks hold. Check 5's simulator half is the one exception, and #871
+already tracks it.
+
+- **Checks 1 to 3, `verify/bedrock_profile_check.py`.** Run per cluster with `--context <C> --cluster <C>
+  --profile accen-dev --region us-west-2`, since the run's kubeconfig names its contexts by cluster and not by ARN.
+  Both ended `BEDROCK PROFILE GREEN`, exit 0, 48 PASS and 0 FAIL each. All five `<C>-nova`, `-haiku`, `-sonnet`,
+  `-opus` and `-tutor` profiles are ACTIVE application profiles and route like their system profiles. Each carries
+  project=watch-it-burn, event=kubecon-na-2026 and attendee=<C>, with consumer=agent, or consumer=tutor on the tutor.
+  The live ModelConfigs bedrock-nova, -haiku, -sonnet and -opus each call the cluster's ARN for their tier. That is
+  the fact fleet.sh logs as `ModelConfig bedrock-nova now calls arn:...`, whose bring-up log is not kept. The
+  workshop-agent config Secret names the nova ARN: `application-inference-profile/5l72jg8rnz71` on community and
+  `88hce5o0zw45` on private. The running agent pod started after the Secret last changed, and BurritoBot answered
+  a `[[wib-probe]]` chat turn through guard-proxy on both clusters.
+- **Check 4.** `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2` ended `MODEL PIN GREEN`
+  (31 PASS), and both clusters' nova profiles answered a Converse call through their own ARN. The run's worktree
+  first had to check out the guard-proxy submodule (`git submodule update --init gitops/ai-layer/guard-proxy`,
+  at the pinned `0f0c809`), because the check reads the tier map from `proxy.py`.
+- **Check 5, the IAM pipeline.** `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3
+  verify/test_iam_policy_aws.py` passed check 1 (Access Analyzer: boundary 1, cluster 11, audit 3 documents) and
+  all three check 2 cases. It then stopped at check 4, the simulator, on `InvalidClientTokenId`. The run's session is
+  a GetSessionToken session without MFA, IAM refuses every call made with one, and #871 is open for exactly that run.
+  So this run ran the five application-profile cases live instead, as the principals they name. A Job modelled on
+  the lab's `cloud-credential-probe` (same image, same pod security) ran once as agent-sa and once as web-terminal,
+  the tutor's ServiceAccount, on each cluster. Each sent a five-token Converse call to the ARN under test:
+
+      case                                                   community        private
+      1 agent, own <C>-nova (allowed)                        ALLOWED          ALLOWED
+      2 agent, the other cluster's nova (implicitDeny)       DENIED by IAM    DENIED by IAM
+      3 agent, own <C>-tutor (implicitDeny)                  DENIED by IAM    DENIED by IAM
+      4 tutor, own <C>-tutor (allowed)                       see below        see below
+      5 tutor, own <C>-nova (implicitDeny)                   DENIED by IAM    DENIED by IAM
+
+  Each IAM denial named `bedrock:InvokeModel` on the profile ARN under test, as the cluster's `-bedrock-` or `-tutor-`
+  role. Case 2 calls the other live cluster's own profile, where the simulator stands in a tag. Case 4 passes IAM on both clusters. The community
+  tutor got the reply `ok` once. Every other try (one on private, then four on each cluster) got Bedrock's
+  Marketplace refusal instead, which comes after IAM: "Model access is denied due to IAM user or service role is
+  not authorized to perform the required AWS Marketplace actions (aws-marketplace:ViewSubscriptions,
+  aws-marketplace:Subscribe)". Calling the community tutor's profile from the private tutor, as a control, got IAM's
+  "no identity-based policy allows the bedrock:InvokeModel action". `aws bedrock get-foundation-model-availability`
+  explains the refusal: `anthropic.claude-sonnet-5`, the tutor's model (`var.tutor_model`), has
+  `agreementAvailability` NOT_AVAILABLE in accen-dev, while sonnet-4-6 and nova-pro are AVAILABLE. The 2026-06-17
+  agreements in PROJECT_STATE covered haiku-4-5, sonnet-4-5 and sonnet-4-6 only. No tutor runs today (#89, and
+  `main.tf` says so above the tutor profile), so nothing live is affected. A tutor brought back would fail on every
+  account without that agreement. That is a follow-up from this run. Accepting a Marketplace agreement is not a
+  run's act.
+
+The Jobs (`app-profile-effect-agent` and `app-profile-effect-tutor` in `agent`) were deleted on both clusters, and
+none was left. The calls cost two profile-check chat turns per cluster, the pin check's two Converse calls and
+about 20 five-token Converse calls, well under 0.05 USD.
+
+**Not yet run on a cluster.** Check 4 of `verify/test_iam_policy_aws.py`, the simulator over
+`infra/org/effect-tests.yaml`, from a credential IAM accepts: that is #871.
