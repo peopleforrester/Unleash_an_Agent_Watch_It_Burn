@@ -242,6 +242,11 @@ data "aws_iam_policy" "permissions_boundary" {
   name = local.permissions_boundary_name
 }
 
+# The lab VPC this cluster is built in, read for its CIDR: the source of the cluster API's 443 rule below (#906).
+data "aws_vpc" "lab" {
+  id = var.vpc_id
+}
+
 # Every registry module here is pinned to its minor (~> X.Y.0). .terraform.lock.hcl locks providers but
 # not modules, so a looser range let a fresh init pick up a newer module whose higher aws floor (21.29.0
 # needs >= 6.59.0) no longer fit the committed lock, and init failed (#468). Moving a module's minor is
@@ -295,6 +300,26 @@ module "eks" {
       to_port                       = 3000
       type                          = "ingress"
       source_cluster_security_group = true
+    }
+  }
+
+  # The lab VPC reaches this cluster's API on 443 (#906). Every roster cluster shares the lab VPC, and with private
+  # endpoint access on, the API's name resolves inside the VPC to this cluster's private endpoint ENIs, which carry
+  # this module's cluster security group. The module admits only its own nodes there, so the KubeCon guardrails
+  # switch, whose terminal on one cluster calls the other cluster's API through the guardrails-peer kubeconfig,
+  # timed out on every peer call (measured 2026-11-05: "dial tcp 10.0.50.254:443: i/o timeout" from
+  # watch-it-burn-private's terminal to watch-it-burn-community, 30 s a call), while fleet.sh guardrails-link, run
+  # from outside the VPC over the public endpoint, passed. The public endpoint already admits 0.0.0.0/0
+  # (publicAccessCidrs), so this opens no API a VPC host could not already reach; it only stops the private path
+  # from being the one that hangs. verify/test_peer_api_rule.py pins it.
+  security_group_additional_rules = {
+    ingress_lab_vpc_443_api = {
+      description = "Lab VPC to the cluster API on 443/tcp (the KubeCon guardrails switch's peer link)"
+      protocol    = "tcp"
+      from_port   = 443
+      to_port     = 443
+      type        = "ingress"
+      cidr_blocks = [data.aws_vpc.lab.cidr_block]
     }
   }
 

@@ -46,6 +46,7 @@ if not exe:
 
 try:
     root_rules = nsr.rules()
+    cluster_rules = nsr.rules(anchor=nsr.CLUSTER_RULES_ANCHOR)
 except nsr.AnchorMissing as e:
     print(f"FAIL: anchor missing: {e}", file=sys.stderr)
     sys.exit(1)
@@ -97,6 +98,25 @@ with tempfile.TemporaryDirectory(prefix="tf-node-rules-") as tmp:
         unknown = sorted(set(attrs) - declared)
         check(f"{name}: every attribute it sets is in the module's type (none silently dropped)", not unknown,
               f"not in the type: {unknown}; the type has {sorted(declared)}")
+
+    print("== the cluster group's rules (#906, the lab VPC to the API on 443) are read as the root means them ==")
+    cm = re.search(r'variable "security_group_additional_rules"\s*\{.*?type\s*=\s*map\(object\(\{(.*?)\}\)\)',
+                   variables, re.DOTALL)
+    check('variables.tf declares security_group_additional_rules as map(object({...}))', cm is not None)
+    cdeclared = set(re.findall(r"^\s*([a-z_]+)\s*=", cm.group(1), re.MULTILINE)) if cm else set()
+    for name, attrs in cluster_rules.items():
+        unknown = sorted(set(attrs) - cdeclared)
+        check(f"{name}: every attribute it sets is in the module's type (none silently dropped)", not unknown,
+              f"not in the type: {unknown}; the type has {sorted(cdeclared)}")
+    cres = re.search(r'resource "aws_security_group_rule" "cluster"\s*\{(.*?)\n\}', main, re.DOTALL)
+    check('main.tf has resource "aws_security_group_rule" "cluster"', cres is not None)
+    cbody = cres.group(1) if cres else ""
+    check("its for_each reads var.security_group_additional_rules", "var.security_group_additional_rules" in cbody)
+    check("it attaches each rule to the module's cluster security group (the one on the control-plane ENIs)",
+          re.search(r"security_group_id\s*=\s*aws_security_group\.cluster\[0\]\.id", cbody) is not None)
+    check("it passes each rule's cidr_blocks through to the rule",
+          re.search(r"^\s*cidr_blocks\s*=\s*try\(each\.value\.cidr_blocks,\s*null\)", cbody, re.MULTILINE) is not None,
+          cbody[:1500])
 
     print("== source_cluster_security_group resolves to the group on the control-plane ENIs ==")
     res = re.search(r'resource "aws_security_group_rule" "node"\s*\{(.*?)\n\}', node_groups, re.DOTALL)

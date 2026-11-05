@@ -1,5 +1,5 @@
 # ABOUTME: Reads the cluster root's node_security_group_additional_rules out of module "eks" in main.tf, so the
-# ABOUTME: offline and tools-tier checks of #869 (control plane to the workshop apps' ports) parse it one way.
+# ABOUTME: offline and tools-tier checks of #869 and #906 parse it one way, and the cluster group's rules likewise.
 """The block is plain HCL the repo writes itself: a map of rule name to an object of `key = value` lines. This
 reads it with brace matching and a line regex, which is enough for that shape; it is not an HCL parser. Each
 anchor it cuts on is checked first, and a missing one raises AnchorMissing naming the literal and the file."""
@@ -12,6 +12,9 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER_TF = REPO / "infra/terraform/aws/cluster/main.tf"
 MODULE_ANCHOR = 'module "eks" {'
 RULES_ANCHOR = "node_security_group_additional_rules = {"
+# The cluster security group's own rules (#906). The newline and indent are part of the literal: without them it is
+# also the tail of the node rules' anchor above.
+CLUSTER_RULES_ANCHOR = "\n  security_group_additional_rules = {"
 
 # The workshop apps lab-platform's attendee check reaches through the API server's Service proxy, by the pod
 # port the control plane dials (issue #869, measured on watch-it-burn-private 2026-11-05).
@@ -48,8 +51,8 @@ def eks_module_body(text: str | None = None) -> str:
     return _block(text, MODULE_ANCHOR, str(CLUSTER_TF.relative_to(REPO)))
 
 
-def rules_body(text: str | None = None) -> str:
-    return _block(eks_module_body(text), RULES_ANCHOR, f'module "eks" in {CLUSTER_TF.relative_to(REPO)}')
+def rules_body(text: str | None = None, anchor: str = RULES_ANCHOR) -> str:
+    return _block(eks_module_body(text), anchor, f'module "eks" in {CLUSTER_TF.relative_to(REPO)}')
 
 
 _VALUE = re.compile(r'^\s*([a-z_]+)\s*=\s*(.+?)\s*$')
@@ -65,9 +68,10 @@ def _value(raw: str):
     return raw  # an expression, kept as written
 
 
-def rules(text: str | None = None) -> dict[str, dict]:
-    """Rule name -> {attribute: value}. Strings are unquoted, numbers and bools converted, anything else raw."""
-    body = rules_body(text)
+def rules(text: str | None = None, anchor: str = RULES_ANCHOR) -> dict[str, dict]:
+    """Rule name -> {attribute: value}. Strings are unquoted, numbers and bools converted, anything else raw.
+    The node rules by default; CLUSTER_RULES_ANCHOR reads the cluster security group's."""
+    body = rules_body(text, anchor)
     out: dict[str, dict] = {}
     for m in re.finditer(r'^\s*([A-Za-z0-9_]+)\s*=\s*\{(.*?)^\s*\}', body, re.MULTILINE | re.DOTALL):
         attrs = {}
