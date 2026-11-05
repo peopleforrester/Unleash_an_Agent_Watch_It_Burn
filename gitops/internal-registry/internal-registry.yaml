@@ -10,7 +10,7 @@
 # served by the apex router (Railway's edge holds the certificate), which sends it to this cluster's console, whose
 # registry server (gitops/ai-layer/console.conf) proxies GET and HEAD to the Service below and refuses every other
 # method, so nobody pushes from outside. fleet.sh routes publishes registry.burritobot.co as a row of its own on the
-# console LB of the cluster holding burritobot-private (bare_rows), and registry-<cluster> for every roster cluster.
+# console LB of the cluster holding burritobot-private (bare_rows), and registry-burritobot-private there alone (#931).
 # Both clusters' nodes pull through the same public name, so a standby promoted to burritobot-private takes the row
 # with the rest and serves the same images at the same name.
 #

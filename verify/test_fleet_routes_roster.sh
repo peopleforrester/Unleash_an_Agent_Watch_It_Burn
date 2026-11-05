@@ -16,12 +16,15 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 TMPDIR="${T}"
 
 # The breakout's two clusters, and every service host each one carries (console.conf, #233). The service
-# list is read from fleet.sh's WIB_SERVICE_HOSTS, WIB_VILLAIN_HOSTS (#664) and WIB_REGISTRY_HOSTS (#774) so a new host
-# needs no second edit here.
-SERVICES="$(sed -n 's/^readonly WIB_\(SERVICE\|VILLAIN\|REGISTRY\)_HOSTS="\(.*\)"$/\2/p' "${FLEET}" | tr '\n' ' ')"
+# list is read from fleet.sh's WIB_SERVICE_HOSTS and WIB_VILLAIN_HOSTS (#664), and the registry's from
+# WIB_REGISTRY_HOSTS (#774), so a new host needs no second edit here.
+SERVICES="$(sed -n 's/^readonly WIB_\(SERVICE\|VILLAIN\)_HOSTS="\(.*\)"$/\2/p' "${FLEET}" | tr '\n' ' ')"
+REGISTRY="$(sed -n 's/^readonly WIB_REGISTRY_HOSTS="\(.*\)"$/\1/p' "${FLEET}")"
+[[ -n "${REGISTRY}" ]] || { echo "  FAIL  no readonly WIB_REGISTRY_HOSTS line in ${FLEET}"; exit 1; }
 NSVC="$(wc -w <<<"${SERVICES}")"
 # Both domains serve the roster (#651): every row has a burritobot.co twin on the same upstream. The internal
-# registry's bare name (#774) is one more row, on the private cluster.
+# registry runs on the private cluster alone, so registry-<cluster> is a row of burritobot-private's only (#931),
+# and the registry's bare name (#774) is one more row, on the same cluster.
 expected() {
     local h d
     {
@@ -30,6 +33,7 @@ expected() {
                 echo "${h}.${d}"
                 for s in ${SERVICES}; do echo "${s}-${h}.${d}"; done
             done
+            echo "${REGISTRY}-burritobot-private.${d}"
         done
         echo "registry.burritobot.co"
     } | sort
@@ -70,8 +74,13 @@ out="$(routes roster)"
 check "it succeeds" '[[ "${out}" == *rc=0* ]]'
 check "the table is exactly the two roster hosts and their service hosts" \
   'diff <(table_hosts) <(expected) >/dev/null'
-check "that is two consoles and ${NSVC} services each, on both domains, and the registry's bare name" \
-  '[[ "$(table_hosts | wc -l)" -eq $(( 4 * (NSVC + 1) + 1 )) ]]'
+check "that is two consoles and ${NSVC} services each, on both domains, private's registry host on both, and the bare name" \
+  '[[ "$(table_hosts | wc -l)" -eq $(( 4 * (NSVC + 1) + 2 + 1 )) ]]'
+check "attackme carries no registry-attackme row, on either domain: nothing runs behind it (#931)" \
+  '! grep -qE "^${REGISTRY}-attackme\." "${T}/apex/routes.map"'
+check "registry-burritobot-private rides the private cluster's console LB on both domains" \
+  'grep -qx "${REGISTRY}-burritobot-private.agenticburn.com  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map" &&
+   grep -qx "${REGISTRY}-burritobot-private.burritobot.co  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map"'
 check "registry.burritobot.co rides the private cluster's console LB, where the registry runs" \
   'grep -qx "registry.burritobot.co  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map"'
 check "each burritobot.co twin points at the same cluster as its agenticburn.com row" \
@@ -112,15 +121,15 @@ check "it names the roster host it would drop" 'grep -q -- "- burritobot-private
 check "and leaves the table as it was" 'diff -q <(printf "%s" "${old}") "${T}/apex/routes.map" >/dev/null'
 
 echo "== the service hosts #651 retired leave the table without reading as a shrink =="
-# The table live before #651 step 4: both clusters with all nine service prefixes and every C6 and registry host
-# fleet.sh carries today, on both domains, and the registry's bare name.
+# The table live before #651 step 4: both clusters with all nine service prefixes and every C6 and registry host,
+# registry-attackme too, which #931 drops, on both domains, and the registry's bare name.
 RETIRED="$(sed -n 's/^readonly WIB_RETIRED_SERVICE_HOSTS="\(.*\)"$/\1/p' "${FLEET}")"
 [[ -n "${RETIRED}" ]] || { echo "  FAIL  no readonly WIB_RETIRED_SERVICE_HOSTS line in ${FLEET}"; exit 1; }
 live=$'# old\n'
 for d in burritobot.co agenticburn.com; do
   for h in attackme burritobot-private; do
     live+="${h}.${d}  old:443"$'\n'
-    for s in ${SERVICES} ${RETIRED}; do
+    for s in ${SERVICES} ${REGISTRY} ${RETIRED}; do
       live+="${s}-${h}.${d}  old:443"$'\n'
     done
   done
@@ -133,8 +142,10 @@ out="$(routes roster)"
 check "it is not refused" '[[ "${out}" == *rc=0* ]] && ! grep -q REFUSING "${T}/log"'
 check "the table is the roster with Grafana, Argo CD and Backstage as its only service hosts" \
   'diff <(table_hosts) <(expected) >/dev/null && ! grep -qE "^(kagent|hedgehog|wombat|unicorn|spider|mantis-shrimp)-" "${T}/apex/routes.map"'
-check "that is ${NWANT} hosts, down from ${NLIVE}: six retired prefixes off each cluster on each domain" \
-  '[[ "$(table_hosts | wc -l)" -eq "${NWANT}" && $(( NLIVE - NWANT )) -eq 24 ]]'
+check "that is ${NWANT} hosts, down from ${NLIVE}: six retired prefixes off each cluster on each domain, and registry-attackme off each" \
+  '[[ "$(table_hosts | wc -l)" -eq "${NWANT}" && $(( NLIVE - NWANT )) -eq 26 ]]'
+check "registry-attackme leaves as a retired row, not as a pool row or a loss (#931)" \
+  '! grep -q -- "- ${REGISTRY}-attackme" "${T}/log"'
 
 echo "== a burritobot.co host that would go missing is refused like an agenticburn.com one =="
 fixture "${live}"
@@ -143,6 +154,8 @@ check "it refuses, and names the burritobot.co host" \
   '[[ "${out}" == *rc=1* ]] && grep -q -- "- burritobot-private.burritobot.co" "${T}/log"'
 check "it names a kept service host it would drop, not a retired one" \
   'grep -q -- "- grafana-burritobot-private.burritobot.co" "${T}/log" && ! grep -q -- "- kagent-" "${T}/log"'
+check "and private's own registry host is a loss it names, not a retired row" \
+  'grep -q -- "- ${REGISTRY}-burritobot-private.burritobot.co" "${T}/log" && ! grep -q -- "- ${REGISTRY}-attackme" "${T}/log"'
 
 echo "== an unknown scope is a usage error =="
 fixture $'# old\n'

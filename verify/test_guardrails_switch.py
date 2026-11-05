@@ -528,11 +528,16 @@ body = srv[1].split("\n}\n", 1)[0] if len(srv) == 2 else ""
 check("read-only: GET (and HEAD) alone reach the registry", "limit_except GET { deny all; }" in body)
 check("it proxies to the registry Service, resolved per request",
       "set $wib_registry http://registry.registry.svc.cluster.local:5000;" in body and "proxy_pass $wib_registry;" in body)
-check("fleet.sh publishes registry-<cluster> for every roster cluster",
-      'readonly WIB_REGISTRY_HOSTS="registry"' in src and "${WIB_REGISTRY_HOSTS}; do" in src)
+check("fleet.sh publishes registry-<cluster> on the cluster holding the shared admin host alone (#931)",
+      'readonly WIB_REGISTRY_HOSTS="registry"' in src
+      and 'if [[ "${host}" == "${SHARED_ADMIN_HOST:-}" ]]; then svcs+=" ${WIB_REGISTRY_HOSTS}"; fi' in src)
 hosts = fleet("emit_service_hosts burritobot-private.agenticburn.com lb.example").stdout
 check("burritobot-private's rows include registry-burritobot-private",
       "registry-burritobot-private.agenticburn.com  lb.example:443" in hosts, hosts)
+community_hosts = fleet("emit_service_hosts attackme.agenticburn.com lb.example").stdout
+check("attackme's rows carry no registry-attackme, which has no registry behind it and answered 502 (#931)",
+      "support-attackme.agenticburn.com  lb.example:443" in community_hosts
+      and not any(r.startswith("registry") for r in community_hosts.splitlines()), community_hosts)
 bare = [fleet(f"bare_rows {h} lb.example").stdout for h in ("burritobot-private.agenticburn.com", "attackme.agenticburn.com")]
 check("the bare registry.burritobot.co row rides the private cluster's LB alone, the name both clusters' nodes pull by",
       bare == ["registry.burritobot.co  lb.example:443\n", ""], str(bare))

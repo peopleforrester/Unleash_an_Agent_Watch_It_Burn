@@ -87,7 +87,9 @@ readonly WIB_RETIRED_SERVICE_HOSTS="kagent hedgehog wombat unicorn spider mantis
 # own server.
 readonly WIB_VILLAIN_HOSTS="maintenance-shell support deployments"
 # registry, the internal registry (#774): registry-<cluster> is the console's read-only door to Distribution, which
-# runs on the KubeCon private cluster (gitops/internal-registry/); on any other cluster the name answers 502.
+# runs on the KubeCon private cluster alone (gitops/internal-registry/). So only the cluster holding the shared admin
+# host carries the row (#931): on attackme the name answered 502 through the router, since nothing runs behind it,
+# and attackme's nodes pull by registry.burritobot.co, which is private's.
 readonly WIB_REGISTRY_HOSTS="registry"
 # The name the nodes pull by, registry.burritobot.co: one row of its own, on the console LB of whichever cluster holds
 # the shared admin host (bare_rows), so a standby promoted to burritobot-private takes it with that cluster's rows.
@@ -95,8 +97,9 @@ readonly WIB_REGISTRY_HOSTS="registry"
 readonly WIB_REGISTRY_BARE="registry.burritobot.co"
 # Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
 emit_service_hosts() {
-    local host="$1" lb="$2" svc label="${1%%.*}"
-    for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS} ${WIB_REGISTRY_HOSTS}; do
+    local host="$1" lb="$2" svc label="${1%%.*}" svcs="${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS}"
+    if [[ "${host}" == "${SHARED_ADMIN_HOST:-}" ]]; then svcs+=" ${WIB_REGISTRY_HOSTS}"; fi
+    for svc in ${svcs}; do
         printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
     done
 }
@@ -4602,8 +4605,12 @@ cmd_routes() {
     local new_hosts old_hosts pool_rows new_count old_count shrinks=0 retired
     retired="$(tr ' ' '|' <<<"${WIB_RETIRED_SERVICE_HOSTS}")"
     new_hosts="$(route_hosts_of < "${tmp}")"
+    # registry-<cluster> on any cluster but the shared admin one is retired too (#931): it never had a registry
+    # behind it, so dropping it takes nothing that answered.
     old_hosts="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
-        | route_hosts_of | grep -vE "^(a-[0-9]+|round[^.]*|(${retired})-[a-z0-9-]+)\." || true)"
+        | route_hosts_of | grep -vE "^(a-[0-9]+|round[^.]*|(${retired})-[a-z0-9-]+)\." \
+        | awk -v keep="${WIB_REGISTRY_HOSTS}-${SHARED_ADMIN_HOST%%.*}." \
+            'index($0, "'"${WIB_REGISTRY_HOSTS}"'-") != 1 || index($0, keep) == 1' || true)"
     if [[ "${scope}" == roster ]]; then
         pool_rows="$(grep -vFx -f <(roster_route_hosts) <<<"${old_hosts}" | grep . || true)"
         old_hosts="$(grep -Fx -f <(roster_route_hosts) <<<"${old_hosts}" || true)"

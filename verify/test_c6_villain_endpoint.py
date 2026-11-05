@@ -312,7 +312,7 @@ hosts = re.search(r'^readonly WIB_VILLAIN_HOSTS="([^"]+)"', FLEET, re.M)
 check("WIB_VILLAIN_HOSTS names the ticket's Deployment, the ticket desk and the deployments page (#773), nothing else",
       bool(hosts) and hosts.group(1).split() == [site.C6_DEPLOYMENT, "support", "deployments"])
 check("emit_service_hosts writes a row for it beside the service hosts",
-      "for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS} ${WIB_REGISTRY_HOSTS}; do" in FLEET)
+      'svcs="${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS}"' in FLEET and "for svc in ${svcs}; do" in FLEET)
 emitted = subprocess.run(["bash", "-c", 'eval "$(sed -n "/^readonly WIB_SERVICE_HOSTS=/,/^}/p" "$1")"; '
                           'emit_service_hosts attackme.agenticburn.com lb-test.elb', "_",
                           str(REPO / "infra/terraform/fleet/fleet.sh")], capture_output=True, text=True)
