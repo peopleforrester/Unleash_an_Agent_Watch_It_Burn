@@ -17229,3 +17229,7 @@ is in it, with an empty Docker config so Docker Hub is pulled anonymously and th
 The exact command is in run 17350's escalation. It should save nine rows and FAIL only the internal Joker until #775
 pushes it. The next run on #603 then copies the new dates in the same way and runs `python3 verify/test_images_saved.py`
 as michael.
+
+**The suites (run 17350, at `b824ca5f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m36s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 257 tests, all green,
+`test_images_lock_live_judge.py` among them, and listed `test_images_lock_live.py` under the E2E suite.
