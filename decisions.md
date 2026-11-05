@@ -19931,3 +19931,9 @@ change.
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs the console, the same read on both clusters
 (`kubectl --context <ctx> -n agent exec deploy/console -- cat /usr/share/nginx/html/kubecon.html`, and `brief.html`)
 should show `mrf-secrets` and no line the guard's digest matches. Rotating the login itself is #912.
+
+**The suites (run 17664, at `85636f49`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), the new guard being the
+267th, then `59 checks ran (the offline suite and 58 tier tests) in 31m00s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`
+printed `prose gate: pass, 7 public-prose file(s) read`.
