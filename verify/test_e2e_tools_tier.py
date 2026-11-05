@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 import pathlib
 import re
@@ -460,6 +461,46 @@ with tempfile.TemporaryDirectory() as t:
     check("nothing reached the host's aws or eksctl", host == "", host)
     kube = (tmp / "kubectl.log").read_text().splitlines() if (tmp / "kubectl.log").exists() else []
     check("the fetched kubectl is what the kubectl test ran, unstubbed", kube == ["fetched version --client"], str(kube))
+
+print("== a tier test gets an empty Helm home of its own, never the host's (#921's run) ==")
+# Run 17641's tier failed six tests on the host's Helm home, which listed a `cilium` repository with no cached
+# index, so every `helm pull --repo` failed. Here HOME carries that same repositories.yaml, and the one fixture
+# tier test reports where Helm would look and what it would find there.
+HELM_VARS = ("HELM_CONFIG_HOME", "HELM_CACHE_HOME", "HELM_DATA_HOME")
+HELM_PROBE = ("import json, os, pathlib, sys\n"
+              f"names = {HELM_VARS!r}\n"
+              "seen = {n: os.environ.get(n, '') for n in names}\n"
+              "listed = {n: sorted(p.name for p in pathlib.Path(v).iterdir()) if v and pathlib.Path(v).is_dir()"
+              " else None for n, v in seen.items()}\n"
+              "pathlib.Path(os.environ['HELM_LOG']).write_text(json.dumps({'seen': seen, 'listed': listed}))\n"
+              "sys.exit(0)\n")
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (vdir / "test_helm_home.py").write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{HELM_PROBE}")
+    host_helm = tmp / ".config" / "helm"
+    host_helm.mkdir(parents=True)
+    (host_helm / "repositories.yaml").write_text("repositories:\n- name: cilium\n  url: https://helm.cilium.io\n")
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "HELM_LOG": str(tmp / "helm.json"),
+           "HELM_CONFIG_HOME": str(host_helm)}
+    r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
+    out = r.stdout + r.stderr
+    check(f"the runner ran the fixture tier test and passed (exit {r.returncode})",
+          r.returncode == 0 and "2 checks ran (the offline suite and 1 tier tests)" in out, out)
+    got = json.loads((tmp / "helm.json").read_text()) if (tmp / "helm.json").exists() else {}
+    seen, listed = got.get("seen", {}), got.get("listed", {})
+    for var in HELM_VARS:
+        value = seen.get(var, "")
+        check(f"{var} is set for the tier test, outside HOME and away from the caller's own setting",
+              bool(value) and not pathlib.Path(value).is_relative_to(tmp / ".config")
+              and not pathlib.Path(value).is_relative_to(tmp / ".cache") and value != str(host_helm), str(seen))
+        check(f"{var} is an empty directory when the test starts", listed.get(var) == [], str(listed))
+    check("the three are separate directories", len({seen.get(v) for v in HELM_VARS}) == 3, str(seen))
+    check("the Helm home is gone once the runner exits",
+          all(seen.get(v) and not pathlib.Path(seen[v]).exists() for v in HELM_VARS), str(seen))
 
 print("== run-e2e.sh fetches the same tools and runs them first on PATH (#585) ==")
 RUN_E2E = VERIFY / "run-e2e.sh"

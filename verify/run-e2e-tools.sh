@@ -78,6 +78,12 @@ run_one "run-tests.sh (the offline suite)" bash "${SCRIPT_DIR}/run-tests.sh"
 NO_CLOUD_DIR="$(mktemp -d)"
 trap 'rm -rf "${NO_CLOUD_DIR}"' EXIT
 no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl
+# Helm reads its repository list, index cache and plugins from the user's home unless told otherwise, and a
+# `helm pull --repo` or `helm template --repo` loads every repository listed there. In run 17641 that home listed a
+# `cilium` repository whose cached index was gone, and every chart fetch in six tier tests failed on it. Each run
+# gets an empty Helm home of its own, removed with the stubs.
+HELM_HOME="${NO_CLOUD_DIR}/helm"
+mkdir -p "${HELM_HOME}/config" "${HELM_HOME}/cache" "${HELM_HOME}/data"
 # The Terraform provider cache outlives each test, so the ~800 MB aws provider downloads once per checkout, not once
 # per test process; the tests run one after another, so nothing writes to it concurrently (#572).
 TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
@@ -87,7 +93,8 @@ tier_env=(env -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_P
     KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
     KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
     OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
-    AGENTGATEWAY="${TOOLS_BIN}/agentgateway")
+    AGENTGATEWAY="${TOOLS_BIN}/agentgateway" HELM_CONFIG_HOME="${HELM_HOME}/config"
+    HELM_CACHE_HOME="${HELM_HOME}/cache" HELM_DATA_HOME="${HELM_HOME}/data")
 tier=0
 for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
     [[ -e "${t}" ]] && grep -q '^# E2E TIER: tools' "${t}" || continue
