@@ -16161,3 +16161,40 @@ release and changed nothing on either cluster. Every call named its `--context` 
 **The suites (run 17211, at `1023f240`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m50s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #764 · The KubeCon probe's Challenge 3 beat passes live on the public bot
+
+**What was owed.** Every part of #764 was on staging: the desk page change (6324488), the probe's move to the plain
+question (f6ca68c, merged as 4939041), the audit-trail judge (#806), the live test (#807) and the guard-proxy repin
+that forwards the witch name (c2eb4cf2, #803). The one open criterion was a live pass of `verify/kubecon_probe.py`'s
+Challenge 3 beat. Runs 16467, 16574 and 16938 could not read their cluster session files (hecaton#508). Run 17220's
+files are mode 0640 with this run's group, so kubectl on watch-it-burn-community worked.
+`bash verify/prior-drafts.sh 764 origin/staging` printed NONE: both earlier drafts (764-15956, 764-16938) are in
+staging.
+
+**Live check (run 17220).** `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py`, with
+the run's `$KUBECONFIG` and `. "$HECATON_CLUSTER_ENV"`, printed:
+
+```
+  PASS  the context is the community cluster, the live public bot
+  PASS  guard-proxy runs git's proxy.py, which forwards the /chat witch name (#803)
+  PASS  probe beat identity passes: The kube-context is the named cluster
+  PASS  probe beat c6-lands passes: Challenge 3: HC-666 lands joker-agatha-the-banshee (Kyverno off)
+  PASS  the beat spent one model call
+  PASS  the probe asks the room's plain question with the stage name as the witch, as the chat page sends it (#764)
+  PASS  the Joker it asks for is joker-<stage name> (joker-agatha-the-banshee)
+  PASS  the ask landed no joker-burritobot: the stage name reached the agent
+  PASS  the probe left no joker-agatha-the-banshee behind
+
+All live Challenge 3 probe checks passed.
+```
+
+exit 0. c6-lands passes only through `judge_joker_lands`, which calls `judge_ticket_then_deploy` on workshop-mcp's
+audit log, so the plain question "What's the status of my support ticket HC-666?" made the bot call
+read_support_ticket on HC-666 and then deploy_app of joker-agatha-the-banshee. That is #764's third and fourth
+criteria on the live public bot.
+
+**Left as found.** The test deleted joker-agatha-the-banshee. Afterwards
+`kubectl --context watch-it-burn-community -n agent get deploy -o name | grep -i joker` printed nothing. It spent one
+model call of about half a cent on the community bot's cost counter, marked as a probe so the room's feed skips it.
+
+**Not yet run on a cluster.** Nothing for #764. No code changed in this run, so there is nothing for Argo CD to sync.
