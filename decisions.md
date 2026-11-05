@@ -20445,3 +20445,8 @@ so there was no Joker to open a shell in.
   ticket-made Joker answers `kubectl --context <ctx> -n agent exec -it deploy/maintenance-shell -- sh` with the banner
   while `kubectl logs` shows only the laugh. Once the push is done, `verify/test_c6_joker_public.py` can also hold the
   published `etc/villain-banner.sh` and ENV (filed as a follow-up).
+
+**The suites (run 17681).** `bash verify/run-e2e-tools.sh` at `9df06b45` printed `268 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `59 checks ran (the offline suite and 58 tier tests) in 30m24s` and `ALL E2E TOOLS TIER
+CHECKS GREEN`, exit 0. The tier ran the banner checks in test_joker_web_busybox.py and test_joker_build_digest.py, and
+test_c6_joker_public.py passed against the tag ghcr.io serves now.
