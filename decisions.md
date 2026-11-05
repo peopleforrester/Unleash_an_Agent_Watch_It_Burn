@@ -28913,7 +28913,7 @@ and no `pre` line, because the leaderboard's C1 column and `verify/kubecon_probe
 reached a tool. Every audit line now carries `turn`, the trace id, which is also the turn's trace in Datadog APM.
 Turns are forgotten 900 s after their last call. A call with no valid traceparent is not limited, and behind
 agentgateway each such call gets a fresh trace id (randomSampling true), so before the Agent change syncs every call
-is a turn of one and nothing is refused: the 176 workshop-mcp tools/calls agentgateway logged today had 176 trace ids.
+is a turn of one and nothing is refused: the 176 workshop-mcp tools/calls agentgateway logged today had 176 trace ids. A side effect of the forwarded header: agentgateway's span for each MCP call, today a trace of its own, joins the turn's trace under the :3000 span that carried the A2A request, beside the agent's own spans.
 
 **Does #463's error result invite the retries?** Not on its own. The 80-call loop got a successful result every time,
 and the failing loops got errors, so both shapes loop. #463 stays: a failed command has to read as failed, or the
@@ -28952,3 +28952,7 @@ are from `kubectl --context watch-it-burn-community -n agent logs deploy/agentga
 - `python3 verify/load_replay.py attackme.burritobot.co --yes --users 150 --harvest <harvest prompts dir>`, run before
   `./fleet.sh reset-bot watch-it-burn-community` as its docstring says, ends with 0 PROXY_TIMEOUT 502s, and
   workshop-mcp's log shows the `refused` lines that stopped the loops.
+
+**The suites (run 17697).** `bash verify/run-e2e-tools.sh` at `e9f3ffa7` printed `272 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `61 checks ran (the offline suite and 60 tier tests) in 30m02s` and `ALL E2E TOOLS TIER
+CHECKS GREEN`, exit 0. Both new tests ran in it: test_turn_guard.py offline and test_turn_guard_e2e.py in the tier.
