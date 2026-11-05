@@ -105,3 +105,23 @@ no credentials. Things only a live org can show, which a reader of the page shou
   been read in the sandbox org.
 - `burritobot-private` traffic does not move any number. Send a prompt to the private bot and confirm the counts
   stay still.
+
+## The Every prompt view (#792)
+
+`every_prompt_view.py` saves beat 3's query from `gitops/ai-layer/web/brief.html`
+(`ml_app:burritobot k8s.cluster.name:burritobot-public`) as the saved view **Every prompt** in Agent Observability.
+It reads the query from the brief, so the view and the recipe stay the same. Datadog documents no saved-view API.
+The only saved-view path that answers is `/api/v1/logs/views`, and it answers the read-only key with 403. So both
+`--list` and `--apply` take `WIB_FLEET_MONITORS_APP_KEY`, the unscoped key from Michael's user in the sandbox org.
+
+`--apply` lists the views first. It writes nothing when Every prompt is already there with the query. It writes
+nothing when a view of that name has another query, since that view is not edited. It writes nothing when the org
+has no Agent Observability view to copy the shape from. Otherwise it creates the one view and reads the list again
+to confirm the view is there.
+
+```bash
+WIB_FLEET_MONITORS_APP_KEY=<key> python3 infra/datadog-room/every_prompt_view.py --profile accen-dev --region us-west-2 --list
+WIB_FLEET_MONITORS_APP_KEY=<key> python3 infra/datadog-room/every_prompt_view.py --profile accen-dev --region us-west-2 --apply
+```
+
+`verify/test_every_prompt_view.py` drives it through a fake org.

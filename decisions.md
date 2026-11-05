@@ -19211,3 +19211,63 @@ plane. Both share the parser in `verify/node_sg_rules.py`.
 **The suites (run 17432, at `eb1aa498`).** `bash verify/run-e2e-tools.sh` printed `263 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
 offline suite and 57 tier tests) in 29m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #792 · run 17464 · Every prompt is saved through the API with the unscoped key, by a script that copies an Agent Observability view's shape; the run goes to the custodian
+
+**What changed in the thread.** Escalation 821, the browser read and screenshot of the brief's link on Tanjiro, was
+dropped on 2026-11-05: "Do any remaining Datadog step through the API with that key, read through the custodian's
+netcup verb, never through his browser." The key is `WIB_FLEET_MONITORS_APP_KEY` in
+`~/secrets/datadog/wib-sandbox-fleet-monitors.env`, Michael's home on this host, which answers this run's user with
+"Permission denied", as for runs 17318 and 17415. So the save is a command the custodian runs as Michael, and this run
+writes that command.
+
+**No saved-view API is documented, checked again.** Datadog's OpenAPI specs as datadog-api-client-python ships them
+(`.generator/schemas/v1/openapi.yaml` and `v2/openapi.yaml` on master, fetched 2026-11-05) have no saved-view path for
+any explorer. The only "views" are `/api/v2/cases/views`, which are Case Management's. The LLM Observability paths
+cover projects, experiments, prompts, spans and annotation queues. Neither the Terraform provider nor
+datadog-sync-cli manages saved views. With the read pair, just before 13:06Z, GET answered 404 on 17 more candidates
+(`/api/v2/saved-views`, `/api/v2/saved_views`, `/api/v1/saved-views`, `/api/ui/event-platform/saved-views`,
+`/api/v1/event-platform/views`, `/api/v2/llm-obs/v1/views`, `/api/v2/llm-obs/v1/saved-views`,
+`/api/v2/llm-obs/v1/saved_views`, `/api/unstable/llm-obs/v1/saved-views`, `/api/v2/spans/views`, `/api/v1/apm/views`,
+`/api/v2/apm/saved-views`, `/api/v1/trace/views`, `/api/v2/rum/views`, `/api/v1/rum/views`, `/api/v1/views`,
+`/api/v2/views`) and 403 "Failed permission authorization checks" on `/api/v1/logs/views`, on `?page=llm` and on
+`/api/v1/logs/views/1`. So `/api/v1/logs/views` is the one store that exists and is reached with keys. That it holds
+the Agent Observability list's views is not known yet. Only a listing with the unscoped key shows it.
+
+**The script, `infra/datadog-room/every_prompt_view.py`.** It reads the query from the brief's recipe (the `<code>`
+after "the query as a link"), so it saves exactly what the brief gives. It fences the org the way `fleet_monitors.py`
+does, and reuses that file's client, key reader and `org_name`. `--list` prints the views by kind (their short product
+fields, never an owner's handle), each Agent Observability view by id and name, and what `--apply` would do.
+`--apply` writes nothing it has to guess:
+
+- Every prompt already there with the brief's query: OK, nothing written.
+- A view named Every prompt with another query: not edited, exit 1.
+- No view whose product field names LLM Observability: nothing written, exit 1, and the listing is what the next run
+  designs from.
+- Otherwise it copies that view's shape without its id, owner and dates, sets the name and the query, and creates
+  the one view. It tries the listing's own wrapper first (`{"logs_view": ...}` for a `logs_views` list), and the bare
+  object only after a 400 or 422. It lists again and passes only when Every prompt is there with the exact query:
+  that is the reload. It prints the view's id and `https://app.datadoghq.com/llm/traces?saved-view-id=<id>`. That
+  link form is the logs explorer's and is confirmed by opening it.
+
+No PUT, PATCH or DELETE is ever sent, so nothing that is not BurritoBot's is edited or deleted (#629). The one view it
+can create is named Every prompt and selects BurritoBot's own spans.
+
+**Read live, 2026-11-05T13:06:46Z.** `--list` with the read pair in the unscoped key's place printed `instructor org:
+Datadog (datadoghq.com)`, then `FAILED: GET /api/v1/logs/views -> 403`, exit 1. The fence passes in Whitney's org
+and the read pair cannot list, as expected. Nothing was written.
+
+**Tests.** `verify/test_every_prompt_view.py` (offline, 37 checks) holds the query to the brief and its link, and
+drives the script through a fake org: a dry run reads nothing; no key, no profile or another org reads no view; each
+of the four cases above, the 400 fallback, a 403 that stops at one POST, both shapes refused, and a create that is
+not there on reload. Only GET and POST are sent, and no key value is printed.
+
+**Escalated to the custodian,** as Michael on netcup from a fresh clone of staging once this change is in it: `--list`,
+then `--apply`, with the env file sourced. Its output names the template or its absence, and the view's id.
+
+**Not yet run on a cluster,** named again:
+1. Save the view: the custodian's `--list` and `--apply`. The next run records the printed id, the view's link and
+   the listing's line for it here. If `--apply` found no template, the next run designs the create from the listing.
+2. The link fills in the query, and the list shows the root's INPUT in CONTENT. The API settled what the spans carry
+   (run 17415); only the page shows how it lays them out, and the thread rules out the browser route.
+3. The `generate_content` rows' preview shows the system prompt. Same limit as 2.
