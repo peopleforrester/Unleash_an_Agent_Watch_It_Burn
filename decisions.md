@@ -16249,3 +16249,6 @@ calling a cloud tool.
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, with `54 checks ran (the offline suite and 53 tier tests) in 25m31s`. The offline suite inside it ran 254 tests,
 `test_no_cloud_by_hand.sh` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with no test named for
 calling a cloud tool.
+Staging moved to `df669958` (#864, agentgateway and the tools tier) while that ran. The two commits rebased onto it
+with no conflict, and `bash verify/run-tests.sh` on the rebased `21bc5574` ran 254 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
