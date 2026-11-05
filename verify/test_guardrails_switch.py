@@ -23,6 +23,7 @@ The Kyverno CLI cases for deny-external-registries are in verify/test_breakout_r
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import pathlib
@@ -516,6 +517,13 @@ check("the registry's Location headers are relative, so the seed's in-pod push s
 seed_sh = next(d for d in reg if d["kind"] == "ConfigMap")["data"]["seed.sh"]
 check("the seed copies to localhost:5000, never to the public name",
       "localhost:5000/${dst}" in seed_sh and "registry.burritobot.co" not in seed_sh)
+# A ConfigMap change restarts no pod, so the pod template carries the seed's checksum and a new pin rolls it (#775).
+seed_sum = hashlib.sha256((seed + seed_sh).encode("utf-8")).hexdigest()
+pod_notes = dep["spec"]["template"]["metadata"].get("annotations") or {}
+check("the pod template's burritobot.co/seed-checksum is the sha256 of images.txt then seed.sh, so a new pin rolls "
+      "the pod (set it to the value shown when this fails)",
+      pod_notes.get("burritobot.co/seed-checksum") == seed_sum,
+      f"has {pod_notes.get('burritobot.co/seed-checksum')!r}, want {seed_sum!r}")
 np = next(d for d in reg if d["kind"] == "NetworkPolicy")
 check("in-cluster, only the console reaches the registry",
       np["spec"]["ingress"] == [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "agent"}},

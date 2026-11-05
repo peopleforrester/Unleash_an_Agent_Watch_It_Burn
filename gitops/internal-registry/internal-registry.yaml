@@ -70,8 +70,13 @@ spec:
   selector: { matchLabels: { app.kubernetes.io/name: registry } }
   template:
     # Both containers log as burritobot-internal-registry in the sandbox env, as every KubeCon pod does (#629, #662).
-    metadata: { labels: { app.kubernetes.io/name: registry, tags.datadoghq.com/service: burritobot-internal-registry,
-                          tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
+    metadata:
+      labels: { app.kubernetes.io/name: registry, tags.datadoghq.com/service: burritobot-internal-registry,
+                tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      # The sha256 of images.txt followed by seed.sh, so a new pin or seed script rolls the pod and the seed copies
+      # it in (#775). A ConfigMap change alone restarts nothing: on 2026-11-05 #714's new Joker pin reached this
+      # ConfigMap and the running pod went on serving the old digest. verify/test_guardrails_switch.py recomputes it.
+      annotations: { burritobot.co/seed-checksum: 1f1bba2d089b1aa8890f76b2aeb4ca46b556419dc3fa20c60036ee94a91e018b }
     spec:
       automountServiceAccountToken: false
       containers:
