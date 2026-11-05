@@ -31,7 +31,3 @@ verify/.tools/
 # Post-event harvest: raw per-cluster behavioural data, may contain attendee-typed text.
 # Never committed: analysis products are summarised into docs/ by hand.
 .harvest/
-
-# KubeCon recorded-fallback segment videos (#452): hundreds of MB of rehearsal capture, copied onto the
-# presenter laptops at these paths rather than carried by every clone. The screenshots ARE committed.
-facilitation/kubecon-na-2026/fallback/videos/*.mp4

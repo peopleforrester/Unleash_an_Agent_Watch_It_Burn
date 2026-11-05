@@ -409,16 +409,16 @@ check("a segment the run-of-show does not have is a usage error", r.returncode =
 # ---------------------------------------------------------------------------------------------------------
 print("the recorded assets")
 assets = yaml.safe_load((FALLBACK / "assets.yaml").read_text(encoding="utf-8"))
-check("one video per segment of the run-of-show, 1 to 6", sorted(v["segment"] for v in assets["videos"]) == [1, 2, 3, 4, 5, 6])
-check("every video is an MP4 under videos/", all(re.fullmatch(r"videos/segment-\d-[a-z0-9-]+\.mp4", v["path"]) for v in assets["videos"]))
+check("one title per segment of the run-of-show, 1 to 6", [v["segment"] for v in assets["segments"]] == [1, 2, 3, 4, 5, 6])
+check("no segment videos are listed: they left this repo with M4 on 2026-11-01 (#613)", "videos" not in assets)
 check("every segment has at least one screenshot", {s["segment"] for s in assets["screenshots"]} == {1, 2, 3, 4, 5, 6})
 check("every screenshot is a PNG under screenshots/, named for its segment",
       all(re.fullmatch(rf"screenshots/0{s['segment']}-\d-[a-z0-9-]+\.png", s["file"]) for s in assets["screenshots"]))
 check("the shots are in segment order", [s["segment"] for s in assets["screenshots"]] == sorted(s["segment"] for s in assets["screenshots"]))
 headings = dict(re.findall(r"^### Segment (\d): (.+?) \(\d+ min\)", RUN_OF_SHOW, re.M))
 check("the run-of-show has six segment headings where this reads them", sorted(headings) == list("123456"), str(headings))
-for v in assets["videos"]:
-    check(f"segment {v['segment']}'s video is titled as the run-of-show heads it", headings.get(str(v["segment"])) == v["title"],
+for v in assets["segments"]:
+    check(f"segment {v['segment']} is titled as the run-of-show heads it", headings.get(str(v["segment"])) == v["title"],
           f"{v['title']!r} vs {headings.get(str(v['segment']))!r}")
 ids = {p.id for p in prompts}
 for s_ in assets["screenshots"]:
@@ -428,16 +428,17 @@ for s_ in assets["screenshots"]:
 deck = (FALLBACK / assets["deck"]).read_text(encoding="utf-8")
 segs, shots = cfa.deck_lists(cfa.load(FALLBACK / "assets.yaml"))
 check("the deck page's shot list is the one in assets.yaml", cfa.embedded(deck, "shots") == shots)
-check("the deck page's segment titles are the videos' titles", cfa.embedded(deck, "segments") == segs)
+check("the deck page's segment titles are the manifest's", cfa.embedded(deck, "segments") == segs)
 check("the deck loads nothing from the network (it is for when the network is gone)",
       not re.search(r'(src|href)="https?://', deck))
-ig = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", str(FALLBACK / assets["videos"][0]["path"])])
-check("the segment videos are kept out of git", ig.returncode == 0)
 ig = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", str(FALLBACK / assets["screenshots"][0]["file"])])
 check("the screenshots are not ignored: the deck is stored in the repo", ig.returncode == 1)
 for s_ in assets["screenshots"]:
-    if (FALLBACK / s_["file"]).is_file():
-        check(f"{s_['file']}, committed, is a real PNG", (FALLBACK / s_["file"]).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n")
+    tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "--error-unmatch", str(FALLBACK / s_["file"])],
+                             capture_output=True)
+    check(f"{s_['file']} is committed", tracked.returncode == 0, tracked.stderr.decode())
+    check(f"{s_['file']} is a real PNG", (FALLBACK / s_["file"]).is_file()
+          and (FALLBACK / s_["file"]).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n")
 
 for bad, why in (({"chat": "order"}, "cluster"), ({"chat": "order", "cluster": "community"}, "controls"),
                  ({"chat": "order", "cluster": "community", "controls": {"topic": True}}, "controls"),
@@ -451,29 +452,29 @@ check("a well-formed private chat capture passes",
 
 problems = dict(cfa.check(FALLBACK / "assets.yaml"))
 check("the checker finds the committed deck page", assets["deck"] not in problems)
+check("the checker finds every committed shot: the Night Before check passes on a clean clone", problems == {}, str(problems))
 CAP = {"by_hand": "taken at the rehearsal"}
 with tempfile.TemporaryDirectory() as td:
     base = pathlib.Path(td)
     (base / "screenshots").mkdir()
-    (base / "videos").mkdir()
     (base / "assets.yaml").write_text(yaml.safe_dump({
         "version": 1, "deck": "screenshots/deck.html",
-        "videos": [{"segment": 1, "title": "One", "path": "videos/a.mp4"}, {"segment": 2, "title": "Two", "path": "videos/b.mp4"},
-                   {"segment": 3, "title": "Three", "path": "videos/c.mp4"}],
+        "segments": [{"segment": 1, "title": "One"}, {"segment": 2, "title": "Two"}, {"segment": 3, "title": "Three"}],
         "screenshots": [{"segment": 1, "file": "screenshots/a.png", "caption": "c", "capture": CAP},
-                        {"segment": 2, "file": "screenshots/b.png", "caption": "d", "capture": CAP}]}))
+                        {"segment": 2, "file": "screenshots/b.png", "caption": "d", "capture": CAP},
+                        {"segment": 3, "file": "screenshots/c.png", "caption": "e", "capture": CAP},
+                        {"segment": 3, "file": "screenshots/d.png", "caption": "f", "capture": CAP}]}))
     (base / "screenshots/deck.html").write_text(
         '<html>\n<script type="application/json" id="segments">\n{}\n</script>\n'
         '<script type="application/json" id="shots">\n[]\n</script>\n</html>\n')
-    (base / "videos/a.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64)
-    (base / "videos/b.mp4").write_bytes(b"")
     (base / "screenshots/a.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
     (base / "screenshots/b.png").write_bytes(b"<html>a saved web page, not a PNG</html>")
+    (base / "screenshots/c.png").write_bytes(b"")
     got = dict(cfa.check(base / "assets.yaml"))
-    check("the checker passes a real MP4 and a real PNG", "videos/a.mp4" not in got and "screenshots/a.png" not in got, str(got))
-    check("the checker fails an empty video", got.get("videos/b.mp4") == "empty", str(got))
-    check("the checker fails a missing video", got.get("videos/c.mp4") == "missing", str(got))
+    check("the checker passes a real PNG and the deck page", "screenshots/a.png" not in got and "screenshots/deck.html" not in got, str(got))
     check("the checker fails a file that is not the type it is named as", "not a PNG" in got.get("screenshots/b.png", ""), str(got))
+    check("the checker fails an empty shot", got.get("screenshots/c.png") == "empty", str(got))
+    check("the checker fails a missing shot", got.get("screenshots/d.png") == "missing", str(got))
     r = subprocess.run([sys.executable, str(ASSETS_PY), "--manifest", str(base / "assets.yaml")], capture_output=True, text=True)
     check("the checker exits 1 and says NOT READY while anything is missing", r.returncode == 1 and "NOT READY" in r.stderr)
     r = subprocess.run([sys.executable, str(ASSETS_PY), "--manifest", str(base / "assets.yaml"), "--write-deck"],
@@ -481,7 +482,7 @@ with tempfile.TemporaryDirectory() as td:
     written = (base / "screenshots/deck.html").read_text()
     check("--write-deck writes the manifest's titles and shots into the deck page",
           cfa.embedded(written, "segments") == {"1": "One", "2": "Two", "3": "Three"}
-          and [s_["file"] for s_ in cfa.embedded(written, "shots")] == ["screenshots/a.png", "screenshots/b.png"], r.stderr)
+          and [s_["file"] for s_ in cfa.embedded(written, "shots")] == [f"screenshots/{x}.png" for x in "abcd"], r.stderr)
     (base / "screenshots/deck.html").write_text("<html></html>")
     r = subprocess.run([sys.executable, str(ASSETS_PY), "--manifest", str(base / "assets.yaml"), "--write-deck"],
                        capture_output=True, text=True)
@@ -528,7 +529,7 @@ night, rollback = section("Night Before"), section("Rollback on the day")
 step3 = re.search(r"^3\. (.*?)(?=^\d\. |\Z)", rollback, re.S | re.M)
 step3 = step3.group(1) if step3 else ""
 check("Rollback step 3 names the screenshots deck by path", f"facilitation/kubecon-na-2026/fallback/{assets['deck']}" in step3)
-check("Rollback step 3 names where the segment videos are", "facilitation/kubecon-na-2026/fallback/videos/" in step3)
+check("Rollback step 3 sends no one to segment videos this repo does not hold (#613)", "videos/" not in step3 and ".mp4" not in step3)
 check("Night Before runs the replay once, segment 1's prompts to the public bot",
       "python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1" in night)
 check("Night Before runs the asset check", "python3 scripts/check-fallback-assets.py" in night)

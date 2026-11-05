@@ -64,8 +64,8 @@ bring-up. Details in decisions.md, 2026-11-03 · #775 and 2026-11-05 · #775.
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
 Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667),
-and since against the four-challenge one: on 2026-11-05 it is 8 READY, 1 PARTIAL (9: ballroom sizing #450, phones
-#451 and the recorded fallback #452), 0 MISSING. Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on
+and since against the four-challenge one: on 2026-11-05 it is 8 READY, 1 PARTIAL (9: ballroom sizing #450 and phones
+#451; its recorded fallback #452 is built), 0 MISSING. Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on
 2026-11-05 (#455): BanTopics is in `llm-guard-scanners`, so the on-topic guard refuses a paraphrase with no listed
 word, and a cpu.5 probe pod on watch-it-burn-private judged all 64 topic asks as written. The probe was green on both
 clusters on 2026-10-28, before the three-challenge order (#639) and C6's fetched ticket (#640). Update its rows
@@ -123,7 +123,7 @@ KubeCon clusters), #41, #42; lab-platform#244 to #248; prompts-agenticburn#11; h
 
 Next, in order:
 - [ ] Rehearsal with Whitney, Wed 2026-10-28 09:00 Central: the cold read against the live platform (#611).
-- [ ] Record the six segment videos and the deck's two by-hand shots for the recorded fallback (#452) at the first full rehearsal, and take shot 03-1 once the Tron ask deploys; the replay is built and the screenshots deck holds 12 of 15 shots (`facilitation/kubecon-na-2026/fallback/`).
+- [x] Recorded fallback (#452): the replayable prompt set, `scripts/replay-prompts.py` and the screenshots deck of 12 shots are in `facilitation/kubecon-na-2026/fallback/`, named in the run-of-show's Night Before and Rollback step 3. The segment videos left this repo with M4 (#613, dropped by Michael on 2026-11-01). The room's Tron ask failing on the public bot is a Challenge 2 risk of its own, filed from #452.
 - [x] Deck PDF to Sessionize: dropped, no deck is submitted (Michael, 2026-10-28; #449, #537 closed).
 - [ ] #634 (workshop_agent service name), #635 (converge skipping repair_datadog: not reproduced on the
   rebuild, where Datadog went in at bootstrap; re-check when keys change after a bring-up).

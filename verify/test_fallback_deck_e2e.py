@@ -110,8 +110,7 @@ with tempfile.TemporaryDirectory() as td:
     manifest = base / "assets.yaml"
     manifest.write_text(yaml.safe_dump({
         "version": 1, "deck": "screenshots/deck.html",
-        "videos": [{"segment": 1, "title": "The first segment", "path": "videos/a.mp4"},
-                   {"segment": 2, "title": "The second segment", "path": "videos/b.mp4"}],
+        "segments": [{"segment": 1, "title": "The first segment"}, {"segment": 2, "title": "The second segment"}],
         "screenshots": [
             {"segment": 1, "file": "screenshots/01-1-drawn.png", "caption": "A shot that is on disk.",
              "capture": {"by_hand": "drawn by the test"}},
@@ -145,12 +144,9 @@ print("== the committed deck, against the committed manifest and the PNGs on dis
 shots = real["slides"][1:]
 check("one slide per shot in assets.yaml, after the title", len(shots) == len(committed), f"{len(shots)} vs {len(committed)}")
 for (file, present), slide in zip(committed, shots):
-    if present:
-        check(f"{file} loads as an image", slide["width"] > 0 and not slide["missing"], str(slide))
-    else:
-        check(f"{file}, not yet taken, shows as MISSING", slide["missing"] == f"MISSING: {file}", str(slide))
+    check(f"{file} is on disk and loads as an image, with no MISSING card", present and slide["width"] > 0
+          and not slide["missing"], str(slide))
 check("the committed deck fetches nothing from the network", real["fetched"] == [], str(real["fetched"]))
-check("the committed deck has shots to show", sum(1 for _, present in committed if present) >= 1)
 
 if failures:
     print(f"\nFAILED: {len(failures)}")
