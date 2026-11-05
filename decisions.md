@@ -19211,3 +19211,72 @@ plane. Both share the parser in `verify/node_sg_rules.py`.
 **The suites (run 17432, at `eb1aa498`).** `bash verify/run-e2e-tools.sh` printed `263 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
 offline suite and 57 tier tests) in 29m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #660 · The front door is checked through the real console Services: both roster roots took the ARN, the NLBs served it, and the terminal websocket works through the TLS listener
+
+Run 17475 (branch `agent/660-14580`, moved onto staging c96c9e3b before this entry, since its base dbbfdc8 was 537
+commits behind). Its earlier runs had no AWS or cluster and reported partial or blocked five times. This run had the
+accen-dev session and both roster clusters, and Michael's ruling that a test's cloud spend needs nobody's go, so it did
+the live leg #660 asked for, on the clusters that exist, instead of waiting on lab-platform#130's `labctl event up`.
+
+**The certificate and its DNS were already done.** The 2026-11-05 #638 entries above record run 17359 requesting
+`arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8` in accen-dev (515966504359,
+us-west-2) and run 17383 finding it ISSUED. `infra/front-door-cert.sh accen-dev us-west-2` exits 0 and prints that
+ARN; both validation CNAMEs resolve at `dns1.registrar-servers.com`; ACM reads both domains SUCCESS, not after
+2027-05-22. So no Namecheap write was needed from this run, and the Namecheap key it cannot read did not matter.
+Michael gave the ARN to lab-platform himself on lab-platform#344 (2026-11-05 08:45Z): the live run under #130 passes
+it as `--front-door-cert` and writes no validation records.
+
+**What was still owed, and how it was checked.** Run 17383 checked the chart's patch on a throwaway Service with its
+own NLB. #660 asks for the console Service in namespace `agent` itself: a TLS listener on 443 read with
+`aws elbv2 describe-listeners`, the TLS check for attackme and burritobot-private, and the terminal websocket through
+the re-encrypting listener. This run took the path `labctl event up` takes, on both KubeCon roster clusters:
+
+1. `kubectl --context <ctx> -n argocd patch application lab-bootstrap --type=json` added the helm parameter
+   `frontDoor.certificateArn=<ARN>` to each root (watch-it-burn-community, `values-burn.yaml`; watch-it-burn-private,
+   `values-admin.yaml`), with a `argocd.argoproj.io/refresh=normal` annotation. Argo CD v3.5.7 re-rendered the
+   `ai-layer` Application with the chart's `kustomize.patches` block and synced the console Service's four
+   annotations (`aws-load-balancer-ssl-cert`, `ssl-ports: "443"`, `backend-protocol: ssl`,
+   `ssl-negotiation-policy: ELBSecurityPolicy-TLS13-1-2-2021-06`) within about a minute of the patch (13:19:15Z to
+   13:20:27Z). So the root-to-Application-to-Service chain the chart draws works on the cluster's own Argo CD, which
+   run 17383's local kustomize build could not show.
+2. The AWS Load Balancer Controller (v2.14.0) changed each console NLB's 443 listener in place, hostname unchanged
+   (`SuccessfullyReconciled`). `aws elbv2 describe-listeners` then showed, on both
+   `k8s-agent-console-6d7d3fd8cd-932f5f880aa49b92` and `k8s-agent-console-8b9a07a948-ac72870744b3b1bd`:
+   `443 TLS ELBSecurityPolicy-TLS13-1-2-2021-06 <ARN>`, with 80 still TCP. Each 443 listener's target group was
+   Protocol TLS, target type ip, one healthy target on 8443: the NLB re-encrypts to nginx. ACM listed both NLBs in
+   `InUseBy` and the certificate's renewal eligibility turned ELIGIBLE.
+3. Direct to each NLB, with the roster name as SNI and `curl --connect-to <name>:443:<nlb>:443` (the NLB hostname
+   is not on the certificate, so the pass-through check-tls.sh cannot be pointed at it by name): for
+   attackme.agenticburn.com and attackme.burritobot.co on the community NLB, and burritobot-private.agenticburn.com
+   and burritobot-private.burritobot.co on the private NLB, `openssl s_client -verify_return_error` answered
+   `Verify return code: 0 (ok)`, subject `*.agenticburn.com`, issuer Amazon RSA 2048 M01; `GET /` answered 200 with
+   curl verifying the name; the websocket upgrade on `/terminal/` pinned to HTTP/1.1 answered 101 on every name in
+   three rounds; and the `tty` subprotocol with no credential answered 502 on every name, as it does on the
+   pass-through path (#770). The very first websocket probes, run within two minutes of the listener flip, answered
+   000 (no response) on three of the four names while the new TLS target group warmed; from then on every probe was
+   101. A live check right after a flip should allow for that minute.
+4. The KubeCon pass-through path, `infra/terraform/fleet/check-tls.sh --closed-terminal attackme.agenticburn.com` and
+   `check-tls.sh burritobot-private.agenticburn.com`, through apex-agenticburn's Caddy to `<nlb>:443` with
+   `tls_insecure_skip_verify`, was green with the TLS listener in place: https 200, chain, SAN, 74 days, 301, and the
+   router closing attackme's terminal (404 on both upgrades) and burritobot-private's upgrade 101 with the tty
+   refusal 502. The baseline before the change was the same; attackme's plain `check-tls.sh` without
+   `--closed-terminal` fails on its 404 by design, so the right call for the public bot is `--closed-terminal`.
+
+`labctl tls-check` itself was not run: lab-platform is private and the run cannot clone it, and its probes (certificate,
+HTTPS 200, redirect, websocket upgrade, `cmd/labctl/tlscheck.go`) are the ones check-tls.sh and the direct probes above
+make. Michael's #130 comment names check-tls.sh as the alternative. Against attackme.agenticburn.com by name it checks
+Railway's certificate until lab-platform#122 moves the wildcard, which is why the direct probes carry the roster name
+as SNI to the NLB.
+
+**Left as found.** The parameter was removed from both roots (13:28:43Z) and both refreshed; the console Services'
+annotations are the baseline five, both 443 listeners read TCP again, the direct handshake is refused as
+`self-signed certificate` again, ACM's `InUseBy` is empty, the two NLBs are the only load balancers in the account
+and the four `k8s-agent-console-*` target groups are the TCP ones from before. The clusters are the KubeCon roster
+as fleet.sh built them; the certificate on their front doors is `labctl event up`'s to apply, and `fleet.sh` would
+drop a hand-added root parameter on its next apply anyway.
+
+**Not yet run on a cluster.** lab-platform#130's own run: `labctl event up ... --front-door-cert=<ARN>` logging
+`front doors: N roster clusters recorded`, the `labctl.event_bootstrap_root` audit row carrying `front_door_cert`,
+and `labctl tls-check attackme.agenticburn.com burritobot-private.agenticburn.com` through lab-platform's gateway once
+lab-platform#122 has moved the wildcard. Those are lab-platform#344's checks, and their outputs go on #344 and #660.
