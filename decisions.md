@@ -19453,3 +19453,11 @@ each of its three fixture environments, so the result no longer hangs on the hos
 watch-it-burn-private, should log `adopted the hecaton-run access entry into the cluster's state`, and its plan should
 show nwuser's entry and association `has moved to` the `operator` keys, the role's entry updated in place for tags
 only, and no access entry, association or key policy replaced or destroyed.
+
+**The suites (run 17543, at `e6439d2a`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the
+offline suite and 58 tier tests) in 32m03s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`;
+`test_cluster_admin_entries_module.py` printed `ALL CLUSTER ADMIN ENTRY MODULE CHECKS GREEN` inside it. A first run
+at `fffeee98` (59 checks in 32m50s, exit 1) failed two: `test_e2e_tools_tier.py` on the host's `/tmp`, fixed above,
+and `test_terraform_lock_init.py`, whose init of `infra/terraform/dashboards` got `github.com: bad response code: 504`
+installing datadog/datadog v3.91.0; the cluster root's init in it passed, and the rerun passed it.
