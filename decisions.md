@@ -20952,3 +20952,4 @@ attackme's absence and private's row on both domains, and holds that a table sti
 drops it without a refusal or a log line, while private's own registry host stays a loss the guard names. With the
 guard's discount taken out, the two new checks on it fail. `verify/test_guardrails_switch.py` reads attackme's rows
 for no registry host, and `verify/test_c6_villain_endpoint.py` reads the loop's new form.
+Its Night Before order check now reads inside the Night Before section, as `verify/test_fleet_wall_check.sh` does: the Probe record entry above names `./fleet.sh router-check` earlier in the file, and the first suite run read that line as the Night Before's and failed the order.

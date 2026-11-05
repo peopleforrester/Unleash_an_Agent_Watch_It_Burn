@@ -190,7 +190,10 @@ check "the usage text names routes roster and router-check" \
   'grep -q "^  routes \[roster\]" "${FLEET}" && grep -q "^  router-check" "${FLEET}"'
 
 ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"
-line_of() { grep -nF -- "$1" "${ROS}" | head -1 | cut -d: -f1; }
+# Read in the Night Before alone: the Probe record names `./fleet.sh router-check` too, earlier on (#931).
+line_of() { sed -n '/^## Night Before$/,/^## Rollback on the day$/p' "${ROS}" | grep -nF -- "$1" | head -1 | cut -d: -f1; }
+grep -qx '## Night Before' "${ROS}" && grep -qx '## Rollback on the day' "${ROS}" \
+  || { echo "  FAIL  ${ROS} has no '## Night Before' or '## Rollback on the day' heading to read the order between"; exit 1; }
 check "the Night Before writes the roster table and checks the router before check-tls" \
   '[[ -n "$(line_of "./fleet.sh routes roster")" && -n "$(line_of "./fleet.sh router-check")" && -n "$(line_of "./fleet.sh check-tls --closed-terminal attackme")" ]] &&
    (( $(line_of "./fleet.sh routes roster") < $(line_of "./fleet.sh router-check") &&
