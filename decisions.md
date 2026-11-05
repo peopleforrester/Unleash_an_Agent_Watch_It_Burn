@@ -18013,3 +18013,9 @@ cluster was changed.
    HC-666 ask after `guardrails-on`, and `stage_traces.py seed` ending `SEEDED GREEN`.
 
 No dependency was added: crane 0.22.1 was already pinned in `verify/e2e-tools.lock` by #775.
+
+**The suites (run 17397, at `57eaf9c3`).** The first `bash verify/run-e2e-tools.sh` ran 56 checks in 28m02s and exited
+1 on `test_no_docker_hub_render.py` alone: six chart downloads from GitHub release assets answered `504 Gateway
+Time-out`. Run again alone with the tier's environment, that test passed (155 checks). The second full run printed
+`258 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `56 checks ran (the offline suite and 55 tier tests) in
+26m38s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
