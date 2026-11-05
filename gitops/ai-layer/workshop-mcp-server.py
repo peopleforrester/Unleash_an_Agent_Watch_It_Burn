@@ -844,8 +844,15 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
         obj, written_by = _parse_manifest(manifest)
     except Exception as e:  # noqa: BLE001
         _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
-    requested_by = str(requested_by or "").strip() or written_by
     obj = _one_object(obj)
+    if isinstance(obj, dict) and "requested_by" in obj:
+        # The call's own argument written as a field of the manifest (#906): on 2026-11-05 two of three HC-666 asks on
+        # the public bot sent {"apiVersion": ..., "requested_by": "Agatha the Banshee", ...}, which the API server
+        # refuses ("failed to create typed patch object ... .requested_by: field not declared in schema"). No
+        # Kubernetes object has the field, so it is taken out and read as the name the argument would have carried.
+        inside = obj.pop("requested_by")
+        written_by = written_by or (inside.strip() if isinstance(inside, str) else "")
+    requested_by = str(requested_by or "").strip() or written_by
     if isinstance(obj, dict) and isinstance(obj.get("kind"), str) and not obj.get("apiVersion"):
         obj["apiVersion"] = _API_VERSIONS.get(obj["kind"], "")
     if not isinstance(obj, dict) or not isinstance(obj.get("kind"), str) or not isinstance(obj.get("apiVersion"), str) \
