@@ -221,7 +221,7 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
 - **Model: AWS Bedrock**, `us.anthropic.claude-haiku-4-5-20251001-v1:0` (inference profile; base ids
   reject on-demand). Use-case form + model agreements submitted on the account. ModelConfig
   `spec.provider: Bedrock`, `spec.bedrock.region`. Creds via **EKS Pod Identity** on the agent SA (no IRSA annotation; IRSA is retained only for the EBS CSI driver).
-- **Output guard:** LLM Guard (API-server, `laiyer/llm-guard-api:0.3.16`, output `Regex` matching the
+- **Output guard:** LLM Guard (API-server, llm-guard-cpu-offline's `ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5`, output `Regex` matching the
   sentinels) behind a small **A2A-aware guard proxy** in front of the agent Service (kagent owns the
   agent pod, so the inspection point is a proxy, not an in-pod sidecar). Live-verified block/redact.
 - **Input guard:** request-phase check in the same proxy, a cheap **block-list** (deterministic,
@@ -259,7 +259,7 @@ Falco app `0.45.1` / chart `9.2.1` (moved from `9.1.0` in #626); kube-prometheus
 OTel Collector chart `0.173.1` / app `0.160.0`;
 agentgateway OSS `v1.7.0` (released 2026-10-27, moved from `v1.5.0` on 2026-10-30 for GHSA-qm3r-hhvc-62cp (#698), and from `v1.3.0` on 2026-09-10; deployed as the
 manifest `gitops/ai-layer/agentgateway.yaml`, image pinned by digest); Tempo chart `2.2.3` @
-`grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.36` (moved from `1.35` in #389);
+`grafana-community/helm-charts`; LLM Guard 0.3.16 as `ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5` (pinned by digest); EKS `1.36` (moved from `1.35` in #389);
 aws-ebs-csi-driver addon + gp3 default SC; Bedrock models
 `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku), `us.anthropic.claude-sonnet-4-6` (Sonnet),
 `us.anthropic.claude-opus-4-8` (Opus) - Sonnet/Opus need the `us.` Geo profile (no In-Region in

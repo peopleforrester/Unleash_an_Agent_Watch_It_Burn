@@ -20675,3 +20675,52 @@ promotes, in a scratch worktree: `bash verify/run-e2e-tools.sh` ran 61 checks (t
 in 30m48s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 270 tests and
 printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` (`All recorded-fallback checks
 passed.`) and staging's `test_e2e_tools_tier.py` among them; the tier printed `FALLBACK DECK GREEN`.
+
+## 2026-11-05 · #805 · Check 3 of test_no_docker_hub.py reads the lock files and the docs for Docker Hub image names
+
+**Why.** Test review run 17694 found the gap #805 still had after run 16565's two tests reached staging: check 1
+reads image fields and build bases, and check 2 reads Docker Hub's host names, so a Docker Hub name with no
+registry outside those fields passed both. Its example was a new `nginx:1.27 sha256:...` row in images.lock, and it
+pointed at `laiyer/llm-guard-api:0.3.16` in images.lock and VERSIONS.lock. `bash verify/prior-drafts.sh 805
+origin/staging` printed NONE: run 16565's draft is in staging, so this run starts from it.
+
+**What check 3 reads.** Every images.lock row, both its reference and the name@sha256 in its digest column. A
+not-an-image row is a placeholder. A kustomize name's row (llm-guard, web, postgres) is judged by the image its
+digest column names, which must be a name@sha256 off Docker Hub. It also reads every image-shaped name, a path with a
+tag or a digest, in images.lock, VERSIONS.lock and the 116 tracked Markdown files outside the records, with a
+path:line citation, a URL and an oci:// chart reference left out. A bare name with no slash in prose
+(`python:3.12-slim`) is not read: in this repo's Markdown it cannot be told from an IAM action, a Datadog tag or a
+Bedrock model id, and a sweep for it found 90 such tokens, nearly all of them not images.
+
+**The one Docker Hub name admitted.** RETAINED holds `laiyer/llm-guard-api:0.3.16`, the archived upstream the
+deployed llm-guard replaced. #714's entry above keeps it as #603's retention record, and lab-platform has no mirror/
+copy of it: an anonymous token for `peopleforrester/lab-platform/mirror/laiyer/llm-guard-api` was refused on
+2026-11-05. The row records a saved tarball and nothing pulls it, so it is admitted, on these terms, each a check:
+its images.lock row is there and keeps its upstream source and netcup's saved date; its VERSIONS.lock pin says the
+deployed image is not this one; nothing check 1 reads names it; and no doc names it. When lab-platform copies it,
+the row moves to the copy and RETAINED goes empty.
+
+**What the sweep found, fixed here.** Three docs still named Docker Hub images that the cluster no longer runs:
+
+- docs/MASTER-RECREATION-SPEC.md's Components table gave the console `nginxinc/nginx-unprivileged:1.27-alpine`.
+  resources.yaml runs `ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine` by digest, and the row now says so.
+  The same table's guard-proxy, workshop-mcp and evil-mcp-shim rows gave a bare `python:3.12-slim`. Check 3 does not
+  read a bare name, but they were wrong the same way, so they now name the ghcr.io python-3.12-slim copy and
+  workshop-mcp's own image.
+- docs/BUILD-SPEC.md named `laiyer/llm-guard-api:0.3.16` twice as the output guard's image. It now names
+  llm-guard-cpu-offline's `ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5`, which ai-layer deploys.
+- VERSIONS.lock's otel-collector image line said "the mirror's otel/opentelemetry-collector-contrib:...", which reads
+  as a Docker Hub name. It now spells out the lab-platform mirror/ path.
+
+No test read the reworded lines (`git grep -nF` over verify and scripts for each).
+
+**Mutation checks**, each restored after: a bare `nginx:1.27` row added to images.lock, the console row put back,
+VERSIONS.lock's otel line put back, the laiyer row's saved date set to -, `laiyer/llm-guard-api:0.3.16` as
+llm-guard's image in resources.yaml, the laiyer name put back in BUILD-SPEC, and web's kustomize row pointed at
+`docker.io/library/nginx`. Each failed check 3 by name, and the resources.yaml and web ones failed checks 1 and 2 too.
+
+**Live check (2026-11-05, read only, run 17702's KUBECONFIG).** `COMMUNITY_CONTEXT=watch-it-burn-community
+PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_no_docker_hub_live.py` exited 0: 58 pods on the community
+cluster and 83 on the private one, no pod or pod template on either naming a Docker Hub image. The private cluster's
+nodes report 16 cached Docker Hub names in status, which the check prints and does not judge. This change runs
+nothing on a cluster, so nothing is owed there.

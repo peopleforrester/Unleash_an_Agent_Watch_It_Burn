@@ -1,5 +1,5 @@
-# ABOUTME: Offline gate for #714 (#805): no image this repo hands a cluster or builds on is a Docker Hub pull, by name or
-# ABOUTME: by having no registry, and no tracked line names Docker Hub except one marked as refusing it.
+# ABOUTME: Offline gate for #714 (#805): no image this repo pulls, builds on, or names in a lock file or a doc is on
+# ABOUTME: Docker Hub, by host or by having no registry, but a line refusing it and the one retention row decisions.md keeps.
 """Why this exists (#805, from #714).
 
 Michael, 2026-10-30, on #714: no Docker Hub anywhere. It costs money and it rate-limits pulls, and a node pulling
@@ -8,7 +8,7 @@ this repo's package, ghcr.io/peopleforrester/watch-it-burn, or lab-platform's mi
 test, nothing held that as a whole: test_enforce_floor judges the directory apps' images only, and a Docker Hub
 name added anywhere else would pass every offline test.
 
-Two checks, each of which a new Docker Hub pull fails:
+Three checks, each of which a new Docker Hub pull or name fails:
 
 1. No image field or build base resolves to Docker Hub, in any tracked file outside the dated records. A reference with no
    registry (nginx:1.27, busybox, curlimages/curl) is a Docker Hub pull exactly as docker.io/library/nginx is
@@ -23,6 +23,17 @@ Two checks, each of which a new Docker Hub pull fails:
    of which carries a comment with (#714) saying it names Docker Hub to refuse it, and finds each of them, so the
    list cannot go stale. The files in GATE are the one exception: the gate's own three, whose job is naming Docker
    Hub, and the fixtures of #603's live judge, which are the Docker Hub names a node reports for an image it cached.
+3. No image the repo names outside a pull resolves to Docker Hub either (#805, test review run 17694). Checks 1 and
+   2 read fields and hostnames, so a registry-less name anywhere else passed both: a new `nginx:1.27 sha256:...` row
+   in images.lock, or a doc telling a rebuild to run `nginxinc/nginx-unprivileged:1.27-alpine`. This check reads
+   every images.lock row, its reference and the name@sha256 in its digest column, and every image-shaped name
+   (a path with a tag or a digest) in images.lock, VERSIONS.lock and the tracked Markdown outside the records. A
+   kustomize name's row (llm-guard, web, postgres) is judged by the image its digest column names. The one Docker
+   Hub name admitted is RETAINED's: laiyer/llm-guard-api:0.3.16, the archived upstream the deployed llm-guard
+   replaced, which #714's decisions.md entry keeps as #603's retention record because lab-platform has no mirror/
+   copy of it. It is admitted only in its images.lock row and its VERSIONS.lock pin, only while that row carries
+   its upstream source and the date netcup's archive saved it, and only while nothing check 1 reads pulls or builds
+   on it.
 
 What a Helm chart renders is test_no_docker_hub_render.py's (tools tier): it renders every Application's sources.
 
@@ -75,6 +86,17 @@ REFUSED = (
     ("verify/test_public_images.py", '"docker.io/someone/tron", "index.docker.io/library/tron"'),
 )
 PLAIN_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]*$")
+# Check 3. The Docker Hub name images.lock and VERSIONS.lock may carry, with the source its row must keep: the
+# archived upstream the deployed llm-guard replaced, #603's retention record of the tarball netcup's archive holds.
+# #714's decisions.md entry keeps it until lab-platform has a mirror/ copy of it; nothing pulls or builds on it.
+RETAINED = {"laiyer/llm-guard-api:0.3.16": "upstream:https://github.com/protectai/llm-guard"}
+LOCKS = ("images.lock", "VERSIONS.lock")
+# An image-shaped name in prose: a path with a tag or a digest. Not preceded by a name character, a slash or a colon,
+# so a URL's path or an oci:// chart reference does not start one; a path:line citation is dropped by FILE_LINE.
+REF_TOKEN = re.compile(r"(?<![\w./:@$-])([a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+"
+                       r"(?::[A-Za-z0-9][A-Za-z0-9._-]*)?(?:@sha256:[0-9a-f]+)?)")
+FILE_LINE = re.compile(r"\.[A-Za-z]+:\d+(?:-\d+)?$")
+SAVED = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 failures: list[str] = []
 
@@ -195,6 +217,48 @@ def python_refs(path: str, text: str) -> list[tuple[str, str, str]]:
     return refs
 
 
+def ref_tokens(text: str) -> list[tuple[int, str]]:
+    """(line, name) for each image-shaped name in prose: a path that carries a tag or a digest."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        for m in REF_TOKEN.finditer(line):
+            tok = m.group(1).rstrip(".,")
+            if (":" in tok.rsplit("/", 1)[-1] or "@sha256:" in tok) and not FILE_LINE.search(tok):
+                out.append((n, tok))
+    return out
+
+
+def lock_rows(text: str) -> list[tuple[int, list[str]]]:
+    """(line, columns) for each images.lock row: ref, digest, source, saved."""
+    return [(n, line.split()) for n, line in enumerate(text.splitlines(), 1) if line.strip() and not line.startswith("#")]
+
+
+def lock_findings(text: str, kustomized: set[str]) -> list[str]:
+    """Each images.lock row that names a Docker Hub image, RETAINED's aside. A not-an-image row is a placeholder; a
+    kustomize name's row (a bare name kustomize replaces) is the image its digest column names, so that is judged."""
+    bad = []
+    for n, cols in lock_rows(text):
+        ref, digest, source = (cols + ["", "", ""])[:3]
+        if source.startswith("not-an-image:"):
+            continue
+        ref = ref.replace("{{.Values.imageRegistry}}", LAB_PLATFORM_GHCR)
+        if ref in kustomized:
+            if "@sha256:" not in digest or docker_hub(digest):
+                bad.append(f"images.lock:{n} {ref}: a kustomize name's row names no ghcr.io image it becomes ({digest})")
+            continue
+        if docker_hub(ref) and ref not in RETAINED:
+            bad.append(f"images.lock:{n} {ref}")
+        if "@sha256:" in digest and docker_hub(digest):
+            bad.append(f"images.lock:{n} {digest}")
+    return bad
+
+
+def prose_findings(path: str, text: str) -> list[str]:
+    """Each image-shaped name in a lock file or a doc that is a Docker Hub image; RETAINED's only in the locks."""
+    return [f"{path}:{n} {tok}" for n, tok in ref_tokens(text)
+            if docker_hub(tok) and not (path in LOCKS and tok in RETAINED)]
+
+
 def replaced(path: str, ref: str, renamed: set[tuple[str, str]]) -> bool:
     name = re.split(r"[:@]", ref, maxsplit=1)[0]
     return any(name == n and (d == "" or path.startswith(d + "/")) for d, n in renamed)
@@ -292,6 +356,30 @@ names = kustomize_names(yaml.safe_load("images: [{name: web, newName: ghcr.io/x/
 found = [w for w, _ in judged([("demo/deployment.yaml", "", "web"), ("other/deployment.yaml", "", "web")], set(), names)]
 check("a name a kustomization replaces is a pull everywhere but under that kustomization's directory",
       found == ["other/deployment.yaml:"], str(found))
+SHA0 = "sha256:" + "0" * 64
+LOCK_FIXTURE = "\n".join([
+    "# a comment row is not read as a row: nginx:1.27",
+    f"nginx:1.27 {SHA0} upstream:https://github.com/nginx/docker-nginx -",
+    f"ghcr.io/x/web:1@{SHA0} docker.io/library/busybox@{SHA0} upstream:https://github.com/x/y -",
+    f"ghcr.io/x/ok:1@{SHA0} {SHA0} upstream:https://github.com/x/y -",
+    f"{{{{.Values.imageRegistry}}}}/mirror/kubearmor/kubearmor:stable ghcr.io/x/mirror/kubearmor/kubearmor@{SHA0} upstream:u -",
+    "REGISTRY/evil@sha256:REPLACE - not-an-image:placeholder -",
+    f"web ghcr.io/peopleforrester/lab-platform/web@{SHA0} repo:x 2026-11-04",
+    f"postgres {SHA0} upstream:https://github.com/docker-library/postgres -",
+    f"laiyer/llm-guard-api:0.3.16 {SHA0} upstream:https://github.com/protectai/llm-guard 2026-11-05",
+])
+found = [b.split(":", 1)[1] for b in lock_findings(LOCK_FIXTURE, {"web", "postgres"})]
+check("a bare images.lock row, a Docker Hub digest column and a kustomize row with no ghcr.io image are each found",
+      [f.split(" ", 1)[0] for f in found] == ["2", "3", "8"] and "nginx:1.27" in found[0], str(found))
+found = prose_findings("docs/x.md", "Run `nginxinc/nginx-unprivileged:1.27-alpine` and `laiyer/llm-guard-api:0.3.16`;"
+                       " see gitops/ai-layer/resources.yaml:96-99, oci://ghcr.io/kagent-dev/kagent/helm/kagent:0.10.1,"
+                       " https://github.com/x/y:1 and ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine.\n")
+check("a doc's Docker Hub image names are found, the retained one too, and a path:line, a URL and ghcr.io are not",
+      found == ["docs/x.md:1 nginxinc/nginx-unprivileged:1.27-alpine", "docs/x.md:1 laiyer/llm-guard-api:0.3.16"],
+      str(found))
+found = prose_findings("VERSIONS.lock", "x  laiyer/llm-guard-api:0.3.16  image: otel/opentelemetry-collector:0.1\n")
+check("the lock files admit RETAINED's name and nothing else on Docker Hub",
+      found == ["VERSIONS.lock:1 otel/opentelemetry-collector:0.1"], str(found))
 
 print("== 1. no image field resolves to Docker Hub ==")
 files = tracked()
@@ -354,6 +442,39 @@ check("each of them carries a comment with (#714) saying it names Docker Hub to 
 missing = [e for e in REFUSED if e not in seen]
 check("every line REFUSED lists is still in its file, so the list holds only what is there", not missing,
       str(missing))
+
+print("== 3. no lock row or doc names a Docker Hub image but RETAINED's ==")
+lock_text = (REPO / "images.lock").read_text(encoding="utf-8")
+kustomized = {n for _, n in renamed}
+rows = {cols[0]: (n, cols) for n, cols in lock_rows(lock_text)}
+check(f"images.lock's rows are read ({len(rows)})", len(rows) >= 60)
+bare = sorted(r for r in kustomized if r in rows)
+check(f"the kustomize names images.lock carries are read as kustomize rows ({', '.join(bare)})",
+      {"llm-guard", "web", "postgres"} <= set(bare), str(bare))
+bad = lock_findings(lock_text, kustomized)
+check("no images.lock row names a Docker Hub image but RETAINED's", not bad, "\n      ".join([""] + bad))
+docs = [f for f in files if f.endswith((".md", ".mdx")) and f not in GATE]
+check(f"the docs' image names are read ({len(docs)} Markdown files)", len(docs) >= 100)
+bad, seen_names = [], 0
+for f in list(LOCKS) + docs:
+    text = (REPO / f).read_text(encoding="utf-8", errors="replace")
+    seen_names += len(ref_tokens(text))
+    bad += prose_findings(f, text)
+check(f"the sweep finds image names to judge ({seen_names})", seen_names >= 80)
+check("no image name in the lock files or the docs is a Docker Hub image but RETAINED's", not bad,
+      "\n      ".join([""] + bad[:25]))
+versions = (REPO / "VERSIONS.lock").read_text(encoding="utf-8")
+for ref, source in RETAINED.items():
+    n, cols = rows.get(ref, (0, []))
+    check(f"{ref} has its images.lock row, so RETAINED holds only what is there", bool(cols))
+    check(f"{ref}'s row keeps its source {source} and the date netcup's archive saved it",
+          cols[2:3] == [source] and bool(SAVED.match((cols + [""] * 4)[3])), str(cols[2:]))
+    pin = re.search(re.escape(ref) + r".*\n(?:\s+.*\n){0,4}?\s+deployed image is not this one", versions)
+    check(f"VERSIONS.lock pins {ref} as the upstream, saying the deployed image is not this one", pin is not None)
+    name = re.split(r"[:@]", ref, maxsplit=1)[0]
+    pulled = sorted({f"{p}:{w}" for p, w, r in refs if re.split(r"[:@]", r.split("docker.io/")[-1], maxsplit=1)[0]
+                     == name})
+    check(f"nothing check 1 reads pulls or builds on {name}", not pulled, str(pulled))
 
 print()
 if failures:

@@ -32,7 +32,7 @@ falco                  chart 9.2.1 / app 0.45.1  (0.45.1 fixes kernel 6.18, #626
 falco-talon            chart 0.4.1 / app v0.3.0  (resolves the prior UNKNOWN chart pin)
 kube-prometheus-stack  chart 86.2.3  (optional bump to 86.3.2; app v0.91.0 unchanged)
 otel-collector         chart 0.173.1 / app 0.160.0  (contrib distro; was 0.158.2 / 0.153.0 until #666)
-                       image: the mirror's otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921, set in all three
+                       image: ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921, set in all three
                        gitops/bootstrap/apps/otel-collector*.yaml; verify/test_otel_collector_version_pins.py holds the copies together
 agentgateway           OSS v1.7.0  (released 2026-10-27, GitHub releases agentgateway/agentgateway; pinned 2026-10-30 for #698, from v1.5.0)
                        image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aaf... (digest pin in gitops/ai-layer/agentgateway.yaml, #415)
