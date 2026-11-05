@@ -71,7 +71,14 @@ GOOD = {
         pod("default", "done-1", [{"name": "c", "image": "busybox:1"}], phase="Succeeded"),
     ],
     "agent": AGENT,
+    # Keyed (namespace, name): ConfigMaps and Secrets a container reads through envFrom (grafana-mcp's shape).
+    "configmaps": {("kagent", "kagent-grafana-mcp"): {"DD_ENV": ENV, "DD_SERVICE": "burritobot-grafana-mcp",
+                                                      "GRAFANA_URL": "grafana.kagent:3000/api"}},
+    "secrets_refs": {("kagent", "kagent-grafana-mcp"): {}},
 }
+GRAFANA = {"name": "grafana-mcp", "image": "x/grafana-mcp:1",
+           "envFrom": [{"configMapRef": {"name": "kagent-grafana-mcp"}}, {"secretRef": {"name": "kagent-grafana-mcp"}}]}
+GOOD["pods"].append(pod("kagent", "kagent-grafana-mcp-1", [GRAFANA]))
 
 
 def fake_get(data: dict):
@@ -87,6 +94,14 @@ def fake_get(data: dict):
             return {"data": {"api-key": base64.b64encode(v.encode()).decode()} if v else {}}
         if a[:1] == ["-n"] and a[2:4] == ["get", "secret"] and "metadata.name=datadog-admin-secret" in a:
             return {"items": [{"metadata": {"name": "datadog-admin-secret"}}] if a[1] in data["admin"] else []}
+        if a[:1] == ["-n"] and a[2:4] == ["get", "configmap"]:
+            if (a[1], a[4]) not in data["configmaps"]:
+                raise RuntimeError(f'configmaps "{a[4]}" not found')
+            return {"data": data["configmaps"][(a[1], a[4])]}
+        if a[:1] == ["-n"] and a[2:4] == ["get", "secret"] and a[4] != "--field-selector":
+            if (a[1], a[4]) not in data["secrets_refs"]:
+                raise RuntimeError(f'secrets "{a[4]}" not found')
+            return {"data": data["secrets_refs"][(a[1], a[4])]}
         if a == ["get", "pods", "-A"]:
             return {"items": data["pods"]}
         if a == ["-n", "datadog", "get", "datadogagent", "datadog"]:
@@ -179,6 +194,15 @@ broken("a literal DD_API_KEY", lambda d: d["pods"][6]["spec"]["containers"][0]["
 broken("a literal additional endpoint", lambda d: d["pods"][5]["spec"]["containers"][0]["env"].append(
     {"name": "DD_LOGS_CONFIG_ADDITIONAL_ENDPOINTS", "value": '[{"api_key":"x"}]'}), "every Datadog API key variable")
 broken("no Running pods", lambda d: d.update({"pods": []}), "Running pods to read")
+broken("a grafana-style container whose ConfigMap lacks the env",
+       lambda d: d["configmaps"][("kagent", "kagent-grafana-mcp")].pop("DD_ENV"), "every container's logs carry")
+out = broken("a container's own env overriding envFrom to another env",
+             lambda d: d["pods"][-1]["spec"]["containers"][0].update({"env": [{"name": "DD_ENV", "value": "production"}]}),
+             "every container's logs carry")
+check("and names where its tags came from", any("env production" in line for line in out))
+broken("an envFrom reference that cannot be read",
+       lambda d: d["pods"][-1]["spec"]["containers"][0].update({"envFrom": [{"configMapRef": {"name": "missing"}}]}),
+       "every container's logs carry")
 broken("a DatadogAgent with no log configs", lambda d: d["agent"]["spec"]["override"]["nodeAgent"].pop("extraConfd"),
        "file-based log configs")
 

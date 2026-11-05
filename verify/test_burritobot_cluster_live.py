@@ -82,14 +82,36 @@ def log_configs(agent: dict) -> dict[str, tuple[str, str]]:
     return out
 
 
-def container_tags(pod: dict, container: dict, confs: dict) -> tuple[str, str, str]:
+def envfrom_vars(container: dict, namespace: str, get) -> dict:
+    """DD_SERVICE and DD_ENV from the container's envFrom ConfigMap and Secret references, which the Agent reads as
+    it reads the container's own env (test_datadog_log_services_render.py). A reference that cannot be read adds
+    nothing, so its container fails the check with the reason the labels and env leave it. A Secret's values are
+    read in this process only and never printed."""
+    out: dict = {}
+    for ref in container.get("envFrom") or []:
+        for kind, key in (("configmap", "configMapRef"), ("secret", "secretRef")):
+            if key not in ref:
+                continue
+            name = (ref[key] or {}).get("name", "")
+            try:
+                data = get("-n", namespace, "get", kind, name).get("data") or {}
+            except RuntimeError:
+                continue
+            for k in ("DD_SERVICE", "DD_ENV"):
+                if k in data:
+                    out[k] = base64.b64decode(data[k]).decode() if kind == "secret" else data[k]
+    return out
+
+
+def container_tags(pod: dict, container: dict, confs: dict, envfrom: dict | None = None) -> tuple[str, str, str]:
     """(service, env, where they came from) for one container's logs."""
     hit = confs.get(short_image(container.get("image", "")))
     if hit:
         return hit[0], hit[1], f"log config for image {short_image(container.get('image', ''))}"
     meta = pod.get("metadata") or {}
     labels = meta.get("labels") or {}
-    env_vars = {e.get("name"): e.get("value") for e in container.get("env") or [] if "value" in e}
+    # The container's own env overrides envFrom, as Kubernetes applies them.
+    env_vars = {**(envfrom or {}), **{e.get("name"): e.get("value") for e in container.get("env") or [] if "value" in e}}
     service = env_vars.get("DD_SERVICE") or labels.get(f"tags.datadoghq.com/{container['name']}.service") \
         or labels.get("tags.datadoghq.com/service") or MISSING
     env = env_vars.get("DD_ENV") or labels.get(f"tags.datadoghq.com/{container['name']}.env") \
@@ -157,7 +179,8 @@ def run(context: str, want_key: str, get=None, say=print) -> list[str]:
     wrong = []
     for p in pods:
         for c in (p.get("spec") or {}).get("containers") or []:
-            service, env, source = container_tags(p, c, confs)
+            ns = p["metadata"]["namespace"]
+            service, env, source = container_tags(p, c, confs, envfrom_vars(c, ns, get))
             if not ours(service) or env != DD_ENV:
                 wrong.append(f"{p['metadata']['namespace']}/{p['metadata']['name']} {c['name']} "
                              f"({short_image(c.get('image', ''))}): service {service}, env {env}, from {source}")
