@@ -11,9 +11,12 @@ set -euo pipefail
 # (no name); any other name is refused before anything is pushed.
 CR="${CRANE:-crane}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The C6 Joker's base, pinned (#664): busybox:latest on 2026-10-29. verify/test_joker_web_busybox.py runs
-# joker-web/start.sh on this digest's own busybox, so the build and the test cannot drift apart.
-JOKER_BASE="docker.io/library/busybox@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4"
+# The C6 Joker's base, pinned (#664): busybox:latest on 2026-10-29, which is busybox 1.38.0. Its linux/amd64 image is
+# pulled from lab-platform's ghcr.io copy (lab-platform#353), never from Docker Hub (#714): the copy's digest is the
+# one Docker Hub's index served for linux/amd64, so the layers and the Joker's digests are the same as before.
+# verify/test_joker_web_busybox.py runs joker-web/start.sh on this digest's own busybox, so the build and the test
+# cannot drift apart.
+JOKER_BASE="ghcr.io/peopleforrester/lab-platform/mirror/library/busybox:1.38.0-f97baa533a26@sha256:f97baa533a26513c453a362be331a43eb60214302f449c16571b23cea141dce4"
 
 # Marketing-NAMED covers (innocent name, villain reveal payload) — for the C2 "ops-approved promo app"
 # social-engineering story: the friendly name makes the deploy land, the pod logs reveal the villain.

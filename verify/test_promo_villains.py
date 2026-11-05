@@ -69,7 +69,7 @@ check("the C2 fallback creates a roster villain at its promo/ reference",
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
 row = next((ln for ln in ros.splitlines() if ln.startswith("| C2 ") and "c2-villain-image/fallback.kubectl.sh" in ln), "")
 check("the run-of-show's C2 fallback row names the image the fallback creates",
-      villain is not None and f"`{ref(villain.group(1))}`" in row and "docker.io/" not in row, row)
+      villain is not None and f"`{ref(villain.group(1))}`" in row and "docker.io/" not in row, row)  # refused (#714)
 
 print("== restrict-image-registries refuses the path, on ghcr.io and through an ECR cache ==")
 check("ghcr.io stays on the allow-list (lab-platform's mirror/ and web images run in apps and agent)",

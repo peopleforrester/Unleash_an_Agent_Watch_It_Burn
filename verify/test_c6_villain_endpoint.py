@@ -190,8 +190,10 @@ proc, calls, _ = run_build("joker", "jokr")
 check("a name build.sh does not know fails before anything is pushed",
       proc.returncode != 0 and calls == [] and "no villain named 'jokr'" in proc.stderr,
       f"rc={proc.returncode} {calls} {proc.stderr}")
-base = re.search(r'^JOKER_BASE="(docker\.io/library/busybox@sha256:[0-9a-f]{64})"', BUILD, re.M)
-check("the Joker's base is busybox pinned by digest", base is not None)
+base = re.search(r'^JOKER_BASE="(ghcr\.io/peopleforrester/lab-platform/mirror/library/busybox:[^@"]+@sha256:[0-9a-f]{64})"',
+                 BUILD, re.M)
+check("the Joker's base is lab-platform's ghcr.io copy of busybox, pinned by digest, not Docker Hub's (#714)",
+      base is not None)
 check("joker-web goes in as a layer under /villain",
       "--transform 's,^joker-web,villain,'" in BUILD and '-b "$JOKER_BASE"' in BUILD and '-C "${src}"' in BUILD
       and 'src="${HERE}"' in BUILD)

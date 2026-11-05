@@ -15,14 +15,16 @@
 # 022 republish, #730), and each equals its row in lab-platform's deploy/watch-it-burn/images.tsv. postgres, the
 # kustomize name gitops/bootstrap/apps/backstage.yaml sets, is lab-platform's mirror/ copy at its copies.tsv digest,
 # and C6's Joker is the digest ghcr.io served on 2026-11-02 (#714: nothing here names a Docker Hub image any more).
+# The two Dockerfile bases, node and debian, are lab-platform#353's mirror/ copies, each the linux/amd64 image of the
+# Docker Hub index this file pinned before, read anonymously from ghcr.io on 2026-11-05 at the digest its tag ends in.
 # The internal registry's two (#774), Distribution 3.1.2 and regctl 0.11.7-alpine, are the digests their own ghcr.io
 # publications served anonymously on 2026-11-02. The breakout's Joker, busybox-1.38.0-internal (#775), is the digest
 # images/villains/build.sh builds from this checkout with crane 0.22.1, computed on 2026-11-03 before its first push:
 # verify/test_joker_build_digest.py rebuilds it, and the festival-ops Joker above, and holds both to these rows.
 # saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
 # verify/test_images_lock.py holds every reference to a row here.
-node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
-debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
+ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node -
+ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts -
 ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
 ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app -
 ${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -

@@ -18,7 +18,9 @@
 # Kubernetes tab failed and the search collators never built an index. Measured 2026-10-24: 6/6 failures on
 # 24.17.0, passes on 24.22.0 and 24.22.1 with the same node-fetch files. The image tag names this Node
 # version, and verify/test_backstage_catalog.py fails if it drops below 24.22.
-FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446
+# The base is lab-platform's ghcr.io copy (lab-platform#353) of the linux/amd64 image under Docker Hub's
+# node:24.22.2-trixie-slim@sha256:54f84b4c..., by digest, so the build pulls nothing from Docker Hub (#714).
+FROM ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280
 
 # Set Python interpreter for `node-gyp` to use
 ENV PYTHON=/usr/bin/python3

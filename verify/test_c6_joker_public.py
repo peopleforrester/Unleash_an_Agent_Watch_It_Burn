@@ -1,9 +1,9 @@
 # ABOUTME: Reads Challenge 6's Joker, the image HC-7731's hidden paragraph names, from ghcr.io anonymously (#671): it
 # ABOUTME: is public, so the public cluster's nodes pull it, and it is the page Joker build.sh builds from joker-web/.
-# SUITE: e2e (needs the network: ghcr.io is asked for the ticket's image, Docker Hub for its busybox base)
+# SUITE: e2e (needs the network: ghcr.io is asked for the ticket's image and for lab-platform's copy of its busybox base)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
-# Why. #671 moved C6 off docker.io/peopleforrester, so the Deployment the ticket causes still pulls once the Docker
+# Why. #671 moved C6 off Docker Hub's peopleforrester account, so the Deployment the ticket causes still pulls once the Docker
 # Hub villains are retired. A node pulls gitops/ai-layer/ticket_site.py's C6_IMAGE with no credential, so a private
 # or missing package admits the Deployment on the public cluster and leaves the pod in ImagePullBackOff, and
 # maintenance-shell-<cluster> shows the console's "Nothing is running" page. The image is pushed by hand
@@ -126,20 +126,22 @@ check("PORT is the one build.sh sets, which the maintenance-shell Service target
       port is not None and f"PORT={port.group(1)}" in cfg.get("Env", []), str(cfg.get("Env")))
 
 print("== its base is build.sh's pinned busybox ==")
-base = re.search(r'^JOKER_BASE="docker\.io/(library/busybox)@(sha256:[0-9a-f]{64})"', BUILD, re.M)
-check("build.sh pins JOKER_BASE to a busybox digest", base is not None)
+base = re.search(r'^JOKER_BASE="ghcr\.io/(peopleforrester/lab-platform/mirror/library/busybox):[^@"]+@(sha256:[0-9a-f]{64})"',
+                 BUILD, re.M)
+check("build.sh pins JOKER_BASE to lab-platform's ghcr.io busybox copy by digest (#714)", base is not None)
 if base is not None:
-    hub = "https://registry-1.docker.io"
     try:
-        htok = token(f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{base.group(1)}:pull")
-        index = json.loads(get(f"{hub}/v2/{base.group(1)}/manifests/{base.group(2)}", htok, base.group(2)))
-        amd = next(d["digest"] for d in index.get("manifests", [])
-                   if d.get("platform", {}).get("os") == "linux" and d["platform"].get("architecture") == "amd64")
-        want = [x["digest"] for x in json.loads(get(f"{hub}/v2/{base.group(1)}/manifests/{amd}", htok, amd))["layers"]]
+        btok = token(f"https://ghcr.io/token?scope=repository:{base.group(1)}:pull")
+        bman = json.loads(get(f"https://ghcr.io/v2/{base.group(1)}/manifests/{base.group(2)}", btok, base.group(2)))
+        if "manifests" in bman:  # an index: build.sh's crane append takes its linux/amd64 image
+            amd = next(d["digest"] for d in bman["manifests"]
+                       if d.get("platform", {}).get("os") == "linux" and d["platform"].get("architecture") == "amd64")
+            bman = json.loads(get(f"https://ghcr.io/v2/{base.group(1)}/manifests/{amd}", btok, amd))
+        want = [x["digest"] for x in bman["layers"]]
         got = [x["digest"] for x in manifest["layers"][:-1]]
         check("every layer under the Joker's is the pinned busybox's linux/amd64 layer", got == want, f"{got} != {want}")
     except (urllib.error.URLError, OSError, ValueError, KeyError, StopIteration) as e:
-        check(f"Docker Hub serves {base.group(1)}@{base.group(2)[:19]}... for linux/amd64", False,
+        check(f"ghcr.io serves {base.group(1)}@{base.group(2)[:19]}... anonymously", False,
               f"{type(e).__name__}: {e}")
 
 print("== its top layer is this checkout's joker-web/, under /villain ==")

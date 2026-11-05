@@ -1,6 +1,6 @@
 # ABOUTME: Rebuilds both Jokers with images/villains/build.sh into a throwaway local registry (#775) and holds each digest
 # ABOUTME: to images.lock: the workshop's festival-ops Joker as published, and the breakout's internal-registry Joker.
-# SUITE: e2e (needs the network: Docker Hub serves build.sh's pinned busybox base)
+# SUITE: e2e (needs the network: ghcr.io serves build.sh's pinned busybox base, lab-platform's copy)
 # E2E TIER: tools (no cluster, no AWS: the pinned crane from e2e-tools.lock, its own registry on loopback)
 """Why (#775). Challenge 3 at KubeCon asks for registry.burritobot.co/burritobot/maintenance-shell, which the internal
 registry (gitops/internal-registry/) copies from ghcr.io by digest at every start. Its page differs from the workshop
