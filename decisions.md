@@ -20450,3 +20450,30 @@ so there was no Joker to open a shell in.
 RENDER-GATE TESTS GREEN`, then `59 checks ran (the offline suite and 58 tier tests) in 30m24s` and `ALL E2E TOOLS TIER
 CHECKS GREEN`, exit 0. The tier ran the banner checks in test_joker_web_busybox.py and test_joker_build_digest.py, and
 test_c6_joker_public.py passed against the tag ghcr.io serves now.
+
+## 2026-11-05 · #927 · run 17684 · the /display throttle checked live on both clusters after Argo CD synced
+
+**What this run found.** Run 17659's change (`59ee1a77`, `65a2d8b5`) is in staging and Argo CD has synced it to both
+clusters. `bash verify/prior-drafts.sh 927 origin/staging` printed LANDED for `origin/agent/927-17650` and NONE
+after it, so there was no draft to port. The wall's own change is prompts-agenticburn#18 (filed 2026-11-05, open,
+no `agent-task` label yet); #927's five criteria all name that repo's `templates/wall.html` and stay open until it
+lands. This run changes no code.
+
+**Live, after the change (run 17684, read only).** On `https://attackme.burritobot.co` and
+`https://burritobot-private.burritobot.co`, `/display` answers 200, and
+`curl -s <host>/display.js | grep -c 'var CARD_INTERVAL_MS = 1500;'` prints 1 on each. The served `display.js` and
+`display.html` are byte for byte the files in `gitops/ai-layer/web/` at this run's base (`cmp` silent, sha256 of
+`display.js` starting `6f3716817b57d142` on both hosts and in the repo), and the served page has the `#more` line.
+`/prompts` read `"enabled": true` with 3 entries on the public cluster and 4 on the private one.
+
+**The served file on the fake clock.** Each host's served `display.js` ran in `verify/display-clock-harness.js` with
+that host's live `/prompts` answer as the first poll and seven `live-check burst NN` arrivals before the next one.
+On both: the history went up at once with `+0 more`; at 1500 ms the line read `+7 more` with no new row; at 2250 ms
+one card went up, `live-check burst 07` (the newest), and the line read `+0 more`; quiet ticks at 3750 ms and
+5250 ms added nothing. Rows went 3 to 4 on the public host and 4 to 5 on the private one.
+
+**Not yet run on a cluster.** The step with a real browser and real chats: with `/display` open on either host, a
+handful of chats sent within a second show in `+N more` and then as one card, the last one sent. This run sent no
+chats, because each one stays in guard-proxy's 50-deep feed and on the projector, and a live check leaves the
+cluster as found. The fake-clock run above is on the exact bytes the clusters serve, so only the browser and the
+chat path are left unexercised.
