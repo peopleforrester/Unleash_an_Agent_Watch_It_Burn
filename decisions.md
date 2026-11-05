@@ -19620,3 +19620,69 @@ internal-registry part is still red. The routes publish (`registry.burritobot.co
 **The suites (run 17626, at `bf811401`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite and 57 tier tests) in 32m02s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #926 · run 17646 · The prompt wall is emptied by restarting its Railway app, after both feeds are empty
+
+**Where the wall keeps what it shows.** `https://prompts.burritobot.co` is prompts-agenticburn, a Flask app on Railway
+(project `prompts-agenticburn`, `7bfe7d7e-8156-4365-9342-afd80ee55029`, service `prompts-agenticburn`, environment
+`production`). Its `app.py` keeps every prompt in a module-level list in process memory, trimmed to the newest 500
+(`MAX_ENTRIES`), with no volume and no database: that repo decided so on 2026-09-07 and wrote it down again when it
+retired the app on 2026-09-19. Its `reset_state()` is called only by its tests. So `reset-bot`, which restarts each
+cluster's guard-proxy, never reached the wall, and the wall held six days of prompts on 2026-11-05 at 17:50Z. A restart
+of the Railway service is what empties it.
+
+**The order matters, and the wall showed why.** At 18:13Z the same day the wall held 19 prompts, 15 from attackme and 4
+from burritobot-private, all with one receive time, 18:06:05Z, and seq at 19: the app had restarted then, and its
+first poll took what each cluster's `/prompts` still held as new, because its merge (`new_entries`) has no earlier
+list to diff against. At 18:13Z attackme's `/prompts` held 0 prompts and burritobot-private's held 4. So a restart
+alone does not open the room on an empty wall: each roster cluster's feed has to be empty first, which `reset-bot`
+does. That is why the reset is a separate command run after `reset-bot` on both clusters, not a step inside
+`reset-bot`: one restart of the wall clears every cluster's column, so a `reset-bot` of the community cluster alone
+would refill the wall from the private one.
+
+**What was built.**
+
+- `fleet.sh wall-reset` reads each roster cluster's `https://<host>.burritobot.co/prompts` and counts prompts as the
+  wall does (strings, without the probe marker, not blank). While any cluster's count is not 0 it fails, names the
+  `reset-bot` to run, and restarts nothing. Then it prints what the wall held, runs
+  `railway restart -p <project> -e production -s prompts-agenticburn -y`, and reads `/api/prompts` until the wall
+  answers with every roster cluster read (`ok` true) and no prompt, within `WIB_WALL_RESET_WAIT` (180 s). It fails
+  naming what the wall still holds, or which cluster it has not read. It needs a Railway login on the host, as
+  `resolve_admin_token` already does.
+- `fleet.sh wall-check --empty` runs the #637 roster check and also fails while `/api/prompts` holds any prompt,
+  printing the count per cluster, when they arrived and the seq. That is the start-state check the issue asks for.
+  Plain `wall-check` is unchanged.
+- The run-of-show's run-through record runs `reset-bot` on both clusters, then `wall-reset`, then
+  `wall-check --empty`, before the delivered session, with a row for it in the record table. The Night Before has
+  the same three after the community reset. Both say to reload the wall's tab after the reset: the page's cursor
+  only moves forward (`cursor = Math.max(cursor, e.seq)` in `templates/wall.html`), so a tab opened before a restart
+  keeps its old cards and shows nothing new until the new seq passes the old one. With the tab reloaded, a new
+  prompt shows within one poll, about 3 seconds (`POLL_INTERVAL`).
+- `verify/test_fleet_wall_reset.sh` (31 checks) runs both commands against a sourced fleet.sh with curl and railway
+  stubbed; the stubbed wall changes only when the restart is called. `verify/test_fleet_wall_check.sh` reads its
+  Night Before order inside the Night Before, since the run-through record now names `wall-check --empty` earlier
+  in the file, and its dispatch check matches the new `cmd_wall_check "$@"`.
+
+**Filed in prompts-agenticburn, through the report.** The page's cursor should go back when the wall's seq does, so a
+tab open across a restart picks the new prompts up without a reload. Until that lands, the reload in the run-of-show
+covers it.
+
+### REJECTED: a token-gated reset endpoint on the wall
+**Why:** It would clear the wall with no restart and no outage, but it is a change to a public app with a new secret to
+hold, in another repo, and the restart already works on the app as it runs today.
+**Status:** Open to revisit if the restart's minute without the wall gets in the way.
+
+**Live check (run 17646), read-only.** On 2026-11-05 at 18:13Z, `wall_held` read the live wall:
+`19|attackme,burritobot-private|15 from attackme, 4 from burritobot-private; received 2026-11-05 18:06Z to 2026-11-05
+18:06Z; seq at 19`. `fleet.sh wall-check --empty` printed `PASS` for the health URL and both clusters, then
+`FAIL  the wall still holds 19 prompt(s) from before the room`, and exited 1. `fleet.sh wall-reset` printed
+`PASS  watch-it-burn-community's feed at https://attackme.burritobot.co/prompts is empty`, then
+`FAIL  watch-it-burn-private's feed at https://burritobot-private.burritobot.co/prompts still holds 4 prompt(s)` with
+`run './fleet.sh reset-bot watch-it-burn-private' first`, and `wall-reset: refused; the wall was not restarted`, exit 1.
+Nothing on either cluster or on Railway was changed.
+
+**Not yet run live.** This run has no Railway login (`railway whoami` answers `Unauthorized`), and `reset-bot` changes
+both bots, so the reset itself waits for a host logged in to Railway. In order, from `infra/terraform/fleet/`:
+`./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private`, `guards-off` on the private terminal,
+`./fleet.sh wall-reset`, then `./fleet.sh wall-check --empty` ending "holds no prompts" and
+`curl -s https://prompts.burritobot.co/api/prompts` showing `"prompts": []`. Then one prompt on attackme shows on a
+reloaded wall tab within about 3 seconds.

@@ -640,8 +640,14 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       service hosts only, no attendee-pool row (the KubeCon breakout, #502).
   router-check        Read the live router's host list (start.burritobot.co/roster.json) and assert it
                       is exactly the roster's clusters: attackme and each <owner>-admin. Read-only.
-  wall-check          Read the prompt wall's health (prompts.burritobot.co/healthz) and assert it
+  wall-check [--empty]
+                      Read the prompt wall's health (prompts.burritobot.co/healthz) and assert it
                       answers 200 and shows every roster cluster with its prompts readable. Read-only.
+                      --empty also fails while the wall holds any prompt (#926).
+  wall-reset          Empty the prompt wall for the room (#926): refuse while any roster cluster's
+                      /prompts feed holds a prompt (reset-bot empties it), restart the wall's Railway
+                      service, which keeps its prompts in memory only, and wait for it to read every
+                      roster cluster with no prompt on it. Needs a Railway login on this host.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
     scale <n>         DESIRED STATE: make exactly <n> attendee clusters exist. Creates what is missing,
@@ -5355,9 +5361,16 @@ cmd_router_check() {
 # the cluster's host, with ok false and an error when it cannot read that cluster's prompts. Run it after
 # router-check. Do not point the wall at lab-platform's roster before 2026-11-12: that roster leaves out attackme
 # and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11). Read-only. WIB_WALL_URL points it
-# elsewhere.
+# elsewhere. With --empty it also fails while the wall holds any prompt (#926): run it so right after wall-reset, and
+# a wall still showing what came before the reset reads as a FAIL with the count, not as a full wall in the room.
 cmd_wall_check() {
-    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/healthz" out code body got entry h n rc=0
+    local empty=0
+    case "${1:-}" in
+        "") ;;
+        --empty) empty=1 ;;
+        *) log "usage: wall-check [--empty]"; return 2 ;;
+    esac
+    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/healthz" out code body got entry h n rc=0 held summary
     out="$(curl -sS --max-time 15 -w '\n%{http_code}' "${url}" 2>/dev/null)" \
         || { log "wall-check: FAIL could not read ${url}"; return 1; }
     code="${out##*$'\n'}"; body="${out%$'\n'*}"
@@ -5376,9 +5389,121 @@ cmd_wall_check() {
             rc=1
         else log "  PASS  the wall shows ${n}"; fi
     done
+    if [[ "${empty}" -eq 1 ]]; then
+        IFS='|' read -r held _ summary <<<"$(wall_held)"
+        if [[ "${held}" == 0 ]]; then log "  PASS  the wall holds no prompts"
+        elif [[ "${held}" == unreadable ]]; then log "  FAIL  ${summary}"; rc=1
+        else
+            log "  FAIL  the wall still holds ${held} prompt(s) from before the room: ${summary}"
+            log "        run './fleet.sh wall-reset' (after reset-bot on every roster cluster)"
+            rc=1
+        fi
+        if [[ "${rc}" -eq 0 ]]; then log "wall-check: the wall shows every roster cluster and holds no prompts"
+        else log "wall-check: the wall is NOT empty and showing every roster cluster"; fi
+        return "${rc}"
+    fi
     if [[ "${rc}" -eq 0 ]]; then log "wall-check: the wall shows every roster cluster"
     else log "wall-check: the wall does NOT show every roster cluster"; fi
     return "${rc}"
+}
+
+# What the wall holds (#926), from its /api/prompts, as one line "<n>|<ok>|<summary>": n is the number of prompts it
+# would show, or "unreadable"; ok the comma-separated clusters it last read without error; summary the count from
+# each cluster, the receive times of the oldest and newest, and the wall's seq. The body goes on stdin: a full wall
+# is 500 prompts of up to 280 characters, past the one-argument limit.
+wall_held() {
+    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/api/prompts" body
+    body="$(curl -fsS --max-time 15 "${url}" 2>/dev/null)" || { printf 'unreadable||could not read %s\n' "${url}"; return 0; }
+    python3 -c '
+import collections, datetime, json, sys
+try:
+    d = json.loads(sys.stdin.read() or "null")
+    prompts, clusters = d["prompts"], d.get("clusters") or []
+    assert isinstance(prompts, list) and isinstance(clusters, list)
+except Exception:
+    print("unreadable||" + sys.argv[1] + " is not the wall'"'"'s prompt list"); sys.exit()
+ok = ",".join(str(c.get("name")) for c in clusters if isinstance(c, dict) and c.get("ok") is True)
+by = collections.Counter(str(e.get("cluster")) if isinstance(e, dict) else "?" for e in prompts)
+ts = [e["ts"] for e in prompts if isinstance(e, dict) and isinstance(e.get("ts"), (int, float))]
+when = lambda t: datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+parts = [", ".join(f"{n} from {c}" for c, n in sorted(by.items())) or "no prompts"]
+if ts:
+    parts.append(f"received {when(min(ts))} to {when(max(ts))}")
+seq = d.get("seq")
+parts.append(f"seq at {seq}")
+print(f"{len(prompts)}|{ok}|" + "; ".join(parts).replace("|", "/"))' "${url}" <<<"${body}"
+}
+
+# Empty the prompt wall for the room (#926). prompts.burritobot.co is prompts-agenticburn, a Flask app on Railway that
+# keeps what it shows in process memory (a 500-deep ring, no volume, no database), so no reset-bot reaches it: on
+# 2026-11-05 at 17:50Z it held 500 prompts from six days of rehearsals, probes and load tests, seq at 666. A restart
+# of its Railway service is what empties it. The restarted wall's first poll takes whatever each cluster's guard-proxy
+# /prompts feed still holds as new, having nothing to diff it against; that is how 19 prompts, 15 from attackme and
+# 4 from burritobot-private, were back on it at 18:06:05Z the same day, all with that one receive time. So this
+# refuses, before it restarts anything, while any roster cluster's feed is not empty, and reset-bot is what empties a
+# feed. After the restart it waits for the wall to answer with every roster cluster read and no prompt, and fails
+# naming what it holds. A wall tab opened before the reset keeps its old cards and its cursor, past the new seq, so
+# the tab is reloaded after it. It needs a Railway login on this host, as resolve_admin_token does.
+readonly WIB_WALL_RW_PROJECT="7bfe7d7e-8156-4365-9342-afd80ee55029"   # Railway project prompts-agenticburn
+readonly WIB_WALL_RW_ENV="production"
+readonly WIB_WALL_RW_SERVICE="prompts-agenticburn"
+readonly WALL_RESET_WAIT="${WIB_WALL_RESET_WAIT:-180}"                 # seconds for the restarted wall to read every cluster
+cmd_wall_reset() {
+    [[ $# -eq 0 ]] || { log "usage: wall-reset"; return 2; }
+    command -v railway >/dev/null 2>&1 || { log "wall-reset: FAIL no railway CLI on this host"; return 1; }
+    local entry name host body n rc=0 held ok summary missing waited=0 err
+    for entry in "${INSTRUCTORS[@]}"; do
+        name="${entry%%|*}"; host="$(public_host_for "${name}" | twin_rows)"
+        body="$(curl -fsS --max-time 10 "https://${host}/prompts" 2>/dev/null)" \
+            || { log "  FAIL  could not read ${name}'s feed at https://${host}/prompts"; rc=1; continue; }
+        # Counted as the wall counts: a string, without the probe marker, not blank.
+        n="$(python3 -c '
+import json, sys
+try:
+    p = json.loads(sys.stdin.read() or "null")["prompts"]
+    assert isinstance(p, list)
+except Exception:
+    print("unreadable"); sys.exit()
+print(sum(1 for x in p if isinstance(x, str) and "[[wib-probe]]" not in x and x.strip()))' <<<"${body}")"
+        if [[ "${n}" == 0 ]]; then log "  PASS  ${name}'s feed at https://${host}/prompts is empty"
+        elif [[ "${n}" == unreadable ]]; then log "  FAIL  https://${host}/prompts is not ${name}'s prompt feed"; rc=1
+        else
+            log "  FAIL  ${name}'s feed at https://${host}/prompts still holds ${n} prompt(s), which a restarted wall"
+            log "        shows again: run './fleet.sh reset-bot ${name}' first"
+            rc=1
+        fi
+    done
+    [[ "${rc}" -eq 0 ]] || { log "wall-reset: refused; the wall was not restarted"; return 1; }
+    IFS='|' read -r held _ summary <<<"$(wall_held)"
+    log "  the wall before the reset: ${held} prompt(s); ${summary}"
+    if ! err="$(railway restart -p "${WIB_WALL_RW_PROJECT}" -e "${WIB_WALL_RW_ENV}" -s "${WIB_WALL_RW_SERVICE}" -y 2>&1)"; then
+        log "wall-reset: FAIL railway restart of ${WIB_WALL_RW_SERVICE} was refused (is this host logged in? railway login):"
+        log "  ${err}"
+        return 1
+    fi
+    log "  restarted Railway service ${WIB_WALL_RW_SERVICE}; waiting for the wall to read every roster cluster"
+    while :; do
+        IFS='|' read -r held ok summary <<<"$(wall_held)"
+        missing=""
+        for entry in "${INSTRUCTORS[@]}"; do
+            n="$(public_host_for "${entry%%|*}")"; n="${n%%.*}"
+            [[ ",${ok}," == *",${n},"* ]] || missing+=" ${n}"
+        done
+        if [[ "${held}" == 0 && -z "${missing}" ]]; then
+            log "wall-reset: the wall is empty and reads every roster cluster. Reload the wall's tab now: a tab"
+            log "  opened before the reset keeps its old cards and shows nothing new until the seq passes its own."
+            return 0
+        fi
+        [[ "${waited}" -ge "${WALL_RESET_WAIT}" ]] && break
+        sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+    done
+    if [[ "${held}" == 0 ]]; then
+        log "wall-reset: FAIL after ${WALL_RESET_WAIT}s the restarted wall is empty but has not read:${missing}"
+    else
+        log "wall-reset: FAIL after ${WALL_RESET_WAIT}s the wall holds ${held} prompt(s); ${summary}"
+        [[ -n "${missing}" ]] && log "  and has not read:${missing}"
+    fi
+    return 1
 }
 
 # The shared ops view (#308): claims from provisioning, liveness from the apex table and each console, and
@@ -5409,7 +5534,8 @@ main() {
             --profile "${WIB_DEFAULT_ACCOUNT}" --region "${WIB_REGION}" "$@" ;;
         routes) cmd_routes "$@" ;;
         router-check) cmd_router_check ;;
-        wall-check) cmd_wall_check ;;
+        wall-check) cmd_wall_check "$@" ;;
+        wall-reset) cmd_wall_reset "$@" ;;
         ops) cmd_ops "$@" ;;
         hosts) cmd_hosts ;;
         preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;

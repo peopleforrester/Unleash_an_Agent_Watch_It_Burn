@@ -87,6 +87,33 @@ touched, so the app stays Synced and self-heal has nothing to revert. It then re
 to the repo's values (all off), but the C7 tool allow-list and gateway rule live
 outside guard-proxy, and only `guards-off` puts them back.
 
+**Then empty the prompt wall (#926).** The room opens on an empty wall, and no
+`reset-bot` reaches it: `https://prompts.burritobot.co` is its own Railway app
+(prompts-agenticburn), and it keeps every prompt it has shown in memory, up to 500.
+On 2026-11-05 it still held six days of rehearsals, probes and load tests. A restart
+of that app empties it, but its first read after the restart takes whatever each
+cluster's feed still holds as new, so both feeds are emptied first. Before the
+delivered session, and before any run that should open on an empty wall, from
+`infra/terraform/fleet/` on a host logged in to Railway:
+
+```bash
+./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private
+./fleet.sh wall-reset
+./fleet.sh wall-check --empty
+```
+
+Then run `guards-off` on the private cluster's terminal, as above. `wall-reset`
+refuses, naming the cluster, while attackme's or burritobot-private's
+`/prompts` still holds a prompt, and restarts nothing. Otherwise it restarts
+the wall and waits until the wall reads both clusters and holds no prompt.
+`wall-check --empty` is the start-state check: it fails, with the count and when
+they arrived, while the wall holds any prompt, so a wall still showing what came
+before the reset reads as a FAIL here and not in the room. The same read by eye:
+`curl -s https://prompts.burritobot.co/api/prompts` shows `"prompts": []`. Then
+reload the wall's tab, or open it now: a tab opened before the reset keeps its old
+cards and shows nothing new until the wall's count passes its own. A prompt sent
+after the reset shows within about 3 seconds.
+
 **After the Go cutover (#738, #778), the reset is the same command and does more.** The Go
 guard-proxy keeps the counter, each session's spend and the runtime cost cap in a file on the
 `guard-proxy-spend` volume, and the volume outlives the pod, so a pod delete no longer clears
@@ -107,6 +134,7 @@ resumes Argo CD before it exits. If it says it could not resume Argo CD, run the
 | Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
+| Prompt wall empty first (`wall-check --empty` passed?) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
@@ -615,7 +643,7 @@ The opening order:
   presenters switch to it at set moments, during segment 1's opening minute of play
   and, optionally, during each challenge's play time after its call-to-action slide.
   The wall is `https://prompts.burritobot.co`: open it full screen before the session
-  starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
+  starts (#637), after `wall-reset` has emptied it (#926, "Run-through record"). It reads each cluster's feed, picks a new prompt up within about 3
   seconds, and lists the clusters named in `start.burritobot.co/roster.json`, so
   the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
@@ -1340,6 +1368,16 @@ is merely slow rather than rebuilding:
   with the whole $25 `COST_CAP_USD` window ahead of it. Anything else, run it again;
   if it still does not read zero, read the guard-proxy pod's logs before the day.
   The same reset runs before each run-through ("Run-through record" above).
+- [ ] **Empty the prompt wall, after the reset (#926).** The probe, the phone check
+  and every rehearsal leave prompts on `https://prompts.burritobot.co`, which keeps
+  them in memory until its app restarts. Once nothing else will prompt either bot,
+  from `infra/terraform/fleet/` on a host logged in to Railway:
+  `./fleet.sh reset-bot watch-it-burn-private` (then `guards-off` on its terminal),
+  `./fleet.sh wall-reset`, then `./fleet.sh wall-check --empty`, which must end "the
+  wall shows every roster cluster and holds no prompts". `wall-reset` refuses while
+  either cluster's feed still holds a prompt and names the `reset-bot` to run. If the
+  wall gets a prompt after this, run the three again on the day, before the room
+  arrives ("Run-through record" above).
 
 ## Rollback on the day
 
