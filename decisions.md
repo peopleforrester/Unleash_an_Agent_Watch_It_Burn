@@ -21475,3 +21475,30 @@ and 60 tier tests) in 29m59s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. I
 verify/run-tests.sh`, printed "274 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces.py` among them.
 
 No dependency was added.
+
+## 2026-11-06: plan-policy red on staging, an apostrophe in a security group rule description (#957, run 17743)
+
+**What failed.** The heavy gate's `CI` check on staging at `2cb0484d` was the plan-policy workflow, job `check`
+(Actions run 42123974421). Its step "Plan the fleet roots" stopped on `terraform plan` of aws/cluster with
+`Error: "description" doesn't comply with restrictions ("^[0-9A-Za-z_ .:/()#,@\\[\\]+=&;{}!$*-]*$")`, on
+`module.eks.aws_security_group_rule.cluster["ingress_lab_vpc_443_api"]`. That rule came in with #906 (`f4ae0101`), and
+its description read "the KubeCon guardrails switch's peer link": the apostrophe is not in the set the AWS provider
+admits for an EC2 security group rule description, so an apply would have failed the same way. The offline test
+#906 added, `verify/test_peer_api_rule.py`, reads the rule's ports and source and that its description names 443 and
+the guardrails switch, not its characters, and the tools tier does not plan the fleet roots, so neither suite saw it.
+
+**The fix.** The description now reads "Lab VPC to the cluster API on 443/tcp (the peer link of the KubeCon
+guardrails switch)", which keeps the two words `test_peer_api_rule.py` checks for. The new offline test
+`verify/test_sg_rule_descriptions.py` holds every description in module "eks"'s node and cluster rule blocks, and in
+each `aws_security_group` resource of the network and cluster roots, to the provider's pattern and its 255-character
+limit, and checks that the description #906 wrote is refused. Run against the old main.tf it fails on exactly that
+rule. Variable descriptions with apostrophes elsewhere in the roots are not security group fields and are left alone.
+
+**Checked locally, the workflow's own steps.** With the toolchain `infra/policy/plan/install-tools.py` installs:
+`plan-fleet.py --tf terraform` planned both roots (the cluster plan holds `ingress_lab_vpc_443_api`),
+`check-plan.py --require-all-exceptions-used` printed `PLAN POLICY CHECK PASSED`, and `verify/test_plan_policy_e2e.py`
+printed `All plan-policy e2e checks passed.`, each exit 0.
+
+**Not yet run on a cluster.** The rule on a live cluster is #906's own check, the KubeCon probe's guardrails-on beat
+(`verify/kubecon_probe.py`), run after the fleet next applies the cluster root to the KubeCon pair. This run applies
+no Terraform: a dispatched run deploys nothing.
