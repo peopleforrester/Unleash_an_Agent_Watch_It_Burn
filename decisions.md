@@ -19758,3 +19758,28 @@ runner with an env of its own and no TMPDIR. By then this host's `/tmp` was an u
 showed `Links: 0`, and `touch /tmp/x` failed with "No such file or directory"), so the fixture's `mktemp` fell back
 to `/tmp` and failed. The test passed in the first run, before `/tmp` went. Its three fixture envs now set TMPDIR to
 the fixture's own directory, so the test no longer hangs on the host's `/tmp` (AGENTS.md, Tests own their inputs).
+
+## 2026-11-05 · #909 · run 17629 · Run 17593's draft ported as it stood, re-measured live and re-run
+
+**What this run took from the draft.** `bash verify/prior-drafts.sh 909 origin/staging` printed START from
+`origin/agent/909-17593`, CLEAN: it branched from `92dfea31`, this run's base too, and staging has not touched any of
+its 14 paths. The issue's comments hold run 17593's done report and no "Not merged" line, so nothing names a fault to
+fix. This run fast-forwarded to the draft's four commits (`79f2acfd`, `630f3a1c`, `eadb333b`, `14a97ca7`) unchanged and
+added only this entry. Nothing differs from the draft's design. `python3 verify/prose_gate.py` passed on the tree.
+
+**Live check, run 17629, read-only (both clusters left as found).** Still at `92dfea31` on both clusters (ai-layer's
+synced revision), with `console-src-2f7h5t7cf7` in `agent` on each. `/kubecon` printed `200` on
+`https://attackme.burritobot.co` and `https://burritobot-private.burritobot.co`. The private page's title was
+`KubeCon brief: Watch It Burn`. `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` (sent with `--path-as-is`)
+printed `404` on both hosts. The lab-bootstrap roots still read `values-kubecon-community.yaml` (community, which
+sets `console.kubeconBrief: false`) and `values-kubecon-private.yaml` (private, which keeps the default `true`),
+both at staging.
+
+**Not yet run on a cluster.** These are unchanged from run 17593's entry above: after promotion, attackme's `/kubecon` should
+print `404` with `console-src-8fk5h94fkf` (or a later hash) and no `kubecon.html` key on the community cluster, the
+private host's `/kubecon` should answer 200 with the brief's title, and the three name and dot-path 404s should hold on
+both hosts. The next run on #908 runs them.
+
+**The suites (run 17629, at `14a97ca7`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 36m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
