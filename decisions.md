@@ -16661,3 +16661,7 @@ Synced at 03:25:57Z.
 
 **What is left of #265.** The spike write-up's update is general-knowledge#120. The cost row and the APM noise are
 proposed as their own issues, as #265 asks for the change that comes out of the spike.
+
+**The suites (run 17275, at `ff8335d4`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 27m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 255 tests,
+the new `test_c1_exfil_block_restore.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
