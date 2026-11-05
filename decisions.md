@@ -19383,3 +19383,20 @@ to change.
 **The suites (run 17439, at `52bbf535`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`263 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `57 checks ran (the offline suite and 56 tier tests) in
 28m43s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+**Run 17513 ports run 17439's draft.** Run 17439's two commits (on `origin/agent/870-17439` as 2bdae154 and
+958b3254) failed hecaton's `tests` gate, and the attempt after it stopped on hecaton's own workspace (its Podman
+socket was missing), before any work. `verify/prior-drafts.sh 870 origin/staging` read the draft CLEAN against
+staging with a decisions.md APPEND, so run 17513 cherry-picked both commits, kept staging's #792 and #876 entries
+ahead of this one, and added the blank line the draft left out before its heading. The gate's output was not
+quoted on the issue, and this run cannot read run 17439's run directory. With the draft on top of `324c47e7`,
+`bash verify/run-tests.sh` printed `265 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and exit 0, and the
+prose gate passed. Nothing else in the draft changed.
+
+**Run 17513 read the evidence again, GET only.** On watch-it-burn-community no pod or ConfigMap named `check870`
+is left, and guard-proxy reads generation 13 with `checksum/proxy-py` `dfca2b1fe758`, as run 17439 left it.
+`verify/dd_traces.py --trace 83b0932cdac55b4abf2d07ee922252c2` prints the Agent Observability root `agent POST
+1025 ms error` over `invocation`, `workshop_agent` and `generate_content`, which read ok. APM's
+`/api/v2/spans/events` with `trace_id:cd34510692488aa4078bc98053c8f488` returns the root `POST` (parent 0) of
+service burritobot as `status error`, `http.status_code 502`, `otel.status_code Error`, along with the `chat` span
+and the agent.forward `POST` client span as error. The check stands as run 17439 recorded it.
