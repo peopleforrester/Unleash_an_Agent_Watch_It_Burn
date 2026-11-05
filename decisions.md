@@ -19783,3 +19783,21 @@ both hosts. The next run on #908 runs them.
 **The suites (run 17629, at `14a97ca7`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
 and 57 tier tests) in 36m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #909 · run 17653 · Run 17629's branch rebased onto staging past #775's identical TMPDIR fix
+
+**Why run 17629 did not land.** Hecaton's rebase onto staging `cb3367d2` stopped at `14a97ca7` with an edit-edit
+conflict in `verify/test_e2e_tools_tier.py`, two regions. Run 17584 (#775) had landed `fa53301d` while #909 was in
+flight. That commit sets `TMPDIR` to the fixture's own directory in the same three fixture envs (`run`, the runner
+fixture and `run_live`) for the same reason, the host's `/tmp`. The two sides differ only in line wrapping in
+`run_live` and in the comment `14a97ca7` adds above `run`'s env.
+
+**How it is resolved.** This run rebased the branch onto `origin/staging` at `cb3367d2`. The conflict keeps both sides:
+staging's env lines as `fa53301d` wraps them, and `14a97ca7`'s #909 comment above `run`'s env. The other four commits
+applied without conflict, and the decisions.md appends sit after #775's entries. The #909 gate is unchanged from run
+17593's design. This run reran the affected tests directly at the rebased tree: `test_e2e_tools_tier.py`,
+`test_kubecon_community_gate.py`, `test_gated_page_names.py`, `test_bootstrap_chart.py` and `test_guardrails_switch.py`
+each exited 0.
+
+**Not yet run on a cluster.** Unchanged from run 17593's entry: the post-promotion curls on attackme and the private
+host, for the next run on #908.
