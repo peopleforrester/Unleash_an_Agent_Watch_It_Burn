@@ -17404,3 +17404,7 @@ prompt.
 
 **Room sizing.** At 150 phones, 31 % of turns met the cluster window from about a minute in. Whether to raise
 `RATE_LIMIT_RPM` for the ballroom is #450's call (the audience path), and these figures are its input.
+
+**The suites (run 17361, at `97ffc883`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`256 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, with `verify/test_load_replay.py` ending "All load replay checks passed.")
+and 54 tier tests, 55 checks in 26m37s, and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
