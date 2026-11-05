@@ -26,7 +26,9 @@
 #                 rule_name tag, lowercased with underscores. Not Falco's log line: its JSON carries a hostname
 #                 field, Datadog takes that as the log's host, and the bare node name it names is not the Agent's
 #                 host (<node>-<cluster>), so the line arrives with no kube_cluster_name and could never be
-#                 grouped by cluster (#489). Absent on the Community cluster, which has no Falco.
+#                 grouped by cluster (#489). Absent on the Community cluster, which has no Falco. Seen live on
+#                 2026-11-05: a read of a file named secret-sauce-recipe.conf in the private cluster's agent
+#                 namespace came back as rule_name:recipe_snoop_in_agent_namespace, 2 on burritobot-private.
 #   C4 bill       guard-proxy's gen_ai.client.cost gauge, the same number as the console's Cost counter. A
 #                 race rather than a tick: the biggest bill in the room is the score. Read with sum:, never
 #                 max: from guard-proxy-agenticburn#38 on the gauge is one series per gen_ai.request.model,

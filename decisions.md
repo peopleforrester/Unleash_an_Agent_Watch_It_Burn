@@ -16665,3 +16665,56 @@ proposed as their own issues, as #265 asks for the change that comes out of the 
 **The suites (run 17275, at `ff8335d4`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 27m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 255 tests,
 the new `test_c1_exfil_block_restore.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+## 2026-11-05 · #489 · Column 3 fills from real data, so every leaderboard column has now filled for burritobot-private; the board itself still waits on the apply
+
+**What this run could and could not do.** Run 17295 had the cluster session for `watch-it-burn-community` and
+`watch-it-burn-private` and the read pair in `watch-it-burn/datadog` (accen-dev, us-west-2). It did not have the
+write key. The issue thread names Whitney's sandbox-org application key at
+`~/secrets/datadog/wib-sandbox-fleet-monitors.env`, but that is Michael's home on this host, `/home/michael/secrets`
+answers this run's user with "Permission denied", the run's own home has no `secrets/`, and the `sources` wrappers
+refuse secret-shaped paths by design. So `fleet.sh monitors --apply` could not run here, and the board is still
+not in the org. `fleet.sh monitors --check` at 03:50Z printed MISSING for all seven monitors, the fleet dashboard
+and the challenge leaderboard, and `--apply` with an empty `WIB_FLEET_MONITORS_APP_KEY` refused before any call.
+The apply goes to the custodian as one command run as Michael from a fresh clone of staging.
+
+**Column 3 against real data.** Run 16997 moved column 3 to `falco.rules.matches.count` by `rule_name` and could not
+see the recipe rule fill: KubeArmor's `block-recipe-snoop` blocks the read on workshop-mcp, so Falco's `open_read`
+never matches there. The policy's selector is `app: workshop-mcp` only, while the Falco rule matches any container
+in namespace `agent` that reads a file whose name ends in `secret-sauce-recipe.conf`. So this run read a decoy
+there instead of lifting the policy: in the private cluster's web-terminal pod, `echo probe-489 >
+/tmp/wib489-secret-sauce-recipe.conf`, two `cat`s of it, then `rm`. Falco's log (pod `security/falco-n27ws`)
+printed `"rule":"Recipe Snoop In Agent Namespace"` twice at 03:48:51Z. Talon left the pod alone, because the rule is
+WARNING and Sidekick forwards only critical. Datadog had the metric within a minute:
+`sum:falco.rules.matches.count{kube_cluster_name:burritobot-*} by {kube_cluster_name,rule_name}.as_count()` over 30
+minutes returned `burritobot-private | recipe_snoop_in_agent_namespace => 2.0`, next to the other rules in the same
+shape (`exec_into_pod_detected`, `sensitive_file_read_in_container`). The tag value is the rule name lowercased
+with each space replaced by `_`, which is the name leaderboard.yaml and verify/test_leaderboard.py use, so the query stays as it is.
+
+**The joined table.** `fleet_monitors.table_scalar`, which sends the table's whole request as one scalar query the
+way query_table joins it on `kube_cluster_name`, returned one row per cluster:
+
+| window | cluster | online | 1 exfil | 2 villain | 3 recipe | 4 bill | 5 guarded | 6 blocked |
+|---|---|---|---|---|---|---|---|---|
+| 4 h | burritobot-private | 1 | 2 | 58 | 2 | 0.122 | blank | blank |
+| 4 h | burritobot-public | 1 | blank | blank | blank | 0.899 | blank | blank |
+| 7 d | burritobot-private | 1 | 6 | 58 | 2 | 0.094 | 12 | 27 |
+| 7 d | burritobot-public | 1 | 275 | 24485 | blank | 0.876 | blank | blank |
+
+Over 7 days every column holds data for burritobot-private, so each name the board reads is proven against real
+data: `@tool_input.command`, `short_image` (now on private too, from the promo villain another run had running),
+the Falco rule tag, the cost gauge, the /chat span's `@witb.guard.decision`, and guard-proxy's and workshop-mcp's
+`@event`s. No column needs a fix. Columns 5 and 6 are blank over the board's 4 hours because nobody re-ran those
+attacks today. This run left them so: all guards on private were off (`/toggle` read every guard false), another
+run (17286) had a villain pod up on that cluster, and filling them now would not outlast the 4-hour window before
+the apply.
+
+**Left as found.** The decoy file was removed in the same command, nothing else on either cluster was touched, and
+nothing was written to the org.
+
+**Not yet run on a cluster.** `WIB_LEADERBOARD_CLUSTERS=burritobot-private python3 verify/test_leaderboard_live.py`,
+after two things: the apply with Whitney's write key (`WIB_FLEET_MONITORS_APP_KEY=<key>
+infra/terraform/fleet/fleet.sh monitors --apply --session 2026-11-12T20:50Z/2026-11-12T21:20Z`, #485's), then a
+walk of the private cluster through C1 to C6 within 4 hours of the test, with `guard-output-on` before C5's re-run
+and `guard-input-on` before C6's and `guards-off` after. For column 3 the walk needs `block-recipe-snoop` off for
+the C3 read (`kubectl -n agent delete kubearmorpolicy block-recipe-snoop`, which Argo CD restores), or the decoy
+read above. The first read of a stored board also tests #862's DRIFT comparison.
