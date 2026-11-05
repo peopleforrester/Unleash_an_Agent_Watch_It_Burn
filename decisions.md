@@ -20884,3 +20884,71 @@ mrf-secrets)`.
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `verify/test_terminal_login_live.sh`
 among them with `30 passed, 0 failed`, then `60 checks ran (the offline suite and 59 tier tests) in 30m48s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-05 · #931 · run 17670 · registry-attackme leaves the routes table, and the support page is the desk's own host
+
+**Context.** Right after #918 published the KubeCon routes (apex-agenticburn main `1e602e1`, router reloaded 19:12Z),
+the coordinator found `https://registry-attackme.burritobot.co/v2/burritobot/maintenance-shell/tags/list` answering
+502 while private's two registry names answered 200, and `/support` answering 404 on both bot hosts, which #916's
+criteria expected to read 200.
+
+**Decision: the registry row.** Community is meant to have no registry. The internal registry is
+`gitops/internal-registry/`, deployed on the private cluster alone (#774), and both clusters' nodes pull by
+`registry.burritobot.co`, which is private's. Live at 19:46Z: `kubectl --context watch-it-burn-community get ns
+registry` answered `NotFound`, and so did the `internal-registry` Application on community, while
+`kubectl --context watch-it-burn-private -n registry get svc registry` listed the Service on 5000/TCP. So the 502 was
+community's console proxying to a Service that does not exist there, as `console.conf` documents. `emit_service_hosts`
+in `fleet.sh` now adds `registry-<cluster>` only for the cluster holding the shared admin host
+(`burritobot-private.agenticburn.com`), on both domains as before, so a promoted standby still takes it with that
+role's rows. The shrink guard reads a published `registry-<cluster>` row of any other cluster as retired, as it does
+the prefixes #651 retired, so neither `routes roster` nor a full `routes` reads the drop as a loss or as a pool row
+leaving. The comments in `console.conf` and `internal-registry.yaml` say the same.
+
+### REJECTED: proxying registry-attackme on to private's registry
+**Why:** It would turn the 502 into a 200 with no publish, but nothing uses that name: attackme's nodes and the
+Challenge 3 ticket both name `registry.burritobot.co`. It would add a second public door to private's registry, and a
+loop through the router if private's registry were ever down.
+**Status:** Closed.
+
+**Decision: the support page.** The talk uses the desk's own host. The run-of-show's segment 4 and the presenter
+page (`gitops/ai-layer/web/kubecon.html`) name `https://support.burritobot.co`, and the bot's own prompt hands out
+the same link (#765). No bot host has ever served `/support`: `git log -S '/support' -- gitops/ai-layer/console.conf`
+finds nothing, so #916's "still answer 200 on `/support`" was a slip in that issue. The run-of-show's segment 4 now
+names private's desk too, `support-burritobot-private.burritobot.co`, and says the bot hosts serve no `/support`. Its
+Night Before routes step says the registry rows are private's alone. #916's criterion is corrected through the
+report, since this run writes to no issue.
+
+**Live check (run 17670), read-only, 19:46Z.** From `infra/terraform/fleet/`:
+
+```
+$ ./fleet.sh router-check
+  PASS  the router serves attackme.burritobot.co
+  PASS  the router serves burritobot-private.burritobot.co
+router-check: the router serves exactly the roster
+exit=0
+$ ./fleet.sh wall-check
+  PASS  https://prompts.burritobot.co/healthz answers 200
+  PASS  the wall shows attackme
+  PASS  the wall shows burritobot-private
+wall-check: the wall shows every roster cluster
+exit=0
+```
+
+`curl` status codes: tags list 200 on `registry.burritobot.co` and `registry-burritobot-private.burritobot.co`, 502 on
+`registry-attackme.burritobot.co`; `/support` 404 on `attackme.burritobot.co` and
+`burritobot-private.agenticburn.com`; 200 on `/` of `support.burritobot.co`, `support-attackme.burritobot.co`,
+`support-burritobot-private.burritobot.co` and `support-burritobot-private.agenticburn.com`, and on `/ticket/HC-666`
+of the bare desk, attackme's and private's, each page carrying `HC-666`; 200 on `/`, `/prompts` and `/cost` of both
+bot hosts, and on `https://deployments.burritobot.co`. The run-of-show's Probe record has the same reading.
+
+**Not yet run on a cluster.** The live table still carries `registry-attackme` on both domains until the next
+`./fleet.sh routes roster`, which pushes apex-agenticburn's main and reloads the router. That is a deploy, which this
+run's governance forbids, so it goes to the coordinator through the report. After it,
+`curl -s -o /dev/null -w '%{http_code}\n' https://registry-attackme.burritobot.co/v2/` should print the router's 404
+for a host it does not carry, and `./fleet.sh router-check` should still end "the router serves exactly the roster".
+
+**Tests.** `verify/test_fleet_routes_roster.sh` expects `registry-<cluster>` on burritobot-private alone, holds
+attackme's absence and private's row on both domains, and holds that a table still carrying `registry-attackme`
+drops it without a refusal or a log line, while private's own registry host stays a loss the guard names. With the
+guard's discount taken out, the two new checks on it fail. `verify/test_guardrails_switch.py` reads attackme's rows
+for no registry host, and `verify/test_c6_villain_endpoint.py` reads the loop's new form.

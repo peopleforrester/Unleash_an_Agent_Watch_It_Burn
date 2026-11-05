@@ -366,6 +366,18 @@ guard false, but private's Falco badge, which reads the Falco DaemonSet that `ku
 `joker-*` Deployment is left on either cluster. `registry.burritobot.co` and `deployments.burritobot.co` still
 answer the router's 404, for the reason above.
 
+**2026-11-05, after the routes publish (#931).** Hecaton run 17670, about 19:40Z, read through the router
+(apex-agenticburn main `1e602e1`, reloaded 19:12Z by #918). `./fleet.sh router-check` ended "the router serves
+exactly the roster" (attackme and burritobot-private, both on burritobot.co) and `./fleet.sh wall-check` ended "the
+wall shows every roster cluster", both exit 0. The tags list read 200 with `busybox-1.38.0` on
+`registry.burritobot.co` and `registry-burritobot-private.burritobot.co`, and 502 on
+`registry-attackme.burritobot.co`: the registry runs on private alone, so `fleet.sh` no longer publishes that row,
+and it leaves the live table at the next `routes roster`. `/support` answered 404 on both bot hosts, which never
+served it; the desk the talk uses answered 200, with HC-666 at `/ticket/HC-666`, on `support.burritobot.co`,
+`support-attackme.burritobot.co` and `support-burritobot-private.burritobot.co`. `/`, `/prompts` and `/cost` read 200
+on both bot hosts, and `https://deployments.burritobot.co` read 200. Still red: `registry-attackme` answers 502 until the
+next routes publish.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
@@ -882,7 +894,11 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
   as well as the Joker wall while the room plays, and back to the deck for the
   attack. The bare `support.burritobot.co` routes to attackme's desk
   (apex-agenticburn#46, live 2026-10-29); `support-attackme.burritobot.co` is the
-  same desk if the bare name ever fails.
+  same desk if the bare name ever fails. The private cluster's desk, the one its bot
+  reads in the fix, is `support-burritobot-private.burritobot.co`. The desk lives
+  only on its own host: neither bot host serves `/support`, and
+  `https://attackme.burritobot.co/support` answers 404 (#931), so give the room the
+  desk's name, never a path on the bot's.
 - **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
   Agatha the Banshee so the probe can check it, and `joker-agatha-the-banshee`
   appears on the wall.
@@ -1115,8 +1131,11 @@ is merely slow rather than rebuilding:
   ```
 
   `routes roster` publishes attackme, both admin hosts and their service hosts, and
-  lists any pool row it takes out of the table. It refuses if a roster console has no
-  load balancer yet; wait for it and run it again. `router-check` reads
+  lists any pool row it takes out of the table. The internal registry runs on the
+  private cluster alone, so `registry-burritobot-private.burritobot.co` and
+  `registry.burritobot.co` are its rows and attackme carries no registry row (#931):
+  `registry-attackme` had nothing behind it and answered 502. It refuses if a roster
+  console has no load balancer yet; wait for it and run it again. `router-check` reads
   `https://start.burritobot.co/roster.json`, which the router builds from the table
   it is actually serving, and must end "the router serves exactly the roster". A
   table pushed but not reloaded fails here, not on stage. Then confirm the C1 beacon
