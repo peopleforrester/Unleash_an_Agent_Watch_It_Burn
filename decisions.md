@@ -20800,3 +20800,9 @@ than a rebase, so the commits the earlier report and the issue comment name stay
 `terraform validate` passes on the merged root, and the offline tests that read it and `fleet.sh` (this entry's,
 `test_attendee_iam_user.sh`, `test_fleet_wall_reset.sh`, `test_peer_api_rule.py`, `test_control_plane_app_ports.py`,
 `test_hostname_tag.py`) pass.
+
+**The suites (run 17707, at `9b85696c`, the merge).** `bash verify/run-e2e-tools.sh` printed `274 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `62 checks ran (the offline suite and 61 tier tests) in 31m41s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `ALL CLUSTER ADMIN ENTRY MODULE CHECKS GREEN` inside it. Live,
+read only, the same day: both clusters still list `user/nwuser` and `role/hecaton-run`, each with
+`AmazonEKSClusterAdminPolicy` at `cluster` scope.
