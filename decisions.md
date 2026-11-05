@@ -19138,3 +19138,8 @@ KUBECONFIG=/dev/null, as tier_env had it, `aws sts get-caller-identity --query A
 first on PATH printed `TEST CALLED A CLOUD TOOL (#857, #865)` and the call, exit 1. Neither cluster was changed.
 
 **Not yet run on a cluster:** nothing; the change is to the test runner, which runs on the dispatch host.
+
+**The suites (run 17230, at `a3aa6de5`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests, each through the new aws and eksctl stubs) in 26m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit
+0. The offline suite inside it ran 253 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. No tier test printed
+`TEST CALLED A CLOUD TOOL`.
