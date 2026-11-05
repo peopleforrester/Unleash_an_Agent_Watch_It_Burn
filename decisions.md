@@ -18098,3 +18098,7 @@ checks and the llm-row check, so the dropped chat that reads as a green row in t
 found. The fifth holds for tokens and for `skipped_tokens_missing`, and fails for the estimated cost: Datadog has no
 price for the cluster's Bedrock application inference-profile ARN, which is the model name. That is #876, already
 open. The live test stays red until #876's change reaches the clusters; it is the check #876's run can close on.
+
+**The suites (run 17405, at `0868c17d`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 27m25s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 259 tests, the
+new `test_llmobs_chat_judge.py` among them, all green.
