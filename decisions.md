@@ -19440,3 +19440,8 @@ arn:aws:iam::<account>:role/lab-platform-operator` and one `labctl harvest` acro
 seat outside the base account answering the probe.
 
 No dependency was added.
+
+**The suites (run 17449, on c98a0831).** `bash verify/run-e2e-tools.sh` ran 58 checks (the offline suite and 57 tier
+tests) in 32m31s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 263 tests,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, and `verify/test_lab_platform_operator_entry.py` printed
+`ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN` with its four cases passed.
