@@ -20477,3 +20477,7 @@ handful of chats sent within a second show in `+N more` and then as one card, th
 chats, because each one stays in guard-proxy's 50-deep feed and on the projector, and a live check leaves the
 cluster as found. The fake-clock run above is on the exact bytes the clusters serve, so only the browser and the
 chat path are left unexercised.
+
+**The suites (run 17684, at `b414b6da`).** `bash verify/run-e2e-tools.sh` printed `268 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `60 checks ran (the offline suite and 59 tier tests) in
+30m39s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
