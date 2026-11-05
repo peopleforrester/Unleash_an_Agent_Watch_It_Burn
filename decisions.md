@@ -20717,3 +20717,18 @@ KubeCon is #872's, once its fleet is down.
 **The suites (run 17689, at `bbcffac6`).** `bash verify/run-e2e-tools.sh` printed `271 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, with `test_kubecon_cost_measured.py` at all 40 checks,
 then `60 checks ran (the offline suite and 59 tier tests) in 29m24s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #927 · run 17699 · nothing left here; #927 waits on prompts-agenticburn#18, now labeled for dispatch
+
+**What this run found.** `bash verify/prior-drafts.sh 927 origin/staging` printed LANDED for
+`origin/agent/927-17684` and `origin/agent/927-17650`, then NONE, so every earlier draft is in staging. The part this
+repo owns, the `/display` throttle (`59ee1a77`), is in staging and was checked live on both clusters by run 17684.
+prompts-agenticburn#18, which carries #927's five criteria for that repo's `templates/wall.html`, is still open, and
+it now has the `agent-task` label that run 17684's escalation asked for, so hecaton can dispatch it there. Neither
+`main` nor `staging` of prompts-agenticburn has a commit after 2026-10-31 (`23c5219e`), and its staging
+`templates/wall.html` has no `CARD_INTERVAL` yet. This run changes no code and leaves both clusters untouched.
+
+**What closes #927.** prompts-agenticburn#18 landing, with its own fake-clock test and
+`uv run ruff check . && uv run pytest` green there. The real-browser chat step on `/display` that run 17684 named
+under Not yet run on a cluster is still not run, for the same reason: each chat stays in guard-proxy's feed and on
+the projector.
