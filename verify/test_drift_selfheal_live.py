@@ -70,6 +70,36 @@ def new_operation(op: dict, prior: str | None) -> bool:
     return bool(started) and (prior is None or started > prior)
 
 
+def heal_count(op: dict) -> int:
+    """The self-heal count on an operationState. Argo CD v3.5 serialises it as `autoHealAttemptsCount` (the Go
+    field is SelfHealAttemptsCount, which is the name its logs print); `selfHealAttemptsCount` is not in the CRD."""
+    return ((op.get("operation") or {}).get("sync") or {}).get("autoHealAttemptsCount", 0)
+
+
+def heal_kind(op: dict, created: str) -> str:
+    """Which of Argo CD's two paths put the policy back, read from the operationState seen right after the policy
+    returned. `created` is the new policy's creationTimestamp; a sync that started after it did not make it.
+
+    When the app already synced the revision git is at, self-heal syncs only the resources that are out of sync:
+    `operation.sync.resources` lists them and no hook runs, so the policy is back in about a second. When
+    `staging` has moved since the app last synced, even by a commit that leaves its manifests alone, the same
+    delete starts a full sync to the new revision, and ai-layer's PreSync gates (kubearmor-gate, otel-gate) run
+    before the policy is applied: 20.1, 25.2 and 27.2 s on 2026-11-05 against the 30 s window (#795). A selective
+    heal can also be followed at once by a full sync to a revision that just landed (10:41Z that day on
+    watch-it-burn-private), which is why the start time is compared and not assumed."""
+    started = op.get("startedAt") or ""
+    if not started or started > created:
+        return (f"a sync that cannot be named: the one read when the policy was back started at {started or 'never'},"
+                f" after the policy was re-created at {created}")
+    sync = (op.get("operation") or {}).get("sync") or {}
+    hooks = sorted({r["name"] for r in (op.get("syncResult") or {}).get("resources") or []
+                    if r.get("hookType") and r.get("kind") == "Job"})
+    if sync.get("resources"):
+        return f"a selective self-heal of {len(sync['resources'])} resource(s), no hooks run"
+    rev = (sync.get("revision") or "")[:8] or "unknown"
+    return f"a full sync to revision {rev}, PreSync Jobs run first: {', '.join(hooks) or 'none'}"
+
+
 def finish() -> int:
     print()
     if failures:
@@ -115,9 +145,8 @@ def main() -> int:
         step = min(QUIET_S - quiet, 15.0)
         time.sleep(step)
         waited += step
-    count = (((app.get("status") or {}).get("operationState") or {}).get("operation") or {}).get(
-        "sync", {}).get("selfHealAttemptsCount", 0)
-    print(f"  {app_name}: last sync {quiet if quiet is not None else 'never'}s ago, selfHealAttemptsCount {count}")
+    count = heal_count(((app.get("status") or {}).get("operationState") or {}))
+    print(f"  {app_name}: last sync {quiet if quiet is not None else 'never'}s ago, autoHealAttemptsCount {count}")
     check(f"{app_name} went {QUIET_S}s without syncing within {QUIET_WAIT_S}s of waiting "
           "(if not, it is healing something all the time: that is the finding)",
           quiet is None or quiet >= QUIET_S)
@@ -145,6 +174,9 @@ def main() -> int:
         check(f"{ns}/{name} came back at all within {GIVE_UP_S}s", False)
         return finish()
     print(f"  back after {back:.1f}s")
+    healing = ((get_json("-n", "argocd", "application", app_name) or {}).get("status") or {}).get(
+        "operationState") or {}
+    print(f"  healed by {heal_kind(healing, after['metadata'].get('creationTimestamp') or '')}")
     check(f"{ns}/{name} came back within the documented {WINDOW_S}s (took {back:.1f}s)", back <= WINDOW_S)
     check("as a new object (a new uid), so it was re-created and not merely never deleted",
           after["metadata"]["uid"] != old_uid)

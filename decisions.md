@@ -18775,3 +18775,120 @@ proven offline; a session on the provisioning box can run it if a seat-specific 
 
 **Tests.** `python3 -I verify/test_imds_credential_theft.py` prints `ALL IMDS CREDENTIAL-THEFT CHECKS PASSED`;
 `bash verify/run-tests.sh` is green; `verify/prose_gate.py` against `origin/staging` is clean.
+## 2026-11-03 · #795 · #205's live drift checks did not run: the run could not read the cluster access it was handed
+
+**No code changed, and nothing ran on a cluster or in AWS.** Hecaton run 16469 is the first dispatch of #795, on
+staging `858ffaf`. It was handed `watch-it-burn-community`, `watch-it-burn-private` and the accen-dev profile under
+the run's `clusters/` directory, and could read none of it. `clusters/env`, `kubeconfig`, `aws-config` and
+`aws-credentials` are mode 0640, owner and group `hecaton`, and the run's user is not in group `hecaton`.
+`. "$HECATON_CLUSTER_ENV"` and `kubectl config get-contexts` both failed with "permission denied", and
+`aws sts get-caller-identity --profile accen-dev --region us-west-2` failed with "The config profile (accen-dev)
+could not be found". This is the fault runs 16389 and 16424 hit on #544 and #715, and it is filed as
+peopleforrester/hecaton#507. #795 waits on that issue.
+
+**What a run can do once #507 is fixed, and what it cannot.** The five steps in #795 split by where their inputs live.
+
+- Step 1, the drill, can run from a run on both clusters. Its target, `agent/platform-console-egress`, is in
+  `gitops/ai-layer/resources.yaml`, and `ai-layer` is on every profile list, the two KubeCon profiles from #774
+  included. Their egress switch adds or removes only the agent egress set, never this policy. Neither cluster
+  is a fresh attendee cluster, as the issue's wording asks, but #795's criteria name these two, so the drill on
+  them is what closes it.
+- Step 4, `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`,
+  needs only the profile, so a run can do it too. Its check 2 is billed (the Access Analyzer check-no-new-access calls).
+- Step 2 applies the audit root (a Config recorder and a multi-region trail, both billed) in each fleet account:
+  `WIB_ATTENDEE_ACCOUNTS` defaults to accen-dev and aws1-student31 to 34, and a run holds only accen-dev.
+  Step 3 needs an attendee key CSV under `infra/terraform/fleet/aws-pool/` and step 5 plans every fleet state.
+  Both paths are gitignored and live only on the operator's machine, and step 5 also installs a cron line
+  there. So steps 2, 3 and 5 belong to a session on that machine with every fleet profile, as the 2026-11-02 #205
+  entry already says. They went to the run report's escalate list with their exact commands.
+
+**Tests at this entry.** `bash verify/run-tests.sh` passes alone (224 tests). Run at the same time as
+`bash verify/run-e2e-tools.sh`, `test_challenge_fallbacks.py` failed in both, because each saw the other's scratch
+directory in the repo's `tmp/`. `bash verify/run-e2e-tools.sh` exits 1 on `test_image_version_tags.py`, which is not
+#795's: ghcr.io now serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:7e5f8986…`, not the pinned and signed
+`sha256:68004fb5…`. That is the tag overwrite the 2026-11-03 #746 entry describes, moved once more since it read
+`sha256:d6acd503…`, most likely by the build-web-terminal push run of #774's `2e1a044`. Run 16420 filed it as a follow-up.
+
+**Not yet run on a cluster.** All five of #795's steps, unchanged: `CONTEXT=<ctx> python3
+verify/test_drift_selfheal_live.py` on watch-it-burn-community and watch-it-burn-private, the audit root's apply in
+each fleet account, `DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`,
+`verify/test_iam_policy_aws.py` with the audit suite, and one hand run of `infra/terraform/drift/drift-report.py`
+before the cron line in `docs/floor.md` goes in.
+
+## 2026-11-05 · #795 · Run 17417: #205's drill and drift report run live on both clusters; the drill now names the path that healed
+
+**Context.** Run 17417 is #795's second dispatch, on staging `fc8a855`. `bash verify/prior-drafts.sh 795 origin/staging`
+printed START from `agent/795-16469` (run 16469, failed blocked on hecaton#507, a run session it could not read).
+Its two commits only appended to decisions.md, so its entry is kept above as it was written, and this one follows it.
+That draft named no change to port. The session this run was handed is readable: `aws sts get-caller-identity`
+answers `user/nwuser` in 515966504359, and both contexts list one Ready node. Run 17269 on #205 had already run steps
+1 and 5 live earlier on 2026-11-05 (its entry above), so this run ran them again on the current staging and took up
+what they showed.
+
+**Step 1, the NetworkPolicy drill, on both clusters.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`,
+three times on each, every run `Self-heal drill passed.` and exit 0:
+
+| run | watch-it-burn-community | watch-it-burn-private |
+|---|---|---|
+| 10:35Z, the base drill | back after 1.2 s | back after 27.2 s |
+| 10:40Z, with the heal-path print | back after 1.2 s, selective heal | back after 3.1 s (see below) |
+| 10:46Z, the drill as committed | back after 1.2 s, `healed by a selective self-heal of 9 resource(s), no hooks run` | back after 1.4 s, the same |
+
+Every return was a new uid with Argo CD's tracking annotation and git's spec, and the sync after it ended
+`Succeeded`, automated. Argo CD reports 20 of 20 applications on community and 38 of 38 on private Synced and
+Healthy, so no drift was found on the Kubernetes plane. Both were left as found: `ai-layer` Synced and Healthy, the policy present
+with git's spec.
+
+**What the 27.2 s was.** The controller's log on private shows it. The app's last sync was to `9f2b575` at 05:11Z,
+and staging had since moved to `fc8a855` with no change under `gitops/ai-layer`, so the app read Synced and nothing
+had synced it. The delete then started a full sync to the new revision, and that sync
+ran ai-layer's PreSync hooks first: from 10:35:35Z to 10:35:46Z deleting the old hook objects
+(`BeforeHookCreation`) and making them again, then the `kubearmor-gate` and `otel-gate` Jobs, and only then the
+policy, back at about 10:36:00Z.
+Community had synced `fc8a855` already, so its heal was selective (`operation.sync.resources` set, `skipHooks=true`)
+and took 1.2 s. Run 17269's first drills on 2026-11-05 at 02:55Z, 20.1 s and 25.2 s, were the same full syncs (the
+apps' history has a sync to `c4d8c18` starting 02:55:15 on both). So the slow path has been 20 to 27 s every time it
+was measured, inside the 30 s window with 3 s to spare at worst. docs/floor.md now says this: which path a heal
+takes, that the first heal after each staging commit is the slow one, and the measurements. The window stays 30 s.
+Making the slow path quicker (the gates as Sync-wave Jobs, or skipped when nothing they gate changed) is a design
+choice about the gates, so it is proposed as a follow-up and not done here.
+
+**Two fixes to the drill.** It printed `selfHealAttemptsCount 0` every time because Argo CD v3.5 writes the count as
+`operation.sync.autoHealAttemptsCount` (the CRD on private has only that name; `SelfHealAttemptsCount` is the Go
+field the controller's log prints). It reads the right name now: community's 10:40Z run printed
+`autoHealAttemptsCount 1`. It also prints `healed by ...`, naming the path. The first version read the operation
+after waiting for the sync to end, and at 10:41Z on private that named the wrong one: a selective heal at `fc8a855`
+put the policy back at 10:41:11Z (`Partial sync operation ... succeeded`, `skipHooks=true`), then `dd250dd`, the next
+staging commit, landed and a full sync with both gates started at 10:41:13Z and another at 10:41:44Z, and the drill
+printed the last. Now it reads the operation as soon as the policy is back and names it only if it started no later
+than the policy's `creationTimestamp`; otherwise it says it cannot name it. `verify/test_drift_selfheal_ops.py` is the
+new offline test: it holds the drill's two helpers to operationStates trimmed from these syncs, the 10:41Z case
+included, checks the read happens before the wait, and checks docs/floor.md names every PreSync Job in
+`gitops/ai-layer`.
+
+**Step 5, the drift report by hand.** `python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region
+us-west-2`, exit 2: 0 drifted states; `watch-it-burn-community` and `watch-it-burn-private` unmanaged, created by
+`user/nwuser` on 2026-10-28, not in Config; and `accen-dev: NO recorder in us-west-2`. This host holds none of the
+fleet, network, boundary or audit states (the report's Notes say so), so the two clusters reading unmanaged is
+what run 17269 found and explained, and is no drift. The cron line in docs/floor.md belongs on the operator machine,
+where the states are, and a run cannot install it.
+
+**Step 4, the IAM pipeline.** `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3
+verify/test_iam_policy_aws.py`, exit 1. Check 1 passed for all three roots (boundary 1 document, cluster 11, audit 3,
+no ERROR or SECURITY_WARNING). Check 2 passed its three cases (an unchanged plan sends nothing, a widening policy
+fails naming the statement, a narrowing one passes). Check 4 stopped at `iam simulate-custom-policy`:
+`InvalidClientTokenId`, since IAM refuses the run's session, a `GetSessionToken` session without MFA. That is the
+pipeline's own hint, and the same refusal run 17269 recorded for `iam get-policy`.
+
+**Steps 2 and 3, not run.** `aws configservice describe-configuration-recorders` and `aws cloudtrail
+describe-trails` both return empty lists in accen-dev, so the audit root is not applied. Applying it makes an IAM role
+and reads the permissions boundary, which this session cannot do. Step 3,
+`WIB_ATTENDEE_ACCOUNTS=accen-dev DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community python3
+verify/test_drift_aws_live.py`, failed its prerequisite `the attendee key CSV is readable`
+(`infra/terraform/fleet/aws-pool/watch-it-burn-community.csv`, which is kept on the operator machine only). Both
+need a principal that can call IAM, and went to the run report's escalate list with their commands.
+
+**Not yet run on a cluster.** In accen-dev, from a principal IAM accepts: `terraform -chdir=infra/terraform/aws/audit
+init`, then `terraform -chdir=infra/terraform/aws/audit apply -state=states/accen-dev.tfstate -var profile=accen-dev
+-var event=kubecon-na-2026`; then `verify/test_drift_aws_live.py` as above with the cluster's attendee CSV; then
+`verify/test_iam_policy_aws.py` for check 4. The drill change needs nothing synced, being a test, and was run here.

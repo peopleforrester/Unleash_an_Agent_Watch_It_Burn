@@ -50,6 +50,17 @@ What that means on the day:
   again. That costs nothing after a quiet spell: once 300 s have passed since the last heal, the next
   heal is immediate, whatever the count.
 
+**A heal takes one of two paths, and only one of them is quick.** If the app has already synced the
+revision `staging` is at, self-heal syncs only the objects that are out of sync. No hook runs, and a
+deleted object is back in about a second. If `staging` has moved since the app last synced, even by a
+commit that changes none of its manifests, the app still reads Synced and nothing syncs, so the next
+delete starts a full sync to the new revision. For `ai-layer` that runs its two PreSync Jobs,
+`kubearmor-gate` and `otel-gate`, before anything is applied. On 2026-11-05 (#795) the full path brought
+the drill's policy back in 20.1, 25.2 and 27.2 s, inside the 30 s window with as little as 3 s to spare,
+and the quick path in 1.2 to 3.1 s. So the first heal after each commit on `staging` is the slow one, and
+every heal after it at the same revision is quick. A lab-platform cluster, whose revision is pinned, takes
+the slow path only once. The drill prints which path the heal took.
+
 **No Git webhook is configured**, on either kind of cluster, so a pushed commit reaches a `staging` cluster
 within 180 s, not seconds. If a beat needs a push to land in seconds, it has to say so on the run sheet and
 run a hard refresh on the app straight after the push:
