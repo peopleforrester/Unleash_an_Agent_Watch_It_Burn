@@ -17721,3 +17721,52 @@ has linked the pair, and its guardrails are off.
 
 **The suites (run 17370, at `2de86c80`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 26m08s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #638 · The front door certificate is issued, and the chart's NLB serves it to both roster names against the system roots
+
+`verify/prior-drafts.sh 638 origin/staging` printed NONE: run 17359's record is on staging, and run 17378 added no
+commits. So this run started from staging and took the step that entry left owed.
+
+**The certificate is issued.** The two validation CNAMEs from run 17359's entry now resolve, and
+`infra/front-door-cert.sh accen-dev us-west-2` exits 0 and prints the bare ARN:
+`arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8`. ACM reads ISSUED, both
+domains SUCCESS, not after 2027-05-22. accen-dev is the account lab-platform#130 names as the roster's
+(`--roster-account`), so this is the ARN its `labctl event up` takes as `--front-door-cert`. ACM marks the
+certificate INELIGIBLE for renewal while no load balancer uses it; that changes once a roster console NLB carries
+it, and its expiry is past every event on the register.
+
+**The check against the system roots, on watch-it-burn-community.** With the issued ARN and no `--cafile`, once
+per roster name:
+
+```
+created agent/front-door-check on watch-it-burn-community with arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8
+its NLB: k8s-agent-frontdoo-d7d9350cb0-2fbfee48de36b3f1.elb.us-west-2.amazonaws.com
+PASS: 443 verifies for attackme.agenticburn.com against the system roots: subject *.agenticburn.com, SANs ['*.agenticburn.com', '*.burritobot.co'], issuer Amazon
+PASS: through the NLB's re-encrypt to nginx, GET / for attackme.agenticburn.com answers HTTP/1.1 200 OK
+deleted agent/front-door-check
+
+created agent/front-door-check on watch-it-burn-community with arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8
+its NLB: k8s-agent-frontdoo-58b343b3ad-d65f6519e8ed5083.elb.us-west-2.amazonaws.com
+PASS: 443 verifies for burritobot-private.agenticburn.com against the system roots: subject *.agenticburn.com, SANs ['*.agenticburn.com', '*.burritobot.co'], issuer Amazon
+PASS: through the NLB's re-encrypt to nginx, GET / for burritobot-private.agenticburn.com answers HTTP/1.1 200 OK
+deleted agent/front-door-check
+```
+
+Both exited 0. That is the issue's second half shown on a cluster: a Service built from the chart's patch with
+the ARN answers on 443 with a chain the system trust store accepts, for both names the gateway sends, and nginx
+answers behind it. (The script prints `deleted` before the second PASS in the raw log because the two lines go to
+different streams; the order above is the order the script runs.) The first run of the check failed before it
+created anything: kustomize could not build `gitops/ai-layer` until `bash verify/ensure-submodules.sh` had checked
+out the guard-proxy submodule, which the script's own message names.
+
+**Left as found.** `kubectl --context watch-it-burn-community -n agent get svc` lists no `front-door-check`, the
+real `console` Service is unchanged (its NLB `k8s-agent-console-6d7d3fd8cd`, 7d20h old), and
+`aws elbv2 describe-load-balancers` lists only the two console NLBs. The issued certificate stays, unused, for the
+event.
+
+**Not yet run on a cluster.** The definition of done's own leg, which is lab-platform's to run: lab-platform#344,
+collected during lab-platform#130's `labctl event up`/`labctl dry-run` with
+`--front-door-cert=arn:aws:acm:us-west-2:515966504359:certificate/8bae04a8-4896-4123-8de4-88aa6e4f75d8`, its bootstrap
+line `front doors: N roster clusters recorded` (lab-platform#130's last report expects N=3 on burn@2.1.0, where
+this issue was written for 2), and `labctl tls-check attackme.agenticburn.com` through the gateway once
+lab-platform#122 has moved the wildcard. #660's websocket check through the TLS listener belongs to that run too.
