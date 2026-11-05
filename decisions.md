@@ -19546,3 +19546,7 @@ cluster. Rotating it on both is #912's live step.
 **Not yet run on a cluster.** Once mrf-secrets holds the new login, `fleet.sh terminal-password watch-it-burn-private`
 (and `watch-it-burn-community`, if #912 keeps the two on one login) writes it; #912 then checks that the old login no
 longer opens the terminal and the new one does.
+
+**The suites (run 17594, at `b2798903`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 32m31s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
