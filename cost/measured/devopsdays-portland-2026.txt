@@ -1,0 +1,54 @@
+DELIVERY COST, MEASURED FROM COST EXPLORER IN EACH MEMBER ACCOUNT
+window: 2026-08-26 (incl) .. 2026-09-10 (excl), UTC days
+delivery: devopsdays-portland-2026
+tag filter: project=watch-it-burn, event=devopsdays-portland-2026
+
+== accen-dev  515966504359
+  tag-filtered total (project=watch-it-burn, event=devopsdays-portland-2026): 0.00 USD
+  billed usage on the window's dates, by service (the whole account):
+    Amazon Elastic Compute Cloud - Compute                 1,011.08
+    AmazonCloudWatch                                         334.50
+    Amazon Elastic Container Service for Kubernetes          306.13
+    EC2 - Other                                              190.55
+    Amazon Elastic Load Balancing                            142.02
+    Amazon Virtual Private Cloud                              69.80
+    Amazon Bedrock                                            43.80
+    AWS Key Management Service                                 4.74
+    AWS Secrets Manager                                        1.19
+    AWS Cost Explorer                                          0.19
+  usage total                                              2,104.01 USD
+  posted in the window and not in the total: Tax 206.97 USD
+  EKS cluster hours: 3,061.3; usage per cluster hour: 0.69 USD per cluster hour
+  day before the window (2026-08-25): 0.08 USD; first day after it (2026-09-10): 8.19 USD
+  usage by day:
+    2026-08-26       46.91
+    2026-08-27      126.57
+    2026-08-28      122.99
+    2026-08-29      123.49
+    2026-08-30      123.72
+    2026-08-31      122.28
+    2026-09-01      147.07
+    2026-09-02      156.31
+    2026-09-03      201.53
+    2026-09-04      202.21
+    2026-09-05      210.35
+    2026-09-06      142.53
+    2026-09-07      171.19
+    2026-09-08      202.32
+    2026-09-09        4.54
+
+== DELIVERY COST, BILLED USAGE ON THE WINDOW'S DATES
+  accen-dev            515966504359     2,104.01 USD
+  all accounts (1)                      2,104.01 USD
+  EKS cluster hours, all accounts: 3,061.3; 0.69 USD per cluster hour
+  tag-filtered, all accounts: 0.00 USD
+
+What the figure is:
+  * Each account's billed usage (Cost Explorer record type Usage, unblended) on the window's UTC days. It is
+    measured, not estimated, and it is the whole account: a co-tenant's spend on the same days is inside it.
+  * Only the accounts listed above. A fleet account left off the command line is not in it.
+  * Tax, credits and refunds are left out. Tax is posted on the bill's own days, mostly the 1st of the month,
+    not on the usage days it is for.
+  * The tag-filtered total is 0.00 because only the payer account can activate cost-allocation tags, and the
+    payer is the lab-account provider's, which is not asked (#392). It is printed so the day the tags are
+    active, the per-delivery figure is in this report without a code change.

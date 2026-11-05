@@ -1,0 +1,45 @@
+DELIVERY COST, MEASURED FROM COST EXPLORER IN EACH MEMBER ACCOUNT
+window: 2026-06-25 (incl) .. 2026-07-01 (excl), UTC days
+tag filter: project=watch-it-burn
+
+== accen-dev  515966504359
+  tag-filtered total (project=watch-it-burn): 0.00 USD
+  billed usage on the window's dates, by service (the whole account):
+    Amazon Elastic Compute Cloud - Compute                   278.35
+    EC2 - Other                                              118.08
+    Amazon Elastic Load Balancing                            107.66
+    AmazonCloudWatch                                         103.23
+    Amazon Elastic Container Service for Kubernetes           86.40
+    Amazon Virtual Private Cloud                              47.57
+    Claude Sonnet 4.6 (Amazon Bedrock Edition)                44.32
+    AWS Key Management Service                                 1.28
+    AWS Secrets Manager                                        0.41
+    AWS Cost Explorer                                          0.05
+    Claude Haiku 4.5 (Amazon Bedrock Edition)                  0.04
+    Amazon Simple Storage Service                              0.00
+  usage total                                                787.39 USD
+  EKS cluster hours: 864.0; usage per cluster hour: 0.91 USD per cluster hour
+  day before the window (2026-06-24): 0.27 USD; first day after it (2026-07-01): 0.08 USD
+  usage by day:
+    2026-06-25       18.92
+    2026-06-26       40.96
+    2026-06-27       30.73
+    2026-06-28       96.94
+    2026-06-29      395.75
+    2026-06-30      204.10
+
+== DELIVERY COST, BILLED USAGE ON THE WINDOW'S DATES
+  accen-dev            515966504359       787.39 USD
+  all accounts (1)                        787.39 USD
+  EKS cluster hours, all accounts: 864.0; 0.91 USD per cluster hour
+  tag-filtered, all accounts: 0.00 USD
+
+What the figure is:
+  * Each account's billed usage (Cost Explorer record type Usage, unblended) on the window's UTC days. It is
+    measured, not estimated, and it is the whole account: a co-tenant's spend on the same days is inside it.
+  * Only the accounts listed above. A fleet account left off the command line is not in it.
+  * Tax, credits and refunds are left out. Tax is posted on the bill's own days, mostly the 1st of the month,
+    not on the usage days it is for.
+  * The tag-filtered total is 0.00 because only the payer account can activate cost-allocation tags, and the
+    payer is the lab-account provider's, which is not asked (#392). It is printed so the day the tags are
+    active, the per-delivery figure is in this report without a code change.

@@ -27,8 +27,9 @@ Bedrock price for the chosen Claude model at build, currently placeholder, **ver
 The live counter is an estimate from token metadata × configured price. The **real** run cost comes
 post-hoc from Cost Explorer via `teardown/cost-report.sh`, never hardcode a dollar figure. That tag-filtered
 figure stays 0.00 while the payer account has not activated the `project` tag, and the payer is the lab-account
-provider's, which is not asked (#392). Until then a delivery is costed by
-`teardown/delivery-cost-estimate.py`: resource hours from CloudTrail and describe calls, Bedrock tokens from
+provider's, which is not asked (#392). Until then a delivery is measured by `teardown/delivery-cost.py`: each member
+account's billed usage on the delivery's dates, from Cost Explorer, by service and day. Its runs are in
+`cost/measured/`. For a breakdown by resource, `teardown/delivery-cost-estimate.py` estimates it: resource hours from CloudTrail and describe calls, Bedrock tokens from
 CloudWatch, every rate from the AWS Price List API, printed as an estimate beside each account's unfiltered
 Cost Explorer total. Recorded runs are in `cost/estimates/`.
 

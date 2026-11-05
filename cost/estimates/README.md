@@ -2,6 +2,10 @@
 
 # Delivery cost estimates
 
+Since 2026-11-05 a delivery's cost is measured, not estimated: `teardown/delivery-cost.py` reads each member
+account's billed usage on the delivery's dates from Cost Explorer, and its runs are in `cost/measured/`. The estimator
+below stays for a breakdown by resource where the bill gives only a service total.
+
 Cost Explorer cannot give a tag-filtered figure for this fleet. Only the payer account can activate the `project`
 and `event` cost-allocation tags, and that account (457247706586) belongs to the lab-account provider, which is not
 asked (Michael's ruling on #392, 2026-11-01). Each delivery is therefore estimated from what the member accounts can

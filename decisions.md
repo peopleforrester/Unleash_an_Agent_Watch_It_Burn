@@ -16400,3 +16400,57 @@ probe covers the same boundary for the credential the cluster hands out. The two
 **The suites (run 17262, at `2169d4ff`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
 tier tests) in 29m35s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_agent_cloud_credential.py`
 and `verify/test_cloud_credential_probe_admission.py` passed in it.
+## 2026-11-05 · #392 · A delivery's cost is measured from each member account's bill by its dates; Portland's accen-dev part is 2,104.01 USD
+
+Escalation 227, the support mail asking the payer to activate the tags, is dropped (the coordinator's comment on #392,
+2026-11-03): nobody contacts Web Age or the lab-account provider. The comment asks for each delivery's cost from our
+own member accounts, through Cost Explorer in each, filtered by the resources' `project` and `event` tags or by the
+event's dates, and for #392's remaining criterion to become that. This run's criterion reads it that way: a delivery is
+costed from each member account's Cost Explorer, and the recorded figure is not zero.
+
+- **The tag filter does not work in a member account, read live.** On accen-dev (515966504359) on 2026-11-05,
+  `ce get-cost-and-usage` filtered on `project=watch-it-burn` for 2026-09-06 .. 2026-09-12 returned 0, `ce get-tags`
+  returned no tags, and `ce list-cost-allocation-tags` was refused with "Linked account doesn't have access to cost
+  allocation tags". So the measured figure is by date.
+- **`teardown/delivery-cost.py` is new.** For each `--profile` it prints the tag-filtered total as it comes back (so
+  the day the tags are active the figure is in the report), then the account's billed usage on the window's UTC days
+  (record type Usage, unblended), by service and by day, and the EKS cluster hours from usage type
+  `AmazonEKS-Hours:perCluster`, so the cost per cluster hour is measured too. Tax, credits and refunds are listed and
+  left out: tax is posted on the bill's own days (1st, 15th and 17th in June on accen-dev), not on the usage days. The
+  day before and the day after the window are read too, and either one above 1.00 USD and 5% of the window's busiest
+  day prints `WINDOW CUTS SPEND`. It refuses a window whose day after is not over, and a profile given twice or two
+  profiles on one account. A failed call ends the run with exit 3 and prints no total. Only `sts get-caller-identity`
+  and `ce get-cost-and-usage` are called, with the profile per call and `--region us-east-1`.
+- **Why not the estimator.** `teardown/delivery-cost-estimate.py` (2026-11-02 entry) prices resources from
+  CloudTrail, which keeps 90 days, so the World's Fair was already out of reach. The bill by date reaches back 13
+  months: accen-dev returned data from October 2025. The estimator stays for a breakdown by resource.
+- **Windows.** Portland is 2026-08-26 .. 2026-09-10: CloudTrail on accen-dev has the first fleet `CreateCluster` at
+  2026-08-26 10:31 UTC and the last `DeleteCluster` at 2026-09-09 00:52 UTC, and the next cluster, wib-137-probe on
+  2026-09-10, is post-delivery work on #137. The World's Fair is 2026-06-25 .. 2026-07-01, read from the daily bill:
+  usage rises on 06-25 and is 0.08 USD on 07-01. `cost/measured/README.md` gives the edge days.
+
+**Live run, on accen-dev, 2026-11-05** (the run's session holds only that profile):
+
+| Delivery | Window | Billed usage | Tax posted in window, left out | EKS cluster hours | Per cluster hour |
+|---|---|---|---|---|---|
+| devopsdays-portland-2026 | 2026-08-26 .. 2026-09-10 | 2,104.01 USD | 206.97 USD | 3,061.3 | 0.69 USD |
+| ai-engineer-worldsfair-2026 | 2026-06-25 .. 2026-07-01 | 787.39 USD | none | 864.0 | 0.91 USD |
+
+Portland's 2,104.01 USD is EC2 compute 1,011.08, CloudWatch 334.50, EKS 306.13, EC2 other 190.55, load balancing
+142.02, VPC 69.80, Bedrock 43.80 and 6.12 in KMS, Secrets Manager and Cost Explorer. The day before billed 0.08 USD and
+the day after 8.19 USD, so no edge line. Both outputs are saved unedited in `cost/measured/`. CloudWatch at 334.50 USD
+is the second-largest line and is one the estimator leaves out. The planning rate of 0.50 USD per cluster hour was low
+on this account: it measured 0.69 for Portland and 0.91 for the World's Fair.
+
+**What is still owed.** Both deliveries also ran on aws1-student31 to aws1-student34 (`WIB_ATTENDEE_ACCOUNTS` in
+`infra/terraform/fleet/fleet.sh`), and this run held only accen-dev, so both figures are the accen-dev part. The
+command with all five profiles is in `cost/measured/README.md`, and it is in this run's escalation. KubeCon NA is
+measured the same way once its fleet is down.
+
+**Tests.** `verify/test_delivery_cost.py` (offline suite) runs the script against an `aws` shim answering from data
+the test owns, in Cost Explorer's response shape, two days a page so paging is exercised. It checks each account's
+usage against hand sums, that edge days and out-of-window tax are not counted, that extended-support and transfer
+usage types are not cluster hours, the edge guard on one account and not the other, the tag filter with and without
+`--event`, the refusals, read-only calls with explicit profile and region, and that each file in `cost/measured/`
+starts with the report heading and has no `WINDOW CUTS SPEND` line. `verify/test_activate_cost_tags.sh` checks that
+`cost-report.sh --help` names the new script.
