@@ -18019,3 +18019,82 @@ No dependency was added: crane 0.22.1 was already pinned in `verify/e2e-tools.lo
 Time-out`. Run again alone with the tier's environment, that test passed (155 checks). The second full run printed
 `258 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `56 checks ran (the offline suite and 55 tier tests) in
 26m38s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #771 · A live judge of #746's five checks, read from the LLM Observability spans API
+
+**What was asked.** Whitney's done-when list on #746 was read by eye in her sandbox org: one root row per chat; the
+prompt and the final reply on it; `read_support_ticket` and `deploy_app` under it; a duration covering the whole chat;
+tokens and an estimated cost, with no `cost_estimate_status:skipped_tokens_missing`. #771 asks for that look as a
+SUITE: e2e live test on the read-only key path, written against a real response once #759 gave runs read access, with
+an offline test that judges a recorded payload. `verify/prior-drafts.sh 771 origin/staging` printed NONE. #759 is
+done (run 17391, `b499c839`), and run 17405 read with its session.
+
+**The response, as read.** Datadog's API reference has no response schema for `/api/v2/llm-obs/v1/spans/events`, so
+the fields were read off a real response first (trace `098fcb005cbe5ed190ad9022a96b03c0`). Each `data[].attributes`
+holds trace_id, span_id, parent_id (the string `undefined` on a root), name, span_kind, start_ns, duration in ns,
+status, `input` and `output` as `{"value": ..., "messages": [...]}`, `metrics` and `tags` as `key:value` strings.
+guard-proxy's root carries `url.path:/chat`, `span.kind:server` and `session_id`. The llm rows' metrics carry
+input_tokens, output_tokens and total_tokens. No row carried a cost metric; Datadog's cost docs name it
+`estimated_total_cost`, in nanodollars, and the llm rows carry the tag
+`cost_estimate_status:skipped_unsupported_model_pricing`. `filter[from]` and `filter[to]` take ISO 8601 times, and
+`filter[tags]` and `filter[session_id]` are ignored (both returned the whole window).
+
+**The judge.** `verify/llmobs_chat_judge.py` lists the window (`--minutes`, default 1440), takes the traces holding a
+`url.path:/chat` span, and judges the newest that called both tools; with none, the newest chat, which then fails
+check 3 by name; with no `/chat` at all, it fails and says to send the HC-666 prompt. It reads that trace whole by
+its id, and lists every span in the root's own interval, one second each side. The checks:
+1. exactly one root, guard-proxy's `/chat` server span, with a session_id, and no span of another trace in the
+   interval carrying that session (a second row for the chat); a listing that fills a page fails, since a second row
+   could be past it;
+2. the root's input is not empty, and its output is not empty and not the prompt again (the old "No content" root);
+3. a tool row of each name whose parent chain reaches the root;
+4. the root starts no later than the first span and ends no earlier than the last, with 100 ms of slack for the
+   three pods' clocks (kagent's own 14 ms server span, the root #746 replaced, fails it by seconds);
+5. at least one llm row, every one with input and output tokens and `estimated_total_cost` above zero, and no row
+   with `cost_estimate_status:skipped_tokens_missing`. A failed cost check names the status and the issue that owns
+   it (#784 for missing tokens, #876 for an unpriced model).
+
+The root's reply is not required to equal the last model reply, though on both chats below it does: Act 2's output
+guard can rewrite the reply on guard-proxy's span, and that would read as a failure that is not one.
+
+**Tests.** `verify/test_llmobs_chat_judge_live.py` (SUITE: e2e) runs the judge as `WIB_DEFAULT_ACCOUNT` in
+`WIB_REGION`, as `test_datadog_sandbox_live.py` does, over `WIB_LLMOBS_JUDGE_MINUTES` (default 1440). The offline
+`verify/test_llmobs_chat_judge.py` serves `verify/fixtures/llmobs-chat-judge/chat-098fcb00.json`, two real responses
+recorded by this run (the trace by id, and its interval), through a fake transport. Only the `messages` lists and
+`tool_definitions` are cut to a count. As recorded it fails the cost check alone, as the org did; with a cost put on
+the llm rows it passes all five; and each of 15 breaks (a second root, a second trace with the session, a full page,
+a root that is not `/chat`, no session, an empty output, an echoed prompt, an empty prompt, no `deploy_app`, a 14 ms
+root, a late root, no output tokens, no cost, `skipped_tokens_missing`, no llm row) fails exactly its check. It also
+covers the choice of chat, the empty window, GETs only, and a key that reaches another org.
+
+**Live, 2026-11-05.** `. "$HECATON_CLUSTER_ENV"` then `python3 verify/test_llmobs_chat_judge_live.py` at 09:26:44Z
+picked trace `098fcb005cbe5ed190ad9022a96b03c0` (the newest of 37 `/chat` traces that called both tools; run 17389's
+HC-666 chat on `burritobot-public`, 08:29:02Z) and exited 1:
+
+    PASS  the chat's trace has exactly one root row
+    PASS  the root is guard-proxy's /chat server span (url.path:/chat, span.kind:server)
+    PASS  the root carries the chat's session_id
+    PASS  the listing of the chat's interval is complete (under 500 spans)
+    PASS  no other trace in the chat's interval carries its session_id (no second row for the chat)
+    PASS  the root's input is the prompt (not empty)
+    PASS  the root's output is the reply (not empty, not the prompt)
+    PASS  a tool row read_support_ticket sits under the root
+    PASS  a tool row deploy_app sits under the root
+    PASS  the root starts with the chat and ends after its last span (100 ms slack)
+          root 4886 ms; the chat's spans span 4886 ms
+    PASS  the chat has model-call (llm) rows
+    PASS  every llm row carries input and output tokens
+    FAIL  every llm row has an estimated cost (metrics.estimated_total_cost)
+          3 of 3 llm rows have none; cost_estimate_status: skipped_unsupported_model_pricing
+          16666 tokens over 3 model calls, estimated cost 0.000000 USD
+    PASS  no row reads cost_estimate_status:skipped_tokens_missing
+
+`--trace e9fb58989b865e2c9ce24f338cd16c71` (the same chat on `burritobot-private`, 08:27:48Z, root 5878 ms, 17282
+tokens) read the same: four checks green, the cost check red on `skipped_unsupported_model_pricing`. `--trace
+39fba3d0574259a99e1a646ed1e89818`, the community send guard-proxy answered with a 502, failed the reply, both tool
+checks and the llm-row check, so the dropped chat that reads as a green row in the UI reads red here.
+
+**What this says about #746.** Four of the five checks hold on live traces from both clusters, as run 17389's look
+found. The fifth holds for tokens and for `skipped_tokens_missing`, and fails for the estimated cost: Datadog has no
+price for the cluster's Bedrock application inference-profile ARN, which is the model name. That is #876, already
+open. The live test stays red until #876's change reaches the clusters; it is the check #876's run can close on.
