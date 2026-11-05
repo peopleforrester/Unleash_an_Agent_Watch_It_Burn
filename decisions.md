@@ -20768,7 +20768,10 @@ default #910 removed, and never printed. Each curl took it on its config, not it
   with the old password. This is the fleet.sh note's point (bootstrap_terminal_auth): the NLB answers on its own name,
   so neither the router nor a hostname is a control, and only the login is. Its login is the old private one, which
   `is_instructor_name` gives every roster cluster. It carries no other login, and that one is in this repo's history, so
-the community terminal fails this issue's second criterion until the rotation reaches it too.
+the community terminal fails this issue's second criterion until the rotation reaches it too. It is a presenter tool:
+kubecon.html's "in the public terminal run `finale-cap-on`" is this terminal, where the entrypoint
+installs `finale-cap-on` and `cost-watch` for its own cluster, and "no Terminal button" means the room gets none. So it
+keeps a login, and the fix is to give it the same new presenter login.
 
 **What a re-sync or bring-up writes.** The pod reads `terminal-auth` as an optional `secretRef`
 (`gitops/ai-layer/resources.yaml`), and git defines no such Secret, so an Argo CD sync neither writes nor restores it.
@@ -20804,3 +20807,9 @@ and the same for `watch-it-burn-community` on its load balancer name, each endin
 clusters. Until the rotation, two internet-facing shells with in-cluster kubectl take a login that is in this public
 repo's history. Run 17688's report asks whether to rotate both now to an interim login kept only in their Secrets, or
 to wait for mrf-secrets.
+
+**The suites (run 17688, at `c414fd45`).** `bash verify/run-e2e-tools.sh` printed `270 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `verify/test_terminal_login_live.sh` among
+them with `28 passed, 0 failed`, then `60 checks ran (the offline suite and 59 tier tests) in 31m10s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `python3 verify/prose_gate.py
+/var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging` printed `prose gate: pass`. No dependency was added.
