@@ -449,7 +449,7 @@ config:
     # Either one carries the prompt and the final reply, and lasts the whole turn. It becomes invoke_agent, Datadog's
     # agent kind: guard-proxy makes no model call of its own, and as an llm row with no tokens it made the trace
     # PARTIAL COST. The token counts are on kagent's generate_content spans (adk-go v2.1.0 TraceGenerateContentResult),
-    # which now sit under the root, and Datadog prices those (aws.bedrock and amazon.nova-pro are in its catalog).
+    # which now sit under the root, and Datadog prices those once transform/llmobs_model names their system id (#784).
     # A self-heal retry forwards again inside the same turn, so its invocation lands under the same root. An A2A
     # message that did not come through guard-proxy names a parent that is not there and shows as its own root, as
     # every kagent turn did before this. verify/test_trace_shape_e2e.py runs both copies through the collector.
@@ -463,6 +463,42 @@ config:
             - 'set(span_id.string, Substring(trace_id.string, 16, 16)) where resource.attributes["service.name"] == "burritobot" and attributes["gen_ai.operation.name"] == "chat" and ((kind == SPAN_KIND_SERVER and IsMatch(name, "^POST /chat/?$")) or name == "sanitize")'
             - 'set(attributes["gen_ai.operation.name"], "invoke_agent") where resource.attributes["service.name"] == "burritobot" and attributes["gen_ai.operation.name"] == "chat" and ((kind == SPAN_KIND_SERVER and IsMatch(name, "^POST /chat/?$")) or name == "sanitize")'
             - 'set(parent_span_id.string, Substring(trace_id.string, 16, 16)) where IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "invocation" and not IsRootSpan()'
+    # The copy's model calls name the model Datadog can price (#784). Live, each Bedrock ModelConfig calls this
+    # cluster's tagged application profile (#513), so kagent's generate_content spans name an ARN like
+    # arn:aws:bedrock:us-west-2:<account>:application-inference-profile/5l72jg8rnz71. Datadog's catalog has no price
+    # for that name: on 2026-11-05 every such row in the sandbox org read cost_estimate_status
+    # skipped_unsupported_model_pricing, with its token counts present, while a row of the same spans named
+    # us.amazon.nova-pro-v1:0 (burritobot-public, 2026-11-03, while its ModelConfig still called the system id) read
+    # success with an estimated_total_cost. A profile is a tagged copy of its system profile and bills at its price, so the copy names
+    # the system id the ModelConfig commits in gitops/ai-layer/resources.yaml; APM's copy keeps the ARN, which is what
+    # the bill's tags trace, and the copy keeps it as witb.bedrock.application_profile (#876). The ARNs are per cluster
+    # and known only after apply, so they come from the environment:
+    # fleet.sh pin_bedrock_profiles writes them to the monitoring/bedrock-profile-models ConfigMap, one
+    # WIB_BEDROCK_PROFILE_<TIER> key per Bedrock ModelConfig, which extraEnvsFrom below loads. A cluster without the
+    # ConfigMap gets the default "unpinned", which no model name equals, so the copy goes out as it came.
+    # verify/test_collector_llmobs_model.py holds the tiers against resources.yaml and fleet.sh, and
+    # verify/test_collector_llmobs_model_e2e.py runs a turn through the real collector.
+    transform/llmobs_model:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.amazon.nova-pro-v1:0") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.amazon.nova-pro-v1:0") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(name, "generate_content us.amazon.nova-pro-v1:0") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_NOVA:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-haiku-4-5-20251001-v1:0") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-haiku-4-5-20251001-v1:0") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(name, "generate_content us.anthropic.claude-haiku-4-5-20251001-v1:0") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_HAIKU:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-sonnet-4-6") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-sonnet-4-6") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(name, "generate_content us.anthropic.claude-sonnet-4-6") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_SONNET:-unpinned}"'
+            - 'set(attributes["witb.bedrock.application_profile"], attributes["gen_ai.request.model"]) where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(attributes["gen_ai.request.model"], "us.anthropic.claude-opus-4-8") where attributes["gen_ai.request.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(attributes["gen_ai.response.model"], "us.anthropic.claude-opus-4-8") where attributes["gen_ai.response.model"] == "${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
+            - 'set(name, "generate_content us.anthropic.claude-opus-4-8") where name == "generate_content ${env:WIB_BEDROCK_PROFILE_OPUS:-unpinned}"'
     # What else leaves the Agent Observability copy. guard-proxy's chat span is the storefront turn's inner wrapper: the
     # same prompt and reply as its root, an llm row with no tokens. kagent's server span is the 14 ms message/send row
     # whose invocation now hangs from the root. Every span with no gen_ai.* attribute is one Datadog would drop anyway,
@@ -605,6 +641,7 @@ config:
           - forward/llmobs
         processors:
           - transform/llmobs_one_root
+          - transform/llmobs_model # #784: the model calls name the system id Datadog prices, not the profile ARN
           - filter/llmobs_one_root
         exporters:
           - debug
@@ -819,6 +856,13 @@ extraEnvs:
         name: cluster-identity
         key: datadog-cluster-name  # burritobot-<role>, the name the Agents report (#629)
         optional: true   # absent on a cluster bootstrapped before #242; rebuilt clusters always have it
+# The cluster's Bedrock application profile ARNs, one WIB_BEDROCK_PROFILE_<TIER> per Bedrock ModelConfig, which
+# transform/llmobs_model reads (#784). fleet.sh pin_bedrock_profiles writes the ConfigMap when it pins the profiles and
+# restarts the collector when it changes. Optional: until then every key reads as "unpinned" and nothing is renamed.
+extraEnvsFrom:
+  - configMapRef:
+      name: bedrock-profile-models
+      optional: true
 service:
   enabled: true
   type: ClusterIP

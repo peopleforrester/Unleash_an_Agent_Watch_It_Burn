@@ -25,9 +25,10 @@ lookup, and `verify/test_deployments_page_live.py` on both KubeCon clusters. Det
 Repinned. a65f748d moved `gitops/ai-layer/guard-proxy` to c2eb4cf2, which carries guard-proxy-agenticburn#37 and
 prices each request at the `workshop-agent` Agent's bound `bedrock-<tier>` ModelConfig, with `checksum/proxy-py`
 `ba8d8e2b789f`. On it a live tier swap is the Agent patch alone. `verify/test_guard_proxy_pin_bound_pricing.py`
-(#841) fails if the pin goes back before #37 or if `verify/model_pin_check.py` stops accepting the swap on it. Owed:
-the nova-to-haiku swap on a cluster, with `/cost`'s tier and Haiku-rate spend checked. Details in decisions.md,
-2026-11-03 · #793 and 2026-11-04 · #841.
+(#841) fails if the pin goes back before #37 or if `verify/model_pin_check.py` stops accepting the swap on it.
+Checked live 2026-11-05 on watch-it-burn-community by `verify/test_tier_swap_live.py`: `/cost`'s tier read haiku 3.8
+seconds after the patch, and the next turn and the counter's growth were priced at the Haiku row; the Agent was patched
+back to bedrock-nova. Details in decisions.md, 2026-11-03 · #793, 2026-11-04 · #841 and 2026-11-05 · #793.
 
 ## guard-proxy's rate-limit replies say to wait and send again (#790)
 

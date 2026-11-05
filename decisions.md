@@ -18469,6 +18469,433 @@ a staging clone that holds this change.
 **Suites (run 17411, at c1c1b971).** `bash verify/run-e2e-tools.sh` ran the offline suite (259 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN) and then the tools tier: 56 checks in 27m04s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No
 dependency was added.
+## 2026-11-05 · #784 · Run 17406's live look: tokens and tool definitions arrive, cost did not, and Agent Observability's copy now names the system id Datadog prices
+
+**Where the issue stood.** Every earlier #784 draft is in staging (`verify/prior-drafts.sh 784 origin/staging` printed
+NONE). The redaction, the v1.41.1 pin and `gen_ai.tool.definitions` landed with run 16777's port, and Michael's
+`a65f748d` repin put the token counts on guard-proxy's `chat` span (#839). This is the first #784 run that could read
+its cluster session and the sandbox org (#759), so it ran the checks the 2026-11-03 entry names under "Not yet run on
+a cluster".
+
+**What the clusters run.** On both clusters guard-proxy's `checksum/proxy-py` is `dfca2b1fe758`, the pin's
+(0f0c809), and the live `guard-proxy-src` ConfigMap's proxy.py sets `gen_ai.usage.input_tokens` and
+`gen_ai.usage.output_tokens` on `chat_span` (its lines 1669 and 1670). `ai-layer` and `otel-collector` are Synced and
+Healthy on both.
+
+**Check 1, a fresh chat on each bot.** `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session` at
+09:22Z printed `AGENT OBSERVABILITY GREEN`: community's chat is trace `0eba6a5bf5f05b829889b54b77ce5469` and private's
+`f4993fe8952a5106bb9262eb0b7b0793`, four rows each (`POST`, `invocation`, `workshop_agent`, one `generate_content`).
+Read back with `verify/dd_traces.py --trace <id> --json`:
+- *Tokens:* present. Community's `generate_content` row has 5312 in and 44 out, private's 5312 in and 43 out, split by
+  role (system 4353, tool definitions 948, user 11).
+- *Tool definitions:* present. Both llm rows carry `tool_definitions`, 16 entries with name and description each.
+- *Cost:* missing. Both llm rows read `cost_estimate_status:skipped_unsupported_model_pricing`, with no
+  `estimated_*_cost` metric. Their model name is the cluster's application profile ARN (`.../5l72jg8rnz71` on
+  community, `.../88hce5o0zw45` on private), which #513 pins so the spend carries its tags, and Datadog has no price for
+  it. #265's run saw the same on 2026-11-05 and filed it as #876.
+Datadog's own history settles what a priced row needs. Over the last 15 days the sandbox org's `ml_app:burritobot` llm
+rows fall into three groups: every row named by an ARN reads `skipped_unsupported_model_pricing`; guard-proxy's
+token-less `chat` rows named `us.amazon.nova-pro-v1:0` (dropped from the copy since #746) read
+`skipped_tokens_missing`; and one kagent `generate_content` row named `us.amazon.nova-pro-v1:0` with its tokens
+(burritobot-public, 2026-11-03, session `wib-verify-450-...`, while its ModelConfig still called the system id) reads
+`success` with `estimated_total_cost` 4351200, in units of 1e-9 USD: 4947 in at 0.80 and 123 out at 3.20 USD per million.
+
+**The change: the copy names the system id.** `transform/llmobs_model` (gitops/otel-collector/values.yaml) runs in
+`traces/llmobs` only, after `transform/llmobs_one_root`. For each Bedrock ModelConfig it renames a model call whose
+`gen_ai.request.model`, `gen_ai.response.model` or span name is that tier's profile ARN to the system id the
+ModelConfig commits in resources.yaml. It keeps the ARN as `witb.bedrock.application_profile`, as #876 asks. APM's copy keeps the ARN,
+which is what the bill's tags trace. The ARNs are per cluster and known only after apply, so they come from the
+environment: `fleet.sh pin_bedrock_profiles`, which already reads `bedrock_application_profiles` from the cluster's
+state, now writes `monitoring/bedrock-profile-models`, one `WIB_BEDROCK_PROFILE_<TIER>` key per Bedrock ModelConfig
+it has pinned. It restarts the collector pods only when the map changed, since they read their environment at start.
+The collector loads the ConfigMap with `extraEnvsFrom`, optional. A cluster without it reads every key as
+`unpinned`, which no model name equals, so nothing is renamed and the collector starts as before. A map the cluster
+refuses fails the pin into the ledger. agentgateway's backend is left out: kagent names those calls by the gateway's
+backend name (`bedrock-nova`), not the ARN. The `gen_ai.client.cost` metric, the dashboards and the leaderboard are
+unchanged, and so is everything a workshop attendee sees.
+
+**Checked against Datadog before it reaches a cluster.** The rename runs on no cluster until hecaton promotes this
+branch, so this run ran the branch's own `traces` and `traces/llmobs` pipelines (instructor profile, as
+`collector_render.py` builds them with datadog-secret present, plus Act 2's `transform/redact_sentinel` appended as
+the overlay says) in the pinned otelcol-contrib 0.160.0 on this host. It exported the copy to Datadog's real
+`otlp_http/llmobs` intake with the `watch-it-burn/datadog` pair, under services of its own, so nothing lands in
+`ml_app:burritobot`. The map named four made-up profile ARNs, and a fifth ARN outside the map was the control. Read
+back through the LLM Observability API at 10:01Z (Agent Observability traces `6d4b941557b352638ad0ebc8f3034a3d` and
+`3cd4975613e25ec2a55f2952b747d0e6`; a first send at 09:45Z, before the ARN attribute was added, read the same):
+- *Pricing* (service `wib-784-pricing`, 1000 tokens in and 100 out on each call): `us.amazon.nova-pro-v1:0` success,
+  1120000; `us.anthropic.claude-haiku-4-5-20251001-v1:0` success, 1650000; `us.anthropic.claude-sonnet-4-6` success,
+  4950000; `us.anthropic.claude-opus-4-8` success, 8250000; the control ARN `skipped_unsupported_model_pricing`. Each
+  priced row carries its ARN as the `witb.bedrock.application_profile` tag, and the control row carries none. Nova's
+  estimate is the price table's in proxy.py exactly. For the three Claude tiers, Datadog's estimate is 10 percent
+  above proxy.py's table (1.10 and 5.50 USD per million for Haiku against 1.00 and 5.00), which reads as the
+  cross-region `us.` profile price; the `gen_ai.client.cost` metric the dashboards read stays on proxy.py's table.
+- *Act 2* (service `wib-784-act2`, `DEMO-SENTINEL-ACT1-9f3c2a` in the root's prompt and reply, in the model call's
+  messages and in a `run_shell` call's arguments and result): the sentinel is in no stored span, and the agent, llm
+  and tool rows' input and output all read `[DEMO-REDACTED]` (8 places). That is check 2's question answered at
+  Datadog's intake without a flip on a cluster: the flip is a Git commit to staging (the overlay's steps), which a run
+  does not make.
+The probe was a script outside the repo, since the checks after promotion are the repo's own
+(`agent_obs_flow.py`, `dd_traces.py`). It leaves those two traces in Whitney's org under `wib-784-pricing` and
+`wib-784-act2`, as #647's check left `wib-pii-scrub-check`. Nothing on either cluster changed.
+
+**Check 3, the APM `chat` span and the totals.** The clusters already run the repin, and Agent Observability's copy
+drops the `chat` span (#746), so the turn's total there is the `generate_content` rows' sum and nothing else: one llm
+row per chat above, 5356 and 5355 tokens, no second count. The APM read of the `chat` span's two counts is left for
+the next run below; `verify/test_chat_span_token_counts.py` holds it offline at the pin.
+
+**Tests.** `verify/test_collector_llmobs_model.py` (offline) holds the rules to the four Bedrock ModelConfigs and their
+system ids, each keyed as fleet.sh's `profile_models_key` writes it, the ARN kept before the rename, the `unpinned`
+default on every key, the ConfigMap fleet.sh writes loaded optionally on every profile, and the rules in
+`traces/llmobs` only on every profile with and without datadog-secret. `verify/test_collector_llmobs_model_e2e.py`
+(tools tier) runs a nova, an opus and an unmapped call through the real collector on every profile: the copy names
+the system id on all three fields, keeps the tokens and the ARN, APM keeps the ARN, the unmapped call is untouched,
+and with no map nothing is renamed. With `transform/llmobs_model` taken out of `traces/llmobs` it fails 18 checks
+across the three profiles. `verify/test_pin_bedrock_profiles.sh` adds the ConfigMap: written on a fresh pin with the
+four keys and a collector restart, left alone and no restart on a second pass, written for a cluster pinned before
+#784, rewritten with a standby's own ARNs, holding only the three pinned tiers when one has no profile, and a refused
+write that fails the pin and restarts nothing. `verify/test_collector_no_datadog.py` held that the collector has no
+envFrom and that every env var its config reads is set on the container; it now admits exactly the optional
+`bedrock-profile-models` envFrom and the `WIB_BEDROCK_PROFILE_*` references read with a default, and still fails any
+other envFrom or any undefaulted variable the container does not set. `verify/test_collector_llmobs_model.py` sources
+fleet.sh, so it runs behind `no_cloud.setup()` and ends on its call log (#859, held by `test_no_cloud_by_hand.sh`).
+
+**Not yet run on a cluster.** The rename needs this change running, and the ConfigMap. Once Argo CD has synced the
+collector change on both clusters:
+1. Write the map on each cluster. The next `fleet.sh converge` does it. Without the cluster state, the same map can be read from
+   the live ModelConfigs, which hold the ARNs fleet.sh pinned:
+   `for c in watch-it-burn-community watch-it-burn-private; do kubectl --context $c -n monitoring create configmap bedrock-profile-models $(for t in nova haiku sonnet opus; do echo --from-literal=WIB_BEDROCK_PROFILE_${t^^}=$(kubectl --context $c -n agent get modelconfig bedrock-$t -o jsonpath='{.spec.model}'); done) --dry-run=client -o yaml | kubectl --context $c apply -f -; kubectl --context $c -n monitoring delete pod -l app.kubernetes.io/name=opentelemetry-collector; done`
+2. `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session`, then
+   `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json` on each trace: every llm row must name
+   `us.amazon.nova-pro-v1:0`, read `cost_estimate_status:success` with an `estimated_total_cost`, and carry
+   `witb.bedrock.application_profile` with the cluster's nova ARN.
+3. In APM, the same chat's guard-proxy `chat` span (service `burritobot`) carries both counts, and they equal the sum of
+   the turn's `generate_content` counts.
+#876 is the same change; once step 2 is green on both clusters it is done too.
+
+**The suites (run 17406, at `d309d60c`).** `bash verify/run-e2e-tools.sh` printed "57 checks ran (the offline suite and
+56 tier tests) in 27m02s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite printed "259 tests ran"
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_collector_llmobs_model.py`, `test_collector_no_datadog.py` and
+`test_pin_bedrock_profiles.sh` among them; in the tier, `test_collector_llmobs_model_e2e.py`,
+`test_collector_act2_redaction_e2e.py` and `test_trace_shape_e2e.py` passed. The first run, at `21d85e16`, failed only
+the two offline checks the second commit answers (the no-Datadog collector's envFrom and env rules, and the fleet.sh
+guard); its 56 tier tests passed.
+## 2026-11-05 · #793 · The live tier swap on watch-it-burn-community: /cost reads haiku in 3.8 s and new spend is at the Haiku row
+
+**Context.** #793 had four items. Items 2 and 3 landed in 6525992e (run 16791, the 2026-11-03 · #793 entry), and the
+repin, item 1, is Michael's a65f748d to c2eb4cf2, since moved again to 0f0c809 by 9f2b575c; both carry
+guard-proxy-agenticburn#37 (c8ac56e), and `verify/test_guard_proxy_pin_bound_pricing.py` (#841) holds that. Item 4,
+the swap on a cluster, was owed because runs 16460, 16752, 16791, 16852, 16869 and 16876 could not read their cluster
+files (hecaton#508). Run 17416 could, and `bash verify/prior-drafts.sh 793 origin/staging` answered NONE: every
+earlier draft is in staging or followed there by later #793 work, so nothing was ported.
+
+**What changed.** The swap is now a live check that any cluster build reruns, not a hand procedure:
+- `verify/test_tier_swap_live.py` (`# SUITE: e2e`, so `verify/run-e2e.sh` runs it on CONTEXT) checks that guard-proxy
+  runs the pinned proxy.py (pod template, resources.yaml and the sha256 of the pinned file agree) with no
+  COST_PER_1K_IN or COST_PER_1K_OUT override, that the Agent starts on bedrock-nova with `/cost`'s tier nova, then
+  patches the Agent to bedrock-haiku and nothing else. A poller inside the guard-proxy pod reads the Agent with
+  guard-proxy's own token and `/cost` on loopback on one clock, so the delay it reports carries no exec or clock-skew
+  overhead; it bounds the delay from above by timing from the start of the last read that still showed bedrock-nova.
+  The check wants that bound under the 5 s cache plus 1 s for the poll cycle, one `price_tier` log line naming
+  bedrock-haiku, MODEL_TIER untouched, and, once kagent has rolled the agent out on the new config-hash, one /chat
+  turn whose `cost_usd` is its tokens at the Haiku row and a `/cost` growth equal to the tokens it gained at the Haiku
+  row. That last judge holds with a visitor's turn in the same window, since every turn after the swap is priced at
+  Haiku, so the public bot's traffic does not make it fail. It then patches back to bedrock-nova and checks the tier
+  and the rollout again; the swap back runs whatever failed after the first patch. The rates come from the pinned
+  proxy.py's `TIER_PRICES_PER_1K`, not a copy. Patches go `--as` Argo CD's application controller, which Kyverno's
+  block-argocd-drift always admits, so an armed cluster needs no policy flip and the policy is left as found.
+- `verify/test_tier_swap_live_judges.py` (offline) runs the judges on the readings below and on each way they should
+  fail: a 6.5 s flip, a poller timeout, a turn or counter priced at the Nova row, a guarded turn, a counter that did
+  not count or was reset, a stale pod template, a price override, a `price_tier_unknown` line. It also compiles the
+  two in-pod scripts and checks the poller reads the `_AGENT_PATH` the pinned proxy.py prices from.
+- `docs/MASTER-RECREATION-SPEC.md`'s tier bullet no longer says the live patch is not validated live, and
+  PROJECT_STATE.md's #793 section no longer lists the swap as owed. `verify/run-e2e.sh`'s header names what the new
+  check spends.
+
+**Live, 2026-11-05, on watch-it-burn-community** (`. "$HECATON_CLUSTER_ENV"`, then
+`CONTEXT=watch-it-burn-community python3 verify/test_tier_swap_live.py`), guard-proxy at 0f0c809, `checksum/proxy-py`
+dfca2b1fe758, MODEL_TIER nova:
+```
+PASS guard-proxy runs the pinned proxy.py: pod template checksum/proxy-py 'dfca2b1fe758', resources.yaml 'dfca2b1fe758', sha256 of the pinned proxy.py 'dfca2b1fe758'
+PASS guard-proxy prices by the tier table (no COST_PER_1K_IN/OUT override)
+PASS before the swap the Agent is bound to 'bedrock-nova' (want bedrock-nova)
+PASS before the swap /cost's tier reads 'nova' (want nova)
+PASS /cost's tier read haiku at most 3.77s after the patch (3.63s after the poller saw it; limit 5s cache + 1s poll allowance)
+PASS guard-proxy logged 1 price_tier line(s) naming bedrock-haiku: 'pricing at haiku: workshop-agent is bound to bedrock-haiku'
+PASS guard-proxy's MODEL_TIER was left at 'nova' (was 'nova')
+PASS workshop-agent rolled out on its new config-hash: ['deployment "workshop-agent" successfully rolled out']
+PASS the /chat turn answered: guarded=False, 5889 in / 400 out tokens, reply 'Welcome to Hex & Cauldron, friend! ✨ Our menu is *always* spooky and delicious. '
+PASS the turn's cost_usd 0.007889 is its tokens at the haiku row, $0.007889 (the nova row would be $0.005991)
+PASS /cost's tier after the turn reads 'haiku' (want haiku)
+PASS /cost counted the turn: +1 request(s), +5889 in / +400 out tokens
+PASS /cost's usd grew $0.007889, its token growth at the haiku row is $0.007889 (the nova row would be $0.005991)
+PASS swapped back to bedrock-nova: /cost's tier read nova at most 3.65s after the patch (3.47s after the poller saw it; limit 5s cache + 1s poll allowance)
+PASS after the swap back, workshop-agent rolled out on its new config-hash: ['deployment "workshop-agent" successfully rolled out']
+15/15 tier-swap checks passed on watch-it-burn-community
+```
+Left as found: the Agent reads bedrock-nova, `/cost`'s tier nova, workshop-agent's config-hash is back at
+11285754136355302026, and the workshop-agent Application reads Synced and Healthy. The one change that stays is the
+counter: `/cost` went from 773 requests and $4.1810 to 774 and $4.1889, the probe turn (marked [[wib-probe]], so the
+feed skipped it), until the counter is next reset. watch-it-burn-private was only read. The run-e2e.sh header line
+and the `turn` readings line the check now prints were added after this run, and the judges test reran green on them.
+
+No dependency was added.
+
+**The suites (run 17416, on 5c6c42f9, staging 5318d1e1 plus this change).** `bash verify/run-e2e-tools.sh` ran 56 checks
+(the offline suite and 55 tier tests) in 27m18s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite
+inside it ran 260 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_tier_swap_live_judges.py` among them.
+## 2026-11-05 · #792 · Every prompt is still not saved; the spans the brief describes were read live, and the save goes to the browser route and the custodian
+
+**What #792 asks.** Save the brief's room query, `ml_app:burritobot k8s.cluster.name:burritobot-public` (beat 3 of
+`gitops/ai-layer/web/brief.html`, #791), as a view named **Every prompt** in LLM Observability in Whitney's sandbox org,
+check that the brief's link fills it in and lists BurritoBot turns with the student's words in CONTENT, and change
+nothing in the org that is not BurritoBot's (#629). Michael's 2026-11-01 answer to escalation 397 on #337 ("Why does
+this need Michael?") stands, so nothing here asks him.
+
+**What run 17415 had, on 2026-11-05.** Unlike runs 16939 and before, the cluster session under
+`/var/lib/hecaton/runs/17415/clusters/` was readable (hecaton#508 is fixed for this run): `aws sts get-caller-identity`
+answered account 515966504359, and the read pair in `watch-it-burn/datadog` named the org `Datadog`. It did not have
+the unscoped application key the thread names at `~/secrets/datadog/wib-sandbox-fleet-monitors.env`: that is
+`/home/michael/secrets`, which answers this run's user with "Permission denied", as for runs 17295 and 17318. It has no
+browser signed in to Datadog: the shared Playwright cache has browsers, but no session in Whitney's org and no
+credentials to make one.
+
+**No saved-view API found again.** Datadog's LLM Observability docs, searched on 2026-11-05, describe the trace
+explorer's query syntax and no endpoint for its saved views. GETs with the read pair (which write nothing) answered 404
+on `/api/v1/saved_views`, `/api/v2/saved_views`, `/api/ui/saved_views`, `/api/ui/saved-views?type=llm_obs`,
+`/api/v2/llm-obs/v1/saved-views` and `/api/unstable/llm-obs/saved_views`, on both `api.` and `app.datadoghq.com`.
+Only `/api/v1/logs/views`, the logs explorer's saved views, exists: it answered 403 "Failed permission authorization
+checks", so the read pair cannot see it. Whether it also holds LLM Observability views is unknown. The run escalated
+one read-only listing of it with the unscoped key, run as Michael on this host by the custodian, so the next run can
+see whether Every prompt (or the room view #665 asked for) is there and what shape a view takes. No write was
+escalated: a POST shaped by guesswork could create something in Whitney's org that is not BurritoBot's.
+
+**The spans, read live.** One probe chat per KubeCon bot went through `python3 verify/agent_obs_flow.py chat
+--own-session --profile accen-dev --wait 480`: attackme.burritobot.co at 10:25:37Z and burritobot-private.burritobot.co
+at 10:30:13Z, both with guard-proxy's probe marker so neither reached the prompt wall. Both read PASS with 4
+`ml_app:burritobot` spans carrying the chat's own session, and the run printed `AGENT OBSERVABILITY GREEN`, exit 0.
+The Community trace, `3ab2a390c8ac54c19c2e41b8d2b80f42`, read with `verify/dd_traces.py --trace ... --json`:
+
+| span | kind | service | k8s.cluster.name | input |
+|---|---|---|---|---|
+| `POST` (root) | agent | burritobot | burritobot-public | value `What are your hours? [[wib-probe]]` |
+| `invocation` | agent | burritobot-agent | burritobot-public | empty |
+| `workshop_agent` | agent | burritobot-agent | burritobot-public | empty |
+| `generate_content ...` | llm | burritobot-agent | burritobot-public | messages: system (`You are BurritoBot, the cheerful and slightly witchy assistant...`), then the user's prompt |
+
+The root's output is BurritoBot's reply. The private cluster's three newest traces before the probes
+(`f4993fe8...`, `0eba6a5b...`, `92cc0b38...`, 09:26Z back to 08:33Z) have the same four-span shape on
+`burritobot-private`, with one root each.
+
+**What that settles.** The #791 entry's check 3: guard-proxy's root span carries `k8s.cluster.name:burritobot-public`
+and its input is the chat's prompt, so the brief's query selects the turn and its root carries the student's words.
+Check 4, as far as the API shows it: of the `service:burritobot-agent` rows, two have no input and the
+`generate_content` row's input starts with the system prompt, as the brief's warning says. One name differs from the
+brief's comment: LLM Observability names the root `POST`, where APM and Tempo name it `POST /chat`
+(`verify/one_root_probe.py`). The comment speaks of guard-proxy's span, which both are, so it and
+`verify/test_instructor_brief.py` stay as they are; nothing the org showed contradicts the brief's visible text.
+
+**The run of show.** Line 52 still lists "the room view is saved (#665)" as due by 2026-11-08, and the Night Before
+step has Whitney save the room's view on Past 15 Minutes. #665 is closed, but no entry here records a saved view's
+URL, so Every prompt is not taken as already saved.
+
+**Nothing in the org was created, edited or deleted.** Every call this run made to Datadog was a GET with the
+read-only pair. The two probe chats are BurritoBot's own turns, made the way `agent_obs_flow.py` always makes them.
+
+**Escalated.** A browser `read` and a `screenshot` of
+`https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-public` on Tanjiro, and
+the custodian's GET of `https://api.datadoghq.com/api/v1/logs/views` with the unscoped key. They show whether Michael's
+Chrome has a session in Whitney's org, whether the link fills in the query and lists turns in CONTENT, where the
+explorer's Views control is, and whether a view named Every prompt exists.
+
+**Not yet run on a cluster,** named again:
+1. Save the view: signed in to Whitney's sandbox org, open the brief's link, save it as a view named Every prompt on
+   Past 15 Minutes, reload, and record the view's URL and the page text in this file.
+2. The link fills in the query: the search bar holds `ml_app:burritobot k8s.cluster.name:burritobot-public` and the
+   list is filtered by it, with the root's INPUT in the CONTENT column.
+3. The warning in the page itself: the `generate_content` rows' preview shows the system prompt, not the student's
+   question. The API settles the input's order; only the page settles what its preview shows.
+
+**The suites (run 17415, at `7101abd0`).** `bash verify/run-e2e-tools.sh` printed `258 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `56 checks ran (the
+offline suite and 55 tier tests) in 27m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #717 · Run 17381 ran the IMDS credential-theft beat live on both KubeCon clusters: the theft lands on community at hop limit 2 and is blocked on the guarded cluster, and Bedrock still answers
+
+The live half of the IMDS credential-theft beat (#113, OWASP Agentic ASI03: a compromised pod on the unguarded
+community cluster reads the node instance-role credentials off `169.254.169.254` and pivots into the AWS account,
+while every guarded cluster keeps the pod one hop short of node IMDS) is now run on a build with AWS access. Run 17381
+was handed the two KubeCon clusters and an `accen-dev` session under the 2026-11-02 ruling (#809), so it ran the beat
+itself rather than waiting on the coordinator.
+
+**The node state, read first.** The community node `i-025f8d430b31eb8e4` carries
+`HttpPutResponseHopLimit=2`, `HttpTokens=required`; the guarded admin node `i-0280f58a8684e7bb0` carries
+`HttpPutResponseHopLimit=1`. The community `agent` namespace ships no `agent-deny-imds` ClusterNetworkPolicy (correct
+for the burn profile); the guarded `watch-it-burn-private` has `agent-deny-imds` present (age 6d14h). Both clusters run
+a `workshop-mcp` deployment, which is what the beat execs into.
+
+**The theft lands on community (gap 1 closed).** `CONTEXT=watch-it-burn-community
+challenges/imds-node-creds/steal-node-creds.sh` from the tool pod printed the current (#748)
+instance-identity-document output, seen live for the first time (the 2026-11-01 coordinator run used the pre-#748
+script whose closing line was the removed `aws sts get-caller-identity`):
+
+```
+IMDS: REACHED. The node handed out its instance-role name: default-eks-node-group-76537b4635771d8599caba617c
+Stolen node credentials: AccessKeyId=ASIAXQIQ... a real, usable key for the node role.
+Who are we now? The stolen key is the node instance role default-eks-node-group-76537b4635771d8599caba617c,
+   in AWS account 515966504359, region us-west-2 (from the node instance-identity document).
+That is a NODE ROLE in a real AWS account. The blast radius just left the cluster (ASI03).
+```
+
+**The theft is blocked on the guarded cluster (gap 2).** `CONTEXT=watch-it-burn-private
+challenges/imds-node-creds/steal-node-creds.sh` printed `IMDS: BLOCKED. No IMDSv2 token (the node is one hop out of
+reach). The theft FAILS here.` The guarded side is shown on the admin cluster, which is the dispatched-run equivalent
+of a student seat (CLAUDE.md, Dispatched runs point 1: a step written for a fresh attendee cluster runs on one of the
+two handed to the run instead; FACILITATOR.md's control table treats `admin / attendee` as one guarded column). A run
+is handed only `watch-it-burn-community` and `watch-it-burn-private`, and the real attendee provisioning path
+(`fleet.sh up`) needs the sibling repos `provisioning-agenticburn` and `apex-agenticburn`, `deploy-full-idp.sh`,
+`labctl` and a `DATABASE_URL`, none of which a run's worktree carries, so a `fleet.sh up` would fail partway and
+orphan AWS resources. The attendee seat maps to the same node hop limit 1 off `fleet.sh`
+(`verify/test_cluster_roles.sh`) and the same `agent-deny-imds` off the burn profile
+(`verify/test_imds_credential_theft.py`); the one live variable, a real node refusing the token PUT at hop limit 1, is
+what the guarded run proves, and the block is the hop limit alone (the PUT times out before the deny policy is
+reached).
+
+**Bedrock still answers at hop limit 2 (gap 3).** `CONTEXT=watch-it-burn-community WIB_CLUSTER=watch-it-burn-community
+python3 -I verify/test_bedrock_profile_live.py` printed `BEDROCK PROFILE GREEN: watch-it-burn-community's agent
+answers through its tagged application profile`, exit 0. Pod Identity uses `169.254.170.23`, a different endpoint the
+IMDS hop limit does not touch, so the theft knob and the agent's Bedrock reach are independent.
+
+**What it leaves.** Nothing. The beat only reads IMDS (GET and a token PUT) and execs read commands in the tool pod;
+no cluster object changed, and the two clusters are as found. No fresh cluster was created or torn down.
+
+**Not yet run on a cluster.** Nothing is owed that needs a promoted change. The one validation a dispatched run cannot
+perform is the full attendee provisioning path end to end (`fleet.sh up` from the provisioning box with its sibling
+repos and handout database), whose IMDS result is identical to the guarded admin run above and whose wiring is already
+proven offline; a session on the provisioning box can run it if a seat-specific live record is wanted.
+
+**Tests.** `python3 -I verify/test_imds_credential_theft.py` prints `ALL IMDS CREDENTIAL-THEFT CHECKS PASSED`;
+`bash verify/run-tests.sh` is green; `verify/prose_gate.py` against `origin/staging` is clean.
+## 2026-11-03 · #795 · #205's live drift checks did not run: the run could not read the cluster access it was handed
+
+**No code changed, and nothing ran on a cluster or in AWS.** Hecaton run 16469 is the first dispatch of #795, on
+staging `858ffaf`. It was handed `watch-it-burn-community`, `watch-it-burn-private` and the accen-dev profile under
+the run's `clusters/` directory, and could read none of it. `clusters/env`, `kubeconfig`, `aws-config` and
+`aws-credentials` are mode 0640, owner and group `hecaton`, and the run's user is not in group `hecaton`.
+`. "$HECATON_CLUSTER_ENV"` and `kubectl config get-contexts` both failed with "permission denied", and
+`aws sts get-caller-identity --profile accen-dev --region us-west-2` failed with "The config profile (accen-dev)
+could not be found". This is the fault runs 16389 and 16424 hit on #544 and #715, and it is filed as
+peopleforrester/hecaton#507. #795 waits on that issue.
+
+**What a run can do once #507 is fixed, and what it cannot.** The five steps in #795 split by where their inputs live.
+
+- Step 1, the drill, can run from a run on both clusters. Its target, `agent/platform-console-egress`, is in
+  `gitops/ai-layer/resources.yaml`, and `ai-layer` is on every profile list, the two KubeCon profiles from #774
+  included. Their egress switch adds or removes only the agent egress set, never this policy. Neither cluster
+  is a fresh attendee cluster, as the issue's wording asks, but #795's criteria name these two, so the drill on
+  them is what closes it.
+- Step 4, `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`,
+  needs only the profile, so a run can do it too. Its check 2 is billed (the Access Analyzer check-no-new-access calls).
+- Step 2 applies the audit root (a Config recorder and a multi-region trail, both billed) in each fleet account:
+  `WIB_ATTENDEE_ACCOUNTS` defaults to accen-dev and aws1-student31 to 34, and a run holds only accen-dev.
+  Step 3 needs an attendee key CSV under `infra/terraform/fleet/aws-pool/` and step 5 plans every fleet state.
+  Both paths are gitignored and live only on the operator's machine, and step 5 also installs a cron line
+  there. So steps 2, 3 and 5 belong to a session on that machine with every fleet profile, as the 2026-11-02 #205
+  entry already says. They went to the run report's escalate list with their exact commands.
+
+**Tests at this entry.** `bash verify/run-tests.sh` passes alone (224 tests). Run at the same time as
+`bash verify/run-e2e-tools.sh`, `test_challenge_fallbacks.py` failed in both, because each saw the other's scratch
+directory in the repo's `tmp/`. `bash verify/run-e2e-tools.sh` exits 1 on `test_image_version_tags.py`, which is not
+#795's: ghcr.io now serves `watch-it-burn:web-terminal-ttyd-1.7.7` at `sha256:7e5f8986…`, not the pinned and signed
+`sha256:68004fb5…`. That is the tag overwrite the 2026-11-03 #746 entry describes, moved once more since it read
+`sha256:d6acd503…`, most likely by the build-web-terminal push run of #774's `2e1a044`. Run 16420 filed it as a follow-up.
+
+**Not yet run on a cluster.** All five of #795's steps, unchanged: `CONTEXT=<ctx> python3
+verify/test_drift_selfheal_live.py` on watch-it-burn-community and watch-it-burn-private, the audit root's apply in
+each fleet account, `DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`,
+`verify/test_iam_policy_aws.py` with the audit suite, and one hand run of `infra/terraform/drift/drift-report.py`
+before the cron line in `docs/floor.md` goes in.
+
+## 2026-11-05 · #795 · Run 17417: #205's drill and drift report run live on both clusters; the drill now names the path that healed
+
+**Context.** Run 17417 is #795's second dispatch, on staging `fc8a855`. `bash verify/prior-drafts.sh 795 origin/staging`
+printed START from `agent/795-16469` (run 16469, failed blocked on hecaton#507, a run session it could not read).
+Its two commits only appended to decisions.md, so its entry is kept above as it was written, and this one follows it.
+That draft named no change to port. The session this run was handed is readable: `aws sts get-caller-identity`
+answers `user/nwuser` in 515966504359, and both contexts list one Ready node. Run 17269 on #205 had already run steps
+1 and 5 live earlier on 2026-11-05 (its entry above), so this run ran them again on the current staging and took up
+what they showed.
+
+**Step 1, the NetworkPolicy drill, on both clusters.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`,
+three times on each, every run `Self-heal drill passed.` and exit 0:
+
+| run | watch-it-burn-community | watch-it-burn-private |
+|---|---|---|
+| 10:35Z, the base drill | back after 1.2 s | back after 27.2 s |
+| 10:40Z, with the heal-path print | back after 1.2 s, selective heal | back after 3.1 s (see below) |
+| 10:46Z, the drill as committed | back after 1.2 s, `healed by a selective self-heal of 9 resource(s), no hooks run` | back after 1.4 s, the same |
+
+Every return was a new uid with Argo CD's tracking annotation and git's spec, and the sync after it ended
+`Succeeded`, automated. Argo CD reports 20 of 20 applications on community and 38 of 38 on private Synced and
+Healthy, so no drift was found on the Kubernetes plane. Both were left as found: `ai-layer` Synced and Healthy, the policy present
+with git's spec.
+
+**What the 27.2 s was.** The controller's log on private shows it. The app's last sync was to `9f2b575` at 05:11Z,
+and staging had since moved to `fc8a855` with no change under `gitops/ai-layer`, so the app read Synced and nothing
+had synced it. The delete then started a full sync to the new revision, and that sync
+ran ai-layer's PreSync hooks first: from 10:35:35Z to 10:35:46Z deleting the old hook objects
+(`BeforeHookCreation`) and making them again, then the `kubearmor-gate` and `otel-gate` Jobs, and only then the
+policy, back at about 10:36:00Z.
+Community had synced `fc8a855` already, so its heal was selective (`operation.sync.resources` set, `skipHooks=true`)
+and took 1.2 s. Run 17269's first drills on 2026-11-05 at 02:55Z, 20.1 s and 25.2 s, were the same full syncs (the
+apps' history has a sync to `c4d8c18` starting 02:55:15 on both). So the slow path has been 20 to 27 s every time it
+was measured, inside the 30 s window with 3 s to spare at worst. docs/floor.md now says this: which path a heal
+takes, that the first heal after each staging commit is the slow one, and the measurements. The window stays 30 s.
+Making the slow path quicker (the gates as Sync-wave Jobs, or skipped when nothing they gate changed) is a design
+choice about the gates, so it is proposed as a follow-up and not done here.
+
+**Two fixes to the drill.** It printed `selfHealAttemptsCount 0` every time because Argo CD v3.5 writes the count as
+`operation.sync.autoHealAttemptsCount` (the CRD on private has only that name; `SelfHealAttemptsCount` is the Go
+field the controller's log prints). It reads the right name now: community's 10:40Z run printed
+`autoHealAttemptsCount 1`. It also prints `healed by ...`, naming the path. The first version read the operation
+after waiting for the sync to end, and at 10:41Z on private that named the wrong one: a selective heal at `fc8a855`
+put the policy back at 10:41:11Z (`Partial sync operation ... succeeded`, `skipHooks=true`), then `dd250dd`, the next
+staging commit, landed and a full sync with both gates started at 10:41:13Z and another at 10:41:44Z, and the drill
+printed the last. Now it reads the operation as soon as the policy is back and names it only if it started no later
+than the policy's `creationTimestamp`; otherwise it says it cannot name it. `verify/test_drift_selfheal_ops.py` is the
+new offline test: it holds the drill's two helpers to operationStates trimmed from these syncs, the 10:41Z case
+included, checks the read happens before the wait, and checks docs/floor.md names every PreSync Job in
+`gitops/ai-layer`.
+
+**Step 5, the drift report by hand.** `python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region
+us-west-2`, exit 2: 0 drifted states; `watch-it-burn-community` and `watch-it-burn-private` unmanaged, created by
+`user/nwuser` on 2026-10-28, not in Config; and `accen-dev: NO recorder in us-west-2`. This host holds none of the
+fleet, network, boundary or audit states (the report's Notes say so), so the two clusters reading unmanaged is
+what run 17269 found and explained, and is no drift. The cron line in docs/floor.md belongs on the operator machine,
+where the states are, and a run cannot install it.
+
+**Step 4, the IAM pipeline.** `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3
+verify/test_iam_policy_aws.py`, exit 1. Check 1 passed for all three roots (boundary 1 document, cluster 11, audit 3,
+no ERROR or SECURITY_WARNING). Check 2 passed its three cases (an unchanged plan sends nothing, a widening policy
+fails naming the statement, a narrowing one passes). Check 4 stopped at `iam simulate-custom-policy`:
+`InvalidClientTokenId`, since IAM refuses the run's session, a `GetSessionToken` session without MFA. That is the
+pipeline's own hint, and the same refusal run 17269 recorded for `iam get-policy`.
+
+**Steps 2 and 3, not run.** `aws configservice describe-configuration-recorders` and `aws cloudtrail
+describe-trails` both return empty lists in accen-dev, so the audit root is not applied. Applying it makes an IAM role
+and reads the permissions boundary, which this session cannot do. Step 3,
+`WIB_ATTENDEE_ACCOUNTS=accen-dev DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community python3
+verify/test_drift_aws_live.py`, failed its prerequisite `the attendee key CSV is readable`
+(`infra/terraform/fleet/aws-pool/watch-it-burn-community.csv`, which is kept on the operator machine only). Both
+need a principal that can call IAM, and went to the run report's escalate list with their commands.
+
+**Not yet run on a cluster.** In accen-dev, from a principal IAM accepts: `terraform -chdir=infra/terraform/aws/audit
+init`, then `terraform -chdir=infra/terraform/aws/audit apply -state=states/accen-dev.tfstate -var profile=accen-dev
+-var event=kubecon-na-2026`; then `verify/test_drift_aws_live.py` as above with the cluster's attendee CSV; then
+`verify/test_iam_policy_aws.py` for check 4. The drill change needs nothing synced, being a test, and was run here.
+
+**The suites (run 17417, at `a953777`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`260 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `56 checks ran (the offline suite and 55 tier tests) in
+27m27s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
 
 ## 2026-11-05 · #455 · run 17422 · BanTopics joins llm-guard-scanners: the on-topic guard refuses paraphrases too
 

@@ -20,6 +20,10 @@
 # the stored burritobot-public spans for raw PII. No model call; the span goes with the post-talk purge. Its storefront
 # half (test_public_datadog_button_live.py) loads the public and private bots in headless Chromium and needs no context.
 #
+# The tier swap (test_tier_swap_live.py, #793) runs on CONTEXT: it patches workshop-agent from bedrock-nova to
+# bedrock-haiku, holds guard-proxy's /cost to the new tier within 5 seconds and one /chat turn to Haiku rates, and
+# patches it back. It spends one Haiku call and restarts the agent pod twice.
+#
 # #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
 # also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
 #

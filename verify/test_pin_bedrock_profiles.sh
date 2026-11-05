@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ABOUTME: Behavioural test of fleet.sh pin_bedrock_profiles (#513, #561): each live Bedrock ModelConfig and agentgateway's
 # ABOUTME: bedrock model env point at the cluster's tagged application profile; a pin with no tagged profile fails.
+# ABOUTME: It also writes the profiles the collector names by their system id for Datadog's pricing (#784).
 #
 # Why. A system-defined inference profile cannot carry tags, so a ModelConfig left on us.amazon.nova-pro-v1:0
 # bills untagged and the denial-of-wallet numbers on stage cannot be checked against the bill. The ARN that fixes
@@ -69,6 +70,14 @@ case "$*" in
       echo "denied by block-argocd-drift" >&2; exit 1
     fi
     for a in "${args[@]}"; do [[ "${a}" == [A-Z_]*=* ]] && printf '%s\n' "${a#*=}" >"${T}/live/gw-${a%%=*}"; done ;;
+  # monitoring/bedrock-profile-models (#784): get answers from ${T}/live/cm.json, apply stores what it reads.
+  *" get configmap bedrock-profile-models "*)
+    [[ -f "${T}/live/cm.json" ]] || { echo 'configmaps "bedrock-profile-models" not found' >&2; exit 1; }
+    cat "${T}/live/cm.json" ;;
+  *"apply -f -"*)
+    body="$(cat)"
+    [[ -f "${T}/cm_fails" ]] && exit 1
+    printf '%s\n' "${body}" >"${T}/live/cm.json" ;;
 esac
 exit 0
 S
@@ -81,7 +90,7 @@ run() { # $1: the cluster name. Prints the function's exit code; its log goes to
         cat \"\${FAIL_FILE}\" >'${T}/ledger' 2>/dev/null || : >'${T}/ledger'" 2>"${T}/stderr" )
 }
 fresh() { # the four Bedrock ModelConfigs and the gateway as Argo first creates them, on their committed system ids
-  rm -f "${T}/live/"* "${T}/patch_fails" "${T}/gw_late" "${T}/drift_armed"; : >"${CALLS}"
+  rm -f "${T}/live/"* "${T}/patch_fails" "${T}/gw_late" "${T}/drift_armed" "${T}/cm_fails"; : >"${CALLS}"
   echo "us.amazon.nova-pro-v1:0" >"${T}/live/bedrock-nova"
   echo "us.anthropic.claude-haiku-4-5-20251001-v1:0" >"${T}/live/bedrock-haiku"
   echo "us.anthropic.claude-sonnet-4-6" >"${T}/live/bedrock-sonnet"
@@ -122,12 +131,26 @@ check "the gateway patch runs as the Argo controller, which block-argocd-drift a
 check "the map is read from this cluster's own state" \
   'grep -q "output -state=${T}/states/watch-it-burn-attendee-001.tfstate -json bedrock_application_profiles" "${CALLS}"'
 check "nothing is recorded as failed" '[[ ! -s "${T}/ledger" ]]'
+# #784: the collector's Agent Observability copy renames each profile ARN to the system id Datadog can price, and it
+# reads the ARNs from this ConfigMap's keys (gitops/otel-collector/values.yaml, transform/llmobs_model).
+cm() { jq -r "$1" "${T}/live/cm.json" 2>/dev/null; }
+check "monitoring/bedrock-profile-models is written, in monitoring" \
+  '[[ "$(cm .kind)" == ConfigMap && "$(cm .metadata.name)" == bedrock-profile-models && "$(cm .metadata.namespace)" == monitoring ]]'
+check "with one WIB_BEDROCK_PROFILE_<TIER> key per Bedrock ModelConfig, each naming the profile it now calls" \
+  '[[ "$(cm ".data | keys | join(\" \")")" == "WIB_BEDROCK_PROFILE_HAIKU WIB_BEDROCK_PROFILE_NOVA WIB_BEDROCK_PROFILE_OPUS WIB_BEDROCK_PROFILE_SONNET" &&
+     "$(cm .data.WIB_BEDROCK_PROFILE_NOVA)" == "$(arn nova0001)" && "$(cm .data.WIB_BEDROCK_PROFILE_OPUS)" == "$(arn opus0001)" ]]'
+check "and the collector pods are restarted, since they read their environment only at start" \
+  'grep -q "kubectl -n monitoring delete pod -l app.kubernetes.io/name=opentelemetry-collector" "${CALLS}"'
 
 echo "== idempotent: a pinned cluster is left alone =="
 : >"${CALLS}"; rc="$(run watch-it-burn-attendee-001)"
 check "it succeeds again" '[[ "${rc}" == "0" ]]'
 check "and patches nothing" '! grep -q "patch modelconfig" "${CALLS}"'
 check "and leaves the gateway alone, so it does not roll on every converge" '! grep -q "set env" "${CALLS}"'
+check "and neither rewrites the profile map nor restarts the collector" '! grep -q "apply -f -\|delete pod" "${CALLS}"'
+rm -f "${T}/live/cm.json"; : >"${CALLS}"; rc="$(run watch-it-burn-attendee-001)"
+check "a pinned cluster without the map (pinned before #784) gets it, and the collector restarts" \
+  '[[ "${rc}" == "0" && "$(cm .data.WIB_BEDROCK_PROFILE_NOVA)" == "$(arn nova0001)" ]] && grep -q "delete pod" "${CALLS}"'
 
 echo "== a standby in another region calls Bedrock there (#643) =="
 # An application profile is created in the cluster's own region, so a us-east-2 standby's ARNs are us-east-2 ones,
@@ -148,6 +171,7 @@ check "agentgateway's BEDROCK_REGION is us-east-2 too" '[[ "$(cat "${T}/live/gw-
 check "set in the same set env as the model, so the gateway rolls once" \
   'grep -q "set env deployment/agentgateway -c agentgateway BEDROCK_NOVA_MODEL=$(REGION=us-east-2 arn nova0001) BEDROCK_REGION=us-east-2" "${CALLS}"'
 check "and the log names the region" 'grep -q "in us-east-2" "${T}/stderr"'
+check "the profile map names the standby's own profiles" '[[ "$(cm .data.WIB_BEDROCK_PROFILE_NOVA)" == "$(REGION=us-east-2 arn nova0001)" ]]'
 : >"${CALLS}"; rc="$(run watch-it-burn-community-b01)"
 check "a second pass changes nothing" '[[ "${rc}" == "0" ]] && ! grep -q "patch modelconfig\|set env" "${CALLS}"'
 echo us-west-2 >"${T}/live/bedrock-haiku.region"; : >"${CALLS}"; rc="$(run watch-it-burn-community-b01)"
@@ -173,7 +197,17 @@ check "it returns non-zero" '[[ "${rc}" == "1" ]]'
 check "the ledger names the cluster" 'grep -qx "watch-it-burn-attendee-001:bedrock-profiles" "${T}/ledger"'
 check "it says which ModelConfig and which id" 'grep -q "bedrock-opus pins us.anthropic.claude-opus-4-8" "${T}/stderr"'
 check "the others are still pinned" '[[ "$(cat "${T}/live/bedrock-nova")" == "$(arn nova0001)" ]]'
+check "and the profile map names the three that are, and not opus" \
+  '[[ "$(cm ".data | keys | length")" == 3 && "$(cm .data.WIB_BEDROCK_PROFILE_OPUS)" == null ]]'
 cp "${T}/output.full" "${T}/output.json"
+
+echo "== a profile map the cluster refuses fails the pin (#784) =="
+fresh; touch "${T}/cm_fails"; rc="$(run watch-it-burn-attendee-001)"
+check "it returns non-zero" '[[ "${rc}" == "1" ]]'
+check "the ledger names the cluster" 'grep -qx "watch-it-burn-attendee-001:bedrock-profiles" "${T}/ledger"'
+check "it says what goes unpriced" 'grep -q "could not write monitoring/bedrock-profile-models" "${T}/stderr"'
+check "and restarts no collector for a map it did not write" '! grep -q "delete pod" "${CALLS}"'
+check "the ModelConfigs are still pinned" '[[ "$(cat "${T}/live/bedrock-nova")" == "$(arn nova0001)" ]]'
 
 echo "== a cluster applied before #513 has no output: a failure that says to re-apply =="
 fresh; mv "${T}/output.json" "${T}/output.away"; rc="$(run watch-it-burn-attendee-001)"; mv "${T}/output.away" "${T}/output.json"
