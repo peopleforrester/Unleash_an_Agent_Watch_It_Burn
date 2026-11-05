@@ -17873,3 +17873,6 @@ the Joker's "never saved".
 **What is left.** The Joker's save waits on #775's push of the `-internal` tag. After that, as michael on netcup, in a
 clone of staging: `~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .`, then copy its one date into
 images.lock and run `python3 verify/test_images_saved.py` there, which should then exit 0.
+
+**The suites (run 17393, at `79e3eb3d`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 28m05s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 258 tests, all green.
