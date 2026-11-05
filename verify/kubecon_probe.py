@@ -29,7 +29,8 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                registry's, #775), then refused by RBAC once guard-agency-on takes Deployments away from the bot, then
                the ticket withheld by the input guard, C7 chains then is stopped at the gateway, the on-topic guard
                redirects the off-topic asks, and a paraphrase with no listed word by BanTopics, and passes "what
-               are your hours" and "do you have mild salsa" through, then
+               are your hours", "do you have mild salsa" and "does the rice have chicken stock" (#905) through,
+               then
                guards-off and guardrails-off
 
 The guards are flipped the way the stage flips them, cumulatively: segment 3's guardrails-on arms the four Kubernetes
@@ -56,7 +57,7 @@ two fixes: least privilege (guard-agency-on's Role, then a server-side dry run o
 Forbidden by RBAC, no model) and the ticket withheld by the input guard (read_support_ticket called in the tool pod,
 then the model asked).
 
-THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 20; a full admin run needs 12,
+THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 20; a full admin run needs 14,
 community 7, the linked-list ask three times). A beat the ceiling stops is reported FAIL, never skipped. Every
 prompt carries the guard-proxy probe marker, so nothing this sends lands in the feed the room sees.
 """

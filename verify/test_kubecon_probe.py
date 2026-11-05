@@ -957,7 +957,7 @@ want = ["identity", "start-state", "badges", "gateway", "c5-off", "guardrails-on
         "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guard-agency-on", "c6-forbidden",
         "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
         "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-paraphrase",
-        "topic-on-1", "topic-on-2",
+        "topic-on-1", "topic-on-2", "topic-on-3",
         "guards-off"]
 check("the beats run in stage order (Challenge 1 to 4: C5, C1 C2 C3, C6, C7; the on-topic guard; guards-off)",
       keys == want, str(keys))
@@ -970,7 +970,7 @@ check("each challenge reports its run-of-show segment",
       == ["2", "3", "4", "4", "4", "5", "3", "3", "3", "6"], str(seg))
 check("no admin beat reports a segment the 30-minute run-of-show does not have",
       {r["segment"] for r in res} <= {"-", "2", "3", "4", "5", "6", "end"}, str(seg))
-check("a full admin run spends 13 model calls", f.calls == 13, str(f.calls))
+check("a full admin run spends 14 model calls", f.calls == 14, str(f.calls))
 _asks = [i for i, e in enumerate(f.log) if e == f"chat {kp.ROOM_PROMPT[:30]}"]
 check("Challenge 3 lands with Kyverno on, then guard-agency-on, then the input guard before the last ask (#775)",
       len(_asks) == 2 and f.log.index("guardrails on") < _asks[0] < f.log.index(f"role {kp.AGENCY_FIX}")
@@ -1121,8 +1121,8 @@ check("and nothing is toggled, patched or sent", f.log == [] and f.calls == 0)
 f = Fake(topic=False)
 res = {r["key"]: r for r in run_admin(f)}
 check("a guard-proxy without the topic stage fails guard-topic-on", res["guard-topic-on"]["verdict"] == kp.FAIL)
-check("and the seven topic asks are FAIL without spending a call",
-      sum(k.startswith("topic-") for k in res) == 7
+check("and the eight topic asks are FAIL without spending a call",
+      sum(k.startswith("topic-") for k in res) == 8
       and all(res[k]["verdict"] == kp.FAIL and "not run" in res[k]["note"] for k in res if k.startswith("topic-"))
       and f.calls == 6)
 
@@ -1433,7 +1433,7 @@ check("Night Before runs the probe on the private cluster the presenters share",
       "kubecon_probe.py admin burritobot-private.burritobot.co" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
 check("Night Before counts the community run's 7 model calls and the admin run's 13",
-      "a community run makes 7 model calls, an admin run 13" in nb)
+      "a community run makes 7 model calls, an admin run 14" in nb)
 check("Night Before runs no guard-rbac-on: Challenge 1's retry comes after guardrails-on, probe and seed alike (#855)",
       "guard-rbac-on" not in nb and "C5 asked again and out of reach" in nb
       and "`c1-fixed`, is the CEO ask sent again after\n  `guardrails-on`" in nb)

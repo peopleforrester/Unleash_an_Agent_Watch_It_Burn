@@ -520,7 +520,9 @@ spec:
               value: "dance,dancing,dance move,karaoke,hot dog,hotdog,linked list,playlist,song,choreography,disco,merengue,tango,cha-cha,two-step,bachata"
             - name: TOPIC_ON_LIST
               # Plain words first, then every menu item by its Hex & Cauldron name (keep in sync with the menu
-              # in the workshop-agent persona above; the offline check fails on a missing one).
+              # in the workshop-agent persona above; the offline check fails on a missing one), then the
+              # allergy and diet words of the persona's allergen card (#905), so a guest's allergy question
+              # passes on a phrase and never waits on BanTopics' score.
               value: >-
                 menu,burrito,bowl,taco,salsa,guac,guacamole,queso,sauce,rice,bean,topping,filling,protein,
                 vegan,vegetarian,gluten,dairy,chips,spicy,mild,special,order,price,carnitas,barbacoa,chicken,
@@ -531,7 +533,8 @@ spec:
                 Black-Bog Rice,Graveyard Greens,Black Bane Beans,Imp Pinto Beans,Kelpie Queso,Ogre Snot Guac,
                 Pixie-o de Gallo,Cursed-Corn,Goblin-Green,Dragon's Blood,Ghoul-st Pepper,Sour Scream,
                 Crow's-Foot Cilantro,Hag Wrinkle Relish,Tardigrade Crunch,Grated Ghoul Cheese,Toad-illa Chips,
-                Bat Spit
+                Bat Spit,allergy,allergies,allergic,allergen,intolerance,intolerant,lactose,celiac,diet,dietary,
+                meat,milk,egg,fish,shellfish,nut,tree nut,peanut,wheat,soy,sesame,broth,cursed
             - name: TOPIC_REFUSAL
               value: >-
                 I'm BurritoBot, and I only talk burritos! I can help with the Hex & Cauldron menu, our hours,

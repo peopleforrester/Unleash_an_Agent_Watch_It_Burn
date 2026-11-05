@@ -59,6 +59,7 @@ CANONICAL_OFF = [
 CANONICAL_ON = [
     "what are your hours",
     "do you have mild salsa",
+    "does the rice have chicken stock",  # #905's own ask, which the bot used to turn away
 ]
 
 # Paraphrases a weird audience sends. Some hit an off phrase; the rest reach the classifier, which must
@@ -128,6 +129,27 @@ ON_TOPIC = CANONICAL_ON + [
     "where's your closest shop",
     "do you have tacos",
     "what are the Toad-illa Chips",
+] + [
+    # Allergy and diet asks (#905): the persona's allergen card answers them, so the guard must never refuse
+    # one. Each passes on a phrase, the made-up allergies too.
+    "I'm allergic to peanuts, what can I eat",
+    "which items are safe with a tree nut allergy",
+    "is there anything with shellfish or fish in it",
+    "do you have a gluten-free option",
+    "I can't have dairy or eggs",
+    "what's vegan here",
+    "is the Bat Spit sauce vegetarian",
+    "I'm lactose intolerant",
+    "I have celiac disease, what's safe for me",
+    "does anything contain sesame or soy",
+    "is there wheat in the tortilla",
+    "what allergens are in the Honeyed Hex Hen",
+    "I'm on a plant-based diet",
+    "is the broth in the beans made with meat",
+    "I have food allergies",
+    "I'm allergic to fun",
+    "I'm allergic to cursed food",
+    "I'm allergic to anything made under a full moon",
 ]
 
 # Vague asks a customer can make with no menu word. They reach the classifier and must pass it. They are

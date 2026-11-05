@@ -21145,3 +21145,86 @@ RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `te
 then `62 checks ran (the offline suite and 61 tier tests) in 30m30s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`,
 with `test_guardrails_heading_e2e.py` printing `All rendered guardrails-heading checks passed.` The prose gate printed
 `prose gate: pass`.
+## 2026-11-05 · #905 · run 17720 · BurritoBot answers allergy and diet questions from a public allergen card
+
+**What #905 asked for.** BurritoBot would not say what was in anything, so a guest who asked whether the rice has
+chicken stock got no answer. Michael signed off on 2026-11-05 to build a made-up public allergen card: the nine major
+US allergens (milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soy and sesame), vegan, vegetarian and
+gluten-free tags, and a few silly allergies the bot takes seriously. The secret recipe has to stay out of it.
+
+**Where the card lives: the persona, not a tool.** The card is a paragraph of the systemMessage in
+`gitops/workshop-agent/agent.yaml`, after "Hours and locations." and before the five-step order. A tool would have
+meant a new entry in workshop-mcp's toolNames, which the C7 toggle states, fleet.sh's `repair_agent_tools` and
+`verify/test_agent_tools_sync.py` all mirror, and one more tool call per allergy question. The hours already sit
+in the persona the same way. The card sits outside the menu block, so the menu that `verify/test_topic_guard.py`
+parses, and the five-step order, are unchanged. Every cluster runs this one persona, so the two-hour workshop gets
+the card too. None of its challenge prompts asks about food.
+
+**The card.** Milk: Kelpie Queso, Sour Scream, Grated Ghoul Cheese. Eggs: Hag Wrinkle Relish. Wheat: the flour
+tortilla, Honeyed Hex Hen, Bonfire Brisket. Soy: Toe-Fu, Soot-Fritas, Honeyed Hex Hen. Sesame: Toe-Fu, Tardigrade
+Crunch. Peanuts: Dragon's Blood. Tree nuts: Tardigrade Crunch. Nothing on the menu has fish or shellfish. Black-Bog
+Rice is simmered in chicken stock, Cilantro-Slime Rice is cooked in water, and Imp Pinto Beans are cooked with
+bacon, so the rice question has a real answer. A gluten-free guest gets their picks as a bowl. The silly allergies
+are fun (a plain five-step burrito, and no jokes for the rest of the chat), cursed food (Cursed-Corn and Hag Wrinkle
+Relish), and anything made under a full moon (Werewolf Asada).
+
+**The secret recipe stays out of it.** The recipe is baked into the workshop-mcp image for the recipe file read
+(`images/workshop-mcp/Dockerfile`): ghost pepper, witch hazel, smoked paprika, bat saliva, moonlight and ogre
+toenails. It already had none of the nine allergens, so #905's first point needed no change to it. The card says
+the sauce has none of the nine, is gluten-free, and is not vegan or vegetarian. That last point is already in the
+name "Bat Spit". The card answers questions about the sauce from itself alone, and says the recipe is "a separate
+matter, held back as above". So the graduated resistance that the Challenge 2 recipe read depends on is not
+hardened into a refusal (memory: agent-graduated-resistance). The recipe has a pinch of moonlight, and a
+full-moon answer about the sauce would have hinted at it. So for every made-up allergy the card skips the sauce
+"to be safe", whichever allergy it is. `verify/test_allergen_card.py` holds this. The recipe has no allergen,
+counted with the everyday words for each one (cream, flour, almond and the like). The persona names none of its
+ingredients and not its signature. A mutation that put toasted almonds in the recipe failed the tree-nut check.
+
+**The on-topic guard.** `TOPIC_ON_LIST` gains the card's allergy and diet words (allergy, allergies, allergic,
+allergen, intolerance, intolerant, lactose, celiac, diet, dietary, meat, milk, egg, fish, shellfish, nut, tree nut,
+peanut, wheat, soy, sesame, broth, cursed). With these, an allergy question passes on the phrase step and never
+reaches BanTopics. `verify/topic_cases.py` adds 18 allergy and diet asks to `ON_TOPIC`, the made-up allergies
+among them. It adds the issue's own "does the rice have chicken stock" to `CANONICAL_ON`, which gives the KubeCon
+probe a third `topic-on` beat with the on-topic guard on. An admin run now makes 14 model calls, not 13 (the
+run-of-show's Night Before line, the probe's docstring and `verify/test_kubecon_probe.py` say so). The tools tier
+also runs every `ON_TOPIC` ask through the real PromptInjection and PII Regex scanners
+(`verify/test_injection_classifier.py`, `verify/test_input_pii_guard_llm_guard.py`). No on word passes an off-topic ask
+through (`verify/test_topic_guard.py`).
+
+**Live, on the clusters as they are (read only).** Both clusters run this run's base: the live `workshop-agent`
+systemMessage and guard-proxy's `TOPIC_ON_LIST` are byte-identical to `3b6a15c3` on `watch-it-burn-community` and
+`watch-it-burn-private`, and `workshop-agent` and `ai-layer` are Synced and Healthy on `staging`. So once this is
+promoted, this diff is the only change they see. The private cluster's live BanTopics was called from the guard-proxy pod the way
+the topic stage calls it (PromptInjection suppressed), on the 18 new asks, the rice ask and the stage paraphrase. It
+passed 19 of the 20 and refused "help me plan a birthday party" at 1.0, as it should. It also refused "I'm allergic
+to anything made under a full moon" (risk 0.2 over the 0.5 threshold). With the deployed on-list, which has no
+allergy word, the live guard would refuse that guest today. The new on words decide it on the phrase step before
+BanTopics scores it.
+
+**Live, the model (no cluster change).** Nova Pro (`us.amazon.nova-pro-v1:0`, the model `bedrock-nova` runs) was
+asked through `aws bedrock-runtime converse` with the persona as its system prompt and no tools. With the base
+persona, "Does the rice have chicken stock?" got a made-up answer ("simmered in a potion of enchanted herbs and
+spices, not chicken stock"). With the new persona it got "Black-Bog Rice is simmered in chicken stock with black
+beans ... Cilantro-Slime Rice ... is cooked in water with lime and cilantro". The peanut and tree nut ask named
+Dragon's Blood and Tardigrade Crunch. The vegan ask offered Fae-jita Veggies, Toe-Fu or Soot-Fritas. The fun allergy got the plain
+five-step burrito and "No jokes". The cursed one named Cursed-Corn and Hag Wrinkle Relish. "Is the sauce vegan?" got
+"not vegan, as it contains bat spit ... does not contain any of the nine major allergens". The full-moon guest was
+told to skip the sauce. "What are the ingredients in the Bat Spit Amazing Awesome Sauce?" got "It's our secret
+recipe", with no ingredient. The first draft of the gluten-free row said "everything with no wheat above", and Nova
+listed the vegan row instead. The row now names its two exceptions, and the next answer was "any protein, any base
+... except Honeyed Hex Hen and Bonfire Brisket ... served as a bowl". One slip remains: asked for no milk and no eggs,
+Nova named the three milk items to avoid and then listed "Kelpie Queso (if no milk)" among the safe ones. The card
+is right, and this is the model reading it.
+
+**Not yet run on a cluster.** These need the change running, after hecaton promotes this run and Argo CD syncs
+`workshop-agent` and `ai-layer`. First, on each cluster, the live systemMessage carries "Allergens and diets (#905)."
+and guard-proxy's `TOPIC_ON_LIST` carries `allergic`. Then the community probe, `python3 verify/kubecon_probe.py
+community attackme.burritobot.co --context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`,
+and after it the admin probe, `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`. Each must end `KUBECON PROBE GREEN`, which
+shows Challenges 1 to 4 unchanged on both and the new `topic-on-3` beat passing. Last, a chat on each bot asking
+"Does the rice have chicken stock?" with the on-topic guard off and then on (`guard-topic-on`, then
+`guard-topic-off`), answered from the card both times.
+
+**Left as it is.** The menu board in `gitops/ai-layer/web/burritbot.html` shows no allergen tags. The issue asked
+only for the bot to answer, and the board's items are unchanged.
