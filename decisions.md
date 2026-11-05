@@ -16338,3 +16338,45 @@ the new form from git and should log the same 0 and 0; the next bring-up's own c
 **The suites (run 17248, at `652c3548`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 28m02s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 254 tests and
 printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-05 · #207 · The IAM pipeline's AWS half run live: check 1 found an action IAM does not have, and check 2's widening was no widening
+
+Run 17271 had a readable `accen-dev` session (`arn:aws:iam::515966504359:user/nwuser`, us-west-2), so it ran
+`IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py` on staging at
+`af0b563a`, the first time that test had ever run. It exited 1 for three reasons.
+
+1. **Check 1 (Access Analyzer validate-policy) failed the cluster plan.** Both statements of
+   `aws_iam_policy.bedrock_invoke` and of `aws_iam_policy.tutor_bedrock_invoke` named `bedrock:Converse` and
+   `bedrock:ConverseStream`, and Access Analyzer gave `ERROR INVALID_ACTION: The action bedrock:Converse does not
+   exist` eight times. IAM has no such actions: the Converse and ConverseStream APIs are authorized by
+   `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream`, which both policies already grant. IAM keeps an
+   unknown action without complaint, so this never broke a cluster; the two names simply matched nothing. They
+   are gone from the four statements in `infra/terraform/aws/cluster/main.tf`, and from the lab's copy of the agent's policy
+   (`agent-bedrock-policy.json` in `gitops/ai-layer/resources.yaml`). `verify/test_agent_cloud_credential.py` now
+   holds the two actions and fails if `"bedrock:Converse` comes back into the cluster root.
+2. **Check 2's widening case did not widen.** It appended `s3:GetObject` to the agent's first statement, whose
+   resources are all Bedrock ARNs. check-no-new-access answered `PASS`, "less or equal access", because that action
+   reaches none of the named resources. The analyzer was right and the test was wrong. Probed live: adding
+   `arn:aws:bedrock:*::foundation-model/*` to the resources, adding `s3:GetObject` together with an S3 resource, and
+   dropping the namespace condition key each gave `FAIL` with "New access in the statement with index: 0". The
+   test now widens the resources to every foundation model, which is what #138 closed, and asserts the failure
+   names `Statement[0]`. Its narrowing case removed `bedrock:ConverseStream` and now removes
+   `bedrock:InvokeModelWithResponseStream`. The check's detail used to print nothing when `got` was an empty list;
+   it now prints `repr(got)`.
+3. **Check 4 (iam simulate-custom-policy) cannot run on this session.** Every IAM call, `iam get-account-summary`
+   included, gave `InvalidClientTokenId`. The run's credentials are a session token from `sts get-session-token`
+   (the caller is the user, not an assumed role), and IAM refuses those when they were taken without MFA, while
+   Access Analyzer and STS accept them. `sts assume-role` as nwuser was denied for every role tried. So
+   `pipeline.aws` now adds that cause to an IAM `InvalidClientTokenId`, and `verify/test_iam_policy_pipeline.py`
+   checks the hint with a stubbed `aws`. `infra/org/README.md` says what the profile needs.
+
+After the fixes, on the same session: check 1 passed the boundary (1 document), cluster (11) and audit (3) plans with no
+ERROR or SECURITY_WARNING; check 2 sent nothing for the unchanged plan, failed the widened agent policy with
+`aws_iam_policy.bedrock_invoke.policy: grants new access (FAIL) ... [Statement[0] New access in the statement with
+index: 0.]`, and passed the narrowed one. That is #207's acceptance 2. Check 4 stopped on the session as above.
+
+**Not yet run on a cluster.** Check 4, by `verify/test_iam_policy_aws.py` run as an `accen-dev` profile holding
+long-term keys or a role session. The removal of the Converse names takes effect when the cluster root is next
+applied; the pin check calls Converse, and so may the agent and the tutor, so the next bring-up's Bedrock beats
+(`verify/bedrock_profile_check.py` and `verify/test_agent_cloud_credential_live.py`) are the check that those
+two actions alone still authorize it.

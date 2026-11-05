@@ -491,11 +491,11 @@ resource "aws_iam_policy" "bedrock_invoke" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
+      # The Converse and ConverseStream APIs are authorized by these two actions; IAM has no
+      # bedrock:Converse action, and Access Analyzer fails a policy that names one (#207).
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       # SCOPED, was Resource = "*" (#138). An attendee holds cluster-admin on their own cluster, so they
       # can schedule a pod under the agent's service account and reach Bedrock directly, around the
@@ -531,8 +531,6 @@ resource "aws_iam_policy" "bedrock_invoke" {
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
       Condition = {
@@ -604,8 +602,6 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       # Both halves are required for a cross-region inference profile: the profile itself, and the
       # foundation models in whichever region it routes to (hence the wildcard region on the second).
@@ -629,8 +625,6 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
       Action = [
         "bedrock:InvokeModel",
         "bedrock:InvokeModelWithResponseStream",
-        "bedrock:Converse",
-        "bedrock:ConverseStream",
       ]
       Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
       Condition = {

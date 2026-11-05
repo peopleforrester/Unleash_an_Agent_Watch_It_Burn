@@ -108,9 +108,13 @@ policy = re.search(r'resource "aws_iam_policy" "bedrock_invoke" \{(.*?)\n\}', TF
 body = re.sub(r"#[^\n]*", "", policy.group(1)) if policy else ""
 check("bedrock_invoke policy found", bool(body))
 check('no Resource is a bare "*"', bool(body) and not re.search(r'Resource\s*=\s*"\*"', body))
-ACTIONS = ["bedrock:Converse", "bedrock:ConverseStream", "bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-check("its actions are the four invoke actions and nothing else",
+# Converse and ConverseStream are authorized by these two; IAM has no bedrock:Converse action, and Access
+# Analyzer (check 1 of the policy pipeline, #207) fails a policy that names one.
+ACTIONS = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+check("its actions are the two invoke actions and nothing else",
       sorted(set(re.findall(r'"([a-z0-9-]+:[A-Za-z*]+)"', body))) == ACTIONS)
+check("no policy in the cluster root names bedrock:Converse, which is not an IAM action",
+      '"bedrock:Converse' not in TF)
 check("it names both the profile ARN and the foundation-model ARN (cross-region needs both)",
       "inference-profile/${p}" in body and "foundation-model/${m}" in body)
 check('the stale "agent policy is Resource = *" comment is gone', 'Bedrock policy above, which is Resource = "*"' not in TF)

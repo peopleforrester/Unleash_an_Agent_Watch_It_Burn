@@ -237,7 +237,13 @@ def aws(profile: str, region: str, *args: str) -> dict:
     proc = subprocess.run(["aws", *args, "--profile", profile, "--region", region, "--output", "json"],
                           capture_output=True, text=True)
     if proc.returncode != 0:
-        raise PipelineError(f"aws {' '.join(args[:2])} failed: {proc.stderr.strip()}")
+        hint = ""
+        if args[0] == "iam" and "InvalidClientTokenId" in proc.stderr:
+            # IAM refuses a GetSessionToken session taken without MFA, while Access Analyzer accepts it, so
+            # checks 1 and 2 pass and check 4 fails here (run 17271, #207).
+            hint = (f" (IAM refuses a session token from sts get-session-token taken without MFA; run as "
+                    f"profile {profile!r} with long-term keys, an MFA session or an assumed role)")
+        raise PipelineError(f"aws {' '.join(args[:2])} failed: {proc.stderr.strip()}{hint}")
     return json.loads(proc.stdout or "{}")
 
 
