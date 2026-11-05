@@ -140,6 +140,18 @@ def deploys(profile: str, app_file: str) -> bool:
     return name in app_names(profile)
 
 
+# The app that puts behind each service host fleet.sh publishes (WIB_SERVICE_HOSTS) the Service console.conf maps it
+# to (#887): Grafana is kube-prometheus-stack's, in the prometheus app. None is Argo CD, which the root itself runs on,
+# so every profile has it. A host whose app a profile leaves out answers the console's not-installed page there.
+SERVICE_HOST_APPS = {"grafana": "prometheus", "argocd": None, "backstage": "backstage"}
+
+
+def serves(profile: str, label: str) -> bool:
+    """Whether a profile installs what the service host <label>-<cluster> fronts. KeyError on a host not mapped."""
+    app = SERVICE_HOST_APPS[label]
+    return app is None or deploys(profile, app)
+
+
 def is_template(path: pathlib.Path) -> bool:
     """A Helm template of the chart: Go template text, not YAML, so YAML-reading sweeps leave it out."""
     return TEMPLATES in path.resolve().parents

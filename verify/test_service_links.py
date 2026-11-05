@@ -28,7 +28,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "verify"))
-from bootstrap_chart import app_names, profiles  # noqa: E402
+from bootstrap_chart import APPS, SERVICE_HOST_APPS, all_profiles, app_names, profiles, serves  # noqa: E402
 
 FLEET = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
@@ -61,6 +61,29 @@ check("Grafana and Argo CD are among them", {"grafana", "argocd"} <= routed)
 # Prometheus and Tempo have no login of their own (#233). Publishing one would hand the internet an
 # unauthenticated query API; the pages reach them through Grafana instead.
 check("Prometheus and Tempo are not published on their own", not routed & {"prometheus", "tempo"})
+
+print("== each service host names the app that installs its Service (#887) ==")
+# test_service_hosts_live.py expects a host's service only on a profile that installs its app, and the console's
+# not-installed page on every other. A host with no app here, or an app whose Application deploys somewhere other
+# than the namespace the console's map sends the host to, would have it expect the wrong page.
+check("bootstrap_chart.SERVICE_HOST_APPS names exactly the hosts fleet.sh publishes", set(SERVICE_HOST_APPS) == routed,
+      f"apps={sorted(SERVICE_HOST_APPS)} fleet={sorted(routed)}")
+upstream_ns = dict(re.findall(r'"~\^([a-z-]+)-\[a-z0-9-\]\+' + DOMS + r'"\s+http://[a-z0-9-]+\.([a-z0-9-]+)\.svc', CONF))
+for label, app in sorted(SERVICE_HOST_APPS.items()):
+    if app is None:
+        check(f"{label} is Argo CD, which every profile's root runs on", label == "argocd")
+        continue
+    f = APPS / f"{app}.yaml"
+    ns = (yaml.safe_load(f.read_text(encoding="utf-8")).get("spec") or {}).get("destination", {}).get("namespace") \
+        if f.is_file() else None
+    check(f"{label}: apps/{app}.yaml deploys to {upstream_ns.get(label)!r}, the namespace console.conf sends it to",
+          ns is not None and ns == upstream_ns.get(label), f"file={f.is_file()} namespace={ns!r}")
+check("Grafana and Backstage are left out of burn and kubecon-community, so the live test expects their "
+      "not-installed page on the community cluster",
+      not any(serves(p, s) for p in ("burn", "kubecon-community") for s in ("grafana", "backstage")))
+check("every profile serves argocd, and attendee, admin and full serve all three hosts",
+      all(serves(p, "argocd") for p in all_profiles())
+      and all(serves(p, s) for p in ("attendee", "admin", "full") for s in SERVICE_HOST_APPS))
 
 print("== the console pages link only to hosts that exist ==")
 page_svcs = set(re.findall(r'data-svc="([a-z-]+)"', PLATFORM))

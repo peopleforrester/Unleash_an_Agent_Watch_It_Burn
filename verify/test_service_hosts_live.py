@@ -1,7 +1,7 @@
 # ABOUTME: Live half of #381: requests every <service>-<cluster>.agenticburn.com host through the real apex
 # ABOUTME: router and says which hop failed: the routes table, the console's Host fan-out, or the Service.
 # SUITE: e2e
-"""Needs kubectl, CONTEXT naming an attendee (or admin) cluster whose routes are published, and the public
+"""Needs kubectl, CONTEXT naming a cluster of any profile whose routes are published, and the public
 internet. Every missing prerequisite is a failure with the reason, never a skip.
 
 Why (#381). On 2026-09-08 none of the service URLs worked on the live pool, while the console, the lab and
@@ -18,6 +18,11 @@ This names the hop for each host, in that order, the order #381 asked the diagno
 proves the two with a login get past their front page: Grafana's data sources answer through it (that is
 how a browser reaches Prometheus and Tempo, which are not published on their own), and Argo CD hands
 out a session, which a server that is not running insecure behind the proxy cannot do.
+
+What a host should answer depends on the cluster's profile (#887). The root's lab-platform/profile label names
+it, and bootstrap_chart.serves reads its values-<profile>.yaml: a host whose app the profile installs must reach
+its Service, and one whose app it leaves out (Grafana and Backstage on the community cluster's burn and
+kubecon-community profiles) must answer the console's not-installed page, past the router and the vhost.
 
 Read-only: GETs, one Argo CD session POST, and kubectl get. The two passwords are read from the cluster
 the same way the platform page tells a student to.
@@ -38,6 +43,9 @@ import urllib.error
 import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import SERVICE_HOST_APPS, all_profiles, deploys, serves  # noqa: E402
+
 FLEET = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
 CONTEXT = os.environ.get("CONTEXT", "")
@@ -146,18 +154,54 @@ for page in ("brief", "kubecon"):
     status, body = fetch(f"https://{host}/..data/{page}.html")
     check(f"https://{host}/..data/{page}.html is a 404", status == 404, f"HTTP {status}: {body.strip()[:160]}")
 
-print("== every service host reaches its Service ==")
+print("== the cluster's profile says which services it installs ==")
+# One root on every profile since #609, lab-bootstrap, labelled with the profile it was applied with. That
+# profile's values-<profile>.yaml is what the cluster installs, so it is what decides, host by host, whether the
+# service or the console's not-installed page is the right answer (#887): the community cluster's burn and
+# kubecon-community profiles install no Grafana, Backstage or Tempo.
+r = kubectl("-n", "argocd", "get", "applications.argoproj.io", "-o", "jsonpath={.items[*].metadata.name}")
+argo_apps = set(r.stdout.split())
+old_roots = argo_apps & {"app-of-apps", "app-of-apps-attendee", "app-of-apps-admin", "app-of-apps-burn"}
+check("the root is lab-bootstrap and no pre-#609 root is left", "lab-bootstrap" in argo_apps and not old_roots,
+      r.stderr.strip()[:160] or f"{sorted(old_roots)}")
+p = kubectl("-n", "argocd", "get", "application", "lab-bootstrap", "-o",
+            "jsonpath={.metadata.labels.lab-platform/profile}")
+profile = p.stdout.strip()
+check(f"lab-bootstrap names a profile the chart has a values file for {all_profiles()}", profile in all_profiles(),
+      p.stderr.strip()[:160] or repr(profile))
+check("bootstrap_chart.SERVICE_HOST_APPS names the app behind each published host", set(SERVICE_HOST_APPS) == set(labels),
+      f"apps={sorted(SERVICE_HOST_APPS)} fleet={sorted(labels)}")
+if profile not in all_profiles() or set(SERVICE_HOST_APPS) != set(labels):
+    finish()
+installed = {label: serves(profile, label) for label in labels}
+print(f"  profile={profile}: " + ", ".join(f"{k} {'installed' if v else 'not installed'}" for k, v in installed.items()))
+# The Applications behind the hosts, and Tempo, whose data source ships with it (#475): each is on the cluster
+# exactly when the profile lists it, so a profile the cluster does not run reads as that, not as a dead service.
+for app in sorted({a for a in SERVICE_HOST_APPS.values() if a} | {"tempo"}):
+    want = deploys(profile, app)
+    check(f"the {app} Application is {'present' if want else 'absent'}, as values-{profile}.yaml lists it",
+          (app in argo_apps) == want, f"profile={profile} {app}={app in argo_apps}")
+
+print("== every service host reaches its Service, or the not-installed page where the profile has none ==")
 for label in labels:
     upstream = upstreams.get(label, "")
     svc, _, rest = upstream.partition(".")
     ns = rest.split(".")[0]
     r = kubectl("-n", ns, "get", "service", svc, "-o", "name")
-    check(f"{label}: Service {ns}/{svc} exists", r.returncode == 0, r.stderr.strip()[:160])
     status, body = fetch(f"https://{label}-{host}/")
-    why = hop(status, body, f"{ns}/{svc}")
-    check(f"{label}: https://{label}-{host}/ reaches it", not why, why)
+    if installed[label]:
+        check(f"{label}: Service {ns}/{svc} exists", r.returncode == 0, r.stderr.strip()[:160])
+        why = hop(status, body, f"{ns}/{svc}")
+        check(f"{label}: https://{label}-{host}/ reaches it", not why, why)
+        continue
+    app = SERVICE_HOST_APPS[label]
+    check(f"{label}: {profile} installs no {app}, so there is no Service {ns}/{svc}",
+          r.returncode != 0 and "NotFound" in r.stderr, r.stderr.strip()[:160] or r.stdout.strip())
+    # The console's @wib_not_here, past hops 1 and 2: the router routed it and the vhost matched.
+    check(f"{label}: https://{label}-{host}/ is the console's not-installed page",
+          status == 200 and NOT_HERE in body, f"HTTP {status}: {hop(status, body, f'{ns}/{svc}') or body[:160]}")
 
-print("== Backstage and Loki: the router's own 404 while nothing deploys them ==")
+print("== a service no row publishes: the router's own 404 ==")
 # The other two URLs #381 named. Once a profile deploys one, fleet.sh publishes it and the loop above probes it
 # (test_service_links.py holds that offline); until then the honest answer is the router's "no cluster here yet",
 # not the storefront or a not-installed page that sends somebody hunting for a broken Backstage.
@@ -168,21 +212,7 @@ for svc in ("backstage", "loki"):
     check(f"{svc}: https://{svc}-{host}/ is the router's 404, since no row publishes it",
           status == 404 and APEX_UNKNOWN in body, f"HTTP {status}: {hop(status, body, svc) or body[:160]}")
 
-print("== Grafana works past its front page, and fronts Prometheus and Tempo ==")
-status, body = fetch(f"https://grafana-{host}/api/health")
-check("Grafana's /api/health answers through its hostname", status == 200 and '"database"' in body,
-      f"HTTP {status}: {hop(status, body, 'monitoring/prometheus-grafana') or body[:160]}")
-gpw = secret("monitoring", "prometheus-grafana", "admin-password")
-check("the Grafana admin password is readable, as the platform page tells a student", bool(gpw))
-# Grafana builds absolute links (Share, alert links) from root_url, which the frontend gets as appUrl. With the
-# old ALB Ingress it was http://grafana.agenticburn.com:3000/ on every cluster (#493).
-status, body = fetch(f"https://grafana-{host}/api/frontend/settings", auth=("admin", gpw))
-try:
-    app_url = json.loads(body).get("appUrl")
-except ValueError:
-    app_url = None
-check(f"Grafana's root_url is its own hostname, https://grafana-{host}/", app_url == f"https://grafana-{host}/",
-      f"HTTP {status}: appUrl={app_url!r}" if app_url is not None else f"HTTP {status}: {body[:160]}")
+print("== nothing here has an ALB Ingress of its own ==")
 r = kubectl("-n", "monitoring", "get", "ingress", "-o", "jsonpath={.items[*].metadata.name}")
 check("Grafana has no Ingress of its own (no ALB for it)", r.returncode == 0 and "grafana" not in r.stdout,
       r.stderr.strip()[:160] or r.stdout)
@@ -190,34 +220,40 @@ check("Grafana has no Ingress of its own (no ALB for it)", r.returncode == 0 and
 r = kubectl("-n", "apps", "get", "ingress", "-o", "jsonpath={.items[*].metadata.name}")
 check("the party apps have no Ingress (no ALB for them)", r.returncode == 0 and not r.stdout.strip(),
       r.stderr.strip()[:160] or r.stdout)
-# The attendee profile installs no Tempo, and its data source ships with the tempo Application (#475), so on an
-# attendee cluster the right answer for uid tempo is "no such data source", not a healthy one.
-r = kubectl("-n", "argocd", "get", "applications.argoproj.io", "-o", "jsonpath={.items[*].metadata.name}")
-argo_apps = set(r.stdout.split())
-# One root on every profile since #609, lab-bootstrap, labelled with the profile it was applied with.
-old_roots = argo_apps & {"app-of-apps", "app-of-apps-attendee", "app-of-apps-admin", "app-of-apps-burn"}
-check("the root is lab-bootstrap and no pre-#609 root is left", "lab-bootstrap" in argo_apps and not old_roots,
-      r.stderr.strip()[:160] or f"{sorted(old_roots)}")
-p = kubectl("-n", "argocd", "get", "application", "lab-bootstrap", "-o",
-            "jsonpath={.metadata.labels.lab-platform/profile}")
-profile = p.stdout.strip()
-check("lab-bootstrap names this cluster's profile", profile in {"attendee", "admin", "full", "burn"},
-      p.stderr.strip()[:160] or repr(profile))
-attendee = profile == "attendee"
-check("the tempo Application is present on admin and full, absent on attendee", ("tempo" in argo_apps) != attendee,
-      f"profile={profile} tempo={'tempo' in argo_apps}")
-for uid in DATASOURCES:
-    status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}/health", auth=("admin", gpw))
-    if uid == "tempo" and attendee:
-        check("attendee: Grafana has no tempo data source, since the cluster has no Tempo", status == 404,
-              f"HTTP {status}: {body[:200]}")
-        continue
+
+if installed["grafana"]:
+    print("== Grafana works past its front page, and fronts Prometheus and Tempo ==")
+    status, body = fetch(f"https://grafana-{host}/api/health")
+    check("Grafana's /api/health answers through its hostname", status == 200 and '"database"' in body,
+          f"HTTP {status}: {hop(status, body, 'monitoring/prometheus-grafana') or body[:160]}")
+    gpw = secret("monitoring", "prometheus-grafana", "admin-password")
+    check("the Grafana admin password is readable, as the platform page tells a student", bool(gpw))
+    # Grafana builds absolute links (Share, alert links) from root_url, which the frontend gets as appUrl. With the
+    # old ALB Ingress it was http://grafana.agenticburn.com:3000/ on every cluster (#493).
+    status, body = fetch(f"https://grafana-{host}/api/frontend/settings", auth=("admin", gpw))
     try:
-        ok = json.loads(body).get("status") == "OK"
+        app_url = json.loads(body).get("appUrl")
     except ValueError:
-        ok = False
-    check(f"Grafana's {uid} data source is healthy, so its Explore link has something behind it",
-          status == 200 and ok, f"HTTP {status}: {body[:200]}")
+        app_url = None
+    check(f"Grafana's root_url is its own hostname, https://grafana-{host}/", app_url == f"https://grafana-{host}/",
+          f"HTTP {status}: appUrl={app_url!r}" if app_url is not None else f"HTTP {status}: {body[:160]}")
+    # A profile with no Tempo (attendee, #475) has no tempo data source either, since it ships with the tempo
+    # Application, so there the right answer for uid tempo is "no such data source", not a healthy one.
+    for uid in DATASOURCES:
+        status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}/health", auth=("admin", gpw))
+        if uid == "tempo" and not deploys(profile, "tempo"):
+            check(f"{profile}: Grafana has no tempo data source, since the cluster has no Tempo", status == 404,
+                  f"HTTP {status}: {body[:200]}")
+            continue
+        try:
+            ok = json.loads(body).get("status") == "OK"
+        except ValueError:
+            ok = False
+        check(f"Grafana's {uid} data source is healthy, so its Explore link has something behind it",
+              status == 200 and ok, f"HTTP {status}: {body[:200]}")
+else:
+    # Its host's not-installed page is checked above; there is no Grafana to log in to or data source to read.
+    print(f"== Grafana: {profile} installs none, so its host is held to the not-installed page above ==")
 
 print("== Argo CD works past its front page ==")
 status, body = fetch(f"https://argocd-{host}/api/version")

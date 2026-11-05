@@ -20884,3 +20884,41 @@ mrf-secrets)`.
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `verify/test_terminal_login_live.sh`
 among them with `30 passed, 0 failed`, then `60 checks ran (the offline suite and 59 tier tests) in 30m48s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-05 · #887 · Run 17706: the live service-host test expects what the cluster's profile installs
+
+Run 17374 (#664) saw `verify/test_service_hosts_live.py` fail 10 checks on watch-it-burn-community, every one about
+Grafana, Backstage or the tempo Application, because the test held every cluster to what the attendee profile
+installs. Since then the community cluster has moved to the `kubecon-community` profile (the root's
+`lab-platform/profile` label and its `values-kubecon-community.yaml`), so at this run's base it failed 11: the same
+10 and its profile check, which knew only the four lab-platform profiles. The private cluster, on `kubecon-private`,
+failed that one check.
+
+**What changed.** `verify/bootstrap_chart.py` gains `SERVICE_HOST_APPS`, the app behind each host fleet.sh publishes
+(grafana is the prometheus app's kube-prometheus-stack, backstage the backstage app, argocd none since every root runs
+on Argo CD), and `serves(profile, label)`, which reads it against the profile's values file. The live test reads the
+profile first, accepts any profile the chart has a values file for, and then, host by host: a host the profile
+installs must reach its Service as before; a host it leaves out must have no Service and answer the console's
+not-installed page (`@wib_not_here`, HTTP 200 past the router and the vhost). The prometheus, backstage and tempo
+Applications must be present exactly when the profile lists them, which replaces the old attendee-only tempo check.
+The Grafana login, root_url and data-source checks run where the profile installs Grafana, with the tempo data source
+expected exactly where it lists tempo. `verify/test_service_links.py` holds the map offline: its keys are fleet.sh's
+`WIB_SERVICE_HOSTS`, each app's file deploys to the namespace console.conf sends its host to, and burn and
+kubecon-community serve neither Grafana nor Backstage. The issue said the router's or the console's not-installed
+page; on these clusters it is the console's, since fleet.sh publishes a row for every service host on every cluster,
+so the test holds that page and no other.
+
+**Live, on 2026-11-05 (run 17706).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_service_hosts_live.py` printed
+  `profile=kubecon-community: grafana not installed, argocd installed, backstage not installed`, passed the
+  not-installed page for grafana and backstage, and ended `All live service-host checks passed.`, exit 0.
+- `CONTEXT=watch-it-burn-private python3 verify/test_service_hosts_live.py` printed
+  `profile=kubecon-private: grafana installed, argocd installed, backstage installed`, passed every Grafana and
+  data-source check, and ended `All live service-host checks passed.`, exit 0.
+- Broken argocd on the community cluster: `kubectl --context watch-it-burn-community -n argocd scale deploy
+  argocd-server --replicas=0`, then the same test failed 3 checks and exited 1: `argocd: https://argocd-attackme.agenticburn.com/
+  reaches it` (`hop 3: the vhost matched but argocd/argocd-server did not answer`), `Argo CD's /api/version answers
+  through its hostname`, and `Argo CD hands out a session through its hostname`. Scaling back to 1 replica left the
+  Deployment at 1 of 1 ready, as found, and the test passed again.
+
+**Not yet run on a cluster:** nothing this change needs.
