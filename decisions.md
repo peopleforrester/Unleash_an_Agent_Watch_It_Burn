@@ -39466,3 +39466,52 @@ so the polls drop at source.
 Challenge 1 turn (`bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`), read APM for
 `trace_id:<sha256 of each tools/call trace id>[:32]` and find nothing, check the gateway's own trace still holds
 the pair, and rerun `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`.
+## 2026-11-05 · #792 · run 17512 · The save is refused by the `sources-elevated` wrapper's tier fence; it goes to the custodian pinned to eef74952 with the AWS read explained
+
+**What the thread asked.** Question 1086 was answered on 2026-11-05: the custodian's independent judge refused run
+17464's `ssh bash` act because it ran "whatever is at the tip of staging rather than the named commits d88f7ab1 and
+eef74952" and passed an AWS profile and region "that nothing in the request explains". The answer tells the run to do
+the act itself through `sources-elevated`, and if that refuses, to escalate the exact command with the `REFUSED` line
+quoted. `bash verify/prior-drafts.sh 792 origin/staging` printed NONE: every earlier draft is in staging.
+
+**What this run can reach.** This run user's sudo allows `sources` and `sources-elevated` as michael, nothing else.
+The verbs `sources-elevated` adds are `fleet` (tanjiro-wsl2 and megumi-wsl2 only), `aws-env`, `browser`, `coord`, `gh` and `gog`.
+`WIB_FLEET_MONITORS_APP_KEY` is only in `~/secrets/datadog/wib-sandbox-fleet-monitors.env` on netcup: a `fleet` listing
+of `~/secrets/datadog/` answered "No such file or directory" on both tanjiro-wsl2 and megumi-wsl2, and megumi has no
+`~/secrets` at all. `repo-cat` reads only under `~/repos` and refuses secret-shaped files. The thread rules out the
+browser route (escalation 821). So no verb this tier holds can read the key.
+
+**The act, tried at 2026-11-05 through `sources-elevated`.** The command, pinned to a named commit:
+
+    sudo -n -u michael /var/lib/hecaton/cli/sources-elevated netcup 'set -eu; d=$(mktemp -d /tmp/wib-792-XXXXXX); git clone -q https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git "$d/r"; cd "$d/r"; git checkout -q --detach eef74952fc0c192a614e9575fb2e280fe2ef93b4; set -a; . "$HOME/secrets/datadog/wib-sandbox-fleet-monitors.env"; set +a; python3 infra/datadog-room/every_prompt_view.py --profile accen-dev --region us-west-2 --apply'
+
+It printed `REFUSED sources netcup is the custodian tier's` and exit 2, before anything ran. Nothing in the org was
+read or written.
+
+**What the escalation now answers.** Both of the judge's points:
+
+1. The commit. The clone is checked out detached at `eef74952fc0c192a614e9575fb2e280fe2ef93b4`, the commit the judge
+   named. It is in `origin/staging` on GitHub (the repo is public), and `git diff eef74952 324c47e7` is empty for
+   `infra/datadog-room/`, `infra/datadog-fleet/fleet_monitors.py` and `gitops/ai-layer/web/brief.html`, so the
+   script, its client and the query it reads are the ones d88f7ab1 wrote and the run of 17464 tested.
+2. The AWS profile. A Datadog call needs an API key along with the application key, and the env file holds the
+   application key only. `every_prompt_view.py` reads the API key from Secrets Manager `watch-it-burn/datadog`
+   (`fleet_monitors.read_keys`, one `get-secret-value`), which is in account 515966504359, us-west-2, reached through
+   the `accen-dev` profile. That one read is the only AWS call. `sources-elevated --check aws-env accen-dev` printed
+   the export command and exit 0, so michael on netcup has that profile. netcup's `/usr/bin/python3` has PyYAML
+   6.0.2, which `fleet_monitors.py` imports.
+
+What the Datadog side touches, from the script at that commit: a GET of `/api/v2/current_user` to fence the org (its
+name must start with `Datadog`), a GET of `/api/v1/logs/views`, and, only when no view named Every prompt exists and
+an LLM Observability view is there to copy, POSTs that create the one view named Every prompt with the query
+`ml_app:burritobot k8s.cluster.name:burritobot-public`, then a GET to read it back. It never sends PUT, PATCH or
+DELETE, so no view that is not BurritoBot's is edited or deleted (#629). The temporary clone stays under `/tmp`,
+since a removal is not the custodian's `netcup` verb's to run.
+
+**Not yet run on a cluster,** named again:
+1. Save the view: the custodian's run of the command above. The next run records the printed id, the view's link and
+   the listing's line for it here. If `--apply` found no template, the next run designs the create from the listing
+   it printed.
+2. The link fills in the query, and the list shows the root's INPUT in CONTENT. The API settled what the spans carry
+   (run 17415); only the page shows how it lays them out, and the thread rules out the browser route.
+3. The `generate_content` rows' preview shows the system prompt. Same limit as 2.
