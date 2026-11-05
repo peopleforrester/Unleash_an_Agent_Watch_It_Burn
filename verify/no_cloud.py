@@ -39,6 +39,7 @@ def setup(directory: str | os.PathLike | None = None) -> pathlib.Path:
     LOG = d / "cloud-calls"
     os.environ.update(KUBECONFIG=str(d / "no-kubeconfig"), AWS_CONFIG_FILE=str(d / "no-aws-config"),
                       AWS_SHARED_CREDENTIALS_FILE=str(d / "no-aws-credentials"), AWS_EC2_METADATA_DISABLED="true",
+                      WIB_TERMINAL_ENV=str(d / "no-terminal-login.env"),
                       PATH=f"{d / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}")
     return LOG
 

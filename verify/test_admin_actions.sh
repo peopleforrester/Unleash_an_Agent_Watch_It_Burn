@@ -88,6 +88,7 @@ ctx_of() { printf 'arn:aws:eks:us-west-2:111122223333:cluster/%s' "$1"; }
 src() { # $1: bash snippet to run after sourcing
   ( cd "$(dirname "${FLEET}")" && WIB_ADMIN_TOKEN=test-token WIB_PROVISIONING_URL=https://prov.test WIB_PROVISION_DIR="${T}/prov" \
       WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" WIB_AWS_POOL_DIR="${T}/pool" WIB_RESTART_WAIT=2 WIB_RESTART_INTERVAL=1 \
+      WIB_TERMINAL_USER="${WIB_TERMINAL_USER-placeholder-presenter}" WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD-placeholder-presenter-pw}" \
       bash -c "source '${FLEET}' >/dev/null 2>&1; $1" 2>>"${T}/stderr" )
 }
 
@@ -132,7 +133,47 @@ check "the local copy ingest publishes is harvested back, as user:password, in t
 check "the terminal pod is restarted so ttyd reads it" 'grep -q -- "-n agent get pods -l app.kubernetes.io/name=web-terminal" "${CALLS}"'
 : >"${CALLS}"
 KCTX="$(ctx_of "${ADMIN}")" src "cmd_terminal_password ${ADMIN}"
-check "an admin cluster gets the presenter login" 'grep -q "TTYD_CREDENTIAL=sprouts:sprouts" "${CALLS}"'
+check "an admin cluster gets the presenter login" 'grep -q "TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}"'
+check "the presenter login is never logged, the user included" '! grep -q "placeholder-presenter" "${T}/stderr"'
+
+echo "== the presenter login comes from mrf-secrets, with no default (#910) =="
+# ${T}/terminal.env is a test-owned stand-in for ~/secrets/projects/watch-it-burn-terminal.env. Each case below
+# blanks the two variables, so fleet.sh reads the file it is pointed at, or finds it absent.
+cat >"${T}/terminal.env" <<'E'
+# the shape mrf-secrets keeps
+WIB_TERMINAL_USER=placeholder-file-user
+WIB_TERMINAL_PASSWORD="placeholder-file-pw"
+E
+: >"${CALLS}"; : >"${T}/stderr"; rm -f "${T}/applied"
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/terminal.env" KCTX="$(ctx_of "${ADMIN}")" \
+  src "cmd_terminal_password ${ADMIN}"; rc=$?
+check "the login is read from WIB_TERMINAL_ENV, its quotes stripped" \
+  'grep -q "TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw --dry-run=client" "${CALLS}"'
+: >"${CALLS}"; : >"${T}/stderr"; rm -f "${T}/applied"
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" KCTX="$(ctx_of "${ADMIN}")" \
+  src "cmd_terminal_password ${ADMIN}"; rc=$?
+check "with no file and no variables, terminal-password on an admin cluster fails" '[[ "${rc}" -ne 0 ]]'
+check "and writes no Secret, so no known login is handed out" '! grep -q "create secret" "${CALLS}" && [[ ! -e "${T}/applied" ]]'
+check "and says where the login lives and which keys it needs" \
+  'grep -q "${T}/no-such.env is missing or unreadable" "${T}/stderr" && grep -q "mrf-secrets (projects/watch-it-burn-terminal.env, keys WIB_TERMINAL_USER and" "${T}/stderr"'
+check "and does not restart the terminal" '! grep -q "app.kubernetes.io/name=web-terminal" "${CALLS}"'
+printf 'WIB_TERMINAL_USER=placeholder-file-user\n' >"${T}/half.env"
+: >"${CALLS}"; : >"${T}/stderr"
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/half.env" KCTX="$(ctx_of "${ADMIN}")" \
+  src "cmd_terminal_password ${ADMIN}"; rc=$?
+check "a file with the user and no password fails by the missing key" \
+  '[[ "${rc}" -ne 0 ]] && grep -q "WIB_TERMINAL_PASSWORD not set in ${T}/half.env" "${T}/stderr" && ! grep -q "create secret" "${CALLS}"'
+: >"${CALLS}"; : >"${T}/stderr"
+WIB_TERMINAL_USER="has:colon" WIB_TERMINAL_PASSWORD="x" WIB_TERMINAL_ENV="${T}/no-such.env" KCTX="$(ctx_of "${ADMIN}")" \
+  src "cmd_terminal_password ${ADMIN}"; rc=$?
+check "a user holding a colon, which ttyd would split wrongly, is refused" '[[ "${rc}" -ne 0 ]] && ! grep -q "create secret" "${CALLS}"'
+: >"${CALLS}"
+WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" KCTX="$(ctx_of "${A}")" \
+  src "cmd_terminal_password ${A}"; rc=$?
+check "an attendee cluster still gets the student login with no presenter login anywhere" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "TTYD_CREDENTIAL=agentic:agentic" "${CALLS}"'
+check "fleet.sh carries no default for the presenter login" \
+  'grep -qx "WIB_TERMINAL_USER=\"\${WIB_TERMINAL_USER:-}\" *# instructor / admin clusters, from mrf-secrets" "${FLEET}" && grep -qx "WIB_TERMINAL_PASSWORD=\"\${WIB_TERMINAL_PASSWORD:-}\"" "${FLEET}"'
 
 echo "== serve-actions claims, runs and reports each queued action =="
 cat >"${T}/queue.json" <<J

@@ -24,8 +24,9 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, CHART, FRONT_DOOR_ARN,  # noqa: E402
                              FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO, LAB_PLATFORM_GHCR, REPO_URL, REVISION,
-                             UNARMED_IF, all_profiles, app_names, c7_control, for_c7_control, for_guardrails, profiles,
-                             values_path, kustomize_images, without_front_door)
+                             UNARMED_IF, all_profiles, app_names, c7_control, for_c7_control, for_guardrails,
+                             for_kubecon_brief, kubecon_brief, profiles, values_path, kustomize_images,
+                             without_front_door)
 
 failures: list[str] = []
 
@@ -74,11 +75,12 @@ for profile in all_profiles():
           rest == [("Secret", "ghcr-kagent-oci")])
     # Each listed file, rendered, is the file as written with the revision and the default image registry filled
     # in and, with no frontDoor.certificateArn, the front door's guarded block left out, on a gateway profile
-    # the c7Control guarded block too (#679), and at guardrails.validationAction Audit the armed block (#638): tpl
-    # changes nothing else.
+    # the c7Control guarded block too (#679), at guardrails.validationAction Audit the armed block (#638), and on a
+    # profile that serves /kubecon the block that withholds it (#909): tpl changes nothing else.
     want = []
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
+        raw = for_kubecon_brief(raw, kubecon_brief(profile))
         raw = without_front_door(for_guardrails(raw, "Audit")).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
@@ -169,6 +171,67 @@ check("a certificateArn that is not an ACM ARN: the render fails, naming it", r.
 for guard in (FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END):
     check(f"no rendered Application keeps {guard}", guard not in render(
         "-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", f"frontDoor.certificateArn={CERT}").stdout)
+
+print("== the KubeCon presenter page, withheld from the community cluster (#909) ==")
+
+
+def ai_layer_for(profile: str) -> dict:
+    r = render("-f", str(values_path(profile)), "--set", f"revision={COMMIT}")
+    return next((d for d in yaml.safe_load_all(r.stdout) if d and d["metadata"]["name"] == "ai-layer"), {}) \
+        if r.returncode == 0 else {}
+
+
+def console_src_built(components: list[str]) -> tuple[dict, str, str]:
+    """The console-src ConfigMap and the name the console Deployment mounts, as Argo CD builds gitops/ai-layer with
+    these kustomize.components: it adds them to the app's own kustomization (`kustomize edit add component`)."""
+    (REPO / "tmp").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+        app = pathlib.Path(d) / "ai-layer"
+        shutil.copytree(REPO / "gitops/ai-layer", app, symlinks=True)
+        if components:
+            kust = yaml.safe_load((app / "kustomization.yaml").read_text(encoding="utf-8"))
+            kust["components"] = list(kust.get("components") or []) + components
+            (app / "kustomization.yaml").write_text(yaml.safe_dump(kust, sort_keys=False), encoding="utf-8")
+        k = subprocess.run([KUBECTL, "kustomize", str(app)], capture_output=True, text=True)
+    if k.returncode != 0:
+        return {}, "", k.stderr.strip()[:300]
+    docs = [x for x in yaml.safe_load_all(k.stdout) if x]
+    cm = next((x for x in docs if x.get("kind") == "ConfigMap" and x["metadata"]["name"].startswith("console-src-")), {})
+    dep = next((x for x in docs if x.get("kind") == "Deployment" and x["metadata"]["name"] == "console"), {})
+    mounted = [v["configMap"]["name"] for v in (dep.get("spec") or {}).get("template", {}).get("spec", {}).get("volumes", [])
+               if (v.get("configMap") or {}).get("name", "").startswith("console-src")]
+    return cm, (mounted or [""])[0], ""
+
+
+built = {}
+for profile, served in (("kubecon-community", False), ("kubecon-private", True), ("burn", False), ("admin", True)):
+    comps = ((ai_layer_for(profile).get("spec") or {}).get("source") or {}).get("kustomize", {}).get("components") or []
+    check(f"{profile}: ai-layer renders {'no components' if served else 'the no-kubecon-brief component'}",
+          comps == ([] if served else ["components/no-kubecon-brief"]), str(comps))
+    if not KUBECTL:
+        continue
+    cm, mounted, err = console_src_built(comps)
+    built[profile] = cm
+    data = cm.get("data") or {}
+    check(f"{profile}: kustomize builds gitops/ai-layer with them, and console-src "
+          f"{'keeps' if served else 'has no'} kubecon.html", bool(cm) and ("kubecon.html" in data) == served, err)
+    check(f"{profile}: the console Deployment mounts that ConfigMap by its hashed name ({mounted})",
+          bool(cm) and mounted == cm["metadata"]["name"])
+    if served and cm:
+        check(f"{profile}: the kubecon.html it serves is the repo's page",
+              data.get("kubecon.html") == (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8"))
+if len(built) == 4 and all(built.values()):
+    community, private = built["kubecon-community"], built["kubecon-private"]
+    check("the community console-src is the private one less kubecon.html, so the console rolls onto a new name",
+          set(private["data"]) - set(community["data"]) == {"kubecon.html"}
+          and all(community["data"][k] == private["data"][k] for k in community["data"])
+          and community["metadata"]["name"] != private["metadata"]["name"])
+r = render("-f", str(values_path("kubecon-private")), "--set", f"revision={COMMIT}", "--set", "console.kubeconBrief=no")
+check("a console.kubeconBrief that is not a bool: the render fails, naming it (#909)", r.returncode != 0
+      and "console.kubeconBrief is whether this cluster's console serves /kubecon" in r.stderr, r.stderr.strip()[:200])
+for guard in ("console.kubeconBrief", "{{"):
+    check(f"no rendered kubecon-community ai-layer keeps {guard!r}",
+          guard not in yaml.safe_dump(ai_layer_for("kubecon-community")))
 
 print("== the guardrails, armed by lab-platform's arm parameter (#638, lab-platform#310) ==")
 ARMING = ("--set", f"{ARM_PARAMETER}={ARM_VALUE}")

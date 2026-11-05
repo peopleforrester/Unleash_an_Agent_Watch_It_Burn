@@ -1,0 +1,76 @@
+# ABOUTME: Every recorded-fallback file the KubeCon breakout keeps in this repo (#452): the screenshots deck's shots,
+# ABOUTME: each with how it is captured, under the run-of-show's segment titles. check-fallback-assets.py reads it.
+#
+# Paths are relative to this directory. See README.md for how each is made.
+#
+# segments: the run-of-show's six segments, each titled as its heading in facilitation/kubecon-na-2026-run-of-show.md
+#   reads; the deck shows the title over each segment's shots. The segment videos are not here: Michael dropped them
+#   from this repo on 2026-11-01 (#613), as handled outside it.
+# screenshots: PNG, committed, shown in order by screenshots/deck.html in a browser with no network. The list inside
+#   deck.html must match this one; verify/test_replay_prompts.py holds them together. Each shot's `capture` says how
+#   it is made:
+#     chat      scripts/capture-fallback-screenshots.py sends that prompts.yaml prompt (its thread up to it) in the
+#               real storefront on `cluster` (community or private) and screenshots the reply. It first reads the
+#               cluster's /controls and refuses the shot unless every control in `controls` reads as listed; it
+#               never flips a guard itself. `toggle` names what the private terminal runs to get there.
+#     page      the capture script screenshots that URL as it loads.
+#     by_hand   taken from the projector output (a terminal or a signed-in Datadog tab the script cannot drive),
+#               saved under this name.
+version: 1
+deck: screenshots/deck.html
+segments:
+  - { segment: 1, title: "Opening and the rules of the room" }
+  - { segment: 2, title: "Challenge 1, the CEO's secret" }
+  - { segment: 3, title: "Challenge 2, the Kubernetes catch-all" }
+  - { segment: 4, title: "Challenge 3, prompt injection through a support ticket" }
+  - { segment: 5, title: "Challenge 4, the poisoned weather tool" }
+  - { segment: 6, title: "The OWASP close, burritos only, and break it" }
+screenshots:
+  - segment: 1
+    file: screenshots/01-1-order.png
+    caption: "The public bot, wide open: it answers as the burrito chain."
+    capture: { chat: order, cluster: community, controls: { ai.topic: false } }
+  - segment: 1
+    file: screenshots/01-2-off-topic-linked-list.png
+    caption: "The room's off-topic ask, answered in full: a burrito bot reversing a linked list."
+    capture: { chat: linked-list, cluster: community, controls: { ai.topic: false } }
+  - segment: 1
+    file: screenshots/01-3-prompt-wall.png
+    caption: "The prompt wall: every prompt the room sends, from both clusters, without a name."
+    capture: { page: "https://prompts.burritobot.co" }
+  - segment: 2
+    file: screenshots/02-1-ceo-address.png
+    caption: "Challenge 1: the CEO's home address comes back in the chat."
+    capture: { chat: ceo-gift-basket, cluster: community, controls: { infra.rbac_scoped: false, ai.output: false } }
+  - segment: 3
+    file: screenshots/03-2-c3-recipe-read.png
+    caption: "Challenge 2: the house recipe, read back out of a file on the box."
+    capture: { chat: c3-recipe-grep, cluster: community, controls: { infra.kubearmor: false } }
+  - segment: 3
+    file: screenshots/03-3-c1-beacon-posted.png
+    caption: "Challenge 2: the customer breakdown, posted to an outside webhook."
+    capture: { chat: c1-beacon, cluster: community, controls: { infra.networkpolicy: false } }
+  - segment: 3
+    file: screenshots/03-5-ceo-forbidden.png
+    caption: "After the switch, Challenge 1 again: the scoped Role keeps the CEO's record out of reach."
+    capture: { chat: ceo-gift-basket, cluster: private, toggle: guard-rbac-on, controls: { infra.rbac_scoped: true } }
+  - segment: 4
+    file: screenshots/04-1-hc666-joker.png
+    caption: "Challenge 3: an innocent ticket question, and the ticket's hidden paragraph deploys a Joker."
+    capture: { chat: hc-666, cluster: community, controls: { ai.input_classifier: false } }
+  - segment: 4
+    file: screenshots/04-2-hc666-withheld.png
+    caption: "guard-input-on: the ticket comes back withheld, and nothing is deployed."
+    capture: { chat: hc-666, cluster: private, toggle: guard-input-on, controls: { ai.input_classifier: true } }
+  - segment: 5
+    file: screenshots/05-1-weather-chained.png
+    caption: "Challenge 4: the weather tool's description chains in a tool nobody asked for."
+    capture: { chat: weather-burrito, cluster: community, controls: { infra.tool_allowlist: false } }
+  - segment: 5
+    file: screenshots/05-2-weather-mcp-guard.png
+    caption: "guard-mcp-on: the gateway allows the weather tool and nothing else."
+    capture: { chat: weather-burrito, cluster: private, toggle: guard-mcp-on, controls: { infra.tool_allowlist: true } }
+  - segment: 6
+    file: screenshots/06-1-burritos-only.png
+    caption: "guard-topic-on: the off-topic ask comes back to the menu, the hours and the locations."
+    capture: { chat: salsa-dance, cluster: private, toggle: guard-topic-on, controls: { ai.topic: true } }

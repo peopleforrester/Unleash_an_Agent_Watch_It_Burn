@@ -2,7 +2,7 @@
 # ABOUTME: kustomize.images at the root's registry, reading a web.yaml that serves their page, and nothing pulls Docker Hub nginx.
 """Why this exists (#715, lab-platform#335).
 
-The five demo apps pulled docker.io/library/nginx:1.27-alpine straight from Docker Hub: five pulls per cluster during
+The five demo apps pulled the official nginx:1.27-alpine straight from Docker Hub: five pulls per cluster during
 an event, on the shared anonymous quota. lab-platform's docs/supply-chain.md replaces them with its `web` image, a Go
 static file server on base-static that reads one routes file, web.yaml, in place of an nginx config, and its
 deploy/watch-it-burn/images.tsv pins the image by digest. A lab-platform image takes the registry the root passes down
@@ -135,10 +135,10 @@ lock = {ln.split()[0]: ln.split()[1:] for ln in (REPO / "images.lock").read_text
         if ln.strip() and not ln.startswith("#")}
 check("the kustomize image name web has a row naming the reference and lab-platform's cmd/web",
       lock.get("web", [])[:2] == [REF, "repo:peopleforrester/lab-platform/cmd/web"], str(lock.get("web")))
-check("no row is left for docker.io/library/nginx:1.27-alpine, which nothing pulls now",
-      "docker.io/library/nginx:1.27-alpine" not in lock)
+check("no row is left for Docker Hub's nginx:1.27-alpine, which nothing pulls now",
+      "docker.io/library/nginx:1.27-alpine" not in lock)  # refused: no row may name it (#714)
 
-print("== nothing under gitops/ pulls docker.io/library/nginx ==")
+print("== nothing under gitops/ pulls Docker Hub's nginx ==")
 files = subprocess.run(["git", "-C", str(REPO), "ls-files", "-z", "gitops"], check=True,
                        capture_output=True).stdout.decode().split("\0")
 pulls = []

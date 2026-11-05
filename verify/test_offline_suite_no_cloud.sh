@@ -72,7 +72,9 @@ echo "== #616's shape: an unstubbed guardrails link under instructors up all =="
 # reaches the token poll.
 mkdir -p "${T}/states" "${T}/logs"
 link616() { # $1: extra stubs
+    # A test-owned presenter login (#910), so `instructors up` passes its login check and reaches the link.
     ( cd "$(dirname "${FLEET}")" && WIB_ROSTER_PROFILES=kubecon WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" \
+        WIB_TERMINAL_USER=placeholder-presenter WIB_TERMINAL_PASSWORD=placeholder-presenter-pw \
         timeout 120 bash -c "source '${FLEET}' >/dev/null 2>&1
             _provision_spec_fleet() { :; }; print_bootstrap_hints() { :; }; require_tools() { :; }; $1
             cmd_instructors up all" )

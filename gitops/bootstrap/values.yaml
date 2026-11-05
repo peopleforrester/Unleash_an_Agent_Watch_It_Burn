@@ -35,3 +35,9 @@ c7Control: toolnames
 # patches both to [Deny] and drops that ignore, so Argo CD holds the armed state from git.
 guardrails:
   validationAction: Audit
+# Whether this cluster's console serves /kubecon, the KubeCon breakout's presenter page (#909). true keeps kubecon.html
+# in the console-src ConfigMap. The two community profiles, burn and kubecon-community, set it false: attackme is a
+# roster host, so the apex router's brief_not_roster matcher passes it, and the ai-layer Application then adds the
+# no-kubecon-brief component, which takes the file out, so the room's /kubecon is a 404. The private cluster keeps it.
+console:
+  kubeconBrief: true

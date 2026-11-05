@@ -11,9 +11,12 @@ set -euo pipefail
 # (no name); any other name is refused before anything is pushed.
 CR="${CRANE:-crane}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The C6 Joker's base, pinned (#664): busybox:latest on 2026-10-29. verify/test_joker_web_busybox.py runs
-# joker-web/start.sh on this digest's own busybox, so the build and the test cannot drift apart.
-JOKER_BASE="docker.io/library/busybox@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4"
+# The C6 Joker's base, pinned (#664): busybox:latest on 2026-10-29, which is busybox 1.38.0. Its linux/amd64 image is
+# pulled from lab-platform's ghcr.io copy (lab-platform#353), never from Docker Hub (#714): the copy's digest is the
+# one Docker Hub's index served for linux/amd64, so the layers and the Joker's digests are the same as before.
+# verify/test_joker_web_busybox.py runs joker-web/start.sh on this digest's own busybox, so the build and the test
+# cannot drift apart.
+JOKER_BASE="ghcr.io/peopleforrester/lab-platform/mirror/library/busybox:1.38.0-f97baa533a26@sha256:f97baa533a26513c453a362be331a43eb60214302f449c16571b23cea141dce4"
 
 # Marketing-NAMED covers (innocent name, villain reveal payload) — for the C2 "ops-approved promo app"
 # social-engineering story: the friendly name makes the deploy land, the pod logs reveal the villain.
@@ -63,11 +66,16 @@ build_joker_web() {
     src="${tmp}/src"
   fi
   # The modes are set, not read from the checkout, so the digest does not follow the umask git checked out under:
-  # rwxrwxr-x for directories and start.sh, rw-rw-r-- for the page, as the pushed busybox-1.38.0 layer has them.
+  # rwxrwxr-x for directories and start.sh, rw-rw-r-- for the page and the banner.
+  # The shell banner (#714): villain-banner.sh goes in as the one file etc/villain-banner.sh, with no etc/ directory
+  # entry, so busybox's /etc keeps its own mode. ENV names it, and busybox sh reads ENV only when it starts an
+  # interactive shell, so `kubectl exec -it <pod> -- sh` prints the banner, and start.sh's loop, `kubectl logs` and a
+  # plain `kubectl exec <pod> -- <cmd>` print what they did before.
   tar --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name --mode='a+rX,ug+w,o-w' -C "${src}" \
-    --transform 's,^joker-web,villain,' -cf "${layer}" joker-web
+    --transform 's,^villain-banner\.sh$,etc/villain-banner.sh,' \
+    --transform 's,^joker-web,villain,' -cf "${layer}" joker-web -C "${HERE}" villain-banner.sh
   "$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f "${layer}" -t "${ref}"
-  "$CR" mutate "${ref}" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "${ref}"
+  "$CR" mutate "${ref}" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 --env ENV=/etc/villain-banner.sh -t "${ref}"
   rm -rf "${tmp}"
   echo "pushed ${ref} (serves :8080)"
 }

@@ -59,7 +59,8 @@ a villain app, (3) run the bill up (denial-of-wallet).
 attacks our unguarded box), **60 hands-on** on their own cluster, 15 wrap and feedback, 10 slack. The full beat-by-beat
 is `docs/RUN-OF-SHOW-2026-08.md`, and the prompts you drive from are on **`/brief`** on each cluster.
 
-**Terminal logins:** yours and Michael's instructor clusters are `sprouts` / `sprouts`; attendee clusters
+**Terminal logins:** yours and Michael's instructor clusters take the presenter login, kept in
+mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`); attendee clusters
 are `agentic` / `agentic`. Deliberately different, so reading the student one aloud does not hand the room
 your presenter consoles.
 

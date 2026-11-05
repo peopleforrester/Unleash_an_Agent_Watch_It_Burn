@@ -21,6 +21,9 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 # even when the test is run by hand (verify/no-cloud.sh). The last check reads the log.
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${HERE}/no-cloud.sh"; no_cloud_guard "${T}/no-cloud"
+# A test-owned presenter terminal login (#910): `instructors up` refuses to build without one, and the guard above
+# shields the real one in mrf-secrets. A placeholder, never a real login.
+export WIB_TERMINAL_USER=placeholder-presenter WIB_TERMINAL_PASSWORD=placeholder-presenter-pw
 
 # terraform: init and the lab-VPC outputs succeed; apply fails for every cluster whose name matches
 # TF_APPLY_FAIL (an ERE; empty fails nothing). Every apply is recorded, so the test can tell an apply that

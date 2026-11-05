@@ -61,6 +61,17 @@ The image is amd64 only, as the cluster nodes are.
 `build.sh joker` pushes the workshop's Joker and nothing else, `build.sh joker-internal` the breakout's (below), and
 `build.sh` with no name both. A roster name is refused before anything is pushed: those ten are lab-platform's build.
 
+## The shell banner (#714)
+
+Both Jokers greet anyone who opens a shell in them. `build.sh` lays `villain-banner.sh` in the layer as
+`/etc/villain-banner.sh` and sets `ENV=/etc/villain-banner.sh`. busybox `sh` runs the file `ENV` names only when it
+starts an interactive shell, so `kubectl exec -it <pod> -- sh` prints a few green hacker lines and then "ACCESS
+GRANTED... just kidding, you deployed me. Why so trusting about admission control?". The log loop is unchanged, so
+`kubectl logs` shows the laugh as before, and `kubectl exec <pod> -- <cmd>` prints only the command's output. The
+banner is `printf` lines only: no network and no file writes. `verify/test_joker_web_busybox.py` runs it on the pinned
+busybox, on a terminal and without one, and runs `start.sh` with `ENV` set. The ten C2 villains get their banner
+from lab-platform's build (lab-platform#372).
+
 ## The breakout's Joker, from the internal registry (KubeCon Challenge 3, #775)
 
 At KubeCon, `guardrails-on` sets both registry policies to Deny, so the room's ticket, HC-666, asks for

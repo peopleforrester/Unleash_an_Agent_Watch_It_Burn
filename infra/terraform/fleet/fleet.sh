@@ -271,12 +271,20 @@ WIB_ROSTER_FILE="${WIB_ROSTER_FILE:-${SCRIPT_DIR}/roster.tsv}"
 # See bootstrap_terminal_auth for why a shared credential is the right call for single-use clusters.
 #
 # SPLIT BY ROLE (Michael's ruling 2026-08-30, issue #109). The instructor/presenter clusters and the
-# student clusters do NOT share a login: `sprouts` is the ADMIN credential for Michael and Whitney, and
-# handing it to a room would also hand the room the presenter consoles. Students get `agentic`.
+# student clusters do NOT share a login: the presenter login is the ADMIN credential for Michael and
+# Whitney, and handing it to a room would also hand the room the presenter consoles. Students get `agentic`.
 # Which credential a cluster gets is decided by is_instructor_name (roster cluster = instructor), see
-# terminal_creds_for. Override either pair per run with the env vars.
-WIB_TERMINAL_USER="${WIB_TERMINAL_USER:-sprouts}"          # instructor / admin clusters
-WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD:-sprouts}"
+# terminal_creds_for.
+#
+# The presenter login is NOT in this repo (#910, part of #908). Its old value sat here as a literal default
+# for months, in a public repo's history, so it is treated as known and replaced. It lives in mrf-secrets,
+# read from WIB_TERMINAL_ENV (default ~/secrets/projects/watch-it-burn-terminal.env) as the two lines
+# WIB_TERMINAL_USER=... and WIB_TERMINAL_PASSWORD=...; the env vars of the same names override the file for
+# one run. There is no default: presenter_login fails, naming the file and keys, when either is absent, and
+# `instructors up` stops before anything is built rather than hand a roster cluster a known login.
+WIB_TERMINAL_ENV="${WIB_TERMINAL_ENV:-${HOME}/secrets/projects/watch-it-burn-terminal.env}"
+WIB_TERMINAL_USER="${WIB_TERMINAL_USER:-}"            # instructor / admin clusters, from mrf-secrets
+WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD:-}"
 WIB_STUDENT_USER="${WIB_STUDENT_USER:-agentic}"            # attendee / student clusters
 WIB_STUDENT_PASSWORD="${WIB_STUDENT_PASSWORD:-agentic}"
 
@@ -453,14 +461,53 @@ public_host_for() {
     return 0
 }
 
+# _terminal_env_value <key> <file>: the value of the line <key>=... in an env file, with one pair of
+# surrounding quotes and any trailing CR or whitespace removed. Prints nothing when the key is absent.
+_terminal_env_value() {
+    local v
+    v="$(sed -n "s/^[[:space:]]*\(export[[:space:]]\+\)\?$1=//p" "$2" 2>/dev/null | head -1)"
+    v="${v%"${v##*[![:space:]]}"}"
+    if [[ "${v}" == \"*\" || "${v}" == \'*\' ]] && [[ "${#v}" -ge 2 ]]; then v="${v:1:${#v}-2}"; fi
+    printf '%s' "${v}"
+}
+
+# The presenter terminal login, as "user:password", from mrf-secrets (#910). Each half is the env var when
+# set, else its line in WIB_TERMINAL_ENV. Returns 1, logging which key is missing from which file and where
+# the value is kept, when either half is absent or unusable: a user holding a colon or whitespace (ttyd splits
+# TTYD_CREDENTIAL on the first colon) or a password holding whitespace. Never logs either value.
+presenter_login() {
+    local user="${WIB_TERMINAL_USER:-}" pw="${WIB_TERMINAL_PASSWORD:-}" missing=()
+    if [[ -r "${WIB_TERMINAL_ENV}" ]]; then
+        [[ -n "${user}" ]] || user="$(_terminal_env_value WIB_TERMINAL_USER "${WIB_TERMINAL_ENV}")"
+        [[ -n "${pw}" ]] || pw="$(_terminal_env_value WIB_TERMINAL_PASSWORD "${WIB_TERMINAL_ENV}")"
+    fi
+    [[ -n "${user}" ]] || missing+=(WIB_TERMINAL_USER)
+    [[ -n "${pw}" ]] || missing+=(WIB_TERMINAL_PASSWORD)
+    if [[ "${#missing[@]}" -gt 0 ]]; then
+        if [[ -r "${WIB_TERMINAL_ENV}" ]]; then
+            log "presenter terminal login: ${missing[*]} not set in ${WIB_TERMINAL_ENV} or the environment"
+        else
+            log "presenter terminal login: ${WIB_TERMINAL_ENV} is missing or unreadable and ${missing[*]} is not set"
+        fi
+        log "  it lives in mrf-secrets (projects/watch-it-burn-terminal.env, keys WIB_TERMINAL_USER and"
+        log "  WIB_TERMINAL_PASSWORD); there is no default, so no roster cluster gets a known login (#910)"
+        return 1
+    fi
+    if [[ "${user}" == *:* || "${user}" =~ [[:space:]] || "${pw}" =~ [[:space:]] ]]; then
+        log "presenter terminal login: the user may not hold a colon or whitespace, nor the password whitespace (${WIB_TERMINAL_ENV})"
+        return 1
+    fi
+    printf '%s:%s\n' "${user}" "${pw}"
+}
+
 # The terminal login for a cluster, as "user:password", chosen by role (#109). Instructor/roster
-# clusters get the admin credential (sprouts); the attendee pool gets the student one (agentic). Keeping
-# this in ONE function means the bootstrap that creates the Secret and the bundle that tells the student
-# what to type can never disagree, which is the failure mode that hands a room a password that does not
-# work. ALWAYS exits 0.
+# clusters get the presenter credential (presenter_login, from mrf-secrets); the attendee pool gets the
+# student one (agentic). Keeping this in ONE function means the bootstrap that creates the Secret and the
+# bundle that tells the student what to type can never disagree, which is the failure mode that hands a
+# room a password that does not work. Returns 1, printing nothing, when the presenter login is unavailable.
 terminal_creds_for() {
     if is_instructor_name "$1"; then
-        printf '%s:%s\n' "${WIB_TERMINAL_USER}" "${WIB_TERMINAL_PASSWORD}"
+        presenter_login || return 1
     else
         printf '%s:%s\n' "${WIB_STUDENT_USER}" "${WIB_STUDENT_PASSWORD}"
     fi
@@ -593,8 +640,15 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       service hosts only, no attendee-pool row (the KubeCon breakout, #502).
   router-check        Read the live router's host list (start.burritobot.co/roster.json) and assert it
                       is exactly the roster's clusters: attackme and each <owner>-admin. Read-only.
-  wall-check          Read the prompt wall's health (prompts.burritobot.co/healthz) and assert it
+  wall-check [--empty]
+                      Read the prompt wall's health (prompts.burritobot.co/healthz) and assert it
                       answers 200 and shows every roster cluster with its prompts readable. Read-only.
+                      --empty also fails while the wall holds any prompt (#926).
+  wall-reset          Empty the prompt wall for the room (#926): refuse while any roster cluster's
+                      /prompts feed holds a prompt (reset-bot empties it), restart the wall's Railway
+                      service, which keeps its prompts in memory only, and wait for it to read every
+                      roster cluster with no prompt on it. Needs a Railway login on this host, or
+                      WIB_WALL_RAILWAY naming the command that runs railway where one is logged in.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
     scale <n>         DESIRED STATE: make exactly <n> attendee clusters exist. Creates what is missing,
@@ -1627,7 +1681,7 @@ bootstrap_one() {
 # ${AWS_POOL_DIR}/<name>.terminal, through provisioning-agenticburn's harvest_terminal_credential.sh. That
 # file is what merge_pool.py joins into the pool, and it accepts only the whole user:password value: a
 # bare password, which is what this script used to write, counts as no credential and fails the build by
-# name (provisioning-agenticburn#16, the agentic/sprouts page). One harvester for every writer means the
+# name (provisioning-agenticburn#16, the page that showed a student login with a presenter password). One harvester for every writer means the
 # file can only ever say what the cluster enforces.
 # Returns the harvester's code: 0 written, 3 the Secret is absent (the terminal is OPEN), 1 unreachable,
 # unreadable or malformed. On any non-zero code no <name>.terminal is left behind, so a stale one cannot
@@ -1695,8 +1749,16 @@ bootstrap_terminal_auth() {
     # and the agent can learn this shared password and log in through the console like any attendee
     # (#593). That route is kept on purpose (question 782): the agent keeps its access so the clusters can
     # be data-mined once the workshop is done. Do not "fix" it with a random password or a NetworkPolicy.
-    # Role-split (#109): instructor clusters get sprouts, the attendee pool gets agentic.
-    local cred; cred="$(terminal_creds_for "${name}")"
+    # Role-split (#109): instructor clusters get the presenter login from mrf-secrets, the attendee pool
+    # gets agentic. A roster cluster whose login is unavailable gets NO Secret and fails the run by name
+    # (#910): writing a fallback would hand it a known login. `instructors up` checks this before it builds.
+    local cred
+    if ! cred="$(terminal_creds_for "${name}")"; then
+        log "  FAILED: terminal-auth NOT created for ${name}: the presenter login is not in mrf-secrets (${WIB_TERMINAL_ENV})"
+        log "  WARN: ${name}'s terminal is UNAUTHENTICATED until 'fleet.sh terminal-password ${name}' runs with it"
+        record_fail "${name}:terminal-login"
+        return
+    fi
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \
         -n agent --from-literal="TTYD_CREDENTIAL=${cred}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         # Read back what the cluster now holds, rather than writing what was meant to be created.
@@ -3337,6 +3399,13 @@ cmd_instructors() {
         done
     done
     [[ "${#PROVISION_SPEC[@]}" -gt 0 ]] || { log "no roster clusters for the requested role(s)"; return 0; }
+    # Every roster cluster's terminal-auth is the presenter login, read from mrf-secrets (#910). Check it
+    # BEFORE anything is built: the bootstrap brings the web terminal up before it writes the Secret, so a
+    # login found missing then leaves a billing cluster whose terminal is open. A bare build writes no Secret.
+    if [[ -z "${WIB_NO_BOOTSTRAP:-}" ]] && ! presenter_login >/dev/null; then
+        log "REFUSING instructors up: the roster clusters' terminal login is unavailable; nothing was built"
+        exit 1
+    fi
     log "provisioning ${#PROVISION_SPEC[@]} instructor cluster(s)..."
     # Keep the build's own result and return it. This used to end on the bootstrap-hints test, which is
     # false on every normal run, so under `set -e` the verb exited 1 even after its verify reported every
@@ -4277,8 +4346,8 @@ ingest_one() {
     #
     # Both halves used to come from two sources nothing reconciled: the username from terminal_creds_for
     # and the password from a bare-password cache file. Measured 2026-09-03: attendee-001 and -002 cached
-    # "sprouts" while both clusters enforced agentic:agentic, so the success page displayed
-    # agentic / sprouts and Whitney got in only by guessing (provisioning-agenticburn#16). A later
+    # the presenter password while both clusters enforced agentic:agentic, so the success page displayed
+    # agentic with the presenter password and Whitney got in only by guessing (provisioning-agenticburn#16). A later
     # version read the Secret but fell back to that cache when the cluster did not answer; the harvester
     # removes the file instead, so an unreadable cluster is a failed ingest, retried, never a stale login.
     local term_user="" term_pw="" cred hrc=0
@@ -4348,7 +4417,7 @@ ingest_one() {
 # `ingest pool` re-ingests every cluster lab-platform's pool holds for the event, by name, claimed or not, read
 # through `labctl pool` (pool_rows, #656). It was how rows already claimed picked up a corrected terminal login,
 # because /admin/import upserted by name and never touched claim state: the bare-password era left claimed rows
-# showing agentic / sprouts (provisioning-agenticburn#16). The rows go to labctl import like every other ingest,
+# showing agentic with the presenter password (provisioning-agenticburn#16). The rows go to labctl import like every other ingest,
 # so the names now come from the pool they are written back to, not from the provisioning app's /admin/roster.
 cmd_ingest() {
     [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest pool | ingest <cluster-name...>"; exit 2; }
@@ -5021,7 +5090,10 @@ print(("zero " if usd == 0 and req == 0 else "") + f"${usd:.4f} over {req} reque
 # access page every student reads wrong. This is the repair for a lost or edited terminal-auth secret.
 terminal_password_one() {
     local name="$1" kcfg="$2" ctx="$3" cred
-    cred="$(terminal_creds_for "${name}")"
+    if ! cred="$(terminal_creds_for "${name}")"; then
+        log "  ${name}: no terminal login to write: the presenter login is not in mrf-secrets (${WIB_TERMINAL_ENV})"
+        return 1
+    fi
     if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create secret generic terminal-auth \
             --from-literal="TTYD_CREDENTIAL=${cred}" --dry-run=client -o yaml 2>/dev/null \
         | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent apply -f - >/dev/null 2>&1; then
@@ -5031,7 +5103,9 @@ terminal_password_one() {
     # cluster's account as AWS_PROFILE). A failed harvest still restarts the terminal, then fails.
     local hrc=0
     harvest_terminal_login "${name}" "${AWS_PROFILE:-}" || hrc=$?
-    log "  ${name}: terminal-auth set for user '${cred%%:*}'; restarting the terminal so ttyd reads it"
+    # The user is named only for the student login, which is public; the presenter login is never logged (#910).
+    local who="the student login"; is_instructor_name "${name}" && who="the presenter login"
+    log "  ${name}: terminal-auth set to ${who}; restarting the terminal so ttyd reads it"
     restart_pods "${name}" "${kcfg}" "${ctx}" agent "${TERMINAL_POD_SELECTOR}" || return 1
     [[ "${hrc}" -eq 0 ]]
 }
@@ -5332,9 +5406,16 @@ cmd_router_check() {
 # the cluster's host, with ok false and an error when it cannot read that cluster's prompts. Run it after
 # router-check. Do not point the wall at lab-platform's roster before 2026-11-12: that roster leaves out attackme
 # and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11). Read-only. WIB_WALL_URL points it
-# elsewhere.
+# elsewhere. With --empty it also fails while the wall holds any prompt (#926): run it so right after wall-reset, and
+# a wall still showing what came before the reset reads as a FAIL with the count, not as a full wall in the room.
 cmd_wall_check() {
-    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/healthz" out code body got entry h n rc=0
+    local empty=0
+    case "${1:-}" in
+        "") ;;
+        --empty) empty=1 ;;
+        *) log "usage: wall-check [--empty]"; return 2 ;;
+    esac
+    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/healthz" out code body got entry h n rc=0 held summary
     out="$(curl -sS --max-time 15 -w '\n%{http_code}' "${url}" 2>/dev/null)" \
         || { log "wall-check: FAIL could not read ${url}"; return 1; }
     code="${out##*$'\n'}"; body="${out%$'\n'*}"
@@ -5353,9 +5434,127 @@ cmd_wall_check() {
             rc=1
         else log "  PASS  the wall shows ${n}"; fi
     done
+    if [[ "${empty}" -eq 1 ]]; then
+        IFS='|' read -r held _ summary <<<"$(wall_held)"
+        if [[ "${held}" == 0 ]]; then log "  PASS  the wall holds no prompts"
+        elif [[ "${held}" == unreadable ]]; then log "  FAIL  ${summary}"; rc=1
+        else
+            log "  FAIL  the wall still holds ${held} prompt(s) from before the room: ${summary}"
+            log "        run './fleet.sh wall-reset' (after reset-bot on every roster cluster)"
+            rc=1
+        fi
+        if [[ "${rc}" -eq 0 ]]; then log "wall-check: the wall shows every roster cluster and holds no prompts"
+        else log "wall-check: the wall is NOT empty and showing every roster cluster"; fi
+        return "${rc}"
+    fi
     if [[ "${rc}" -eq 0 ]]; then log "wall-check: the wall shows every roster cluster"
     else log "wall-check: the wall does NOT show every roster cluster"; fi
     return "${rc}"
+}
+
+# What the wall holds (#926), from its /api/prompts, as one line "<n>|<ok>|<summary>": n is the number of prompts it
+# would show, or "unreadable"; ok the comma-separated clusters it last read without error; summary the count from
+# each cluster, the receive times of the oldest and newest, and the wall's seq. The body goes on stdin: a full wall
+# is 500 prompts of up to 280 characters, past the one-argument limit.
+wall_held() {
+    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/api/prompts" body
+    body="$(curl -fsS --max-time 15 "${url}" 2>/dev/null)" || { printf 'unreadable||could not read %s\n' "${url}"; return 0; }
+    python3 -c '
+import collections, datetime, json, sys
+try:
+    d = json.loads(sys.stdin.read() or "null")
+    prompts, clusters = d["prompts"], d.get("clusters") or []
+    assert isinstance(prompts, list) and isinstance(clusters, list)
+except Exception:
+    print("unreadable||" + sys.argv[1] + " is not the wall'"'"'s prompt list"); sys.exit()
+ok = ",".join(str(c.get("name")) for c in clusters if isinstance(c, dict) and c.get("ok") is True)
+by = collections.Counter(str(e.get("cluster")) if isinstance(e, dict) else "?" for e in prompts)
+ts = [e["ts"] for e in prompts if isinstance(e, dict) and isinstance(e.get("ts"), (int, float))]
+when = lambda t: datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+parts = [", ".join(f"{n} from {c}" for c, n in sorted(by.items())) or "no prompts"]
+if ts:
+    parts.append(f"received {when(min(ts))} to {when(max(ts))}")
+seq = d.get("seq")
+parts.append(f"seq at {seq}")
+print(f"{len(prompts)}|{ok}|" + "; ".join(parts).replace("|", "/"))' "${url}" <<<"${body}"
+}
+
+# Empty the prompt wall for the room (#926). prompts.burritobot.co is prompts-agenticburn, a Flask app on Railway that
+# keeps what it shows in process memory (a 500-deep ring, no volume, no database), so no reset-bot reaches it: on
+# 2026-11-05 at 17:50Z it held 500 prompts from six days of rehearsals, probes and load tests, seq at 666. A restart
+# of its Railway service is what empties it. The restarted wall's first poll takes whatever each cluster's guard-proxy
+# /prompts feed still holds as new, having nothing to diff it against; that is how 19 prompts, 15 from attackme and
+# 4 from burritobot-private, were back on it at 18:06:05Z the same day, all with that one receive time. So this
+# refuses, before it restarts anything, while any roster cluster's feed is not empty, and reset-bot is what empties a
+# feed. After the restart it waits for the wall to answer with every roster cluster read and no prompt, and fails
+# naming what it holds. A wall tab opened before the reset keeps its old cards and its cursor, past the new seq, so
+# the tab is reloaded after it. It needs a Railway login on this host, as resolve_admin_token does, or
+# WIB_WALL_RAILWAY: the command, split on spaces, that runs railway on a host that has one. The host that reaches the
+# clusters is not always the one logged in to Railway: on 2026-11-05 a hecaton run had both clusters and no Railway
+# login, and the restart's guard, every feed empty first, has to run in the same command as the restart (#926).
+readonly WIB_WALL_RW_PROJECT="7bfe7d7e-8156-4365-9342-afd80ee55029"   # Railway project prompts-agenticburn
+readonly WIB_WALL_RW_ENV="production"
+readonly WIB_WALL_RW_SERVICE="prompts-agenticburn"
+readonly WALL_RESET_WAIT="${WIB_WALL_RESET_WAIT:-180}"                 # seconds for the restarted wall to read every cluster
+cmd_wall_reset() {
+    [[ $# -eq 0 ]] || { log "usage: wall-reset"; return 2; }
+    local rw=()
+    read -ra rw <<<"${WIB_WALL_RAILWAY:-railway}"
+    [[ "${#rw[@]}" -gt 0 ]] && command -v "${rw[0]}" >/dev/null 2>&1 \
+        || { log "wall-reset: FAIL no railway CLI on this host (WIB_WALL_RAILWAY: '${WIB_WALL_RAILWAY:-railway}')"; return 1; }
+    local entry name host body n rc=0 held ok summary missing waited=0 err
+    for entry in "${INSTRUCTORS[@]}"; do
+        name="${entry%%|*}"; host="$(public_host_for "${name}" | twin_rows)"
+        body="$(curl -fsS --max-time 10 "https://${host}/prompts" 2>/dev/null)" \
+            || { log "  FAIL  could not read ${name}'s feed at https://${host}/prompts"; rc=1; continue; }
+        # Counted as the wall counts: a string, without the probe marker, not blank.
+        n="$(python3 -c '
+import json, sys
+try:
+    p = json.loads(sys.stdin.read() or "null")["prompts"]
+    assert isinstance(p, list)
+except Exception:
+    print("unreadable"); sys.exit()
+print(sum(1 for x in p if isinstance(x, str) and "[[wib-probe]]" not in x and x.strip()))' <<<"${body}")"
+        if [[ "${n}" == 0 ]]; then log "  PASS  ${name}'s feed at https://${host}/prompts is empty"
+        elif [[ "${n}" == unreadable ]]; then log "  FAIL  https://${host}/prompts is not ${name}'s prompt feed"; rc=1
+        else
+            log "  FAIL  ${name}'s feed at https://${host}/prompts still holds ${n} prompt(s), which a restarted wall"
+            log "        shows again: run './fleet.sh reset-bot ${name}' first"
+            rc=1
+        fi
+    done
+    [[ "${rc}" -eq 0 ]] || { log "wall-reset: refused; the wall was not restarted"; return 1; }
+    IFS='|' read -r held _ summary <<<"$(wall_held)"
+    log "  the wall before the reset: ${held} prompt(s); ${summary}"
+    if ! err="$("${rw[@]}" restart -p "${WIB_WALL_RW_PROJECT}" -e "${WIB_WALL_RW_ENV}" -s "${WIB_WALL_RW_SERVICE}" -y 2>&1)"; then
+        log "wall-reset: FAIL railway restart of ${WIB_WALL_RW_SERVICE} was refused (is this host logged in? railway login):"
+        log "  ${err}"
+        return 1
+    fi
+    log "  restarted Railway service ${WIB_WALL_RW_SERVICE}; waiting for the wall to read every roster cluster"
+    while :; do
+        IFS='|' read -r held ok summary <<<"$(wall_held)"
+        missing=""
+        for entry in "${INSTRUCTORS[@]}"; do
+            n="$(public_host_for "${entry%%|*}")"; n="${n%%.*}"
+            [[ ",${ok}," == *",${n},"* ]] || missing+=" ${n}"
+        done
+        if [[ "${held}" == 0 && -z "${missing}" ]]; then
+            log "wall-reset: the wall is empty and reads every roster cluster. Reload the wall's tab now: a tab"
+            log "  opened before the reset keeps its old cards and shows nothing new until the seq passes its own."
+            return 0
+        fi
+        [[ "${waited}" -ge "${WALL_RESET_WAIT}" ]] && break
+        sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+    done
+    if [[ "${held}" == 0 ]]; then
+        log "wall-reset: FAIL after ${WALL_RESET_WAIT}s the restarted wall is empty but has not read:${missing}"
+    else
+        log "wall-reset: FAIL after ${WALL_RESET_WAIT}s the wall holds ${held} prompt(s); ${summary}"
+        [[ -n "${missing}" ]] && log "  and has not read:${missing}"
+    fi
+    return 1
 }
 
 # The shared ops view (#308): claims from provisioning, liveness from the apex table and each console, and
@@ -5386,7 +5585,8 @@ main() {
             --profile "${WIB_DEFAULT_ACCOUNT}" --region "${WIB_REGION}" "$@" ;;
         routes) cmd_routes "$@" ;;
         router-check) cmd_router_check ;;
-        wall-check) cmd_wall_check ;;
+        wall-check) cmd_wall_check "$@" ;;
+        wall-reset) cmd_wall_reset "$@" ;;
         ops) cmd_ops "$@" ;;
         hosts) cmd_hosts ;;
         preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;

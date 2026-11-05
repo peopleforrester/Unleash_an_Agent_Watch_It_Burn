@@ -496,7 +496,8 @@ SHELL_COMMAND = ["sleep", "3600"]
 # deployment, so a phone cannot fill the node (Michael, #773).
 ROOM_RESOURCES = {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "50m", "memory": "64Mi"}}
 SCALED_KINDS = ("Deployment", "StatefulSet", "ReplicaSet")
-_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")
+# Every name Docker Hub goes by, so deploy_app can refuse a Docker Hub image PUBLIC_IMAGES does not carry (#714).
+_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")  # refused (#714)
 
 
 def _registry_and_repo(image: str) -> tuple[str, str]:
@@ -513,8 +514,8 @@ def _registry_and_repo(image: str) -> tuple[str, str]:
 def _public_image_name(image: str) -> str | None:
     """The PUBLIC_IMAGES name an image asks for; "" for a Docker Hub image the list does not carry; None for any other.
 
-    A Docker Hub reference is read for its repository, so "nginx", "nginx:latest" and nginx under docker.io's
-    library/ all ask for nginx. The pinned image's own repository at any tag is that name too."""
+    A Docker Hub reference is read for its repository, so "nginx", "nginx:latest" and nginx in Docker Hub's library/
+    namespace, under any of its registry names, all ask for nginx. The pinned image's own repository at any tag is that name too."""
     registry, repo = _registry_and_repo(image)
     if registry in _DOCKER_HUB:
         repo = repo.removeprefix("library/")
@@ -844,8 +845,15 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
         obj, written_by = _parse_manifest(manifest)
     except Exception as e:  # noqa: BLE001
         _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
-    requested_by = str(requested_by or "").strip() or written_by
     obj = _one_object(obj)
+    if isinstance(obj, dict) and "requested_by" in obj:
+        # The call's own argument written as a field of the manifest (#906): on 2026-11-05 two of three HC-666 asks on
+        # the public bot sent {"apiVersion": ..., "requested_by": "Agatha the Banshee", ...}, which the API server
+        # refuses ("failed to create typed patch object ... .requested_by: field not declared in schema"). No
+        # Kubernetes object has the field, so it is taken out and read as the name the argument would have carried.
+        inside = obj.pop("requested_by")
+        written_by = written_by or (inside.strip() if isinstance(inside, str) else "")
+    requested_by = str(requested_by or "").strip() or written_by
     if isinstance(obj, dict) and isinstance(obj.get("kind"), str) and not obj.get("apiVersion"):
         obj["apiVersion"] = _API_VERSIONS.get(obj["kind"], "")
     if not isinstance(obj, dict) or not isinstance(obj.get("kind"), str) or not isinstance(obj.get("apiVersion"), str) \

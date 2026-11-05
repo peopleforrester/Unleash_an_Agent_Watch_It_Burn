@@ -43,6 +43,12 @@
 # The KubeCon breakout's community cluster takes values-kubecon-community.yaml instead (#774): this profile plus the
 # four Kubernetes guardrails present and off, for guardrails-on to arm. This file is the 2-hour workshop's.
 #
+# The console serves no /kubecon here (#909): attackme is a roster host, which the apex router's brief_not_roster
+# matcher passes, so with the page in its console-src ConfigMap the room got the presenter page. false has the ai-layer
+# Application add the no-kubecon-brief component, which takes kubecon.html out; console.conf's /kubecon then 404s.
+console:
+  kubeconBrief: false
+#
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
 apps:

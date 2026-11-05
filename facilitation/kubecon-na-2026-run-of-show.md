@@ -22,7 +22,9 @@ the C1 beacon collector only, for C1 on deck (open question 9).
   (checkout `~/repos/agenticburn/rounds-agenticburn`). Issue rounds-agenticburn#38
   cuts that deck from this run-of-show, beat for beat.
 - The prompts the presenters send are not reproduced here. They live, copy-ready,
-  on `/kubecon` on each cluster (`gitops/ai-layer/web/kubecon.html`): the demo-only
+  on `/kubecon` on the private cluster, `https://burritobot-private.burritobot.co/kubecon`
+  (`gitops/ai-layer/web/kubecon.html`). The community cluster serves no `/kubecon`
+  since #909: attackme is the room's host, so its console answers `404`. It is the demo-only
   cut laid out by the segments below, with each beat's prompt, who sends it, the
   admin-terminal toggle where one applies, the success marker and the deterministic
   fallback, and no provisioning or student-lab content. The 2-hour workshop's own
@@ -41,7 +43,9 @@ forecast date: it is built straight through, in this order.
    clusters from 2026-10-24 are spun up, tested and torn down in one session, on
    the smallest instances.
 2. **Every abstract point READY, or cut with Whitney's agreement** (#456).
-3. **The recorded fallback** (#452), recorded the moment the live run works.
+3. **The recorded fallback** (#452). Michael dropped its milestone (M4, #613) on
+   2026-11-01 as handled outside this repo and not a blocker; the repo keeps the
+   replayable prompt set, its replay script and the screenshots deck.
 
 Dates are for people only:
 
@@ -87,6 +91,34 @@ touched, so the app stays Synced and self-heal has nothing to revert. It then re
 to the repo's values (all off), but the C7 tool allow-list and gateway rule live
 outside guard-proxy, and only `guards-off` puts them back.
 
+**Then empty the prompt wall (#926).** The room opens on an empty wall, and no
+`reset-bot` reaches it: `https://prompts.burritobot.co` is its own Railway app
+(prompts-agenticburn), and it keeps every prompt it has shown in memory, up to 500.
+On 2026-11-05 it still held six days of rehearsals, probes and load tests. A restart
+of that app empties it, but its first read after the restart takes whatever each
+cluster's feed still holds as new, so both feeds are emptied first. Before the
+delivered session, and before any run that should open on an empty wall, from
+`infra/terraform/fleet/` on a host logged in to Railway:
+
+```bash
+./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private
+./fleet.sh wall-reset
+./fleet.sh wall-check --empty
+```
+
+Then run `guards-off` on the private cluster's terminal, as above. `wall-reset`
+refuses, naming the cluster, while attackme's or burritobot-private's
+`/prompts` still holds a prompt, and restarts nothing. Otherwise it restarts
+the wall and waits until the wall reads both clusters and holds no prompt.
+`wall-check --empty` is the start-state check: it fails, with the count and when
+they arrived, while the wall holds any prompt, so a wall still showing what came
+before the reset reads as a FAIL here and not in the room. The same read by eye:
+`curl -s https://prompts.burritobot.co/api/prompts` shows `"prompts": []`. Then
+reload the wall's tab, or open it now: a tab opened before the reset keeps its old
+cards and shows nothing new until the restarted wall's sequence number passes the
+one that tab last saw. A prompt sent
+after the reset shows within about 3 seconds.
+
 **After the Go cutover (#738, #778), the reset is the same command and does more.** The Go
 guard-proxy keeps the counter, each session's spend and the runtime cost cap in a file on the
 `guard-proxy-spend` volume, and the volume outlives the pod, so a pod delete no longer clears
@@ -107,6 +139,7 @@ resumes Argo CD before it exits. If it says it could not resume Argo CD, run the
 | Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
+| Prompt wall empty first (`wall-check --empty` passed?) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
@@ -278,6 +311,60 @@ Bedrock directly, with the same model settings as the private cluster, which pas
 
 Seen in both public runs, so this is past a watch item: the room should expect some HC-666 tries to need a
 second send, which the "keep trying" step already covers. On stage, the presenters send it until it lands.
+
+**2026-11-05, internal-registry on watch-it-burn-private (#919).** Hecaton run 17626. At 17:44Z, at staging
+`92dfea31`, `kubectl --context watch-it-burn-private -n argocd get application internal-registry -o wide` printed
+`Synced Degraded`: the registry pod read `1/2 CrashLoopBackOff`, and its seed failed with `Method Not Allowed
+[http 405]` because `REGISTRY_HTTP_HOST` sent each upload's PATCH out through the read-only console door. The
+relative-URL fix (#906's `02404d1d`) reached staging as `b42b7d06` (#775), and Argo CD synced private at `cb3367d2`
+at 17:55Z. At 18:25Z the same command printed `Synced Healthy` at `cb3367d29be681d81d783fb21e9aab406e1ad1aa`, the
+pod read `2/2 Running`, the seed's log ended `seeded; serving`, and the tags list read
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. Nothing in this part is still red; the public
+`registry.burritobot.co` still waits on the routes publish (#916).
+
+**2026-11-05, the run-through day: both clusters on their KubeCon profiles (#906).** Hecaton run 17556, at staging
+`92dfea31`, on watch-it-burn-community (`attackme.burritobot.co`) and watch-it-burn-private
+(`burritobot-private.burritobot.co`). Before the probes, both clusters still ran the 2-hour workshop's profiles
+(`burn` and `admin`), which is what had left `block-recipe-snoop` and the agent egress set applied on private and
+`deny-external-registries` missing. Their `lab-bootstrap` roots now render `kubecon-community` and `kubecon-private`.
+`fleet.sh guardrails-link` linked the pair, and each control-plane security group now admits the other cluster's
+nodes on 443 (the switch's peer calls had timed out on the private endpoint).
+
+Admin, 16:21Z: 32 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.2001 to $0.2479 over 13 model calls. guardrails-on armed
+both clusters from the private terminal, and guards-off and guardrails-off left both at the start state.
+guardrails-on and guardrails-off from the community terminal also switched both, by hand, in 6 seconds.
+
+Community, 16:30Z: 12 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $4.4517 to $4.4866 over 7 model calls. Then
+`./fleet.sh reset-bot watch-it-burn-community` read `$0.0000 over 0 requests`.
+
+The runs before those, all model variance, not the platform:
+
+| Run | Result | The FAILs |
+|---|---|---|
+| Community 1 to 5 | 11, 11, 10, 11 and 12 PASS of 12 | The linked-list ask 2 of 3 twice (a Bedrock 424 `ModelErrorException`, then an empty reply). HC-666 three times: the bot wrote `requested_by` as a field of the Deployment, and the API server refused it (`.requested_by: field not declared in schema`). deploy_app takes that field out once #906's fix for it reaches the cluster. |
+| Admin 1 | cut off | guardrails-on timed out at 300 s: every call to the other cluster's API hung on its private endpoint. Fixed by the security group rule above. |
+| Admin 3 | 31 PASS of 32 | Challenge 4's re-ask: "no sign it tried", as on 2026-10-29. |
+
+Not shown by the probe: `registry.burritobot.co` and `deployments.burritobot.co` still answer the router's 404,
+because the routes table with their rows is not published yet. The private cluster's registry seed failed with a 405
+until `b42b7d06` (#775) reaches it, so HC-666's Joker there is admitted but its image cannot be pulled before both.
+
+**2026-11-05, the run-through day, rechecked (#906).** Hecaton run 17628, on run 17556's commits (ported onto staging
+`92dfea31`), with neither cluster changed since 16:31Z. Both roots still render `kubecon-community` and
+`kubecon-private`, the pair is still linked, and every Argo CD application reads Synced and Healthy but private's
+`internal-registry`, as above.
+
+Admin, 18:06Z: 32 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.2479 to $0.2914 over 13 model calls. guardrails-on from the
+private terminal armed both clusters, and guards-off and guardrails-off left both at the start state.
+
+Community, 18:08Z: 11 PASS of 12, `KUBECON PROBE RED`, $0.0769 to $0.1309 over 7 model calls. The one FAIL was the
+linked-list ask, 2 of 3: the bot wrote out its plan to answer and stopped there. HC-666 landed on the first send.
+Community again, 18:09Z: 12 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.1309 to $0.1655 over 7 model calls.
+
+At 18:10Z `./fleet.sh reset-bot watch-it-burn-community` read `$0.0000 over 0 requests`. Both `/controls` read every
+guard false, but private's Falco badge, which reads the Falco DaemonSet that `kubecon-private` installs (#486). No
+`joker-*` Deployment is left on either cluster. `registry.burritobot.co` and `deployments.burritobot.co` still
+answer the router's 404, for the reason above.
 
 ## The one platform, and the two clusters on it
 
@@ -456,9 +543,10 @@ about 12 hours at 6 and 8 hours at 15: roughly $95, with the VPCs. The rehearsal
 credits if a standby runs hot (t3 launches Unlimited); and the self-check's
 Bedrock calls. Those are estimates, not measured.
 
-Terminal login on the private cluster is `sprouts` / `sprouts`, the presenter login
-every roster cluster gets (`agentic` is the attendee pool's). Read it off the
-cluster if in doubt:
+Terminal login on the private cluster is the presenter login every roster
+cluster gets; the attendee pool takes the student login. It lives in
+mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`),
+not in this repo. Read it off the cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
 
 Guard toggles on the private cluster, from its terminal: `guard-output-on`,
@@ -605,9 +693,9 @@ The opening order:
   presenters switch to it at set moments, during segment 1's opening minute of play
   and, optionally, during each challenge's play time after its call-to-action slide.
   The wall is `https://prompts.burritobot.co`: open it full screen before the session
-  starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
-  seconds, and lists the clusters named in `start.burritobot.co/roster.json`, so
-  the Night Before's `wall-check` is what proves both clusters are on it. If the
+  starts (#637), after `wall-reset` has emptied it (#926, "Run-through record"). It
+  reads each cluster's feed, picks a new prompt up within about 3 seconds, and
+  lists the clusters named in `start.burritobot.co/roster.json`, so the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
 - **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain),
@@ -964,11 +1052,10 @@ saying the same thing.
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); Challenge 2 has no seed yet (#843), so segment 3 shows its live trace in the `burritobot-private` tab; the Grafana view carries it without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Yes: the live input, and the replay and the screenshots deck in `facilitation/kubecon-na-2026/fallback/`; the segment videos left this repo with M4 (#613) |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
-ready: the pre-seeded traces (#648) and
-the recorded half of point 9 (#452).
+ready: the pre-seeded traces (#648).
 
 ## Challenges shown live, and challenges cut
 
@@ -1038,11 +1125,14 @@ is merely slow rather than rebuilding:
   must print `200`. Anything else means the provisioning service, which stays up
   for this session as the beacon collector (open question 9), is down; bring it back
   before the day. The router 404s `/kubecon` on any host outside the roster (#511),
-  so confirm the gate lets the stage through: for each of attackme and
-  burritobot-private,
-  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.burritobot.co/kubecon`
-  must print `200`. A `404` means the router's roster matcher does not know that
-  host, and the presenters have nothing to drive from.
+  and the community console withholds it from the room (#909), so confirm both
+  gates:
+  `curl -fsS -o /dev/null -w '%{http_code}\n' https://burritobot-private.burritobot.co/kubecon`
+  must print `200`. A `404` there means the router's roster matcher does not know
+  that host, and the presenters have nothing to drive from.
+  `curl -s -o /dev/null -w '%{http_code}\n' https://attackme.burritobot.co/kubecon`
+  must print `404`. A `200` there means the room can read the presenter page: the
+  community cluster's ai-layer has not synced the commit that withholds it.
 - [ ] **The prompt wall shows both clusters (#637).** Segment 1 projects
   `https://prompts.burritobot.co`, and the wall builds its cluster list from the same
   `roster.json` that `router-check` just read, so run it once the routes are right:
@@ -1187,8 +1277,10 @@ is merely slow rather than rebuilding:
   ```
 
   Each seed is its own session, `wib-stage-<seed>-<UTC minute>`, sent without the
-  probe marker so the trace reads as the prompt shown (the nine prompts do show in
-  the private bot's column of the prompt wall, the PII masked to `[redacted]`). The
+  probe marker so the trace reads as the prompt shown (the prompts show in the
+  private bot's column of the prompt wall, except the PII one: the feed masks it to
+  `[redacted]`, and a masked prompt is left off `/display` (#915) and, with
+  prompts-agenticburn#15, off the wall). The
   PII prompt is sent only after guard-proxy's input stages say they refuse it. It
   waits until every trace in LLM Observability carries the tool spans the stage
   points at (`get_vault_entry`; `run_shell`, the recipe grep; `read_support_ticket`
@@ -1251,11 +1343,22 @@ is merely slow rather than rebuilding:
   (`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`): open it, run
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
   "Traces" row shows a row. Say on the day which surface is shown.
-- [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
-  per-segment videos and screenshots deck must exist and be rehearsed once, so a
-  dead venue network does not end the session. The repo paths for these are not
-  built yet; see the open questions. The rollback step below names them once they
-  exist.
+- [ ] **Recorded fallback proven once (#452).** On each presenter laptop, from the
+  repo root, so a dead venue network does not end the session. What each file is
+  and how it is made: `facilitation/kubecon-na-2026/fallback/README.md`.
+  - The replay, once, over the phone hotspot rather than the hotel network:
+    `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1`.
+    It sends segment 1's prompts from `facilitation/kubecon-na-2026/fallback/prompts.yaml`
+    (the order and the four off-topic asks, five model calls, nothing that deploys
+    or reads a Secret), paced under guard-proxy's 150-a-minute window, and stops at
+    the first prompt that does not land. Every line should end `ok`, then `DONE: 5 of 5
+    delivered`; read the replies against each prompt's `expect`. Run it before the
+    community bot's last `reset-bot`, so its five turns are off the counter.
+  - The deck and every screenshot it lists are in place:
+    `python3 scripts/check-fallback-assets.py`, which ends `recorded fallback ready`
+    and exits 1 if any shot is missing, empty or not a PNG.
+  - Open `facilitation/kubecon-na-2026/fallback/screenshots/deck.html` from disk
+    with Wi-Fi off and step through it: no red MISSING card.
 - [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
   timeouts are sized for a ballroom and that the page, the projector QR, and the
   Feedback link work on a real iPhone and a real Android phone on venue-like
@@ -1328,6 +1431,16 @@ is merely slow rather than rebuilding:
   with the whole $25 `COST_CAP_USD` window ahead of it. Anything else, run it again;
   if it still does not read zero, read the guard-proxy pod's logs before the day.
   The same reset runs before each run-through ("Run-through record" above).
+- [ ] **Empty the prompt wall, after the reset (#926).** The probe, the phone check
+  and every rehearsal leave prompts on `https://prompts.burritobot.co`, which keeps
+  them in memory until its app restarts. Once nothing else will prompt either bot,
+  from `infra/terraform/fleet/` on a host logged in to Railway:
+  `./fleet.sh reset-bot watch-it-burn-private` (then `guards-off` on its terminal),
+  `./fleet.sh wall-reset`, then `./fleet.sh wall-check --empty`, which must end "the
+  wall shows every roster cluster and holds no prompts". `wall-reset` refuses while
+  either cluster's feed still holds a prompt and names the `reset-bot` to run. If the
+  wall gets a prompt after this, run the three again on the day, before the room
+  arrives ("Run-through record" above).
 
 ## Rollback on the day
 
@@ -1335,10 +1448,13 @@ is merely slow rather than rebuilding:
    below so the guardrail is what is proven. Do not debug the model live.
 2. The venue network cannot carry the room: the presenters drive the audience
    beat themselves from the admin cluster and the room watches, rather than hacking
-   from phones.
-3. Nothing live works at all: play the recorded fallback (#452). Name the exact
-   path to the segment videos and the screenshots deck here once #452 has built them;
-   it is an open question today (see below).
+   from phones. The room's prompts still reach the public bot and the wall: from a
+   laptop on the phone hotspot, replay the segment on stage,
+   `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment <N>`.
+   If it stops, do not retry it; go to step 3.
+3. Nothing live works at all: show the recorded fallback (#452). Open the
+   screenshots deck from disk, `facilitation/kubecon-na-2026/fallback/screenshots/deck.html`,
+   step to the segment on stage, and narrate over it.
 4. Any beat over its time budget by half: cut it to a sentence and move on. The room
    never watches unrehearsed troubleshooting.
 
@@ -1412,10 +1528,19 @@ number and says who settled it and when, so references to it elsewhere still lan
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and
    Whitney's wording. This is the biggest content risk in the cut.
-2. **The recorded fallback is not built yet (#452).** The replayable prompt set, the
-   per-segment videos, and the screenshots deck have no repo paths today. The
-   rollback step and the Night Before step reference them; they need to exist before
-   the cold read, and this file should name their exact paths once they do.
+2. **The recorded fallback is built (#452).** The replayable prompt set, its
+   replay script, the screenshots deck and its capture script are in
+   `facilitation/kubecon-na-2026/fallback/` and `scripts/`, and the Night Before and
+   rollback steps name them. The deck holds 12 shots, every segment from 1 to 6,
+   captured on the live clusters on 2026-11-04. The segment videos, and the two
+   shots that were to be taken by hand at the first full rehearsal, left this repo
+   when Michael dropped M4 (#613) on 2026-11-01. Challenge 2's public-image shot is
+   not in the deck: on 2026-11-04 the Tron ask did not deploy on the community bot,
+   because the model passed `deploy_app` the bare name "Tron" for its manifest,
+   three times out of three, and again on 2026-11-05. The manifest the model then
+   offered names the Docker Hub image `tron`, which `deploy_app` refuses because the
+   cantina pulls only its listed public images. That is a live risk for Challenge 2
+   itself, not only for the deck.
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet

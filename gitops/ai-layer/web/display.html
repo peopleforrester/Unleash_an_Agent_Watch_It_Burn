@@ -1,5 +1,5 @@
 <!-- ABOUTME: Side-screen display of the MODERATED attendee prompt stream (optional gamification). -->
-<!-- ABOUTME: Reads guard-proxy /prompts; only shows moderated text, and only if STREAM_PROMPTS=on. -->
+<!-- ABOUTME: Reads guard-proxy /prompts, only if STREAM_PROMPTS=on; display.js leaves off masked prompts (#915) and adds one card per 1.5 s with a "+N more" count (#927). -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -14,12 +14,14 @@
     #stream { padding: 16px 24px; font-size: 22px; line-height: 1.5; }
     .p { padding: 8px 0; border-bottom: 1px solid #161616; white-space: pre-wrap; }
     #off { padding: 40px; color: #777; font-size: 18px; }
+    #more { padding: 10px 24px 0; font-size: 18px; color: #9a9a9a; font-variant-numeric: tabular-nums; }
     .spons{/* lightened brand pair: the print values fail AA on this dark ground */font-size:clamp(13px,1.5vw,22px);color:#b9b3cc;display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
 </style>
 </head>
 <body>
   <h1>Live attack stream (moderated)</h1>
   <div id="off" hidden>Prompt streaming is disabled (STREAM_PROMPTS=off).</div>
+  <div id="more" hidden>+0 more</div>
   <div id="stream"></div>
   <script src="display.js"></script>
   <div style="text-align:center;padding:18px 0 26px"><span class="spons">Co-sponsored by <strong style="color:#B98CFF">Datadog</strong> &amp; <strong style="color:#D08BFF">Neo4j</strong></span></div>

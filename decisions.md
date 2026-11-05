@@ -800,7 +800,7 @@ the first colon.
 
 **On the harvester's exit codes in `ingest`:** 0 registers the row. 1 (unreachable, unreadable, malformed)
 registers nothing and records `ingest:<name>`, so the existing retry loop takes it again; the old fallback to a
-cached password is gone, because that cache is what showed agentic / sprouts. 3 (no Secret, terminal open)
+cached password is gone, because that cache is what showed agentic / [presenter password redacted, #911]. 3 (no Secret, terminal open)
 still registers the console with an empty login and records `terminal-open:<name>`, so the run fails by name
 without hiding the console from a student. fleet.sh removes `<cluster>.terminal` on any non-zero exit, as the
 harvester does.
@@ -3436,7 +3436,7 @@ public URL resolves only once this change reaches `main`.
   `maintenance-shell` Deployment.
 - **Fixes found on the way:** the page's C2 fallback named `challenges/01-cncf-wall/fallback.kubectl.sh`, the
   retired workshop Beat 1 (#499), and its C5 fallback used a `--sidecar` flag the script dropped; the
-  run-of-show gave the private terminal the attendee login, `agentic`, where the roster gets `sprouts`
+  run-of-show gave the private terminal the attendee login, `agentic`, where the roster gets the presenter login [value redacted, #911]
   (`verify/test_admin_actions.sh`); its fallback table still described C6's input check as a guard-proxy
   request with zero tokens, where `fallback.curl.sh input` now calls `read_support_ticket` in the tool pod;
   and its Night Before still expected the badge and topic beats to fail, which have passed since 2026-10-27.
@@ -5109,7 +5109,7 @@ the one the issue describes. No code changed.
 - **No attendee pool is up.** The platform rebuilt on 2026-10-28 is the roster alone, `watch-it-burn-community`
   and `watch-it-burn-private` in accen-dev (PROJECT_STATE.md, "KubeCon platform up"). The KubeCon session points
   nobody at a distributor, so no attendee lab runs (`facilitation/kubecon-na-2026-run-of-show.md`, "The one
-  platform, and the two clusters on it"). Both roster clusters carry `sprouts`, not `agentic`.
+  platform, and the two clusters on it"). Both roster clusters carry the presenter login [value redacted, #911], not `agentic`.
 - **The harvester's source is still unread.** `sources repo-cat agenticburn/provisioning-agenticburn/scripts/harvest_terminal_credential.sh`
   is still refused as "looks like a secret", and `repo-ls` of that directory does not list it.
 
@@ -13004,7 +13004,7 @@ presenters drive from `/kubecon`, which carries no provisioning or student-lab c
 runs on the roster in `infra/terraform/fleet/roster.tsv`, and the attendee pool is outside it (lines 271 to 273). The
 router table carries the roster only, and nobody is pointed at the provisioning distributor (lines 302 to 306). The
 Night Before brings up the roster with `./fleet.sh instructors up all` and says the attendee pool is not provisioned
-for this session (lines 891 to 893). The presenters log in to the private cluster's terminal as `sprouts` / `sprouts`
+for this session (lines 891 to 893). The presenters log in to the private cluster's terminal with the presenter login [value redacted, #911]
 and read that login off the cluster's `terminal-auth` Secret (lines 446 to 449). The provisioning app stays up as the
 C1 beacon collector only (lines 912 to 916, and open question 9 at lines 1285 to 1292, #502 and question 714). So the
 empty pool is correct for KubeCon, and no ingest against the Railway host is owed for it. The unset
@@ -19385,6 +19385,1339 @@ offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` a
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
 
+## 2026-11-05 · #775 · Run 17584: the breakout Joker is on ghcr.io, and the internal registry's seed is fixed to push over localhost
+
+**Where #775 stood.** `bash verify/prior-drafts.sh 775 origin/staging` printed NONE: every #775 draft is in staging
+except run 16043's decisions.md records, which later work follows. Item 1 of run 17397's "Not yet run on a cluster"
+list is now done. push-jokers.yml ran on staging at 10:22 UTC (run 42010178866, success), on staging again at 10:40
+and on main at 11:10. Read anonymously, ghcr.io's tags list for `festival-ops/maintenance-shell` is
+`["busybox-1.38.0","busybox-1.38.0-internal"]`, and the `-internal` manifest answers 200 with
+`docker-content-digest: sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf`, the digest
+images.lock pins. This run cannot read the workflow's log (`gh run view --log` is refused to runs), so the push is
+confirmed from the registry side.
+
+**Found live: the seed never filled the registry.** Both clusters moved to the KubeCon profiles at 15:25 UTC on
+2026-11-05 (lab-bootstrap reads `values-kubecon-private.yaml` on watch-it-burn-private and
+`values-kubecon-community.yaml` on watch-it-burn-community, at staging `92dfea31`). That brought the internal registry
+up for the first time with the breakout Joker on ghcr.io. The `internal-registry` Application read Degraded: the
+registry container was Ready, and the seed container was in CrashLoopBackOff after 15 restarts in 59 minutes. Its log
+ended `failed to send blob (chunk), ref localhost:5000/burritobot/maintenance-shell:busybox-1.38.0: ... Method Not
+Allowed [http 405]`. The registry's own log showed the HEAD and POST requests from the seed and no PATCH. The cause is
+`REGISTRY_HTTP_HOST=https://registry.burritobot.co`. Distribution builds every Location header from that host, so the
+POST to localhost was answered with an upload URL on the public name. regctl sent its PATCH there, and the public side
+answered 405: the apex router has no route for that name yet, and the console that will serve it passes only GET and
+HEAD. A PATCH to `https://registry.burritobot.co/v2/burritobot/maintenance-shell/blobs/uploads/x` from this host
+answers 405 too. With the seed down the pod never reads Ready, the Service has no endpoints, and every HC-666 Joker
+would sit in ImagePullBackOff.
+
+**Decided here: relative Location headers.** `REGISTRY_HTTP_HOST` is replaced by `REGISTRY_HTTP_RELATIVEURLS=true`.
+A client that follows a Location header stays on the host it called: the seed on localhost, and a node or the console
+on the public name. A pull from the filesystem store follows no Location header, so pulls do not change. Distribution
+uses `http.relativeurls` only when `http.host` is unset, so the host setting goes.
+`verify/test_guardrails_switch.py` checks both: the registry container sets `REGISTRY_HTTP_RELATIVEURLS` to `true` and
+does not set `REGISTRY_HTTP_HOST`. On the old manifest that check fails and the rest pass.
+
+**Live check (run 17584), on watch-it-burn-private.** The manifest's ConfigMap and Deployment, with only the registry
+container's env changed to `REGISTRY_HTTP_RELATIVEURLS=true`, were applied in a scratch namespace `check-775-17584`.
+The pod read 2/2 Ready within the rollout. The seed's log printed `copying ghcr.io/.../maintenance-shell:busybox-1.38.0-internal@sha256:0dbe92d4... ->
+localhost:5000/burritobot/maintenance-shell:busybox-1.38.0` and `seeded; serving`. Inside the pod,
+`regctl image digest localhost:5000/burritobot/maintenance-shell:busybox-1.38.0` printed `sha256:0dbe92d4...`,
+`regctl tag ls` printed `busybox-1.38.0`, and a POST to `/v2/burritobot/x/blobs/uploads/` answered with
+`Location: /v2/burritobot/x/blobs/uploads/<uuid>?_state=...`, a relative URL. The scratch namespace was then deleted,
+and `kubectl get ns check-775-17584` answers NotFound. The `registry` namespace itself was not touched; Argo CD puts
+the fix there once hecaton promotes this run.
+
+**Not yet run on a cluster.** In order:
+1. After promotion, on watch-it-burn-private: the `internal-registry` Application reads Healthy, and the registry
+   pod in `registry` reads 2/2 with the seed's log ending `seeded; serving`.
+2. The apex router routes `registry.burritobot.co` and `deployments.burritobot.co`. On 2026-11-05 both still serve the
+   router's fallback page (404), while `attackme.burritobot.co` and `burritobot-private.burritobot.co` answer 200.
+   `fleet.sh routes` publishes those rows (`bare_rows`, `WIB_VILLAIN_HOSTS`) on a KubeCon bring-up. Publishing routes
+   is a deploy, which a run may not make. Then
+   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` lists `busybox-1.38.0`.
+3. The rest of the 2026-11-03 #775 entry's list: both KubeCon probe runs (`verify/kubecon_probe.py`) ending
+   `KUBECON PROBE GREEN`, a visitor's HC-666 ask after `guardrails-on`, and `stage_traces.py seed` ending
+   `SEEDED GREEN`. Each needs items 1 and 2 first: until a node can pull the Joker, `c6-lands` cannot pass.
+
+**A test fix found by the suites (run 17584).** The first `bash verify/run-e2e-tools.sh` at `b42b7d06` printed `266
+tests ran`, then `58 checks ran (the offline suite and 57 tier tests) in 30m35s`, and exited 1 on one offline test,
+`test_e2e_tools_tier.py`. Its #865 case failed six checks, each on `mktemp: failed to create directory via template
+'/tmp/tmp.XXXXXXXXXX': No such file or directory`. On this host `/tmp` had stopped taking new files partway through
+the run, and the run's `TMPDIR` points into the worktree. The test starts the runner with an env it builds itself,
+`PATH` and `HOME` and its logs, so `TMPDIR` was dropped and the runner's `mktemp` fell back to the host's `/tmp`, which
+the test does not own. The three fixture envs in the test now set `TMPDIR` to the test's own temporary directory, as
+they already did for `HOME`. Run alone after that, the test passed all 314 of its checks. The runner and the scripts
+are unchanged.
+
+**The suites (run 17584, at `fa53301d`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 30m46s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. At the end of the run the live
+`registry` pod on watch-it-burn-private still read 1/2 with the seed in Error after 26 restarts, as expected until
+Argo CD syncs this change; no scratch namespace is left on either cluster.
+
+## 2026-11-05 · #915 · run 17639 · /display leaves off any prompt the feed masked to `[redacted]`
+
+**What changed.** Whitney tested the wall on 2026-11-05 with a cuss word, and it showed "Go [redacted] yourself." In
+context only one word fits, so the mask said the word anyway. `gitops/ai-layer/web/display.js` now drops every
+`/prompts` entry whose text contains `[redacted]`, in any case, before it renders a row; the rest still go up newest
+first. The `[REDACTED]` case is matched too, so a visitor who types the mask in capitals gets the same treatment.
+Only the page changes. guard-proxy is not touched: `moderate()` (proxy.py) and `internal/feed/feed.go` still mask
+the feed copy, `conformance/test_prompt_feed.py` is unchanged, the prompt still goes to the bot as typed (the feed
+copy is the only one masked, feed.go's comment and proxy.py's #646 comment say so), and `/prompts` still carries
+the masked text. This supersedes the 2026-10-28 planning call's "the wall redacts the display"; the planning note
+now says so, and the run-of-show's stage-traces step no longer says the PII seed shows masked. The same mask covers
+e-mails, card and phone numbers and street addresses, so those prompts stay off the projector too, which fits slide
+7's privacy warning. The wall itself is peopleforrester/prompts-agenticburn#15.
+
+**Tests.** `verify/test_display_masked_prompts_e2e.py` (tools tier, needs node) runs the real `display.js` in a node
+vm through `verify/display-feed-harness.js`, a stub DOM and a stub fetch, on feeds whose entries are what the
+pinned proxy.py's `moderate()` makes of a cuss word, a block-listed term, an e-mail, a card number and a street
+address. Each masked entry is absent while the clean prompts around it still show, newest first; `[REDACTED]` and
+`[Redacted]` are absent; clean prompts, including the bare word "redacted", all show; a feed of only masked prompts
+shows an empty stream, not the off notice; streaming off still shows the off notice. On the old `display.js` it
+fails 13 checks. Offline, `verify/test_stream.py` checks that the mask literal in `display.js` is the one feed.go
+and proxy.py write, that it is matched case-blind, and that the feed is filtered before any row is rendered.
+
+**Live, before the change (run 17639, read only).** `https://attackme.burritobot.co/display` and
+`https://burritobot-private.burritobot.co/display` both answer 200, both `/prompts` read `"enabled": true`, and the
+served `display.js` on both is the old one (no `MASK`). The public feed was empty; the private one carried probe
+and stage prompts with no mask in them.
+
+**Not yet run on a cluster.** After hecaton promotes this run and Argo CD syncs the console's ConfigMap: on
+watch-it-burn-community, `curl -s https://attackme.burritobot.co/display.js | grep -c 'var MASK = "\[redacted\]"'`
+prints 1; then a chat with a cuss word (and one with a made-up e-mail) shows in `/prompts` masked, does not appear
+on `https://attackme.burritobot.co/display`, a clean chat sent after it does, and the bot answers all three. The
+same on `https://burritobot-private.burritobot.co/display` on watch-it-burn-private. #917, #921 and #924 change the
+same page; whichever lands later keeps the `.filter(shown)` step ahead of the render.
+
+**The suites (run 17639, at `2a508c41`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
+and 58 tier tests) in 31m49s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new tier test is the 58th.
+## 2026-11-05 · #910 · run 17594 · fleet.sh reads the presenter terminal login from mrf-secrets and has no default for it
+
+**What changed.** `infra/terraform/fleet/fleet.sh` no longer carries a literal default for `WIB_TERMINAL_USER` or
+`WIB_TERMINAL_PASSWORD`, the presenter login every roster cluster (the community and private clusters, their
+standbys and the presenter clusters, `is_instructor_name`) gets as its `terminal-auth` Secret. A new
+`presenter_login` reads each half from the environment when set, else from the line of the same name in
+`WIB_TERMINAL_ENV`, by default `~/secrets/projects/watch-it-burn-terminal.env`, the mrf-secrets file beside the
+`watch-it-burn-provisioning.env` that `resolve_admin_token` already reads. It strips one pair of quotes, an `export `
+prefix and a trailing CR, and refuses a user holding a colon or whitespace (ttyd splits `TTYD_CREDENTIAL` on the
+first colon) or a password holding whitespace. When either half is absent it returns 1 and logs the file, the
+missing keys and that the value lives in mrf-secrets, and never logs either value. `terminal_password_one` now logs
+"the presenter login" in place of the user it wrote; the student user is still named. Comments in fleet.sh that
+named the old value are reworded. The student login, `agentic`, is unchanged.
+
+**Fails loudly, at three points.** `instructors up` checks the login before anything is built and exits 1 with
+"REFUSING instructors up ... nothing was built", because the bootstrap brings the web terminal up before it writes
+the Secret and a login found missing then leaves a billing cluster whose terminal is open. A bare build
+(`WIB_NO_BOOTSTRAP`) writes no Secret and is not checked. `bootstrap_terminal_auth` (also reached by a standby build)
+writes no Secret for a roster cluster without the login, logs that its terminal is open until `terminal-password`
+runs, and records `<name>:terminal-login`, so the run exits non-zero. `terminal-password` on a roster cluster
+without it fails and writes nothing. An attendee bring-up never needs the presenter login.
+
+**Why a file read and not an ExternalSecret.** The issue allowed either. The login is written by fleet.sh, which
+already reads two values from `~/secrets`, on the presenter's machine, and the clusters' ESO install has no store
+that reaches mrf-secrets, which is a git repo; a store would need the value copied into AWS Secrets Manager first, a
+second copy to keep in step. The file read keeps one copy.
+
+**The mrf-secrets request.** mrf-secrets is a data vault this run cannot open or file on (`gh` refuses it), so the
+agent-task issue asking for a new presenter login to be generated and stored at `projects/watch-it-burn-terminal.env`
+under the keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD` goes in this run's report as a follow-up for hecaton
+to file. It carries no value, old or new.
+
+**Tests own their inputs.** `verify/test_admin_actions.sh` and `verify/test_fleet_terminal_harvest.sh` now expect a
+placeholder login they set themselves (`placeholder-presenter`), and between them cover: the login read from a
+test-owned env file (quotes, `export` and a CR stripped); a missing file and a file missing one key each failing,
+naming the file and key, with no Secret written, nothing harvested, no terminal restart and `<name>:terminal-login`
+recorded; a user holding a colon refused; `instructors up` exiting 1 before the build with the login absent; a bare
+build and an attendee cluster not needing it; no presenter value in the log; and fleet.sh's two assignments holding
+no default. Reverting the preflight and putting a default back fails five of those checks. `verify/no-cloud.sh` and
+`verify/no_cloud.py` now clear the two variables and point `WIB_TERMINAL_ENV` at a file that does not exist, so a
+guarded test run on a presenter's machine never reads the real login. Five tests that run `instructors up`
+(`test_cluster_roles.sh`, `test_fleet_apply_failure_exit.sh`, `test_fleet_converge_repairs.sh`,
+`test_fleet_exit_codes.sh`, `test_offline_suite_no_cloud.sh`) and `test_hostname_tag.py` set the same placeholder.
+
+**Live check, both clusters, run 17594 (read only).** `kubectl -n agent get secret terminal-auth` on
+watch-it-burn-private and watch-it-burn-community, compared in the shell against the old default read from git and
+never printed: each holds a `user:password` value equal to the old repo default. So both terminals still take the
+known login, and the community cluster shares it, since `is_instructor_name` counts the community cluster as a roster
+cluster. Rotating it on both is #912's live step.
+
+**Not yet run on a cluster.** Once mrf-secrets holds the new login, `fleet.sh terminal-password watch-it-burn-private`
+(and `watch-it-burn-community`, if #912 keeps the two on one login) writes it; #912 then checks that the old login no
+longer opens the terminal and the new one does.
+
+**The suites (run 17594, at `b2798903`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 32m31s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**Why run 17594 did not land, and the fix (run 17644).** Hecaton's tests gate ran `bash verify/run-tests.sh` on
+`d54cc3e4` and failed one test, `test_e2e_tools_tier.py`, which passed in run 17594's own suites and touches nothing
+this change does. Its fixture envs set `PATH` and `HOME` but dropped `TMPDIR`, so the runner's `mktemp` fell back to
+the host's `/tmp`. Run 17584 found and fixed the same thing for #775 (`fa53301d`, on staging since). Reproduced here
+under `unshare -rm` with `/tmp` mounted read-only: the base's copy of the test failed eight checks on `mktemp: failed
+to create directory via template '/tmp/tmp.XXXXXXXXXX': Read-only file system`, and with `fa53301d`'s version none
+failed on `/tmp`. Its two remaining failures, the Playwright directory it cannot write, fail the same way under
+`unshare -rm` with `/tmp` writable, because inside the namespace the test runs as root, which can write anywhere. So
+they come from the simulation and not from `/tmp`. This branch takes `fa53301d`'s copy of
+`verify/test_e2e_tools_tier.py` unchanged, so it matches staging's and merges with no conflict. fleet.sh and the
+tests above are unchanged.
+
+**The suites (run 17644, at `e30952b7`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 32m17s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #919 · run 17626 · internal-registry on watch-it-burn-private reads Synced and Healthy at cb3367d2, with the relative-URL fix staging carries as b42b7d06
+
+**Where the fix is on staging.** At the start of the run `git branch -r --contains 02404d1d` named only
+`origin/agent/906-17556`, and `bash verify/prior-drafts.sh 906 origin/staging` printed `DRAFT origin/agent/906-17556
+... 6 of 6 commit(s) not in origin/staging`, `CLEAN` and `START`; #906's run report reads `partial` (the routes table
+was not published), so its draft was not promoted. The run cherry-picked `02404d1d` onto `92dfea31` as `d6306dd0`.
+While the suites ran, staging moved to `cb3367d2`, and #775's run 17584 had landed the same change as `b42b7d06`:
+`REGISTRY_HTTP_RELATIVEURLS=true` in place of `REGISTRY_HTTP_HOST` in `gitops/internal-registry/internal-registry.yaml`,
+and a check of it in `verify/test_guardrails_switch.py`. `git diff d6306dd0 b42b7d06` differs only in the manifest's
+comment and the test. So `b42b7d06` is the staging commit that carries #906's change, and the cherry-pick was dropped:
+this branch was rebuilt on `cb3367d2`. The one thing #906's draft had that staging lacked is its check that the seed
+copies to `localhost:5000` and never names `registry.burritobot.co`; this run adds it to
+`verify/test_guardrails_switch.py`. Pointing the seed's `regctl image copy` at `registry.burritobot.co/${dst}` fails
+it, and the file restored passes. #906's other five draft commits stay #906's.
+
+**Live, watch-it-burn-private, 17:44Z, before the fix reached it.**
+`kubectl --context watch-it-burn-private -n argocd get application internal-registry -o wide` printed:
+
+```
+NAME                SYNC STATUS   HEALTH STATUS   REVISION                                   PROJECT
+internal-registry   Synced        Degraded        92dfea3194365ec18eb808750e114388d17fe96d   default
+```
+
+`kubectl --context watch-it-burn-private -n registry get pods` printed `registry-9f696f77c-tg79x 1/2
+CrashLoopBackOff 30 (2m54s ago) 139m`, and the seed container's log ended `failed to send blob (chunk), ref
+localhost:5000/burritobot/maintenance-shell:busybox-1.38.0: http status: unexpected http status code: Method Not
+Allowed [http 405]`, the failure #906 diagnosed.
+
+**The fix in a scratch namespace (left as found).** The ConfigMap and Deployment of the fixed manifest, with only the
+namespace changed to `check-919-17626`, were applied on watch-it-burn-private. `kubectl rollout status
+deploy/registry` printed `successfully rolled out`, the pod read `2/2 Running 0`, the tags list read
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`, `regctl image digest` read
+`sha256:0dbe92d402b5e021c97e67e16613d9d042ed89ae1333be3dbe22f6b9cf0edabf` (the images.lock pin), and the seed's log
+ended `seeded; serving`. `kubectl delete namespace check-919-17626` then left `NotFound`, 17:47Z.
+
+**Live, watch-it-burn-private, 18:25Z, after Argo CD synced `cb3367d2`.** The Application's operation finished at
+`2026-11-05T17:55:34Z` and its health turned Healthy at `17:55:37Z`. The same `get application ... -o wide` printed:
+
+```
+NAME                SYNC STATUS   HEALTH STATUS   REVISION                                   PROJECT
+internal-registry   Synced        Healthy         cb3367d29be681d81d783fb21e9aab406e1ad1aa   default
+```
+
+`kubectl --context watch-it-burn-private -n registry get pods` printed `registry-675c5bcc-pmlq8 2/2 Running 0 30m`,
+the seed's log ended `seeded; serving`, and `wget -qO- http://localhost:5000/v2/burritobot/maintenance-shell/tags/list`
+in the pod read `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. Nothing in #916's
+internal-registry part is still red. The routes publish (`registry.burritobot.co` answering through the router) is
+#916's other part and is not read here.
+
+**Not yet run on a cluster.** Nothing: the added check is offline only.
+
+**The suites (run 17626, at `bf811401`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite and 57 tier tests) in 32m02s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #926 · run 17646 · The prompt wall is emptied by restarting its Railway app, after both feeds are empty
+
+**Where the wall keeps what it shows.** `https://prompts.burritobot.co` is prompts-agenticburn, a Flask app on Railway
+(project `prompts-agenticburn`, `7bfe7d7e-8156-4365-9342-afd80ee55029`, service `prompts-agenticburn`, environment
+`production`). Its `app.py` keeps every prompt in a module-level list in process memory, trimmed to the newest 500
+(`MAX_ENTRIES`), with no volume and no database: that repo decided so on 2026-09-07 and wrote it down again when it
+retired the app on 2026-09-19. Its `reset_state()` is called only by its tests. So `reset-bot`, which restarts each
+cluster's guard-proxy, never reached the wall, and the wall held six days of prompts on 2026-11-05 at 17:50Z. A restart
+of the Railway service is what empties it.
+
+**The order matters, and the wall showed why.** At 18:13Z the same day the wall held 19 prompts, 15 from attackme and 4
+from burritobot-private, all with one receive time, 18:06:05Z, and seq at 19: the app had restarted then, and its
+first poll took what each cluster's `/prompts` still held as new, because its merge (`new_entries`) has no earlier
+list to diff against. At 18:13Z attackme's `/prompts` held 0 prompts and burritobot-private's held 4. So a restart
+alone does not open the room on an empty wall: each roster cluster's feed has to be empty first, which `reset-bot`
+does. That is why the reset is a separate command run after `reset-bot` on both clusters, not a step inside
+`reset-bot`: one restart of the wall clears every cluster's column, so a `reset-bot` of the community cluster alone
+would refill the wall from the private one.
+
+**What was built.**
+
+- `fleet.sh wall-reset` reads each roster cluster's `https://<host>.burritobot.co/prompts` and counts prompts as the
+  wall does (strings, without the probe marker, not blank). While any cluster's count is not 0 it fails, names the
+  `reset-bot` to run, and restarts nothing. Then it prints what the wall held, runs
+  `railway restart -p <project> -e production -s prompts-agenticburn -y`, and reads `/api/prompts` until the wall
+  answers with every roster cluster read (`ok` true) and no prompt, within `WIB_WALL_RESET_WAIT` (180 s). It fails
+  naming what the wall still holds, or which cluster it has not read. It needs a Railway login on the host, as
+  `resolve_admin_token` already does.
+- `fleet.sh wall-check --empty` runs the #637 roster check and also fails while `/api/prompts` holds any prompt,
+  printing the count per cluster, when they arrived and the seq. That is the start-state check the issue asks for.
+  Plain `wall-check` is unchanged.
+- The run-of-show's run-through record runs `reset-bot` on both clusters, then `wall-reset`, then
+  `wall-check --empty`, before the delivered session, with a row for it in the record table. The Night Before has
+  the same three after the community reset. Both say to reload the wall's tab after the reset: the page's cursor
+  only moves forward (`cursor = Math.max(cursor, e.seq)` in `templates/wall.html`), so a tab opened before a restart
+  keeps its old cards and shows nothing new until the new seq passes the old one. With the tab reloaded, a new
+  prompt shows within one poll, about 3 seconds (`POLL_INTERVAL`).
+- `verify/test_fleet_wall_reset.sh` (31 checks) runs both commands against a sourced fleet.sh with curl and railway
+  stubbed; the stubbed wall changes only when the restart is called. `verify/test_fleet_wall_check.sh` reads its
+  Night Before order inside the Night Before, since the run-through record now names `wall-check --empty` earlier
+  in the file, and its dispatch check matches the new `cmd_wall_check "$@"`.
+
+**Filed in prompts-agenticburn, through the report.** The page's cursor should go back when the wall's seq does, so a
+tab open across a restart picks the new prompts up without a reload. Until that lands, the reload in the run-of-show
+covers it.
+
+### REJECTED: a token-gated reset endpoint on the wall
+**Why:** It would clear the wall with no restart and no outage, but it is a change to a public app with a new secret to
+hold, in another repo, and the restart already works on the app as it runs today.
+**Status:** Open to revisit if the restart's minute without the wall gets in the way.
+
+**Live check (run 17646), read-only.** On 2026-11-05 at 18:13Z, `wall_held` read the live wall:
+`19|attackme,burritobot-private|15 from attackme, 4 from burritobot-private; received 2026-11-05 18:06Z to 2026-11-05
+18:06Z; seq at 19`. `fleet.sh wall-check --empty` printed `PASS` for the health URL and both clusters, then
+`FAIL  the wall still holds 19 prompt(s) from before the room`, and exited 1. `fleet.sh wall-reset` printed
+`PASS  watch-it-burn-community's feed at https://attackme.burritobot.co/prompts is empty`, then
+`FAIL  watch-it-burn-private's feed at https://burritobot-private.burritobot.co/prompts still holds 4 prompt(s)` with
+`run './fleet.sh reset-bot watch-it-burn-private' first`, and `wall-reset: refused; the wall was not restarted`, exit 1.
+Nothing on either cluster or on Railway was changed.
+
+**Not yet run live.** This run has no Railway login (`railway whoami` answers `Unauthorized`), and `reset-bot` changes
+both bots, so the reset itself waits for a host logged in to Railway. In order, from `infra/terraform/fleet/`:
+`./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private`, `guards-off` on the private terminal,
+`./fleet.sh wall-reset`, then `./fleet.sh wall-check --empty` ending "holds no prompts" and
+`curl -s https://prompts.burritobot.co/api/prompts` showing `"prompts": []`. Then one prompt on attackme shows on a
+reloaded wall tab within about 3 seconds.
+
+**The suites (run 17646, at `d3e3e468`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 34m40s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #909 · run 17593 · The community cluster's console withholds /kubecon; the private one still serves it
+
+**What changed.** `gitops/bootstrap/values.yaml` gains `console.kubeconBrief: true`, and the two community profiles,
+`values-burn.yaml` and `values-kubecon-community.yaml`, set it `false`. On false the ai-layer Application
+(`gitops/bootstrap/apps/ai-layer.yaml`) renders `kustomize.components: [components/no-kubecon-brief]`, the guard in
+YAML comments as the front door's is. That component (`gitops/ai-layer/components/no-kubecon-brief/kustomization.yaml`)
+holds one JSON patch on the generated `console-src` ConfigMap, `remove /data/kubecon.html`. `console.conf`'s
+`location = /kubecon { try_files /kubecon.html =404; }` is unchanged, so on the community cluster it finds no file
+and answers 404, and on the private cluster it serves the page. `templates/apps.yaml` fails a render whose
+`console.kubeconBrief` is not a bool, naming it. The run-of-show now sends presenters to
+`https://burritobot-private.burritobot.co/kubecon`, and its Night Before step expects 200 there and 404 on attackme.
+
+**Why this gate and not the other two the issue named.** The page is not on the community cluster at all, so it
+answers 404 for any Host header an attendee sends. A Host check in nginx would have depended on the router passing
+Host, which #565 ruled out as the place for the gate, and the community load balancer is internet-facing, so an
+attendee could send it `Host: burritobot-private.burritobot.co` and get the page. Leaving `location = /kubecon` out
+of the community render would have meant a second console.conf, or a patch over one large string, for one line.
+The profile is what fleet.sh already picks by role (`bootstrap_profile_for_role`: community gets burn or
+kubecon-community, admin gets admin or kubecon-private), and Argo CD renders it from git through the lab-bootstrap
+root, so selfHeal keeps it. A component and not a second `kustomize.patches` entry because ai-layer's `patches`
+key is already behind the front door's guard, and two guards on one key would nest.
+
+**Measured with kubectl v1.36.2's kustomize, 2026-11-05.** Built in place, as Argo CD's `kustomize edit add
+component` does, the component's patch lands after configMapGenerator: `console-src` drops from 16 keys to 15 and
+its name moves from `console-src-2f7h5t7cf7` (the name live on both clusters at `92dfea31`) to
+`console-src-8fk5h94fkf`, and the console Deployment mounts the new name, so the pod rolls. The Application CRD on
+both clusters (Argo CD v3.5.7) has `spec.source.kustomize.components`. The burn profile withholds it too: the 2-hour
+workshop's community cluster is also attackme, and its presenters drive from `/brief`, which stays.
+
+**Tests.** `verify/test_kubecon_community_gate.py` (offline) renders each profile's ai-layer Application, applies its
+components to the console-src keys as configMapGenerator names them, and resolves paths against console.conf's
+default server as nginx picks a location: `/kubecon` is 404 on burn and kubecon-community and serves the repo's
+kubecon.html on kubecon-private, admin, attendee and full. `/kubecon.html`, `/..data/kubecon.html`,
+`/..data/brief.html` and `/.kubecon` are 404 on every render, `/brief`, `/` and `/lab` still serve, and fleet.sh's
+role to profile table must give the community role only withholding profiles. `verify/test_gated_page_names.py` is
+unchanged and green. `verify/test_bootstrap_chart_render.py` (tools tier) renders kubecon-community, kubecon-private,
+burn and admin with the pinned Helm, builds gitops/ai-layer with each one's components, and checks the community
+`console-src` is the private one less kubecon.html under a new hashed name the Deployment mounts, and that
+`console.kubeconBrief=no` fails the render. `verify/test_bootstrap_chart.py` holds the new value, the guard's place
+and the community values files' `console` key.
+
+**Live check, run 17593, read-only (both clusters left as found).** At `92dfea31`, before the change reaches them:
+`curl -s -o /dev/null -w '%{http_code}' https://attackme.burritobot.co/kubecon` printed `200`, the issue's finding,
+and the page's title was `KubeCon brief: Watch It Burn`; on `https://burritobot-private.burritobot.co/kubecon`, `200`
+with the same title. `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` printed `404` on both hosts.
+`/whoami` answered `host=<the host asked for>` on attackme and burritobot-private under both domains. The
+lab-bootstrap roots read `values-kubecon-community.yaml` (community) and `values-kubecon-private.yaml` (private),
+both at staging.
+
+**Not yet run on a cluster.** The change reaches the clusters once hecaton promotes it and Argo CD syncs ai-layer.
+The next run on #908 runs, and records here:
+- `curl -s -o /dev/null -w '%{http_code}' https://attackme.burritobot.co/kubecon` prints `404` (and the same on
+  attackme.agenticburn.com), and `kubectl --context watch-it-burn-community -n agent get cm -o name` shows
+  `console-src-8fk5h94fkf` or a later hash, with no `kubecon.html` key.
+- `curl -s https://burritobot-private.burritobot.co/kubecon` answers 200 with `<title>KubeCon brief: Watch It
+  Burn</title>`.
+- `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` still print `404` on both hosts.
+
+**The suites (run 17593, at `79f2acfd`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 31m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**A rerun on the final tree, and a test that did not own its temp directory.** A second `bash verify/run-tests.sh`,
+after the two decisions.md commits, failed one test: `test_e2e_tools_tier.py`, whose #865 fixture runs the tier
+runner with an env of its own and no TMPDIR. By then this host's `/tmp` was an unlinked directory (`stat /tmp`
+showed `Links: 0`, and `touch /tmp/x` failed with "No such file or directory"), so the fixture's `mktemp` fell back
+to `/tmp` and failed. The test passed in the first run, before `/tmp` went. Its three fixture envs now set TMPDIR to
+the fixture's own directory, so the test no longer hangs on the host's `/tmp` (AGENTS.md, Tests own their inputs).
+
+## 2026-11-05 · #909 · run 17629 · Run 17593's draft ported as it stood, re-measured live and re-run
+
+**What this run took from the draft.** `bash verify/prior-drafts.sh 909 origin/staging` printed START from
+`origin/agent/909-17593`, CLEAN: it branched from `92dfea31`, this run's base too, and staging has not touched any of
+its 14 paths. The issue's comments hold run 17593's done report and no "Not merged" line, so nothing names a fault to
+fix. This run fast-forwarded to the draft's four commits (`79f2acfd`, `630f3a1c`, `eadb333b`, `14a97ca7`) unchanged and
+added only this entry. Nothing differs from the draft's design. `python3 verify/prose_gate.py` passed on the tree.
+
+**Live check, run 17629, read-only (both clusters left as found).** Still at `92dfea31` on both clusters (ai-layer's
+synced revision), with `console-src-2f7h5t7cf7` in `agent` on each. `/kubecon` printed `200` on
+`https://attackme.burritobot.co` and `https://burritobot-private.burritobot.co`. The private page's title was
+`KubeCon brief: Watch It Burn`. `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` (sent with `--path-as-is`)
+printed `404` on both hosts. The lab-bootstrap roots still read `values-kubecon-community.yaml` (community, which
+sets `console.kubeconBrief: false`) and `values-kubecon-private.yaml` (private, which keeps the default `true`),
+both at staging.
+
+**Not yet run on a cluster.** These are unchanged from run 17593's entry above: after promotion, attackme's `/kubecon` should
+print `404` with `console-src-8fk5h94fkf` (or a later hash) and no `kubecon.html` key on the community cluster, the
+private host's `/kubecon` should answer 200 with the brief's title, and the three name and dot-path 404s should hold on
+both hosts. The next run on #908 runs them.
+
+**The suites (run 17629, at `14a97ca7`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
+and 57 tier tests) in 36m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #909 · run 17653 · Run 17629's branch rebased onto staging past #775's identical TMPDIR fix
+
+**Why run 17629 did not land.** Hecaton's rebase onto staging `cb3367d2` stopped at `14a97ca7` with an edit-edit
+conflict in `verify/test_e2e_tools_tier.py`, two regions. Run 17584 (#775) had landed `fa53301d` while #909 was in
+flight. That commit sets `TMPDIR` to the fixture's own directory in the same three fixture envs (`run`, the runner
+fixture and `run_live`) for the same reason, the host's `/tmp`. The two sides differ only in line wrapping in
+`run_live` and in the comment `14a97ca7` adds above `run`'s env.
+
+**How it is resolved.** This run rebased the branch onto `origin/staging` at `cb3367d2`. The conflict keeps both sides:
+staging's env lines as `fa53301d` wraps them, and `14a97ca7`'s #909 comment above `run`'s env. The other four commits
+applied without conflict, and the decisions.md appends sit after #775's entries. The #909 gate is unchanged from run
+17593's design. This run reran the affected tests directly at the rebased tree: `test_e2e_tools_tier.py`,
+`test_kubecon_community_gate.py`, `test_gated_page_names.py`, `test_bootstrap_chart.py` and `test_guardrails_switch.py`
+each exited 0.
+
+**Not yet run on a cluster.** Unchanged from run 17593's entry: the post-promotion curls on attackme and the private
+host, for the next run on #908.
+
+**The suites (run 17653, at `ebecf752`, rebased on `cb3367d2`).** `bash verify/run-e2e-tools.sh` printed `267 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57
+tier tests) in 34m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Live, read-only, with both clusters' ai-layer
+at `cb3367d2` and `console-src-2f7h5t7cf7`: `/kubecon` printed `200` on attackme and on the private host, where the
+title was `KubeCon brief: Watch It Burn`, and `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` printed `404`
+on both. That is the pre-promotion baseline again.
+## 2026-11-05 · #930 · The load-test record names what the 2026-11-05 runs did not cover, for #924's question
+
+#924 asks whether the live system (the SSE fan-out to every viewer, guard-proxy's prompt feed and the spend cap) has
+been load-tested at 500 people. `facilitation/kubecon-na-2026-load-test.md` gains a section, "What these runs did not
+cover", and the answer to #924 is written from it.
+
+- **Covered.** The 500- and 150-session replays of 2026-11-05 loaded guard-proxy's `/chat` limits (150 a minute per
+  cluster refused 1,153 of 1,500 turns, 77 %, at 500), the cost tally ($0.0060 a served turn, so the $25 cap holds
+  about 4,100 served turns) and `PROXY_TIMEOUT`. These figures are the doc's, unchanged.
+- **Not covered.** guard-proxy's `/prompts` feed and the wall's SSE fan-out: every replayed prompt carried
+  `[[wib-probe]]`, which `_is_probe` keeps off the feed, and `load_replay.py` opens no wall page. The section also
+  names two gaps the issue did not: the cap's refusal was never met (`/cost` ended at $4.13 of $25), and only attackme
+  on watch-it-burn-community was loaded.
+- **The wall's mechanism** is read from prompts-agenticburn's `app.py` on GitHub: it polls each cluster's `/prompts`
+  every 3 s (`POLL_INTERVAL`) and streams new prompts to its pages over SSE.
+- **The comment on #924.** A run may not post one, so its exact `gh issue comment` is in run 17651's report under
+  `escalate`. It links the section on `staging`, where the anchor exists once hecaton promotes this run.
+
+No live check: the change is a record of earlier runs, and nothing in it runs on a cluster. No test reads this doc
+(`git grep -n kubecon-na-2026-load-test -- verify scripts` finds none).
+
+**The suites (run 17651, at `ff497d0b`).** `bash verify/run-tests.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, exit 0. `bash verify/run-e2e-tools.sh` printed `58 checks ran (the offline suite and 57 tier
+tests) in 32m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-05 · #927 · run 17659 · /display adds one card per 1.5 s, the newest, with a "+N more" count
+
+**Why this repo, and what is left.** #927 is the throttle half of #924 (Michael's decision of 2026-11-05: about one
+new card every 1.5 s, the newest, with a "+N more" count that resets when a card appears). Its criteria name the
+prompt wall, `templates/wall.html` in peopleforrester/prompts-agenticburn, which this repo's runs do not change.
+Run 17650 read that page and filed nothing here, and its gate failed with no commits. This run does what #915 did
+for the mask: it puts the same throttle on this repo's own `/display` page (`gitops/ai-layer/web/display.js`), the
+wall's fallback on the projector, and hands the wall's change to prompts-agenticburn as a follow-up issue with the
+same spec. #927's five criteria stay open until that issue lands there.
+
+**What changed.** At 500 people the feed takes 8 to 17 prompts a second, and `/display` redrew the whole 50-deep
+list every 1.5 s poll, so about 25 new rows pushed everything down each time. Now the first answer the page gets
+goes up at once, newest first, as before, so a reloaded projector is not blank. After that, each poll's new
+entries (the longest-suffix diff that prompts-agenticburn's `new_entries()` uses, since the feed has no ids) pass
+#915's mask filter and go into a holding slot. Once per `CARD_INTERVAL_MS` (1500, the one named constant for the
+load test and the pause to read), if anything arrived since the last card, the newest goes up as a card and the
+rest are dropped, never queued. A `+N more` line under the heading counts what arrived since the last card and
+reads `+0 more` when a card appears. The card tick runs half a window after the poll; with both on 1.5 s and in
+step, a poll's count would be cleared by the card that follows it before anyone could read it. The screen keeps 50
+rows, as the deque does. guard-proxy, its feed and its poll interval are unchanged: every viewer still gets every
+prompt, and only what is drawn is sampled. The pause and the load test are #924's other children.
+
+**Tests.** `verify/test_display_throttle_e2e.py` (tools tier, needs node) runs the real `display.js` in node
+through `verify/display-clock-harness.js`, a fake clock that fires the page's own `setInterval` and `setTimeout`,
+a stub DOM and a scripted `/prompts` fetch, with no real timer and no network. It checks the constant is 1500 and
+the tick runs on it; a burst of 10 then 5 reads `+10 more`, one card (the 10th), `+0 more`, then `+5 more`, one
+card (the 5th), and quiet ticks after add nothing; masked arrivals are neither shown nor counted; 80 arrivals
+between two polls read `+50 more` and show the newest; and 17 prompts a second for 60 s give cards at least 1.5 s
+apart, each the newest the page had, with the count right at every 250 ms frame. Three mutations of `display.js`
+(keep the oldest, never reset the count, draw every arrival) fail it on 6, 6 and 11 checks. #915's runner,
+`verify/display-feed-harness.js`, gained the `#more` element and a `setTimeout` stub, and its test passes
+unchanged. Offline, `verify/test_stream.py` now checks the mask filter at both places a prompt enters (the
+first snapshot and the new arrivals), the constant, the tick and the `#more` element.
+
+**Live, before the change (run 17659, read only).** `https://attackme.burritobot.co/display` and
+`https://burritobot-private.burritobot.co/display` both answer 200 and serve #915's `display.js` (`var MASK`, no
+`CARD_INTERVAL_MS`); `/prompts` reads `"enabled": true` on both, with 0 entries on the public one and 4 on the
+private one.
+
+**Not yet run on a cluster.** After hecaton promotes this run and Argo CD syncs the console's ConfigMap:
+`curl -s https://attackme.burritobot.co/display.js | grep -c 'var CARD_INTERVAL_MS = 1500;'` prints 1, and with
+`/display` open, a handful of chats sent within a second show in `+N more` and then as one card, the last one sent.
+The same on `https://burritobot-private.burritobot.co/display`.
+
+**The suites (run 17659, at `f789eb74`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `60 checks ran (the offline suite
+and 59 tier tests) in 31m12s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new tier test is the 59th.
+## 2026-11-05 · #911 · run 17664 · No tracked file carries the old presenter terminal login; presenters are sent to mrf-secrets
+
+**What changed.** #910 took the old presenter login (the one word that was fleet.sh's default for both
+`WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`) out of fleet.sh and its tests. The value was still written out in
+`gitops/ai-layer/web/kubecon.html` (the notes and the footer), `gitops/ai-layer/web/brief.html`,
+`facilitation/kubecon-na-2026-run-of-show.md`, `facilitation/WHITNEY-START-HERE.md`, `docs/RUN-OF-SHOW-2026-08.md`
+(three places), `PROJECT_STATE.md`, four older decisions.md entries, `verify/test_instructor_brief.py` and the
+expected-output comment in `verify/fleet-drift-audit.sh`. Each now reads that the presenter login lives in
+mrf-secrets, `projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`, the key #910
+gave it, and none writes a value. fleet.sh's comments were already reworded by #910. The student login, `agentic`, is
+unchanged and still written out, since it is the one read aloud to a room.
+
+**decisions.md was redacted in place.** This file is append-only by convention, but #908 requires that no tracked file
+carry the value, so the four older entries that named it (the provisioning-agenticburn#16 ingest note near line 803, the run-of-show
+review near line 3439, the roster note near line 5112 and the KubeCon session note near line 13007) now read
+`[value redacted, #911]` or `[presenter password redacted, #911]` where the value was. Nothing else in them changed.
+This entry is the record of that edit. The value stays in git history, which is why #910 treats it as known and #912
+rotates it on the clusters.
+
+**`fleet-drift-audit.sh` no longer prints the presenter user.** Its expected-output comment named the value, and its
+`cred` field printed the user half of each cluster's `TTYD_CREDENTIAL`, which on a roster cluster is the presenter
+user #910 keeps out of every log. It now prints `cred=agentic` for the student login, `cred=presenter` for any other
+user and an empty field for no Secret, so the audit still tells the role split apart without naming the login.
+
+**The guard, `verify/test_no_presenter_login.py`.** It reads every tracked file in the working tree (`git ls-files`,
+text files only), splits each line into alphanumeric tokens and compares the SHA-256 of each token, as written and
+lowercased, against two digests: of the old word, and of the unpadded base64 of the `user:password` pair as the
+`terminal-auth` Secret held it. A hit names the file and line, never the token. The test does not carry the value: a
+digest of one lowercase word can be recovered by brute force, which is acceptable here because the value is already
+in public history and the guard's only job is to stop it being written out again. A self-test on a placeholder it
+owns comes first: the scanner finds it as written, upper-cased and inside a `user:password` pair, does not match a
+longer word containing it, and in a scratch git repo names the tracked file and line and does not read an untracked
+file. On the base tree (`9506e37f`) the guard fails and names the 16 lines this change rewords; on the branch it
+passes, reading 1054 text files. `verify/test_instructor_brief.py` no longer asserts the value: it checks that
+kubecon.html points at mrf-secrets and the key in both the notes and the footer, that the run-of-show does, and that
+neither writes a terminal login as a user / password pair, a check that the old wording fails.
+
+**Tests own their inputs.** `git grep -nF` on each reworded phrase against `verify/`, `scripts/` and `infra/` found no
+reader of the old words other than `verify/test_instructor_brief.py` and the comment in `fleet-drift-audit.sh`, which
+change in this commit.
+
+**Live check, both clusters, run 17664 (read only).** On watch-it-burn-private and watch-it-burn-community the new
+audit line, run with `--context`, printed `cred=presenter`, so each terminal-auth Secret still holds a user other
+than `agentic`, as #910 found. The console pod on each serves `/usr/share/nginx/html/kubecon.html` and `brief.html`
+with no `mrf-secrets` in either and, scanned by the guard's digest in the shell and never printed, two lines of
+kubecon.html and one of brief.html carrying the old login: the pages on the clusters are staging's before this
+change.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs the console, the same read on both clusters
+(`kubectl --context <ctx> -n agent exec deploy/console -- cat /usr/share/nginx/html/kubecon.html`, and `brief.html`)
+should show `mrf-secrets` and no line the guard's digest matches. Rotating the login itself is #912.
+
+**The suites (run 17664, at `85636f49`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), the new guard being the
+267th, then `59 checks ran (the offline suite and 58 tier tests) in 31m00s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`
+printed `prose gate: pass, 7 public-prose file(s) read`.
+
+## 2026-11-05 · #926 · run 17676 · wall-reset can run railway on another host, and the live reset waits on a Railway login
+
+**Why the reset did not run.** Run 17646's `fleet.sh wall-reset` reached staging at `c84432a2`. The escalated
+`railway restart` came back to the run (question 1089): every run acts through the `sources-elevated` wrapper, and no other
+tier holds a Railway login. So this run looked for a Railway login it could use, and there is none. `railway whoami`
+answers `Unauthorized` on this host. Through `sources-elevated fleet`, tanjiro-wsl2 answers `Unauthorized. Please run
+railway login again.` (its `~/.railway/config.json` is there, so the login expired) and megumi-wsl2 answers
+`Unauthorized. Please login with railway login`. Secrets Manager in accen-dev holds no Railway secret. Michael's
+Chrome on tanjiro is signed in to Railway and shows the service (`2744f1fd-d0cf-4f6d-8611-3351e6efac85`, environment
+`f8d76627-3655-4469-95cd-793fd2e2cbd5`, active deployment `8ea9028f`). But the restart sits in a menu on the
+deployment, and the browser route presses one thing per tab, so it cannot reach the menu's item. A browserless
+`railway login` or a new Railway token is a sign-in or a credential on Michael's account. This run did neither:
+`railway login` on a fleet host is his own sign-in, and is escalated as that.
+
+**Not run before the restart can follow it.** `reset-bot` empties both feeds, but prompts come back into them: attackme
+went from 0 to 3 between 18:13Z and 19:52Z. A `reset-bot` with no restart right after it leaves the wall as it was,
+and changes both bots for nothing, so this run did not run it. Read-only, the path `reset-bot` takes works from a run:
+`_account_for_name` gave `accen-dev` for both clusters, `admin_kubeconfig` gave
+`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-community` and `.../watch-it-burn-private`, and guard-proxy
+read 1 replica, 1 ready, on each.
+
+**What changed.** `wall-reset` runs railway as `WIB_WALL_RAILWAY` names it, split on spaces, and as plain `railway`
+when that is unset. A run has the clusters and no Railway login, and a fleet host may have the login. The guard, every
+feed empty first, has to run in the same command as the restart, so the restart moves to the other host, not the guard.
+From a run, once a fleet host is logged in:
+`WIB_WALL_RAILWAY="sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2 railway" ./fleet.sh wall-reset`.
+The wrapper joins the words into the ssh command, so the restart's arguments arrive as they are. A first word that is
+not on the host fails before any feed is read. `verify/test_fleet_wall_reset.sh` gains 4 checks (35 in all): the
+restart goes through the named command with the same arguments, a feed holding a prompt still refuses before it is
+called, a missing command fails before anything is read, and a refusal on the other host is passed on.
+
+**Live check (run 17676), read-only.** At 19:52Z `./fleet.sh wall-check --empty` printed `PASS` for the health URL and
+both clusters, then `FAIL  the wall still holds 22 prompt(s) from before the room: 18 from attackme, 4 from
+burritobot-private; received 2026-11-05 18:06Z to 2026-11-05 19:28Z; seq at 22`, and exited 1. At 19:57Z
+`./fleet.sh wall-reset`, with `WIB_WALL_RAILWAY` naming tanjiro-wsl2 through the wrapper, printed that attackme's feed
+holds 3 prompts and burritobot-private's 4, each with the `reset-bot` to run, then `wall-reset: refused; the wall was
+not restarted`, and exited 1 without calling tanjiro. Nothing on either cluster or on Railway was changed.
+
+**Not yet run live.** Once `railway login` has run on tanjiro-wsl2, from `infra/terraform/fleet/` in a run, with no
+pause between the first two: `./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private`, then the
+`WIB_WALL_RAILWAY` command above, then `./fleet.sh wall-check --empty` ending "holds no prompts", and
+`curl -s https://prompts.burritobot.co/api/prompts` showing `"prompts": []`. Then one prompt on attackme shows on the
+wall within about 3 seconds.
+
+**The suites (run 17676, at `1c2c6b0d`).** `bash verify/run-e2e-tools.sh` printed `268 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
+and 58 tier tests) in 30m55s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #883 · The IAM plan renders take providers from the plugin cache, not the registry
+
+**What failed.** The heavy gate ran `bash verify/run-e2e-tools.sh` on staging at `9c0e791c` and exited 1 on
+`test_iam_policy_structural.py` alone. The gate's log is not readable from a run, and the issue quotes only its tail.
+In this run the test passed both at `9c0e791c` and at `92dfea31` (the current base), with the tier's environment
+and pinned tools. So the failure is not in the code. It is the one run 16828 recorded under #825, where
+`terraform init` could not download `hashicorp/cloudinit v2.4.1` because releases.hashicorp.com reset the connection.
+
+**Why the test downloads so much.** `verify/iam_plan_render.py` copies no lockfile into its working copy of a
+root. Terraform 1.4 and later ignore `TF_PLUGIN_CACHE_DIR` for any provider that no lockfile records, so each
+`terraform init` fetched every provider from the registry again and only then linked the cache. #778's entry says
+the aws provider downloads once per checkout, but that was not so. The structural test renders four times
+(boundary, cluster, audit, and the cluster plan with the rules broken), and each render downloaded aws (about
+840 MB) and cloudinit, tls, time and null for the cluster root. In run 17534, a warm-cache init of the cluster
+root still printed `Installing hashicorp/aws v6.72.0`.
+
+**What changed.**
+- `verify/iam_plan_render.py`: every terraform call runs with `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE=true`,
+  so init uses the cached provider when no lockfile records it. The lockfile each render writes is thrown away
+  with its temp directory, so a lockfile that records only this platform's hash breaks nothing. With the flag, the
+  same init printed `Using hashicorp/aws v6.72.0 from the shared cache directory` for all five providers. The
+  structural test fell from 2m30s to 1m29s on a warm cache. Init still asks the registry which versions match and
+  still fetches the modules, which is a few small requests where before there were four 840 MB downloads.
+- `verify/test_iam_plan_render_cache.py` (offline): a stub terraform records each call's environment. For all
+  three roots, init, plan and show must carry the flag and a cache directory, with and without the tier's shared
+  cache. With the flag removed it fails 4 checks.
+- `verify/test_terraform_lock_init.py` is unchanged. It clears the cache on purpose, since it checks a fresh init.
+
+**Live check.** None. The change is in the tools tier's renderer, which needs no cluster and no AWS, and nothing on
+either cluster reads it.
+
+**A second fix: the tier's own test hung on the host's `/tmp`.** The first full run of the E2E command at
+`39600ce0` failed one offline test, `test_e2e_tools_tier.py`, at 6 checks in #865's fixture of the whole runner.
+That fixture runs the runner with an `env=` of its own that drops `TMPDIR`. The runner's `mktemp -d` then fell back to
+`/tmp`, which this run's sandbox does not let it write (`mktemp: failed to create directory via template
+'/tmp/tmp.XXXXXXXXXX'`), while `TMPDIR` named a directory in the worktree. Run 17534 set `TMPDIR` in each of the
+test's three `env=` to a `tmp` directory inside the scratch tree (`ad0d0130`). Staging took the same fix
+independently under #775 (`fa53301d`, run 17584), which sets `TMPDIR` to the scratch root itself in all three. The
+two collided when hecaton rebased run 17610's branch, so run 17678 dropped `ad0d0130`'s edit to the test and kept
+staging's.
+'/tmp/tmp.XXXXXXXXXX'`), while `TMPDIR` named a directory in the worktree. Each of the test's three `env=` now
+sets `TMPDIR` to a `tmp` directory inside its own scratch tree, so the test owns that input. Nothing in the test
+scans the scratch root. Rerun alone, it exits 0.
+
+**The suites (run 17534, at `ad0d0130`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
+offline suite and 57 tier tests) in 28m15s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+`test_iam_policy_structural.py` ended `0 failure(s)` in it, and in the first full run at `39600ce0` as well.
+
+**Resumed as run 17610.** Run 17534 ended `executor-error`. Its executor could not read
+`config/publication.yaml` from hecaton release `ab58b52213b5`, which is no longer on the host (the current release,
+`b5ac95bc543e`, has the file). That is hecaton's side, so nothing here changed. Staging had not moved from
+`92dfea31`. At `52fc7d7f`, `bash verify/run-e2e-tools.sh` printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, `58 checks ran (the offline suite and 57 tier tests) in 32m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_iam_policy_structural.py` at `0 failure(s)`.
+
+**Resumed as run 17678, rebased onto staging `4c9329dd`.** Run 17610 ended `rebase-conflict`: its `ad0d0130` and
+staging's `fa53301d` (#775) made the same TMPDIR change to `verify/test_e2e_tools_tier.py` in three places. The rebase
+kept staging's file, so this issue's branch now adds only the renderer change, its offline test and this record.
+At `5688cc47`, `bash verify/run-e2e-tools.sh` printed `269 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`59 checks ran (the offline suite and 58 tier tests) in 30m31s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
+`test_iam_policy_structural.py` at `0 failure(s)`.
+## 2026-11-05 · #906 · run 17556 · Both KubeCon clusters on their KubeCon profiles, linked, both probes GREEN, the bot reset
+
+`verify/prior-drafts.sh 906 origin/staging` printed NONE, and the issue had no comments, so this run started from
+staging `92dfea31`. The attempt before it ended on hecaton's own podman socket (`/run/user/103/podman/podman.sock`
+missing), before any work, so nothing was ported.
+
+**Step 1, the heavy gate (#883).** #883 was filed on staging `9c0e791c`, where `test_iam_policy_structural.py` failed.
+Every suite record on staging since names the tools tier green (58 checks at `92dfea31`, #874's entry). This run's own
+tools tier result is at the end of this entry.
+
+**Step 2, what applied the two policies outside the switch.** Argo CD did. The live `lab-bootstrap` root on
+watch-it-burn-private rendered `values-admin.yaml` (label `lab-platform/profile: admin`), and the one on
+watch-it-burn-community `values-burn.yaml`. Both clusters were built on 2026-10-28, before #774 added the two KubeCon
+profiles on 2026-11-01, and nothing had moved their roots since. The admin profile lists `network-policies` and
+`kubearmor-policies`, whose Applications owned `agent-egress-allowlist` and `block-recipe-snoop` (their Argo CD
+tracking ids said so), and it does not list `kyverno-breakout`, `guardrails-switch` or `internal-registry`. The burn
+profile has no Kyverno engine, so guardrails-on could not have armed community either. At 15:24Z and 15:26Z this run
+patched each root's values file and label to its KubeCon profile, the root `infra/deploy-full-idp.sh` writes for
+`kubecon-private` and `kubecon-community`:
+
+    kubectl --context watch-it-burn-private -n argocd patch application lab-bootstrap --type merge \
+      -p '{"metadata":{"labels":{"lab-platform/profile":"kubecon-private"}},"spec":{"source":{"helm":{"valueFiles":["values-kubecon-private.yaml"]}}}}'
+
+and the same with `kubecon-community` on watch-it-burn-community. Argo CD pruned `network-policies` and
+`kubearmor-policies` on private, which deleted the two policies and the agent and apps namespaces' other NetworkPolicies
+those Applications owned, and added `guardrails-switch`, `internal-registry` and `kyverno-breakout` (step 3). On
+community it added `kyverno`, `kyverno-registry-policy`, `kyverno-breakout` and `guardrails-switch`. Every Application
+on both clusters came back Synced and Healthy, except private's `internal-registry` (below). `event.sh` already defaults
+`WIB_ROSTER_PROFILES` to `kubecon`, so a fresh bring-up gets these profiles without this patch.
+
+`/controls` on private still reads `falco: true`. That badge reads the Falco DaemonSet (guard-proxy's
+`test_controls_falco_reads_the_daemonset`), and `kubecon-private` installs Falco on purpose: it detects and blocks
+nothing, and it is not one of the four guardrails #774 starts off. Every other badge on both clusters reads false.
+
+**Step 4, the link, and why guardrails-on still hung.** `./fleet.sh guardrails-link watch-it-burn-community
+watch-it-burn-private` printed `linked; guardrails-on in either terminal arms both`. The first admin probe then
+timed out on guardrails-on after 300 s, and private's terminal showed why: `kubectl --kubeconfig ~/.kube/peer`
+answered `dial tcp 10.0.50.254:443: i/o timeout`. Both clusters sit in one VPC with private endpoint access on, so
+inside the VPC a cluster's API name resolves to its private endpoint, whose security group (the EKS module's cluster
+group) admits only that cluster's own nodes. guardrails-link checks each link from this host, over the public
+endpoint, so it passed. This run added one rule to each module cluster group, from the other cluster's node group only:
+
+    aws ec2 authorize-security-group-ingress --group-id sg-04130d5989d5c1ab1 --ip-permissions \
+      'IpProtocol=tcp,FromPort=443,ToPort=443,UserIdGroupPairs=[{GroupId=sg-011fc555e507cfb40,Description="watch-it-burn-private nodes to this cluster API, the guardrails switch (#906)"}]'
+
+(`sgr-06466079a45231aba` on community) and the mirror on private, `sg-0ca9886f5a9d4f6d3` from community's node group
+`sg-0b7d2a0cfaed6fecd` (`sgr-00a76b36470442653`). The same peer call then answered in 0.1 s, and guardrails-on and
+guardrails-off each switched both clusters in 6 s, from either terminal. In git, `e6f34a90` gives `module "eks"` a
+`security_group_additional_rules` entry admitting the lab VPC's CIDR (`data "aws_vpc" "lab"`) on 443. The public
+endpoint already admits 0.0.0.0/0, so the rule opens nothing a VPC host could not reach already. A root apply adds it
+beside the two hand rules, which differ in source, so the apply does not collide with them, and they can then be
+revoked (`aws ec2 revoke-security-group-rules --group-id <group> --security-group-rule-ids <id>`). Until then #205's
+drift report will name them. `verify/test_peer_api_rule.py` pins the rule offline, and
+`verify/test_control_plane_app_ports_module.py` (tools tier) now also checks every attribute it sets against the pinned
+module's `security_group_additional_rules` type and that the module's cluster rule passes `cidr_blocks` through.
+
+**The internal registry's seed failed, and why.** On private, `internal-registry`'s pod read 1/2: the seed container
+exited with `failed to send blob (chunk) ... Method Not Allowed [http 405]`. The registry's log has the upload POSTs
+(202) and no PATCH at all. `REGISTRY_HTTP_HOST=https://registry.burritobot.co` made every upload Location absolute on
+the public name, so regctl sent its PATCH out through the router and the console, whose door admits only GET (a
+`curl -X PATCH` on the public name answers 405 too). `02404d1d` sets `REGISTRY_HTTP_RELATIVEURLS=true` instead. A live
+patch of the Deployment was refused by `block-argocd-drift`, as it should be, so the fix was checked in a scratch
+namespace, `check-906-17556`, with the same two images and seed script: the pod read 2/2, the tags list read
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`, and `regctl image digest` read the pinned
+`sha256:0dbe92d4...`. The namespace was deleted. `internal-registry` reads Degraded on private until `02404d1d` reaches
+it. `verify/test_guardrails_switch.py` now checks the relative URLs and that the seed pushes only to localhost.
+
+**Step 5, the routes table.** Not published by this run: publishing pushes apex-agenticburn's main and reloads the
+live router over Railway SSH, which a run's governance forbids, so the report escalates it (`./fleet.sh routes roster`,
+then `router-check` and `wall-check`, from a staging checkout). At 16:30Z `registry.burritobot.co/v2/` and
+`deployments.burritobot.co` still answered the router's 404.
+
+**Step 6, the breakout image.** Done before this run: push-jokers.yml's staging run of 10:22Z (#775) pushed it.
+ghcr.io's tags list for `peopleforrester/festival-ops/maintenance-shell` reads `busybox-1.38.0` and
+`busybox-1.38.0-internal`, the manifest request for the second answers 200, and the scratch seed above copied it at the
+images.lock digest.
+
+**Step 7, the probes.** Full results are in the run-of-show's Probe record (2026-11-05 entry). Admin, 16:21Z: 32 PASS,
+`KUBECON PROBE GREEN`, $0.2001 to $0.2479 over 13 model calls. Community, 16:30Z: 12 PASS, `KUBECON PROBE GREEN`,
+$4.4517 to $4.4866 over 7 model calls. Every FAIL before those was the model: the linked-list ask twice, Challenge 4's
+re-ask once, and HC-666 three times in five community runs on a new manifest shape. The bot wrote `requested_by` as a
+top-level field of the Deployment, and the API server answered `failed to create typed patch object ...
+.requested_by: field not declared in schema`. `d25d21da` has deploy_app take that field out and read it as the
+requester, as #856 did for the trailing form, and `verify/test_deploy_app_manifest_shapes.py` gains the shape (its six
+new checks fail on the old server). The first admin run was cut off by this run's own 590 s timeout before its last
+beat; the clusters were read afterwards and put back with guardrails-off from the terminal, and every later run ended
+with the probe's own guards-off and guardrails-off.
+
+**Step 8.** `./fleet.sh reset-bot watch-it-burn-community` printed `counter at zero on
+https://attackme.burritobot.co/cost ($0.0000 over 0 requests)`, and `/cost` read `"requests": 0, "usd": 0.0`.
+
+**Left on the clusters, at 16:31Z.** Both roots on their KubeCon profiles; the pair linked both ways; the two security
+group rules above; every AI guard off and the four Kubernetes guardrails off on both (`/controls` all false but
+private's Falco badge); no `joker-*` Deployment on either; community's counter at zero.
+
+**Not yet run on a cluster.** Once hecaton promotes this run and Argo CD syncs it:
+1. On private, `internal-registry` reads Synced and Healthy, its pod 2/2.
+2. Once the routes are published as well,
+   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` lists `busybox-1.38.0`,
+   `deployments.burritobot.co` answers 200, and `CONTEXT=watch-it-burn-community python3
+   verify/test_service_hosts_live.py` covers the kept service hosts.
+3. Several HC-666 asks in a row on community land `joker-<name>` with no schema refusal: the community probe's
+   `c6-lands` beat, run three times.
+4. After a root apply of `infra/terraform/aws/cluster` to either cluster, `aws ec2 describe-security-group-rules` on
+   its module cluster group shows TCP 443 from the lab VPC CIDR, and the two hand rules can be revoked.
+
+**The suites (run 17556, at `5d40fd08`).** The first `bash verify/run-e2e-tools.sh`, at `1cd135ea`, exited 1 on one offline
+test, `test_e2e_tools_tier.py`: its fixtures run the tier's scripts with an env that drops TMPDIR, so their `mktemp`
+went to the host's `/tmp`, which had been removed mid-run on this host (`ls -ld /tmp` showed link count 0, and
+`touch /tmp/x` answered "No such file or directory"). `5d40fd08` gives each fixture run its own scratch as TMPDIR.
+The second run printed `267 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline
+suite and 57 tier tests) in 31m33s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, so #883's command is green on
+this branch. No dependency was added.
+
+## 2026-11-05 · #906 · run 17628 · Run 17556's work ported, both probes GREEN again, the bot reset, the routes still owed
+
+`verify/prior-drafts.sh 906 origin/staging` printed START from `origin/agent/906-17556`, CLEAN: staging had not
+touched any of its 11 paths. The issue's only comment is that run's own report (outcome partial), and no comment says
+why it did not merge, so this run cherry-picked all six commits and redid only the live checks. Their hashes here:
+`02404d1d` is `11b86302`, `d25d21da` is `13c1f1cc`, `e6f34a90` is `44cc9be5`, `1cd135ea` is `f3a6da86`, `5d40fd08`
+is `3470f5c3` and `1077925e` is `4e804a67`. The run-of-show now names the new ones; the run 17556 entry above keeps
+the old ones as written.
+
+**What the clusters read at 17:47Z.** As run 17556 left them: both `lab-bootstrap` roots on `kubecon-community` and
+`kubecon-private`, the `guardrails-peer` Secret on both, `deny-external-registries` and `restrict-image-registries`
+on community and `deny-external-registries` on private, no NetworkPolicy or KubeArmor policy of the guardrails on
+either, and every Argo CD application Synced and Healthy but private's `internal-registry` (Degraded until
+`11b86302` reaches it). Community's counter had moved to $0.0482 over 9 requests: another run was replaying topic
+cases on it (`sess-replay-*` sessions in `workshop-agent`'s log at 17:48Z). This run waited until that log had been
+quiet for 6 minutes before it switched anything.
+
+**The probes.** Admin on watch-it-burn-private, 18:06Z: 32 PASS, `KUBECON PROBE GREEN`, $0.2479 to $0.2914 over 13
+model calls, guardrails-on arming both clusters from the private terminal and guardrails-off disarming both.
+Community, 18:08Z: 11 PASS of 12, RED, on the linked-list ask (2 of 3; the bot wrote out its plan and stopped), $0.0769
+to $0.1309 over 7 calls. Community again, 18:09Z: 12 PASS, `KUBECON PROBE GREEN`, $0.1309 to $0.1655 over 7 calls.
+HC-666 landed on both community runs, on the old server still, so `13c1f1cc`'s beat (Not yet run, item 3 above)
+stays owed. The run-of-show's Probe record has the three runs.
+
+**Step 8.** At 18:10Z `./fleet.sh reset-bot watch-it-burn-community` printed `counter at zero on
+https://attackme.burritobot.co/cost ($0.0000 over 0 requests)`, and `/cost` read `"requests": 0, "usd": 0.0`.
+
+**Step 5, still owed.** `registry.burritobot.co` and `deployments.burritobot.co` answer the router's 404. apex main's
+Caddyfile already looks `deployments.burritobot.co` up under `deployments-attackme.burritobot.co`'s row, beside the
+support desk's. What is missing is the table: apex main's `routes.map` was last published on 2026-11-01 (`b0c97e80`,
+24 hosts), before the deployments and registry rows existed, and it carries neither. `./fleet.sh routes roster`
+writes both, then pushes apex main and reloads the live router over Railway SSH. A run may not push or deploy, so this
+run escalates that one step, to be run from a staging checkout once this run is promoted, so that the registry it
+routes to has seeded.
+
+**The Falco badge.** Private's `/controls` reads `falco: true`. The badge reads the Falco DaemonSet (#486), and
+`kubecon-private` installs Falco, which with Talon answers only the fork bomb, not one of the four guardrails #774
+starts off and not a beat of the breakout. This run left it, as run 17556 did, and the report names it.
+
+**Left on the clusters, at 18:10Z.** As found at 17:47Z, but community's counter at zero and community's guard-proxy
+pod replaced by reset-bot. No `joker-*` Deployment on either cluster.
+
+**The suites (run 17628).** `bash verify/run-e2e-tools.sh` at `4e804a67`, the six ported commits, printed `267 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite and 57 tier tests) in 35m14s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `bash verify/run-tests.sh` at `3cfb3c4a`, which adds only this
+entry and the run-of-show's record, printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. No
+dependency was added.
+
+## 2026-11-05 · #906 · run 17652 · Run 17628's commits rebased onto staging `cb3367d2`
+
+Run 17628 ended failed at the merge on a rebase conflict: #775's run 17584 reached staging first with two of the same
+fixes. `b42b7d06` sets `REGISTRY_HTTP_RELATIVEURLS=true` on the internal registry, as `11b86302` did, and adds its own
+relative-Location check to `verify/test_guardrails_switch.py`. `fa53301d` hands `verify/test_e2e_tools_tier.py`'s
+fixtures their own TMPDIR, as `3470f5c3` did. Both conflicts were resolved to staging's side: the registry manifest is
+staging's, and the TMPDIR commit, with nothing left after the resolution, dropped out. The one check run 17556 had and
+staging did not, that the seed copies to `localhost:5000` and never names `registry.burritobot.co`, is kept beside
+staging's check as `1bbab60e`. The other commits applied as they were: `13c1f1cc` is now `6c477927`, `44cc9be5` is
+`92d27d8d`, and the records follow. The run-of-show names the new hashes and `b42b7d06` for the registry seed.
+
+Per the coordinator's comment of 18:48Z, this run did not repeat the live recheck. Run 17628's results above stand,
+and #918 and #920 own the routes publish and the HC-666 check on the new server. One read: on watch-it-burn-private,
+Argo CD's `internal-registry` reads Synced and Healthy at `cb3367d2`, so #775's seed fix is live there.
+
+**The suites (run 17652).** `bash verify/run-e2e-tools.sh` at `27f3bcab`, rebased on staging `cb3367d2`, printed `267
+tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `58 checks ran (the offline suite and 57 tier tests) in
+33m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+Before promotion staging moved to `9506e37f` (#910's TMPDIR take-up and terminal login, #915's masked prompts), so the
+branch was rebased again, with no conflict. The hashes this entry names for #906's own commits are the branch's as
+of `cb3367d2` and change at each rebase; the commit subjects name them for good. The run-of-show now names #906's
+deploy_app fix by issue rather than by hash.
+On that base, `bash verify/run-tests.sh` at `dab7e25a` printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`
+and `exit=0`, and `bash verify/run-e2e-tools.sh` printed `59 checks ran (the offline suite and 58 tier tests) in
+30m01s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**A third rebase (run 17652).** Staging moved to `4c9329dd` while the suites ran. #919's `667234c0` adds the same
+seed-to-localhost check to `verify/test_guardrails_switch.py` that this branch kept from run 17556, so that commit is
+dropped too and staging's copy stands; the sentence above that names it as kept is superseded. #919's paragraph and
+#906's land side by side in the run-of-show's Probe record. What #906 still adds on staging is the deploy_app
+manifest-shape fix, the lab VPC's rule on each cluster API, and these records.
+On `4c9329dd`, `bash verify/run-e2e-tools.sh` at `b559d890` printed `269 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, then `59 checks ran (the offline suite and 58 tier tests) in 30m32s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`.
+## 2026-11-05 · #714 · The build side leaves Docker Hub: the Joker, web-terminal and Backstage build on lab-platform's ghcr.io copies, and the gate reads every tracked line
+
+**What changed.** lab-platform#353's three build-base copies answered an anonymous pull from ghcr.io on 2026-11-05,
+each at the linux/amd64 digest of the Docker Hub index this repo had pinned (read with crane 0.22.1 from both sides):
+`mirror/library/busybox:1.38.0-f97baa533a26`, `mirror/library/debian:bookworm-slim-a3bba7dc7dbc` and
+`mirror/library/node:24.22.2-trixie-slim-e053394f1551`. So the last three Docker Hub names move:
+
+- `images/villains/build.sh`'s JOKER_BASE is the busybox copy by digest. `verify/test_joker_build_digest.py` rebuilt
+  both Jokers on it into a loopback registry and got the digests images.lock pins (d8dae795 and 0dbe92d4), so nothing
+  needs a push. `test_joker_web_busybox.py` and `test_c6_joker_public.py` read the base from ghcr.io anonymously now,
+  and `test_c6_villain_endpoint.py` requires the copy.
+- `images/web-terminal/Dockerfile` builds FROM the debian copy, pinned by digest (it was a floating
+  `debian:bookworm-slim`). The copy is amd64 only, which is what the workflow builds and the nodes run.
+- The Backstage Dockerfile and its README's `buildah from` name the node copy by digest.
+  `test_backstage_catalog.py` requires the copy and still reads the Node version (24.22 or later) from its tag.
+- images.lock's two base rows name the copies at their digests.
+- `verify/test_no_docker_hub.py` now holds the build side, as the issue asks. Check 1 also reads Dockerfile FROM
+  lines, `buildah from` lines and shell NAME_BASE= assignments. Check 2 reads images/, images.lock and verify/ too,
+  so `git grep docker.io` outside the dated records finds only the REFUSED lines, each carrying a `(#714)` comment
+  that says it names Docker Hub to refuse it. The gate's own three files (docker_hub.py and the two gate tests) are
+  the one exception, since their fixtures are what they detect. Putting a bare `debian:bookworm-slim` FROM back, a
+  bare busybox JOKER_BASE, a `buildah from node:...`, a docker.io row in images.lock, or dropping one comment each
+  made it fail by name; each was reverted.
+- Two docstring lines that named docker.io as history are reworded (test_demo_app_web_image.py, and deploy_app's
+  `_public_image_name`, whose `_DOCKER_HUB` tuple gets its comment).
+
+**Live check (2026-11-05, read only).** Every pod's spec image on both clusters, judged by `verify/docker_hub.py`:
+
+- watch-it-burn-community: 54 pods, 47 images, none from Docker Hub that this repo deploys. The one Docker Hub name
+  is `agent/tron` (`trongame/tron:latest`), a Deployment deploy_app made on 2026-11-01, before #773 made it refuse
+  a Docker Hub name PUBLIC_IMAGES does not carry. It has been in ImagePullBackOff for three days, so the node retries
+  an anonymous Docker Hub pull every few minutes. It is left as found; its delete is escalated.
+- watch-it-burn-private: 75 pods, 69 images. Every image Argo CD renders names ghcr.io or another non-Docker Hub
+  registry. Thirteen containers report a docker.io name in status.image while their spec names the ghcr.io copy:
+  containerd reports the first name it holds for an image, and these nodes pulled the Docker Hub name before #623
+  and #714 moved them, so the status name comes from that cache and shows no new pull. Four KubeArmor pods (the enforcer DaemonSet,
+  its init container, the controller and the relay) still run Docker Hub images in their spec. Their
+  KubeArmorConfig names the four ghcr.io copies, and the community cluster runs exactly those, but on the private
+  cluster require-resource-limits is Deny, and the operator's snitch Job and the controller's new ReplicaSet carry
+  containers with no limits (KubeArmorConfig has no resources field), so Kyverno refuses them and the pods from
+  2026-10-28 stay. The operator's log says so: `Cannot run snitch on node ... Policy require-resource-limits failed`.
+  That is a policy bug of its own, filed as a follow-up: on a fresh admin-profile build the same denial would keep
+  KubeArmor from starting at all.
+
+**Not yet run on a cluster.** A fresh cluster build that pulls every pod with no Docker Hub name in a spec or in
+status: it needs the follow-up's KubeArmor fix on the admin profile, and the nodes' cached Docker Hub names gone,
+which only a new nodegroup gives.
+
+**Left on Docker Hub outside this repo's tree.** llm-guard-cpu-offline, the submodule at images/llm-guard, builds
+FROM `python:3.12-slim` (follow-up there). images.lock's `laiyer/llm-guard-api:0.3.16` row is #603's retention copy
+of the archived upstream, which nothing pulls or builds on; lab-platform has no mirror/ copy of it (follow-up).
+
+**The suites (run 17238).** `bash verify/run-e2e-tools.sh` at `ee6aa1bd` on staging `4b8a5058` printed
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, with `55 checks ran (the offline suite and 54 tier tests) in 28m47s`; the
+offline suite inside it ran 254 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. The tier's Joker checks read
+the new base from ghcr.io: test_joker_web_busybox, test_c6_joker_public and test_joker_build_digest each passed.
+Staging moved to `c4d8c186` (#867's records) while that ran. The commit rebased onto it with only this file's append
+to merge, and `bash verify/run-tests.sh` on the rebased branch ran 254 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
+
+## 2026-11-05 · #714 · Run 17572 ports run 17238's build-side change, deletes agent/tron, and adds the live Docker Hub check
+
+**Why run 17238's work is here.** Run 17238 ended failed with an executor error on hecaton's side (a missing
+`config/publication.yaml` in hecaton's own release), not on anything in this repo, so its two commits never reached
+staging. `bash verify/prior-drafts.sh 714 origin/staging` named its draft with three in-place drifts, so this run
+cherry-picked both commits onto staging `92dfea31`. Two things differ from the draft:
+
+- images.lock conflicted on the node and debian rows. Staging had dated them 2026-11-05 (the second netcup save, run
+  17393) under their Docker Hub names. They now name lab-platform#353's ghcr.io copies, which no save has held, so they
+  read `-`, and the header says so.
+- Staging had since added `verify/images_live.py` and `verify/test_images_lock_live_judge.py` (#603's live judge),
+  whose nine docker.io lines failed the draft's check 2. images_live.norm now reads Docker Hub's host names from
+  `docker_hub.HUB_HOSTS` instead of spelling three of them, so its fixtures pass unchanged. The judge's fixture file
+  joins GATE, because its docker.io names are the ones a node reports for an image it cached, which the judge has to
+  read. Putting a docker.io comment back in images_live.py made check 2 fail by name; it was reverted.
+
+**The live acts (2026-11-05, KUBECONFIG of run 17572, both contexts named on every call).** Escalation 806 asked for
+agent/tron's delete; hecaton dropped it and handed the act to the run.
+
+1. `kubectl --context watch-it-burn-community -n agent get deploy tron -o yaml --show-managed-fields`: created
+   2026-11-01T16:22:34Z by field manager `workshop-mcp` (deploy_app), image `trongame/tron:latest`, no Service, no Argo
+   CD Application tracking it, pod `tron-6447f57c8d-fhnj8` in ImagePullBackOff, uid 7b62bc15-04a2-4b60-b16a-e1f0c3085abb.
+2. `kubectl --context watch-it-burn-community -n agent delete deployment tron --wait=true`: `deployment.apps "tron"
+   deleted from agent namespace`; a `get deploy,rs,pod` after it listed no tron object. Nothing in git deploys it, so
+   Argo CD does not bring it back.
+3. The KubeArmor leftover run 17238 found on watch-it-burn-private is gone without an act: the enforcer, controller
+   and relay pods there started at 03:34 to 03:35 UTC on 2026-11-05 on the ghcr.io copies, and the operator was already
+   on its copy. Run 17238 read require-resource-limits' Deny as a fault a fresh admin build would repeat. It is not:
+   the policy is Audit in git (`policies/kyverno/require-resource-limits.yaml`), and Deny on the private cluster is
+   the Beat 1 toggle, a demo prop. No follow-up is needed for it.
+
+**A live check that holds it: `verify/test_no_docker_hub_live.py` (SUITE: e2e, the live-cluster suite).** It reads
+every Pod, ReplicaSet, Deployment, StatefulSet, DaemonSet, Job and CronJob on COMMUNITY_CONTEXT and PRIVATE_CONTEXT
+and fails on any container whose spec image is a Docker Hub pull. `docker_hub.live_hub_images` is the judge, and
+the judgement section of test_no_docker_hub.py holds it to fixtures offline: a Pod, a Deployment at 0 replicas and a CronJob are
+read, and a ghcr.io spec passes whatever cached name its status shows. It leaves out a Deployment's old ReplicaSets
+at 0 replicas and finished Jobs, which start no pod. The first live run judged them too and found 18 and 19 such
+revisions from before #623 and #714 (old demo-app nginx, kagent's grafana-mcp and postgres, KubeArmor, Grafana,
+falcosidekick, Backstage's old postgres). Every one of them was at 0 replicas.
+
+`COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_no_docker_hub_live.py`
+printed, exit 0:
+
+```
+== watch-it-burn-community ==
+  PASS  watch-it-burn-community runs pods (58)
+        0 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-community names a Docker Hub image (0 found)
+== watch-it-burn-private ==
+  PASS  watch-it-burn-private runs pods (75)
+        16 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-private names a Docker Hub image (0 found)
+No pod or pod template on either cluster names a Docker Hub image.
+```
+
+The events on both clusters, read the same hour, held one Docker Hub pull event, a BackOff for the tron pod from
+before its delete, and none on the private cluster. The 16 status names on the private cluster are the Falco,
+falcoctl, falcosidekick, Grafana, Tempo, KubeArmor, Postgres, grafana-mcp and collector copies, each reported under
+the Docker Hub name its node pulled before the move.
+
+**Not yet run on a cluster.** A fresh cluster build, on a new nodegroup, where `verify/test_no_docker_hub_live.py`
+passes and prints 0 cached status names. A run cannot bring a cluster or nodegroup up.
+
+**Left, outside #714's Docker Hub work.** The villain shell banner Michael added on 2026-10-30 is not started. Of the
+three image groups it covers, only the two Jokers are built here (the C2 covers and the roster are lab-platform's
+promo/ build). A banner changes both Joker digests. push-jokers.yml (#775) pushes a new pin on promotion, but
+`verify/test_c6_joker_public.py` in the tools tier reads the published layer against the checkout first. So the
+change goes red before it can be promoted, and the banner needs its own issue to sequence the pin and the push.
+
+**The suites (run 17572).** The first `bash verify/run-e2e-tools.sh`, at `58a393cb`, ran 58 checks in 31m05s. All 57
+tier tests passed; the offline suite failed on one test, test_e2e_tools_tier.py. Its fixture runs of the tier runner
+built an environment without TMPDIR, so the runner's mktemp fell back to /tmp. That stopped working in this run's
+sandbox at 17:09 CET (`touch /tmp/x` answered "No such file or directory"), although it had worked an hour before.
+Each of its three environments now sets TMPDIR to the test's own scratch directory (`756dad44`), and the test passed
+alone. The second run, at `756dad44`, printed `266 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`58 checks ran (the offline suite and 57 tier tests) in 29m51s` and `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #714 · run 17681 · Run 17572's draft ported, and both Jokers get the shell banner
+
+**The port.** Run 17572's five commits had not reached staging when this run started. `bash verify/prior-drafts.sh 714
+origin/staging` named `origin/agent/714-17572` as START, with one in-place drift (`verify/test_e2e_tools_tier.py`,
+staging's `be97ab92` for #909) and a decisions.md APPEND. Four commits were cherry-picked onto staging `4c9329dd`, with
+decisions.md resolved by keeping staging's entries and then the draft's. The fifth, `756dad44`, was skipped: it set
+TMPDIR in the tier test's three fixture environments, and `be97ab92` and #775 had already put the same three settings
+on staging, so the pick left nothing to change. The 17572 entry above names `756dad44`; on staging the fix is
+`be97ab92`'s.
+
+**The banner (Michael's comment of 2026-10-30).** Run 17572 left it as a follow-up, reading that a banner moves both
+Joker digests and that `verify/test_c6_joker_public.py` would go red before push-jokers.yml could push the new ones.
+That test compares only the published layer's `villain/start.sh` and `villain/www/index.html` with the checkout, and
+the banner changes neither. So it passes against the tag as it is now and after the push, and the change can be
+promoted green. What it adds:
+
+- `images/villains/villain-banner.sh`: three green lines of hacker text, then "ACCESS GRANTED... just kidding, you
+  deployed me. Why so trusting about admission control?" and the Joker's sign-off. Every line is one `printf` of
+  quoted text.
+- `build.sh` puts it in the Joker layer as the single member `etc/villain-banner.sh`, with no `etc/` directory entry,
+  so busybox's `/etc` keeps its mode, and adds `--env ENV=/etc/villain-banner.sh` beside `PORT=8080`. Both Jokers get
+  it, since both are built by `build_joker_web`. The ten C2 villains are lab-platform's build and get theirs from
+  lab-platform#372.
+- Re-pinned from the rebuild: the workshop Joker `busybox-1.38.0` moves from `d8dae795` to `0765b359552b`, the
+  breakout's `busybox-1.38.0-internal` from `0dbe92d4` to `793db2995eee`. The new digests are in images.lock (the
+  workshop row's saved date goes back to `-`, since no save holds the new digest), `games/villain-apps/deploy-villain.yaml`
+  and the internal registry's seed. push-jokers.yml pushes each build to its tag when this reaches staging, because
+  `scripts/ghcr_version_tag.py` copies a crane build to a pinned digest ghcr.io lacks when the build has exactly that
+  digest. It ran green three times on 2026-11-05.
+
+**Tests.** `verify/test_joker_web_busybox.py` (tools tier) now runs the banner on the pinned busybox's own `sh`.
+On a pty, as `kubectl exec -it <pod> -- sh` gives it, the shell prints the banner and then answers `echo
+still-$((40+2))` with `still-42`. The arithmetic is the proof the shell still runs, because the pty echoes what is
+typed. `sh -c 'echo ok'` and a `sh` fed from a pipe print only `ok`. `start.sh` run with ENV set logs the laugh and no
+banner text. Appending `exit 0` to the banner made the printf-only check and the still-a-shell check fail, and an
+empty ENV made the tty check fail; both were reverted. `verify/test_joker_build_digest.py` now reads the built
+config's ENV and the exported `/etc/villain-banner.sh`, and checks that busybox's `etc/passwd` is still there. With
+crane 0.22.1 it rebuilt both new pins under umask 002 and 022. `verify/test_c6_villain_endpoint.py` (offline) holds
+build.sh's layer member and its `--env ENV=` flag.
+
+**Live (2026-11-05, this run's KUBECONFIG, `--context` on every call).** `COMMUNITY_CONTEXT=watch-it-burn-community
+PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_no_docker_hub_live.py` printed, exit 0:
+
+```
+  PASS  watch-it-burn-community runs pods (58)
+        0 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-community names a Docker Hub image (0 found)
+  PASS  watch-it-burn-private runs pods (76)
+        16 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-private names a Docker Hub image (0 found)
+No pod or pod template on either cluster names a Docker Hub image.
+```
+
+A read of every pod's images on both clusters found no `maintenance-shell` or `registry.burritobot.co` image running,
+so there was no Joker to open a shell in.
+
+**Not yet run on a cluster.**
+
+- A fresh cluster build, on a new nodegroup, where `verify/test_no_docker_hub_live.py` passes and prints 0 cached
+  status names (as in run 17572's entry). A run cannot bring a cluster or nodegroup up.
+- The banner on the published Joker, after push-jokers.yml has pushed `0765b359552b` and `793db2995eee`: `crane digest
+  ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0` returns the new pin, and on a cluster a
+  ticket-made Joker answers `kubectl --context <ctx> -n agent exec -it deploy/maintenance-shell -- sh` with the banner
+  while `kubectl logs` shows only the laugh. Once the push is done, `verify/test_c6_joker_public.py` can also hold the
+  published `etc/villain-banner.sh` and ENV (filed as a follow-up).
+
+**The suites (run 17681).** `bash verify/run-e2e-tools.sh` at `9df06b45` printed `268 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `59 checks ran (the offline suite and 58 tier tests) in 30m24s` and `ALL E2E TOOLS TIER
+CHECKS GREEN`, exit 0. The tier ran the banner checks in test_joker_web_busybox.py and test_joker_build_digest.py, and
+test_c6_joker_public.py passed against the tag ghcr.io serves now.
+
+## 2026-11-05 · #927 · run 17684 · the /display throttle checked live on both clusters after Argo CD synced
+
+**What this run found.** Run 17659's change (`59ee1a77`, `65a2d8b5`) is in staging and Argo CD has synced it to both
+clusters. `bash verify/prior-drafts.sh 927 origin/staging` printed LANDED for `origin/agent/927-17650` and NONE
+after it, so there was no draft to port. The wall's own change is prompts-agenticburn#18 (filed 2026-11-05, open,
+no `agent-task` label yet); #927's five criteria all name that repo's `templates/wall.html` and stay open until it
+lands. This run changes no code.
+
+**Live, after the change (run 17684, read only).** On `https://attackme.burritobot.co` and
+`https://burritobot-private.burritobot.co`, `/display` answers 200, and
+`curl -s <host>/display.js | grep -c 'var CARD_INTERVAL_MS = 1500;'` prints 1 on each. The served `display.js` and
+`display.html` are byte for byte the files in `gitops/ai-layer/web/` at this run's base (`cmp` silent, sha256 of
+`display.js` starting `6f3716817b57d142` on both hosts and in the repo), and the served page has the `#more` line.
+`/prompts` read `"enabled": true` with 3 entries on the public cluster and 4 on the private one.
+
+**The served file on the fake clock.** Each host's served `display.js` ran in `verify/display-clock-harness.js` with
+that host's live `/prompts` answer as the first poll and seven `live-check burst NN` arrivals before the next one.
+On both: the history went up at once with `+0 more`; at 1500 ms the line read `+7 more` with no new row; at 2250 ms
+one card went up, `live-check burst 07` (the newest), and the line read `+0 more`; quiet ticks at 3750 ms and
+5250 ms added nothing. Rows went 3 to 4 on the public host and 4 to 5 on the private one.
+
+**Not yet run on a cluster.** The step with a real browser and real chats: with `/display` open on either host, a
+handful of chats sent within a second show in `+N more` and then as one card, the last one sent. This run sent no
+chats, because each one stays in guard-proxy's 50-deep feed and on the projector, and a live check leaves the
+cluster as found. The fake-clock run above is on the exact bytes the clusters serve, so only the browser and the
+chat path are left unexercised.
+
+**The suites (run 17684, at `b414b6da`).** `bash verify/run-e2e-tools.sh` printed `268 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `60 checks ran (the offline suite and 59 tier tests) in
+30m39s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-04 · #452 · The KubeCon recorded fallback: the replay and the screenshots deck, on the six-segment layout
+
+The breakout's point 9 needs a fallback for the room's live input. Run 7091's draft (`origin/agent/452-7091`,
+0023ac3b) built the replay half on 2026-10-24 and never reached staging; the owner's comment of 2026-10-27 found no
+branch then, and it was on origin by this run. `verify/prior-drafts.sh` called its drift two edits in place
+(`.gitignore`, the run-of-show) and a decisions.md append, but staging had since rewritten what the draft was
+built on, so most of it was made again on the current layout:
+
+- **Six segments, not seven.** The run-of-show went to six segments (#687, #776), so the videos are one per
+  segment, 1 to 6, each titled with its segment's heading. Segment 1 is in the set because the room's first
+  minute on the bot and the prompt wall are on screen in it. The draft had segments 2 to 7, a platform tour and
+  an observability segment the cut no longer has.
+- **The prompt set is `/kubecon`'s room prompts.** The draft copied its leak prompt from `/brief`, the workshop
+  page, and wrote its own off-topic asks. Now every prompt is the room's prompt on `/kubecon`, the page this
+  session drives from, word for word, with the segments the page shows it in; the offline test holds the two
+  sets equal both ways. `--segment N` replays the segment on stage. Challenge 2's Tron ask and its follow-up
+  share a `thread`, so they go out as one conversation; every other prompt has its own.
+- **The front door moved.** The public host is `attackme.burritobot.co` (the agenticburn.com name is its twin,
+  #651). guard-proxy's window is now 150 a minute (the draft paced under 120). The console nginx now holds each conversation to 10 a
+  minute, keyed on the `X-BurritoBot-Session` header, so the replay sends that header and a witch name as the
+  storefront does. The reply timeout is 300 s, over nginx's 285 s. The refusals it stops on are guard-proxy's
+  two rate limits, its cost cap ("The kitchen is closed"), its budget guard ("The kitchen tab is frozen", which
+  the draft had read as the cost cap) and nginx's own "Slow down"; the offline test provokes each on the real
+  handler, and reads nginx's from `console.conf`.
+- **The screenshots deck is captured on the live clusters as well as at the rehearsal.** The issue asks for the
+  videos from the first full rehearsal; it does not say where the screenshots come from. Most shots are a
+  prompt and its reply on one of the two clusters, so `scripts/capture-fallback-screenshots.py` takes them in
+  headless Chromium through the real storefront. Each shot names the `/controls` state it shows, and the script
+  refuses a shot whose cluster reads otherwise, so a guarded shot cannot be taken on an open bot. It never flips
+  a guard. Two shots stay by hand at the rehearsal: the signed-in Datadog trace and the `guardrails-on` terminal.
+- **`deck.html`'s lists are written from `assets.yaml`** by `check-fallback-assets.py --write-deck`, so the deck
+  and the manifest are edited in one place. The draft kept a hand-copied list and a hand-copied title map.
+- Kept from the draft: the required target, one session per prompt, pacing at most half the window, a guardrail
+  block and a missed marker reported but not failures, the asset checker, and the videos out of git by default
+  (Git LFS or a release asset instead is still open for Michael).
+
+**What ran live (run 16962, 2026-11-04, on `watch-it-burn-community` and `watch-it-burn-private`).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` read the public host from
+  cluster-identity (`attackme.agenticburn.com`) and printed `DONE: 1 of 1 delivered` and `All live replay checks
+  passed.`
+- The Night Before's replay, `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment
+  1`, printed `ok` on all five prompts and `DONE: 5 of 5 delivered`, about $0.026 of Bedrock. The wide-open bot
+  taught salsa steps, planned the hot dog party, listed karaoke songs and reversed a linked list, and the prompt
+  wall showed the five prompts under attackme (shot 01-3).
+- `scripts/capture-fallback-screenshots.py` took 12 of the deck's 15 shots, committed here. The 8 community shots
+  were taken with every guard off, as found. The 4 private ones were taken one guard at a time from the private
+  terminal (`guard-input-on`, `guard-mcp-on`, `guard-topic-on`, `guard-rbac-on`), each put back with its `-off`
+  helper; `/controls` then read as it did before the first, and the workshop-agent Role's rules matched the saved
+  copy. 03-5 used `guard-rbac-on` instead of `guardrails-on`, because the scoped Role is the one guardrail the
+  shot shows and `guardrails-on` switches both clusters. HC-666 deployed two Jokers on community
+  (`joker-morgana-the-wraith`, `joker-isolde-the-troll`); both were deleted, and community's Deployments then
+  matched the list saved before the first shot.
+- Retakes: one HC-666 reply came back as Bedrock's "blocked by our content filters" after the Joker had deployed,
+  and one beacon ask broke its own curl quoting and then timed out; each landed on the next try. Shot 03-1
+  (Challenge 2's public image) is not committed: three times out of three the model called `deploy_app` with the
+  manifest `"Tron"`, and the tool refused it as not a single object with apiVersion and kind. That is the room's
+  own Challenge 2 ask failing on the public bot, filed as a followup from this run.
+
+**Not yet done:** the six videos and shots 02-2 and 03-4, made at the first full rehearsal, and the replay over a
+presenter's phone hotspot, which is the Night Before's. `verify/test_fallback_deck_e2e.py` (tools tier) opens the
+deck from disk with the network cut off and steps through every slide.
+
+## 2026-11-05 · #452 · Run 17082 ports run 16962's recorded fallback onto staging and retries the Challenge 2 shot
+
+Run 16962's draft (`origin/agent/452-16962`) built the recorded fallback and never reached staging: hecaton had
+not yet promoted or rejected it when this run was dispatched. `verify/prior-drafts.sh 452 origin/staging` named it
+START, two base commits behind, with one drift line: `verify/test_presenter_student_retired.sh`, which staging's
+75e8461d (#616) had edited. That commit adds the same `cmd_guardrails_link() { :; }` stub as the draft's 62524287,
+on the same line, so 62524287 was dropped and staging's version kept. The draft's 0052b930 and 5edc800d were
+cherry-picked as they are, with decisions.md's two appends both kept. The draft's last commit, 6c9843ca, only
+recorded its own suite run at 62524287; this run's suite results are below instead. Nothing else differs from the
+draft.
+
+**What ran live (run 17082, 2026-11-05, on `watch-it-burn-community`).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` printed `DONE: 1 of 1 delivered to
+  https://attackme.agenticburn.com/chat` and `All live replay checks passed.`, about $0.004 of Bedrock.
+- Shot 03-1 (Challenge 2's public image) was tried once more with every community guard off, as `/controls`
+  read: `scripts/capture-fallback-screenshots.py --shot 03-1-c2-public-image`. The model called `deploy_app`
+  twice with the manifest `"Tron"`, which the tool refused as not a single object with apiVersion and kind
+  (workshop-mcp's log), and then offered a manifest naming the Docker Hub image `tron`, which `deploy_app` would
+  refuse too, since only its `PUBLIC_IMAGES` names are pulled (#714, #773). The PNG showed the failure, so it was
+  deleted and not committed. That is four failures in four tries of the room's own Challenge 2 ask on the public
+  bot. The `tron` Deployment on community is the 2026-11-01 run's (`trongame/tron:latest`); its YAML was saved
+  before the shot and compared after, unchanged, and the agent namespace's Deployments, StatefulSets and
+  ReplicaSets matched the list saved before. The cluster was left as found.
+
+**Not yet done:** the six segment videos and by-hand shots 02-2 and 03-4, which come from the first full
+rehearsal (the run-of-show's Run-through record still reads "not yet run"), and shot 03-1, which waits on the
+Challenge 2 ask landing on the public bot.
+
+**The suites (run 17082, at `33c9685e`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests) in 25m41s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
+tests, `test_replay_prompts.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier ran
+`test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
+
+## 2026-11-05 · #452 · Run 17547 lands the recorded fallback without the segment videos, since M4 was dropped
+
+**Why the scope changed.** Michael dropped M4, the recorded fallback milestone (#613), on 2026-11-01, as handled
+outside this repo and not a blocker. Hecaton's comment on #452 then asked for only the repo's part: the replayable
+prompt set and its script. Recording the six segment videos at the first full rehearsal is no longer this issue's
+ask, so nothing here waits on that rehearsal any more.
+
+**The port.** `verify/prior-drafts.sh 452 origin/staging` named run 17082's draft START: four commits, 138 base
+commits behind, four drift lines, all edits in place. Its four commits were cherry-picked in order. In
+`docs/KUBECON-ABSTRACT-READINESS.md` and the run-of-show's abstract table, staging's 9c6c0174 (#455) had rewritten
+row 8 for BanTopics; staging's row 8 was kept and the draft's row 9. decisions.md's appends were both kept. Why
+run 17082 failed validation is not stated on the issue, and its prose passes the gate on this base, so nothing in
+the draft itself was changed for it.
+
+**What differs from the draft.** One commit on top of it takes the videos out:
+- `facilitation/kubecon-na-2026/fallback/assets.yaml` lists `segments` (each run-of-show heading, for the deck's
+  titles) in place of `videos`, and its screenshots are the 12 that were taken. The three never taken are gone
+  from the list: 02-2 and 03-4 were to be taken by hand at that rehearsal, and 03-1 (Challenge 2's public image)
+  has no screen to take while the room's Tron ask fails on the public bot (a followup from this run). So the deck
+  shows no MISSING card, and `scripts/check-fallback-assets.py` passes on a clean clone.
+- `scripts/check-fallback-assets.py` checks the deck page and the PNGs, and no longer knows MP4.
+- The `.gitignore` rule and `videos/.gitkeep` are removed. The README drops its videos section and says why.
+- The run-of-show's Rollback step 3 goes from the replay straight to the deck. The Night Before's asset check
+  expects `recorded fallback ready`. Open question 2 reads built, and names the Tron ask as Challenge 2's own risk.
+- `verify/test_replay_prompts.py` holds the manifest to six titled segments and no videos, every listed shot to a
+  committed PNG, the checker to passing on the repo as it is, and Rollback step 3 to naming no videos.
+  `verify/test_fallback_deck_e2e.py` holds every slide of the committed deck to a loaded image.
+- Readiness row 9 stays PARTIAL, for ballroom sizing (#450) and phones (#451); its recorded fallback part now
+  reads built.
+
+**What ran live (run 17547, 2026-11-05, on `watch-it-burn-community`).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` at 15:11:55Z printed
+  `DONE: 1 of 1 delivered to https://attackme.agenticburn.com/chat` and `All live replay checks passed.`
+- The Night Before's replay, `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co
+  --segment 1`, at 15:12:08Z: all five lines ended `ok` (order, salsa-dance, hot-dog-party, karaoke,
+  linked-list) and it printed `DONE: 5 of 5 delivered to https://attackme.burritobot.co/chat`, about $0.04 of
+  Bedrock. The wide-open bot answered each off-topic ask. Segment 1 deploys nothing and reads no Secret, so the
+  cluster was left as found apart from the cost counter.
+- `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 13 files in place`.
+
+**Not yet run on a cluster:** nothing this change needs.
+
+**The suites (run 17547, at `46b09b4a`).** The first `bash verify/run-e2e-tools.sh` ran 59 checks in 31m02s and
+exited 1 on one: `test_terraform_lock_init.py`, whose fresh `terraform init` of `infra/terraform/dashboards` got
+`github.com: bad response code: 504` while downloading datadog/datadog v3.91.0. Run again alone with the pinned
+terraform, it printed `ALL TERRAFORM LOCK-INIT CHECKS GREEN`. The second full run ran 59 checks (the offline suite
+and 58 tier tests) in 30m54s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran
+267 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` among them; the tier ran
+`test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
+
+## 2026-11-05 · #452 · Run 17599: the skip-markers gate read a check label as an exit-as-skip
+
+Run 17547 failed hecaton's `skip-markers` gate, which counts per line the markers in
+`hecaton/run/skipmarks.py`, among them the pattern `\bexit\s+2\b`. Line 401 of `verify/test_replay_prompts.py`
+labelled a check `"an unknown --only id is exit 2"`: a string naming the usage-error exit code the check asserts,
+not a skip, but the pattern cannot tell the two apart. The same line was in runs 16962's and 17082's drafts, so it
+is most likely also why run 17082 failed validation. The label now reads `"an unknown --only id is a usage error"`,
+as its neighbours do; the assertion (`r.returncode == 2`) is unchanged. The gate's own `count()`, run over every
+file this branch changes against base `92dfea31`, finds no added marker in any of the 26.
+
+**The suites (run 17599, at `03c53b93`).** `bash verify/run-e2e-tools.sh` ran 59 checks (the offline suite and 58
+tier tests) in 31m46s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 267
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier printed `FALLBACK DECK GREEN`. Run 17547's live
+checks above stand: this change touches only a check's label.
+
+## 2026-11-05 · #452 · Runs 17627 and 17686: run 17599's draft ported, with no change of its own
+
+Run 17599 reported done at `03c53b93` and `6cb4e345` on branch `agent/452-17547`, but nothing it committed reached
+staging, and the issue names no gate that stopped it. `bash verify/prior-drafts.sh 452 origin/staging` printed START
+from `origin/agent/452-17547`, CLEAN: staging had not touched any of its 26 paths since its base `92dfea31`, which is
+this run's base too. Its nine commits are cherry-picked unchanged, so the design and every entry above for #452
+stand. Before the suites, run 17627 put the change through the gates it can run itself: the skip-markers gate's own
+`count()` over every changed file finds an added `exit 2` only in decisions.md, which is not a test file and so not
+read; `verify/prose_gate.py` passed on the 6 public-prose files; and the links gate's own `links.check()` with the
+pinned lychee finds 5 broken links at the base and the same 5 at the candidate, none added.
+
+**Why run 17627 did not land.** Its first full `bash verify/run-e2e-tools.sh` went red only on
+`test_e2e_tools_tier.py`: the fixture envs carried no TMPDIR, so the runner's `mktemp` fell back to `/tmp`, and that
+host's `/tmp` was an unlinked directory (`stat` showed `Links: 0`). Run 17627 gave the three fixture envs their own
+TMPDIR, and the suite went green. Staging landed the same fix meanwhile, in fa53301d (#775) and be97ab92 (#909), so
+hecaton's rebase hit an edit-edit conflict on that file and failed the run. Run 17686 drops run 17627's copy of the
+fix and keeps staging's. This branch now changes no path the draft did not, and a trial rebase of it onto
+origin/staging applied with no conflict.
+
+**Live, on watch-it-burn-community on 2026-11-05 (run 17627).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` printed
+  `DONE: 1 of 1 delivered to https://attackme.agenticburn.com/chat` and `All live replay checks passed.`
+- The Night Before's replay, `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1`,
+  printed `ok` on all five lines and `DONE: 5 of 5 delivered to https://attackme.burritobot.co/chat`, about $0.025
+  of Bedrock. Segment 1 deploys nothing, so the cluster was left as found apart from the cost counter.
+- `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 13 files in place`.
+
+**Not yet run on a cluster:** nothing this change needs.
+
+**The suites (run 17686).** Run on this branch rebased onto origin/staging at `93a5f59b`, the state hecaton
+promotes, in a scratch worktree: `bash verify/run-e2e-tools.sh` ran 61 checks (the offline suite and 60 tier tests)
+in 30m48s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 270 tests and
+printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` (`All recorded-fallback checks
+passed.`) and staging's `test_e2e_tools_tier.py` among them; the tier printed `FALLBACK DECK GREEN`.
+## 2026-11-05 · #879 · A test holds #392's third-delivery criterion: KubeCon NA is costed from the fleet accounts' bills
+
+Test review run 17331 found that nothing tested #392's criterion "Activate the project cost-allocation tag on the
+payer account, or the third delivery is costed by guesswork too". The activation is off the table (Michael's rulings
+on #392, 2026-11-01 and 2026-11-03), and the criterion became each delivery costed from the member accounts' own Cost
+Explorer with a non-zero recorded figure (the 2026-11-05 · #392 entries above). The two past deliveries are recorded
+in `cost/measured/`. For the third, KubeCon NA (owed on #872), only the run-of-show's teardown step named the command,
+and no test read it.
+
+`verify/test_kubecon_cost_measured.py` (offline suite, 40 checks, 44 once the KubeCon record is saved) now does. It fails when:
+
+- the run-of-show's "Record the real spend" step stops naming `teardown/delivery-cost.py` with `--event` set to the
+  run-of-show's own delivery (`kubecon-na-2026`, from its file name), placeholders for the window's two ends and
+  nothing else, a `--profile` for each fleet account, `cost/measured/kubecon-na-2026.txt` as the record and #872, or
+  starts naming the estimator; or `cost/measured/README.md` stops giving KubeCon `--event kubecon-na-2026`;
+- that command, filled in with a KubeCon-shaped window (2026-11-02 .. 2026-11-14) and the five accounts in
+  `WIB_ATTENDEE_ACCOUNTS`, run against an aws shim answering as a member account does (tag figure 0.00), stops
+  printing every account's usage at its hand sum and a non-zero all-accounts total, or stops saying why the tag
+  figure is 0.00;
+- with the shim answering as active tags would, `delivery-cost.py` or `cost-report.sh --tag-key event --tag-value
+  kubecon-na-2026` stops printing the non-zero tag-filtered figure. That is #392's literal Done-when, read on the day
+  the payer activates the tags;
+- a file in `cost/measured/` has a zero total or zero EKS cluster hours, either past delivery's file is gone, or a
+  saved `kubecon-na-2026.txt` does not name its delivery, take in the session day 2026-11-12 (read from the
+  run-of-show's opening line), measure every fleet account, or is free of `WINDOW CUTS SPEND`.
+
+Each anchor the test reads in the run-of-show and the README is checked first and named when it is missing. Eight
+edits made by hand and then reverted each turned the test red: the estimator named in the step, the Portland event in
+its command, one profile in place of each fleet account, the step's anchor reworded, Portland's total zeroed, a
+KubeCon record with the Portland window and an account missing, the payer footnote dropped from the script, and the
+tag figure forced to 0.00 in the script.
+
+**The previous attempt** at this issue ended `workspace`: hecaton could not reach its Podman socket
+(`/run/user/103/podman/podman.sock`), on the host and before any repo work. Nothing here caused it or changed for it.
+`verify/prior-drafts.sh 879 origin/staging` printed NONE.
+
+**Not yet run on a cluster.** Nothing is owed: the test is offline and reads only the repo. The live measurement of
+KubeCon is #872's, once its fleet is down.
+
+**The suites (run 17689, at `bbcffac6`).** `bash verify/run-e2e-tools.sh` printed `271 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, with `test_kubecon_cost_measured.py` at all 40 checks,
+then `60 checks ran (the offline suite and 59 tier tests) in 29m24s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
 ## 2026-11-05 · #884 · run 17543 · The cluster root names its admins: nwuser everywhere, the hecaton-run role in accen-dev
 
 **What changed.** `infra/terraform/aws/cluster/main.tf` sets `enable_cluster_creator_admin_permissions = false` and
@@ -19442,12 +20775,6 @@ the entry's `tags_all` gaining the seven fleet tags, in place. Nothing was appli
 `accessEntries[?ends_with(@, ':role/hecaton-run')] | [0]` printed the role's ARN on both clusters, `None` for a role
 name not there, and `ResourceNotFoundException` (exit 254) for a cluster that does not exist.
 
-**A test fixed on the way: `verify/test_e2e_tools_tier.py`.** Its #865 section runs a fixture copy of
-`run-e2e-tools.sh` with an environment of PATH, HOME and a few logs, and no TMPDIR, so the runner's `mktemp -d` fell
-back to `/tmp`, which this run's sandbox does not allow it to write: `mktemp: failed to create directory via template
-'/tmp/tmp.XXXXXXXXXX'`, and five of its checks failed. The test now sets TMPDIR to its own temporary directory in
-each of its three fixture environments, so the result no longer hangs on the host's `/tmp`.
-
 **Not yet run on a cluster.** The apply itself, on the operator machine where the states are:
 `WIB_FORCE_UP=1 bash infra/terraform/fleet/fleet.sh instructors up all`, which applies watch-it-burn-community and
 watch-it-burn-private, should log `adopted the hecaton-run access entry into the cluster's state`, and its plan should
@@ -19458,6 +20785,18 @@ only, and no access entry, association or key policy replaced or destroyed.
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the
 offline suite and 58 tier tests) in 32m03s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`;
 `test_cluster_admin_entries_module.py` printed `ALL CLUSTER ADMIN ENTRY MODULE CHECKS GREEN` inside it. A first run
-at `fffeee98` (59 checks in 32m50s, exit 1) failed two: `test_e2e_tools_tier.py` on the host's `/tmp`, fixed above,
-and `test_terraform_lock_init.py`, whose init of `infra/terraform/dashboards` got `github.com: bad response code: 504`
+at `fffeee98` (59 checks in 32m50s, exit 1) failed two: `test_e2e_tools_tier.py` on the host's `/tmp` (run 17543's `e6439d2a` set TMPDIR in its
+fixtures; staging's #909, `be97ab92`, made the same fix, and the merge keeps staging's), and `test_terraform_lock_init.py`, whose init of `infra/terraform/dashboards` got `github.com: bad response code: 504`
 installing datadog/datadog v3.91.0; the cluster root's init in it passed, and the rerun passed it.
+
+**Run 17707 resumes run 17543.** Run 17543 ended `executor-error` after its work and report were done: hecaton's
+executor raised `FileNotFoundError` on `/var/lib/hecaton/app/releases/3e853a25d5b5/config/publication.yaml`, a file
+of hecaton's own release that is still missing, so nothing in this repo caused it. Its three commits were intact on
+`agent/884-17543`. Staging had moved 67 commits since its base `92dfea31`; `bash verify/draft-drift.sh HEAD
+origin/staging` named four edits in place and nothing moved or deleted. The branch takes staging by a merge rather
+than a rebase, so the commits the earlier report and the issue comment name stay as they are. In the merge,
+`verify/test_e2e_tools_tier.py` is staging's (#909 set TMPDIR at the same three fixture sites), `main.tf` keeps
+#906's `data "aws_vpc" "lab"` next to the admin locals, and decisions.md keeps both sides' entries, staging's first.
+`terraform validate` passes on the merged root, and the offline tests that read it and `fleet.sh` (this entry's,
+`test_attendee_iam_user.sh`, `test_fleet_wall_reset.sh`, `test_peer_api_rule.py`, `test_control_plane_app_ports.py`,
+`test_hostname_tag.py`) pass.

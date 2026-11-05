@@ -52,13 +52,14 @@ check "a 200 with no cluster list fails" '[[ "$(wall "{\"ok\":true}" 200)" == rc
 check "an unreachable wall fails" '[[ "$(CURL_RC=7 wall "" 000)" == rc=1 ]] && grep -q "could not read" "${T}/log"'
 
 echo "== wiring =="
-check "fleet.sh dispatches wall-check" 'grep -q "^        wall-check) cmd_wall_check ;;$" "${FLEET}"'
-check "the usage text names wall-check" 'grep -q "^  wall-check" "${FLEET}"'
+check "fleet.sh dispatches wall-check" 'grep -qF "        wall-check) cmd_wall_check \"\$@\" ;;" "${FLEET}"'
+check "the usage text names wall-check" 'grep -q "^  wall-check " "${FLEET}"'
 
 ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"
 KUBECON="${HERE}/../gitops/ai-layer/web/kubecon.html"
 WALL="https://prompts.burritobot.co"
-line_of() { grep -nF -- "$1" "${ROS}" | head -1 | cut -d: -f1; }
+# Read in the Night Before alone: the run-through record names `./fleet.sh wall-check --empty` too, earlier on (#926).
+line_of() { sed -n '/^## Night Before$/,/^## Rollback on the day$/p' "${ROS}" | grep -nF -- "$1" | head -1 | cut -d: -f1; }
 # A pipeline into these checks ends in `grep ... >/dev/null`, never `grep -q`: under pipefail, grep -q exits at its first
 # match, the writer still sending gets SIGPIPE, and the pipeline returns 141, so the check failed whenever the writer
 # had more to send at that moment (seen once in a full run-tests.sh on 2026-10-29, not reproducible alone).

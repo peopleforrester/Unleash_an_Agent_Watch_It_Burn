@@ -64,8 +64,8 @@ bring-up. Details in decisions.md, 2026-11-03 · #775 and 2026-11-05 · #775.
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
 Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667),
-and since against the four-challenge one: on 2026-11-05 it is 8 READY, 1 PARTIAL (9: ballroom sizing #450, phones
-#451 and the recorded fallback #452), 0 MISSING. Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on
+and since against the four-challenge one: on 2026-11-05 it is 8 READY, 1 PARTIAL (9: ballroom sizing #450 and phones
+#451; its recorded fallback #452 is built), 0 MISSING. Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on
 2026-11-05 (#455): BanTopics is in `llm-guard-scanners`, so the on-topic guard refuses a paraphrase with no listed
 word, and a cpu.5 probe pod on watch-it-burn-private judged all 64 topic asks as written. The probe was green on both
 clusters on 2026-10-28, before the three-challenge order (#639) and C6's fetched ticket (#640). Update its rows
@@ -123,7 +123,7 @@ KubeCon clusters), #41, #42; lab-platform#244 to #248; prompts-agenticburn#11; h
 
 Next, in order:
 - [ ] Rehearsal with Whitney, Wed 2026-10-28 09:00 Central: the cold read against the live platform (#611).
-- [ ] Rebuild the recorded fallback (#452); its branch was lost. Record once the rehearsal works.
+- [x] Recorded fallback (#452): the replayable prompt set, `scripts/replay-prompts.py` and the screenshots deck of 12 shots are in `facilitation/kubecon-na-2026/fallback/`, named in the run-of-show's Night Before and Rollback step 3. The segment videos left this repo with M4 (#613, dropped by Michael on 2026-11-01). The room's Tron ask failing on the public bot is a Challenge 2 risk of its own, filed from #452.
 - [x] Deck PDF to Sessionize: dropped, no deck is submitted (Michael, 2026-10-28; #449, #537 closed).
 - [ ] #634 (workshop_agent service name), #635 (converge skipping repair_datadog: not reproduced on the
   rebuild, where Datadog went in at bootstrap; re-check when keys change after a bring-up).
@@ -288,8 +288,9 @@ Clusters track `staging`; main is behind by design until Michael promotes.
   detect-and-respond. The C3 bait is now baked into the workshop-mcp image so the block is EPERM, not
   ENOENT.
 - **C4 is denial-of-wallet**, not the fork bomb. Fork bomb retired: Nova refuses it in chat.
-- **Terminal credential is split**: `sprouts` for instructor/roster clusters, `agentic` for the attendee
-  pool.
+- **Terminal credential is split**: the presenter login for instructor/roster clusters, kept in
+  mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`) since #910,
+  and `agentic` for the attendee pool.
 - **Model is Nova Pro**, and `MODEL_TIER` must match the bound ModelConfig (guarded by a build test).
 - **guard-proxy env never arrives via git** (Argo CD ignoreDifferences); it needs a live patch behind a
   Kyverno flip. See docs/GOTCHAS-FLEET-AND-DELIVERY.md.

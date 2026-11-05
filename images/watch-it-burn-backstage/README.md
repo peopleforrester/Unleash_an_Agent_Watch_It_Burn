@@ -15,7 +15,7 @@ buildah, from this directory:
 
 ```bash
 # 1. install, type-check and build the backend bundle, on the image's own Node
-ctr=$(buildah from docker.io/library/node:24.22.2-trixie-slim)
+ctr=$(buildah from ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280)
 buildah run --network=host -v "$PWD":/src --workingdir /src "$ctr" -- bash -c \
   'apt-get update -qq && apt-get install -y -qq python3 g++ build-essential libsqlite3-dev &&
    yarn install --immutable && yarn tsc && yarn build:backend'
@@ -34,7 +34,8 @@ Then:
 2. `verify/sign-images.sh` signs that digest under the workshop key (cosign 2.x). An unsigned image of ours is
    denied admission in every namespace (`policies/kyverno/verify-image-signatures.yaml`).
 
-The base image is pinned on purpose; see the header of `packages/backend/Dockerfile`.
+The base image is pinned on purpose; see the header of `packages/backend/Dockerfile`. Both steps pull it from
+lab-platform's ghcr.io copy, by digest, never from Docker Hub (#714).
 
 ## Dependency pins
 

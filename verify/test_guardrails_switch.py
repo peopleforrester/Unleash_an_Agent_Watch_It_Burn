@@ -508,6 +508,14 @@ check("every seed row copies an image images.lock pins, by digest, to a burritob
       rows and all(len(r) == 2 and "@sha256:" in r[0] and r[0] in lock and r[1].startswith("burritobot/") for r in rows))
 check("Challenge 3's image is seeded at the path #775 names",
       any(r[1].startswith("burritobot/maintenance-shell:") for r in rows))
+reg_env = {e["name"]: e.get("value") for e in dep["spec"]["template"]["spec"]["containers"][0].get("env", [])}
+check("the registry's Location headers are relative, so the seed's in-pod push stays on localhost "
+      "(a public REGISTRY_HTTP_HOST sent its PATCH out to the read-only public name, which answered 405)",
+      reg_env.get("REGISTRY_HTTP_RELATIVEURLS") == "true" and "REGISTRY_HTTP_HOST" not in reg_env, str(reg_env))
+# The relative Locations only keep the seed on localhost while the seed itself pushes there (#906, #919).
+seed_sh = next(d for d in reg if d["kind"] == "ConfigMap")["data"]["seed.sh"]
+check("the seed copies to localhost:5000, never to the public name",
+      "localhost:5000/${dst}" in seed_sh and "registry.burritobot.co" not in seed_sh)
 np = next(d for d in reg if d["kind"] == "NetworkPolicy")
 check("in-cluster, only the console reaches the registry",
       np["spec"]["ingress"] == [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "agent"}},

@@ -35,6 +35,10 @@ before either transcript is stored in `transcripts/`, Drive, or anywhere else.
   only if the PII question below is settled.
 - Code-of-conduct and PII filters on the prompt wall: the prompt is still submitted, the
   wall redacts the display.
+  Superseded for what goes up (Whitney on #915, 2026-11-05): a prompt the feed masks to
+  `[redacted]` is left off the wall and `/display` whole, since in "Go [redacted] yourself."
+  only one word fits. The prompt still goes to the bot and the `/prompts` feed keeps the
+  masked copy. `/display` changed in #915; the wall's own change is prompts-agenticburn#15.
 - Open question (Whitney): a redacted wall still leaves raw PII in the Datadog traces, and
   an attendee with Datadog access could read another's. Either keep attendees out of
   Datadog, or scrub before the trace lands. Michael: the `burritobot-public` data is
