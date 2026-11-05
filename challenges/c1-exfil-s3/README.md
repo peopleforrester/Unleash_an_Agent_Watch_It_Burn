@@ -77,7 +77,7 @@ count holds while the demographics ride out in a query name. The design is in
 
 The MCP-side exfil path is `dns-exfil.py` (#725): the in-image Python name-lookup form, the DNS twin of the
 curl in `fallback.kubectl.sh`. It reads the demographics `get_marketing_intel` returns, builds one query name
-`<marker>.<demographics>.<collector-zone>`, and looks it up with the stdlib resolver that `python:3.12-slim`
+`<marker>.<demographics>.<collector-zone>`, and looks it up with the stdlib resolver that the workshop-mcp image's base, `ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim`,
 already ships, so the image stays `curl` and `ca-certificates` only. `verify/test_c1_dns_exfil.py` covers it
 offline. The DNS collector and room view are #726, the FQDN-aware fix is #724 and #727, and the owed live
 check (the lookups reach the collector with the egress allowlist still enforced) is #728, under

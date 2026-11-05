@@ -20763,3 +20763,17 @@ now names the ghcr.io reference the three otel-collector Applications render
 (`ghcr.io/peopleforrester/lab-platform/mirror/otel/...`). No test read that line's old words.
 
 **Not yet run on a cluster.** Nothing is owed: check 3 is offline and reads only the repo.
+
+**Check 4, added in the same run: no Markdown page names a Docker Hub image.** Checks 1 to 3 read no prose, and
+the spec pages still said components run Docker Hub images that the cluster runs from ghcr.io. Check 4 reads every
+code span on a tracked Markdown page outside the records. PRDs (prds/, docs/prd*) count as records, since they are
+plans kept as written. A span counts as an image when it has an image's shape with a tag or digest. A repo path with
+a line number, a host and port, an IAM action and a key:value tag are skipped. A name with no path counts only when
+its tag opens with a digit. So `python:3.12-slim` is read, and a bare `debian:bookworm-slim` is a gap the fixture
+names. Seven lines failed it, and each now names the ghcr.io image the repo runs or builds on:
+MASTER-RECREATION-SPEC's component table (guard-proxy, workshop-mcp and evil-mcp-shim on
+`watch-it-burn:python-3.12-slim`, workshop-mcp's own `workshop-mcp-mcp-1.29.1`, and the console on
+`watch-it-burn:nginx-1.27-alpine`, the images gitops/ai-layer/resources.yaml and the two Dockerfiles name),
+BUILD-SPEC's two LLM Guard lines (now cpu.5, the deployed image VERSIONS.lock records), and C1's README on the base
+image's stdlib resolver. No test read those words. A `curlimages/curl:8.10.1` cell added to the spec table made
+check 4 fail by name, and was then reverted.

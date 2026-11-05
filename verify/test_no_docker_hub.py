@@ -33,6 +33,11 @@ Two checks, each of which a new Docker Hub pull fails:
    which lab-platform keeps no ghcr.io copy of. It must stay a declared, upstream, saved row, so a new Docker Hub
    row fails, and RETAINED must name only rows that are there.
 
+4. No Markdown page outside the records names a Docker Hub image in a code span. A spec table that says a component
+   runs `python:3.12-slim` names Docker Hub, though the cluster runs the ghcr.io copy. A span is read as an image
+   when it is shaped as one with a tag or digest; a repo path with a line number (`verify/x.py:9`) and a host and
+   port (`agentgateway:3000`) are not. Plans as written (prds/, docs/prd*) are records like the dated ones.
+
 What a Helm chart renders is test_no_docker_hub_render.py's (tools tier): it renders every Application's sources.
 
 The build side came in with #714's last step, once lab-platform#353's ghcr.io copies of busybox 1.38.0, debian
@@ -284,6 +289,34 @@ def versions_refs(text: str) -> list[tuple[str, str]]:
     return out
 
 
+FILE_EXT = re.compile(r"\.(py|sh|tf|ya?ml|md|json|txt|lock|tsv|js|ts|html|go|toml|cfg|ini)$")
+
+
+def plan(path: str) -> bool:
+    """A plan as written: a PRD, under prds/ or a docs/prd* page."""
+    return path.startswith("prds/") or path.rsplit("/", 1)[-1].startswith("prd")
+
+
+def markdown_refs(path: str, text: str) -> list[tuple[str, str]]:
+    """(file:line, reference) for each code span on a Markdown page shaped as an image reference with a tag or digest.
+    A span whose name is a file (a path with an extension, or one in the repo) is a line reference. A name with no
+    path is read only with a version tag, one that opens with a digit and is not all digits: `python:3.12-slim` is an
+    image, and `agentgateway:3000` (a host and port), `s3:PutObject` (an IAM action) and `ml_app:burritobot` (a tag)
+    are not."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        for span in re.findall(r"`([^`\s]+)`", line):
+            if not IMAGE_SHAPE.match(span) or not re.search(r":[A-Za-z0-9_]|@sha256:", span):
+                continue
+            name, _, tag = span.partition("@")[0].partition(":")
+            if FILE_EXT.search(name) or (REPO / name).exists():
+                continue
+            if "/" not in name and not tag[:1].isdigit() or "/" not in name and tag.isdigit():
+                continue
+            out.append((f"{path}:{n}", span))
+    return out
+
+
 print("== the judgement itself ==")
 for ref, hub in (("nginx:1.27", True), ("busybox", True), ("curlimages/curl:8.10.1", True),
                  ("docker.io/library/nginx:1.27-alpine", True), ("index.docker.io/x/y", True),
@@ -479,6 +512,24 @@ for ref in RETAINED:
     pulled = [f"{w}: {r}" for w, r in pulls if re.split(r"[:@]", r.rsplit("/", 1)[-1], maxsplit=1)[0]
               == name.rsplit("/", 1)[-1] and docker_hub(r)]
     check(f"no image field check 1 read pulls {name}", not pulled, str(pulled))
+
+print("== 4. no Markdown page names a Docker Hub image ==")
+MD_FIXTURE = ("| guard-proxy | `python:3.12-slim` | `nginxinc/nginx-unprivileged:1.27-alpine` |\n"
+              "see `verify/test_x.py:9` and `infra/terraform/aws/cluster/main.tf:229-231`, on `agentgateway:3000`\n"
+              "grant `s3:PutObject`, tag `ml_app:burritobot`, base `debian:bookworm-slim`\n"
+              "runs `ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:" + "5" * 64 + "`, `kubectl`\n")
+found = [r for _, r in markdown_refs("fixture.md", MD_FIXTURE)]
+check("a Markdown code span naming an image with a path or a version tag is read; a file:line reference, a host and "
+      "port, an IAM action, a key:value tag, a bare name with a word tag and a plain word are not",
+      found == ["python:3.12-slim", "nginxinc/nginx-unprivileged:1.27-alpine",
+                "ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:" + "5" * 64], str(found))
+mrefs: list[tuple[str, str]] = []
+pages = [f for f in files if f.endswith((".md", ".mdx")) and not plan(f)]
+for f in pages:
+    mrefs += markdown_refs(f, (REPO / f).read_text(encoding="utf-8", errors="replace"))
+check(f"Markdown pages' image spans are read ({len(mrefs)} in {len(pages)} pages)", len(mrefs) >= 10)
+bad = [f"{w}: {r}" for w, r in mrefs if docker_hub(r)]
+check("no Markdown page outside the records names a Docker Hub image", not bad, "\n      ".join([""] + bad))
 
 print()
 if failures:
