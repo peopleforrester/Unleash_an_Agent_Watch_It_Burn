@@ -20713,3 +20713,7 @@ tag figure forced to 0.00 in the script.
 
 **Not yet run on a cluster.** Nothing is owed: the test is offline and reads only the repo. The live measurement of
 KubeCon is #872's, once its fleet is down.
+
+**The suites (run 17689, at `bbcffac6`).** `bash verify/run-e2e-tools.sh` printed `271 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, with `test_kubecon_cost_measured.py` at all 40 checks,
+then `60 checks ran (the offline suite and 59 tier tests) in 29m24s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
