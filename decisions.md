@@ -19442,6 +19442,12 @@ the entry's `tags_all` gaining the seven fleet tags, in place. Nothing was appli
 `accessEntries[?ends_with(@, ':role/hecaton-run')] | [0]` printed the role's ARN on both clusters, `None` for a role
 name not there, and `ResourceNotFoundException` (exit 254) for a cluster that does not exist.
 
+**A test fixed on the way: `verify/test_e2e_tools_tier.py`.** Its #865 section runs a fixture copy of
+`run-e2e-tools.sh` with an environment of PATH, HOME and a few logs, and no TMPDIR, so the runner's `mktemp -d` fell
+back to `/tmp`, which this run's sandbox does not allow it to write: `mktemp: failed to create directory via template
+'/tmp/tmp.XXXXXXXXXX'`, and five of its checks failed. The test now sets TMPDIR to its own temporary directory in
+each of its three fixture environments, so the result no longer hangs on the host's `/tmp`.
+
 **Not yet run on a cluster.** The apply itself, on the operator machine where the states are:
 `WIB_FORCE_UP=1 bash infra/terraform/fleet/fleet.sh instructors up all`, which applies watch-it-burn-community and
 watch-it-burn-private, should log `adopted the hecaton-run access entry into the cluster's state`, and its plan should
