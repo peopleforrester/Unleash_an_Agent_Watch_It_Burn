@@ -16808,3 +16808,6 @@ watch-it-burn-private and on watch-it-burn-community: both still run c2eb4cf's p
 `dfca2b1fe758` on both clusters, and `kubectl --context watch-it-burn-private -n agent exec deploy/guard-proxy --
 grep -n "APM trace root" /app/proxy.py` should print nothing.
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_kubecon_c3_live.py` checks that rollout.
+
+**Suites (run 17303, at ad173efe).** `bash verify/run-e2e-tools.sh` ran the offline suite (253 tests, ALL OFFLINE
+RENDER-GATE TESTS GREEN) and then the tools tier: 55 checks in 27m42s, ALL E2E TOOLS TIER CHECKS GREEN, exit 0.
