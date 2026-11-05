@@ -20234,3 +20234,9 @@ deploy_app fix by issue rather than by hash.
 On that base, `bash verify/run-tests.sh` at `dab7e25a` printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`
 and `exit=0`, and `bash verify/run-e2e-tools.sh` printed `59 checks ran (the offline suite and 58 tier tests) in
 30m01s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**A third rebase (run 17652).** Staging moved to `4c9329dd` while the suites ran. #919's `667234c0` adds the same
+seed-to-localhost check to `verify/test_guardrails_switch.py` that this branch kept from run 17556, so that commit is
+dropped too and staging's copy stands; the sentence above that names it as kept is superseded. #919's paragraph and
+#906's land side by side in the run-of-show's Probe record. What #906 still adds on staging is the deploy_app
+manifest-shape fix, the lab VPC's rule on each cluster API, and these records.
