@@ -80,6 +80,11 @@ agent_pods() {
     "${KCTL[@]}" get pods -l "${sel}" -o name | sort
 }
 
+# The gateway's config loads, and the last of them. A reload either loads or fails (v1.7.0 logs "Failed to reload config"
+# and keeps serving the config it had), so both count. `|| true`: a log with neither yet is an answer, not a failure.
+gw_loads() { "${KCTL[@]}" "${GW_LOGS[@]}" | grep -cE 'loaded config|Failed to reload' || true; }
+gw_last_load() { { "${KCTL[@]}" "${GW_LOGS[@]}" | grep -E 'loaded config|Failed to reload' || true; } | tail -1; }
+
 app_status() { "${ARGO[@]}" get "$1" -o jsonpath='{.status.sync.status} {.status.health.status}'; }
 # kagent's verdict on evil-mcp: deny mode turns it False, and it comes back on the next list after restore.
 accepted() { "${KCTL[@]}" get remotemcpserver evil-mcp -o jsonpath='{.status.conditions[?(@.type=="Accepted")].status}'; }
@@ -110,6 +115,11 @@ snapshot() {
         pyj 'json.dumps({"data": {"server.py": o["data"]["server.py"]}})' >"${STATE}/evil-src.json"
     "${KCTL[@]}" get deploy evil-mcp-shim -o jsonpath='{.spec.template.spec.containers[0].image}' >"${STATE}/probe-image"
     agent_pods >"${STATE}/agent-pods"
+    # A gateway whose last reload failed runs an older config than its ConfigMap, and on v1.7.0 it can go on refusing
+    # every reload until it restarts (watch-it-burn-community on 2026-11-05: #864's frontendPolicies.tracing against the
+    # config.tracing it started with). setup then has to restart it to load the pinned bind.
+    gw_last_load >"${STATE}/gateway-last-load"
+    if grep -q 'Failed to reload' "${STATE}/gateway-last-load"; then touch "${STATE}/gateway-stale"; fi
     # The coordinator's bar for "as found" is the public host answering 200, so it has to answer 200 before.
     local host="${PUBLIC_HOST:-$("${KCTL[@]}" get configmap cluster-identity -o jsonpath='{.data.public-host}' 2>/dev/null || true)}"
     [[ -n "${host}" ]] || die "no cluster-identity public-host on ${CONTEXT}; set PUBLIC_HOST to the host that must answer 200"
@@ -133,9 +143,7 @@ setup() {
         "${KCTL[@]}" apply -f -
     kubectl kustomize "${HERE}" | "${KCTL[@]}" apply -f -
     "${KCTL[@]}" rollout status deploy/tool-pin --timeout=240s
-    # A reload either loads or fails (v1.7.0 logs "Failed to reload config" and keeps the old one), so both count.
-    loads() { "${KCTL[@]}" "${GW_LOGS[@]}" | grep -cE 'loaded config|Failed to reload' || true; }
-    local before; before="$(loads)"
+    local before; before="$(gw_loads)"
     # The bind is added to the config the cluster runs, not the one this checkout commits (gateway_bind.py extend).
     "${KCTL[@]}" get configmap agentgateway-config -o json | python3 "${HERE}/gateway_bind.py" extend >"${STATE}/gateway-pinned.json"
     "${KCTL[@]}" patch configmap agentgateway-config --type merge --patch-file "${STATE}/gateway-pinned.json"
@@ -156,12 +164,23 @@ print(json.dumps({"spec": spec}))' "${STATE}/gateway-ingress.json" >"${STATE}/ga
         "${KCTL[@]}" patch svc agentgateway --type json \
             -p '[{"op":"add","path":"/spec/ports/-","value":{"name":"evil-mcp-pinned","port":3004,"targetPort":3004}}]'
     fi
-    # The binary watches its file and reloads in under a second (local bed); the wait is kubelet's
-    # ConfigMap volume sync, up to about a minute.
-    echo "waiting for the gateway to reload with bind 3004..."
-    for _ in $(seq 40); do [[ "$(loads)" -gt "${before}" ]] && break; sleep 5; done
-    [[ "$(loads)" -gt "${before}" ]] || die "the gateway never reloaded; check its log"
-    local last; last="$("${KCTL[@]}" "${GW_LOGS[@]}" | grep -E 'loaded config|Failed to reload' | tail -1)"
+    if [[ -e "${STATE}/gateway-stale" ]]; then
+        echo "the gateway's last reload, before this check, failed: $(cat "${STATE}/gateway-last-load")"
+        echo "it runs an older config than its ConfigMap and refuses reloads, so it is restarted on the pinned config"
+        # Before the restart, so restore restarts it again onto the ConfigMap it puts back, whatever happens next.
+        touch "${STATE}/gateway-restarted"
+        "${KCTL[@]}" rollout restart deploy/agentgateway
+        "${KCTL[@]}" rollout status deploy/agentgateway --timeout=240s
+        # `logs deploy/` can still pick the old pod while it terminates, so wait for a load line from the new one.
+        for _ in $(seq 24); do [[ "$(gw_last_load)" == *"loaded config"* ]] && break; sleep 5; done
+    else
+        # The binary watches its file and reloads in under a second (local bed); the wait is kubelet's
+        # ConfigMap volume sync, up to about a minute.
+        echo "waiting for the gateway to reload with bind 3004..."
+        for _ in $(seq 40); do [[ "$(gw_loads)" -gt "${before}" ]] && break; sleep 5; done
+        [[ "$(gw_loads)" -gt "${before}" ]] || die "the gateway never reloaded; check its log"
+    fi
+    local last; last="$(gw_last_load)"
     [[ "${last}" != *"Failed to reload"* ]] || die "the gateway refused the pinned config: ${last}"
     local listed; listed="$(probe "${PINNED_URL}")"
     echo "the pinned bind, before evil-mcp points at it: ${listed}"
@@ -299,6 +318,12 @@ restore() {
         { "${KCTL[@]}" rollout restart deploy/workshop-agent && "${KCTL[@]}" rollout status deploy/workshop-agent --timeout=180s; } ||
             bad "restarting workshop-agent on evil-mcp's old url"
     fi
+    if [[ -e "${STATE}/gateway-restarted" ]]; then
+        # setup restarted it on the pinned config, so it is restarted again on the ConfigMap just put back. It cannot be
+        # put back onto the stale config it was running, and that is not what Argo CD syncs either.
+        { "${KCTL[@]}" rollout restart deploy/agentgateway && "${KCTL[@]}" rollout status deploy/agentgateway --timeout=240s; } ||
+            bad "restarting agentgateway on its own config"
+    fi
     for app in application/ai-layer "${ROOT}"; do
         "${ARGO[@]}" patch "${app}" --type merge --patch-file "${STATE}/sync-$(slug "${app}").json" || bad "turning ${app}'s auto-sync back"
     done
@@ -314,6 +339,10 @@ restore() {
             "$("${KCTL[@]}" get networkpolicy agentgateway-ingress -o json |
                 pyj 'json.dumps({"spec": {"ingress": o["spec"].get("ingress", [])}}, sort_keys=True)')" \
             "$(pyj 'json.dumps(o, sort_keys=True)' <"${STATE}/gateway-ingress.json")"
+    fi
+    if [[ -e "${STATE}/gateway-restarted" ]]; then
+        for _ in $(seq 24); do [[ "$(gw_last_load)" == *"loaded config"* ]] && break; sleep 5; done
+        expect "the restarted gateway's config load" "$(gw_last_load | grep -o 'loaded config' || true)" "loaded config"
     fi
     expect "the agentgateway Service's ports" \
         "$("${KCTL[@]}" get svc agentgateway -o jsonpath='{.spec.ports[*].name}')" "$(cat "${STATE}/svc-ports")"

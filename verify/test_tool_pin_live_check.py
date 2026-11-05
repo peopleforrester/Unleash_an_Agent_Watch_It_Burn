@@ -10,6 +10,8 @@ file. What is held here:
 - after `run`, every object is as it was before, the rug-pulled server.py is no longer what evil-mcp runs, and the
   public host was checked for 200;
 - a failure in the middle of `run`, or a gateway that refuses the pinned config, still ends with everything as found;
+- a gateway whose last reload failed before the check (it runs an older config than its ConfigMap, as on
+  watch-it-burn-community on 2026-11-05) is restarted onto the pinned config, and restarted again by restore;
 - `restore` exits 1 and keeps its snapshot when the cluster does not match it;
 - `setup` changes nothing when the public host is not answering 200 or the context is unknown, and will not take a
   second snapshot over the first.
@@ -169,6 +171,7 @@ with tempfile.TemporaryDirectory() as d:
           and bool(events_matching(st, "apply ConfigMap/tool-pin-baseline")))
     check("the rug pull and deny mode both happen, in that order",
           events_matching(st, "patch ConfigMap/evil-mcp-src")[0] < events_matching(st, "set env deploy/tool-pin PIN_MODE=deny")[0])
+    check("a gateway that reloads is never restarted", not events_matching(st, "restart agentgateway"))
     check("kagent did not roll the agent here, so run restarts it, and restore restarts it again",
           "kagent did not roll workshop-agent" in out and len(events_matching(st, "restart workshop-agent")) == 2)
     check("each of the three phases asks, observes, and the rug-pulled ones call get_weather",
@@ -206,6 +209,29 @@ with tempfile.TemporaryDirectory() as d:
           r.returncode != 0 and "the gateway refused the pinned config" in out)
     check("evil-mcp is never pointed at the refused bind", not events_matching(st, PINNED))
     check("everything is as found", as_found(st) == as_found(bed.before))
+
+    print("== a gateway whose last reload failed before the check ==")
+    bed = Bed(pathlib.Path(d) / "g")
+    st0 = bed.st()
+    st0["logs"].append("error state_manager Failed to reload config: cannot use deprecated config.tracing together "
+                       "with frontendPolicies.tracing")
+    st0["gateway_stale"] = True
+    bed.state_file.write_text(json.dumps(st0))
+    r = bed.live("run")
+    out = r.stdout + r.stderr
+    st = bed.st()
+    why = [line for line in out.splitlines() if line.startswith("live-check:")]
+    check("run exits 0" + ("" if r.returncode == 0 else f" (exit {r.returncode}; {why}; tail: {out[-300:]!r})"), r.returncode == 0)
+    restarts = events_matching(st, "restart agentgateway")
+    pinned_cfg = events_matching(st, 'patch ConfigMap/agentgateway-config {"data": {"config.yaml": ')
+    to_pinned = events_matching(st, f'patch RemoteMCPServer/evil-mcp {{"spec": {{"url": "{PINNED}"}}}}')
+    check("setup says the gateway refuses reloads and restarts it after the pinned config and before evil-mcp moves",
+          "refuses reloads" in out and len(restarts) == 2 and len(pinned_cfg) == 2
+          and pinned_cfg[0] < restarts[0] < to_pinned[0])
+    check("restore restarts it again after putting its config back, and checks it loaded",
+          pinned_cfg[1] < restarts[1] and "ok    the restarted gateway's config load" in out and "FAIL" not in out)
+    check("everything is as found, the gateway now on its own ConfigMap",
+          as_found(st) == as_found(bed.before) and st["gateway_stale"] is False)
 
     print("== restore that cannot put a thing back says so and keeps the snapshot ==")
     bed = Bed(pathlib.Path(d) / "d")

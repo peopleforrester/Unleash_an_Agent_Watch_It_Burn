@@ -4,7 +4,8 @@
 """Installed twice by the test, as `kubectl` and as `curl` (argv[0] says which).
 
 The cluster is one JSON file, $TP_STATE: {"objects": {"<ns>/<Kind>/<name>": obj}, "logs": [...], "events": [...],
-"running_src": <the server.py evil-mcp-shim last started on>}. Every write is appended to "events" so the test can
+"running_src": <the server.py evil-mcp-shim last started on>, "gateway_stale": <true while the gateway refuses every
+reload, as v1.7.0 did on watch-it-burn-community on 2026-11-05 until it restarted>}. Every write is appended to "events" so the test can
 say what live-check.sh changed and in what order. Faults come from $TP_FAIL (comma-separated):
 
     reload        the gateway logs "Failed to reload config" for the pinned config, as v1.7.0 does for a bad one
@@ -233,8 +234,12 @@ def main(argv: list[str]) -> int:
         st["events"].append(f"patch {kind}/{name} {json.dumps(patch, sort_keys=True)[:4000]}")
         if k == "agent/ConfigMap/agentgateway-config":
             pinned = 3004 in gateway_ports(st)
-            st["logs"].append("error state_manager Failed to reload config: bad" if pinned and "reload" in FAIL
-                              else "info state_manager loaded config from File(\"/etc/agentgateway/config.yaml\")")
+            if st.get("gateway_stale"):
+                st["logs"].append("error state_manager Failed to reload config: cannot use deprecated config.tracing "
+                                  "together with frontendPolicies.tracing")
+            else:
+                st["logs"].append("error state_manager Failed to reload config: bad" if pinned and "reload" in FAIL
+                                  else "info state_manager loaded config from File(\"/etc/agentgateway/config.yaml\")")
         if kind == "RemoteMCPServer":
             # kagent reconciles on a spec change: its list fails while tool-pin denies, and passes otherwise.
             denied = any(e["name"] == "PIN_MODE" and e["value"] == "deny" for e in st["objects"].get(
@@ -267,6 +272,10 @@ def main(argv: list[str]) -> int:
                 "kubectl.kubernetes.io/restartedAt"] = str(len(st["events"]))
             roll(st, deploy)
             st["events"].append(f"restart {deploy}")
+            if deploy == "agentgateway":
+                # A new process reads its ConfigMap at startup: the log starts again, and a stale config is gone.
+                st["logs"] = ['info state_manager loaded config from File("/etc/agentgateway/config.yaml")']
+                st["gateway_stale"] = False
     elif verb == "set" and rest[0] == "env":
         if "set-env" in FAIL:
             print("shim: set env refused (set-env)", file=sys.stderr)
