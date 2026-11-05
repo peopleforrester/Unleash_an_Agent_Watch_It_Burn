@@ -20575,3 +20575,45 @@ Challenge 2 ask landing on the public bot.
 tier tests) in 25m41s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
 tests, `test_replay_prompts.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier ran
 `test_fallback_deck_e2e.py` (`FALLBACK DECK GREEN`).
+
+## 2026-11-05 · #452 · Run 17547 lands the recorded fallback without the segment videos, since M4 was dropped
+
+**Why the scope changed.** Michael dropped M4, the recorded fallback milestone (#613), on 2026-11-01, as handled
+outside this repo and not a blocker. Hecaton's comment on #452 then asked for only the repo's part: the replayable
+prompt set and its script. Recording the six segment videos at the first full rehearsal is no longer this issue's
+ask, so nothing here waits on that rehearsal any more.
+
+**The port.** `verify/prior-drafts.sh 452 origin/staging` named run 17082's draft START: four commits, 138 base
+commits behind, four drift lines, all edits in place. Its four commits were cherry-picked in order. In
+`docs/KUBECON-ABSTRACT-READINESS.md` and the run-of-show's abstract table, staging's 9c6c0174 (#455) had rewritten
+row 8 for BanTopics; staging's row 8 was kept and the draft's row 9. decisions.md's appends were both kept. Why
+run 17082 failed validation is not stated on the issue, and its prose passes the gate on this base, so nothing in
+the draft itself was changed for it.
+
+**What differs from the draft.** One commit on top of it takes the videos out:
+- `facilitation/kubecon-na-2026/fallback/assets.yaml` lists `segments` (each run-of-show heading, for the deck's
+  titles) in place of `videos`, and its screenshots are the 12 that were taken. The three never taken are gone
+  from the list: 02-2 and 03-4 were to be taken by hand at that rehearsal, and 03-1 (Challenge 2's public image)
+  has no screen to take while the room's Tron ask fails on the public bot (a followup from this run). So the deck
+  shows no MISSING card, and `scripts/check-fallback-assets.py` passes on a clean clone.
+- `scripts/check-fallback-assets.py` checks the deck page and the PNGs, and no longer knows MP4.
+- The `.gitignore` rule and `videos/.gitkeep` are removed. The README drops its videos section and says why.
+- The run-of-show's Rollback step 3 goes from the replay straight to the deck. The Night Before's asset check
+  expects `recorded fallback ready`. Open question 2 reads built, and names the Tron ask as Challenge 2's own risk.
+- `verify/test_replay_prompts.py` holds the manifest to six titled segments and no videos, every listed shot to a
+  committed PNG, the checker to passing on the repo as it is, and Rollback step 3 to naming no videos.
+  `verify/test_fallback_deck_e2e.py` holds every slide of the committed deck to a loaded image.
+- Readiness row 9 stays PARTIAL, for ballroom sizing (#450) and phones (#451); its recorded fallback part now
+  reads built.
+
+**What ran live (run 17547, 2026-11-05, on `watch-it-burn-community`).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` at 15:11:55Z printed
+  `DONE: 1 of 1 delivered to https://attackme.agenticburn.com/chat` and `All live replay checks passed.`
+- The Night Before's replay, `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co
+  --segment 1`, at 15:12:08Z: all five lines ended `ok` (order, salsa-dance, hot-dog-party, karaoke,
+  linked-list) and it printed `DONE: 5 of 5 delivered to https://attackme.burritobot.co/chat`, about $0.04 of
+  Bedrock. The wide-open bot answered each off-topic ask. Segment 1 deploys nothing and reads no Secret, so the
+  cluster was left as found apart from the cost counter.
+- `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 13 files in place`.
+
+**Not yet run on a cluster:** nothing this change needs.
