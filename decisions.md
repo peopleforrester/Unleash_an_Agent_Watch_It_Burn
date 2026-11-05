@@ -21506,3 +21506,30 @@ no Terraform: a dispatched run deploys nothing.
 **The suites (run 17743, at `082a410c`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`275 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, the new test among them) and then the tier: `61 checks ran (the offline suite
 and 60 tier tests) in 30m13s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-06 · #891 · A test reads #759's record of where the Datadog read pair lives and how a run uses it
+
+**What was missing.** #759's criterion "This issue records where the credential lives and how a run uses it" is met
+by a comment on the issue, Michael's issuecomment-6605670550 (and the later one on run 17391's live read). Test review
+run 17398 found that no test read it: `verify/test_dd_traces.py` checks that the reader asks Secrets Manager for
+`watch-it-burn/datadog`. That holds the code path and says nothing of the record.
+
+**The test.** `verify/test_dd_credential_comment.py`, in the tools tier beside the two cause-comment tests (#811,
+#659), reads #759's comments through `verify/gh_comments.py` with gh's token (#863). It takes what the record must say
+from the tree, not from constants of its own: the secret id from the argv `fleet_monitors.read_keys` builds (run with
+a stub in place of subprocess), the fields that function reads (api-key, app-key, site), and the profile, account and
+region from AGENTS.md's sentence on a run's session (accen-dev, us-west-2). One comment by hecatongithub or
+peopleforrester must name Secrets Manager, the secret id, the fields and the accen-dev account, and must give
+`. "$HECATON_CLUSTER_ENV"` followed by a `python3 verify/dd_traces.py` command. That command is run through
+`dd_traces.main` with a keys stub that stops it once it has parsed its flags, so it must be one the reader's parser
+accepts and that asks for the pair as accen-dev in us-west-2. A recording comment must also carry the command from
+dd_traces.py's docstring word for word, so the record and the reader's own usage stay one command.
+
+**It fails when the record stops holding.** Checked by feeding the test #759's real comments with one thing changed
+in each (a script outside the tree that replaced `gh_comments.read`): the secret renamed in the comments, the source
+step removed, `--traces` renamed to `--trace-count`, `--profile other`, "Secrets Manager" replaced, and
+`fleet_monitors.SECRET_ID` renamed in the code. Each exited 1 on the one recording check and named what the closest
+comment left out, for the bad flag the parser's own usage error. Unchanged, it passes and names
+issuecomment-6605670550.
+
+**Live.** No cluster is involved: the test reads GitHub only, and it passed on this run's host against the live
+issue.
