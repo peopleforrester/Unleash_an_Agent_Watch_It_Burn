@@ -19324,3 +19324,8 @@ fails when any llm row has no `estimated_total_cost` and names the skipped statu
 the same with or without it, so the live check above stands. After Argo CD syncs `otel-collector`, rerun
 `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session` and `verify/dd_traces.py --trace <id> --json`
 on each trace: each llm row must still read `cost_estimate_status:success`.
+
+**The suites (run 17466, at `b9f1b825`).** `bash verify/run-e2e-tools.sh` printed `264 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57 tier
+tests) in 34m57s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_collector_llmobs_model.py` and
+`test_collector_llmobs_model_e2e.py` passed in it.
