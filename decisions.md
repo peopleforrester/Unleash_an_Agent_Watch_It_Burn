@@ -17467,3 +17467,7 @@ what they spend.
 
 **Not yet run.** The purge of `burritobot-public` from Whitney's org, per the run-of-show's Teardown step, on or after
 2026-11-13, by someone signed in to her org: the read pair in `watch-it-burn/datadog` cannot delete.
+
+**The suites (run 17362, at `18523454`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite, 257 tests
+green with `test_pii_scrub_live_logic.py` among them, and 54 tier tests) in 26m54s and printed
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
