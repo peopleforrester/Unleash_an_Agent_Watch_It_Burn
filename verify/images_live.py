@@ -7,7 +7,7 @@ images.lock is filled from what the repo names (test_images_lock.py) and what it
 runtime, the Prometheus operator's config reloader, the Datadog operator's Agent and Cluster Agent. Run 17350's live
 check found those on both clusters with no row. This reads what each pod runs and finds the containers no row covers.
 
-A container is covered when a row's ref, Docker Hub's docker.io/ and library/ taken off and any @digest dropped, is
+A container is covered when a row's ref, Docker Hub's host and library/ taken off and any @digest dropped, is
 the container's image the same way; or, for a templated row whose digest is name@sha256, when the image is that name
 at the ref's tag; or when the digest the container names after @, or the one its status reports in imageID, is a
 row's digest or the digest pinned in a row's ref. The name and tag come first because a node that once pulled the
@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 
+from docker_hub import HUB_HOSTS
 from images_saved import lock_rows, saved_digest
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}")
@@ -33,12 +34,13 @@ ROOM_MANAGER = "workshop-mcp"
 
 
 def norm(image: str) -> str:
-    """An image reference with any @digest dropped and Docker Hub's docker.io/ and library/ taken off."""
+    """An image reference with any @digest dropped and Docker Hub's host (docker_hub.HUB_HOSTS) and library/ taken off.
+
+    A node reports the Docker Hub name it first pulled an image by, so the host is read here, never pulled."""
     ref = image.split("@", 1)[0]
-    for prefix in ("docker.io/", "index.docker.io/", "registry-1.docker.io/"):
-        if ref.startswith(prefix):
-            ref = ref[len(prefix):]
-            break
+    host, slash, rest = ref.partition("/")
+    if slash and host.lower() in HUB_HOSTS:
+        ref = rest
     if ref.startswith("library/"):
         ref = ref[len("library/"):]
     if ":" not in ref.rsplit("/", 1)[-1]:

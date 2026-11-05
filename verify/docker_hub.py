@@ -60,3 +60,48 @@ def image_fields(node, where: str = ""):
     elif isinstance(node, list):
         for i, v in enumerate(node):
             yield from image_fields(v, f"{where}[{i}]")
+
+
+def pod_spec(obj: dict):
+    """The pod spec a live object runs or stamps out: a Pod's own, a controller's template, a CronJob's job's."""
+    spec = obj.get("spec") if isinstance(obj.get("spec"), dict) else {}
+    if obj.get("kind") == "Pod":
+        return spec
+    if obj.get("kind") == "CronJob":
+        spec = ((spec.get("jobTemplate") or {}).get("spec")) or {}
+    return ((spec.get("template") or {}).get("spec")) or None
+
+
+def stamps_pods(obj: dict) -> bool:
+    """Whether a live object can still start a pod from its spec. A Deployment keeps each old ReplicaSet at 0 replicas
+    as revision history, and a finished Job starts no more pods, so neither pulls what its template names."""
+    spec = obj.get("spec") if isinstance(obj.get("spec"), dict) else {}
+    if obj.get("kind") == "ReplicaSet":
+        return int(spec.get("replicas") or 0) > 0
+    if obj.get("kind") == "Job":
+        done = {c.get("type") for c in ((obj.get("status") or {}).get("conditions") or [])
+                if c.get("status") == "True"}
+        return not done & {"Complete", "Failed"}
+    return True
+
+
+def live_hub_images(objects: list[dict]) -> list[tuple[str, str]]:
+    """(kind/namespace/name container, image) for each container a live object names on Docker Hub (#714).
+
+    The spec is what a node pulls by. A container's status.image is not read: containerd reports the first name it
+    holds an image by, so a node that pulled the Docker Hub original before a ghcr.io copy replaced it reports that
+    name for the copy, with no pull. A controller's template is read too, so a Deployment scaled to 0 is still caught;
+    an old ReplicaSet and a finished Job are not (stamps_pods)."""
+    found = []
+    for obj in objects:
+        spec = pod_spec(obj) if stamps_pods(obj) else None
+        if not isinstance(spec, dict):
+            continue
+        meta = obj.get("metadata") or {}
+        where = f"{obj.get('kind')}/{meta.get('namespace', '')}/{meta.get('name', '')}"
+        for key in ("initContainers", "containers", "ephemeralContainers"):
+            for c in spec.get(key) or []:
+                image = c.get("image") if isinstance(c, dict) else None
+                if isinstance(image, str) and docker_hub(image):
+                    found.append((f"{where} {key}:{c.get('name')}", image))
+    return found

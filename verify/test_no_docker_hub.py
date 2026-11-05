@@ -21,7 +21,8 @@ Two checks, each of which a new Docker Hub pull fails:
    is not a pull, and neither is a placeholder images.lock lists as not-an-image, nor a FROM naming an earlier stage.
 2. No tracked line names Docker Hub but to refuse it: `git grep` for its hosts finds only the lines in REFUSED, each
    of which carries a comment with (#714) saying it names Docker Hub to refuse it, and finds each of them, so the
-   list cannot go stale. The gate's own three files (GATE) are the one exception: naming Docker Hub is their job.
+   list cannot go stale. The files in GATE are the one exception: the gate's own three, whose job is naming Docker
+   Hub, and the fixtures of #603's live judge, which are the Docker Hub names a node reports for an image it cached.
 
 What a Helm chart renders is test_no_docker_hub_render.py's (tools tier): it renders every Application's sources.
 
@@ -42,7 +43,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 from bootstrap_chart import IMAGE_REGISTRY, LAB_PLATFORM_GHCR  # noqa: E402
-from docker_hub import HUB_NAMES, docker_hub, image_fields  # noqa: E402
+from docker_hub import HUB_NAMES, docker_hub, image_fields, live_hub_images  # noqa: E402
 
 # Records kept as written, by path or directory prefix: decisions.md is append-only, and the others say what was
 # true when they were written. A path with a date in it (docs/spike-prompt-guard-2-2026-10-28.md, a dated research
@@ -52,7 +53,10 @@ RECORDS = ("decisions.md", "PROJECT_STATE.md", "ACTION_ITEMS.md", "transcripts/"
 DATED = re.compile(r"\d{4}-\d{2}-\d{2}")
 # The gate itself: the judgement of what Docker Hub is, this file, and the render check. Their fixtures and their lists
 # of Docker Hub's names are what they detect, so check 2 does not read them.
-GATE = ("verify/docker_hub.py", "verify/test_no_docker_hub.py", "verify/test_no_docker_hub_render.py")
+GATE = ("verify/docker_hub.py", "verify/test_no_docker_hub.py", "verify/test_no_docker_hub_render.py",
+        # #603's live judge takes Docker Hub's host off the name a node reports for an image it pulled before #623 and
+        # #714 moved it (images_live.norm, which reads the hosts from docker_hub.py); these fixtures are those names.
+        "verify/test_images_lock_live_judge.py")
 # (file, the text on the line): the lines that name Docker Hub in order to refuse it. Each carries (#714) in a comment.
 REFUSED = (
     # deploy_app refuses a Docker Hub image PUBLIC_IMAGES does not carry, so it lists every name Docker Hub goes by.
@@ -215,6 +219,41 @@ for ref, hub in (("nginx:1.27", True), ("busybox", True), ("curlimages/curl:8.10
                  ("public.ecr.aws/docker/library/busybox:1.38.0", False),
                  ("localhost:5000/x", False), ("registry.k8s.io/pause:3.9", False)):
     check(f"{ref} {'is' if hub else 'is not'} a Docker Hub pull", docker_hub(ref) is hub)
+LIVE = [
+    {"kind": "Pod", "metadata": {"namespace": "agent", "name": "tron-1"},
+     "spec": {"containers": [{"name": "tron", "image": "trongame/tron:latest"}]},
+     "status": {"containerStatuses": [{"name": "tron", "image": "docker.io/trongame/tron:latest"}]}},
+    {"kind": "Pod", "metadata": {"namespace": "kubearmor", "name": "relay-1"},
+     "spec": {"initContainers": [{"name": "init", "image": "ghcr.io/example/mirror/kubearmor/kubearmor-init:stable"}],
+              "containers": [{"name": "relay", "image": "ghcr.io/example/mirror/kubearmor/relay:latest"}]},
+     "status": {"containerStatuses": [{"name": "relay", "image": "docker.io/kubearmor/relay:latest"}]}},
+    {"kind": "Deployment", "metadata": {"namespace": "agent", "name": "idle"},
+     "spec": {"replicas": 0, "template": {"spec": {"containers": [{"name": "w", "image": "nginx:1.27"}]}}}},
+    {"kind": "CronJob", "metadata": {"namespace": "ops", "name": "tick"},
+     "spec": {"jobTemplate": {"spec": {"template": {"spec": {"containers": [
+         {"name": "t", "image": "registry-1.docker.io/library/busybox"}]}}}}}},
+    {"kind": "Service", "metadata": {"namespace": "agent", "name": "web"}, "spec": {"ports": [{"port": 80}]}},
+    {"kind": "ReplicaSet", "metadata": {"namespace": "apps", "name": "old-revision"},
+     "spec": {"replicas": 0, "template": {"spec": {"containers": [{"name": "w", "image": "nginx:1.27"}]}}}},
+    {"kind": "ReplicaSet", "metadata": {"namespace": "apps", "name": "live-revision"},
+     "spec": {"replicas": 1, "template": {"spec": {"containers": [{"name": "w", "image": "busybox"}]}}}},
+    {"kind": "Job", "metadata": {"namespace": "ops", "name": "done"},
+     "spec": {"template": {"spec": {"containers": [{"name": "j", "image": "alpine"}]}}},
+     "status": {"conditions": [{"type": "Complete", "status": "True"}]}},
+    {"kind": "Job", "metadata": {"namespace": "ops", "name": "running"},
+     "spec": {"template": {"spec": {"containers": [{"name": "j", "image": "alpine"}]}}}, "status": {"active": 1}},
+]
+found = live_hub_images(LIVE)
+check("the live judge reads a Pod's spec, a scaled-to-0 Deployment's template and a CronJob's job template",
+      found == [("Pod/agent/tron-1 containers:tron", "trongame/tron:latest"),
+                ("Deployment/agent/idle containers:w", "nginx:1.27"),
+                ("CronJob/ops/tick containers:t", "registry-1.docker.io/library/busybox"),
+                ("ReplicaSet/apps/live-revision containers:w", "busybox"),
+                ("Job/ops/running containers:j", "alpine")], str(found))
+check("the live judge leaves out a Deployment's old ReplicaSet at 0 replicas and a finished Job, which start no pod",
+      not any("old-revision" in w or "Job/ops/done" in w for w, _ in found), str(found))
+check("the live judge leaves a ghcr.io spec alone whatever cached Docker Hub name its status reports",
+      not any("relay" in w for w, _ in found), str(found))
 FIXTURE_YAML = """
 spec:
   template: {spec: {containers: [{name: a, image: "nginx:1.27"}]}}
