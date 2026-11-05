@@ -19096,3 +19096,7 @@ apply set is not read back here; the run-of-show names `2026-11-12T20:50Z/2026-1
 **Not yet run on a cluster.** Nothing. The issue's work was live, and it has run.
 
 No dependency was added.
+
+**The suites (run 17428, on 484923ce).** `bash verify/run-e2e-tools.sh` ran 57 checks (the offline suite and 56 tier
+tests) in 28m14s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 262 tests,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_fleet_monitors.py` among them.
