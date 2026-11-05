@@ -25,6 +25,14 @@ The noise the filter exists for goes in too, and must still come out dropped: th
 event-queue micro-spans, the AWS SDK's empty `chat <model>` leaf, kagent's MCP client calls, the gateway's MCP
 session lifecycle, the agent-card fetch, a parentless a2a span and guard-proxy's badge poll.
 
+#877 adds two cases, both read live on burritobot-private on 2026-11-05. guard-proxy polls the agent with tasks/get
+once a second while a tool runs, and each poll is four spans in the turn's trace: guard-proxy's POST, the gateway's
+SERVER and Http CLIENT spans on :3000, and the agent's server span. Span for span, the guard-proxy and gateway spans
+match the message/send hop, so the collector keeps all four and the trace still has one root. The gateway's MCP
+tools/call pair (the SERVER span on :3001 and its "tools/call workshop-mcp_<tool>" CLIENT child) is a trace of its own,
+since kagent's MCP client sends no traceparent. APM keeps it, as #265 meant, and Agent Observability's copy (#746)
+carries no gateway span. Before #877 the copy kept the pair, and the intake wrote it into APM a second time.
+
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
 """
 from __future__ import annotations
@@ -104,6 +112,20 @@ def interaction(with_a2a: bool) -> list[tuple]:
          {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Http"}, True),
         # kagent's FastAPI server span, parented on the gateway's outbound span.
         ("agent-server", AGENT, "POST /", SERVER, "gateway-out", {"http.method": "POST", "http.route": "/"}, True),
+        # guard-proxy's tasks/get poll (#877), sent once a second under agent.forward while the turn runs (proxy.py
+        # _handle_chat at pin 0f0c809). Names and attributes as Tempo had them for trace
+        # 9d352dffa84e5674a6af3f4b10662808. Only the agent's end differs from the hop above: no gen_ai.* attribute and
+        # no child. All four stay, inside the one trace.
+        ("poll-http", GUARD, "POST", CLIENT, "forward",
+         {"http.method": "POST", "http.url": "http://agentgateway.agent.svc.cluster.local:3000/"}, True),
+        ("poll-gateway", GATEWAY, "POST /*", SERVER, "poll-http",
+         {"http.request.method": "POST", "url.path": "/", "server.address": "agentgateway.agent.svc.cluster.local",
+          "server.port": 3000, "protocol": "http"}, True),
+        ("poll-gateway-out", GATEWAY, "POST workshop-agent.agent.svc.cluster.local:8080", CLIENT, "poll-gateway",
+         {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Http", "http.method": "POST"},
+         True),
+        ("poll-agent-server", AGENT, "POST /", SERVER, "poll-gateway-out",
+         {"http.request.method": "POST", "url.path": "/", "http.request.body.size": 113}, True),
         ("asgi-receive", AGENT, "POST / http receive", INTERNAL, "agent-server", {}, False),
         ("asgi-send", AGENT, "POST / http send", INTERNAL, "agent-server", {}, False),
     ]
@@ -150,8 +172,15 @@ NOISE = [
      {"server.address": "agentgateway.agent", "server.port": 3001, "mcp.method.name": "tools/list"}, False),
     ("mcp-delete", GATEWAY, "DELETE /", SERVER, None,
      {"server.address": "agentgateway.agent", "server.port": 3001, "http.method": "DELETE"}, False),
+    # The tool call itself, as Tempo had it for trace ba4d717c4482c8c0598202c7238ecc7f (#877): a parentless SERVER
+    # span on :3001 and the gateway's CLIENT span for its call to workshop-mcp. Both carry gen_ai.tool.name.
     ("mcp-call", GATEWAY, "tools/call", SERVER, None,
-     {"server.address": "agentgateway.agent", "server.port": 3001, "mcp.method.name": "tools/call"}, True),
+     {"server.address": "agentgateway.agent", "server.port": 3001, "mcp.method.name": "tools/call",
+      "mcp.target": "workshop-mcp", "mcp.resource.type": "tool", "gen_ai.tool.name": "run_shell",
+      "http.request.method": "POST", "url.path": "/mcp", "protocol": "mcp"}, True),
+    ("mcp-call-out", GATEWAY, "tools/call workshop-mcp_run_shell", CLIENT, "mcp-call",
+     {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Mcp", "mcp.target": "workshop-mcp",
+      "mcp.method.name": "tools/call", "gen_ai.tool.name": "run_shell", "peer.service": "burritobot-agent"}, True),
     ("card", AGENT, "GET /.well-known/agent-card.json", SERVER, None, {}, False),
     # A message from a caller that sent no context: kagent's server span is then a root, and stays dropped.
     ("no-context", AGENT, "POST /", SERVER, None, {"http.method": "POST"}, False),
@@ -201,20 +230,32 @@ def read_spans(out: pathlib.Path) -> list[dict]:
     return spans
 
 
-def run_collector(profile: str) -> tuple[list[dict], str]:
-    """The profile's traces processors, in its order, between an OTLP/HTTP receiver and a file exporter."""
+def run_collector(profile: str) -> tuple[list[dict], list[dict], str]:
+    """The profile's traces processors, in its order, between an OTLP/HTTP receiver and a file exporter, and its
+    traces/llmobs processors on the forwarded copy into a second file: what APM gets and what Agent Observability's
+    intake gets (#877)."""
     conf = collector_config(profile, datadog_secret=False)
-    procs = conf["service"]["pipelines"]["traces"]["processors"]
+    pipes = conf["service"]["pipelines"]
+    procs = pipes["traces"]["processors"]
+    llmobs = pipes.get("traces/llmobs") or {}
+    check(f"the {profile} collector forwards Agent Observability's copy to traces/llmobs",
+          "forward/llmobs" in pipes["traces"]["exporters"] and llmobs.get("receivers") == ["forward/llmobs"],
+          f"traces exporters {pipes['traces']['exporters']}, traces/llmobs {llmobs}")
+    lprocs = llmobs.get("processors") or []
     want = sum(1 for _label, _trace, spans, _one in TRACES for s in spans if s[6])
     port = free_port()
     with tempfile.TemporaryDirectory() as d:
-        out = pathlib.Path(d) / "spans.json"
+        out, lout = pathlib.Path(d) / "spans.json", pathlib.Path(d) / "llmobs.json"
         cfg = {
             "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
-            "processors": {p: conf["processors"][p] for p in procs},
-            "exporters": {"file": {"path": str(out)}},
+            "processors": {p: conf["processors"][p] for p in procs + lprocs},
+            "connectors": {"forward/llmobs": conf["connectors"]["forward/llmobs"]},
+            "exporters": {"file": {"path": str(out)}, "file/llmobs": {"path": str(lout)}},
             "service": {"telemetry": {"metrics": {"level": "none"}},
-                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs, "exporters": ["file"]}}},
+                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
+                                                 "exporters": ["file", "forward/llmobs"]},
+                                      "traces/llmobs": {"receivers": ["forward/llmobs"], "processors": lprocs,
+                                                        "exporters": ["file/llmobs"]}}},
         }
         cfg_file = pathlib.Path(d) / "config.yaml"
         cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
@@ -226,6 +267,7 @@ def run_collector(profile: str) -> tuple[list[dict], str]:
         proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         got: list[dict] = []
+        copy: list[dict] = []
         try:
             sent, deadline = False, time.time() + 30
             while not sent and time.time() < deadline and proc.poll() is None:
@@ -246,16 +288,18 @@ def run_collector(profile: str) -> tuple[list[dict], str]:
                     settled = time.time() + 6
                 if settled is not None and time.time() > settled:
                     break
+            # The forward connector hands the same batch on after the file exporter, so the copy is written with it.
+            copy = read_spans(lout)
         finally:
             proc.terminate()
             proc.wait(timeout=15)
             log.close()
-        return got, (pathlib.Path(d) / "collector.log").read_text()
+        return got, copy, (pathlib.Path(d) / "collector.log").read_text()
 
 
 for profile in ("instructor", "attendee", "burn"):
     print(f"== the {profile} collector ==")
-    got, collector_log = run_collector(profile)
+    got, copy, collector_log = run_collector(profile)
     for label, trace, spans, one_root in TRACES:
         kept = {sid(trace, s[0]): s for s in spans if s[6]}
         dropped = {sid(trace, s[0]): s for s in spans if not s[6]}
@@ -271,6 +315,21 @@ for profile in ("instructor", "attendee", "burn"):
                        if not s.get("parentSpanId") or s["parentSpanId"] not in out)
         check(f"{label}: one root, guard-proxy's POST /chat (Datadog's 'multiple root spans' is #320)",
               roots == [f"{GUARD} POST /chat"], f"roots: {roots}")
+        polls = [f"{s[1]} {s[2]}" for s in spans if s[0].startswith("poll-") and sid(trace, s[0]) not in out]
+        check(f"{label}: guard-proxy's tasks/get poll stays whole, all four hops inside the one trace (#877)",
+              not polls, f"dropped: {polls}")
+    # #877: the gateway's MCP tools/call pair stays in APM, the evidence #265 kept, and is not in Agent Observability's
+    # copy, whose intake wrote it into APM as a second parentless trace of the same spans.
+    noise = next(t for t in TRACES if t[0] == "the noise traces")
+    pair = sorted(s["name"] for s in got if s["traceId"] == noise[1] and s["service"] == GATEWAY)
+    check("APM keeps the gateway's tools/call pair for each MCP tool call (#265, #877)",
+          pair == ["tools/call", "tools/call workshop-mcp_run_shell"], f"APM's gateway spans: {pair}")
+    turn = sorted(s["name"] for s in copy if s["name"].startswith("generate_content"))
+    check("Agent Observability's copy came out of traces/llmobs with the turn's model calls in it",
+          len(turn) == 2 * 2, f"copy: {sorted(s['service'] + ' ' + s['name'] for s in copy)}")
+    gateway = sorted(f"{s['service']} {s['name']}" for s in copy if s["service"] in (GATEWAY, "agentgateway"))
+    check("Agent Observability's copy carries no gateway span, so no tool call is a second root in APM (#877)",
+          not gateway, f"in the copy: {gateway}")
 
 print()
 if failures:
