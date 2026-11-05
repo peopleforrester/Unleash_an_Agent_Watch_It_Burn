@@ -19260,3 +19260,7 @@ f842ec3 (main is d3fc4d5, `checksum/proxy-py` becomes `e66685f983fc`) and Argo C
 through the live proxy should read the same. The repin is a submodule move, which only Michael's commit can make
 (the #382 entry), and is filed as a follow-up. It runs the same proxy.py this check ran, so nothing else is expected
 to change.
+
+**The suites (run 17439, at `52bbf535`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`263 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `57 checks ran (the offline suite and 56 tier tests) in
+28m43s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
