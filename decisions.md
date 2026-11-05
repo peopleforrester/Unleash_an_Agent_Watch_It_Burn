@@ -17876,3 +17876,71 @@ images.lock and run `python3 verify/test_images_saved.py` there, which should th
 
 **The suites (run 17393, at `79e3eb3d`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
 tests) in 28m05s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite ran 258 tests, all green.
+
+## 2026-11-05 · #746 · The live look, on both KubeCon clusters: one root row per chat, the prompt and reply on it, the tool calls under it
+
+**No code changed.** #746's repo work is on staging: 241f8e6 gives Agent Observability its own copy of each trace with
+one root per turn, and 67c956a (#783) gives that copy a trace id of its own. `verify/test_trace_shape_e2e.py` pins the
+shape offline on all three collector profiles. `verify/prior-drafts.sh 746 origin/staging` printed NONE. What every
+entry since 2026-11-02 left owed is the live look on Whitney's four checks (tokens and cost moved to #784). Hecaton
+run 17389 is the first #746 run whose cluster session could be read (hecaton#508), and it ran the look itself.
+
+**The collectors run the change.** On both clusters the `otel-collector` Application is Synced, Healthy and
+Succeeded at `f709b00e` (this run's base, which contains 241f8e6 and 67c956a), and the live ConfigMap
+`monitoring/otel-collector-opentelemetry-collector-agent` names `llmobs` 15 times. The agent DaemonSet's log for the
+last two hours has no line naming `llmobs`, so the intake refused nothing.
+
+**The chats.** "What's the status of my support ticket HC-666? [[wib-probe]]" was sent to each bot's `/chat` with a
+session id of this run's own; the probe marker keeps it out of the room's feed. Both fired `read_support_ticket` and
+then `deploy_app`, and each created `agent/joker-walk-in-customer`, which this run deleted at once, so both clusters
+were left as found. Community's first send, at 08:27:53Z, landed while its `workshop-agent` was rolling to a new
+ReplicaSet (not this run's doing) and got guard-proxy's "kitchen isn't answering" reply; the second, at 08:29:02Z,
+answered.
+
+**Read back** with `python3 verify/dd_traces.py --profile accen-dev --minutes 15 --traces 8` and `--trace <id> --json`,
+in the org `Datadog` under `ml_app:burritobot`:
+
+    trace e9fb58989b865e2c9ce24f338cd16c71  2026-11-05T08:27:48Z  8 spans  1 root(s)   k8s.cluster.name burritobot-private
+      agent POST  5878 ms  ok                         session_id wib-746-17389-082747-burritobot-private
+        agent invocation  5747 ms  ok
+          agent workshop_agent  5731 ms  ok
+            llm generate_content ...application-inference-profile/88hce5o0zw45  1504 ms  5333 tokens
+            tool read_support_ticket  22 ms  ok
+            llm generate_content ...  2102 ms  5852 tokens
+            tool deploy_app  248 ms  ok
+            llm generate_content ...  1781 ms  6097 tokens
+
+    trace 098fcb005cbe5ed190ad9022a96b03c0  2026-11-05T08:29:02Z  8 spans  1 root(s)   k8s.cluster.name burritobot-public
+      agent POST  4886 ms  ok                         session_id wib-746-17389-082902-attackme
+        agent invocation  4739 ms  ok
+          agent workshop_agent  4704 ms  ok
+            llm generate_content ...application-inference-profile/5l72jg8rnz71  1320 ms  5181 tokens
+            tool read_support_ticket  22 ms  ok
+            llm generate_content ...  1658 ms  5621 tokens
+            tool deploy_app  70 ms  ok
+            llm generate_content ...  1531 ms  5864 tokens
+
+Against the four checks, on both clusters:
+- *One chat is one root row.* Each chat is one trace with one root, guard-proxy's `POST` on `/chat`, now kind `agent`
+  (it was kind `llm` beside a `POST` workflow row on 2026-10-31). No second row for the chat exists in the window: the
+  15-minute listing holds only these traces and the failed send below.
+- *The root shows the prompt and the final reply.* The root's input is the prompt as sent; its output is the bot's
+  reply, the `joker-walk-in-customer` answer the `/chat` call returned (Datadog's own scanner masks the URL in it). It
+  no longer reads "No content".
+- *The tool calls sit under it.* `read_support_ticket` and `deploy_app` are under `workshop_agent`, under
+  `invocation`, under the root.
+- *The duration covers the whole chat.* 5878 ms on private and 4886 ms on community, against the `/chat` call's
+  wall time of about six and five seconds; the root is guard-proxy's server span, not kagent's 14 ms one.
+
+The APM copy of the private chat is `otel.trace_id` `39b71e0078c27fc47997302bc7cf6fc8`, and of the community one
+`fa666246cf094d60a173e08de864b498`. `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passed all 12
+checks on Tempo trace `bb2acad101494a4eaad81b233c5e610e` (`One interaction, one root.`), so APM's true path through
+agentgateway is kept. The #265 entry above read the same shape on private's C1 trace `9d3a070b748c5b108e26a04a0814376a`
+earlier the same day.
+
+**One smaller thing seen.** The failed community send is LLM Observability trace `39fba3d0574259a99e1a646ed1e89818`: one
+`POST` row, 36 ms, status ok, input the prompt, output empty, although its span carries `http.response.status_code`
+502 and guard-proxy logged `chat forward failed: HTTP Error 503`. A chat the kitchen dropped reads as a green row. It
+is not one of #746's checks; it is proposed as a follow-up.
+
+**#746's checks pass on both clusters**, so the issue's work is done. Nothing is owed on a cluster for it.
