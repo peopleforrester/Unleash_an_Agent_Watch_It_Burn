@@ -16063,3 +16063,65 @@ PATH with a token, so the read does not spend the host's shared anonymous quota 
 tier tests) in 25m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 253
 tests, `test_gh_comments.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. All three cause-comment
 tests passed in the tier through gh.
+## 2026-11-05 · #864 · agentgateway's tracing moves from the deprecated config.tracing to frontendPolicies.tracing
+
+**What changed.** Both gateway ConfigMaps in `gitops/ai-layer/agentgateway.yaml`, agentgateway-config and
+agentgateway-c7-config, drop `config.tracing` and say the same thing as a top-level frontend policy:
+
+    frontendPolicies:
+      tracing:
+        host: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        protocol: http
+        randomSampling: true
+
+This is the same configuration the binary already ran. v1.7.0 reads `config.tracing`, logs `config.tracing is
+deprecated; migrate to frontendPolicies.tracing` five times, and turns the block into exactly this
+(`crates/agentgateway/src/types/local.rs`, `merge_deprecated_frontend_policies`, read at tag v1.7.0 on 2026-11-05):
+the endpoint URL's host and port as an inline backend, `otlpProtocol` as `protocol`, `randomSampling` as it is,
+`clientSampling` unset in both (an incoming sampled traceparent is followed, `eval(client_sampling, true)` in
+`telemetry/log.rs`). The 2026-06-26 DECISION-LOG rows say `frontendPolicies.tracing` crashed v1.3.0 with "no variant of
+enum SimpleLocalBackend". That attempt wrote the old block's `otlpEndpoint` key. The policy names its target as
+`host`, `service` or `backend`, so it had no target. The file's header said gRPC :4317, and it now states what the
+config sends. The comment by the Deployment's env and the current docs (`docs/MASTER-RECREATION-SPEC.md`,
+`docs/READINESS-CHECKLIST.md`) say `frontendPolicies.tracing` too. PRD 20, PROGRESS.md and DECISION-LOG are records and
+keep their wording.
+
+**The tests.** `verify/test_agentgateway_config.py` holds, for both ConfigMaps, no `config.tracing` and the tracing
+policy above, and holds the header to `frontendPolicies.tracing`, http and :4318 and to no gRPC or :4317. Against the
+old file it fails six checks. The v1.7.0 schema still takes `config.tracing`, so the schema check alone would not
+catch the old key coming back. `verify/test_agentgateway_tracing_e2e.py` is new, in the tools tier. For each
+ConfigMap it runs the real binary on the committed tracing, with the collector swapped for a loopback OTLP receiver
+and the binds for one loopback route. It holds no deprecation line in the log, OTLP/HTTP protobuf POSTs to
+`/v1/traces`, the incoming traceparent's trace id in what was exported, and a request with no traceparent traced as
+well. A control puts the same tracing back under `config.tracing` and must see the warning (5 lines), so a log the
+test cannot read does not pass as clean. With `randomSampling: false` the untraced-request check fails on both
+ConfigMaps, so it is not vacuous.
+
+**A new pinned tool.** The binary is agentgateway v1.7.0's release asset `agentgateway-linux-amd64`, SHA-256
+`1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8`, the release's own `.sha256` file, read
+2026-11-05. It is now a row in `verify/e2e-tools.lock`, and `fetch-e2e-tools.sh` downloads it. `run-e2e-tools.sh`
+and `run-e2e.sh` set `AGENTGATEWAY` to it. `test_e2e_tools_tier.py` holds its version to the Deployment's image tag and
+its URL to that tag's release, so a gateway bump has to move this pin as well. Then the tier runs the bumped config on
+the bumped binary, and a version that dropped the old key would have failed here first. The image's `/app/agentgateway`
+is a separate build of the tag: other bytes (`c7ef326b...`), the same `--version` 1.7.0, so what the pin holds equal
+to the image is the version. The release binary is used because the tier host has no container runtime it can count
+on.
+
+**Run on the image's own binary (run 17196).** `/app/agentgateway` was copied out of the pinned image
+(`podman create`, `podman cp`) and run on loopback on each ConfigMap, old form and new. The old form logged 5
+deprecation lines each and exported to `/v1/traces`. The new form logged none and exported the same way.
+`--validate-only` accepts both forms and prints no warnings, so it cannot tell them apart.
+
+**Live check (run 17196), nothing changed on the cluster.** On watch-it-burn-private, pod
+`agentgateway-b49f45688-vlkvv` (the old config, as served by Argo CD) had logged the warning 5 times in the
+agentgateway container and 15 in agentgateway-c7, which reloads its config on each C7 rule flip and warns on each
+load. `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`, run before the change, printed trace
+845dbf40ef1b4a44af544a4a574298da with one root (guard-proxy's POST /chat), the gateway's span for the A2A hop,
+the agent's server span under the gateway's outbound span, and `One interaction, one root.`
+
+**Not yet run on a cluster.** The change itself, once hecaton promotes this run and Argo CD syncs ai-layer: on
+watch-it-burn-private, the agentgateway pod rolls (the main container reads its config file at startup; the
+ConfigMap content changes), `kubectl --context watch-it-burn-private -n agent logs deploy/agentgateway -c
+agentgateway | grep -c 'config.tracing is deprecated'` and the same for `-c agentgateway-c7` print 0, and
+`CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py` passes with the gateway's A2A spans in the trace. The
+next run on #864 runs them.

@@ -177,6 +177,28 @@ c7_bind_ports = {b["port"] for b in (yaml.safe_load(c7_text) or {}).get("binds",
 check("the C7 container declares its bind and its readiness port, and nothing the first one holds",
       c7_ports == c7_bind_ports | {ready_port} and not (c7_ports & main_ports))
 
+print("== tracing is a frontend policy in both ConfigMaps, not the deprecated config.tracing (#864) ==")
+# v1.7.0 logs config.tracing as deprecated and turns it into frontendPolicies.tracing itself (crates/agentgateway/src/
+# types/local.rs, merge_deprecated_frontend_policies, read at tag v1.7.0); a version that drops the old key would
+# export nothing, with no error. The binary runs both ConfigMaps in test_agentgateway_tracing_e2e.py (the tools tier).
+WANT_TRACING = {"host": "otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318",
+                "protocol": "http", "randomSampling": True}
+for cm_name in ("agentgateway-config", "agentgateway-c7-config"):
+    parsed = yaml.safe_load(next(d for d in docs if d["kind"] == "ConfigMap"
+                                 and d["metadata"]["name"] == cm_name)["data"]["config.yaml"]) or {}
+    # The v1.7.0 schema still takes config.tracing, and the binary refuses it beside frontendPolicies.tracing
+    # ("cannot use deprecated config.tracing together with frontendPolicies.tracing"), so this keeps it out.
+    check(f"{cm_name} has no config.tracing", "tracing" not in (parsed.get("config") or {}))
+    got = (parsed.get("frontendPolicies") or {}).get("tracing")
+    check(f"{cm_name} exports to the collector's OTLP/HTTP port, every new trace sampled ({got})", got == WANT_TRACING)
+header = GATEWAY.read_text(encoding="utf-8").split("\n---", 1)[0]
+check("the file header names frontendPolicies.tracing", "frontendPolicies.tracing" in header)
+check("and does not describe tracing as gRPC :4317, which neither ConfigMap sends", ":4317" not in header
+      and "gRPC" not in header)
+proto = WANT_TRACING["protocol"]
+port = WANT_TRACING["host"].rsplit(":", 1)[1]
+check(f"and states the protocol and port the config uses ({proto}, :{port})", f":{port}" in header and proto in header)
+
 print("== the bedrock backend's model is pinned through the container env (#561) ==")
 # agentgateway v1.5.0 runs the whole config file through shellexpand::full before parsing it
 # (crates/agentgateway/src/config.rs, parse_config), so a $VAR or ${VAR} its container does not set fails the

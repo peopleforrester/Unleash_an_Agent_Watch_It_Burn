@@ -58,10 +58,10 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver "
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway "
       f"({sorted(tools)})",
       set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd", "crane",
-                     "weaver"})
+                     "weaver", "agentgateway"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -114,6 +114,16 @@ check("weaver is the version and SHA-256 weaver-registry-check.yml pins",
       bool(wf_version and wf_sha) and "weaver" in tools
       and tools["weaver"][1:3] == [wf_version.group(1), wf_sha.group(1)], str(tools.get("weaver")))
 
+# agentgateway runs both gateway ConfigMaps in test_agentgateway_tracing_e2e.py (#864), so its pin is the version of
+# the image gitops/ai-layer/agentgateway.yaml runs (the tag before the digest).
+want = re.search(r"image: cr\.agentgateway\.dev/agentgateway:(v[0-9.]+)@sha256:",
+                 (REPO / "gitops/ai-layer/agentgateway.yaml").read_text())
+check(f"agentgateway is the deployed gateway image's version ({want.group(1) if want else None})",
+      bool(want) and "agentgateway" in tools and tools["agentgateway"][1] == want.group(1))
+check("the agentgateway artifact is that version's release binary",
+      "agentgateway" in tools and bool(want) and tools["agentgateway"][3]
+      == f"https://github.com/agentgateway/agentgateway/releases/download/{want.group(1)}/agentgateway-linux-amd64")
+
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
     m = re.search(rf"^{name}\s+(v\S+)", versions_lock, re.M)
@@ -145,7 +155,8 @@ names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
              "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
              "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_ttyd_ws_auth.py",
-             "test_joker_build_digest.py", "test_weaver_registry_check.py", "test_guard_proxy_go_otel.py"):
+             "test_joker_build_digest.py", "test_weaver_registry_check.py", "test_guard_proxy_go_otel.py",
+             "test_agentgateway_tracing_e2e.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()
@@ -167,7 +178,8 @@ for var in ("CONTEXT", "IAM_PIPELINE_PROFILE", "IAM_PIPELINE_REGION", "AWS_PROFI
     check(f"run-e2e-tools.sh runs each tier test with {var} unset", f"-u {var}" in code)
 check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECONFIG=/dev/null" in code)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane"),
+                  ("AGENTGATEWAY", "agentgateway")):
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
 check("run-e2e-tools.sh puts the fetched tools first on PATH", 'PATH="${TOOLS_BIN}:${PATH}"' in code)
 
@@ -405,7 +417,8 @@ check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools
 check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
 check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane"),
+                  ("AGENTGATEWAY", "agentgateway")):
     check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
 check("run-e2e.sh never looks for otelcol-contrib on PATH (#654)",
       "command -v" not in "\n".join(line for line in live.splitlines() if "otelcol" in line.lower()))
@@ -454,7 +467,7 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
     check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver could not "
+          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not "
           "be fetched" in r.stderr,
           r.stderr)
     check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)

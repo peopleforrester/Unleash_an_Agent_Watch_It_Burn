@@ -53,7 +53,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 
 ## 5. AI layer
 - ✅ kagent (ADK) agent on Bedrock Sonnet 4.6; live-verified end to end.
-- ✅ **agentgateway** deployed and in the live path (guard-proxy → agentgateway → workshop-agent); tracing fixed (`config.tracing`, schema-correct, in the manifest).
+- ✅ **agentgateway** deployed and in the live path (guard-proxy → agentgateway → workshop-agent); tracing fixed (`frontendPolicies.tracing` since #864, schema-correct, in the manifest).
 - ✅ guard-proxy + LLM Guard (input/output); CLIENT span + JSON logging (PRD #27 M2).
 - ✅ workshop-mcp + evil-mcp-shim.
 - ✅ On a workshop cluster C7's control is the kagent `toolNames` allowlist (`toggle-mcp-authz-on.sh`). `evil-mcp` goes through agentgateway on its own bind, :3003 (#514), whose `mcpAuthorization` rule stays `'true'` there; on an admin cluster `guard-mcp-on` narrows that rule instead and it is the control (#496, #516). The design is weighed in `docs/research/2026-10-24-agentgateway-evaluation.md`.

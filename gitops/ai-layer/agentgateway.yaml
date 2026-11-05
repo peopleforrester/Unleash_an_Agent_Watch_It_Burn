@@ -5,8 +5,10 @@
 #   - image registry is cr.agentgateway.dev (NOT ghcr.io).
 #   - proxy config is binds[].port -> listeners[].routes[].backends[].host ("host:port" string, no separate
 #     port field).
-#   - OTLP tracing is the config-file key frontendPolicies.tracing.otlpEndpoint (gRPC :4317); the
-#     OTEL_EXPORTER_OTLP_ENDPOINT env var is inert for trace export (resolves PRD #20 M4 / blocker #4).
+#   - OTLP tracing is the config-file frontend policy frontendPolicies.tracing: host is the collector's
+#     host:port (:4318), protocol http, randomSampling true (#864; config.tracing, its form until then, is
+#     deprecated in v1.7.0). The OTEL_EXPORTER_OTLP_ENDPOINT env var is inert for trace export (resolves PRD #20
+#     M4 / blocker #4).
 #   - MCP front is the binds backend form backends[].mcp.targets[].mcp.host with route-level
 #     policies.mcpAuthorization.rules (CEL, OR-combined; 'true' = default allow).
 #
@@ -81,7 +83,7 @@ spec:
             # application profile ARN, and ai-layer ignores this entry too.
             - name: BEDROCK_REGION
               value: us-west-2
-            # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via
+            # NOTE: tracing is configured in the config file's frontendPolicies.tracing block (below), NOT via
             # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emitted ZERO spans on the pre-v1.5.0 build (verified live 2026-06-26: a targeted
             # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.
           ports:
@@ -177,9 +179,14 @@ data:
       # read-only ConfigMap here; 'disabled' keeps them unencrypted, as on v1.5.0 (#698).
       session:
         key: disabled
+    # Tracing is a frontend policy (#864). v1.7.0 still reads config.tracing but logs it as deprecated and turns
+    # it into exactly this (crates/agentgateway/src/types/local.rs, merge_deprecated_frontend_policies, read at
+    # tag v1.7.0): the endpoint's host:port as an inline backend, otlpProtocol as protocol, randomSampling as is.
+    # OTLP/HTTP to the collector's :4318, every new trace sampled; an incoming sampled traceparent is followed.
+    frontendPolicies:
       tracing:
-        otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
-        otlpProtocol: http
+        host: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        protocol: http
         randomSampling: true
     binds:
     - port: 3000
@@ -291,9 +298,10 @@ data:
       readinessAddr: 0.0.0.0:15022
       session:
         key: disabled # as agentgateway-config: v1.7.0 cannot write a generated key into a ConfigMap (#698)
-      tracing:
-        otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
-        otlpProtocol: http
+    frontendPolicies:
+      tracing: # as agentgateway-config (#864)
+        host: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        protocol: http
         randomSampling: true
     binds:
     - port: 3003

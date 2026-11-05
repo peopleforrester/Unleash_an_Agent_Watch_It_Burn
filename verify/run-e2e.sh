@@ -30,7 +30,7 @@
 # this suite exists to prove the things the offline suite cannot, and a run that proved none of them must
 # not exit 0. Every prerequisite is checked before anything runs, so one run lists everything that is missing.
 #
-# kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver are not taken from the host
+# kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway are not taken from the host
 # (#585, #654, #770, #775, #782). The prerequisite check runs verify/fetch-e2e-tools.sh, which puts the pinned,
 # checksum-verified binaries of e2e-tools.lock in the gitignored verify/.tools/bin, and that directory goes first on
 # PATH for everything after it, so a cluster build runs the same binaries as the gate's E2E command
@@ -58,24 +58,26 @@ fi
 # terraform the IAM policy pipeline (#207) renders and checks the roots with, the kubectl and helm every render and
 # live check runs, the otelcol-contrib the collector tests run (test_lab_pipeline_collector.py, the chart's
 # version), the ttyd the terminal image ships (test_ttyd_ws_auth.py, #770), and the weaver
-# test_weaver_registry_check.py checks weaver/registry with (#782). The fetch needs the four tools above, so it is
-# only tried once they are there.
+# test_weaver_registry_check.py checks weaver/registry with (#782), and the agentgateway release binary of the deployed
+# gateway version test_agentgateway_tracing_e2e.py runs the gateway ConfigMaps on (#864). The fetch needs the four
+# tools above, so it is only tried once they are there.
 tools_ready=0
 if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1 \
     && command -v sha256sum >/dev/null 2>&1; then
     if bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
         tools_ready=1
     else
-        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver could not be fetched (fetch-e2e-tools.sh, reasons above)")
+        missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not be fetched (fetch-e2e-tools.sh, reasons above)")
     fi
 else
-    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane and weaver were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
+    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
 fi
 if [[ "${tools_ready}" -eq 1 ]]; then
     # The six tests that take a path get the fetched one, so a tool already on the host is never what runs.
     export PATH="${TOOLS_BIN}:${PATH}"
     export KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform" \
-        OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
+        OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane" \
+        AGENTGATEWAY="${TOOLS_BIN}/agentgateway"
 fi
 # test_iam_policy_aws.py sends the IAM documents to Access Analyzer and the policy simulator as a named profile.
 command -v aws >/dev/null 2>&1 || missing+=("the aws CLI is not on PATH")
