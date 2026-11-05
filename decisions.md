@@ -18178,3 +18178,14 @@ recorded. The collector's two patches of the Agent just before it vanished are w
 it removes its own finalizer.
 
 **Tests.** No code changed; this run's suite results follow in the next entry.
+
+## 2026-11-05 · #733 · Run 17386's suite results: offline 258 green, the tools tier 56 checks green on the third run
+
+At `a57cf167`, `bash verify/run-e2e-tools.sh` ran three times. Each time the offline suite ran 258 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. The first two tier runs went red only on Helm chart fetches from GitHub release
+downloads that answered `504 Gateway Time-out`. In the first, the only red was `test_no_docker_hub_render.py`, on
+falcosidekick 0.14.0. In the second, `test_datadog_log_services_render.py`, `test_enforce_floor.py` and
+`test_image_registry_render.py` went red on falco, falco-talon, falcosidekick, opentelemetry-collector and argo-cd
+charts. A plain `curl` of the falco 9.2.1 release URL from the host answered 504 twice and then 200, and each failing
+test passed when rerun alone. The third run printed `56 checks ran (the offline suite and 55 tier tests) in 27m26s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with no 504 in its log. No test changed.
