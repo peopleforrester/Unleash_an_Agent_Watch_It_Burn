@@ -196,6 +196,16 @@ check("beat-01's sample workload is labelled into burritobot-beat1-sample-web wi
       '"tags.datadoghq.com/service":"burritobot-beat1-sample-web","tags.datadoghq.com/env":"burritobot-kubecon-na-26"' in beat
       and "could not label the sample workload for Datadog" in beat)
 
+print("== the one-shot pods live checks run (verify/probe_pod.py) carry the sandbox tags (#629) ==")
+# verify/one_root_probe.py and verify/test_tool_audit_live.py run these in agent on both clusters. Untagged, their logs
+# reached the org as service watch-it-burn, the image's short name, with no env (oneroot-* pods, 2026-11-05).
+sys.path.insert(0, str(REPO / "verify"))
+import probe_pod  # noqa: E402
+probe_labels = probe_pod.shell_pod("oneroot-abc123", "agent", "ghcr.io/x/watch-it-burn:t", "true")["metadata"].get("labels", {})
+check("a probe pod logs under service burritobot-live-probe with the env",
+      probe_labels.get("tags.datadoghq.com/service") == "burritobot-live-probe"
+      and probe_labels.get("tags.datadoghq.com/env") == DD_ENV, str(probe_labels))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

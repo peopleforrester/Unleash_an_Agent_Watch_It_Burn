@@ -16924,7 +16924,7 @@ tests) in 28m09s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/
 
 **Why the branch moved.** Staging moved from 9e7070d to 15e483ed (337 commits) while the earlier commit 6eab11c sat
 unpromoted. `verify/draft-drift.sh` named 12 files that staging had since edited. Backup: `backup/629-6eab11c`. The
-design is re-made on staging's layout as ed175237, not cherry-picked.
+design was made again on staging's layout as ed175237 (on this branch, 2d0e4eb0), in place of a cherry-pick.
 
 **What differs from the draft.**
 - `infra/argocd-values.yaml`: dropped. Staging's fee7dbd7 (#858) moved Argo CD to chart 10.11.7 (v3.5.7) with the limits
@@ -17004,3 +17004,46 @@ expected a Joker's labels without the stamp, and that test is updated. `bash ver
 `lab-bootstrap` Application re-enables its child's `selfHeal`, which is why it is paused as well. The `block-argocd-drift`
 policy blocks direct patches to Argo-managed Deployments even at Audit, so a Backstage annotation can only land
 through Git.
+
+## 2026-11-05 · #629 · Run 17338 ports run 17283's branch, labels the live checks' probe pods, and reruns both live checks
+
+**The port.** Run 17283's five commits did not land: the ai-isms gate failed one line of the entry above. They are on
+`origin/agent/629-16034` (hecaton rebased them there as 091f211b..f820d476). `verify/prior-drafts.sh 629 origin/staging`
+called them CLEAN apart from the decisions.md append, so this run cherry-picked them onto staging 5151dddf: 2d0e4eb0
+(was ed175237), 2697308a (was 5a935714), ef307083 (was d9df4378), 862bc3c6 (was a143e951) and af0a209f (was c8ae6b77).
+The entry above keeps its old hashes except in the line the gate failed, which now says the design was made again in
+place of a cherry-pick. Nothing else in the draft changed.
+
+**Live state at 05:27Z.** On both clusters, the `kubearmor` and `lab-bootstrap` Applications have `selfHeal` true and
+are Synced (private at 5151dddf), so run 17283's pauses were already reverted. Private's `kubearmor-default` still has
+the `globalEnv` with DD_ENV, and LimitRange `kubearmor-default-limits` is still in namespace kubearmor. This run
+changed nothing on either cluster.
+
+**Results.**
+- `verify/test_burritobot_cluster_live.py`, CONTEXT=watch-it-burn-community and then CONTEXT=watch-it-burn-private:
+  PASS on both. Each has the burritobot key alone, and every running container names its service and env.
+- `verify/test_datadog_sandbox_live.py` at 05:29Z (lookback 60 minutes) and 05:30Z (15 minutes): checks 1, 3, 4 and 5
+  PASS, and check 2 FAILS. These services broke the rule, with the pods Datadog named for each:
+  - `backstage` and `rootHttpRouter` on burritobot-private, from pod `backstage-db87f996d-ptlhh`. The fix is the pod
+    annotation in 2d0e4eb0.
+  - `maintenance-shell` on burritobot-public, from 23 pods of ReplicaSet `maintenance-shell-79b5756675` in agent. That is
+    the room Joker, which `deploy_app` creates; the Deployment was gone by 05:31Z. The stamp in 2d0e4eb0 tags it.
+  - `watch-it-burn` on both clusters, which is the short name of the `ghcr.io/peopleforrester/watch-it-burn` image,
+    from pods with no tags: `oneroot-dc5afc` on private (`verify/one_root_probe.py`), and Jobs `app-profile-effect-agent`
+    and `app-profile-effect-tutor` on both, which another run was creating at 05:30Z. No branch in the mirror has
+    the code for those Jobs.
+
+**The fix in this run.** `verify/probe_pod.py`'s `shell_pod`, which `one_root_probe.py` and `test_tool_audit_live.py`
+build their pods with, now labels each pod `tags.datadoghq.com/service: burritobot-live-probe` and the env.
+`verify/test_datadog_sandbox_names.py` checks it, and fails with the old `probe_pod.py`. A file-based Autodiscovery
+config cannot do this job, because it matches by image short name and `watch-it-burn` is also the short name of
+labelled workloads such as workshop-mcp, whose logs it would rename.
+
+**What any live check must do from now on.** Whitney's rule covers every pod on these two clusters, the throwaway
+ones too. A pod or Job that a run starts in either cluster carries `tags.datadoghq.com/service: burritobot-<name>`
+and `tags.datadoghq.com/env: burritobot-kubecon-na-26`. Without them the sandbox check fails for up to an hour after
+the pod logs. The `app-profile-effect` Jobs need these labels before their run's change is promoted.
+
+**Not yet run on a cluster.** `verify/test_datadog_sandbox_live.py` with WIB_DD_LOOKBACK_MIN=60, once this branch is
+on staging, Argo CD has synced `backstage` on private, and an hour has passed with no untagged probe pod. That run
+also records whether check 2 passes on both clusters, which closes #629.
