@@ -18892,3 +18892,7 @@ need a principal that can call IAM, and went to the run report's escalate list w
 init`, then `terraform -chdir=infra/terraform/aws/audit apply -state=states/accen-dev.tfstate -var profile=accen-dev
 -var event=kubecon-na-2026`; then `verify/test_drift_aws_live.py` as above with the cluster's attendee CSV; then
 `verify/test_iam_policy_aws.py` for check 4. The drill change needs nothing synced, being a test, and was run here.
+
+**The suites (run 17417, at `a953777`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`260 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `56 checks ran (the offline suite and 55 tier tests) in
+27m27s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
