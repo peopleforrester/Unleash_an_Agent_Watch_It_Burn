@@ -16129,3 +16129,31 @@ next run on #864 runs them.
 **The suites (run 17196, at `17158b7d`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
 tier tests, `test_agentgateway_tracing_e2e.py` the new one) in 26m09s and printed `ALL E2E TOOLS TIER CHECKS GREEN`,
 exit 0. The offline suite inside it ran 252 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+## 2026-11-05 · #858 · Checked live: both clusters run Argo CD v3.5.7 from chart 10.11.7, with every Application Synced and Healthy
+
+**What ran.** Hecaton run 17211, the third dispatch of #858, ran the checks that the entry above names under "Not yet
+run on a cluster: the roll". Run 17110 handed the roll on as an escalation. When this run started, both releases had
+already been upgraded: `helm history argocd` shows revision 4 at 2026-11-05 01:24:20 CET on watch-it-burn-private and
+01:29:48 CET on watch-it-burn-community, private first, as the escalation asked. This run did not upgrade either
+release and changed nothing on either cluster. Every call named its `--context` or `--kube-context`.
+
+**What the clusters printed.**
+- `helm history argocd -n argocd`: revision 4 is `deployed`, argo-cd-10.11.7, app v3.5.7, `Upgrade complete`, on both.
+  On private, revisions 2 and 3 are still the two `failed` upgrades of 2026-11-02 that Kyverno's
+  require-resource-limits refused at the redis-secret-init Job. Revision 4 got past that hook with the new limits.
+- `kubectl -n argocd get deploy,sts`: the application controller, repo server, server, ApplicationSet controller and
+  notifications controller run `quay.io/argoproj/argocd:v3.5.7`, and the repo server's init container too. Redis
+  stays `redis:8.6.4-alpine`. All six pods are Running 1/1 with no restarts on both clusters.
+- Each argocd pod's `imageID` is `quay.io/argoproj/argocd@sha256:16df57da...0db`, the digest in images.lock's row.
+- Every container carries the limits `infra/argocd-values.yaml` sets: controller 2 CPU and 3Gi, repo server 2 CPU
+  and 2Gi, server 1 CPU and 512Mi, the other three 500m and 256Mi. `helm get values argocd` on each cluster equals
+  staging's `infra/argocd-values.yaml`, parsed as YAML.
+- Applications: 38 of 38 Synced and Healthy on private, 20 of 20 on community.
+- `/api/version` answers `{"Version":"v3.5.7"}` at `https://argocd-burritobot-private.agenticburn.com` and
+  `https://argocd-attackme.agenticburn.com`. Both answered v3.5.2 earlier on 2026-11-05.
+
+**Dependabot.** Alerts 275 (GHSA-j6cw-g6p4-7hch) and 276 (GHSA-fmxq-cgp8-87wp) read `fixed` at 2026-11-05T00:55:47Z.
+`fee7dbd7` is on main, and main's replay go.mod requires argo-cd v3.5.7.
+
+**Not yet run on a cluster:** nothing for #858. The issue closes with this entry.
