@@ -20675,3 +20675,41 @@ promotes, in a scratch worktree: `bash verify/run-e2e-tools.sh` ran 61 checks (t
 in 30m48s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 270 tests and
 printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` (`All recorded-fallback checks
 passed.`) and staging's `test_e2e_tools_tier.py` among them; the tier printed `FALLBACK DECK GREEN`.
+## 2026-11-05 · #879 · A test holds #392's third-delivery criterion: KubeCon NA is costed from the fleet accounts' bills
+
+Test review run 17331 found that nothing tested #392's criterion "Activate the project cost-allocation tag on the
+payer account, or the third delivery is costed by guesswork too". The activation is off the table (Michael's rulings
+on #392, 2026-11-01 and 2026-11-03), and the criterion became each delivery costed from the member accounts' own Cost
+Explorer with a non-zero recorded figure (the 2026-11-05 · #392 entries above). The two past deliveries are recorded
+in `cost/measured/`. For the third, KubeCon NA (owed on #872), only the run-of-show's teardown step named the command,
+and no test read it.
+
+`verify/test_kubecon_cost_measured.py` (offline suite, 40 checks, 44 once the KubeCon record is saved) now does. It fails when:
+
+- the run-of-show's "Record the real spend" step stops naming `teardown/delivery-cost.py` with `--event` set to the
+  run-of-show's own delivery (`kubecon-na-2026`, from its file name), placeholders for the window's two ends and
+  nothing else, a `--profile` for each fleet account, `cost/measured/kubecon-na-2026.txt` as the record and #872, or
+  starts naming the estimator; or `cost/measured/README.md` stops giving KubeCon `--event kubecon-na-2026`;
+- that command, filled in with a KubeCon-shaped window (2026-11-02 .. 2026-11-14) and the five accounts in
+  `WIB_ATTENDEE_ACCOUNTS`, run against an aws shim answering as a member account does (tag figure 0.00), stops
+  printing every account's usage at its hand sum and a non-zero all-accounts total, or stops saying why the tag
+  figure is 0.00;
+- with the shim answering as active tags would, `delivery-cost.py` or `cost-report.sh --tag-key event --tag-value
+  kubecon-na-2026` stops printing the non-zero tag-filtered figure. That is #392's literal Done-when, read on the day
+  the payer activates the tags;
+- a file in `cost/measured/` has a zero total or zero EKS cluster hours, either past delivery's file is gone, or a
+  saved `kubecon-na-2026.txt` does not name its delivery, take in the session day 2026-11-12 (read from the
+  run-of-show's opening line), measure every fleet account, or is free of `WINDOW CUTS SPEND`.
+
+Each anchor the test reads in the run-of-show and the README is checked first and named when it is missing. Eight
+edits made by hand and then reverted each turned the test red: the estimator named in the step, the Portland event in
+its command, one profile in place of each fleet account, the step's anchor reworded, Portland's total zeroed, a
+KubeCon record with the Portland window and an account missing, the payer footnote dropped from the script, and the
+tag figure forced to 0.00 in the script.
+
+**The previous attempt** at this issue ended `workspace`: hecaton could not reach its Podman socket
+(`/run/user/103/podman/podman.sock`), on the host and before any repo work. Nothing here caused it or changed for it.
+`verify/prior-drafts.sh 879 origin/staging` printed NONE.
+
+**Not yet run on a cluster.** Nothing is owed: the test is offline and reads only the repo. The live measurement of
+KubeCon is #872's, once its fleet is down.
