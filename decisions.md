@@ -19211,3 +19211,59 @@ plane. Both share the parser in `verify/node_sg_rules.py`.
 **The suites (run 17432, at `eb1aa498`).** `bash verify/run-e2e-tools.sh` printed `263 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the
 offline suite and 57 tier tests) in 29m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #873 · run 17449 · Attendee seats admit lab-platform-operator in the group lab-platform:learner-apps
+
+**What changed.** `infra/terraform/aws/cluster/main.tf` gives every attendee seat (`role=attendee`) an EKS access
+entry for `arn:aws:iam::<the seat's account>:role/lab-platform-operator`, type STANDARD, Kubernetes group
+`lab-platform:learner-apps`, with no access policy associated. lab-platform's `labctl harvest` probes each seat's
+workshop apps as that role in every account but the harvest's own (lab-platform#370), and until now each seat
+admitted only its creator and its student, so one harvest across the five accounts got a 401 from every seat
+outside its base account. The new output `lab_platform_operator_entry` names the admitted ARN, or is empty.
+
+**Why the entry is conditional.** lab-platform makes the role in every account except the base credentials' own
+(lab-platform `docs/aws-accounts.md`, "Creating the role"), and EKS refuses an entry whose principal does not exist
+(checked live below). So the root looks the role up by name (`data.aws_iam_roles` with `^lab-platform-operator$`)
+and makes the entry only where it is found. A seat built before the role reached its account gets the entry at its
+next apply. The community and admin clusters get none: the harvest pools only seats, and lab-platform refuses those
+two clusters at its own entries.
+
+**A role made again.** EKS binds an entry to the principal's unique id, and lab-platform removes the role from an
+account once its event is over. A role made again under the same name has a new id, and the old entry no longer
+admits it while its ARN, which is all Terraform compares, is unchanged. A `terraform_data` holding the role's
+`unique_id` is in the entry's `replace_triggered_by`, so the next apply replaces the entry.
+
+**What the entry grants.** Nothing yet: it authenticates the role and binds it to a group no RBAC on the seat names.
+#874 applies lab-platform's learner-apps RBAC on every seat; after that the group reads the eight workshop apps'
+Service proxies, as an attendee's check does, and nothing else.
+
+**Test.** `verify/test_lab_platform_operator_entry.py` (E2E tools tier) copies the root into an empty directory,
+initialises it against the committed lock, and runs `terraform test` with the cases in
+`verify/fixtures/lab_platform_operator_entry.tftest.hcl` against a mocked aws provider, so no AWS call is made: a
+seat in an account with the role gets one entry with the right ARN, the one group and type, the root's only access
+policy association stays the student's, and the entry follows the role's unique id; a seat in an account without the
+role, the community cluster and the admin cluster get none. With the `role=attendee` condition removed from the
+root, the community and admin cases fail.
+
+**Live check (watch-it-burn-private, account 515966504359, us-west-2, 12:45Z).** With the run's session sourced:
+
+- `aws eks create-access-entry --cluster-name watch-it-burn-private --principal-arn
+  arn:aws:iam::515966504359:role/lab-platform-operator --kubernetes-groups lab-platform:learner-apps --type STANDARD`
+  made the entry: `kubernetesGroups` `["lab-platform:learner-apps"]`, username
+  `arn:aws:sts::515966504359:assumed-role/lab-platform-operator/{{SessionName}}`. So the role exists in accen-dev,
+  and the entry's shape is one EKS takes.
+- `aws eks list-associated-access-policies` on it returned `"associatedAccessPolicies": []`.
+- The same call for `role/wib-873-no-such-role-x7` was refused: `InvalidParameterException ... The specified
+  principalArn is invalid: invalid principal.` That is why the root looks the role up first.
+- `aws eks delete-access-entry` removed the entry, and `list-access-entries` afterwards listed the five entries the
+  cluster held before (the EKS service role, the node group role, `hecaton-run`, `nwuser` and `wib-private`). Left as
+  found.
+
+The run's session cannot call IAM (its `get-role` answers `InvalidClientTokenId`), and it reaches accen-dev only, so
+whether the other four accounts hold the role was not read here; the lookup makes an account without it plan no entry.
+
+**Not yet run on a cluster.** No attendee seat is up, and a run brings none up. The next seat build (`fleet.sh up`)
+plans the entry; then `aws eks describe-access-entry --cluster-name <seat> --principal-arn
+arn:aws:iam::<account>:role/lab-platform-operator` and one `labctl harvest` across the accounts, after #874, show a
+seat outside the base account answering the probe.
+
+No dependency was added.
