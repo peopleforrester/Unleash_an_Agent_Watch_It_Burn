@@ -19437,3 +19437,11 @@ which only a new nodegroup gives.
 **Left on Docker Hub outside this repo's tree.** llm-guard-cpu-offline, the submodule at images/llm-guard, builds
 FROM `python:3.12-slim` (follow-up there). images.lock's `laiyer/llm-guard-api:0.3.16` row is #603's retention copy
 of the archived upstream, which nothing pulls or builds on; lab-platform has no mirror/ copy of it (follow-up).
+
+**The suites (run 17238).** `bash verify/run-e2e-tools.sh` at `ee6aa1bd` on staging `4b8a5058` printed
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, with `55 checks ran (the offline suite and 54 tier tests) in 28m47s`; the
+offline suite inside it ran 254 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. The tier's Joker checks read
+the new base from ghcr.io: test_joker_web_busybox, test_c6_joker_public and test_joker_build_digest each passed.
+Staging moved to `c4d8c186` (#867's records) while that ran. The commit rebased onto it with only this file's append
+to merge, and `bash verify/run-tests.sh` on the rebased branch ran 254 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
