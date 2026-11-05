@@ -16458,3 +16458,58 @@ starts with the report heading and has no `WINDOW CUTS SPEND` line. `verify/test
 **The suites (run 17257, at `9a6faa36`).** `bash verify/run-tests.sh` ran 255 tests green, after `9a6faa36` took a
 retired cluster name out of `cost/measured/README.md` that `test_docs_current.py` refused. `bash verify/run-e2e-tools.sh`
 ran 55 checks (the offline suite and 54 tier tests) in 29m30s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-05 · #783 · Checked live: the fix runs on both clusters, a fresh chat on each reads back from Agent Observability, and Datadog's history confirms the cause
+
+**No code changed.** Hecaton run 17261 is the fifth dispatch of #783 and the first whose user could read its
+`clusters/` files, so the live half the 2026-11-02 · #783 entry left owed ran here. `verify/prior-drafts.sh 783
+origin/staging` printed NONE: every earlier draft is on staging.
+
+**The fix is applied on both clusters** (criterion 2). At 2026-11-05 ~02:50 UTC,
+`COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_otel_trace_id_fix_live.py` (#812) passed all 21 checks and ended "#783's fix is on staging and applied on
+watch-it-burn-community and watch-it-burn-private." On each cluster the `otel-collector` Application is Synced,
+Healthy and Succeeded at staging `c4d8c186`, which contains 67c956a; the agent DaemonSet's pod started after that sync
+(2026-11-03 21:04 and 21:03 UTC) with 0 restarts; and its relay ConfigMap runs
+`set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))` first in `traces/llmobs`. The collector log on each
+had no `llmobs` or `error` line in the 6 hours before. The cluster-identity ConfigMap names watch-it-burn-community
+`burritobot-public` and watch-it-burn-private `burritobot-private`, the `k8s.cluster.name` the checks below read.
+
+**A fresh chat on each cluster is in Agent Observability** (criterion 3). `. "$HECATON_CLUSTER_ENV" && python3
+verify/test_agent_obs_flow_live.py` (#813, `chat --own-session`), started 2026-11-05 02:38:16 UTC, exit 0:
+
+    PASS  attackme.burritobot.co: the chat's own session wib-aoflow-burritobot-public-20261105023818 is in Agent Observability: 4 ml_app:burritobot span(s) on burritobot-public, traces 1a86a16caee55334b0f6a87d0a0962e9
+    PASS  burritobot-private.burritobot.co: the chat's own session wib-aoflow-burritobot-private-20261105023818 is in Agent Observability: 4 ml_app:burritobot span(s) on burritobot-private, traces 823b86e6d4e75bd580edce9f68fd0134
+    AGENT OBSERVABILITY GREEN
+
+Before it, at 02:29 UTC, `python3 verify/agent_obs_flow.py watch --profile accen-dev` (no model call) printed
+"PASS APM's newest burritobot span is from 2026-11-05 01:29:33Z, and Agent Observability has 4 ml_app:burritobot
+span(s) since" and `AGENT OBSERVABILITY GREEN`. The session tag #813 left unread live is on the spans. The two chats
+cost two model calls and changed nothing on either cluster.
+
+**Datadog's history confirms the cause the 2026-11-02 entry inferred** (criterion 1). A read-only script outside the
+tree counted, per window and per cluster, `ml_app:burritobot` spans in the LLM Observability spans API against
+`service:burritobot env:burritobot-kubecon-na-26` spans in APM (each capped at 100 per window):
+
+| window (UTC) | public: Agent Obs / APM | private: Agent Obs / APM |
+|---|---|---|
+| 11-01 01:00-02:00 | 52 / 65 | 75 / 96 |
+| 11-01 03:00-04:00 | 56 / 71 | 0 / 0 |
+| 11-01 04:00-16:00 | 0 / 0 | 0 / 0 |
+| 11-01 16:00-17:00 | 0 / 53 | 0 / 0 |
+| 11-02 06:00-09:00 | 0 / 16 | 0 / 16 |
+| 11-03 06:00-07:00 | 4 / 18 | 0 / 0 |
+| 11-04 18:00-11-05 03:00 | 230 / 248 | 124 / 155 |
+
+Every other hour from 11-01 00:00 to 11-05 03:00 had no span on either side. So no chat reached either cluster
+between the 03:26 row and 241f8e6's rollout at 15:51 UTC: APM was empty too, and "since about 03:30" is only the last
+chat before the outage. Every chat after 241f8e6 and before the fix (11-01 16:00, 11-02 06:00 to 09:00) reached APM
+and made no Agent Observability row. 67c956a reached staging on 11-02 between 14:22 and 16:32 UTC, and the first chat
+after it (11-03 06:00) made rows again, as has every chat since. The only trace-path change between those chats is
+67c956a: #774's 5c400e86 adds Applications to the KubeCon profile lists and does not touch the collector's config.
+The cause stands as written: APM's `dd_llmobs_enabled` false vetoed Agent Observability's copy while the copy shared
+APM's trace id.
+
+**The alarm** (criterion 4) is `verify/agent_obs_flow.py` from c4c62bb, run above, with its offline test
+`verify/test_agent_obs_flow.py` and its live test `verify/test_agent_obs_flow_live.py` in `run-e2e.sh`.
+
+**Not yet run on a cluster.** Nothing #783 asks for.
