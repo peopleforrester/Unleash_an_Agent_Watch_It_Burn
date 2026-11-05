@@ -16015,6 +16015,6 @@ differs: the org has (...)`, and the comparison is then fixed to normalize that 
 
 **The suites (run 17194, at `2878d1fa`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
 tier tests) in 25m24s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 252
-tests, `test_fleet_monitors.py` (198 checks, the 36 new `--board` checks among them) and `test_leaderboard.py`
+tests, `test_fleet_monitors.py` (198 checks, 34 of them new for `--board`) and `test_leaderboard.py`
 among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. `test_leaderboard_live.py` is `# SUITE: e2e`, so
 the offline suite leaves it to `run-e2e.sh`.
