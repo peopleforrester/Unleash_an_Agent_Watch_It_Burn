@@ -279,6 +279,22 @@ Bedrock directly, with the same model settings as the private cluster, which pas
 Seen in both public runs, so this is past a watch item: the room should expect some HC-666 tries to need a
 second send, which the "keep trying" step already covers. On stage, the presenters send it until it lands.
 
+**2026-11-05, the roster routes table, before its publish (#918, run 17619).** `./fleet.sh routes roster`, rendered
+read-only with its push and reload stubbed, printed `routes: wrote 33 host(s) to routes.map` with no shrink refusal:
+the 24 retired kagent and party-app rows leave, the `deployments-` and `registry-` rows of both clusters on both
+domains and bare `registry.burritobot.co` arrive, on the same two console load balancers. The publish itself (apex
+main push and router reload) is escalated, since a run may not push. Live at 17:36Z, on the table already published:
+
+| Check | Result |
+|---|---|
+| `./fleet.sh router-check` | PASS: serves attackme.burritobot.co and burritobot-private.burritobot.co, exactly the roster |
+| `./fleet.sh wall-check` | PASS: healthz 200, the wall shows attackme and burritobot-private |
+| registry.burritobot.co `/v2/burritobot/maintenance-shell/tags/list` | 404, the router's no-route page (needs the publish) |
+| deployments.burritobot.co | 404, the router's no-route page (needs the publish) |
+| attackme.burritobot.co `/`, `/prompts`, `/cost` | 200, 200, 200 |
+| burritobot-private.agenticburn.com `/`, `/prompts`, `/cost` | 200, 200, 200 |
+| `/support` on both bot hosts | 404 from the console's nginx: the console has no `/support` page; the desk is support.burritobot.co (200) |
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in

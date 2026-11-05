@@ -19384,3 +19384,73 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
+## 2026-11-05 · #918 · run 17619 · The roster routes table rendered and checked; its publish goes to escalation
+
+**What this run did not do, and why.** It did not push apex-agenticburn's main or reload the live router. Michael's
+go for that act is on #916 (the coordinator's comment of 2026-11-05: "Publish the routes."), but a dispatched run's
+governance forbids any push or deploy and the issue text cannot change that, and the run holds no credential for
+either: `git clone https://github.com/peopleforrester/apex-agenticburn.git` answered `could not read Username`. So
+the publish goes in the report's `escalate`, pointing at that go, with the commands below, and every check that
+can run before it ran here.
+
+**The render, read-only, at about 17:37Z.** The published table was read from apex main with
+`gh api repos/peopleforrester/apex-agenticburn/contents/routes.map?ref=main` (apex main at `e92da1a`, the last
+table commit `b0c97e8` of 2026-11-01): 48 hosts, 24 per cluster, on two upstreams. It was committed into a scratch
+git dir, and `cmd_routes roster` was run from this branch's `fleet.sh` (sourced, `load_roster`, with
+`publish_routes_table` and `apply_routes_table` replaced by stubs that only log) with `WIB_APEX_DIR` at that dir and
+the run's accen-dev session. It printed:
+
+    routes: wrote 33 host(s) to routes.map (apex repo)
+    STUB publish: apex main NOT pushed (33 hosts)
+    STUB apply: live router NOT reloaded
+    cmd_routes rc=0
+
+No shrink refusal, and no roster host leaves. Against the published table: 9 rows added, 24 removed. The 24 are the
+kagent, hedgehog, wombat, unicorn, spider and mantis-shrimp rows of attackme and burritobot-private on both domains.
+The 9 are `deployments-` and `registry-` for both clusters on both domains, and bare `registry.burritobot.co`. All
+33 rows point at the same two console load balancers as before: 16 at `k8s-agent-console-6d7d3fd8cd-...` (community)
+and 17 at `k8s-agent-console-8b9a07a948-...` (private; bare registry is the 17th). This is #906's render, so the
+table to publish is this one, and no other roster cluster has a row in it.
+
+**Live checks before the publish, 17:36Z.**
+
+    $ ./fleet.sh router-check
+      PASS  the router serves attackme.burritobot.co
+      PASS  the router serves burritobot-private.burritobot.co
+    router-check: the router serves exactly the roster
+    $ ./fleet.sh wall-check
+      PASS  https://prompts.burritobot.co/healthz answers 200
+      PASS  the wall shows attackme
+      PASS  the wall shows burritobot-private
+    wall-check: the wall shows every roster cluster
+
+Both pass on the table already live, and both read only the roster consoles, which the new table keeps, so they
+are expected to pass after it too; that is still to be run. `curl` on the hosts:
+
+- `https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`: 404, the router's "no route for this
+  host" page (`server: railway-hikari`). `https://registry.burritobot.co/v2/` the same.
+- `https://deployments.burritobot.co/`: 404, the same page. Apex main's Caddyfile (`e92da1a`) already maps
+  `deployments.burritobot.co` to `deployments-attackme.burritobot.co`'s row, which the new table brings, so this host
+  turns on with the reload.
+- attackme.burritobot.co and burritobot-private.agenticburn.com: `/` 200, `/prompts` 200, `/cost` 200, `/support`
+  404 on both. That 404 is nginx's own page from the console, not the router: `gitops/ai-layer/console.conf` has no
+  `/support` location and never had one (`git log -S'location = /support'` finds nothing). The support desk is its
+  own host, `support.burritobot.co`, which answered 200. So `/support` on a bot host is not a page that worked
+  before, and the issue's criterion that it answers 200 cannot be met by the routes publish; the comment on #916
+  says so.
+
+**For the tier that runs the publish.** From a checkout of staging, with the apex checkout beside it:
+
+    cd infra/terraform/fleet
+    AWS_PROFILE=accen-dev WIB_APEX_DIR=<apex checkout> ./fleet.sh routes roster
+    ./fleet.sh router-check && ./fleet.sh wall-check
+    curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list
+    curl -fsS -o /dev/null -w '%{http_code}\n' https://deployments.burritobot.co
+
+`routes roster` should print `wrote 33 host(s)` and `recorded on apex main as <sha>, on top of e92da1a`; anything
+else is not this render. The registry tags list answers 200 with `busybox-1.38.0` only once #906's seed fix
+(`02404d1d`, on `agent/906-17556`, not yet on staging) is promoted and internal-registry on private has synced.
+
+**Not yet run on a cluster.** Everything after the publish: `router-check` and `wall-check` against the 33-host
+table, the registry tags list, `deployments.burritobot.co`, and `/`, `/prompts` and `/cost` on both bot hosts again.
