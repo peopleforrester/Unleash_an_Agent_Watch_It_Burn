@@ -16058,3 +16058,8 @@ issuecomment-6483003262, #783's at issuecomment-6578827445, #796's at issuecomme
 `/usr/bin:/bin`, whose gh has no token, `test_dispatched_runs_cause_comment.py` exited 1 on the one check "gh is on
 PATH with a token, so the read does not spend the host's shared anonymous quota (#863)", quoting gh's
 "please run: gh auth login". No cluster is touched by this change.
+
+**The suites (run 17195, at `ca2d6976`).** `bash verify/run-e2e-tools.sh` ran 54 checks (the offline suite and 53
+tier tests) in 25m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 253
+tests, `test_gh_comments.py` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`. All three cause-comment
+tests passed in the tier through gh.
