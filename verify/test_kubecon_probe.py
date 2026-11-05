@@ -224,11 +224,14 @@ check("identity: the burritobot.co name of another cluster fails",
       not passes(kp.judge_identity("attackme.burritobot.co", "burritobot-private.agenticburn.com",
                                    "attackme.agenticburn.com")))
 # The private cluster's start (#774): every AI guard off and the four Kubernetes guardrails present and off.
-start = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
+start = {"profile": kp.PRIVATE_PROFILE,
+         "guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
          "kyverno_actions": ["Audit"], "breakout_actions": ["Audit"], "networkpolicy": False,
          "kubearmor_action": None, "rbac_scoped": False}
 check("start state: guards off and the four Kubernetes guardrails off passes", passes(kp.judge_start_state(start)))
-for name, change in [("an AI guard on", {"guards": {**start["guards"], "budget": True}}),
+for name, change in [("the root on the admin profile", {"profile": "admin"}),
+                     ("the root's profile unreadable", {"profile": None}),
+                     ("an AI guard on", {"guards": {**start["guards"], "budget": True}}),
                      ("the allow-list already narrowed", {"evil_tools": ["get_weather"]}),
                      ("the C7 gateway rule already narrowed", {"c7_rule": kp.C7_NARROWED}),
                      ("the C7 gateway rule unreadable", {"c7_rule": None}),
@@ -241,6 +244,13 @@ for name, change in [("an AI guard on", {"guards": {**start["guards"], "budget":
                      ("the Role unreadable", {"rbac_scoped": None}),
                      ("guard state unreadable", {"guards": {}})]:
     check(f"start state: {name} fails", not passes(kp.judge_start_state({**start, **change})))
+# Run 17370's private cluster on 2026-11-05 (#888): the root still on admin, so the note names that first, the cause of
+# the three guardrail symptoms after it.
+drifted = {**start, "profile": "admin", "breakout_actions": [], "kubearmor_action": "Block", "networkpolicy": True}
+ok, note = kp.judge_start_state(drifted)
+check("start state: the admin root is named first, before its symptoms",
+      not ok and note.startswith("the lab-bootstrap root renders the 'admin' profile, not 'kubecon-private'")
+      and "deny-external-registries is not installed" in note, note)
 # After guardrails-on: the same AI guards, and all four Kubernetes guardrails on.
 armed = {**start, "kyverno_actions": ["Deny"], "breakout_actions": ["Deny"], "networkpolicy": True,
          "kubearmor_action": "Block", "rbac_scoped": True}
@@ -740,6 +750,8 @@ class NoisyKubectl:
                 {"mcpServer": {"name": "evil-mcp", "toolNames": self.tools}}]}}})
         elif "validatingpolicy" in args:
             out = '["Audit"]'
+        elif list(args) == kp.ROOT_PROFILE:
+            out = kp.PRIVATE_PROFILE
         elif "networkpolicy" in args or "kubearmorpolicy" in args:
             rc, err = 1, 'Error from server (NotFound): not found\n'
         if "get" in args:
@@ -833,7 +845,7 @@ class Fake:
 
     def measure(self):
         action = ["Deny"] if self.armed else ["Audit"]
-        return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
+        return {"profile": kp.PRIVATE_PROFILE, "guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
                 "kyverno_actions": action, "breakout_actions": action, "networkpolicy": self.armed,
                 "kubearmor_action": "Block" if self.armed else None, "rbac_scoped": self.role == kp.RBAC_FIX}
 

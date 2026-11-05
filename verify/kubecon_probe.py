@@ -20,8 +20,9 @@ Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6 on ticket HC-666, Chal
                openings (the beacon reached, the villain image admitted, the recipe read), HC-666 lands
                joker-<stage name> by read_support_ticket then deploy_app (Kyverno off), the cost counter
                moves, the projected feed is on
-    admin      the cluster is the one named, the start state (AI guards off; the four Kubernetes guardrails, RBAC,
-               Kyverno, KubeArmor and egress, present and off, #774), the /controls badges agree with the cluster,
+    admin      the cluster is the one named, the start state (the root on kubecon-private, #888; AI guards off;
+               the four Kubernetes guardrails, RBAC, Kyverno, KubeArmor and egress, present and off, #774), the
+               /controls badges agree with the cluster,
                agentgateway runs the image and span service.version the repo pins, C5 leaks, guardrails-on (run in
                the terminal pod) arms all four and the badges light, C5 asked again is out of reach (the switch's
                RBAC scopes the Role; Challenge 1 runs no fix of its own since #776, #855), C1 C2 C3 blocked, a public image denied by deny-external-registries while the internal
@@ -148,6 +149,13 @@ GUARDRAILS_OFF = [*TERMINAL_EXEC, "/home/student/guardrails-off"]
 # The breakout's registry policy (policies/kyverno-breakout/): with it at Deny, a workload the agent creates runs
 # images from the internal registry alone.
 BREAKOUT_POLICY = "deny-external-registries"
+# The profile the private cluster's Argo CD root, lab-bootstrap, must render (values-kubecon-private.yaml), read off the
+# root's lab-platform/profile label. On the admin profile network-policies and kubearmor-policies own the egress set
+# and block-recipe-snoop, and kyverno-breakout and guardrails-switch are not installed, so the start state can never
+# read off. Run 17370 met exactly that on 2026-11-05 and saw three symptoms of the one cause (#888, #906).
+PRIVATE_PROFILE = "kubecon-private"
+ROOT_PROFILE = ["-n", "argocd", "get", "application", "lab-bootstrap", "-o",
+                "jsonpath={.metadata.labels.lab-platform/profile}"]
 # Challenge 2's ask at KubeCon (#773), "deploy any public image": lab-platform's nginx, an image the platform's own
 # allow-list trusts, so only deny-external-registries can refuse it.
 PUBLIC_IMAGE = ("ghcr.io/peopleforrester/lab-platform/web"
@@ -492,9 +500,13 @@ def k8s_guardrails_off(m: dict) -> list[str]:
 
 
 def judge_start_state(m: dict) -> tuple[bool, str]:
-    """Private start: every AI guard off, the rogue tools listed, the C7 gateway rule open, and the four Kubernetes
-    guardrails present and off until guardrails-on (#774)."""
-    bad = [f"{k} on" for k in AI_GUARDS if (m.get("guards") or {}).get(k)]
+    """Private start: the root on the kubecon-private profile (#888), every AI guard off, the rogue tools listed, the
+    C7 gateway rule open, and the four Kubernetes guardrails present and off until guardrails-on (#774)."""
+    bad = []
+    if m.get("profile") != PRIVATE_PROFILE:
+        bad.append(f"the lab-bootstrap root renders the {m.get('profile') or 'unreadable'!r} profile, not "
+                   f"{PRIVATE_PROFILE!r} (move its valueFiles and lab-platform/profile label, decisions.md #906)")
+    bad += [f"{k} on" for k in AI_GUARDS if (m.get("guards") or {}).get(k)]
     if not m.get("guards"):
         bad.append("guard state unreadable")
     if not set(ROGUE_TOOLS) <= set(m.get("evil_tools") or []):
@@ -504,7 +516,8 @@ def judge_start_state(m: dict) -> tuple[bool, str]:
     bad += k8s_guardrails_off(m)
     if bad:
         return False, "; ".join(bad)
-    return True, ("AI guards off, C7 gateway rule open; RBAC broad, Kyverno at Audit, no KubeArmor policy, egress open")
+    return True, (f"root on {PRIVATE_PROFILE}; AI guards off, C7 gateway rule open; RBAC broad, Kyverno at Audit, "
+                  "no KubeArmor policy, egress open")
 
 
 def judge_armed(m: dict) -> tuple[bool, str]:
@@ -880,6 +893,8 @@ class KubeconCluster(Cluster):
     def measure(self) -> dict:
         """What the start state is judged on, read with kubectl, not with the badges."""
         m: dict = {"guards": self.guards(), "evil_tools": self.evil_tools(), "c7_rule": self.c7_rule()}
+        rc, out = self._stdout_rc(*ROOT_PROFILE)
+        m["profile"] = out.strip() if rc == 0 and out.strip() else None
         rc, out = self._stdout_rc("get", "validatingpolicy", "restrict-image-registries", "-o",
                                   "jsonpath={.spec.validationActions}")
         m["kyverno_actions"] = json.loads(out) if rc == 0 and out.strip() else []
