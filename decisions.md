@@ -20040,3 +20040,10 @@ offline suite and 57 tier tests) in 28m15s`, `ALL E2E TOOLS TIER CHECKS GREEN` a
 `92dfea31`. At `52fc7d7f`, `bash verify/run-e2e-tools.sh` printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS
 GREEN`, `58 checks ran (the offline suite and 57 tier tests) in 32m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`, with `test_iam_policy_structural.py` at `0 failure(s)`.
+
+**Resumed as run 17678, rebased onto staging `4c9329dd`.** Run 17610 ended `rebase-conflict`: its `ad0d0130` and
+staging's `fa53301d` (#775) made the same TMPDIR change to `verify/test_e2e_tools_tier.py` in three places. The rebase
+kept staging's file, so this issue's branch now adds only the renderer change, its offline test and this record.
+At `5688cc47`, `bash verify/run-e2e-tools.sh` printed `269 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`59 checks ran (the offline suite and 58 tier tests) in 30m31s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
+`test_iam_policy_structural.py` at `0 failure(s)`.
