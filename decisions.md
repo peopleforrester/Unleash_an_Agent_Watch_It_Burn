@@ -18639,3 +18639,7 @@ feed skipped it), until the counter is next reset. watch-it-burn-private was onl
 and the `turn` readings line the check now prints were added after this run, and the judges test reran green on them.
 
 No dependency was added.
+
+**The suites (run 17416, on 5c6c42f9, staging 5318d1e1 plus this change).** `bash verify/run-e2e-tools.sh` ran 56 checks
+(the offline suite and 55 tier tests) in 27m18s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite
+inside it ran 260 tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `verify/test_tier_swap_live_judges.py` among them.
