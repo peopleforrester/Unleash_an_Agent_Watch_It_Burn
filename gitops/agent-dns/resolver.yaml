@@ -62,7 +62,10 @@ spec:
   template:
     metadata:
       # A Corefile change reaches the running pods through the mounted ConfigMap, and `reload` applies it.
-      labels: { app.kubernetes.io/name: agent-dns, tags.datadoghq.com/service: burritobot-agent-dns, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      # No tags.datadoghq.com/service label: the Datadog Agent's log config for the coredns image already names its
+      # logs burritobot-coredns and would win over a label (verify/test_datadog_log_services_render.py), so these
+      # logs read as burritobot-coredns with kube_namespace:agent.
+      labels: { app.kubernetes.io/name: agent-dns, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
     spec:
       automountServiceAccountToken: false # forward and cache need no cluster API
       enableServiceLinks: false
