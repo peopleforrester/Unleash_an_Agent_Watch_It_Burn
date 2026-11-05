@@ -800,7 +800,7 @@ the first colon.
 
 **On the harvester's exit codes in `ingest`:** 0 registers the row. 1 (unreachable, unreadable, malformed)
 registers nothing and records `ingest:<name>`, so the existing retry loop takes it again; the old fallback to a
-cached password is gone, because that cache is what showed agentic / sprouts. 3 (no Secret, terminal open)
+cached password is gone, because that cache is what showed agentic / [presenter password redacted, #911]. 3 (no Secret, terminal open)
 still registers the console with an empty login and records `terminal-open:<name>`, so the run fails by name
 without hiding the console from a student. fleet.sh removes `<cluster>.terminal` on any non-zero exit, as the
 harvester does.
@@ -3436,7 +3436,7 @@ public URL resolves only once this change reaches `main`.
   `maintenance-shell` Deployment.
 - **Fixes found on the way:** the page's C2 fallback named `challenges/01-cncf-wall/fallback.kubectl.sh`, the
   retired workshop Beat 1 (#499), and its C5 fallback used a `--sidecar` flag the script dropped; the
-  run-of-show gave the private terminal the attendee login, `agentic`, where the roster gets `sprouts`
+  run-of-show gave the private terminal the attendee login, `agentic`, where the roster gets the presenter login [value redacted, #911]
   (`verify/test_admin_actions.sh`); its fallback table still described C6's input check as a guard-proxy
   request with zero tokens, where `fallback.curl.sh input` now calls `read_support_ticket` in the tool pod;
   and its Night Before still expected the badge and topic beats to fail, which have passed since 2026-10-27.
@@ -5109,7 +5109,7 @@ the one the issue describes. No code changed.
 - **No attendee pool is up.** The platform rebuilt on 2026-10-28 is the roster alone, `watch-it-burn-community`
   and `watch-it-burn-private` in accen-dev (PROJECT_STATE.md, "KubeCon platform up"). The KubeCon session points
   nobody at a distributor, so no attendee lab runs (`facilitation/kubecon-na-2026-run-of-show.md`, "The one
-  platform, and the two clusters on it"). Both roster clusters carry `sprouts`, not `agentic`.
+  platform, and the two clusters on it"). Both roster clusters carry the presenter login [value redacted, #911], not `agentic`.
 - **The harvester's source is still unread.** `sources repo-cat agenticburn/provisioning-agenticburn/scripts/harvest_terminal_credential.sh`
   is still refused as "looks like a secret", and `repo-ls` of that directory does not list it.
 
@@ -13004,7 +13004,7 @@ presenters drive from `/kubecon`, which carries no provisioning or student-lab c
 runs on the roster in `infra/terraform/fleet/roster.tsv`, and the attendee pool is outside it (lines 271 to 273). The
 router table carries the roster only, and nobody is pointed at the provisioning distributor (lines 302 to 306). The
 Night Before brings up the roster with `./fleet.sh instructors up all` and says the attendee pool is not provisioned
-for this session (lines 891 to 893). The presenters log in to the private cluster's terminal as `sprouts` / `sprouts`
+for this session (lines 891 to 893). The presenters log in to the private cluster's terminal with the presenter login [value redacted, #911]
 and read that login off the cluster's `terminal-auth` Secret (lines 446 to 449). The provisioning app stays up as the
 C1 beacon collector only (lines 912 to 916, and open question 9 at lines 1285 to 1292, #502 and question 714). So the
 empty pool is correct for KubeCon, and no ingest against the Railway host is owed for it. The unset
@@ -19880,3 +19880,54 @@ The same on `https://burritobot-private.burritobot.co/display`.
 **The suites (run 17659, at `f789eb74`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `60 checks ran (the offline suite
 and 59 tier tests) in 31m12s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new tier test is the 59th.
+## 2026-11-05 · #911 · run 17664 · No tracked file carries the old presenter terminal login; presenters are sent to mrf-secrets
+
+**What changed.** #910 took the old presenter login (the one word that was fleet.sh's default for both
+`WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`) out of fleet.sh and its tests. The value was still written out in
+`gitops/ai-layer/web/kubecon.html` (the notes and the footer), `gitops/ai-layer/web/brief.html`,
+`facilitation/kubecon-na-2026-run-of-show.md`, `facilitation/WHITNEY-START-HERE.md`, `docs/RUN-OF-SHOW-2026-08.md`
+(three places), `PROJECT_STATE.md`, four older decisions.md entries, `verify/test_instructor_brief.py` and the
+expected-output comment in `verify/fleet-drift-audit.sh`. Each now reads that the presenter login lives in
+mrf-secrets, `projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`, the key #910
+gave it, and none writes a value. fleet.sh's comments were already reworded by #910. The student login, `agentic`, is
+unchanged and still written out, since it is the one read aloud to a room.
+
+**decisions.md was redacted in place.** This file is append-only by convention, but #908 requires that no tracked file
+carry the value, so the four older entries that named it (the provisioning-agenticburn#16 ingest note near line 803, the run-of-show
+review near line 3439, the roster note near line 5112 and the KubeCon session note near line 13007) now read
+`[value redacted, #911]` or `[presenter password redacted, #911]` where the value was. Nothing else in them changed.
+This entry is the record of that edit. The value stays in git history, which is why #910 treats it as known and #912
+rotates it on the clusters.
+
+**`fleet-drift-audit.sh` no longer prints the presenter user.** Its expected-output comment named the value, and its
+`cred` field printed the user half of each cluster's `TTYD_CREDENTIAL`, which on a roster cluster is the presenter
+user #910 keeps out of every log. It now prints `cred=agentic` for the student login, `cred=presenter` for any other
+user and an empty field for no Secret, so the audit still tells the role split apart without naming the login.
+
+**The guard, `verify/test_no_presenter_login.py`.** It reads every tracked file in the working tree (`git ls-files`,
+text files only), splits each line into alphanumeric tokens and compares the SHA-256 of each token, as written and
+lowercased, against two digests: of the old word, and of the unpadded base64 of the `user:password` pair as the
+`terminal-auth` Secret held it. A hit names the file and line, never the token. The test does not carry the value: a
+digest of one lowercase word can be recovered by brute force, which is acceptable here because the value is already
+in public history and the guard's only job is to stop it being written out again. A self-test on a placeholder it
+owns comes first: the scanner finds it as written, upper-cased and inside a `user:password` pair, does not match a
+longer word containing it, and in a scratch git repo names the tracked file and line and does not read an untracked
+file. On the base tree (`9506e37f`) the guard fails and names the 16 lines this change rewords; on the branch it
+passes, reading 1054 text files. `verify/test_instructor_brief.py` no longer asserts the value: it checks that
+kubecon.html points at mrf-secrets and the key in both the notes and the footer, that the run-of-show does, and that
+neither writes a terminal login as a user / password pair, a check that the old wording fails.
+
+**Tests own their inputs.** `git grep -nF` on each reworded phrase against `verify/`, `scripts/` and `infra/` found no
+reader of the old words other than `verify/test_instructor_brief.py` and the comment in `fleet-drift-audit.sh`, which
+change in this commit.
+
+**Live check, both clusters, run 17664 (read only).** On watch-it-burn-private and watch-it-burn-community the new
+audit line, run with `--context`, printed `cred=presenter`, so each terminal-auth Secret still holds a user other
+than `agentic`, as #910 found. The console pod on each serves `/usr/share/nginx/html/kubecon.html` and `brief.html`
+with no `mrf-secrets` in either and, scanned by the guard's digest in the shell and never printed, two lines of
+kubecon.html and one of brief.html carrying the old login: the pages on the clusters are staging's before this
+change.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs the console, the same read on both clusters
+(`kubectl --context <ctx> -n agent exec deploy/console -- cat /usr/share/nginx/html/kubecon.html`, and `brief.html`)
+should show `mrf-secrets` and no line the guard's digest matches. Rotating the login itself is #912.

@@ -497,9 +497,10 @@ about 12 hours at 6 and 8 hours at 15: roughly $95, with the VPCs. The rehearsal
 credits if a standby runs hot (t3 launches Unlimited); and the self-check's
 Bedrock calls. Those are estimates, not measured.
 
-Terminal login on the private cluster is `sprouts` / `sprouts`, the presenter login
-every roster cluster gets (`agentic` is the attendee pool's). Read it off the
-cluster if in doubt:
+Terminal login on the private cluster is the presenter login every roster
+cluster gets; the attendee pool takes the student login. It lives in
+mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`),
+not in this repo. Read it off the cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
 
 Guard toggles on the private cluster, from its terminal: `guard-output-on`,

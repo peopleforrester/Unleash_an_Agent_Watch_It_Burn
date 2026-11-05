@@ -14,7 +14,8 @@
 #
 # Read the output as: every field should match the expected column below.
 #   guards_budget=True   cost_cap=25.0   tier=nova   tokenFile=1   gbudget=1   gstatus=1
-#   cred=sprouts (roster clusters) | cred=agentic (attendee pool)
+#   cred=presenter (roster clusters: a login other than the student one, kept in mrf-secrets as
+#   WIB_TERMINAL_USER in projects/watch-it-burn-terminal.env, #910) | cred=agentic (attendee pool)
 #   lab_tour=1  lab_hints=9  lab_ddcreds=2  lab_whereami=1  lab_nopoller=0
 #   bb_logo=1   bb_caprow=1  bb_greet=1     brief=1
 #   tetragon_apps=0   ka_annot=enabled
@@ -39,7 +40,10 @@ ok tokenFile "$(kubectl -n agent exec deploy/web-terminal -- sh -c 'grep -c toke
 ok gbudget "$(kubectl -n agent exec deploy/web-terminal -- sh -c 'test -x /home/student/guard-budget-on&&echo 1||echo 0' 2>/dev/null|tail -1)"
 ok gstatus "$(kubectl -n agent exec deploy/web-terminal -- sh -c 'test -x /home/student/guards-status&&echo 1||echo 0' 2>/dev/null|tail -1)"
 # 3 credential split
-ok cred "$(kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null|base64 -d 2>/dev/null|cut -d: -f1)"
+# The presenter user is never printed (#910): anything set other than the student user reads as "presenter".
+u="$(kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null|base64 -d 2>/dev/null|cut -d: -f1)"
+[[ -z "$u" || "$u" == agentic ]] || u=presenter
+ok cred "$u"
 # 4 web pages
 L=/usr/share/nginx/html/lab.html; B=/usr/share/nginx/html/burritbot.html
 ok lab_tour "$(kubectl -n agent exec deploy/console -- grep -c 'What you were just handed' $L 2>/dev/null|tail -1)"

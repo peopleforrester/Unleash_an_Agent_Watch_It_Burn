@@ -288,8 +288,9 @@ Clusters track `staging`; main is behind by design until Michael promotes.
   detect-and-respond. The C3 bait is now baked into the workshop-mcp image so the block is EPERM, not
   ENOENT.
 - **C4 is denial-of-wallet**, not the fork bomb. Fork bomb retired: Nova refuses it in chat.
-- **Terminal credential is split**: `sprouts` for instructor/roster clusters, `agentic` for the attendee
-  pool.
+- **Terminal credential is split**: the presenter login for instructor/roster clusters, kept in
+  mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`) since #910,
+  and `agentic` for the attendee pool.
 - **Model is Nova Pro**, and `MODEL_TIER` must match the bound ModelConfig (guarded by a build test).
 - **guard-proxy env never arrives via git** (Argo CD ignoreDifferences); it needs a live patch behind a
   Kyverno flip. See docs/GOTCHAS-FLEET-AND-DELIVERY.md.

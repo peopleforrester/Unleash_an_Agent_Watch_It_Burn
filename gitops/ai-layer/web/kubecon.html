@@ -115,8 +115,8 @@
   so they can be turned on live. Both clusters start with the four Kubernetes guardrails (RBAC, Kyverno admission,
   KubeArmor and the egress NetworkPolicy) present and <b>off</b> (#774), so Challenges 1 and 2 land on either bot,
   until <code>guardrails-on</code> in Challenge 2 arms all four on both at once. The night before, run
-  <code>guards-off</code> and <code>guardrails-off</code> from the private terminal. Terminal login on the private
-  cluster is <code>sprouts</code> / <code>sprouts</code>. The AI-guard toggles below go through the guard-proxy,
+  <code>guards-off</code> and <code>guardrails-off</code> from the private terminal. The private cluster's
+  terminal login is the presenter login, which lives in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>); it is not written on this page. The AI-guard toggles below go through the guard-proxy,
   which Argo CD does not revert and which keeps the cost counter alive. Never flip a guard with
   <code>kubectl set env</code>.</div>
 
@@ -481,7 +481,7 @@
   both clusters; <code>guard-agency-on</code> and <code>guard-input-on</code> (Challenge 3),
   <code>guard-mcp-on</code> (Challenge 4), <code>guard-topic-on</code> (Segment 6) flip one at a time, and each
   prints the kubectl it runs. Terminal login on the private
-  cluster: <code>sprouts</code> / <code>sprouts</code>; the public cluster has no terminal. The full 2-hour
+  cluster: the presenter login in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>); the public cluster has no terminal. The full 2-hour
   workshop brief is at <a href="/brief">/brief</a>.
 </footer>
 

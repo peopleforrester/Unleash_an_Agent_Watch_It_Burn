@@ -472,11 +472,24 @@ check("C6's least-privilege fallback asks the API whether workshop-mcp may creat
 check("the page hands each person their own Joker page and the deployments page",
       "https://maintenance-shell-attackme.burritobot.co/joker-</code> plus their name" in _c6
       and "https://deployments.burritobot.co</code> under their witch name" in _c6)
-# The roster's terminals take the presenter login, sprouts (fleet.sh, verify/test_admin_actions.sh); the public
-# bot shows no Terminal button (#645).
-check("the page and the run-of-show give the private terminal the presenter login",
-      "<code>sprouts</code> / <code>sprouts</code>" in KUBECON and "`sprouts` / `sprouts`" in ROS
+# The roster's terminals take the presenter login, which fleet.sh reads from mrf-secrets and no tracked file
+# carries (#910, #911; verify/test_admin_actions.sh, verify/test_no_presenter_login.py); the public bot shows no
+# Terminal button (#645). So the page and the run-of-show point at mrf-secrets and the key, and write no login.
+_MRF_HTML = ("mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> "
+             "and <code>WIB_TERMINAL_PASSWORD</code>)")
+_MRF_MD = "mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`)"
+_KFLAT = " ".join(KUBECON.split())
+_RFLAT = " ".join(ROS.split())
+check("the page sends presenters to mrf-secrets for the private terminal login, in the notes and the footer",
+      _KFLAT.count(_MRF_HTML) == 2
+      and "terminal login is the presenter login, which lives in " + _MRF_HTML in _KFLAT
+      and "Terminal login on the private cluster: the presenter login in " + _MRF_HTML in _KFLAT)
+check("the run-of-show sends presenters to mrf-secrets for the private terminal login",
+      "Terminal login on the private cluster is the presenter login" in _RFLAT and _MRF_MD in _RFLAT
       and "`agentic` / `agentic`" not in ROS)
+check("neither writes a terminal login out as a user / password pair",
+      not re.search(r"[Tt]erminal login[^.]{0,80}<code>[^<]+</code> / <code>[^<]+</code>", _KFLAT)
+      and not re.search(r"[Tt]erminal login[^.]{0,80}`[^`]+` / `[^`]+`", _RFLAT))
 
 print("== /kubecon reads at a glance (#639) ==")
 # The page is read on stage, so only the cues stay up: prompt, toggle and success markers. The story,

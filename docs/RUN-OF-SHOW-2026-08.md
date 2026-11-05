@@ -135,8 +135,9 @@ prompts behind hints, so do not present from it.
 
 ## Your servers
 
-Login for **your** (instructor) terminals: **`sprouts` / `sprouts`**.
-Login for **attendee** clusters: **`agentic` / `agentic`**. These are deliberately different: `sprouts` is
+Login for **your** (instructor) terminals: the presenter login, kept in
+mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`).
+Login for **attendee** clusters: **`agentic` / `agentic`**. These are deliberately different: the presenter login is
 the admin credential, and reading it out to a room would also hand the room your presenter consoles.
 
 | | Michael | Whitney |
@@ -669,7 +670,7 @@ none is a stage risk, but a technical room reads the abstract and someone will a
 | `ModelErrorException ... invalid sequence as part of ToolUse` | transient Bedrock/Nova error | Re-send once |
 | A URL is 404 | router table not applied | `infra/terraform/fleet/fleet.sh routes` (it applies via reload now) |
 | Round 2 exfil still lands | the #108 regression is back | check the egress NetworkPolicy covers the whole namespace, not just `workshop-agent` |
-| Terminal asks for login and `sprouts` fails | ingest did not run | `fleet.sh ingest-instructors`; the password is `sprouts` |
+| Terminal asks for login and the presenter login fails | ingest did not run | `fleet.sh ingest-instructors`; the login is `WIB_TERMINAL_USER` / `WIB_TERMINAL_PASSWORD` in mrf-secrets (`projects/watch-it-burn-terminal.env`) |
 
 **Bail-out rule:** any beat over its time budget by 50% gets cut to a sentence and you move on. The room
 never watches unrehearsed troubleshooting.
