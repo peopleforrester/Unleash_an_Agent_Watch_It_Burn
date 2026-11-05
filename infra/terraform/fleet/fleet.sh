@@ -1974,6 +1974,10 @@ up_one() {
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
         log "  FAILED: ${name} (its attendee IAM user is in the way of the apply)"; record_fail "${name}"; return 0
     fi
+    # The run role's entry, made by hecaton before the root named it (#884), would fail the apply on ResourceInUseException.
+    if ! adopt_run_role_access_entry "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
+        log "  FAILED: ${name} (the ${RUN_ROLE_NAME} access entry is in the way of the apply)"; record_fail "${name}"; return 0
+    fi
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" -var "event=${WIB_EVENT}" "${tfvars[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
@@ -2391,6 +2395,46 @@ adopt_attendee_iam_user() {   # $1 cluster, $2 account, rest: the -var arguments
             || { log "  ${name}: import of ${imports[i]} failed (see ${adopt_log})"; return 1; }
     done
     log "  ${name}: adopted IAM user ${user} into the cluster's state"
+}
+
+# The hecaton run role's cluster-admin entry (#884). The cluster root names the role in access_entries in the account
+# hecaton made it in, and hecaton's deploy/aws/hecaton-run/apply.sh had already made its entry on
+# watch-it-burn-community and watch-it-burn-private, outside terraform. An apply of either would fail creating it
+# (ResourceInUseException). So before each apply, an entry for the role that the cluster has and the state does not
+# hold is imported, with its admin association, and the apply then owns it. A fresh build has no entry to import and
+# creates it; an account without the role has no entry either. Returns 0 when the apply may go ahead.
+readonly RUN_ROLE_NAME="hecaton-run"   # main.tf's local.run_role_name; verify/test_cluster_admin_entries.sh holds both
+adopt_run_role_access_entry() {   # $1 cluster, $2 account, rest: the -var arguments the apply passes
+    local name="$1" acct="$2"; shift 2
+    local state="${STATE_DIR}/${name}.tfstate" entry='module.eks.aws_eks_access_entry.this["hecaton_run"]'
+    local assoc='module.eks.aws_eks_access_policy_association.this["hecaton_run_admin"]'
+    local admin="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy" listed arn out rc=0
+    # No state here: a fresh build, which creates the entry with the cluster.
+    [[ -f "${state}" ]] || return 0
+    listed="$(terraform -chdir="${CLUSTER_DIR}" state list -state="${state}" 2>/dev/null)" \
+        || { log "  ${name}: could not list ${state}, so the run role's access entry cannot be checked"; return 1; }
+    grep -qxF "${entry}" <<<"${listed}" && return 0
+    arn="$(AWS_PROFILE="${acct}" aws eks list-access-entries --cluster-name "${name}" --region "${WIB_REGION}" \
+        --query "accessEntries[?ends_with(@, ':role/${RUN_ROLE_NAME}')] | [0]" --output text 2>&1)" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        # The cluster is gone: the apply builds it again, entry and all.
+        [[ "${arn}" == *ResourceNotFoundException* ]] && return 0
+        log "  ${name}: could not list the cluster's access entries, so the run role's entry cannot be checked"
+        return 1
+    fi
+    [[ -z "${arn}" || "${arn}" == "None" ]] && return 0
+    local imports=("${entry}" "${name}:${arn}") i adopt_log="${LOG_DIR}/${name}.adopt.log"
+    if ! grep -qxF "${assoc}" <<<"${listed}"; then
+        out="$(AWS_PROFILE="${acct}" aws eks list-associated-access-policies --cluster-name "${name}" --principal-arn "${arn}" \
+            --region "${WIB_REGION}" --query "associatedAccessPolicies[?policyArn=='${admin}'] | length(@)" --output text 2>/dev/null)"
+        [[ "${out}" == "1" ]] && imports+=("${assoc}" "${name}#${arn}#${admin}")
+    fi
+    for ((i = 0; i < ${#imports[@]}; i += 2)); do
+        terraform -chdir="${CLUSTER_DIR}" import -no-color -input=false -state="${state}" "$@" \
+            "${imports[i]}" "${imports[i + 1]}" >>"${adopt_log}" 2>&1 \
+            || { log "  ${name}: import of ${imports[i]} failed (see ${adopt_log})"; return 1; }
+    done
+    log "  ${name}: adopted the ${RUN_ROLE_NAME} access entry into the cluster's state"
 }
 
 # Every account-wide wib-* user tagged project=watch-it-burn whose cluster is not live: the users the old

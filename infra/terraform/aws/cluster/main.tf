@@ -242,6 +242,63 @@ data "aws_iam_policy" "permissions_boundary" {
   name = local.permissions_boundary_name
 }
 
+# --- Who administers the cluster (#884) -----------------------------------------------------------
+#
+# The EKS module's enable_cluster_creator_admin_permissions gave whoever ran terraform a cluster-admin access
+# entry, and the module names that same caller as the cluster KMS key's administrator. That held while the
+# operator user nwuser was the only one to apply this root. Since hecaton#519 a hecaton run's accen-dev profile
+# is the role hecaton-run, so a run's apply planned to replace nwuser's entry with the role's (the role's guard
+# policy refuses eks:DeleteAccessEntry on nwuser's entries, so the apply stopped there) and to hand the key's
+# administration to the role. Both are named here instead, and the plan is the same whoever runs it.
+variable "operator_user" {
+  type        = string
+  default     = "nwuser"
+  description = "IAM user, in the cluster's own account, given cluster admin and the cluster KMS key's administration. nwuser is the operator in every fleet account."
+}
+
+locals {
+  account_id   = data.aws_caller_identity.current.account_id
+  operator_arn = "arn:aws:iam::${local.account_id}:user/${var.operator_user}"
+  # The accounts where hecaton's deploy/aws/hecaton-run/apply.sh made the run role: accen-dev only. EKS refuses
+  # an access entry for a principal that does not exist, so the other four fleet accounts get none.
+  # fleet.sh's RUN_ROLE_NAME is the same name; verify/test_cluster_admin_entries.sh holds the two together.
+  run_role_name     = "hecaton-run"
+  run_role_accounts = ["515966504359"]
+  # Map key -> principal. The keys are state addresses: module.eks.aws_eks_access_entry.this["<key>"] and
+  # module.eks.aws_eks_access_policy_association.this["<key>_admin"].
+  cluster_admins = merge(
+    { operator = local.operator_arn },
+    { for a in local.run_role_accounts : "hecaton_run" => "arn:aws:iam::${a}:role/${local.run_role_name}" if a == local.account_id },
+  )
+  cluster_admin_entries = { for k, arn in local.cluster_admins : k => {
+    principal_arn = arn
+    type          = "STANDARD"
+    policy_associations = {
+      admin = {
+        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }
+    }
+  } }
+}
+
+# nwuser's entry was the module's "cluster_creator" until #884. Moving it keeps the entry on every cluster built
+# before; without these, the apply would delete and re-create the operator's kubectl access.
+moved {
+  from = module.eks.aws_eks_access_entry.this["cluster_creator"]
+  to   = module.eks.aws_eks_access_entry.this["operator"]
+}
+
+moved {
+  from = module.eks.aws_eks_access_policy_association.this["cluster_creator_admin"]
+  to   = module.eks.aws_eks_access_policy_association.this["operator_admin"]
+}
+
+# The role's own entry on watch-it-burn-community and watch-it-burn-private was made outside terraform, by hecaton,
+# before this root named it. fleet.sh's adopt_run_role_access_entry imports it into the cluster's state before the
+# apply, as it adopts an attendee user made before #549; an import block here would fail every fresh build, where
+# the entry does not exist yet.
+
 # Every registry module here is pinned to its minor (~> X.Y.0). .terraform.lock.hcl locks providers but
 # not modules, so a looser range let a fresh init pick up a newer module whose higher aws floor (21.29.0
 # needs >= 6.59.0) no longer fit the committed lock, and init failed (#468). Moving a module's minor is
@@ -253,8 +310,11 @@ module "eks" {
   name               = var.name
   kubernetes_version = var.kubernetes_version
 
-  endpoint_public_access                   = true
-  enable_cluster_creator_admin_permissions = true
+  endpoint_public_access = true
+  # Who administers the cluster is named, not taken from whoever runs terraform (#884). See cluster_admins below.
+  enable_cluster_creator_admin_permissions = false
+  access_entries                           = local.cluster_admin_entries
+  kms_key_administrators                   = [local.operator_arn]
   # No IRSA/OIDC provider: every IAM-needing workload (LB controller, ESO, EBS CSI, agent) is on Pod
   # Identity now, so nothing is left to trust an OIDC provider. Dropping it removes the per-cluster OIDC
   # endpoint entirely, fleet-consistent with the "no per-cluster OIDC trust" pattern used below.

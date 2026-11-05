@@ -19384,3 +19384,66 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
+## 2026-11-05 · #884 · run 17543 · The cluster root names its admins: nwuser everywhere, the hecaton-run role in accen-dev
+
+**What changed.** `infra/terraform/aws/cluster/main.tf` sets `enable_cluster_creator_admin_permissions = false` and
+passes `access_entries = local.cluster_admin_entries`: the key `operator`, the user `var.operator_user` (default
+`nwuser`) in the plan's own account, and in accen-dev (515966504359, the one account in `local.run_role_accounts`)
+the key `hecaton_run`, the role `hecaton-run`. Each gets `AmazonEKSClusterAdminPolicy` at cluster scope, the policy
+key `admin`. Two `moved` blocks carry nwuser's existing entry and association from the module's old
+`this["cluster_creator"]` and `this["cluster_creator_admin"]` to `this["operator"]` and `this["operator_admin"]`, so
+an apply on a cluster built before keeps the entry instead of re-creating it. `fleet.sh` gains
+`adopt_run_role_access_entry`, which `up_one` calls after `adopt_attendee_iam_user` and before the apply: when the
+cluster's state is here and does not hold `module.eks.aws_eks_access_entry.this["hecaton_run"]`, and the cluster has
+an entry ending `:role/hecaton-run`, it imports the entry (`<cluster>:<arn>`) and, when the role holds it, the admin
+association (`<cluster>#<arn>#<policy>`), with the apply's variables. No state (a fresh build), no such entry (the
+other four accounts) or a cluster that is gone imports nothing; an unreadable list or a failed import stops that
+cluster's apply.
+
+**Why.** Since hecaton#519 a run's accen-dev profile is the role, so the module's creator entry would follow the
+caller from nwuser to the role, and the role's guard policy refuses the `eks:DeleteAccessEntry` that replace needs.
+
+**Beyond the ask: the KMS key's administrator.** The module names the same caller as the cluster KMS key's
+administrator when `kms_key_administrators` is empty (`coalescelist(var.kms_key_administrators, [issuer_arn])`).
+Live, both clusters' key policies name `user/nwuser` in `KeyAdministration` (community key `ee88539a-...`, private
+`b1ac5ab1-...`), so a run's apply would have rewritten both policies to name the role. The root now passes
+`kms_key_administrators = [local.operator_arn]`, which is what the keys hold today, so no policy changes. The role is
+not added as a key administrator: nothing asked for it, and the account root's default statement remains.
+
+**Why an account list and not every account.** EKS refuses an access entry for a principal that does not exist, and
+the role exists in accen-dev only, so naming it in the other four fleet accounts would fail their applies. The list
+holds the account id rather than a lookup of the role by name, so a role of that name made in another account later
+is not handed cluster admin without an edit here. Attendee seats in accen-dev get the role's entry too, as they had
+nwuser's; the issue asked for both principals on the root and did not scope them by cluster role.
+
+**Why the import is in fleet.sh, not an import block.** An `import` block for the role's entry would fail every
+fresh build, where the entry does not exist yet. fleet.sh already adopts attendee users made before #549 the same
+way, and the cluster states live on the operator machine (`infra/terraform/fleet/states`), not on this host, so a
+run cannot import into them itself.
+
+**Tests.** `verify/test_cluster_admin_entries.sh` (offline, 31 checks) reads the root's text (the flag, the list, the
+key administrator, both `moved` blocks, the account list, `fleet.sh`'s `RUN_ROLE_NAME` equal to `local.run_role_name`)
+and drives `adopt_run_role_access_entry` with aws and terraform shims through each case above. Turning the flag back
+to `true` fails one check. `verify/test_cluster_admin_entries_module.py` (tools tier) inits and validates a copy of
+the root against the pinned module 21.29.x, reads the module's source for the keying the `moved` blocks and imports
+assume (`cluster_creator` with policy `admin`, entries by key, associations by `<entry>_<policy>`, the KMS
+`coalescelist`), and plans the root's own locals block against `iam_plan_render.py`'s local STS endpoint: account
+111122223333 gets `operator` alone, and with that account added to the list it gets `operator` and `hecaton_run`.
+
+**Live check, run 17543 (read only, both clusters left as found).** `aws eks list-access-entries` on both clusters
+lists `user/nwuser` and `role/hecaton-run`, each with `AmazonEKSClusterAdminPolicy` at `cluster` scope; nwuser's
+entry carries the fleet tags, the role's none, its username `arn:aws:sts::515966504359:assumed-role/hecaton-run/{{SessionName}}`.
+main.tf's locals block, planned alone with the run's session (caller `assumed-role/hecaton-run/hecaton-run-17543`),
+gave `operator = arn:aws:iam::515966504359:user/nwuser` and `hecaton_run = arn:aws:iam::515966504359:role/hecaton-run`.
+A scratch config importing the role's entry and association from watch-it-burn-private into a throwaway local state,
+with fleet.sh's two ids, printed `Import successful!` twice, and its plan was `0 to add, 1 to change, 0 to destroy`:
+the entry's `tags_all` gaining the seven fleet tags, in place. Nothing was applied. fleet.sh's query
+`accessEntries[?ends_with(@, ':role/hecaton-run')] | [0]` printed the role's ARN on both clusters, `None` for a role
+name not there, and `ResourceNotFoundException` (exit 254) for a cluster that does not exist.
+
+**Not yet run on a cluster.** The apply itself, on the operator machine where the states are:
+`WIB_FORCE_UP=1 bash infra/terraform/fleet/fleet.sh instructors up all`, which applies watch-it-burn-community and
+watch-it-burn-private, should log `adopted the hecaton-run access entry into the cluster's state`, and its plan should
+show nwuser's entry and association `has moved to` the `operator` keys, the role's entry updated in place for tags
+only, and no access entry, association or key policy replaced or destroyed.
