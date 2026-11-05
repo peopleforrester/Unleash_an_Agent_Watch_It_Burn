@@ -17282,3 +17282,6 @@ written to the org: every call in this run used the read-only pair.
 
 **Not yet run on a cluster.** Nothing. The issue's work, the apply and the confirmation, has run. The changed
 `--check` ran live from this run's tree.
+
+**The suites (run 17358, at `9b00065a`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 26m26s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
