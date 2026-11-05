@@ -13,7 +13,8 @@ catches third-party images, and a Rekor dependency that would make admission fai
 seal the cluster in Challenge 1.
 
 Since #669 the scope also takes lab-platform's llm-guard, which lab-platform signs with this same key, at
-ghcr.io and through an ECR cache, and since #734 its web image, the demo apps' (#715), the same way. Nothing
+ghcr.io and through an ECR cache; since question 1041 (#719) the deployed guard is llm-guard-cpu-offline's cpu.5, in
+our own registry, and lab-platform's stays in scope for the return to it. Since #734 its web image, the demo apps' (#715), the same way. Nothing
 else of lab-platform's is in scope: its mirror/ vendor copies are unsigned and its promo/ villains are refused by
 path, not by signature (question 878).
 
@@ -130,19 +131,27 @@ for foreign in ("ghcr.io/peopleforrester/lab-platform/mirror/library/postgres:18
 ours = f"{OUR_REGISTRY}:workshop-mcp@sha256:" + "0" * 64
 check("does demand one from our own registry", matched(ours))
 
-print("== lab-platform's llm-guard and web are in scope, at ghcr.io and through a cache, and nothing else of lab-platform's ==")
-# The ai-layer Application names the guard at the root's imageRegistry (#622, #652); render both values it takes.
+print("== the deployed llm-guard, cpu.5, is in scope (#719, question 1041) ==")
+# Since question 1041 the ai-layer Application names llm-guard-cpu-offline's cpu.5, a watch-it-burn image, by digest.
 ai_layer = yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8"))
 guard = next((i for i in kustomize_images(ai_layer) if i["name"] == "llm-guard"), None)
-check("the ai-layer Application names llm-guard by digest at the root's registry",
-      bool(guard) and guard["newName"] == f"{IMAGE_REGISTRY}/llm-guard" and "digest" in guard)
+check("the ai-layer Application names llm-guard by digest in our own registry",
+      bool(guard) and guard["newName"] == OUR_REGISTRY and "digest" in guard)
 if guard:
-    tail = f"llm-guard:{guard['newTag']}@{guard['digest']}" if guard.get("newTag") else f"llm-guard@{guard['digest']}"
-    for registry in (LAB_PLATFORM_GHCR, CACHE, "123456789012.dkr.ecr.us-west-2.amazonaws.com/peopleforrester/lab-platform"):
-        image = f"{registry}/{tail}"
-        check(f"demands one from the guard at {registry}", matched(image))
-        check(f"  and the registry allowlist admits it there", registry_allowlist.allowed(image))
-    check("demands one from the guard by digest alone", matched(f"{LAB_PLATFORM_GHCR}/llm-guard@{guard['digest']}"))
+    image = f"{guard['newName']}:{guard['newTag']}@{guard['digest']}"
+    check(f"demands one from the guard as deployed, {image.split('@')[0]}", matched(image))
+    check("  and the registry allowlist admits it", registry_allowlist.allowed(image))
+
+print("== lab-platform's llm-guard and web are in scope, at ghcr.io and through a cache, and nothing else of lab-platform's ==")
+# lab-platform's llm-guard (#669) stays in scope for the return to it after lab-platform#341 (question 1041). Its
+# references are judged at the digest it ran at until then (#730), at each registry the root's imageRegistry can be.
+LP_GUARD = "llm-guard:v1@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
+for registry in (LAB_PLATFORM_GHCR, CACHE, "123456789012.dkr.ecr.us-west-2.amazonaws.com/peopleforrester/lab-platform"):
+    image = f"{registry}/{LP_GUARD}"
+    check(f"demands one from lab-platform's guard at {registry}", matched(image))
+    check(f"  and the registry allowlist admits it there", registry_allowlist.allowed(image))
+check("demands one from lab-platform's guard by digest alone",
+      matched(f"{LAB_PLATFORM_GHCR}/llm-guard@{LP_GUARD.split('@')[1]}"))
 # #734: the demo apps name lab-platform's web image by digest at the root's registry (#715); the same three paths.
 web = next((i for i in kustomize_images(yaml.safe_load((APPS / "demo-app-hedgehog.yaml").read_text(encoding="utf-8")))
             if i["name"] == "web"), None)

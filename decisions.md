@@ -17552,3 +17552,157 @@ above was on the same values set by hand.
 **Suites (run 17353, at 3ba5016).** `bash verify/run-e2e-tools.sh` ran the offline suite (256 tests, ALL OFFLINE
 RENDER-GATE TESTS GREEN, `test_collector_config.py` among them) and then the tools tier: 55 checks in 25m37s,
 ALL E2E TOOLS TIER CHECKS GREEN, exit 0. No dependency was added.
+
+## 2026-11-02 · #719 · images/llm-guard is to move to llm-guard-cpu-offline 31962f2, by a session that can commit a gitlink; which image BanTopics runs in is asked
+
+llm-guard-cpu-offline reported its state on #719 (2026-10-31): main at `31962f2`, and `llm-guard-0.3.16-cpu.5`
+(`sha256:4c66fd0f…8579791`), which bakes BanTopics' zero-shot model `deberta-v3-base-zeroshot-v2.0` at `8e7e5af5` and is past
+GHSA-xcq7-p3pf-p88h, the OpenTelemetry advisory about unbounded tracestate parsing. The deployed guard, lab-platform's
+`llm-guard:v1` (`sha256:6cdbf3a2…`, #652 and #730), has neither. The issue asks two things: whether to move this repo's
+submodule pin, and which image BanTopics will run in for #455, the on-topic guard.
+
+**Decision 1: images/llm-guard should move from f2fcb8f to 31962f2.** lab-platform's `build-llm-guard.sh` reads the API's source
+at the llm-guard-cpu-offline commit this submodule pins, and lab-platform `27f4a49` (lab-platform#341) moved its
+`SOURCE_COMMIT` to 31962f2 for the zero-shot model's licence file. cpu.5 was built from 31962f2 too. Nothing deployed changes:
+`git diff --quiet f2fcb8f 31962f2 -- src` is clean, so the API files v1 was built from are the same, and nothing in this repo
+builds from the submodule. The move brings llm-guard-cpu-offline's tests, `config/`, `overrides.txt` and the `model-zero-shot/`
+mirror into `images/llm-guard`. 31962f2 is on that repo's main (fetched 2026-11-02, main now `28cc8b1`, which only records the
+signed cpu.5 release in its README and decisions.md). The pin goes to 31962f2 rather than 28cc8b1 so it names the commit
+lab-platform's build and cpu.5 both read.
+- **Not committed here.** Run 15912 committed the gitlink move, and the dispatcher's `forbidden` gate failed run 15974 on
+  it. The gate (hecaton `run/validate.py`, `gate_forbidden`) flags any changed path whose mode is 160000 as "adds
+  submodule", so a run cannot move an existing pin either. Every pin move on staging was made in Michael's own sessions
+  (`git log -- gitops/ai-layer/guard-proxy images/llm-guard`). Run 16431 put the gitlink back to f2fcb8f and escalated
+  the move as exact commands, for a session that can commit a gitlink and push to staging:
+  `git -C images/llm-guard fetch origin && git -C images/llm-guard checkout 31962f2074f758a2e9e06a9a91b4d758bcd56f03 &&
+  git add images/llm-guard && git commit -m "Pin images/llm-guard at llm-guard-cpu-offline 31962f2 (#719)" &&
+  bash verify/submodule-pins-pushed.sh && git push origin staging`. Nothing deployed waits on it: cpu.5 is pulled by
+  digest from ghcr.io, and lab-platform's build reads 31962f2 already.
+
+**images.lock (#603).** The three digests #719 names are declared rows: cpu.4 (`sha256:3322db6a…`), cpu.5 and
+`llm-guard-model-zeroshot-8e7e5af5` (`sha256:c01ca964…`), each read anonymously from ghcr.io on 2026-11-02 and equal to the
+issue's. A `sha256-4c66fd0f….sig` tag exists for cpu.5. Michael's 2026-11-01 comment on #719 says `cosign verify --key
+policies/cosign/watch-it-burn.pub` passes on it. This run has no cosign and did not run the verify again.
+
+**Not decided here: which image BanTopics runs in.** It is the run's question to the coordinator. The earlier draft, run
+13615's 166dddb on `origin/agent/719-13615`, was never promoted. It chose lab-platform's image after lab-platform#341, with cpu.5
+as the fallback. Its main reason was that both paths waited on the same signature from Michael, so cpu.5 was not ready any
+sooner. That stopped being true on 2026-11-01, when cpu.5 was signed. Michael's comment that day keeps the choice open on #719.
+Neither the spec nor this log settles it now:
+- **For lab-platform's rebuild:** #652 made lab-platform the builder of the guard image, "so llm-guard-cpu-offline no longer has
+  to build or sign it for the talk". #669, #622 and #730 are built around that image. The lab_system fold inventory
+  (lab-system-knowledge `okr/2026-10-17-agenticburn-fold-inventory.md`, the measurement file for the key result
+  `lab-fold-complete`) lands the LLM guard image build in lab-platform. A row is folded only when this repo calls lab-platform for
+  it, so moving to cpu.5 takes the guard back out. lab-platform#341 is still open with no rebuilt digest: its build needs the
+  workshop key and a GHCR push.
+- **For cpu.5:** it is signed with the workshop key, which `verify-image-signatures` already trusts for every
+  `ghcr.io/peopleforrester/watch-it-burn*` image. It is public, it has the OpenTelemetry fix the deployed v1 lacks, and it
+  works today, while #455 (labelled urgent) is blocked and KubeCon NA starts 2026-11-09. Both images bake the model at
+  `/home/user/models/zero-shot`, so #455's scanner entry is the same either way. Moving back later is one repin.
+- **What cpu.5 would change here:** the ai-layer `kustomize.images` entry (or a literal image in `resources.yaml`, as every other
+  watch-it-burn image is named); `verify/test_llm_guard_image.py`, which today fails on any watch-it-burn llm-guard under
+  `gitops/`; the guard lookups in `test_image_signing.py`, `test_kyverno_cel_policies.py`, `test_enforce_floor.py` and
+  `test_bootstrap_chart_render.py`; the images.lock `llm-guard` row; VERSIONS.lock; and `NETWORK_BOUNDARY`, which only
+  lab-platform's entrypoint reads. cpu.5 binds 0.0.0.0:8000 as uid 1000 and reads `/home/user/app/config`, and its entrypoint
+  refuses `APP_WORKERS` above 1. The Deployment already sets 1.
+
+**Tests.** `verify/test_llm_guard_bantopics_image.py` (offline, new) gates BanTopics on an allow-list. A BanTopics entry in
+`llm-guard-scanners` fails unless the llm-guard image is pinned at a digest known to bake the zero-shot model, and unless its
+`model_path` is `/home/user/models/zero-shot`. Today the list holds only cpu.5, and lab-platform#341's digest joins it when that
+image is built. The draft used a deny-list of v1's old digest `781a126b`, which #730's republish to `6cdbf3a2` would already have
+got past. The gate reads the digest from `kustomize.images` or from the Deployment's own image, so it holds under either answer.
+It is shown to fire on copies of the scanners with BanTopics added at v1, at an unchecked digest, at a Hub id and with no
+`model_path`, and to pass at cpu.5. It also holds the images.lock rows. Run 15912's version also checked the submodule at
+31962f2: the gitlink, `src/` unchanged since f2fcb8f, the Dockerfile's two model directories and `config/scanners.yml`. Run
+16431 dropped those checks along with the gitlink move. With the pin at f2fcb8f those files are not in the checkout. The notes in
+PROJECT_STATE.md, the readiness table's row 8, the run-of-show and `kubecon.html` that named llm-guard-cpu-offline#2 as BanTopics'
+blocker now name #719's image choice. llm-guard-cpu-offline closed #2 and #15 on 2026-11-01.
+
+**Not yet run on a cluster.** Nothing deployed changes in this entry. Once the image is chosen and pinned, the checks owed
+belong to #455: `bash verify/run-e2e.sh` on a fresh attendee cluster, where `verify/test_topic_classifier.py` and the probe
+(#503) judge BanTopics' real scores, and `bash verify/input-guard.sh <host> <kube-context> <aws-profile>`, which checks that the
+injection classifier still blocks through the new image.
+
+## 2026-11-02 · #719 · question 1041 · BanTopics runs in llm-guard-cpu-offline's cpu.5 now, and the guard returns to lab-platform's image after lab-platform#341
+
+**Question 1041:** should the on-topic guard's BanTopics scanner run in llm-guard-cpu-offline's signed cpu.5 image now,
+or wait for lab-platform's rebuilt llm-guard image under lab-platform#341? **Answer:** use cpu.5 now, return to
+lab-platform later. **Decided by** hecaton's research under Michael's standing rules, not by Michael (comment
+6572786844 on #719). The rule it rests on is objective 2026q4.H's "a hard-dated workshop never waits on lab_system"
+(personal-knowledge `okr/okrs.yaml`, questions 312 and 729 there). KubeCon NA runs 2026-11-09 to 11-12, and the KR
+kubecon-na-burritobot, "BurritoBot breakout with Whitney Lee and its demo platform ready, in line with the accepted
+abstract", is priority 1 and due 2026-11-08. lab-fold-complete is priority 3 and due 2026-12-31. The fold inventory's
+container-images row was not folded when the answer was given, so using cpu.5 now unfolds nothing.
+
+**What it changes.** The ai-layer Application's `kustomize.images` entry sets the kustomize image `llm-guard` to
+`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791`
+in place of lab-platform's `llm-guard:v1@sha256:6cdbf3a2…` (#652, #730). The entry stays, so the return is a change to that one
+line, back to `{{ .Values.imageRegistry }}/llm-guard:<tag>@<digest>`.
+- **Named literally, not at the root's registry.** cpu.5 is a public watch-it-burn image, named like every other one.
+  `imageRegistry` is lab-platform's path, and the ECR pull-through cache behind it exists for lab-platform's private
+  packages (#622). A cache root therefore pulls cpu.5 from ghcr.io, as it pulls workshop-mcp and the web terminal.
+- **Admission.** `verify-image-signatures` already matches `ghcr.io/peopleforrester/watch-it-burn*` under the workshop
+  key, so the policy is unchanged apart from its header comment. Its lab-platform llm-guard globs stay for the return.
+  `restrict-image-registries` admits it.
+- **The container.** It is unchanged. cpu.5 binds 0.0.0.0:8000 as uid 1000, reads `/home/user/app/config`, serves
+  `/healthz` and starts only with `APP_WORKERS=1`, all of which the Deployment already sets (llm-guard-cpu-offline at 31962f2,
+  `Dockerfile`, `src/entrypoint.sh`, `src/app/app.py`). `NETWORK_BOUNDARY=sandbox` is read only by lab-platform's
+  entrypoint. It stays, with a comment, so the return needs no other edit. PromptInjection's `model_path` is the same
+  directory in both images.
+- **Records.** The images.lock `llm-guard` row names cpu.5 and llm-guard-cpu-offline as its source. v1 at 6cdbf3a2
+  becomes a declared row kept for the return. VERSIONS.lock, `docs/MASTER-RECREATION-SPEC.md`, the comments in
+  `resources.yaml` and `ai-layer.yaml`, and the BanTopics notes (PROJECT_STATE.md, readiness row 8, the run-of-show,
+  `kubecon.html`) now say the image has the model and that the scanner entry is #455's.
+- **Not in this change.** The BanTopics scanner entry, guard-proxy's `scanners_suppress`, and tuning BanTopics' threshold
+  on a cluster belong to #455, which this unblocks. `verify/test_llm_guard_bantopics_image.py` now passes a BanTopics
+  entry at the pinned digest, and still refuses one at v1 or an unchecked digest.
+
+**Tests.** `verify/test_llm_guard_image.py` holds the cpu.5 entry, the images.lock row and the container contract,
+`APP_WORKERS=1` included. `verify/test_image_signing.py` checks that the deployed guard is in the signature scope, and
+that lab-platform's llm-guard stays in scope at ghcr.io and through a cache, judged at v1's digest. In the E2E tools
+tier, `verify/test_kyverno_cel_policies.py` runs Kyverno's offline key check on the deployed cpu.5 as well as on
+lab-platform's v1 and its cache path, and under a wrong key both fail. That re-checks Michael's 2026-11-01 signature
+with the policy's own key. `verify/test_bootstrap_chart_render.py` builds the bundle as Argo CD does and checks that
+the llm-guard Deployment runs cpu.5 unset and at a cache path, and that no other container changes.
+`verify/test_image_registry_render.py` (#622) used to require that a cache-path render name no `ghcr.io/peopleforrester`
+reference at all. The literal cpu.5 entry broke that, and the test now asks for what the value can actually change:
+no `ghcr.io/peopleforrester/lab-platform` reference is left, and every other `ghcr.io/peopleforrester` reference is the
+public `watch-it-burn` registry, which the cache path does not serve. The first run of the tier also failed on a
+GitHub 500 while fetching the falcosidekick 0.14.0 chart. That fetch passed when the test was run again.
+
+**Not yet run on a cluster.** On a fresh attendee cluster:
+`kubectl --context <ctx> -n agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must
+print the cpu.5 reference above. The pod must become Ready within its startup probe: the image is 1,650 MB compressed,
+so time the first pull. `bash verify/input-guard.sh <host> <kube-context> <aws-profile>` must pass the benign prompt and
+block the injection through cpu.5. Then #455 runs `verify/test_topic_classifier.py` and the probe (#503) once its
+BanTopics entry is in.
+## 2026-11-05 · #719 · run 17384 · run 15912's draft carried onto current staging
+
+The two entries above are run 15912's, with its continuations 15974 and 16431, written on 2026-11-02. None of it reached
+staging: hecaton's merge of the draft's tip (`44c02822`) conflicted in images.lock, and the coordinator asked for the same
+change redone on current staging, keeping every images.lock entry staging has. This run applied the draft's net diff
+(`bd6db624..origin/agent/719-15912`) to staging at `ad18f774` and resolved it as follows.
+
+**Still true on 2026-11-05.** lab-platform#341 is open and has posted no rebuilt digest, so `llm-guard:v1` is still
+`sha256:6cdbf3a2…` with neither the zero-shot model nor the OpenTelemetry fix. Question 1041's answer stands: the guard runs
+cpu.5 now and returns to lab-platform's image after lab-platform#341. Hecaton's `gate_forbidden` (`run/validate.py`, read
+on 2026-11-05) still fails any changed mode-160000 path as "adds submodule", so `images/llm-guard` stays at `f2fcb8f` here
+and its move to `31962f2` is a follow-up for a session that can commit a gitlink. Escalations 502 and 734 on #719 were
+dropped as stale on 2026-11-05.
+
+**What differs from the draft.**
+- **images.lock.** Staging's rows are kept as they are, the 2026-11-04 netcup save dates (run 17350) and #714's renamed
+  tags included. Only the `llm-guard` row changes, to cpu.5 with saved `-`, because that save copied v1's digest, not
+  cpu.5's. The four declared rows follow `laiyer/llm-guard-api`; v1's declared row carries the 2026-11-04 date, since the
+  save holds that digest. The lock script, llm-coding-workflow's `scripts/mirror-images.sh`, has no regenerate mode:
+  `refs` lists references, `pin` only fills a missing digest, and a kustomize image name's row is declared by hand. So
+  the rows were edited and then read with `mirror-images.sh check .`: 26 references, 57 declared, and every problem it
+  names is a `never saved` row that waits on `mirror-images.sh save` on netcup, cpu.4, cpu.5 and the zero-shot image among
+  them. None is a missing digest or source.
+- **verify/ensure-submodules.sh.** The draft's fix is dropped. Staging's `440fb97e` (#837) already reads
+  `git submodule status` whole before matching, which is the same fix, and it also moves a stale submodule to its pin.
+- **Readiness row 8 and the run-of-show.** Staging reworded both since the draft. The draft's words were applied to
+  staging's text: the `llm-guard-cpu-offline#2` notes in row 8, run-of-show segment 6, its readiness table row 8 and its
+  open item 1 now say the image has the model since #719 and that the scanner entry is #455's. The dated history row in
+  the readiness table keeps its old wording.
+- Every other file applied cleanly, the tests among them, and is the draft's change.
