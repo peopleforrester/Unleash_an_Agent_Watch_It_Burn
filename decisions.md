@@ -16386,8 +16386,8 @@ boundary 1, cluster 11, audit 3, no ERROR or SECURITY_WARNING, and no Resource i
 **A broken case in check 2.** The widening case added `s3:GetObject` to the agent statement, whose resources are
 Bedrock ARNs alone. That grants nothing, and check-no-new-access answered PASS, so the test failed on a true answer.
 The case now appends `arn:aws:bedrock:*::foundation-model/*`, the widening #138 closed, and fails check 2 naming
-`aws_iam_policy.bedrock_invoke.policy` as it should. The narrowing case drops `InvokeModelWithResponseStream` now
-that `ConverseStream` is gone. All three check 2 cases pass.
+`aws_iam_policy.bedrock_invoke.policy` as it should. The narrowing case drops `InvokeModelWithResponseStream`,
+as `ConverseStream` is gone. All three check 2 cases pass.
 
 **Not yet run.** Check 4 of `verify/test_iam_policy_aws.py`, the simulator over `infra/org/effect-tests.yaml`.
 The run's `accen-dev` session is a session token, and IAM refuses every call made with it
