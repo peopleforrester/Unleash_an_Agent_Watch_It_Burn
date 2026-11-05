@@ -16396,3 +16396,7 @@ The run's `accen-dev` session is a session token, and IAM refuses every call mad
 `IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py`. The live
 probe covers the same boundary for the credential the cluster hands out. The two-action policy reaches AWS at the next
 `terraform apply` of a cluster root; until then both clusters hold the four-action document, which grants the same.
+
+**The suites (run 17262, at `2169d4ff`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
+tier tests) in 29m35s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_agent_cloud_credential.py`
+and `verify/test_cloud_credential_probe_admission.py` passed in it.
