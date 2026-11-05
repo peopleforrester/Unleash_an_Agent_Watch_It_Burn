@@ -126,6 +126,10 @@ TERRAFORM_TIMEOUT = 600
 def _plugin_cache() -> str:
     # One provider download per test process, not one per render. The E2E tier sets TF_PLUGIN_CACHE_DIR to a
     # directory that survives between tests (run-e2e-tools.sh), so the download happens once per checkout.
+    # That holds only with TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE set (render() sets it). The renders copy no
+    # lockfile, and Terraform 1.4+ ignores the cache for a provider no lockfile records: each init fetched aws (about
+    # 840 MB) and cloudinit from releases.hashicorp.com again, four times per test, and a reset connection on one of
+    # those fetches failed the tier on staging (#883, as in run 16828).
     if not _CACHE:
         _CACHE.append(tempfile.mkdtemp(prefix="wib-tf-plugins-"))
     return _CACHE[0]
@@ -148,7 +152,8 @@ def render(root: str, edit=None) -> dict:
                 # The associations name the EKS module's cluster; with the module out of the plan, name it directly.
                 text = text.replace("module.eks.cluster_name", "var.name")
             (work / "main.tf").write_text(edit(text) if edit else text, encoding="utf-8")
-            env = {**os.environ, "TF_PLUGIN_CACHE_DIR": os.environ.get("TF_PLUGIN_CACHE_DIR") or _plugin_cache()}
+            env = {**os.environ, "TF_PLUGIN_CACHE_DIR": os.environ.get("TF_PLUGIN_CACHE_DIR") or _plugin_cache(),
+                   "TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE": "true"}
             def run(*a):
                 try:
                     return subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True, env=env,

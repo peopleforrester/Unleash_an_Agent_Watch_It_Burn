@@ -19985,3 +19985,33 @@ wall within about 3 seconds.
 **The suites (run 17676, at `1c2c6b0d`).** `bash verify/run-e2e-tools.sh` printed `268 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
 and 58 tier tests) in 30m55s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #883 · The IAM plan renders take providers from the plugin cache, not the registry
+
+**What failed.** The heavy gate ran `bash verify/run-e2e-tools.sh` on staging at `9c0e791c` and exited 1 on
+`test_iam_policy_structural.py` alone. The gate's log is not readable from a run, and the issue quotes only its tail.
+In this run the test passed both at `9c0e791c` and at `92dfea31` (the current base), with the tier's environment
+and pinned tools. So the failure is not in the code. It is the one run 16828 recorded under #825, where
+`terraform init` could not download `hashicorp/cloudinit v2.4.1` because releases.hashicorp.com reset the connection.
+
+**Why the test downloads so much.** `verify/iam_plan_render.py` copies no lockfile into its working copy of a
+root. Terraform 1.4 and later ignore `TF_PLUGIN_CACHE_DIR` for any provider that no lockfile records, so each
+`terraform init` fetched every provider from the registry again and only then linked the cache. #778's entry says
+the aws provider downloads once per checkout, but that was not so. The structural test renders four times
+(boundary, cluster, audit, and the cluster plan with the rules broken), and each render downloaded aws (about
+840 MB) and cloudinit, tls, time and null for the cluster root. In run 17534, a warm-cache init of the cluster
+root still printed `Installing hashicorp/aws v6.72.0`.
+
+**What changed.**
+- `verify/iam_plan_render.py`: every terraform call runs with `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE=true`,
+  so init uses the cached provider when no lockfile records it. The lockfile each render writes is thrown away
+  with its temp directory, so a lockfile that records only this platform's hash breaks nothing. With the flag, the
+  same init printed `Using hashicorp/aws v6.72.0 from the shared cache directory` for all five providers. The
+  structural test fell from 2m30s to 1m29s on a warm cache. Init still asks the registry which versions match and
+  still fetches the modules, which is a few small requests where before there were four 840 MB downloads.
+- `verify/test_iam_plan_render_cache.py` (offline): a stub terraform records each call's environment. For all
+  three roots, init, plan and show must carry the flag and a cache directory, with and without the tier's shared
+  cache. With the flag removed it fails 4 checks.
+- `verify/test_terraform_lock_init.py` is unchanged. It clears the cache on purpose, since it checks a fresh init.
+
+**Live check.** None. The change is in the tools tier's renderer, which needs no cluster and no AWS, and nothing on
+either cluster reads it.
