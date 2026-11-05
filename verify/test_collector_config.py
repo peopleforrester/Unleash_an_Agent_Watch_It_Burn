@@ -177,18 +177,29 @@ check("the old inaccurate promise is gone",
       "the trace shows a tool call to <code class=\"inl\">agenticburn.com/beacon</code>" not in LAB)
 
 print("== Kyverno reports arrive while the student is still looking (#323) ==")
-# Challenge 2 asks a student to read the PolicyReport for a Pod they created seconds ago. The chart default
-# scans hourly, so the report Whitney called a "broken command" was correct and up to an hour early.
+# Challenge 2 asks a student to read the PolicyReport for a Pod they created seconds ago. A new Pod is
+# scanned when it is created; the interval only sets how often every unchanged resource is scanned again.
 #
-# Measured on watch-it-burn-michael-admin, 2026-09-08, policy in Audit and the villain running:
-#   at 1h default   no report for the pod after 2 minutes, while every older pod had one
-#   at 30s          restrict-image-registries: validation error: Images must come from allowed registries...
+# #323 measured on watch-it-burn-michael-admin, 2026-09-08, at the 1h default: no report for the villain
+# after 2 minutes, while every older pod had one. #608 measured on watch-it-burn-private, 2026-11-05, how
+# long a new bypass-shaped Pod waited for its report:
+#   30s, 200m CPU limit         528s  (rescanning ~350 resources twice a minute throttled the controller
+#                                      in 99.9% of periods; new Pods queued behind the rescans)
+#   30s, 1 CPU limit            115s  (still the whole CPU)
+#   1h, 200m or 1 CPU, at rest   45s
+#   1h, 200m, just restarted    275s  (behind a ten-minute startup scan: what #323 saw)
 KYV = (REPO / "gitops/bootstrap/apps/kyverno.yaml").read_text(encoding="utf-8")
-check("the scan interval is set", "backgroundScanInterval: 30s" in KYV)
+check("the scan interval is set to 1h, not a rescan that starves new Pods' reports",
+      "backgroundScanInterval: 1h" in KYV)
 # The key path is the trap. reportsController.extraArgs is a real key, applies cleanly, syncs Healthy and
 # does nothing, because the chart already emits the flag from its own value and the duplicate is ignored.
 check("it is under the chart's own feature block",
-      re.search(r"features:\s*\n\s+backgroundScan:\s*\n\s+backgroundScanInterval: 30s", KYV) is not None)
+      re.search(r"features:\s*\n\s+backgroundScan:\s*\n\s+backgroundScanInterval: 1h", KYV) is not None)
+# The full scan, at startup and hourly, takes about two minutes at 1 CPU and ten at 200m; a new Pod's report
+# waits behind it.
+_rc = yaml.safe_load(KYV)["spec"]["source"]["helm"]["valuesObject"]["reportsController"]
+check(f"the reports controller may use a whole CPU for its full scans (limit {_rc['resources']['limits']['cpu']!r})",
+      str(_rc["resources"]["limits"]["cpu"]) in ("1", "1000m"))
 # Test the KEY, not the word. The comment above it names extraArgs precisely so nobody tries it again,
 # and a check that cannot tell a YAML key from prose fails on its own documentation.
 check("extraArgs is not used as a key",

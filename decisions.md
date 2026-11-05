@@ -17471,3 +17471,80 @@ what they spend.
 **The suites (run 17362, at `18523454`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite, 257 tests
 green with `test_pii_scrub_live_logic.py` among them, and 54 tier tests) in 26m54s and printed
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-05 · #608 · First live run: the #607, #490 and #552 checks pass; the PolicyReport checks waited on a starved reports controller
+
+Hecaton run 17353 ran `CONTEXT=watch-it-burn-private python3 verify/test_llm_bypass_live.py` from its own
+checkout of staging 9974cf1 against watch-it-burn-private
+(`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private`, ACTIVE, account 515966504359, through the
+run's handed-over kubeconfig and accen-dev session). Argo CD's kyverno-policies, ai-layer and lab-bootstrap
+Applications were Synced and Healthy at 9974cf1. `verify/prior-drafts.sh 608 origin/staging` printed NONE:
+the unlanded drafts of runs 12431 and 12662 are followed in staging by later #608 work, and neither holds anything
+this entry lacks. Run 12431's draft reported the whole suite passing at 0d73c8d; that run is not repeated here,
+and this entry records the first run whose output is on record.
+
+**The first run (run id e2e538): 52 PASS, 5 FAIL, exit 1.** Every prerequisite passed, the restrict-agent-spawned-workloads
+expression comparison included, so the whitespace fix from the 2026-11-03 #608 entry holds live.
+
+- **The three #607 Secret checks pass.** A Pod mounting terminal-auth as a secret volume and a Pod reading it
+  through an env secretKeyRef, each made as agent-sa on the default ServiceAccount, are refused by
+  restrict-agent-spawned-workloads, and a Pod mounting ceo-personal-record and reading it by secretKeyRef is
+  admitted.
+- **The #490 checks pass.** agent-sa may create the default-endpoint, envFrom and valueFrom pods; each exists and
+  no NetworkPolicy allows it a public API; the console label does open egress.
+- **The #552 checks pass.** The plain pod is Ready, as are agentgateway, workshop-agent and guard-proxy. The plain
+  pod's connections to agentgateway :3000 and :3002 and to workshop-agent :8080 are dropped while the hop before
+  each is admitted (kagent to workshop-agent :8080 too), guard-proxy still reaches agentgateway :3000, and the six
+  impersonating shapes are refused by restrict-agent-spawned-workloads.
+- **The guarded path passes:** guard-proxy's and agentgateway's own pods are reported PASS.
+- **The five PolicyReport checks failed** with "no result for this policy" after the 150 s wait: the four bypass
+  shapes (bare Pod, Deployment, the guard-proxy-named Deployment, the init container) that should read FAIL, and
+  the guard-proxy-routed Pod that should read PASS.
+- Cleanup held: `cleanup (wib.test/run=e2e538): done`, and `kubectl get pods,deploy,rs,cm -A -l wib.test/run`
+  found nothing afterwards. Nothing called a model.
+
+**Why the reports were late.** The policy was right and the report did come: one probe Pod shaped like the bare
+bypass case got `deny-llm-endpoint-bypass: fail` after 528 s. The reports controller was the cause. Prometheus on
+the cluster showed it at its 200m CPU limit and throttled in 99.9% of CFS periods, over the last hour and six hours
+earlier (the oldest data the cluster's Prometheus holds). Its own metrics over one minute: 358 background-scan
+reconciles and 330 PolicyReport updates, about 58 CPU-seconds. The 30 s `backgroundScanInterval` that #323 set
+rescans each of ~350 resources (74 Pods, 189 ReplicaSets, Services and the rest) twice a minute, which needs about a
+whole CPU, so a new Pod's report queued behind the rescans for minutes.
+
+**The measurement.** To test this, the run paused automated sync on lab-bootstrap and the kyverno Application,
+edited the kyverno-reports-controller Deployment, and timed the same probe Pod (created, its report read every
+3 to 18 s, then deleted):
+
+| Interval | CPU limit | State | Report after | Controller CPU |
+|---|---|---|---|---|
+| 30s | 200m | as deployed | 528 s | 0.20, throttled |
+| 30s | 1 | settled | 115 s | 0.98 |
+| 1h | 1 | settled | 46 s | 0.03 |
+| 1h | 200m | 2 minutes after a restart | 275 s | 0.20, startup scan |
+| 1h | 200m | settled | 45 s | 0.01 |
+
+A new Pod is scanned when it is created, whatever the interval; the interval only sets how often every unchanged
+resource is scanned again. The startup scan took about two minutes at 1 CPU and about ten at 200m. The fourth row
+is what #323 saw on 2026-09-08 at the 1h default (no report after two minutes for the Pod just deployed, while
+every older Pod had one): a controller still in its startup scan after a config change, not the interval.
+
+With 1h and 1 CPU, the whole suite ran again (run id 1e36b3): **57 PASS, no FAIL, exit 0**, "All live
+deny-llm-endpoint-bypass and restrict-agent-spawned-workloads checks passed.", the five PolicyReport checks
+included. Cleanup held again.
+
+**Left as found.** The run restored both Applications' syncPolicy from the copies it saved (automated, prune,
+selfHeal and their syncOptions). Argo CD put the Deployment back to `200m` and `--backgroundScanInterval=30s`
+within ten seconds, and both Applications read Synced and Healthy.
+
+**The change.** `gitops/bootstrap/apps/kyverno.yaml` sets `features.backgroundScan.backgroundScanInterval` to 1h
+(the chart's default, kept explicit) and the reports controller's CPU limit to 1 (request unchanged at 50m), and its
+comment carries the table above in place of #323's reasoning. `verify/test_collector_config.py`'s #323 block now
+holds 1h under the same feature-block key and a limit of a whole CPU, with the measurements. The comments on
+`REPORT_TIMEOUT_S` in `verify/test_llm_bypass_live.py` and `verify/test_kyverno_cel_live.py`, which named the 30 s
+rescan, now name the 45 s measured; the 150 s wait itself is unchanged. The watch-it-burn-community cluster runs no
+Kyverno, so the change reaches watch-it-burn-private and attendee clusters. On an attendee cluster with about forty
+Pods, a 30 s rescan at 200m also cannot finish inside its interval, so Challenge 2's report was late there too.
+
+**Not yet run on a cluster:** the change itself, once Argo CD syncs it to watch-it-burn-private:
+`CONTEXT=watch-it-burn-private python3 verify/test_llm_bypass_live.py` with the Deployment reading `cpu: "1"` and
+`--backgroundScanInterval=1h`. The next run on #608, or any run on the cluster, records it here. The measured run
+above was on the same values set by hand.
