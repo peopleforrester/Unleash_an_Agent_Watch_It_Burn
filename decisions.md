@@ -19981,3 +19981,7 @@ pause between the first two: `./fleet.sh reset-bot watch-it-burn-community watch
 `WIB_WALL_RAILWAY` command above, then `./fleet.sh wall-check --empty` ending "holds no prompts", and
 `curl -s https://prompts.burritobot.co/api/prompts` showing `"prompts": []`. Then one prompt on attackme shows on the
 wall within about 3 seconds.
+
+**The suites (run 17676, at `1c2c6b0d`).** `bash verify/run-e2e-tools.sh` printed `268 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `59 checks ran (the offline suite
+and 58 tier tests) in 30m55s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
