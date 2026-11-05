@@ -19329,3 +19329,51 @@ on each trace: each llm row must still read `cost_estimate_status:success`.
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57 tier
 tests) in 34m57s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_collector_llmobs_model.py` and
 `test_collector_llmobs_model_e2e.py` passed in it.
+## 2026-11-05 · #874 · run 17465 · The attendee profile binds lab-platform's learner group to the eight workshop apps
+
+**What changed.** A new Application, `learner-apps-access` (`gitops/bootstrap/apps/learner-apps-access.yaml`, sync
+wave -4), installs `gitops/learner-apps-access/learner-apps-access.yaml`, and `values-attendee.yaml` alone lists it.
+The manifest is what `labctl app-access burn@2.0.0` prints, as eight YAML documents in place of its one v1 List: in
+each of apps, argocd, kagent and monitoring, a Role `lab-platform-learner-apps` with get on `services/proxy` for that
+namespace's proxy names (`http:demo-app-{hedgehog,mantis-shrimp,spider,unicorn,wombat}:80`, `http:argocd-server:80`,
+`http:kagent-ui:8080`, `http:prometheus-grafana:80`), and a RoleBinding of the same name to the Group
+`lab-platform:learner-apps`, each labelled `app.kubernetes.io/managed-by=lab-platform`. Read from lab-platform main
+on 2026-11-05: `internal/eventplan/appaccess.go` (Role.AppAccess), `internal/eventplan/lab.go` (burnApps) and
+`internal/kubeconfig/kubeconfig.go` (LearnerAppsGroup).
+
+**Why.** lab-platform gives a harvested seat's learner an access entry carrying that group, and the attendee reads
+the workshop apps through the API server's Service proxy. On a cluster lab-platform builds, its bootstrap step binds
+the group; on a seat this repo builds nothing did, so each attendee would be refused 403 at the workshop apps step.
+
+**Its own Application, on attendee alone.** The issue asked for the attendee profile, and lab-platform's attendee
+role is the only one with apps, so no other profile lists it; the shape follows cluster-network-policies (#203). The
+names are lab-platform's, so an apply of its List on the same cluster replaces these objects rather than adding a
+second set. The attendee profile now lists 30 apps and renders 35 Applications with the root, so the stated count
+moved from 34 to 35 in `docs/RUN-OF-SHOW-2026-08.md` (both places), `docs/DESIGN-GLANCE.md` and
+`gitops/ai-layer/web/platform.html`, with `verify/test_fleet_contract.py` and `verify/test_bootstrap_chart.py` in the
+same commit. The instructor count of 38 does not change.
+
+**Tests.** `verify/test_learner_apps_access.py` (offline) renders the expected objects from the eight apps by
+lab-platform's rules and holds the manifest to them object for object; checks there is no ClusterRole, no verb but
+get, no wildcard and no subject but the group; reads the five demo apps' Services from `gitops/manifests`, Grafana's
+name from the prometheus Application's release and the four namespaces from `gitops/namespaces`; and checks the
+Application's source, its wave after namespaces, and that attendee is the one profile listing it. A mutation of
+kagent-ui's port fails one check, and adding `create` to a Role fails three.
+
+**Live check, watch-it-burn-private, run 17465 (left as found).** Before: no object labelled
+`app.kubernetes.io/managed-by=lab-platform`. `kubectl apply --dry-run=server` admitted all eight (Kyverno included).
+Then applied, probed as `--as=probe-874 --as-group=lab-platform:learner-apps`, and deleted:
+- `kubectl auth can-i get services/<proxy> --subresource=proxy` answered `yes` for all eight proxy names.
+- It answered `no` for `http:argocd-server:443`, `https:argocd-server:443`, `create` on `http:argocd-server:80`,
+  `http:guard-proxy:8080` in agent, Prometheus's own proxy in monitoring, Secrets in argocd, pods and Services in
+  apps, `pods/exec` in apps, and the hedgehog proxy in default.
+- `kubectl get --raw .../services/http:argocd-server:80/proxy/healthz` with the group passed authorization and timed
+  out on the dial (the node rule #869 adds is not applied there yet); the hedgehog read without the group answered
+  `Forbidden`, the issue's 403.
+- After the delete: `No resources found` for the label again.
+
+**Not yet run on a cluster.** The Application itself syncing on an attendee-profile root: neither cluster up is on
+the attendee profile (community is burn, private is admin). On the next attendee seat, once its root syncs:
+`kubectl get role,rolebinding -A -l app.kubernetes.io/managed-by=lab-platform` shows four of each, and with #869's
+rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive` (`go test -tags live`,
+`LAB_AWS_LIVE=1`, `LAB_APP_ACCESS_CLUSTER=<seat>`) answers 200 for all eight apps.

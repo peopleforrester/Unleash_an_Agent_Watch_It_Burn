@@ -17,6 +17,9 @@
 #   - cluster-network-policies KEPT -> it is platform baseline, not a challenge control: the Admin-tier deny on
 #       the instance metadata service from the agent namespace, which C8's cloud-credential beat shows (#203).
 #       No NetworkPolicy can say deny, and network-policies is left off here, so this is the readable rule.
+#   - learner-apps-access ADDED, on this profile alone -> the Roles and RoleBindings lab-platform's learner group
+#       needs to read the eight workshop apps through the API server's Service proxy (#874). A harvested seat gets
+#       no lab-platform bootstrap step, so without it every attendee is refused 403 at the workshop apps step.
 #
 # The collector is otel-collector-attendee, the same Application name as otel-collector with the dual-ship
 # overlay (#242); otel-collector-burn is the burn cluster's Datadog-only collector (#476), the same name again.
@@ -61,6 +64,7 @@ apps:
   - kubearmor
   - kyverno-policies
   - kyverno
+  - learner-apps-access
   - minimal-floor
   - namespaces
   - otel-collector-attendee

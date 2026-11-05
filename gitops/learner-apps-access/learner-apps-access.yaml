@@ -1,0 +1,141 @@
+# ABOUTME: lab-platform's learner apps RBAC (#874): get on the eight workshop apps' Service proxies, by name, for the
+# ABOUTME: group lab-platform:learner-apps that a harvested seat's learner access entry carries. Attendee profile only.
+#
+# What `labctl app-access burn@2.0.0` prints (lab-platform internal/eventplan/appaccess.go, Role.AppAccess, over
+# burnApps in internal/eventplan/lab.go), as YAML documents instead of one v1 List. The names, the label and every
+# rule are its own, so an apply of its List over these replaces them rather than adding a second set:
+#   - one Role and one RoleBinding, both lab-platform-learner-apps, in each namespace that holds an app, sorted;
+#   - get on services/proxy and nothing else, for exactly that namespace's proxy names, sorted, each
+#     http:<service>:<port> as the API server's proxy path spells it;
+#   - the binding's one subject the Group lab-platform:learner-apps (lab-platform internal/kubeconfig,
+#     LearnerAppsGroup).
+# get is the only verb, so an attendee reads an app through the API server and cannot post to it that way. There is
+# no ClusterRole and no read on Secrets, pods or exec, which is why the learner's EKS access entry gets this group
+# rather than edit in these namespaces: Argo CD's admin Secret is in one of them.
+#
+# The eight apps: grafana, argocd, kagent and the five demo apps. A ninth app, or a moved Service or port, changes
+# lab-platform's burnApps and this file together; verify/test_learner_apps_access.py holds both to the same list.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lab-platform-learner-apps
+  namespace: apps
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get"]
+    resourceNames:
+      - "http:demo-app-hedgehog:80"
+      - "http:demo-app-mantis-shrimp:80"
+      - "http:demo-app-spider:80"
+      - "http:demo-app-unicorn:80"
+      - "http:demo-app-wombat:80"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lab-platform-learner-apps
+  namespace: apps
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lab-platform-learner-apps
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: lab-platform:learner-apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lab-platform-learner-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get"]
+    resourceNames:
+      - "http:argocd-server:80"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lab-platform-learner-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lab-platform-learner-apps
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: lab-platform:learner-apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lab-platform-learner-apps
+  namespace: kagent
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get"]
+    resourceNames:
+      - "http:kagent-ui:8080"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lab-platform-learner-apps
+  namespace: kagent
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lab-platform-learner-apps
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: lab-platform:learner-apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lab-platform-learner-apps
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get"]
+    resourceNames:
+      - "http:prometheus-grafana:80"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lab-platform-learner-apps
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/managed-by: lab-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lab-platform-learner-apps
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: lab-platform:learner-apps

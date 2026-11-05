@@ -1,0 +1,31 @@
+# ABOUTME: ArgoCD Application for gitops/learner-apps-access/: the Roles and RoleBindings that admit lab-platform's
+# ABOUTME: learner group to the eight workshop apps' Service proxies. The attendee profile alone lists it (#874).
+#
+# A seat this repo builds and lab-platform harvests gets no lab-platform bootstrap step: its learner access entry
+# carries the group lab-platform:learner-apps, and on a cluster where nothing binds that group an attendee's proxy
+# read of every workshop app is refused 403. So the attendee root installs the binding itself.
+#
+# Its own Application, as cluster-network-policies is, so that it reaches the attendee profile alone: the attendee
+# role is the only one lab-platform hands to learners (burn@2.0.0's Attendee role, the one with Apps). Sync wave -4,
+# after namespaces (-10) creates apps, kagent and monitoring; argocd exists before the root does.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: learner-apps-access
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/learner-apps-access
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
