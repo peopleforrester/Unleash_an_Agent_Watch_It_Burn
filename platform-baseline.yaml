@@ -508,6 +508,15 @@ components:
       registry.burritobot.co (#774), Distribution seeded with the images the agent may run once Kyverno denies
       external registries; Challenge 3's image lives there (#775). The KubeCon private profile only.
 
+  - name: learner-apps-access
+    sister: []
+    status: local
+    apps: [learner-apps-access.yaml]
+    why: >
+      lab-platform's learner apps RBAC (#874): get on the eight workshop apps' Service proxies for the group a
+      harvested seat's learner access entry carries, so an attendee reaches them through the API server. The
+      attendee profile only.
+
   - name: minimal-floor
     sister: []
     status: local

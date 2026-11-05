@@ -19351,7 +19351,8 @@ names are lab-platform's, so an apply of its List on the same cluster replaces t
 second set. The attendee profile now lists 30 apps and renders 35 Applications with the root, so the stated count
 moved from 34 to 35 in `docs/RUN-OF-SHOW-2026-08.md` (both places), `docs/DESIGN-GLANCE.md` and
 `gitops/ai-layer/web/platform.html`, with `verify/test_fleet_contract.py` and `verify/test_bootstrap_chart.py` in the
-same commit. The instructor count of 38 does not change.
+same commit. The instructor count of 38 does not change. `platform-baseline.yaml` claims the new file as a `local`
+entry, which `verify/test_platform_baseline.py` requires of every Application.
 
 **Tests.** `verify/test_learner_apps_access.py` (offline) renders the expected objects from the eight apps by
 lab-platform's rules and holds the manifest to them object for object; checks there is no ClusterRole, no verb but
