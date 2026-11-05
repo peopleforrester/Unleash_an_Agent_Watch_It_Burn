@@ -19690,3 +19690,60 @@ reloaded wall tab within about 3 seconds.
 **The suites (run 17646, at `d3e3e468`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
 and 57 tier tests) in 34m40s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-05 · #909 · run 17593 · The community cluster's console withholds /kubecon; the private one still serves it
+
+**What changed.** `gitops/bootstrap/values.yaml` gains `console.kubeconBrief: true`, and the two community profiles,
+`values-burn.yaml` and `values-kubecon-community.yaml`, set it `false`. On false the ai-layer Application
+(`gitops/bootstrap/apps/ai-layer.yaml`) renders `kustomize.components: [components/no-kubecon-brief]`, the guard in
+YAML comments as the front door's is. That component (`gitops/ai-layer/components/no-kubecon-brief/kustomization.yaml`)
+holds one JSON patch on the generated `console-src` ConfigMap, `remove /data/kubecon.html`. `console.conf`'s
+`location = /kubecon { try_files /kubecon.html =404; }` is unchanged, so on the community cluster it finds no file
+and answers 404, and on the private cluster it serves the page. `templates/apps.yaml` fails a render whose
+`console.kubeconBrief` is not a bool, naming it. The run-of-show now sends presenters to
+`https://burritobot-private.burritobot.co/kubecon`, and its Night Before step expects 200 there and 404 on attackme.
+
+**Why this gate and not the other two the issue named.** The page is not on the community cluster at all, so it
+answers 404 for any Host header an attendee sends. A Host check in nginx would have depended on the router passing
+Host, which #565 ruled out as the place for the gate, and the community load balancer is internet-facing, so an
+attendee could send it `Host: burritobot-private.burritobot.co` and get the page. Leaving `location = /kubecon` out
+of the community render would have meant a second console.conf, or a patch over one large string, for one line.
+The profile is what fleet.sh already picks by role (`bootstrap_profile_for_role`: community gets burn or
+kubecon-community, admin gets admin or kubecon-private), and Argo CD renders it from git through the lab-bootstrap
+root, so selfHeal keeps it. A component and not a second `kustomize.patches` entry because ai-layer's `patches`
+key is already behind the front door's guard, and two guards on one key would nest.
+
+**Measured with kubectl v1.36.2's kustomize, 2026-11-05.** Built in place, as Argo CD's `kustomize edit add
+component` does, the component's patch lands after configMapGenerator: `console-src` drops from 16 keys to 15 and
+its name moves from `console-src-2f7h5t7cf7` (the name live on both clusters at `92dfea31`) to
+`console-src-8fk5h94fkf`, and the console Deployment mounts the new name, so the pod rolls. The Application CRD on
+both clusters (Argo CD v3.5.7) has `spec.source.kustomize.components`. The burn profile withholds it too: the 2-hour
+workshop's community cluster is also attackme, and its presenters drive from `/brief`, which stays.
+
+**Tests.** `verify/test_kubecon_community_gate.py` (offline) renders each profile's ai-layer Application, applies its
+components to the console-src keys as configMapGenerator names them, and resolves paths against console.conf's
+default server as nginx picks a location: `/kubecon` is 404 on burn and kubecon-community and serves the repo's
+kubecon.html on kubecon-private, admin, attendee and full. `/kubecon.html`, `/..data/kubecon.html`,
+`/..data/brief.html` and `/.kubecon` are 404 on every render, `/brief`, `/` and `/lab` still serve, and fleet.sh's
+role to profile table must give the community role only withholding profiles. `verify/test_gated_page_names.py` is
+unchanged and green. `verify/test_bootstrap_chart_render.py` (tools tier) renders kubecon-community, kubecon-private,
+burn and admin with the pinned Helm, builds gitops/ai-layer with each one's components, and checks the community
+`console-src` is the private one less kubecon.html under a new hashed name the Deployment mounts, and that
+`console.kubeconBrief=no` fails the render. `verify/test_bootstrap_chart.py` holds the new value, the guard's place
+and the community values files' `console` key.
+
+**Live check, run 17593, read-only (both clusters left as found).** At `92dfea31`, before the change reaches them:
+`curl -s -o /dev/null -w '%{http_code}' https://attackme.burritobot.co/kubecon` printed `200`, the issue's finding,
+and the page's title was `KubeCon brief: Watch It Burn`; on `https://burritobot-private.burritobot.co/kubecon`, `200`
+with the same title. `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` printed `404` on both hosts.
+`/whoami` answered `host=<the host asked for>` on attackme and burritobot-private under both domains. The
+lab-bootstrap roots read `values-kubecon-community.yaml` (community) and `values-kubecon-private.yaml` (private),
+both at staging.
+
+**Not yet run on a cluster.** The change reaches the clusters once hecaton promotes it and Argo CD syncs ai-layer.
+The next run on #908 runs, and records here:
+- `curl -s -o /dev/null -w '%{http_code}' https://attackme.burritobot.co/kubecon` prints `404` (and the same on
+  attackme.agenticburn.com), and `kubectl --context watch-it-burn-community -n agent get cm -o name` shows
+  `console-src-8fk5h94fkf` or a later hash, with no `kubecon.html` key.
+- `curl -s https://burritobot-private.burritobot.co/kubecon` answers 200 with `<title>KubeCon brief: Watch It
+  Burn</title>`.
+- `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` still print `404` on both hosts.
