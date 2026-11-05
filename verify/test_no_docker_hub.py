@@ -24,6 +24,15 @@ Two checks, each of which a new Docker Hub pull fails:
    list cannot go stale. The files in GATE are the one exception: the gate's own three, whose job is naming Docker
    Hub, and the fixtures of #603's live judge, which are the Docker Hub names a node reports for an image it cached.
 
+3. No row of the two lock files names a Docker Hub image, by host or by having no registry (run 17694's test review
+   found a bare `nginx:1.27 sha256:...` row would pass checks 1 and 2, which read image fields and hostnames only).
+   Every images.lock row's reference is judged, and so is the reference a kustomize image name's row resolves to; in
+   VERSIONS.lock, each `image:` label's reference, a component's value shaped as an image reference, and every
+   registry-path reference with a tag or digest. The one exception is RETAINED: #603's retention copy of the
+   archived upstream the deployed llm-guard replaced, which nothing pulls or builds on (check 1 holds that) and
+   which lab-platform keeps no ghcr.io copy of. It must stay a declared, upstream, saved row, so a new Docker Hub
+   row fails, and RETAINED must name only rows that are there.
+
 What a Helm chart renders is test_no_docker_hub_render.py's (tools tier): it renders every Application's sources.
 
 The build side came in with #714's last step, once lab-platform#353's ghcr.io copies of busybox 1.38.0, debian
@@ -75,6 +84,14 @@ REFUSED = (
     ("verify/test_public_images.py", '"docker.io/someone/tron", "index.docker.io/library/tron"'),
 )
 PLAIN_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]*$")
+# images.lock rows kept on their Docker Hub name on purpose (check 3). laiyer/llm-guard-api:0.3.16 is #603's retention
+# copy of the upstream llm-guard image, whose source repo protectai/llm-guard was archived in July 2026: the row
+# records the bytes netcup's archive saved (2026-11-05) under the name they were pulled by. The deployed llm-guard is
+# llm-guard-cpu-offline's ghcr.io image, and lab-platform has no mirror/ copy of this one (#714's decisions.md entry).
+RETAINED = ("laiyer/llm-guard-api:0.3.16",)
+# A string shaped as an image reference: lowercase repository path, an optional tag, an optional digest. A digest
+# VERSIONS.lock shortens to sha256:60216aaf... still reads as one.
+IMAGE_SHAPE = re.compile(r"^[a-z0-9][a-z0-9._/-]*(?::[A-Za-z0-9_][A-Za-z0-9._-]*)?(?:@sha256:[0-9a-f]+(?:\.\.\.)?)?$")
 
 failures: list[str] = []
 
@@ -208,6 +225,62 @@ def judged(refs: list[tuple[str, str, str]], placeholders: set[str], renamed: se
         ref = ref.replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR).replace("{{.Values.imageRegistry}}", LAB_PLATFORM_GHCR)
         if ref not in placeholders and not replaced(path, ref, renamed) and PLAIN_REF.match(ref):
             out.append((f"{path}:{where}", ref))
+    return out
+
+
+def lock_rows(text: str) -> list[tuple[int, list[str], bool]]:
+    """(line, columns, whether it sits under the "# Declared:" header) for each images.lock row."""
+    rows, declared = [], False
+    for n, line in enumerate(text.splitlines(), 1):
+        if line.startswith("# Declared:"):
+            declared = True
+        if line.strip() and not line.startswith("#"):
+            rows.append((n, line.split(), declared))
+    return rows
+
+
+def unregistry(ref: str) -> str:
+    return ref.replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR).replace("{{.Values.imageRegistry}}", LAB_PLATFORM_GHCR)
+
+
+def lock_refs(text: str, kustomize: set[str]) -> list[tuple[str, str]]:
+    """(images.lock:line, reference) for every reference a row names, placeholders left out.
+
+    A row's first column is its reference. A kustomize image name (llm-guard, web, postgres) is no pull itself: its
+    row's second column is the reference kustomize writes in, and that is judged in its place. A second column that
+    is a reference and not a bare digest is judged on any row."""
+    out = []
+    for n, cols, _ in lock_rows(text):
+        ref, second = unregistry(cols[0]), unregistry(cols[1]) if len(cols) > 1 else "-"
+        source = cols[2] if len(cols) > 2 else ""
+        if source.startswith("not-an-image:"):
+            continue
+        is_ref = second != "-" and not second.startswith("sha256:")
+        if not (ref in kustomize and is_ref):
+            out.append((f"images.lock:{n}", ref))
+        if is_ref:
+            out.append((f"images.lock:{n}", second))
+    return out
+
+
+def versions_refs(text: str) -> list[tuple[str, str]]:
+    """(VERSIONS.lock:line, reference) for each image reference VERSIONS.lock names: the first word after an `image:`
+    label, whatever it is; a component's value (an unindented line's second column) shaped as a reference with a
+    tag, a path or a digest; and anywhere, a reference with a registry path and a tag or digest."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        toks = [t.strip("`,;()'\"") for t in line.split()]
+        for i, t in enumerate(toks):
+            if not t:
+                continue
+            last = t.rsplit("/", 1)[-1]
+            labelled = i > 0 and toks[i - 1] == "image:"
+            value = i == 1 and not line[0].isspace() and IMAGE_SHAPE.match(t) and re.search(r"[:/@]", t)
+            pathed = "/" in t and IMAGE_SHAPE.match(t) and (":" in last or "@sha256:" in t)
+            if labelled or value or pathed:
+                out.append((f"VERSIONS.lock:{n}", t))
     return out
 
 
@@ -354,6 +427,58 @@ check("each of them carries a comment with (#714) saying it names Docker Hub to 
 missing = [e for e in REFUSED if e not in seen]
 check("every line REFUSED lists is still in its file, so the list holds only what is there", not missing,
       str(missing))
+
+print("== 3. no lock-file row names a Docker Hub image ==")
+LOCK_FIXTURE = (
+    "# Declared: fixture\n"
+    "nginx:1.27 sha256:" + "0" * 64 + " upstream:https://github.com/nginx/docker-nginx -\n"
+    "docker.io/library/busybox:1.38 sha256:" + "1" * 64 + " upstream:x -\n"
+    "web ghcr.io/peopleforrester/lab-platform/web@sha256:" + "2" * 64 + " repo:x -\n"
+    "stray ghcr.io/x/stray@sha256:" + "3" * 64 + " repo:x -\n"
+    "{{.Values.imageRegistry}}/mirror/x/y:1 ghcr.io/peopleforrester/lab-platform/mirror/x/y@sha256:" + "4" * 64
+    + " upstream:x -\n"
+    "REGISTRY/evil@sha256:REPLACE - not-an-image:placeholder -\n")
+found = sorted(r for _, r in lock_refs(LOCK_FIXTURE, {"web"}) if docker_hub(r))
+check("an images.lock row with a bare or docker.io name is judged a Docker Hub pull, a kustomize name's ghcr.io "
+      "target and a placeholder are not, and a bare name kustomize does not set is",
+      found == ["docker.io/library/busybox:1.38", "nginx:1.27", "stray"], str(found))
+VERSIONS_FIXTURE = ("redis        bitnami/redis:7.4  (note)\n"
+                    "otel         chart 1.0\n"
+                    "                       image: the mirror's otel/opentelemetry-collector-contrib:0.160.0\n"
+                    "                       image: nginx:1.27 (pinned)\n"
+                    "                       see gitops/bootstrap/apps/x.yaml and protectai/llm-guard, schema/config.json\n"
+                    "LIVE RESULT: green\n")
+found = [r for _, r in versions_refs(VERSIONS_FIXTURE)]
+check("VERSIONS.lock's component values, image: labels and tagged registry paths are read, and prose paths are not",
+      found == ["bitnami/redis:7.4", "the", "otel/opentelemetry-collector-contrib:0.160.0", "nginx:1.27"], str(found))
+check("an image: label that opens with prose is read as such, so it fails as no pinned reference",
+      [r for r in found if not (IMAGE_SHAPE.match(r) and re.search(r"[:@]", r))] == ["the"], str(found))
+lock_text = (REPO / "images.lock").read_text(encoding="utf-8")
+kustomize = {n for _, n in renamed}
+lrefs = lock_refs(lock_text, kustomize)
+check(f"images.lock's rows are read ({len(lrefs)} references)", len(lrefs) >= 60)
+bad = [f"{w}: {r}" for w, r in lrefs if docker_hub(r) and r not in RETAINED]
+check("no images.lock row names a Docker Hub image", not bad, "\n      ".join([""] + bad))
+vtext = (REPO / "VERSIONS.lock").read_text(encoding="utf-8")
+vrefs = versions_refs(vtext)
+check(f"VERSIONS.lock's image references are read ({len(vrefs)})", len(vrefs) >= 4)
+unshaped = [f"{w}: {r}" for w, r in vrefs if not (IMAGE_SHAPE.match(r) and re.search(r"[:@]", r))]
+check("every VERSIONS.lock image: label names a pinned reference (a tag or digest) first", not unshaped,
+      "\n      ".join([""] + unshaped))
+bad = [f"{w}: {r}" for w, r in vrefs if docker_hub(r) and r not in RETAINED]
+check("no VERSIONS.lock image reference is a Docker Hub image", not bad, "\n      ".join([""] + bad))
+rows = {cols[0]: (n, cols, declared) for n, cols, declared in lock_rows(lock_text)}
+for ref in RETAINED:
+    n, cols, declared = rows.get(ref, (0, [], False))
+    check(f"RETAINED's {ref} is an images.lock row, so the list holds only what is there", bool(cols))
+    check(f"{ref} sits under images.lock's Declared header, which no tracked file pulls", declared)
+    check(f"{ref} is an upstream image pinned by digest, its tarball saved (a dated saved column)",
+          len(cols) == 4 and cols[1].startswith("sha256:") and cols[2].startswith("upstream:")
+          and bool(DATED.fullmatch(cols[3])), " ".join(cols))
+    name = re.split(r"[:@]", ref, maxsplit=1)[0]
+    pulled = [f"{w}: {r}" for w, r in pulls if re.split(r"[:@]", r.rsplit("/", 1)[-1], maxsplit=1)[0]
+              == name.rsplit("/", 1)[-1] and docker_hub(r)]
+    check(f"no image field check 1 read pulls {name}", not pulled, str(pulled))
 
 print()
 if failures:

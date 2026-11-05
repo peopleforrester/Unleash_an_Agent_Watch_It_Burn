@@ -20732,3 +20732,34 @@ it now has the `agent-task` label that run 17684's escalation asked for, so heca
 `uv run ruff check . && uv run pytest` green there. The real-browser chat step on `/display` that run 17684 named
 under Not yet run on a cluster is still not run, for the same reason: each chat stays in guard-proxy's feed and on
 the projector.
+
+## 2026-11-05 · #805 · run 17714 · check 3: no images.lock or VERSIONS.lock row names a Docker Hub image
+
+**Why.** Test review run 17694 found that test_no_docker_hub.py reads image fields, build bases and Docker Hub's
+host names, and nothing else. A row with no registry in images.lock, such as `nginx:1.27 sha256:...`, would have
+passed every test, and so would a bare name in VERSIONS.lock. `verify/prior-drafts.sh 805 origin/staging` printed
+LANDED for `origin/agent/805-16565` and then NONE, so this run started from staging.
+
+**What check 3 reads.** In images.lock, every row's reference, with placeholders (`not-an-image:`) left out. A
+kustomize image name (llm-guard, web, postgres, as check 1 collects them) is judged by the reference its second
+column gives. Any second column that is a reference and not a bare digest is judged as well. In VERSIONS.lock, the
+first word after each `image:` label, a component's value shaped as an image reference, and every tagged or
+digest-pinned reference with a registry path. Each `image:` label must open with a pinned reference. Fixtures and
+hand mutations each failed by name: a bare `nginx:1.27` row added to images.lock, a `bitnami/redis:7.4` component
+added to VERSIONS.lock, postgres's row cut down to a bare digest, and the retained row's saved date set to `-`.
+Each mutation was reverted.
+
+**The one retained row.** `laiyer/llm-guard-api:0.3.16` stays on its Docker Hub name. It is #603's retention copy
+of the upstream image that the deployed llm-guard replaced, saved on netcup on 2026-11-05, and its source repo
+protectai/llm-guard is archived. Nothing pulls it or builds on it, and lab-platform keeps no ghcr.io copy of it (an
+anonymous tag list of `lab-platform/mirror/laiyer/llm-guard-api` was refused on 2026-11-05, as #714's entry found
+too). `RETAINED` in the test names it alone. The row must exist, sit under images.lock's `# Declared:` header, be an
+`upstream:` image pinned by digest with a dated saved column, and be named by no image field check 1 reads. A new
+Docker Hub row fails. The row is kept by design, and it is never pulled.
+
+**One edit outside the test.** VERSIONS.lock's otel-collector `image:` line read "the mirror's
+otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921", a bare name, which is a Docker Hub pull as written. It
+now names the ghcr.io reference the three otel-collector Applications render
+(`ghcr.io/peopleforrester/lab-platform/mirror/otel/...`). No test read that line's old words.
+
+**Not yet run on a cluster.** Nothing is owed: check 3 is offline and reads only the repo.
