@@ -26412,3 +26412,73 @@ changed.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
 59m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+## 2026-11-05 · #704 · vLLM does not fit beside the platform on one t3.2xlarge, and this run's session cannot build a cluster
+
+**Context.** Hecaton run 17379 is #704's fifth dispatch and the first whose cluster session was readable (hecaton#508
+is fixed). `bash verify/prior-drafts.sh 704 origin/staging` named run 16409's branch as the draft to start from. Its
+one commit, `d8ea4928` ("wip: run 16409 workspace preserved"), only moves the guard-proxy submodule pin, which staging
+has since moved again (`9f2b575c`), so nothing from it is reused. The issue's own work is a cold build of the
+local-inference profile on a fresh t3.2xlarge, timed to every Application Healthy, then
+`verify/local-inference-live.py`, the numbers into platform-baseline.yaml's vllm entry, and a teardown.
+
+**A fresh cluster cannot be built with this session.** The run's grant allows creating and tearing down a cluster
+other than the two shared ones, so the 2026-11-02 sheet came first: `WIB_NO_BOOTSTRAP=1 ./fleet.sh up
+watch-it-burn-attendee-099`. This worktree has no lab VPC state, so the run gave fleet.sh a stand-in state under the
+gitignored `infra/terraform/fleet/states/`, holding only the two outputs `read_vpc` reads: `vpc-0607c27ee51fb233c`
+and its private subnets `subnet-0d80af76b70e4e1cc` (us-west-2a) and `subnet-0eb9a64421d4e53f2` (us-west-2b), read
+from the VPC tagged `watch-it-burn-lab-vpc` that both shared clusters sit in. `up` stopped before any apply, in
+`adopt_attendee_iam_user`: "could not read IAM user wib-attendee-099". The session is an access key with a session
+token, and every IAM call answers `InvalidClientTokenId` (`aws iam get-user`, `aws iam list-roles`), while STS and
+EKS answer. That is what an STS session token issued without MFA does: it cannot call the IAM API. The cluster module
+creates the cluster and node IAM roles, the Pod Identity roles and the attendee IAM user, so no apply of it can
+succeed on this session, and neither can `eksctl create cluster`, which makes roles too. Nothing was created in AWS:
+`aws eks list-clusters` still lists only the two shared clusters, and no resource is tagged
+`Name=watch-it-burn-attendee-099`. The stand-in state was removed afterwards.
+
+**The finding that matters more: as written, vLLM cannot be scheduled beside the platform on one t3.2xlarge.** A
+t3.2xlarge node has 7910m CPU allocatable. The 2026-11-04 fallback re-profiles watch-it-burn-private from admin to
+local-inference. Before running it, the run read the node: admin, which is full's list plus `kubearmor-policies` and
+`network-policies`, two Applications of policies that request nothing, already requests 5975m CPU and 11836Mi
+memory across 73 running pods. The largest are monitoring at 850m, agent at 805m, kagent at 660m and the Datadog
+Agent, cluster agent and operator at 600m together. That leaves 1935m CPU. vLLM requests 4 CPU (memory fits: 18893Mi
+free against 10Gi). local-inference requests what admin does plus vLLM, so the re-profile would leave vllm-qwen3
+Pending and the build would never reach every Application Healthy. A cold build on a fresh node would hit the same
+wall: the same platform requests, and at least 5375m with no Datadog key. So the re-profile was not run; it would
+have taken two guardrail Applications off the presenters' cluster to show a Pending pod.
+
+**What was run live instead, and what it printed.** `verify/vllm_fit_probe.py` (new) creates the manifest's own
+vllm-qwen3 Deployment, moved to a namespace of its own (`vllm-fit-probe`), waits for the scheduler's verdict, and
+deletes the namespace at the end. It changes no profile and no Argo CD Application.
+
+- `CONTEXT=watch-it-burn-private python3 verify/vllm_fit_probe.py`: "CPU 5975m of 7910m requested, 1935m free;
+  memory 11836Mi of 30729Mi requested, 18893Mi free", then "UNSCHEDULABLE: 0/1 nodes are available: 1 Insufficient
+  cpu. ... preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod."
+- `CONTEXT=watch-it-burn-community python3 verify/vllm_fit_probe.py`: "CPU 4075m of 7910m requested, 3835m free",
+  then the same "Insufficient cpu" verdict. Community runs burn, which has fewer components than full, and 4 CPU
+  still does not fit.
+- `CONTEXT=watch-it-burn-community CPU_REQUEST=3500m python3 verify/vllm_fit_probe.py`, the manifest's pod with only
+  its CPU request lowered so that vLLM's own cold start could be timed on this node type. The image was not on the
+  node before. Created 07:45:49Z, scheduled at once, "Successfully pulled image ... in 2m23.088s ... Image size:
+  4947778006 bytes", container started 07:48:14Z, Ready 07:53:49Z: "creation to Ready: 480 s", of which 143 s pull
+  and 335 s model load. "cgroup memory.peak: 9.28 GiB", "CPU used since start: 478 CPU-seconds over 357 s (mean
+  1.34 cores)". One 5-token completion to the pod's :8000 answered HTTP 200 in 19.5 s, model `qwen3-1.7b`. PASS.
+
+Both clusters are as found: `vllm-fit-probe` is gone from each, and nothing else was touched. One trace stays: the
+vLLM image is now in community's containerd cache, so a later pull on that node is a warm one.
+
+**What the record says now.** platform-baseline.yaml's vllm entry keeps `measured: false`. Its header defines
+measuring as a cold build with and without the component, timed to Healthy, and no profile build was timed. The
+probe's numbers go into `known`, each named for what it is, with the CPU-request change stated. The header of
+`values-local-inference.yaml` now says that by CPU request the server does not fit.
+
+**What has to be decided first.** Before a cold build can be timed at all, the profile has to make room for vLLM:
+lower its CPU request to fit the 1935m left on a t3.2xlarge (limits unchanged), build the local-inference cluster on
+a larger node or two nodes, or take about 2.1 CPUs of requests out of its list. The spec and the 2026-10-29 question
+657 entry leave that open, so it is this run's question. Each choice also changes what the next run does: a lower
+request can be checked on watch-it-burn-private with the fallback sheet, which needs no IAM, while a bigger node
+needs a cluster build, and that needs a session that can call IAM.
+
+**Not yet run on a cluster.** The cold build itself (`CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference`,
+timed to every Application Healthy) and `CONTEXT=<ctx> python3 verify/local-inference-live.py`, after that decision,
+on a fresh cluster built with a session that can call IAM, or by the 2026-11-04 fallback on watch-it-burn-private if
+the answer lowers the request.
