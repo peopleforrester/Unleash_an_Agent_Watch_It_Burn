@@ -16244,3 +16244,8 @@ over, because `test_offline_suite_no_cloud.sh` covers the runner.
 **Live check.** None beyond the suites: the change is to tests only and touches no cluster. The suites ran in this
 run's environment, which carries the live KUBECONFIG and AWS session for both clusters, and no test was named for
 calling a cloud tool.
+
+**The suites (run 17218, at `4dd9bc6e` on staging `3b147fd2`).** `bash verify/run-e2e-tools.sh` printed
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0, with `54 checks ran (the offline suite and 53 tier tests) in 25m31s`. The offline suite inside it ran 254 tests,
+`test_no_cloud_by_hand.sh` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with no test named for
+calling a cloud tool.
