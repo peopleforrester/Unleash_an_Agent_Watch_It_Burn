@@ -26412,3 +26412,70 @@ changed.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
 59m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+## 2026-11-05 · #856 · run 17687 · The last HC-666 failures were HTTP 500s on fields a Deployment does not declare
+
+**Prior drafts.** `verify/prior-drafts.sh 856 origin/staging` printed NONE: runs 16947 and 16959 are both in staging.
+
+**Access.** This run's kubeconfig and env files were readable (hecaton#508 no longer applied), so the failing calls
+were read from the workshop-mcp log on watch-it-burn-community. The pod ran staging's server (the md5 of
+`/app/server.py` matched `gitops/ai-layer/workshop-mcp-server.py` at the base, `93a5f59b`), and the Agent's prompt
+carried run 16959's deploy_app sentence.
+
+**What failed, measured.** The log runs from the pod's start, 2026-11-04 21:08 UTC, to 2026-11-05 20:30 UTC. In it,
+19 deploy_app calls named a joker-<name>: 14 landed, and all 5 that failed were one shape. The model put the call's
+own `requested_by` into the manifest, as a top-level key beside apiVersion and kind, and left the argument empty
+(joker-isolde-the-troll at 21:20:39 and 21:20:41 on 2026-11-04; joker-agatha-the-banshee at 15:36:43, 15:40:28 and
+16:28:49 on 2026-11-05). Server-side apply refuses a field a Deployment does not declare with HTTP 500, not a 422:
+`failed to create typed patch object (agent/joker-isolde-the-troll; apps/v1, Kind=Deployment): .requested_by: field not
+declared in schema`. That is the wall's "Refused by the cluster (HTTP 500)" rows. No 422 and no Joker parse error
+appeared in the log, and no "refused as written" line, so run 16959's re-apply change had nothing left to cover.
+
+**The live check before the change (2026-11-05, public bot, the chat page's exact /chat body, one session per ask).**
+Six asks as Agatha the Banshee, whose Joker was already on the cluster (sessions `check-856-17687-a1` to `-a6`,
+20:34:52 to 20:35:35 UTC): five landed, each at its first deploy_app call. The second failed with the same 500 on
+another shape. The model closed the template after its metadata and wrote the pod's spec beside it, at `spec.spec`
+(`.spec.spec: field not declared in schema`), and the bot sent the guest to the support desk. Then six asks with new
+names from the chat page's vocabulary (Barnaby the Basilisk, Cordelia the Cyclops, Dorian the Djinn, Elspeth the
+Gargoyle, Fenwick the Goblin, Gideon the Gorgon; sessions `check-856-17687-nbar` to `-ngid`, 20:38:36 to 20:39:15):
+all six landed, each at its first call, with the Joker's own page in the reply. Every one of the twelve replies claiming
+a made Joker had a wall row behind it. So the no-call replies run 16959 saw did not recur here, and the only
+failure left was the 500.
+
+**The change.** In `deploy_app` (`gitops/ai-layer/workshop-mcp-server.py`):
+
+- A `requested_by` (or `requestedBy`, `requested-by`) key in the manifest is taken out and used as the argument when
+  the argument is empty. A manifest that is the whole call, `{"manifest": ..., "requested_by": ...}`, is read as its
+  manifest, whether that is an object or a JSON string.
+- A Deployment, StatefulSet, DaemonSet, ReplicaSet or Pod keeps only `apiVersion`, `kind`, `metadata`, `spec` and
+  `status` at the top, after `_mend_workload` has moved the fields it knows into `spec`. The pod's log names what
+  was dropped. Other kinds (a ConfigMap's `data`) are untouched.
+- `_mend_workload` moves a pod spec or template metadata written at `spec.spec` or `spec.metadata` into
+  `spec.template`, keeping what the template already had.
+- The plain-Joker retry run 16959 added for a 422 also covers this 500 (`field not declared in schema`), so a field
+  the model nests where no Deployment has one still lands the Joker HC-666 asks for. An admission webhook's refusal
+  is still left as the refusal.
+
+**Checked on the cluster without deploying.** The four logged manifests that failed were run through the changed
+deploy_app offline, and both the manifest as the model sent it and the one deploy_app now applies went to the
+community cluster's API server as a server-side dry run (`kubectl apply --server-side --dry-run=server
+--field-manager=workshop-mcp --force-conflicts -n agent`). All four as sent were refused with the log's own messages
+(three `.requested_by`, one `.spec.spec`), and all four as mended were taken, admission webhooks included. A dry run
+writes nothing.
+
+**Tests.** New `verify/test_deploy_app_undeclared_fields.py` holds the log's four manifests byte for byte against a
+stand-in API server that refuses, with that 500, a field a Deployment, its spec or its container does not declare.
+Each lands in one apply, credited to the witch the model wrote, with the ticket's image and the Joker's hostname. It
+also checks the whole-call wrapper in three forms, two extra top-level fields, the template's metadata and pod spec
+both at the workload's spec, and `requested_by` inside the container, which lands as the plain Joker in two applies.
+A wrapped manifest that is not one ("Tron") is still refused before any apply, a non-Joker Deployment with that 500
+is still refused after one apply, and a ConfigMap keeps its `data`. Against the base server it fails 44 checks. The
+deploy_app tests already in the suite pass unchanged.
+
+**Left on the cluster.** The six new-name Jokers were deleted after the check, so the agent namespace again holds only
+joker-agatha-the-banshee. The six Agatha asks only re-applied that Joker. The support desk's wall keeps this run's
+rows from 20:34:56 to 20:39:15.
+
+**Not yet run on a cluster.** This change reaches workshop-mcp once hecaton promotes it. Then the same twelve asks
+(the six Agatha asks, then six new names, deleted after) should each add one `ok: true` row. The workshop-mcp log
+should show no `field not declared in schema` error, and any "dropped top-level field(s)" or "refused as written
+(HTTP 500)" line names a shape this change covered.

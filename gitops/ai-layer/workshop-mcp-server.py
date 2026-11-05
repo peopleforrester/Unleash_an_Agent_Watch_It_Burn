@@ -836,6 +836,14 @@ def _mend_workload(obj: dict, name: str) -> None:
             spec[key] = obj.pop(key)
     tmpl = spec.get("template") if isinstance(spec.get("template"), dict) else {}
     spec["template"] = tmpl
+    # The pod's spec, or the template's metadata, written in the workload's spec, beside the template rather than in
+    # it: the API server's server-side apply refuses that with HTTP 500, ".spec.spec: field not declared in schema"
+    # (#856, run 17687: the second of six HC-666 asks on 2026-11-05 at 20:35:04 UTC).
+    for key in ("spec", "metadata"):
+        if isinstance(spec.get(key), dict):
+            held = spec.pop(key)
+            into = tmpl.get(key) if isinstance(tmpl.get(key), dict) else {}
+            tmpl[key] = {**held, **into}
     pod = tmpl.get("spec") if isinstance(tmpl.get("spec"), dict) else {}
     tmpl["spec"] = pod
     for key in _POD_SPEC_KEYS:
@@ -921,9 +929,59 @@ def _plain_room_joker(obj: dict, name: str) -> dict | None:
     return plain
 
 
+# What was left once the 422 was covered (#856, run 17687, 2026-11-05): in the public bot's workshop-mcp log from
+# 2026-11-04 21:08 UTC, 19 deploy_app calls named a joker-<name>, 14 landed, and all five that failed were one shape.
+# The model wrote the call's own requested_by into the manifest, as a key beside apiVersion and kind
+# ('...busybox-1.38.0"}]}}},"requested_by":"Isolde the Troll"}'), and left the argument empty. The API server's
+# server-side apply refuses a field a Deployment does not have with HTTP 500, "failed to create typed patch object
+# (...): .requested_by: field not declared in schema", and the model sent the same thing again. So a requested_by
+# written into the manifest is the argument, a manifest that is the whole call ({"manifest": ..., "requested_by": ...})
+# is its manifest, a workload or Pod keeps only the top-level fields its kind has, and that 500 is retried as the
+# plain Joker as a 422 is. verify/test_deploy_app_undeclared_fields.py holds each shape.
+_REQUESTED_BY_KEYS = ("requested_by", "requestedBy", "requested-by")
+_WORKLOAD_TOP_KEYS = ("apiVersion", "kind", "metadata", "spec", "status")
+
+
+def _unwrap_call(obj, requested_by: str) -> tuple[object, str]:
+    """The manifest without the call's arguments the model wrote into it, and the requested_by it wrote there."""
+    if not isinstance(obj, dict):
+        return obj, requested_by
+    if "kind" not in obj and "manifest" in obj:
+        inner = obj["manifest"]
+        if isinstance(inner, str):
+            inner, written = _parse_manifest(inner)
+            requested_by = requested_by or written
+        for key in _REQUESTED_BY_KEYS:
+            if isinstance(obj.get(key), str):
+                requested_by = requested_by or obj[key].strip()
+        return _unwrap_call(_one_object(inner), requested_by)
+    for key in _REQUESTED_BY_KEYS:
+        if key in obj:
+            written = obj.pop(key)
+            if isinstance(written, str):
+                requested_by = requested_by or written.strip()
+    return obj, requested_by
+
+
+def _drop_undeclared_top_keys(obj: dict) -> None:
+    """A Deployment, StatefulSet, DaemonSet, ReplicaSet or Pod keeps only the top-level fields its kind has: the
+    API server's server-side apply refuses any other with HTTP 500, "field not declared in schema"."""
+    if obj.get("kind") not in _TEMPLATED_KINDS + ("Pod",):
+        return
+    extra = [k for k in obj if k not in _WORKLOAD_TOP_KEYS]
+    for key in extra:
+        obj.pop(key)
+    if extra:
+        print(f"{obj['kind']}/{(obj.get('metadata') or {}).get('name')}: dropped top-level field(s) its kind does not "
+              f"have: {', '.join(map(str, extra))}", flush=True)
+
+
 def _refused_as_invalid(code: int, body: str) -> bool:
-    """A 422 from the API server's own validation, not an admission webhook's denial, which is the lesson."""
-    return code == 422 and "admission webhook" not in body
+    """A 422 from the API server's own validation, or the 500 its server-side apply gives a field the kind does not
+    declare, not an admission webhook's denial, which is the lesson."""
+    if "admission webhook" in body:
+        return False
+    return code == 422 or (code == 500 and "field not declared in schema" in body)
 
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
@@ -946,15 +1004,16 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
             _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
         # One line that YAML cannot read and that is no object either ("`Tron`"): read as a name below (#939).
         obj, written_by = manifest.strip(), ""
-    obj = _one_object(obj)
-    if isinstance(obj, dict) and "requested_by" in obj:
-        # The call's own argument written as a field of the manifest (#906): on 2026-11-05 two of three HC-666 asks on
-        # the public bot sent {"apiVersion": ..., "requested_by": "Agatha the Banshee", ...}, which the API server
-        # refuses ("failed to create typed patch object ... .requested_by: field not declared in schema"). No
-        # Kubernetes object has the field, so it is taken out and read as the name the argument would have carried.
-        inside = obj.pop("requested_by")
-        written_by = written_by or (inside.strip() if isinstance(inside, str) else "")
+    # The call's own argument written as a field of the manifest (#906, #856): on 2026-11-05 the public bot sent
+    # {"apiVersion": ..., "requested_by": "Agatha the Banshee", ...}, which the API server refuses ("failed to create
+    # typed patch object ... .requested_by: field not declared in schema"). No Kubernetes object has the field, so it
+    # is taken out and read as the name the argument would have carried; _unwrap_call also reads a manifest that is
+    # the whole call, {"manifest": ..., "requested_by": ...}.
     requested_by = str(requested_by or "").strip() or written_by
+    try:
+        obj, requested_by = _unwrap_call(_one_object(obj), requested_by)
+    except Exception as e:  # noqa: BLE001
+        _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
     named = None
     if isinstance(obj, (str, int)) and not isinstance(obj, bool):
         # Only a name, "Tron" or 2048 (#939): the Deployment it asks for, with the image it runs.
@@ -973,6 +1032,7 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     ns = _ns()
     obj["metadata"]["namespace"] = ns
     _mend_workload(obj, name)
+    _drop_undeclared_top_keys(obj)
     _move_off_docker_hub(obj, f"{kind}/{name}")
     _default_limits(obj)
     _shrink_room_joker(obj, name)
