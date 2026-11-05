@@ -19384,3 +19384,65 @@ rule applied lab-platform's `TestTheLearnerAppsGroupReachesEveryWorkshopAppLive`
 offline suite and 57 tier tests) in 35m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first run at
 `07fbbf49` failed one offline test, `test_platform_baseline.py`, because no baseline entry claimed the new
 Application; `ca883d38` adds that entry.
+
+## 2026-11-05 · #878 · run 17521 · The agentgateway pod template carries a checksum of agentgateway-config, so a static-section change rolls the pod
+
+**What changed.** The agentgateway Deployment's pod template in `gitops/ai-layer/agentgateway.yaml` carries the
+annotation `checksum/agentgateway-config: "7b5736c88625"`, the first 12 hex digits of sha256 of the
+agentgateway-config ConfigMap's `config.yaml` string, bumped by hand on every change to that string. It is the shape
+guard-proxy's `checksum/proxy-py` and LLM Guard's `checksum/scanners-yml` already have in `resources.yaml`: the
+ConfigMap keeps its stable name, and the annotation is what makes the pod template change with the content, so Argo
+CD rolls the pod and the new one reads the file at startup. The comment by the annotation says why, and names the
+test that holds it.
+
+**Why an annotation and not the kustomize content hash.** The bundle's generated ConfigMaps carry the kustomize hash
+in their names (#252), which rolls a pod with no hand step. agentgateway-config is a plain resource, and generating it
+would rename the live object to `agentgateway-config-<hash>`. That name is read live by #480's tool-pin live check
+(`docs/research/2026-10-24-tool-pin-spike/live-check.sh` patches `configmap agentgateway-config` and its shim models
+`agent/ConfigMap/agentgateway-config`), is the one the Kyverno drift policy's comment and `test_kyverno_cel_policies.py`
+name, and is read from the file by nine offline tests, `fleet.sh` and `test_pin_bedrock_profiles.sh`. The
+annotation touches one file and no name, and the repo already holds two of them by test. The cost is the hand bump,
+which `verify/test_agentgateway_config_checksum.py` turns into a red offline test with the value to set, the same
+way `test_proxy_checksum.py` does for proxy.py.
+
+**Why the C7 ConfigMap is not in it.** agentgateway-c7-config's rule line is flipped live on an admin cluster
+(guard-mcp-on / guard-mcp-off), the agentgateway-c7 container reloads it without a restart, and ai-layer ignores
+drift on its `config.yaml`. The checksum reads agentgateway-config's string only, so a C7 rule flip, live or
+committed, leaves the pod template as it is and rolls nothing. The test holds that with the flipped rule line.
+
+**What v1.7.0 does without this.** The binary watches its config file and reloads the binds, but a change to the
+static `config:` section is not applied by a reload, and a migration it refuses is logged as `Failed to reload
+config` while the old config goes on serving: on watch-it-burn-community the pod that had started on 2026-11-04
+21:14 with `config.tracing` refused #864's `frontendPolicies.tracing` at 01:28 on 2026-11-05 and served the old
+config until #480's live check restarted it at 03:55 UTC, with Argo CD reporting Synced and Healthy throughout.
+#864's entry expected the ConfigMap change to roll the pod; nothing in the pod template changed, so nothing did.
+
+**The test.** `verify/test_agentgateway_config_checksum.py` (offline) holds the annotation on the pod template, not
+the Deployment's own metadata, equal to sha256(config.yaml)[:12] and 12 hex digits; builds a copy of the file with one
+key added to the static section, on an anchor it first checks occurs exactly once, and holds that the committed
+annotation reads as stale on it; builds a copy with the C7 rule line flipped on and holds that the checksum is
+unchanged and the annotation still current; holds that no pod template annotation names the C7 ConfigMap or carries
+its hash; and holds that ai-layer's ignoreDifferences on the agentgateway Deployment name env entries only, so the
+annotation syncs. With the value set to `000000000000` it fails three checks and prints
+`Bump it: set checksum/agentgateway-config to 7b5736c88625 in gitops/ai-layer/agentgateway.yaml`.
+
+**Live check (run 17521), nothing changed on either cluster.** Both clusters run staging `92dfea31` with ai-layer
+Synced and Healthy, and both agentgateway-config ConfigMaps carry the committed string (sha256 `7b5736c8...`, the
+annotation's value). Neither pod template carries a checksum: community's carries only
+`kubectl.kubernetes.io/restartedAt: 2026-11-05T04:55:23+01:00`, #480's restart, and private's carries none; the
+pods started at 03:55:23 UTC (community) and 02:23:53 UTC (private) and each main container logs one `loaded
+config` line and no `Failed to reload`. That ai-layer reads Synced beside community's restartedAt annotation shows an
+annotation another manager adds to the pod template does not put the Deployment OutOfSync. A `--dry-run=server`
+merge patch adding `checksum/agentgateway-config: "7b5736c88625"` to the pod template was admitted on community (the
+rendered annotations read both keys; the Deployment's generation stayed 10) and on private was denied by
+`block-argocd-drift` ("This resource is managed by ArgoCD. Change it in Git, not in the cluster."), as it should be
+for the run's principal; generation stayed 7. The change reaches both pods through Git, as guard-proxy's does.
+
+**Not yet run on a cluster.** The annotation itself, once hecaton promotes this run and Argo CD syncs ai-layer: on
+each cluster the pod template gains the annotation, which is a pod template change, so the agentgateway pod rolls
+once (`kubectl --context <ctx> -n agent get deploy agentgateway -o jsonpath='{.spec.template.metadata.annotations}'`
+reads `checksum/agentgateway-config`, and `kubectl --context <ctx> -n agent get pods -l
+app.kubernetes.io/name=agentgateway` shows a pod younger than the sync). Then the issue's own check: a commit that
+edits the static section of agentgateway-config and bumps the annotation to the value the test prints, and after
+Argo CD syncs it the pod has rolled again and `kubectl --context <ctx> -n agent logs deploy/agentgateway -c
+agentgateway` shows one `loaded config` line and no `Failed to reload`. The next run on #878 runs them.
