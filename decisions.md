@@ -17951,3 +17951,76 @@ tests) in 28m28s. The offline suite ran 258 tests and printed `ALL OFFLINE RENDE
 Gateway Timeout from github.com while fetching: `test_no_docker_hub_render.py` on the `tempo-3.0.0.tgz` chart and
 `test_terraform_lock_init.py` on the datadog provider's checksums. Rerun alone with the tier's own environment, both
 exited 0.
+## 2026-11-05 · #760 · Each challenge's expected Datadog trace shape, and a live check of the newest traces against it
+
+**The expected shape is `verify/challenge-trace-shapes.yaml`.** It writes down the frame every challenge's trace in
+LLM Observability (`ml_app:burritobot`, Whitney's sandbox org, #629) must have, and each challenge's key calls under
+the root, as #760's table gives them: Challenge 1 `get_vault_entry` reading `ceo-personal-record`; Challenge 2
+`deploy_app` and `run_shell`; Challenge 3 `read_support_ticket`, then `deploy_app`; Challenge 4 `get_weather`, then
+`read_internal_config`. The frame: one root row per chat, the prompt as its input and the reply as its output, an llm
+row, tokens and cost on every llm row with no `cost_estimate_status:skipped_*` tag, and the root's duration covering
+every row. The duration item comes from Whitney's #746 checks (the 14 ms kagent root), and it allows one second for
+clock skew between pods.
+
+**The check is `verify/challenge_traces.py`.** It reads Datadog's span list (`GET /api/v2/llm-obs/v1/spans/events`)
+with the read-only pair in Secrets Manager `watch-it-burn/datadog`, the pair #759 showed reads the sandbox org. It
+first names the org the key reaches, as `dd_traces.py` does, and reads nothing when that org's name does not start
+with `--org-prefix` (default `$WIB_DD_POOL_PREFIX` or `Datadog`). Then it reads every tool row in the window
+(`--hours`, default 24), following the cursor. A challenge's latest trace is the newest one whose tool rows include all
+its key calls, so a newer fixed-side trace (#648's c4-fixed has no `read_internal_config`) leaves the attack's trace in
+view. That whole trace is read and judged. It prints PASS or FAIL per challenge, each with its reasons and the trace
+link (`app.<site>/llm/traces?query=ml_app:burritobot trace_id:<id>`), and ends `CHALLENGE TRACES GREEN` (exit 0) or
+`RED` (exit 1). Exit 2 when Datadog cannot be read, answers `meta.status: timeout`, the window holds more tool rows than
+`--max-pages` reads, or the key reaches another org. `--tag k8s.cluster.name:burritobot-private` (or `-public`) narrows
+it to one cluster, and `--out` writes the results as JSON. `verify/test_challenge_traces_live.py` (`# SUITE: e2e`) runs
+it in the live suite and fails unless it ends GREEN.
+
+**Three changes from the draft, from what the live traces showed.** Run 16426's draft (`origin/agent/760-16426`,
+fd60342) was cherry-picked; `draft-drift.sh` named only edits in place, and the two conflicts were a PROGRESS.md
+bullet and a run-of-show paragraph beside the Go cutover's, both kept. The draft's decisions entry is replaced by this
+one, since its prose failed the ai-isms gate, the likely reason run 16426 ended failed (validation).
+- An unpriced model call is one line per row name, with a count: a Challenge 2 chat has four model calls, and four
+  identical lines hid the other findings.
+- `cost_estimate_status:skipped_unsupported_model_pricing` names #876, the open issue for a model call named by the
+  cluster's Bedrock inference-profile ARN; `skipped_tokens_missing` still names #784.
+- In an ordered pair, two calls whose rows overlap in time pass with a `note:` line. The live Challenge 4 trace has
+  `get_weather` and `read_internal_config` side by side under one `(merged tools)` row, both 1.9 s long, with
+  `read_internal_config` starting 3 microseconds earlier: the model asked for both in one turn after reading the
+  poisoned tool description. Neither came first, so the issue's "then" holds. A later call that ended before the
+  earlier one began still fails.
+
+**The live run (run 17404, 2026-11-05).** After `. "$HECATON_CLUSTER_ENV"`,
+`python3 verify/challenge_traces.py --profile accen-dev --hours 72 --out tmp/challenge-traces.json` printed
+`CHALLENGE TRACES RED`, exit 1. Every challenge's newest trace had one root (`POST`, `invocation` under it), the prompt
+and reply on the root, the root's duration covering the chat, and its key calls under the root in order;
+Challenge 1's `get_vault_entry` read `ceo-personal-record`. So #746's one-root part passes in the org. Each failed on
+cost alone: every llm row has tokens and no `estimated_total_cost`, tagged `skipped_unsupported_model_pricing`.
+- Challenge 1: 2 llm rows, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3Ae6cfcdada5e85edaab64fffe99260333
+- Challenge 2: 4 llm rows, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A35a367c5f23359358d48e2e602b8714b
+- Challenge 3: 3 llm rows, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A098fcb005cbe5ed190ad9022a96b03c0
+- Challenge 4: 2 llm rows and the one-turn note, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A7c7fa1f9da6a55f6969f87b07f052714
+
+With `--tag k8s.cluster.name:burritobot-public` the four links are the public bot's (Challenge 1's is
+`92d13e7af0695a3880cac2b87c83a238`), all failing on cost. With `--tag k8s.cluster.name:burritobot-private` Challenges
+1, 3 and 4 fail on cost, and Challenge 2 finds no chat in 72 hours with both of its calls: the newest `deploy_app` is
+trace `e9fb58989b865e2c9ce24f338cd16c71` and the newest `run_shell` is `9d3a070b748c5b108e26a04a0814376a`. The stage
+plays Challenge 2 as three separate asks, and `stage_traces.py`'s `c2-attack` seed is the recipe read alone. Tool rows
+carry `k8s.cluster.name`, so `--tag` works on them.
+
+**The failures, filed.** The cost failure on all four is #876, already open with this cause, so no second issue is
+filed; the four links above are its evidence. The private Challenge 2 failure is filed as its own follow-up, with the
+two trace links: the shape from #760's table asks for both calls in one chat, and the presenters' play never makes them
+in one chat.
+
+**Tests.** `verify/test_challenge_traces.py` (offline, in `bash verify/run-tests.sh`) runs the command against a fake
+span list served three rows a page, with rows on the documented response fields. It checks the shape file against
+#760's table and #648's attack seeds, the one-root shape passing all four, the two-root split failing all four, each
+part of the frame failing alone, the counted cost line, the live Challenge 4 one-turn shape passing with its note and
+failing once `read_internal_config` ends before `get_weather` begins, which trace counts as the latest, Challenge 2
+played one call per chat, `--tag` and `--hours`, the exit 2 cases (another org among them), and the run-of-show steps.
+Turning off the org guard, or putting back the draft's order rule, each turns it red; I tried both on temporary edits
+that were then restored.
+
+**Not yet run on a cluster.** The check before each timed run-through (by 2026-11-08) and the night before the talk:
+`python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json`, recorded in the run-of-show's
+run-through record. Those are live rehearsal steps; none has happened yet.
