@@ -20922,3 +20922,7 @@ so the test holds that page and no other.
   Deployment at 1 of 1 ready, as found, and the test passed again.
 
 **Not yet run on a cluster:** nothing this change needs.
+
+**The suites (run 17706, at `54bcf07e`).** `bash verify/run-e2e-tools.sh` ran 61 checks (the offline suite and 60
+tier tests) in 31m04s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 272
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_service_links.py` among them.
