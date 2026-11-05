@@ -17944,3 +17944,10 @@ earlier the same day.
 is not one of #746's checks; it is proposed as a follow-up.
 
 **#746's checks pass on both clusters**, so the issue's work is done. Nothing is owed on a cluster for it.
+
+**The suites (run 17389, at `87f4d796`).** `bash verify/run-e2e-tools.sh` ran 56 checks (the offline suite and 55 tier
+tests) in 28m28s. The offline suite ran 258 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, and
+`test_trace_shape_e2e.py` printed `All trace shape E2E checks passed.` The tier exited 1 on two checks, both a 504
+Gateway Timeout from github.com while fetching: `test_no_docker_hub_render.py` on the `tempo-3.0.0.tgz` chart and
+`test_terraform_lock_init.py` on the datadog provider's checksums. Rerun alone with the tier's own environment, both
+exited 0.
