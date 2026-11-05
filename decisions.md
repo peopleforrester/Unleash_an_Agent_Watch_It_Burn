@@ -17135,3 +17135,40 @@ about 20 five-token Converse calls, well under 0.05 USD.
 
 **The suites (run 17336, at `d9cd6032`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54
 tier tests) in 28m33s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #555 · Run 17347 ran the live audit-trail check itself: it passes on both KubeCon clusters, nothing to fix
+
+**Context.** #555 asks for `verify/test_tool_audit_live.py` to be run against a live Datadog org, to confirm the
+Datadog Logs search #474 moved it to. Run 16390's draft (`7e05dae` on `origin/agent/555-16390`) recorded a pass, but
+its evidence was escalation 698's attempt on another host, because that run could not read its own cluster
+credentials, and the draft did not reach staging (run 16838 ended failed at validation). Run 17347's session files
+are readable, so this run ran the check itself instead of porting the draft's second-hand result. The draft's
+`decisions.md` append is replaced by this entry.
+
+**Result.** At staging `5151dddf`, `CONTEXT=<ctx> python3 verify/test_tool_audit_live.py` ran under `uv` on mcp
+1.29.1 (the check printed "it is the version the workshop-mcp image pins (1.29.1; found 1.29.1)") against
+watch-it-burn-private (admin profile) and watch-it-burn-community (burn profile), in parallel. Both exited 0 with 36
+PASS lines, no failed check, and the closing line `All live tool-audit checks passed.` The Datadog Logs section on both:
+
+```
+  PASS  the DatadogAgent CR datadog/datadog is readable
+  PASS  datadog-secret holds the api-key and app-key the Agent ships with
+  PASS  Datadog Logs has the call's pre and post lines, once each
+  PASS  the pre line was written before the post line
+  PASS  both carry the identity the caller declared, through agentgateway
+  PASS  both name the tool and the server
+  PASS  both are tagged with the pod and container that wrote them
+```
+
+That holds each of the issue's assumptions: the Agent tags workshop-mcp's lines with its namespace, deployment, pod
+and `kube_container_name:shim`; the search reads the audit line in the shape Datadog stores it; datadog-secret's app
+key can read logs; and the lines were found inside the 300-second window. No assumption failed, so the check and
+the platform are unchanged.
+
+**Loki's leftover PVC.** On watch-it-burn-private, `kubectl -n monitoring get pvc` lists only `storage-tempo-0`, and
+the namespace's StatefulSets are Prometheus and Tempo; on watch-it-burn-community the namespace has no claim. There is
+no Loki claim on either cluster, so nothing was deleted. The probe pod the check starts was gone from `agent` on both
+clusters after the run, so both were left as found.
+
+**Not yet run on a cluster.** Nothing for #555. Attendee clusters run the same check through `bash verify/run-e2e.sh`
+at their own build.
