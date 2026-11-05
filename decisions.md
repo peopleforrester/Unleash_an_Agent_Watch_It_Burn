@@ -20635,3 +20635,8 @@ not a skip, but the pattern cannot tell the two apart. The same line was in runs
 is most likely also why run 17082 failed validation. The label now reads `"an unknown --only id is a usage error"`,
 as its neighbours do; the assertion (`r.returncode == 2`) is unchanged. The gate's own `count()`, run over every
 file this branch changes against base `92dfea31`, finds no added marker in any of the 26.
+
+**The suites (run 17599, at `03c53b93`).** `bash verify/run-e2e-tools.sh` ran 59 checks (the offline suite and 58
+tier tests) in 31m46s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 267
+tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier printed `FALLBACK DECK GREEN`. Run 17547's live
+checks above stand: this change touches only a check's label.
