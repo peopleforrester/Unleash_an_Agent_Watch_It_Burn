@@ -16915,3 +16915,7 @@ issue's work is done.
 
 **Not yet run on a cluster.** Nothing: the change is to the pipeline and its tests, which run from the command line,
 and no cluster reads them.
+
+**The suites (run 17310, at `a243799f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 28m09s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_iam_policy_pipeline.py` and
+`verify/test_iam_policy_structural.py` passed in it.
