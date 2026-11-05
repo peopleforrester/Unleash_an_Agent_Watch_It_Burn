@@ -1,6 +1,6 @@
 # ABOUTME: Render-gate check for the optional prompt-stream display: capture is moderated + default OFF,
-# ABOUTME: and the display page reads the moderated /prompts feed. No cluster needed.
-import importlib.util, pathlib, sys
+# ABOUTME: and the display page reads the moderated /prompts feed and hides masked prompts (#915). No cluster needed.
+import importlib.util, pathlib, re, sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("gp_stream", REPO / "gitops/ai-layer/guard-proxy/proxy.py")
 proxy = importlib.util.module_from_spec(spec); spec.loader.exec_module(proxy)
@@ -16,5 +16,19 @@ check("moderate() truncates long input", len(proxy.moderate("x" * 1000)) <= 280)
 check("recent-prompts buffer is bounded", proxy._prompts.maxlen and proxy._prompts.maxlen <= 100)
 check("display page loads display.js + has a stream", "display.js" in disp_html and "stream" in disp_html)
 check("display.js reads the moderated /prompts feed", '"/prompts"' in disp_js)
+
+# #915: a prompt the feed masked is left off /display whole. The behaviour (display.js run in node against feeds
+# built by moderate()) is test_display_masked_prompts_e2e.py in the tools tier; these hold the pieces offline.
+feed_go = (REPO / "gitops/ai-layer/guard-proxy/internal/feed/feed.go").read_text()
+go_mask = re.search(r'^\s*redacted\s*=\s*"([^"]+)"', feed_go, re.M)
+js_mask = re.search(r'var MASK = "([^"]+)";', disp_js)
+check("feed.go still names its mask (redacted = \"...\")", go_mask is not None)
+check("display.js names the mask it hides (var MASK = \"...\";)", js_mask is not None)
+py_mask = "[redacted]" if "[redacted]" in proxy.moderate("Go fuck yourself.") else None
+check("display.js hides the mask both guard-proxies write",
+      js_mask is not None and go_mask is not None and js_mask.group(1) == go_mask.group(1) == py_mask)
+check("display.js matches the mask in any case", "String(p).toLowerCase().indexOf(MASK) === -1" in disp_js)
+check("display.js filters the feed before it renders a row",
+      re.search(r"\(data\.prompts \|\| \[\]\)\.filter\(shown\)[^;]*\.forEach\(", disp_js) is not None)
 if failures: print(f"\nFAILED: {len(failures)}"); sys.exit(1)
 print("\nAll prompt-stream checks passed.")

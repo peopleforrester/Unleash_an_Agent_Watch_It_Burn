@@ -1187,8 +1187,10 @@ is merely slow rather than rebuilding:
   ```
 
   Each seed is its own session, `wib-stage-<seed>-<UTC minute>`, sent without the
-  probe marker so the trace reads as the prompt shown (the nine prompts do show in
-  the private bot's column of the prompt wall, the PII masked to `[redacted]`). The
+  probe marker so the trace reads as the prompt shown (the prompts show in the
+  private bot's column of the prompt wall, except the PII one: the feed masks it to
+  `[redacted]`, and a masked prompt is left off `/display` (#915) and, with
+  prompts-agenticburn#15, off the wall). The
   PII prompt is sent only after guard-proxy's input stages say they refuse it. It
   waits until every trace in LLM Observability carries the tool spans the stage
   points at (`get_vault_entry`; `run_shell`, the recipe grep; `read_support_ticket`

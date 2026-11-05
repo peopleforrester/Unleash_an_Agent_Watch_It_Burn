@@ -19454,3 +19454,38 @@ RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), the
 and 57 tier tests) in 30m46s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. At the end of the run the live
 `registry` pod on watch-it-burn-private still read 1/2 with the seed in Error after 26 restarts, as expected until
 Argo CD syncs this change; no scratch namespace is left on either cluster.
+
+## 2026-11-05 · #915 · run 17639 · /display leaves off any prompt the feed masked to `[redacted]`
+
+**What changed.** Whitney tested the wall on 2026-11-05 with a cuss word, and it showed "Go [redacted] yourself." In
+context only one word fits, so the mask said the word anyway. `gitops/ai-layer/web/display.js` now drops every
+`/prompts` entry whose text contains `[redacted]`, in any case, before it renders a row; the rest still go up newest
+first. The `[REDACTED]` case is matched too, so a visitor who types the mask in capitals gets the same treatment.
+Only the page changes. guard-proxy is not touched: `moderate()` (proxy.py) and `internal/feed/feed.go` still mask
+the feed copy, `conformance/test_prompt_feed.py` is unchanged, the prompt still goes to the bot as typed (the feed
+copy is the only one masked, feed.go's comment and proxy.py's #646 comment say so), and `/prompts` still carries
+the masked text. This supersedes the 2026-10-28 planning call's "the wall redacts the display"; the planning note
+now says so, and the run-of-show's stage-traces step no longer says the PII seed shows masked. The same mask covers
+e-mails, card and phone numbers and street addresses, so those prompts stay off the projector too, which fits slide
+7's privacy warning. The wall itself is peopleforrester/prompts-agenticburn#15.
+
+**Tests.** `verify/test_display_masked_prompts_e2e.py` (tools tier, needs node) runs the real `display.js` in a node
+vm through `verify/display-feed-harness.js`, a stub DOM and a stub fetch, on feeds whose entries are what the
+pinned proxy.py's `moderate()` makes of a cuss word, a block-listed term, an e-mail, a card number and a street
+address. Each masked entry is absent while the clean prompts around it still show, newest first; `[REDACTED]` and
+`[Redacted]` are absent; clean prompts, including the bare word "redacted", all show; a feed of only masked prompts
+shows an empty stream, not the off notice; streaming off still shows the off notice. On the old `display.js` it
+fails 13 checks. Offline, `verify/test_stream.py` checks that the mask literal in `display.js` is the one feed.go
+and proxy.py write, that it is matched case-blind, and that the feed is filtered before any row is rendered.
+
+**Live, before the change (run 17639, read only).** `https://attackme.burritobot.co/display` and
+`https://burritobot-private.burritobot.co/display` both answer 200, both `/prompts` read `"enabled": true`, and the
+served `display.js` on both is the old one (no `MASK`). The public feed was empty; the private one carried probe
+and stage prompts with no mask in them.
+
+**Not yet run on a cluster.** After hecaton promotes this run and Argo CD syncs the console's ConfigMap: on
+watch-it-burn-community, `curl -s https://attackme.burritobot.co/display.js | grep -c 'var MASK = "\[redacted\]"'`
+prints 1; then a chat with a cuss word (and one with a made-up e-mail) shows in `/prompts` masked, does not appear
+on `https://attackme.burritobot.co/display`, a clean chat sent after it does, and the bot answers all three. The
+same on `https://burritobot-private.burritobot.co/display` on watch-it-burn-private. #917, #921 and #924 change the
+same page; whichever lands later keeps the `.filter(shown)` step ahead of the render.
