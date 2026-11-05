@@ -20640,3 +20640,32 @@ file this branch changes against base `92dfea31`, finds no added marker in any o
 tier tests) in 31m46s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 267
 tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`; the tier printed `FALLBACK DECK GREEN`. Run 17547's live
 checks above stand: this change touches only a check's label.
+
+## 2026-11-05 · #452 · Runs 17627 and 17686: run 17599's draft ported, with no change of its own
+
+Run 17599 reported done at `03c53b93` and `6cb4e345` on branch `agent/452-17547`, but nothing it committed reached
+staging, and the issue names no gate that stopped it. `bash verify/prior-drafts.sh 452 origin/staging` printed START
+from `origin/agent/452-17547`, CLEAN: staging had not touched any of its 26 paths since its base `92dfea31`, which is
+this run's base too. Its nine commits are cherry-picked unchanged, so the design and every entry above for #452
+stand. Before the suites, run 17627 put the change through the gates it can run itself: the skip-markers gate's own
+`count()` over every changed file finds an added `exit 2` only in decisions.md, which is not a test file and so not
+read; `verify/prose_gate.py` passed on the 6 public-prose files; and the links gate's own `links.check()` with the
+pinned lychee finds 5 broken links at the base and the same 5 at the candidate, none added.
+
+**Why run 17627 did not land.** Its first full `bash verify/run-e2e-tools.sh` went red only on
+`test_e2e_tools_tier.py`: the fixture envs carried no TMPDIR, so the runner's `mktemp` fell back to `/tmp`, and that
+host's `/tmp` was an unlinked directory (`stat` showed `Links: 0`). Run 17627 gave the three fixture envs their own
+TMPDIR, and the suite went green. Staging landed the same fix meanwhile, in fa53301d (#775) and be97ab92 (#909), so
+hecaton's rebase hit an edit-edit conflict on that file and failed the run. Run 17686 drops run 17627's copy of the
+fix and keeps staging's. This branch now changes no path the draft did not, and a trial rebase of it onto
+origin/staging applied with no conflict.
+
+**Live, on watch-it-burn-community on 2026-11-05 (run 17627).**
+- `CONTEXT=watch-it-burn-community python3 verify/test_replay_prompts_live.py` printed
+  `DONE: 1 of 1 delivered to https://attackme.agenticburn.com/chat` and `All live replay checks passed.`
+- The Night Before's replay, `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1`,
+  printed `ok` on all five lines and `DONE: 5 of 5 delivered to https://attackme.burritobot.co/chat`, about $0.025
+  of Bedrock. Segment 1 deploys nothing, so the cluster was left as found apart from the cost counter.
+- `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 13 files in place`.
+
+**Not yet run on a cluster:** nothing this change needs.
