@@ -20669,3 +20669,9 @@ origin/staging applied with no conflict.
 - `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 13 files in place`.
 
 **Not yet run on a cluster:** nothing this change needs.
+
+**The suites (run 17686).** Run on this branch rebased onto origin/staging at `93a5f59b`, the state hecaton
+promotes, in a scratch worktree: `bash verify/run-e2e-tools.sh` ran 61 checks (the offline suite and 60 tier tests)
+in 30m48s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 270 tests and
+printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_replay_prompts.py` (`All recorded-fallback checks
+passed.`) and staging's `test_e2e_tools_tier.py` among them; the tier printed `FALLBACK DECK GREEN`.
