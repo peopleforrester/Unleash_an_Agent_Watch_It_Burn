@@ -20231,3 +20231,6 @@ Before promotion staging moved to `9506e37f` (#910's TMPDIR take-up and terminal
 branch was rebased again, with no conflict. The hashes this entry names for #906's own commits are the branch's as
 of `cb3367d2` and change at each rebase; the commit subjects name them for good. The run-of-show now names #906's
 deploy_app fix by issue rather than by hash.
+On that base, `bash verify/run-tests.sh` at `dab7e25a` printed `267 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`
+and `exit=0`, and `bash verify/run-e2e-tools.sh` printed `59 checks ran (the offline suite and 58 tier tests) in
+30m01s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
