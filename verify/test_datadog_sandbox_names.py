@@ -113,7 +113,8 @@ for path in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yam
             c = d["spec"]["template"]["spec"]["containers"][0]
             env = {e["name"]: e.get("value", "") for e in c.get("env", [])}
             pods[d["metadata"]["name"]] = (d["spec"]["template"]["metadata"].get("labels") or {}, env)
-check("the AI layer's workloads were found (10 Deployments and the workshop-agent)", len(pods) == 11, sorted(pods))
+check("the AI layer's workloads were found (11 Deployments, egress-proxy since #861, and the workshop-agent)",
+      len(pods) == 12, sorted(pods))
 for name, (labels, env) in sorted(pods.items()):
     svc = labels.get("tags.datadoghq.com/service", "")
     otel = env.get("OTEL_SERVICE_NAME")

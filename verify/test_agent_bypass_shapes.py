@@ -76,7 +76,10 @@ def selectors(np: dict) -> list[dict]:
     s = np.get("spec") or {}
     peers = [p for rule in (s.get("ingress") or []) for p in rule.get("from") or []]
     peers += [p for rule in (s.get("egress") or []) for p in rule.get("to") or []]
-    return [s.get("podSelector") or {}] + [p["podSelector"] for p in peers if "podSelector" in p]
+    # A peer whose podSelector sits beside a namespaceSelector names pods in another namespace (kube-dns in
+    # kube-system, #861), not a label an agent-namespace pod could wear, so it is not one egressLabels must list.
+    return [s.get("podSelector") or {}] + [p["podSelector"] for p in peers
+                                           if "podSelector" in p and "namespaceSelector" not in p]
 
 
 nps = network_policies()

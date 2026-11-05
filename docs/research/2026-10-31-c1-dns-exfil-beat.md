@@ -91,6 +91,47 @@ stage 1 cluster, egress open, on the bare burn profile, which gains no Istio and
 attendee and admin clusters, which run Istio ambient, so B is built once, on the mesh. A later breakout profile
 that wants the full fix on its community cluster makes that choice in its own issue.
 
+## As built: option B over floor C (#861)
+
+The #724 decision (question 1009) chose B over floor C. #861 carried its four build items, and this is what was
+built for them. Nothing in it uses the mesh.
+
+- **The proxy.** `egress-proxy` runs in `agent` from `gitops/ai-layer/egress_proxy.py`, a standard-library CONNECT
+  proxy on the pinned workshop-mcp image. It opens a tunnel only to a hostname on `ALLOWED_HOSTS` and port 443, and
+  it refuses any other name before it looks the name up. Each decision is one JSON line in its log.
+  `agent-allow-egress-proxy` admits this pod alone to 443 and to kube-dns.
+- **The weather feed (item 2).** `ALLOWED_HOSTS` is `geocoding-api.open-meteo.com` and `api.open-meteo.com`, the
+  two hosts `weather_feed.py` calls. The feed sets `HTTPS_PROXY`, and `agent-allow-weather-feed-egress` now points
+  it at the proxy on 3128 instead of 443 to anywhere. No pod in `agent` but the proxy has a direct path out on 443,
+  in the stage 2 file and in the fix (item 1).
+- **The locked resolver (item 1).** `agent-dns` is CoreDNS in `agent` (`gitops/agent-dns`). It answers
+  `cluster.local` and `bedrock-runtime.us-west-2.amazonaws.com` through kube-dns, and sends every other name to the
+  VPC resolver at 169.254.169.253. The Kyverno MutatingPolicy `agent-dns-resolver` points every new `agent` pod at
+  it (nameserver 172.20.0.53), except agent-dns and egress-proxy, whose labels are on the egressLabels list.
+  Stage 2's `agent-allow-dns` still admits 53 to kube-system and to the VPC resolver, so stage 2b leaks. The fix,
+  `c1-dns-lock.yaml` in `challenge-fixes`, replaces that policy: only agent-dns may reach a DNS server, and only
+  kube-dns. Every other name then fails inside the cluster, and no other pod can send a query anywhere.
+- **Bedrock (item 3).** Bedrock keeps the in-VPC `10.0.0.0/16:443` allow and does not go through the proxy. That
+  CIDR reaches no public host, and its PrivateLink endpoint is the VPC's only interface endpoint, so the resolver
+  needs that one AWS name. Routing every model call through the proxy would add a hop and a failure point to each
+  turn and close no path. The Pod Identity allow at `169.254.170.23:80` stays.
+- **Istio 1.30.4 (item 4).** The 1.30 documentation has no ambient egress page. The page was added on 2026-09-17
+  and first ships with the 1.31 docs. The 1.30 waypoint page does document binding a `ServiceEntry` to a waypoint
+  through `istio.io/use-waypoint`. The private cluster has no Gateway API CRDs, which a waypoint needs, and the
+  burn profile has no Istio at all (#860). So the proxy is a plain Deployment, and the pin does not have to support
+  the pattern.
+- **Profiles.** `agent-dns` is listed on attendee, admin, full and local-inference. The admin profile's armed set
+  (`policies/network-policies`) is the fixed state. The KubeCon and burn profiles do not list it, so the fix is not
+  for those clusters, and applying `c1-dns-lock.yaml` there would cut every lookup. The proxy is part of ai-layer
+  and runs on every profile.
+
+`verify/test_egress_lock.py` holds the stage 2 and fixed sets, the Corefile and the allowlist.
+`verify/test_egress_proxy.py` runs the proxy. `verify/test_agent_dns_mutation.py` runs the mutation through the
+Kyverno CLI, and `verify/test_egress_proxy_e2e.py` runs the weather feed through the proxy against Open-Meteo.
+`verify/test_c1_dns_lock_live.py` builds these pieces in a scratch namespace on a cluster and checks the three
+assertions below. A name that gets an authoritative answer from example.com stands in for the DNS collector,
+which is not built yet (#726).
+
 ## Build pieces and cost
 
 | Piece | Size | Notes |

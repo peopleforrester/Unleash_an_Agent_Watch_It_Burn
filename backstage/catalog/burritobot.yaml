@@ -286,8 +286,8 @@ metadata:
   name: weather-feed
   title: Weather feed
   description: >-
-    Where evil-mcp's get_weather gets a real reading from Open-Meteo. The one pod in the agent namespace
-    allowed out to the internet, so no pod that runs a tool needs that egress.
+    Where evil-mcp's get_weather gets a real reading from Open-Meteo, through egress-proxy, so no pod that
+    runs a tool needs a path to the internet.
   annotations:
     backstage.io/kubernetes-label-selector: app.kubernetes.io/name=weather-feed
     backstage.io/kubernetes-namespace: agent
@@ -297,4 +297,23 @@ spec:
   type: service
   lifecycle: production
   owner: tool-vendor
+  system: burritobot
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: egress-proxy
+  title: Egress proxy
+  description: >-
+    The one way out of the agent namespace on 443 (#861). It opens a tunnel only to a hostname on its allowlist,
+    the two Open-Meteo hosts the weather feed calls, and refuses every other name before it looks it up.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=egress-proxy
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/egress_proxy.py
+  tags: [egress]
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
   system: burritobot

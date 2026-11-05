@@ -1,5 +1,5 @@
 # ABOUTME: Current weather for a named city from Open-Meteo, served in-cluster to C7's get_weather (#642).
-# ABOUTME: The one agent-namespace pod with internet egress, and all it can do is this lookup.
+# ABOUTME: It reaches Open-Meteo through egress-proxy (HTTPS_PROXY, #861), and all it can do is this lookup.
 """weather-feed: GET /current?city=<name> -> the current reading, as JSON.
 
 The agent namespace is default-deny egress once the network layer is on, and Challenge 1 depends on that.

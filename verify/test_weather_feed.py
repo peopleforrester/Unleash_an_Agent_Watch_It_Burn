@@ -1,12 +1,13 @@
 # ABOUTME: Pins the weather feed (#642): C7's get_weather reads real conditions from an in-namespace service,
-# ABOUTME: which is the only agent pod allowed out to the internet, and only the agent's guard keeps that label.
+# ABOUTME: which reaches Open-Meteo through egress-proxy (#861), and the agent cannot mint a pod with its label.
 """Offline checks for #642.
 
 Whitney asked for the weather to be real. The agent namespace is default-deny egress once the network layer
 is on, and C1's lesson depends on that staying true. So one small pod, weather-feed, fetches from Open-Meteo,
-and get_weather asks it in-cluster. Its egress allow is its own NetworkPolicy, shipped with the platform and
-in the C1 fix a student applies, and its label is on the Kyverno list that stops the agent minting a pod
-that borrows that egress.
+and get_weather asks it in-cluster. Since #861 the feed has no direct path out: it sets HTTPS_PROXY and
+egress-proxy opens tunnels only to Open-Meteo's two hosts (verify/test_egress_lock.py holds that list). Its
+NetworkPolicy, shipped with the platform and in the C1 fix a student applies, points it at the proxy, and its
+label is on the Kyverno list that stops the agent minting a pod that wears it.
 """
 from __future__ import annotations
 
@@ -63,12 +64,16 @@ svc = one("Service", "weather-feed")
 check("a weather-feed Service on 8080", svc.get("spec", {}).get("ports", [{}])[0].get("port") == 8080
       and svc.get("spec", {}).get("selector") == LABEL)
 
-print("== only the feed is let out, on 443 ==")
+print("== the feed goes out through egress-proxy, not on 443 itself (#861) ==")
+env = {e["name"]: e.get("value") for e in c.get("env") or []}
+check("the feed sets HTTPS_PROXY to egress-proxy:3128, which urllib reads", env.get("HTTPS_PROXY") == "http://egress-proxy:3128")
 np = yaml.safe_load(NP_FILE.read_text()) if NP_FILE.exists() else {}
 check("the shipped policy exists", bool(np))
 check("it selects only the feed", np.get("spec", {}).get("podSelector", {}).get("matchLabels") == LABEL)
 egress = np.get("spec", {}).get("egress") or []
-check("it allows TCP 443 and nothing else", egress and all(r.get("ports") == [{"protocol": "TCP", "port": 443}] for r in egress))
+check("its one rule is egress-proxy on TCP 3128, with no 443 to anywhere",
+      egress == [{"to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "egress-proxy"}}}],
+                  "ports": [{"protocol": "TCP", "port": 3128}]}], repr(egress))
 fixes = one("ConfigMap", "challenge-fixes").get("data", {}).get("c1-network-policy.yaml", "")
 embedded = [d for d in yaml.safe_load_all(fixes) if d and d["metadata"]["name"] == "agent-allow-weather-feed-egress"]
 check("the C1 fix a student applies carries the same policy, so their lock-down keeps the weather",

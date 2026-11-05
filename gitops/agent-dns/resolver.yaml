@@ -1,0 +1,107 @@
+# ABOUTME: The agent namespace's own resolver (#861, floor C of the #724 decision): CoreDNS that answers the lab's
+# ABOUTME: zones through the cluster DNS and sends every other name down a second, separate path the fix closes.
+#
+# Why a resolver of its own. A NetworkPolicy matches addresses and ports and cannot read a query name, so while an
+# agent pod may reach kube-dns on 53, kube-dns relays any name it is asked for to the internet, and stage 2b of
+# Challenge 1 carries the marketing data out inside one (challenges/c1-exfil-s3/dns-exfil.py). Every pod in `agent`
+# asks this resolver instead (agent-dns-resolver.yaml sets each pod's resolv.conf), and the resolver keeps the two
+# kinds of name on two paths with two addresses, which a NetworkPolicy can tell apart:
+#
+#   cluster.local and bedrock-runtime.us-west-2.amazonaws.com   -> the cluster DNS (kube-dns), as before
+#   every other name                                             -> the VPC resolver, 169.254.169.253
+#
+# Stage 2's policy (c1-network-policy.yaml) still allows UDP and TCP 53 to both, so the second path is open and
+# stage 2b leaks. The fix (c1-dns-lock.yaml, and policies/network-policies on an admin cluster) narrows
+# agent-allow-dns to this resolver alone, and to kube-dns alone: the second path is cut, no other agent pod may
+# reach a DNS server at all, and a name outside the lab's zones gets SERVFAIL without leaving the cluster.
+#
+# The lab zones are the only names an agent pod needs once 443 goes through egress-proxy: in-cluster services, and
+# the Bedrock runtime endpoint, which resolves to the in-VPC PrivateLink ENI (infra/terraform/aws/network/main.tf,
+# aws_vpc_endpoint.bedrock_runtime, private DNS on). That is the one interface endpoint in the VPC. A subdomain of it
+# is answered NXDOMAIN by the VPC's private zone for the endpoint, so nothing under it leaves the VPC. us-west-2 is
+# var.region's default and the region every cluster runs in; a cluster in another region changes this line.
+# egress-proxy resolves its two Open-Meteo names through kube-dns itself, so they are not here.
+#
+# The resolver listens on 1053 and the Service maps 53 to it, so it binds no low port. The
+# Service's ClusterIP is fixed at 172.20.0.53 because a pod's dnsConfig takes an address: 172.20.0.0/16 is the EKS
+# service range every policy here already names (agent-egress-allowlist.yaml), and .53 sits in the low band
+# Kubernetes reserves for static addresses, beside kube-dns's .10, so no dynamic Service can take it first.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-dns
+  namespace: agent
+  labels: { app.kubernetes.io/name: agent-dns }
+data:
+  Corefile: |
+    cluster.local:1053 bedrock-runtime.us-west-2.amazonaws.com:1053 {
+        errors
+        cache 30
+        forward . /etc/resolv.conf
+        reload
+    }
+    .:1053 {
+        errors
+        log
+        forward . 169.254.169.253
+        health :8080
+        ready :8181
+        reload
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-dns
+  namespace: agent
+  labels: { app.kubernetes.io/name: agent-dns }
+spec:
+  # Two, because every pod in the namespace resolves through it: one lost replica must not stop BurritoBot.
+  replicas: 2
+  selector: { matchLabels: { app.kubernetes.io/name: agent-dns } }
+  template:
+    metadata:
+      # A Corefile change reaches the running pods through the mounted ConfigMap, and `reload` applies it.
+      labels: { app.kubernetes.io/name: agent-dns, tags.datadoghq.com/service: burritobot-agent-dns, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+    spec:
+      automountServiceAccountToken: false # forward and cache need no cluster API
+      enableServiceLinks: false
+      # ClusterFirst on purpose: `forward . /etc/resolv.conf` is kube-dns. agent-dns-resolver skips this pod by its
+      # label, so its own resolv.conf never points at itself.
+      dnsPolicy: ClusterFirst
+      containers:
+        - name: coredns
+          image: registry.k8s.io/coredns/coredns:v1.14.7@sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286 # the EKS add-on's version on both clusters, 2026-11-05
+          args: ["-conf", "/etc/coredns/Corefile"]
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+          ports:
+            - { name: dns, containerPort: 1053, protocol: UDP }
+            - { name: dns-tcp, containerPort: 1053, protocol: TCP }
+          readinessProbe: { httpGet: { path: /ready, port: 8181 }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /health, port: 8080 }, periodSeconds: 20, failureThreshold: 5 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            # The image's /coredns carries the cap_net_bind_service file capability, so with ALL dropped and no
+            # new privileges the exec itself fails ("exec /coredns: operation not permitted", found live
+            # 2026-11-05). Upstream's own Deployment adds it back for the same reason.
+            capabilities: { drop: [ALL], add: [NET_BIND_SERVICE] }
+          volumeMounts: [{ name: config, mountPath: /etc/coredns, readOnly: true }]
+      volumes:
+        - name: config
+          configMap: { name: agent-dns }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-dns
+  namespace: agent
+  labels: { app.kubernetes.io/name: agent-dns }
+spec:
+  clusterIP: 172.20.0.53
+  selector: { app.kubernetes.io/name: agent-dns }
+  ports:
+    - { name: dns, port: 53, targetPort: dns, protocol: UDP }
+    - { name: dns-tcp, port: 53, targetPort: dns-tcp, protocol: TCP }

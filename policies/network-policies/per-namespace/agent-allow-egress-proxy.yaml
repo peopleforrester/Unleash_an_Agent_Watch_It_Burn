@@ -1,0 +1,26 @@
+# ABOUTME: Lets egress-proxy, and only it, reach the internet on 443 and the cluster DNS (#861, option B of #724).
+# ABOUTME: It is the one way out of the agent namespace on 443, and it opens a tunnel only to an allowlisted host.
+#
+# A NetworkPolicy cannot name a host, so the rule is TCP 443 to anywhere for this one pod, as the weather feed's was
+# before #861. What keeps it narrow is the pod: gitops/ai-layer/egress_proxy.py opens a CONNECT tunnel only to a name
+# on ALLOWED_HOSTS (the two Open-Meteo hosts weather_feed.py calls) and refuses the rest before it looks a name up.
+# Its DNS goes to kube-dns, not agent-dns, because the Open-Meteo names are not lab zones; the proxy resolves only
+# names it has already allowed. The Kyverno egressLabels list carries its label, so the agent cannot create a pod
+# that wears it. Shipped in both the stage 2 policy and the admin set, so the weather works under either.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-egress-proxy
+  namespace: agent
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: egress-proxy }
+  policyTypes: [Egress]
+  egress:
+    - ports: [{ protocol: TCP, port: 443 }]
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }

@@ -422,6 +422,14 @@ components:
 
   # ---------------------------------------------------------------- this platform only
 
+  - name: agent-dns
+    sister: []
+    status: local
+    apps: [agent-dns.yaml]
+    why: >
+      The agent namespace's own resolver and the Kyverno rule that points agent pods at it, so Challenge 1's DNS
+      lock can confine their lookups to the lab's zones (#861). Attendee, admin and full.
+
   - name: ai-layer-otel
     sister: []
     status: local

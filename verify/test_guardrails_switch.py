@@ -73,8 +73,10 @@ check("kubecon-community is burn plus the Kyverno engine, its two registry polic
       set(community) == set(app_names("burn")) | {"kyverno", "kyverno-registry-policy", "kyverno-breakout",
                                                    "guardrails-switch"},
       str(sorted(set(community) ^ set(app_names("burn")))))
-check("kubecon-private is admin without the two apps that arm egress and KubeArmor, plus the breakout's three",
-      set(private) == (set(app_names("admin")) - {"network-policies", "kubearmor-policies"})
+# agent-dns (#861) is the 2-hour workshop's DNS lock, built for the next event; the KubeCon profiles leave it out.
+check("kubecon-private is admin without the two apps that arm egress and KubeArmor and without agent-dns, "
+      "plus the breakout's three",
+      set(private) == (set(app_names("admin")) - {"network-policies", "kubearmor-policies", "agent-dns"})
       | {"kyverno-breakout", "guardrails-switch", "internal-registry"},
       str(sorted(set(private) ^ set(app_names("admin")))))
 for p in KUBECON_PROFILES:

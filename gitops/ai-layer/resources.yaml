@@ -664,11 +664,12 @@ spec:
   selector: { app: evil-mcp-shim }
   ports: [{ name: mcp, port: 8000, targetPort: mcp }]
 ---
-# The weather feed (#642). get_weather on evil-mcp-shim returns a REAL reading, which it asks for here. This
-# is the only pod in the agent namespace allowed out to the internet (agent-allow-weather-feed-egress, TCP 443),
-# and all it does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps
-# Challenge 1's egress lock-down true for every pod that can run a tool. Its label is on the Kyverno
-# egressLabels list, so the agent cannot mint a pod that borrows this egress.
+# The weather feed (#642). get_weather on evil-mcp-shim returns a REAL reading, which it asks for here. All it
+# does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps Challenge 1's
+# egress lock-down true for every pod that can run a tool. Since #861 it reaches Open-Meteo through egress-proxy
+# (HTTPS_PROXY below), which opens a tunnel only to the two Open-Meteo hostnames, so no pod in the namespace but
+# the proxy has a direct path out on 443. Its label is on the Kyverno egressLabels list, so the agent cannot mint
+# a pod that wears the label agent-allow-weather-feed-egress selects.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -687,6 +688,10 @@ spec:
           image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
           imagePullPolicy: Always
           command: ["python", "/app/weather_feed.py"]
+          # urllib reads HTTPS_PROXY, so both Open-Meteo calls go out as CONNECT tunnels through egress-proxy (#861).
+          # In-cluster names never pass through it: the feed calls nothing in the cluster.
+          env:
+            - { name: HTTPS_PROXY, value: "http://egress-proxy:3128" }
           resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
           ports: [{ name: http, containerPort: 8080 }]
           readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
@@ -702,6 +707,52 @@ metadata:
 spec:
   selector: { app.kubernetes.io/name: weather-feed }
   ports: [{ name: http, port: 8080, targetPort: http }]
+---
+# The forced egress proxy (#861, option B of the #724 decision). Challenge 1's egress policy leaves no direct path
+# from namespace `agent` to the internet; this pod is the one way out on 443, and it opens a CONNECT tunnel only to
+# a hostname on ALLOWED_HOSTS. The list is the two Open-Meteo names weather_feed.py calls, so C7's get_weather keeps
+# working under the lock and nothing else leaves. It decides on the name before any lookup, so a refused name is
+# never resolved. agent-allow-egress-proxy lets this pod alone reach 443 and the cluster DNS; its label is on the
+# Kyverno egressLabels list, so the agent cannot mint a pod that borrows that egress. Not built on the mesh: the
+# burn profile has no Istio (#860) and the 1.30 pin documents no ambient egress gateway (decisions.md, #861).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-proxy
+  labels: { app.kubernetes.io/name: egress-proxy }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: egress-proxy } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: egress-proxy, tags.datadoghq.com/service: burritobot-egress-proxy, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
+    spec:
+      automountServiceAccountToken: false # it needs no cluster API, so it holds no token
+      enableServiceLinks: false # no injected EGRESS_PROXY_* variables beside its own settings
+      containers:
+        - name: proxy
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
+          imagePullPolicy: Always
+          command: ["python", "/app/egress_proxy.py"]
+          env:
+            # Exactly the hosts weather_feed.py's GEOCODE and FORECAST URLs name (verify/test_egress_lock.py).
+            - { name: ALLOWED_HOSTS, value: "geocoding-api.open-meteo.com,api.open-meteo.com" }
+            - { name: ALLOWED_PORTS, value: "443" }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+          ports: [{ name: proxy, containerPort: 3128 }]
+          readinessProbe: { httpGet: { path: /healthz, port: proxy }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: proxy }, periodSeconds: 20 }
+          volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+      volumes:
+        - name: src
+          configMap: { name: egress-proxy-src }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-proxy
+spec:
+  selector: { app.kubernetes.io/name: egress-proxy }
+  ports: [{ name: proxy, port: 3128, targetPort: proxy }]
 ---
 # The fake ticket site (#640). C6's ticket is fetched from here by workshop-mcp's read_support_ticket, so the
 # attendee names a ticket and never sees the text the bot acts on. It serves fixed tickets from memory and calls
@@ -1052,6 +1103,8 @@ data:
         - to: [{ ipBlock: { cidr: 169.254.170.23/32 } }] # the EKS Pod Identity agent
           ports: [{ protocol: TCP, port: 80 }]
     ---
+    # DNS stays open here: every pod may ask the cluster DNS and the VPC resolver, which relay any name. That is
+    # the door stage 2b uses; c1-dns-lock.yaml replaces this policy to shut it.
     apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy
     metadata:
@@ -1062,6 +1115,10 @@ data:
       policyTypes: [Egress]
       egress:
         - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
+        - to: [{ ipBlock: { cidr: 169.254.169.253/32 } }]  # the VPC resolver, where agent-dns sends non-lab names
           ports:
             - { protocol: UDP, port: 53 }
             - { protocol: TCP, port: 53 }
@@ -1102,8 +1159,9 @@ data:
       egress:
         - to: [{ podSelector: {} }]
     ---
-    # Keeps C7's live weather working once egress is locked down (#642): the weather feed alone may reach
-    # Open-Meteo on 443. It is a fixed lookup service, not a route out for the agent.
+    # Keeps C7's live weather working once egress is locked down (#642, #861): the weather feed goes out through
+    # egress-proxy, which opens a tunnel only to Open-Meteo's two hosts. It is a fixed lookup service, not a route
+    # out for the agent.
     apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy
     metadata:
@@ -1114,7 +1172,51 @@ data:
         matchLabels: { app.kubernetes.io/name: weather-feed }
       policyTypes: [Egress]
       egress:
+        - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: egress-proxy } } }]
+          ports: [{ protocol: TCP, port: 3128 }]
+    ---
+    # The one way out on 443 (#861): egress-proxy alone may reach the internet, and it opens a tunnel only to a
+    # hostname on its allowlist. It resolves those names through the cluster DNS.
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-egress-proxy
+      namespace: agent
+    spec:
+      podSelector:
+        matchLabels: { app.kubernetes.io/name: egress-proxy }
+      policyTypes: [Egress]
+      egress:
         - ports: [{ protocol: TCP, port: 443 }]
+        - to:
+            - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+              podSelector: { matchLabels: { k8s-app: kube-dns } }
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
+  c1-dns-lock.yaml: |
+    # Challenge 1, stage 2b fix: lock DNS to the lab's own resolver (#861).
+    # Apply it on top of c1-network-policy.yaml. It replaces agent-allow-dns: only agent-dns, the resolver every
+    # agent pod asks, may reach a DNS server, and only the cluster DNS. agent-dns answers the lab's names
+    # (cluster.local and the Bedrock endpoint) through it and sends every other name to the VPC resolver, which
+    # this leaves no allow for, so a name carrying data stops inside the cluster. For the attendee, admin and full
+    # clusters, which run agent-dns; on a cluster without it this would cut every lookup.
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-dns
+      namespace: agent
+    spec:
+      podSelector:
+        matchLabels: { app.kubernetes.io/name: agent-dns }
+      policyTypes: [Egress]
+      egress:
+        - to:
+            - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+              podSelector: { matchLabels: { k8s-app: kube-dns } }
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
   c3-kubearmor-policy.yaml: |
     # Challenge 3 fix: block reads of the recipe file inline, in the kernel, for the agent's tool pod.
     apiVersion: security.kubearmor.com/v1

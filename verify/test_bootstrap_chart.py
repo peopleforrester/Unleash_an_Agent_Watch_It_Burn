@@ -221,13 +221,17 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
 # and less loki and alloy, which #474 dropped from attendee, admin and full,
 # plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full,
 # plus workshop-agent, the Agent's own Application, which #707 added to every profile,
-# plus backstage, which #244 brought back from gitops/apps-disabled on attendee, admin and full.
+# plus backstage, which #244 brought back from gitops/apps-disabled on attendee, admin and full,
+# plus agent-dns, the agent namespace's locked resolver, which #861 added to attendee, admin and full.
 WANT = {
-    "attendee": 29, "burn": 19, "admin": 33, "full": 31,
+    "attendee": 30, "burn": 19, "admin": 34, "full": 32,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203, #707 and #244",
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203, #707, #244 and #861",
           len(app_names(profile)) == n)
+for profile in WANT:
+    check(f"{profile} {'does not list' if profile == 'burn' else 'lists'} agent-dns (#861)",
+          ("agent-dns" in app_names(profile)) == (profile != "burn"))
 for profile in WANT:
     check(f"{profile} {'lists' if profile != 'burn' else 'does not list'} backstage (#244)",
           ("backstage" in app_names(profile)) == (profile != "burn"))

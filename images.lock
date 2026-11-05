@@ -137,3 +137,4 @@ quay.io/prometheus-operator/prometheus-config-reloader:v0.94.0 sha256:142a1f11df
 registry.datadoghq.com/agent:7.83.0 sha256:3e915817a38ad113551851015d56a0e50f83fb587bcbbb1ae703dc157b112538 upstream:https://github.com/DataDog/datadog-agent 2026-11-05
 registry.datadoghq.com/cluster-agent:7.83.0 sha256:27c294c40d2503c8cfd2e0a6988a85f2cd5647aa80b8866285e36e111063b41e upstream:https://github.com/DataDog/datadog-agent 2026-11-05
 public.ecr.aws/eks/aws-load-balancer-controller:v2.14.0 sha256:b21255725e67c112fe95888ec4cf38964950ad17800837618c30685cc6856864 upstream:https://github.com/kubernetes-sigs/aws-load-balancer-controller 2026-11-05
+registry.k8s.io/coredns/coredns:v1.14.7@sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286 sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286 upstream:https://github.com/coredns/coredns -
