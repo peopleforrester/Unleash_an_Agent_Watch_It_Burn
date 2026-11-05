@@ -21401,3 +21401,8 @@ describing what you plan") is the lever to try and measure on a cluster; this ru
 **Not yet run on a cluster.** Nothing. The change is to the go-live checklist prose and needs no cluster; the live
 baseline above is this run's measurement of the behavior the checklist now reads correctly, and step b2 is the
 issue's own command, which this run ran green at 19 of 20.
+
+**Suites (runs 17693 and 17741, at `410f8bc9`).** Run 17693 was stopped while its suite ran (a loop stop on its
+repeated short polls of the log, not a failing test), so run 17741 ran it again. `bash verify/run-e2e-tools.sh`
+printed `271 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `60 checks ran (the offline suite and 59 tier
+tests) in 29m58s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
