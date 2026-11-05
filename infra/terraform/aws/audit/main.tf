@@ -75,8 +75,10 @@ variable "event" {
 
 # What Config records. EKS and S3 are the planes the fleet builds on; IAM is where the attendee users and their
 # inline grants live (the cluster root's, #549) and where an out-of-band grant would land; Bedrock is the model the
-# agent calls, through the application inference profiles the cluster root makes; the recorder and the trail are
-# recorded so changing them is on record too. The EKS list is every AWS::EKS:: type in the Config resource
+# agent calls, through the application inference profiles the cluster root makes; the trail is recorded so
+# changing it is on record too. The recorder is recorded as well, but not from this list: AWS::Config::* types are
+# Config's own system types, recorded by default, and PutConfigurationRecorder refuses one in a recording group
+# ("this is a system resource type of AWS Config", the #795 apply of 2026-11-05). The EKS list is every AWS::EKS:: type in the Config resource
 # reference as read on 2026-10-30 (there is no access-entry type). IAM types are global and are recorded by this
 # one regional recorder; record them in one region only.
 variable "recorded_resource_types" {
@@ -99,7 +101,6 @@ variable "recorded_resource_types" {
     "AWS::Bedrock::ApplicationInferenceProfile",
     "AWS::Bedrock::Guardrail",
     "AWS::CloudTrail::Trail",
-    "AWS::Config::ConfigurationRecorder",
   ]
 }
 

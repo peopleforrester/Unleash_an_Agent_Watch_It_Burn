@@ -188,6 +188,9 @@ check(f"the recorder records every type the report requires {required}", set(req
 eks = {"AWS::EKS::Cluster", "AWS::EKS::Nodegroup", "AWS::EKS::Addon", "AWS::EKS::FargateProfile",
        "AWS::EKS::IdentityProviderConfig", "AWS::EKS::PodIdentityAssociation"}
 check("the recorder records all six EKS types", eks <= recorded)
+system = sorted(t for t in recorded if t.startswith("AWS::Config::"))
+check("the recorder's types carry no AWS::Config:: system type, which AWS records by default and refuses in a"
+      " recording group" + (f" (found {system})" if system else ""), types_block is not None and not system)
 check("the recorder records the attendee users and their grants", {"AWS::IAM::User", "AWS::IAM::UserPolicy"} <= recorded)
 check("recording is by inclusion and continuous",
       'use_only = "INCLUSION_BY_RESOURCE_TYPES"' in audit and 'recording_frequency = "CONTINUOUS"' in audit)
