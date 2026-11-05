@@ -21097,3 +21097,7 @@ leaves a copy in the last-applied annotation, is #944.
 watch-it-burn-private watch-it-burn-community` on tanjiro-wsl2 from `infra/terraform/fleet/`, then
 `bash verify/terminal-login-live.sh` on each cluster with neither variable set, each ending `(login from mrf-secrets)`.
 No code changed in this run and no dependency was added.
+
+**The suites (run 17716, at `27ec3092`).** `bash verify/run-e2e-tools.sh` printed `274 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `61 checks ran (the offline suite and
+60 tier tests) in 28m35s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
