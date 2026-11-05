@@ -19751,3 +19751,10 @@ The next run on #908 runs, and records here:
 **The suites (run 17593, at `79f2acfd`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `58 checks ran (the offline suite
 and 57 tier tests) in 31m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**A rerun on the final tree, and a test that did not own its temp directory.** A second `bash verify/run-tests.sh`,
+after the two decisions.md commits, failed one test: `test_e2e_tools_tier.py`, whose #865 fixture runs the tier
+runner with an env of its own and no TMPDIR. By then this host's `/tmp` was an unlinked directory (`stat /tmp`
+showed `Links: 0`, and `touch /tmp/x` failed with "No such file or directory"), so the fixture's `mktemp` fell back
+to `/tmp` and failed. The test passed in the first run, before `/tmp` went. Its three fixture envs now set TMPDIR to
+the fixture's own directory, so the test no longer hangs on the host's `/tmp` (AGENTS.md, Tests own their inputs).

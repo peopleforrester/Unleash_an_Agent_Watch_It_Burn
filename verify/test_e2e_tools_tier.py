@@ -295,6 +295,8 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
 
 
 def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path) -> subprocess.CompletedProcess:
+    # TMPDIR is the fixture's own (#909): run-tests.sh and no-cloud.sh mktemp, and on 2026-11-05 run 17593's host /tmp
+    # was an unlinked directory (stat Links: 0), so a mktemp falling back to /tmp failed and this test with it.
     env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures")}
     return subprocess.run([BASH, str(script)], capture_output=True, text=True, timeout=120, env=env)
