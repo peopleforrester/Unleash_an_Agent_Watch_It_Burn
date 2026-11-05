@@ -3,7 +3,7 @@
 """Why this exists (#265, 2026-11-05).
 
 The live check `bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev` applies Challenge 1's
-six NetworkPolicies, sends the lab's resend prompt and reads the reply. Its exit trap deleted all six. On
+seven NetworkPolicies (six until #861 added the egress proxy's), sends the lab's resend prompt and reads the reply. Its exit trap deleted all of them. On
 watch-it-burn-private the same six names are Argo CD's own (policies/network-policies, the armed admin cluster), so the
 check removed them and the agent's egress stayed open until Argo CD's next reconcile, five minutes later, at
 03:17:06Z. The script now snapshots the policies it is about to overwrite, puts them back on exit, and deletes only
@@ -130,7 +130,7 @@ def run(before: dict, reply: str) -> tuple[int, dict, dict, str, str]:
 
 POLICIES = c1_policies()
 KEYS = {f"NetworkPolicy/{p['metadata'].get('namespace') or 'default'}/{p['metadata']['name']}": p for p in POLICIES}
-check("the ConfigMap carries the six Challenge 1 NetworkPolicies", len(KEYS) == 6 and all(
+check("the ConfigMap carries the seven Challenge 1 NetworkPolicies", len(KEYS) == 7 and all(
     p["kind"] == "NetworkPolicy" for p in POLICIES), str(sorted(KEYS)))
 OTHER = {"NetworkPolicy/agent/workshop-agent-ingress": {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
          "metadata": {"name": "workshop-agent-ingress", "namespace": "agent", "uid": "keep"}, "spec": {}}}
@@ -140,22 +140,22 @@ def same_as_c1(at_chat: dict) -> bool:
     return all(k in at_chat and at_chat[k]["spec"] == p["spec"] for k, p in KEYS.items())
 
 
-print("== an attendee cluster: none of the six is there, so all six are created and then deleted ==")
+print("== an attendee cluster: none of the seven is there, so all seven are created and then deleted ==")
 rc, after, at_chat, calls, out = run(dict(OTHER), "Sorry, the send failed: the command did not complete.")
 check("the check passes on a reply that reports the failure", rc == 0 and "OK" in out, out)
-check("all six C1 policies were in force when the prompt was sent", same_as_c1(at_chat))
-check("none of the six is left behind", not any(k in after for k in KEYS), str(sorted(after)))
+check("all seven C1 policies were in force when the prompt was sent", same_as_c1(at_chat))
+check("none of the seven is left behind", not any(k in after for k in KEYS), str(sorted(after)))
 check("a policy the check never named is untouched", after.get("NetworkPolicy/agent/workshop-agent-ingress") == OTHER[
     "NetworkPolicy/agent/workshop-agent-ingress"])
 check("nothing is replaced, since nothing was there before", " replace " not in calls, calls)
 check("every kubectl call names the context", all(l.startswith("--context ctx-test ") for l in calls.splitlines()), calls)
 
-print("== an armed admin cluster: all six are Argo CD's already, so all six come back as they were ==")
+print("== an armed admin cluster: all seven are Argo CD's already, so all seven come back as they were ==")
 armed = {**OTHER, **{k: server_copy(p, "argo") for k, p in KEYS.items()}}
 rc, after, at_chat, calls, out = run(json.loads(json.dumps(armed)), "I could not resend it, the request was blocked.")
 check("the check passes", rc == 0, out)
 check("the lab's C1 policies were the ones in force when the prompt was sent", same_as_c1(at_chat))
-check("all six are still there afterwards", all(k in after for k in KEYS), str(sorted(after)))
+check("all seven are still there afterwards", all(k in after for k in KEYS), str(sorted(after)))
 check("each is back to the spec, labels and annotations it had", all(
     after[k]["spec"] == armed[k]["spec"] and after[k]["metadata"].get("labels") == armed[k]["metadata"]["labels"]
     and after[k]["metadata"].get("annotations") == armed[k]["metadata"]["annotations"] for k in KEYS if k in after))
@@ -175,7 +175,7 @@ check("the four it created are gone", not any(k in after for k in KEYS if k not 
 print("== a reply that does not report a failure: the check fails, and still restores ==")
 rc, after, at_chat, calls, out = run(json.loads(json.dumps(armed)), "Done! I have resent the marketing intel.")
 check("the check exits non-zero and says FAIL", rc == 1 and "FAIL" in out, out)
-check("all six are back as they were", all(k in after and after[k]["spec"] == armed[k]["spec"] for k in KEYS))
+check("all seven are back as they were", all(k in after and after[k]["spec"] == armed[k]["spec"] for k in KEYS))
 check("its temporary files are removed", "left behind" not in out, out)
 
 if failures:
