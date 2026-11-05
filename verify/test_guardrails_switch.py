@@ -508,6 +508,15 @@ check("every seed row copies an image images.lock pins, by digest, to a burritob
       rows and all(len(r) == 2 and "@sha256:" in r[0] and r[0] in lock and r[1].startswith("burritobot/") for r in rows))
 check("Challenge 3's image is seeded at the path #775 names",
       any(r[1].startswith("burritobot/maintenance-shell:") for r in rows))
+# The seed pushes over localhost and follows each upload's Location. A Location on the public name sent its PATCH
+# out through the console door, which refuses every method but GET, so the seed failed with 405 (#906).
+reg_env = {e["name"]: e.get("value") for c in dep["spec"]["template"]["spec"]["containers"] if c["name"] == "registry"
+           for e in c.get("env") or []}
+check("the registry answers with relative Locations, so the seed's uploads stay on localhost",
+      reg_env.get("REGISTRY_HTTP_RELATIVEURLS") == "true" and "REGISTRY_HTTP_HOST" not in reg_env, str(reg_env))
+check("the seed copies to localhost:5000, never to the public name",
+      "localhost:5000/${dst}" in next(d for d in reg if d["kind"] == "ConfigMap")["data"]["seed.sh"]
+      and "registry.burritobot.co" not in next(d for d in reg if d["kind"] == "ConfigMap")["data"]["seed.sh"])
 np = next(d for d in reg if d["kind"] == "NetworkPolicy")
 check("in-cluster, only the console reaches the registry",
       np["spec"]["ingress"] == [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "agent"}},

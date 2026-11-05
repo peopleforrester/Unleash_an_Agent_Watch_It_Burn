@@ -81,8 +81,11 @@ spec:
           image: ghcr.io/distribution/distribution:3.1.2@sha256:d106962e6fe3fa69c178cec77eeeee5edb626b8df6535b7bd6b95e658a0a5ca9
           ports: [{ name: http, containerPort: 5000 }]
           env:
-            # Location headers name the public host, not the pod, for a client that follows one.
-            - { name: REGISTRY_HTTP_HOST, value: "https://registry.burritobot.co" }
+            # Location headers are relative, so a client follows one on the host it asked (#906). The seed pushes over
+            # localhost, and an upload's PATCH and PUT go to the Location the POST returns. With REGISTRY_HTTP_HOST set
+            # to https://registry.burritobot.co that Location was the public name, whose console door refuses every
+            # method but GET and HEAD, so the seed's first blob failed with 405 and the pod never read Ready.
+            - { name: REGISTRY_HTTP_RELATIVEURLS, value: "true" }
           readinessProbe:
             httpGet: { path: /v2/, port: http }
             periodSeconds: 5
