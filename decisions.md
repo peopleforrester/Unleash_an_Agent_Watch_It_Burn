@@ -16770,3 +16770,7 @@ against the code before it.
 
 **Not yet run on a cluster.** Nothing for #480: the issue's cluster half is this run. Building the pin into GitOps,
 the badge and the bind's Service port and ingress rule, is #117's.
+
+**The suites (run 17293, at `127e5d1f`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 27m07s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The offline suite inside it ran 255 tests and
+printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
