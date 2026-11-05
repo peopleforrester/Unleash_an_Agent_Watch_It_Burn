@@ -16948,3 +16948,7 @@ kyverno-reports-controller pod.
 **Not run.** `bash verify/run-e2e.sh` as a whole: it needs DRIFT_PROFILE and ATTENDEE_CLUSTER naming an attendee
 cluster in the fleet account, and neither of the two clusters is one. The parts this issue names in it, run-all.sh's
 beat-01 and the KubeCon probe's badges, ran above on their own. The kyverno CLI on this host is v1.19.1, not v1.19.0.
+
+**The suites (run 17286, at `6fc3e26`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
+tests) in 27m35s and printed `256 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `ALL E2E TOOLS TIER CHECKS
+GREEN`, exit 0. `verify/test_kyverno_profile_policies.py` is among the 256.
