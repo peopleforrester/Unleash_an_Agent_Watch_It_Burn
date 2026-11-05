@@ -22,12 +22,15 @@ spec:
     targetRevision: "{{ .Values.revision }}"
     path: gitops/ai-layer
     kustomize:
-      # LLM Guard's image (#652): lab-platform's llm-guard:v1, by digest, at the registry the root passes down
-      # (#622). resources.yaml names it by the kustomize image name llm-guard, and Argo CD's kustomize
-      # (`kustomize edit set image`) sets that name here, so a root passing an ECR pull-through cache path gets
-      # the cache's copy. The package is lab-platform's; verify/test_llm_guard_image.py holds the reference.
+      # LLM Guard's image (#719, question 1041): llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5, by digest, the
+      # image that bakes BanTopics' zero-shot model for #455, signed with the workshop key. It is a watch-it-burn
+      # image on ghcr.io and public, so it is named literally and not at the root's imageRegistry, which is
+      # lab-platform's (#622). resources.yaml names it by the kustomize image name llm-guard, and Argo CD's
+      # kustomize (`kustomize edit set image`) sets that name here. When lab-platform#341 posts a signed rebuild,
+      # this entry returns to "llm-guard={{ .Values.imageRegistry }}/llm-guard:<tag>@<digest>" (#652).
+      # verify/test_llm_guard_image.py holds the reference.
       images:
-        - "llm-guard={{ .Values.imageRegistry }}/llm-guard:v1@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
+        - "llm-guard=ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791"
       # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
       # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which
       # verifies against the system roots, accepts it. Unset, these patches are not rendered and 443 stays the TCP
