@@ -19808,3 +19808,23 @@ tier tests) in 34m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Live, re
 at `cb3367d2` and `console-src-2f7h5t7cf7`: `/kubecon` printed `200` on attackme and on the private host, where the
 title was `KubeCon brief: Watch It Burn`, and `/kubecon.html`, `/..data/kubecon.html` and `/.kubecon` printed `404`
 on both. That is the pre-promotion baseline again.
+## 2026-11-05 · #930 · The load-test record names what the 2026-11-05 runs did not cover, for #924's question
+
+#924 asks whether the live system (the SSE fan-out to every viewer, guard-proxy's prompt feed and the spend cap) has
+been load-tested at 500 people. `facilitation/kubecon-na-2026-load-test.md` gains a section, "What these runs did not
+cover", and the answer to #924 is written from it.
+
+- **Covered.** The 500- and 150-session replays of 2026-11-05 loaded guard-proxy's `/chat` limits (150 a minute per
+  cluster refused 1,153 of 1,500 turns, 77 %, at 500), the cost tally ($0.0060 a served turn, so the $25 cap holds
+  about 4,100 served turns) and `PROXY_TIMEOUT`. These figures are the doc's, unchanged.
+- **Not covered.** guard-proxy's `/prompts` feed and the wall's SSE fan-out: every replayed prompt carried
+  `[[wib-probe]]`, which `_is_probe` keeps off the feed, and `load_replay.py` opens no wall page. The section also
+  names two gaps the issue did not: the cap's refusal was never met (`/cost` ended at $4.13 of $25), and only attackme
+  on watch-it-burn-community was loaded.
+- **The wall's mechanism** is read from prompts-agenticburn's `app.py` on GitHub: it polls each cluster's `/prompts`
+  every 3 s (`POLL_INTERVAL`) and streams new prompts to its pages over SSE.
+- **The comment on #924.** A run may not post one, so its exact `gh issue comment` is in run 17651's report under
+  `escalate`. It links the section on `staging`, where the anchor exists once hecaton promotes this run.
+
+No live check: the change is a record of earlier runs, and nothing in it runs on a cluster. No test reads this doc
+(`git grep -n kubecon-na-2026-load-test -- verify scripts` finds none).

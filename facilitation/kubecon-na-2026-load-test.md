@@ -156,3 +156,22 @@ attackme.burritobot.co, from one machine, 500 sessions from the Portland harvest
   lines, so their source is still unknown.
 - What it measured: from one address the per-network nginx limit refused 78 % of turns, which on venue Wi-Fi
   is one bucket for the whole ballroom. That led to Michael's 2026-11-01 ruling on #450 to limit per person.
+
+## What these runs did not cover
+
+The 2026-11-05 runs loaded attackme's `/chat` and what stands in front of the model: guard-proxy's rate limits, its
+cost tally and `PROXY_TIMEOUT`. They did not load the room's prompt feed or the wall (#924 asks about both):
+
+- **guard-proxy's `/prompts` feed under load.** Every replayed prompt carried `[[wib-probe]]`, and guard-proxy keeps a
+  probe-marked prompt off the feed (`_is_probe`, proxy.py). No replayed prompt reached `/prompts`, so how the feed
+  holds up at hundreds of prompts a minute was not measured.
+- **The wall's SSE fan-out to many viewers.** The wall at `prompts.burritobot.co` (prompts-agenticburn) polls each
+  cluster's `/prompts` every 3 s and streams new prompts to every open page over SSE. With no replayed prompt on the
+  feed it had nothing new to stream, and `load_replay.py` opens no wall page, so the stream to a room of phones and
+  the projector was not loaded at all.
+- **The cost cap's refusal.** The runs measured the cap's headroom, $0.0060 a served turn against $25, but `/cost`
+  ended at $4.13, so the refusal guard-proxy sends once the cap is reached was never met under load.
+- **The admin cluster.** Only attackme, on watch-it-burn-community, was loaded; burritobot-private was not.
+
+A run that loads the feed and the wall sends prompts without the marker, which puts them on the live wall, and opens
+many wall pages at once. No such run is on record.
