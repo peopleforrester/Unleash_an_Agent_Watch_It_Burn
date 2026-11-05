@@ -19876,3 +19876,7 @@ private one.
 `curl -s https://attackme.burritobot.co/display.js | grep -c 'var CARD_INTERVAL_MS = 1500;'` prints 1, and with
 `/display` open, a handful of chats sent within a second show in `+N more` and then as one card, the last one sent.
 The same on `https://burritobot-private.burritobot.co/display`.
+
+**The suites (run 17659, at `f789eb74`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `60 checks ran (the offline suite
+and 59 tier tests) in 31m12s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new tier test is the 59th.
