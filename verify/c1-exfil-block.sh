@@ -10,12 +10,47 @@ HOST="${1:?usage: $0 <host> <kube-context> [aws-profile]}"; CTX="${2:?}"; PROFIL
 URL="https://${HOST}.agenticburn.com"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 kc() { AWS_PROFILE="$PROFILE" kubectl --context "$CTX" "$@"; }
-tmp="$(mktemp -t c1.XXXX.yaml)"; trap 'kc delete -f "$tmp" --ignore-not-found >/dev/null 2>&1 || true; rm -f "$tmp"' EXIT
+# The cluster is left as it was found (#265). An armed admin cluster already runs these six policies under Argo CD
+# (policies/network-policies), and deleting all of them on exit, as this did until 2026-11-05, left the agent's egress
+# open on watch-it-burn-private for the five minutes until Argo CD's next reconcile. So the ones that were there before
+# are snapshot and put back as they were, and only the ones this script created are deleted.
+work="$(mktemp -d -t c1.XXXX)"; tmp="$work/c1.yaml"; prior="$work/prior.json"; fresh="$work/fresh.yaml"
+restore="$work/restore.json"; : >"$fresh"; : >"$restore"
+cleanup() {
+    if [[ -s "$fresh" ]] && ! kc delete -f "$fresh" --ignore-not-found >/dev/null 2>&1; then
+        echo "  WARN  $HOST: could not delete the C1 policies this check created" >&2
+    fi
+    if [[ -s "$restore" ]] && ! kc replace -f "$restore" >/dev/null 2>&1; then
+        echo "  WARN  $HOST: could not put back the policies that were there before; Argo CD restores its own" >&2
+    fi
+    rm -rf "$work"
+}
+trap cleanup EXIT
 python3 - "$HERE/../gitops/ai-layer/resources.yaml" "$tmp" <<'PY'
 import sys, yaml
 for d in yaml.safe_load_all(open(sys.argv[1])):
     if d and d.get("kind") == "ConfigMap" and "c1-network-policy.yaml" in (d.get("data") or {}):
         open(sys.argv[2], "w").write(d["data"]["c1-network-policy.yaml"]); break
+PY
+kc get -f "$tmp" --ignore-not-found -o json >"$prior"
+python3 - "$tmp" "$prior" "$fresh" "$restore" <<'PY'
+import json, sys, yaml
+tmp, prior, fresh, restore = sys.argv[1:]
+raw = open(prior).read().strip()
+d = json.loads(raw) if raw else {}
+items = (d.get("items") or []) if d.get("kind") == "List" else ([d] if d else [])
+key = lambda o: (o["kind"], o["metadata"].get("namespace"), o["metadata"]["name"])
+have = {key(o) for o in items}
+docs = [o for o in yaml.safe_load_all(open(tmp)) if o]
+new = [o for o in docs if key(o) not in have]
+if new:
+    yaml.safe_dump_all(new, open(fresh, "w"))
+for o in items:
+    for k in ("resourceVersion", "uid", "creationTimestamp", "managedFields", "generation", "selfLink"):
+        o["metadata"].pop(k, None)
+    o.pop("status", None)
+if items:
+    json.dump({"apiVersion": "v1", "kind": "List", "items": items}, open(restore, "w"))
 PY
 kc apply -f "$tmp" >/dev/null; sleep 10
 reply="$(curl -s --max-time 150 -X POST "$URL/chat" -H 'Content-Type: application/json' -H "Origin: $URL" \
