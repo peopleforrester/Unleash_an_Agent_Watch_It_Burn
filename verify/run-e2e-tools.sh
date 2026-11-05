@@ -82,9 +82,16 @@ no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl
 # per test process; the tests run one after another, so nothing writes to it concurrently (#572).
 TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
 mkdir -p "${TF_CACHE}"
+# Helm's config, cache and data go to a directory of this run's own (#704). Left at the user's home, helm read a
+# repositories.yaml some other job had added a repo to without its index, and every `--repo` fetch in
+# test_images_lock_render.py failed on "no cached repo found ... cilium-index.yaml".
+HELM_HOME_DIR="${NO_CLOUD_DIR}/helm"
+mkdir -p "${HELM_HOME_DIR}/config" "${HELM_HOME_DIR}/cache" "${HELM_HOME_DIR}/data"
 tier_env=(env -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
     -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
     KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
+    HELM_CONFIG_HOME="${HELM_HOME_DIR}/config" HELM_CACHE_HOME="${HELM_HOME_DIR}/cache"
+    HELM_DATA_HOME="${HELM_HOME_DIR}/data"
     KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
     OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
     AGENTGATEWAY="${TOOLS_BIN}/agentgateway")
