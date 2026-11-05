@@ -17667,6 +17667,21 @@ ACTIVE), from staging `dd3e291`. `verify/prior-drafts.sh 886 origin/staging` pri
 
 **Not yet run on a cluster:** nothing. The committed Kyverno values have now run live and pass.
 
+**The tools tier read the host's Helm repositories (#886, run 17704).** The first `bash verify/run-e2e-tools.sh`
+of this run, at `fdc9d2e`, printed `ALL OFFLINE RENDER-GATE TESTS GREEN` and then 61 checks in 29m48s with six red:
+test_datadog_log_services_render.py, test_enforce_floor.py, test_image_registry_render.py,
+test_images_lock_render.py, test_kubearmor_config_render.py and test_no_docker_hub_render.py. Each `helm pull
+--repo` printed `Error: no cached repo found. (try 'helm repo update'): open
+/var/lib/hecaton/pools/claude-performantpro-8/.cache/helm/repository/cilium-index.yaml`. That pool HOME's
+`.config/helm/repositories.yaml`, written on 2026-10-31, names a `cilium` repository whose index is not cached, and
+the pinned Helm v4.2.1 refuses a `pull --repo` while any configured repository has no index. The same pull with
+`HELM_REPOSITORY_CONFIG` pointing at an empty file succeeded. The tier did not own an input. `run-e2e-tools.sh`
+now gives each tier test `HELM_CONFIG_HOME`, `HELM_CACHE_HOME` and `HELM_DATA_HOME` in a fresh `mktemp -d`
+removed on exit, and unsets `HELM_REPOSITORY_CONFIG`, `HELM_REPOSITORY_CACHE` and `HELM_REGISTRY_CONFIG`.
+`verify/test_e2e_tools_tier.py` holds those seven lines. The pool HOME's file lies outside this clone and was left as
+it is. Run alone with that environment, four of the six passed: 116, 70, 141 and 120 checks, no FAIL. `run-e2e.sh`,
+the by-hand live suite, still uses the caller's Helm home.
+
 ## 2026-11-05 · #648 · Run 17365: the input guard refuses PII live, `seed` stops off the start state, and the seed links outlast the night
 
 **Live, on watch-it-burn-private (accen-dev, us-west-2), at staging `a2c7309`, which Argo CD had synced.** This is

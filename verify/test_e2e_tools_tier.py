@@ -177,6 +177,13 @@ check("run-e2e-tools.sh runs the offline suite, which the gate no longer runs on
 for var in ("CONTEXT", "IAM_PIPELINE_PROFILE", "IAM_PIPELINE_REGION", "AWS_PROFILE"):
     check(f"run-e2e-tools.sh runs each tier test with {var} unset", f"-u {var}" in code)
 check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECONFIG=/dev/null" in code)
+# A repository the host's Helm was given is not a tier input: a stale one failed every `helm pull --repo` (#886).
+check("run-e2e-tools.sh gives Helm a fresh empty home of its own, removed on exit (#886)",
+      'HELM_HOMES="$(mktemp -d)"' in code and '"${HELM_HOMES}"' in code.split("trap ", 1)[-1].split("\n", 1)[0])
+for var in ("HELM_CONFIG_HOME", "HELM_CACHE_HOME", "HELM_DATA_HOME"):
+    check(f"run-e2e-tools.sh points {var} into that home (#886)", f'{var}="${{HELM_HOMES}}/' in code)
+for var in ("HELM_REPOSITORY_CONFIG", "HELM_REPOSITORY_CACHE", "HELM_REGISTRY_CONFIG"):
+    check(f"run-e2e-tools.sh runs each tier test with {var} unset (#886)", f"-u {var}" in code)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
                   ("OTELCOL_CONTRIB", "otelcol-contrib"), ("TTYD", "ttyd"), ("CRANE", "crane"),
                   ("AGENTGATEWAY", "agentgateway")):

@@ -76,7 +76,11 @@ run_one "run-tests.sh (the offline suite)" bash "${SCRIPT_DIR}/run-tests.sh"
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${SCRIPT_DIR}/no-cloud.sh"
 NO_CLOUD_DIR="$(mktemp -d)"
-trap 'rm -rf "${NO_CLOUD_DIR}"' EXIT
+# Helm's config, cache and data homes are a fresh empty directory, so a render reads no repository the host's
+# Helm was given (#886). A `cilium` repository added on 2026-10-31 to the pool HOME's repositories.yaml, with no
+# index cached, failed every `helm pull --repo` with "no cached repo found" and turned six render tests red.
+HELM_HOMES="$(mktemp -d)"
+trap 'rm -rf "${NO_CLOUD_DIR}" "${HELM_HOMES}"' EXIT
 no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl
 # The Terraform provider cache outlives each test, so the ~800 MB aws provider downloads once per checkout, not once
 # per test process; the tests run one after another, so nothing writes to it concurrently (#572).
@@ -84,6 +88,8 @@ TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
 mkdir -p "${TF_CACHE}"
 tier_env=(env -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
     -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
+    -u HELM_REPOSITORY_CONFIG -u HELM_REPOSITORY_CACHE -u HELM_REGISTRY_CONFIG
+    HELM_CONFIG_HOME="${HELM_HOMES}/config" HELM_CACHE_HOME="${HELM_HOMES}/cache" HELM_DATA_HOME="${HELM_HOMES}/data"
     KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
     KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
     OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
