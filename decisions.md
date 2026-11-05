@@ -17842,3 +17842,34 @@ scopes are refused while five read scopes pass the rule.
 **The suites (run 17391, on 065236e).** `bash verify/run-e2e-tools.sh` printed "56 checks ran (the offline suite and
 55 tier tests) in 27m13s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash verify/run-tests.sh`,
 printed "258 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces.py` among them.
+## 2026-11-05 · #603 · The second netcup save holds the nine the first one left, laiyer/llm-guard-api:0.3.16 among them; only the unpushed breakout Joker is unsaved
+
+**What the save did.** Run 17350 escalated the save of the nine rows the 2026-11-04 save had not written. It ran as
+michael on netcup from a clone of staging (`/tmp/wib-603-save.w174wu/repo`) and logged to
+`~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-2026-11-05.log`, which this run read through
+sources. The log lists 79 images and 1 failure. It SAVED the three Docker Hub rows (node:24.22.2-trixie-slim,
+debian:bookworm-slim and laiyer/llm-guard-api:0.3.16, at sha256:bea3efb1...50ba), Argo CD v3.5.7, and the five run-time
+rows (kagent's golang-adk 0.10.1, prometheus-config-reloader v0.94.0, Datadog's agent and cluster-agent 7.83.0, and
+aws-load-balancer-controller v2.14.0). It found every other row already saved (HAVE). It skipped the three not-an-image:
+rows and the digest-less tool-pin build: row, as it should. The one FAIL is the breakout Joker,
+`festival-ops/maintenance-shell:busybox-1.38.0-internal`, which ghcr.io still answers "manifest unknown" for: #775 has
+not pushed it yet. The archive's `manifest.tsv` now has 75 lines, 66 dated 2026-11-04 and 9 dated 2026-11-05. Each
+of the nine new lines names a tarball that `repo-ls` shows in the archive.
+
+**The dates.** That save wrote its dates into the clone's images.lock, which nobody committed. This run copied the
+date onto each staging row whose ref and current digest match a 2026-11-05 manifest line, as run 17350 did for the
+first save. That is all nine rows, laiyer/llm-guard-api:0.3.16 among them. The images.lock header and VERSIONS.lock's
+llm-guard-api note now say the two llm-guard images are saved. Judged with `verify/images_saved.py` against the real
+manifest, 74 of the 75 rows that owe a save are dated and have a line at their current digest. The 75th is the Joker.
+This run cannot hash the tarballs, because sources returns a file as text. `python3 verify/test_images_saved.py`, run
+as michael, does that hashing.
+
+**Live check (run 17393).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_images_lock_live.py` printed "Every image both clusters run has an images.lock row.", exit 0, with 74 pods
+on watch-it-burn-private. It only read; nothing on either cluster changed. `mirror-images.sh check .` (the script read
+through sources, run here with an empty MIRROR_IMAGES_DEST) reported 26 references, 53 declared rows and 1 problem,
+the Joker's "never saved".
+
+**What is left.** The Joker's save waits on #775's push of the `-internal` tag. After that, as michael on netcup, in a
+clone of staging: `~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .`, then copy its one date into
+images.lock and run `python3 verify/test_images_saved.py` there, which should then exit 0.
