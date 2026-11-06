@@ -26340,3 +26340,9 @@ collector was still running and not yet listening when the test's 30 seconds ran
 it with an error. A start now gets `START_BOUND`, 120 seconds, and one still not listening then is stopped and named
 with how long it waited and what it printed on stderr. With the bound set to 0 the check fails with "still not
 listening on <port> after 0 s".
+
+**The suites (run 17911, at `f6939137`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 32m27s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17911/e2e-tools.log`. The two
+runs before it are `e2e-tools.first.log` (stopped after `test_finale_cap.py` failed offline) and
+`e2e-tools.second.log` (offline green, the tier 71 of 72 on the collector start above).
