@@ -26136,3 +26136,8 @@ reads `Block /tmp/burrito-data/config/legacy/`, and `kubectl -n agent exec deplo
 under `/tmp/burrito-data` and `legacy` under `config`, and `Permission denied` on `legacy` itself, so the guardrails
 were on and the folder names the test reads from the repo are the ones the bot has. Nothing was changed on either
 cluster; the `ls` on `legacy` adds one KubeArmor Block alert to the private cluster's log.
+
+**The suites (run 17893, at `53845c01`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `72 checks ran (the offline suite and 71 tier tests) in 32m34s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`; `test_kubecon_c3_recipe_block.py` ended `All /kubecon C3 recipe-block checks passed.` The prose
+gate printed `prose gate: pass`.
