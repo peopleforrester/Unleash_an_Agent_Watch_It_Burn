@@ -24975,3 +24975,7 @@ after that run's cleanup. `https://attackme.burritobot.co/controls` read every g
 before this commit and shows both prompts and the "successfully deployed ... public nginx image" reply, and
 `python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 14 files in place`. No code changed,
 and no dependency was added.
+
+**The suites (run 17883, at `bdb761b2`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `72 checks ran (the offline suite and 71 tier tests) in 30m15s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
