@@ -24258,3 +24258,7 @@ from `infra/terraform/fleet/`, which does the same and pushes nothing new), then
 404, and the tags list above, which should still list `busybox-1.38.0`.
 
 **Not yet run on a cluster.** Nothing: the change is records only. No dependency was added.
+
+**The suites (run 17841, at `967589a4`).** `bash verify/run-e2e-tools.sh` printed `291 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `69 checks ran (the offline suite
+and 68 tier tests) in 34m08s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
