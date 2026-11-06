@@ -25142,3 +25142,9 @@ change it. The test now reads that line to say which limit ended the turn and ke
 hang (under 15s, against the client's 30s). Run against a copy with the scaled PROXY_TIMEOUT set above TURN_TIMEOUT,
 the new check fails, reading "the 2.25s turn deadline (TURN_TIMEOUT) passed", so it still catches a forward limit
 that does not end the turn. This file is the only one changed.
+
+**The suites (run 17905, at `accd6e05`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`301 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `72 checks ran (the offline suite and 71 tier tests) in
+40m35s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `test_952_slide17_decision.py` printed "All #952 slide-17
+decision checks passed." and `test_chat_turn_cancel.py` printed "All /chat turn cancel checks passed." The prose gate
+printed `prose gate: pass`.
