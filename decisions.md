@@ -26820,3 +26820,8 @@ The act's script, as sent:
 ```
 set -euo pipefail; for t in gh railway curl sha256sum; do command -v "$t" >/dev/null || { echo "missing $t"; exit 1; }; done; railway whoami; A=a93679a5ba49accb702feb87e6fcaa65c13480d9; R=repos/peopleforrester/apex-agenticburn; h=$(gh api "$R/commits/main" --jq .sha); [ "$h" = "$A" ] || { echo "apex main is $h, not $A; refusing"; exit 1; }; d=$(mktemp -d); mkdir "$d/scripts"; gh api "$R/contents/routes.map?ref=$A" -H 'Accept: application/vnd.github.raw' >"$d/routes.map"; gh api "$R/contents/scripts/reload-routes.sh?ref=$A" -H 'Accept: application/vnd.github.raw' >"$d/scripts/reload-routes.sh"; cd "$d"; printf '%s  %s\n' 34e68498cf525ad7977561f3759e9488080f12a3596447f955f6759b40634501 routes.map dcd39436c1c86b4ffaff64b39fabfc083dc4930244d17b2c471cfd8d35a8de85 scripts/reload-routes.sh | sha256sum -c; ! grep -q registry-attackme routes.map; bash scripts/reload-routes.sh "$d/routes.map"; for u in https://registry-attackme.burritobot.co/v2/ https://registry-attackme.agenticburn.com/v2/; do printf '%s ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "$u"; done; curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list; echo
 ```
+
+**The suites (run 18021, at `8b6c934f`).** `bash verify/run-e2e-tools.sh` printed `308 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `test_public_images.py` among them, then `73 checks ran (the offline suite and 72 tier tests) in 53m46s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18021/e2e-tools.log`). The prose gate printed
+`prose gate: pass`.
