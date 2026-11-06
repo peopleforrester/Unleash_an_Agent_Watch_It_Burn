@@ -350,26 +350,42 @@ components:
       (hostOverride vllm-qwen3.agent.svc.cluster.local:8000), as a plain Deployment and Service with the
       sister's pod spec, listed by values-local-inference.yaml only. KServe is not required for the route.
     cost:
-      measured: false
+      measured: true
+      # The local-inference profile's cold build on a fresh t3.2xlarge, deploy-full-idp.sh's start to every
+      # Application Healthy (run 17970, 2026-11-06, #704).
+      build_seconds: 1805
+      requests:
+        cpu: 1500m
+        memory: 10Gi
+      limits:
+        cpu: "6"
+        memory: 16Gi
       known: >
-        Measured on the sister, on the same t3.2xlarge node type: requests 4 CPU / 10Gi, limits 6 CPU / 16Gi,
-        memory peak 12.52 GiB with KVCACHE 2 (it OOMKilled at a 10Gi limit). The Qwen3-1.7B weights are baked
-        into ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b, 4.95 GB compressed (read from the registry
-        2026-10-24), so nothing downloads at start, but that pull is the build-time cost nobody has timed here.
-        Measured here on 2026-11-05 (#704, verify/vllm_fit_probe.py), without a cold build of the profile: the
-        manifest's 4 CPU request does not fit beside the platform on one t3.2xlarge. The node has 7910m CPU
-        allocatable; watch-it-burn-private (admin, which is full's list plus two policy-only Applications) already
-        requests 5975m, leaving 1935m, and the scheduler refused the pod with "Insufficient cpu" there and on
-        watch-it-burn-community (3835m free). With the CPU request at 3500m, limits unchanged, on community's
-        t3.2xlarge it went from creation to Ready in 480 s: a 143 s cold pull of the 4947778006-byte image and 335
-        s of model load. cgroup memory.peak was 9.28 GiB once Ready, CPU averaged 1.34 cores over the load, and one
-        5-token completion came back from qwen3-1.7b. Question 1082 (2026-11-05) lowered the manifest's CPU
-        request to 1500m, limits unchanged. With that pod spec, unmodified, on watch-it-burn-private beside the
-        running platform (6045m of 7910m requested before it, 1865m free), the scheduler placed it at once and it
-        went from creation to Ready in 521 s: a 179 s cold pull and 341 s of model load. memory.peak was 8.86 GiB,
-        CPU averaged 1.35 cores, and qwen3-1.7b answered a 5-token completion. That leaves about 365m of CPU
-        requests free on the node. The profile's wall-clock to every Application Healthy is still unmeasured: the
-        build pulls staging, so it waits until the 1500m request is on staging.
+        Timed on 2026-11-06 (#704, hecaton run 17970) on watch-it-burn-attendee-099, a fresh one-node t3.2xlarge
+        cluster built for this and torn down after. CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference
+        started at 18:31:25Z on a node with nothing but EKS's own pods. The script itself returned after 739 s.
+        All 37 Applications other than vllm-qwen3 were Healthy by 1522 s, and vllm-qwen3 joined them at 1805 s,
+        so 38 of 38 were Healthy 30 min 5 s after the start. Without vLLM the same build would have ended at about
+        1522 s, so vLLM adds about 283 s to the wall-clock. Of that, about 164 s came from the workaround below and
+        does not belong to vLLM. The build pulled staging, where the request was still 4 CPU, and on this cold
+        node the 4 CPU pod also stayed Pending with "Insufficient cpu". So once the Deployment existed (18:48:32Z),
+        auto-sync was turned off on lab-bootstrap and vllm-qwen3 and the CPU request was set to 1500m by hand
+        (18:51:16Z). Kyverno's block-argocd-drift policy refused the first attempt at that patch, and the retry
+        is where the 164 s went. From the 1500m pod's creation (18:51:29Z) to Ready (19:01:10Z) took 581 s: a
+        213.5 s cold pull of the image and 365 s of model load. cgroup memory.peak was 8.81 GiB, and the
+        container used 527 CPU-seconds from start to just after Ready, a mean of about 1.44 cores. After that,
+        verify/local-inference-live.py printed PASS: a chat call through agentgateway's :3002/local route got a
+        200 back from qwen3-1.7b. With vLLM running, the node's pods requested 7275m of 7910m allocatable CPU
+        (635m free) and 21564Mi of 30729Mi memory. The rest of the platform requests about 5775m on its own.
+        On the sister, on the same node type, the pod asked 4 CPU / 10Gi with limits 6 CPU / 16Gi and peaked at
+        12.52 GiB with KVCACHE 2 (it OOMKilled at a 10Gi limit). The image,
+        ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b, is 4.95 GB compressed with the Qwen3-1.7B
+        weights baked in, so nothing downloads at start. Earlier probes, without a profile build
+        (verify/vllm_fit_probe.py, 2026-11-05): on watch-it-burn-private (admin) and watch-it-burn-community the
+        scheduler refused the 4 CPU pod with "Insufficient cpu". A 3500m pod on community went from creation to
+        Ready in 480 s (143 s pull, 335 s load, 9.28 GiB peak). The 1500m pod on private, beside the running
+        platform, took 521 s (179 s pull, 341 s load, 8.86 GiB peak). Question 1082 is what set the request to
+        1500m.
 
   - name: kserve
     sister: [kserve, kserve-crd]

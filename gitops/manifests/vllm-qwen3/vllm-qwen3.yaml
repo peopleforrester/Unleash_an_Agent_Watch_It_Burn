@@ -14,10 +14,12 @@
 # the admin build), and a pod at 3500m averaged 1.34 cores from start to Ready. The 6 CPU limit is unchanged, so
 # vLLM still bursts into idle CPU; under contention its guaranteed share is smaller than the sister's.
 #
-# Cost, as known before this platform's own cold build times it: requests 1500m CPU / 10Gi, limits 6 CPU / 16Gi,
-# a measured 12.52 GiB peak on the sister, and an image of 4.95 GB compressed (12 layers, read from the registry
-# 2026-10-24). The weights are baked into the image, so nothing downloads at start, but that pull is the
-# largest single item in this profile's build time.
+# Cost: requests 1500m CPU / 10Gi, limits 6 CPU / 16Gi, and an image of 4.95 GB compressed (12 layers, read from
+# the registry 2026-10-24). The weights are baked into the image, so nothing downloads at start, but that pull is
+# the largest single item in this profile's build time. The profile's cold build on a fresh t3.2xlarge was timed on
+# 2026-11-06 (#704): every Application Healthy in 1805 s, this pod's creation to Ready in 581 s (a 213.5 s pull and
+# 365 s of model load), and an 8.81 GiB memory peak, against 12.52 GiB on the sister. platform-baseline.yaml's
+# vllm entry has the rest.
 #
 # Known gap, deliberate: any pod in the agent namespace can reach this Service directly, without passing
 # guard-proxy or agentgateway, the same class of bypass deny-llm-endpoint-bypass records for the in-VPC

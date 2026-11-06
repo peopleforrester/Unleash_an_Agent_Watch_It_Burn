@@ -194,7 +194,11 @@ def proposal_without_cost(b: dict) -> None:
 
 
 def measured_without_numbers(b: dict) -> None:
-    entry(b, "vllm")["cost"]["measured"] = True
+    # The case owns its input: vllm is measured since #704, so its numbers are taken away here, not assumed absent.
+    cost = entry(b, "vllm")["cost"]
+    cost["measured"] = True
+    cost.pop("build_seconds", None)
+    cost.pop("requests", None)
 
 
 def rejection_without_record(b: dict) -> None:

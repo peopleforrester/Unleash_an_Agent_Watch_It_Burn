@@ -14,8 +14,9 @@
 # measured vLLM at 4 CPU / 10Gi requested on a t3.2xlarge; whether it fits beside this platform on one is what the
 # cold build is for, and platform-baseline.yaml's vllm entry is where its measured cost goes. Measured 2026-11-05
 # (#704): at 4 CPU it does not. The platform requests about 6 of the node's 7.9 allocatable CPUs, so vllm-qwen3
-# stayed Pending. Question 1082 lowered its CPU request to 1500m (limits unchanged), which fits in what is left;
-# the vllm entry has the numbers.
+# stayed Pending. Question 1082 lowered its CPU request to 1500m (limits unchanged), which fits in what is left.
+# The cold build was timed on a fresh t3.2xlarge on 2026-11-06 (#704): every Application Healthy in 1805 s, with
+# 635m of the node's CPU requests left free. The vllm entry has the numbers.
 #
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
