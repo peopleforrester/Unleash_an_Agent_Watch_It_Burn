@@ -50,18 +50,16 @@ What that means on the day:
   again. That costs nothing after a quiet spell: once 300 s have passed since the last heal, the next
   heal is immediate, whatever the count.
 
-**A heal takes one of two paths.** Usually self-heal syncs only the objects that are out of sync. No
-hook runs, and a deleted object is back in about a second. The other path is a full sync, which applies
-every object of the app, wave by wave, with 2 s between waves. A delete gets it only when two things
-hold at once. First, `staging` has moved since the app last synced, even by a commit that changes none
-of its manifests (the app then still reads Synced, so nothing has synced it). Second, the app's last
-comparison is more than 120 s old (`timeout.reconciliation`), so the refresh the delete asks for
-compares with `staging`'s head rather than with the revision it compared last. The periodic resync
-comes 120 to 180 s after the last one, so that window is up to a minute long each time round. On
-2026-11-06 the first heal after a staging commit on watch-it-burn-private came 63 s after the last
-comparison: it was selective, at the new revision, and the policy was back in 2.7 s (#962). This was
-read from Argo CD v3.5.7's controller (`needRefreshAppStatus`, `alreadyAttemptedSync` and
-`evaluateRevisionChanges`). `HEAL_PATH=full` on the drill below waits for that window.
+**A heal takes one of two paths.** Most heals sync only the objects that are out of sync. No hook
+runs, and a deleted object is back in about a second. The other path is a full sync, which applies
+every object of the app, wave by wave, with 2 s between waves. It can happen only when `staging` has
+moved since the app last synced, even by a commit that changes none of its manifests (the app still
+reads Synced, so nothing has synced it). Even then it is not certain. Argo CD v3.5.7 starts a full
+sync only when a comparison with `staging`'s head is the first to see the object missing, and the
+refresh a delete asks for usually compares at the revision the app last compared. So the first heal
+after a staging commit takes either path. On 2026-11-05 three such heals were full syncs (#795). On
+2026-11-06, on watch-it-burn-private, two were selective at the new revision, back in 2.7 s and 2.5 s
+(#962).
 
 Until #898 that full sync was the slow path for `ai-layer`. Its two ordering gates, `kubearmor-gate` and
 `otel-gate`, were PreSync hooks, and a full sync deleted, re-created and ran them before it applied
@@ -71,7 +69,10 @@ inside the 30 s window with as little as 3 s to spare, against 1.2 to 3.1 s for 
 are plain Jobs at sync-wave -1, and everything else in `ai-layer` is at wave 0. On a fresh cluster Argo
 CD holds wave 0 until each gate Job is Complete, so workshop-mcp is still admitted after the KubeArmor
 webhook and guard-proxy after the OTel webhook. A later full sync re-applies the Complete Jobs unchanged,
-which runs no pod, so a heal no longer waits on the gates. A gate runs again only when its Job is
+which runs no pod, so a heal no longer waits on the gates. On 2026-11-06 at 10:03:41Z a full sync of
+`ai-layer` on watch-it-burn-private re-applied both Complete gate Jobs at :46 without starting a pod and
+applied the drill's policy at :48, 7 s in. At 03:47Z that day, under the hooks, the same point came
+24 s in. A gate runs again only when its Job is
 renamed: the name carries a hash of the Job and its script, and `verify/test_ai_layer_gates.py` names
 the new one after an edit. The drill prints which path the heal took. On a full sync it names its PreSync
 Jobs as none, and a Job named there means a hook is back.
@@ -112,10 +113,6 @@ time is drift in itself. The drill then deletes the policy and times how long it
 It passes only if the policy returns within 30 seconds as a new object (a new uid) that carries Argo
 CD's tracking annotation and the spec git has, and if the automated sync that put it back then ends
 `Succeeded`. The policy is back before that sync ends, so the drill waits up to 2 minutes for it.
-With `HEAL_PATH=full` the drill measures the full-sync path. It fails straight away if `staging`
-has not moved since `ai-layer` last synced. Otherwise it waits up to 5 minutes for the app's last
-comparison to pass `timeout.reconciliation`, deletes the policy then, and fails unless a full sync
-that ran no PreSync Job put it back.
 `verify/run-e2e.sh` runs it on every cluster build.
 
 Kyverno's `block-argocd-drift` refuses UPDATE and DELETE on Deployments, ConfigMaps and Services that

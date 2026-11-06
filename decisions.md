@@ -24836,3 +24836,75 @@ No file but this one changed, so no test changed. No dependency was added.
 **Suites (run 17854, at `200d790a`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`292 tests ran`, `ALL
 OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `69 checks ran (the offline suite and 68 tier tests) in 30m11s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #962 · run 17855 · the first heals after two staging commits were selective, 2.7 s and 2.5 s; the gate Jobs held
+
+**Context.** Run 17855 is #962's first dispatch, on staging `69b85238`. `bash verify/prior-drafts.sh 962
+origin/staging` printed NONE. #898's commits reached staging as `5b9530ea` and `60de9d9a` (the issue names their
+pre-promotion SHAs, `3a7baaf7` and `7282b41a`), and `ai-layer` on watch-it-burn-private synced `60de9d9a` at
+05:41:34Z.
+
+**Check 1 (09:28Z).** `kubectl --context watch-it-burn-private -n agent get jobs` printed
+`kubearmor-gate-d92910c4   Complete   1/1   8s   3h47m` and `otel-gate-0353f97d   Complete   1/1   8s   3h47m`.
+`ai-layer` read `Synced Healthy` at `69b85238`. The transition sync left neither Job Failed, so the recovery in
+docs/floor.md was not needed.
+
+**Check 2, first drill (09:29Z).** `ai-layer` had last synced `8673057d` (07:30:07Z), and staging had since moved to
+`69b85238` with no change under `gitops/ai-layer`. `CONTEXT=watch-it-burn-private python3
+verify/test_drift_selfheal_live.py` printed `back after 2.7s` and `healed by a selective self-heal of 1
+resource(s), no hooks run`, then `Self-heal drill passed.`, exit 0. The controller log has `Initiated automated
+sync to '69b85238...'` with `Resources:[...NetworkPolicy platform-console-egress]`, `skipHooks=true`, and `Partial
+sync operation to 69b85238... succeeded` at 09:29:01Z. It did not print the `healed by a full sync to revision
+<rev>, PreSync Jobs run first: none` the issue expected. The heal was at the new revision, and it was selective.
+
+**Why it was selective.** Read from Argo CD v3.5.7's source (`controller/appcontroller.go` and
+`controller/state.go` at the tag). A refresh asked for by an object change runs at comparison level 1
+(CompareWithRecent), at `status.sync.revision`. The periodic resync had already moved that to `69b85238` (every
+120 s plus up to 60 s jitter: argocd-cm on private has `timeout.reconciliation` 120s and the jitter 60s).
+`evaluateRevisionChanges` then sees the synced and compared revisions equal and reports no changes, so
+`alreadyAttemptedSync` compares only the sources. They match, so autoSync takes the self-heal branch, which syncs
+only the out-of-sync resources. A full sync needs a level 2 comparison (against `staging` by name) that sees the
+object missing while `operationState.syncResult.revision` is older. The log showed the delete came 63 s after the
+last comparison (09:27:57Z), inside the 120 s expiry, so it got level 1.
+
+**Check 2, a second drill timed for the full path (10:13Z).** The run's first commit (`947ed106`) made the drill aim at that path:
+`HEAL_PATH=full` waited for staging to move past the last sync and for the comparison to pass 120 s, then deleted.
+Staging moved to `8e00324d` while `ai-layer` had last synced `10193be9`, and at 10:13Z the drill printed `compared
+8e00324d, last synced 10193be9, reconciledAt 2026-11-06T10:11:07Z`, deleted, and then `back after 2.5s` and
+`healed by a selective self-heal of 1 resource(s), no hooks run`. Every check passed but the full-path one. The
+controller log shows why. The delete's first refresh did run at level 2 (`comparison expired ... level (2)`,
+10:13:12Z), but it still read the policy as present and printed `Skipping auto-sync: application status is
+Synced`. The next refresh (`controller refresh requested, level (1)`) saw it missing and healed it selectively at
+`8e00324d`. Timing the delete makes a full sync possible but not certain. A check that passes or fails on that race
+would be broken under the repo's rule on random results, so the run's second commit takes `HEAL_PATH=full` out
+again. The drill's docstring and docs/floor.md now say that the first heal after a staging commit can take
+either path, and why.
+
+**The full path since #898, read from a real full sync.** `10193be9` changed `gitops/ai-layer/workshop-mcp-server.py`,
+so `ai-layer` ran an automated full sync at 10:03:41Z (`skipHooks=false`). It applied the wave -1 objects at
+10:03:44Z, and `job.batch/kubearmor-gate-d92910c4 serverside-applied` and `job.batch/otel-gate-0353f97d
+serverside-applied` at 10:03:46Z. `get pods` still shows only the gate pods from 4h33m earlier, so no gate ran again.
+`networkpolicy.networking.k8s.io/platform-console-egress serverside-applied` came at 10:03:48Z, 7 s into the sync,
+and the sync succeeded at 10:03:54Z. At 03:47Z, under the hooks, the same point came 24 s in. So a full-sync heal
+now has the policy back about 7 s after its sync starts. That is a sync started by a commit, not by the drill, so
+it is the time a full-sync heal would take, not a drill measurement. The other syncs since `60de9d9a` were also full
+syncs started by commits that changed `ai-layer`: `b17fc38b` in 12 s, `6cabaa4b` in 16 s and `8673057d` in 13 s,
+start to finish. Each `syncResult` lists both gate Jobs with no `hookType`.
+
+**Check 3.** `kubectl --context watch-it-burn-private -n agent get pods -l app=workshop-mcp -o
+jsonpath='{.items[*].metadata.annotations.kubearmor-policy}'` printed `enabled` at 09:29Z and again at 10:13Z
+(pod `workshop-mcp-b444f5c8d-btlbr`).
+
+**Left as found.** Each drill deleted only `agent/platform-console-egress`, and Argo CD put it back with git's spec
+and the tracking annotation. At 10:13Z `ai-layer` read `Synced Healthy` at `8e00324d`, and both gate Jobs were
+Complete.
+
+**What changed in the repo.** The drill's `heal_kind` docstring and docs/floor.md said that when staging has moved,
+the next delete starts a full sync. Both now say it can take either path, and give the measurements and the
+post-#898 full-sync timing. `verify/test_drift_selfheal_ops.py` gains the 09:29Z operationState, a selective heal at
+a revision the app had not synced, and checks that it reads as selective. The drill's behaviour is unchanged.
+
+**Not yet run on a cluster.** A drill whose heal is a full sync, printing `healed by a full sync to revision <rev>,
+PreSync Jobs run first: none`, has still not been seen. The drill cannot cause one on demand. When a future run of
+`CONTEXT=watch-it-burn-private python3 verify/test_drift_selfheal_live.py` happens to heal that way, its `back
+after` time is the number to record against the 10:03Z sync's 7 s.

@@ -10,7 +10,6 @@ gates first (back in 27.2 s). The third case is from private at 10:41Z, where a 
 """
 from __future__ import annotations
 
-import datetime
 import importlib.util
 import pathlib
 import sys
@@ -76,9 +75,8 @@ check(f"a sync that started after the policy was re-created is not named as the 
       later.startswith("a sync that cannot be named") and "full sync" not in later)
 check("an operationState with no start time is not named either", drill.heal_kind({}, "2026-11-05T10:41:11Z")
       .startswith("a sync that cannot be named"))
-# watch-it-burn-private, 2026-11-06T09:29:00Z (#962): the first heal after staging moved from 8673057d to 69b85238.
-# The delete came 63 s after the app's last comparison, so its refresh compared at the revision already compared
-# and self-heal synced the one resource, at the new revision, back in 2.7 s.
+# watch-it-burn-private, 2026-11-06T09:29:00Z (#962): the first heal after staging moved from 8673057d to 69b85238,
+# with no change under gitops/ai-layer. Self-heal synced the one resource at the new revision: back in 2.7 s.
 NEW_REV_SELECTIVE = {
     "operation": {"initiatedBy": {"automated": True}, "sync": {
         "autoHealAttemptsCount": 1, "prune": True, "revision": "69b85238158aa9bff01c783d56bc3ad0d0b7ccc7",
@@ -88,55 +86,15 @@ NEW_REV_SELECTIVE = {
                    "resources": [{"kind": "NetworkPolicy", "name": "platform-console-egress", "syncPhase": "Sync"}]},
 }
 nrs = drill.heal_kind(NEW_REV_SELECTIVE, "2026-11-06T09:29:01Z")
-check(f"a heal at a revision the app had not synced still reads as selective when it was ({nrs})",
+check(f"a selective heal at a revision the app had not synced reads as selective, not full ({nrs})",
       nrs == "a selective self-heal of 1 resource(s), no hooks run")
-ANCHORS = ("healed_by = heal_kind(", "SYNC_WAIT_S:\n")
+ANCHORS = ("healed by {heal_kind(", "SYNC_WAIT_S:\n")
 missing = [a for a in ANCHORS if a not in DRILL]
 check(f"verify/test_drift_selfheal_live.py has the lines this check orders ({missing or 'both'} missing)" if missing
       else "verify/test_drift_selfheal_live.py has the lines this check orders", not missing)
 if not missing:
     check("the drill reads the operationState as soon as the policy is back, before it waits for the sync to end",
           DRILL.index(ANCHORS[0]) < DRILL.index(ANCHORS[1]))
-
-print("== HEAL_PATH=full times the delete into a comparison with staging's head (#962) ==")
-check("timeout.reconciliation 120s reads as 120", drill.parse_seconds("120s") == 120)
-check("3m reads as 180", drill.parse_seconds("3m") == 180)
-for bad in ("120", "2m30s", "1h", ""):
-    try:
-        drill.parse_seconds(bad)
-        check(f"{bad!r} is refused, not guessed at", False)
-    except ValueError:
-        check(f"{bad!r} is refused, not guessed at", True)
-
-
-def app_state(compared: str, synced: str, reconciled: str | None) -> dict:
-    status = {"sync": {"revision": compared}, "operationState": {"syncResult": {"revision": synced}}}
-    if reconciled:
-        status["reconciledAt"] = reconciled
-    return {"status": status}
-
-
-NOW = datetime.datetime(2026, 11, 6, 9, 29, 0, tzinfo=datetime.timezone.utc)
-OLD, HEAD = "8673057d63e780a05691c3088d26ba804a2b8dfb", "69b85238158aa9bff01c783d56bc3ad0d0b7ccc7"
-why, wait = drill.full_path_state(app_state(HEAD, OLD, "2026-11-06T09:27:57Z"), 120, NOW)
-check(f"today's 09:29Z delete, 63 s after the last comparison, had {wait:.0f}s to wait (why: {why})",
-      why is None and wait == 120 + drill.EXPIRY_MARGIN_S - 63)
-why, wait = drill.full_path_state(app_state(HEAD, OLD, "2026-11-06T09:26:00Z"), 120, NOW)
-check(f"a comparison 180 s old is past the expiry: delete now (wait {wait})", why is None and wait == 0)
-why, _ = drill.full_path_state(app_state(HEAD, HEAD, "2026-11-06T09:26:00Z"), 120, NOW)
-check(f"with no staging commit since the last sync, the full path is refused by name ({why})",
-      why is not None and "staging has not moved since the app last synced 69b85238" in why)
-why, _ = drill.full_path_state(app_state(HEAD, "", "2026-11-06T09:26:00Z"), 120, NOW)
-check(f"an app that never synced is refused, not drilled ({why})", why is not None and "synced none" in why)
-why, _ = drill.full_path_state(app_state(HEAD, OLD, None), 120, NOW)
-check(f"an app with no reconciledAt is refused ({why})", why is not None and "reconciledAt" in why)
-FULL_ANCHORS = ('if HEAL_PATH == "full":\n        cm = get_json(', 'p = kubectl("-n", ns, "delete"')
-missing_full = [a for a in FULL_ANCHORS if a not in DRILL]
-check(f"the drill has the lines this check orders ({missing_full} missing)" if missing_full
-      else "the drill has the HEAL_PATH=full wait and the delete", not missing_full)
-if not missing_full:
-    check("HEAL_PATH=full waits before the delete, not after it",
-          DRILL.index(FULL_ANCHORS[0]) < DRILL.index(FULL_ANCHORS[1]))
 
 print("== ai-layer runs no hook Job, and docs/floor.md names its wave -1 gate Jobs ==")
 # #898: the gates were PreSync hooks, and every full sync deleted, re-created and ran them before it applied the
@@ -162,8 +120,6 @@ check(f"ai-layer has its wave -1 gate Jobs to name ({', '.join(sorted(gates))})"
 for job in sorted(gates):
     check(f"floor.md names the gate Job `{job}`", f"`{job}`" in FLOOR)
 check("floor.md says a full sync no longer runs the gates (#898)", "full sync" in FLOOR and "#898" in FLOOR)
-check("floor.md says when a heal is a full sync and how the drill aims at it (#962)",
-      "`timeout.reconciliation`" in FLOOR and "`HEAL_PATH=full`" in FLOOR and "#962" in FLOOR)
 
 print()
 if failures:

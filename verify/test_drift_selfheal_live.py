@@ -1,12 +1,7 @@
 # ABOUTME: E2E drill for #205: delete a managed NetworkPolicy on a live cluster and time Argo CD putting it back,
 # ABOUTME: against the window docs/floor.md documents. Needs kubectl and CONTEXT; anything missing is a failure.
 # SUITE: e2e
-"""Usage: CONTEXT=<kube-context> [HEAL_PATH=any|full] python3 verify/test_drift_selfheal_live.py
-
-HEAL_PATH=full aims the delete at the full-sync path (#962): it fails unless staging has moved since the app last
-synced, waits until the app's last comparison is older than argocd-cm's timeout.reconciliation, deletes then, and
-fails unless a full sync put the policy back. The default, any, deletes as soon as the app is quiet and reports
-whichever path healed. heal_kind's docstring says why the moment matters.
+"""Usage: CONTEXT=<kube-context> python3 verify/test_drift_selfheal_live.py
 
 The target is the one managed NetworkPolicy every profile carries (TARGET below). The 30 s window holds only
 when the owning app has not self-healed recently: at one git revision the controller backs each further
@@ -23,7 +18,6 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -37,12 +31,7 @@ GIVE_UP_S = 330        # past the window, keep watching this long so a miss repo
 SYNC_WAIT_S = 120      # after the policy is back, how long the sync that put it back may take to finish
 TRACKING = "argocd.argoproj.io/tracking-id"
 
-EXPIRY_MARGIN_S = 2    # HEAL_PATH=full deletes this long after the comparison expires, for clock skew
-EXPIRY_WAIT_S = 300    # how long HEAL_PATH=full waits for an expired comparison (the resync is 120 s + 60 s jitter)
-HEAL_PATHS = ("any", "full")
-
 CONTEXT = os.environ.get("CONTEXT", "")
-HEAL_PATH = os.environ.get("HEAL_PATH", "any")
 failures: list[str] = []
 
 
@@ -91,19 +80,20 @@ def heal_kind(op: dict, created: str) -> str:
     """Which of Argo CD's two paths put the policy back, read from the operationState seen right after the policy
     returned. `created` is the new policy's creationTimestamp; a sync that started after it did not make it.
 
-    The path is set by the comparison the delete's refresh runs (Argo CD v3.5.7, controller/appcontroller.go
-    needRefreshAppStatus and alreadyAttemptedSync, controller/state.go evaluateRevisionChanges). A refresh that an
-    object change asks for compares at the revision the app last compared (level 1, CompareWithRecent). With no
-    manifest-generate-paths annotation that reads as no new revision, so self-heal syncs only the resources that
-    are out of sync: `operation.sync.resources` lists them and no hook runs, so the policy is back in about a
-    second. Once the app's last comparison is older than argocd-cm's timeout.reconciliation (120 s; the periodic
-    resync comes 0 to 60 s after that), the same refresh compares with staging's head (level 2,
-    CompareWithLatest), and if the app last synced an older commit, even one that leaves its manifests alone, it
-    starts a full sync to the head. So the first heal after a staging commit is a full sync only when the delete
-    lands in that window, which HEAL_PATH=full waits for. On 2026-11-06 on watch-it-burn-private a delete 63 s
-    after the last comparison healed selectively, at the new revision 69b85238, in 2.7 s (#962). While ai-layer's
-    gates (kubearmor-gate, otel-gate) were PreSync hooks, a full sync ran them before the policy was applied: 20.1,
-    25.2 and 27.2 s on 2026-11-05 against the 30 s window (#795). Since #898 they are plain wave -1 Jobs that a full sync re-applies without running, so a full
+    A selective self-heal syncs only the resources that are out of sync: `operation.sync.resources` lists them and
+    no hook runs, so the policy is back in about a second. A full sync applies every resource, wave by wave. Which
+    one a delete gets is set by the first comparison that sees the policy missing (Argo CD v3.5.7,
+    controller/appcontroller.go needRefreshAppStatus, autoSync and alreadyAttemptedSync, controller/state.go
+    evaluateRevisionChanges). A refresh an object change asks for compares at the revision the app last compared,
+    which with no manifest-generate-paths annotation reads as no new revision, so it heals selectively, at
+    staging's head if the periodic resync has already compared it. Only a comparison against staging's head
+    (the periodic one, or the delete's own once the last is over 120 s old) that sees the policy missing, while
+    the app last synced an older commit, starts a full sync. So the first heal after a staging commit can take
+    either path: full on 2026-11-05 (#795), selective at the new revision on 2026-11-06, in 2.7 s at 69b85238 and
+    2.5 s at 8e00324d (#962). At 10:13:12Z that day the delete's own comparison was against staging's head but
+    still read the policy as there, and the next refresh healed it selectively. While ai-layer's gates
+    (kubearmor-gate, otel-gate) were PreSync hooks, a full sync ran them before the policy was applied: 20.1, 25.2
+    and 27.2 s on 2026-11-05 against the 30 s window (#795). Since #898 they are plain wave -1 Jobs that a full sync re-applies without running, so a full
     sync names its PreSync Jobs as none, and one that lists a Job again means a hook is back. A selective
     heal can also be followed at once by a full sync to a revision that just landed (10:41Z that day on
     watch-it-burn-private), which is why the start time is compared and not assumed."""
@@ -118,36 +108,6 @@ def heal_kind(op: dict, created: str) -> str:
         return f"a selective self-heal of {len(sync['resources'])} resource(s), no hooks run"
     rev = (sync.get("revision") or "")[:8] or "unknown"
     return f"a full sync to revision {rev}, PreSync Jobs run first: {', '.join(hooks) or 'none'}"
-
-
-def parse_seconds(value: str) -> int:
-    """argocd-cm's timeout.reconciliation, a Go duration written as whole seconds or minutes (`120s`, `3m`)."""
-    m = re.fullmatch(r"(\d+)(s|m)", value.strip())
-    if not m:
-        raise ValueError(f"timeout.reconciliation {value!r} is not whole seconds or minutes (120s, 3m)")
-    return int(m.group(1)) * (60 if m.group(2) == "m" else 1)
-
-
-def full_path_state(app: dict, expiry_s: int, now: datetime.datetime) -> tuple[str | None, float]:
-    """For HEAL_PATH=full: why a delete now cannot start a full sync (None when it can), and how many seconds to
-    wait first so the delete's refresh compares with staging's head (heal_kind's docstring has the mechanism).
-
-    status.sync.revision is the revision of the app's last comparison, which the periodic resync moves to
-    staging's head; operationState.syncResult.revision is the one it last synced. When they are equal, staging
-    has not moved since the last sync and every heal is selective, so there is nothing to wait for."""
-    status = app.get("status") or {}
-    compared = (status.get("sync") or {}).get("revision") or ""
-    synced = ((status.get("operationState") or {}).get("syncResult") or {}).get("revision") or ""
-    if not compared or not synced:
-        return (f"the app does not say both revisions (compared {compared or 'none'}, synced {synced or 'none'})", 0.0)
-    if compared == synced:
-        return (f"staging has not moved since the app last synced {synced[:8]}, so a heal can only be selective;"
-                " run it again after the next staging commit reaches the app", 0.0)
-    reconciled = status.get("reconciledAt")
-    if not reconciled:
-        return ("the app has no reconciledAt to time the delete against", 0.0)
-    age = (now - datetime.datetime.fromisoformat(reconciled.replace("Z", "+00:00"))).total_seconds()
-    return (None, max(0.0, expiry_s + EXPIRY_MARGIN_S - age))
 
 
 def finish() -> int:
@@ -166,7 +126,6 @@ def main() -> int:
     print("== prerequisites ==")
     check("kubectl is on PATH", shutil.which("kubectl") is not None)
     check("CONTEXT names the cluster to drill", bool(CONTEXT))
-    check(f"HEAL_PATH is one of {', '.join(HEAL_PATHS)} (it is {HEAL_PATH!r})", HEAL_PATH in HEAL_PATHS)
     if failures:
         return finish()
     app = get_json("-n", "argocd", "application", app_name)
@@ -204,31 +163,6 @@ def main() -> int:
     if failures:
         return finish()
 
-    if HEAL_PATH == "full":
-        cm = get_json("-n", "argocd", "configmap", "argocd-cm") or {}
-        raw = (cm.get("data") or {}).get("timeout.reconciliation")
-        check(f"argocd-cm sets timeout.reconciliation, which HEAL_PATH=full times the delete by ({raw})", bool(raw))
-        if failures:
-            return finish()
-        expiry = parse_seconds(raw)
-        print(f"== HEAL_PATH=full: waiting for {app_name}'s last comparison to pass {expiry}s ==")
-        t_exp = time.monotonic()
-        while True:
-            app = get_json("-n", "argocd", "application", app_name) or {}
-            why, wait = full_path_state(app, expiry, datetime.datetime.now(datetime.timezone.utc))
-            if why or wait <= 0 or time.monotonic() - t_exp >= EXPIRY_WAIT_S:
-                break
-            time.sleep(min(wait, 5.0))
-        status = app.get("status") or {}
-        print(f"  compared {((status.get('sync') or {}).get('revision') or '')[:8]}, last synced "
-              f"{(((status.get('operationState') or {}).get('syncResult') or {}).get('revision') or '')[:8]}, "
-              f"reconciledAt {status.get('reconciledAt')}")
-        check(f"staging has moved since {app_name} last synced ({why or 'it has'})", why is None)
-        if why is None:
-            check(f"{app_name}'s last comparison passed {expiry}s within {EXPIRY_WAIT_S}s of waiting", wait <= 0)
-        if failures:
-            return finish()
-
     print(f"== delete {ns}/{name} and time its return ==")
     old_uid = before["metadata"]["uid"]
     prior_start = ((app.get("status") or {}).get("operationState") or {}).get("startedAt")
@@ -252,11 +186,7 @@ def main() -> int:
     print(f"  back after {back:.1f}s")
     healing = ((get_json("-n", "argocd", "application", app_name) or {}).get("status") or {}).get(
         "operationState") or {}
-    healed_by = heal_kind(healing, after["metadata"].get("creationTimestamp") or "")
-    print(f"  healed by {healed_by}")
-    if HEAL_PATH == "full":
-        check(f"HEAL_PATH=full: a full sync put it back and ran no PreSync Job ({healed_by})",
-              healed_by.startswith("a full sync to revision ") and healed_by.endswith("PreSync Jobs run first: none"))
+    print(f"  healed by {heal_kind(healing, after['metadata'].get('creationTimestamp') or '')}")
     check(f"{ns}/{name} came back within the documented {WINDOW_S}s (took {back:.1f}s)", back <= WINDOW_S)
     check("as a new object (a new uid), so it was re-created and not merely never deleted",
           after["metadata"]["uid"] != old_uid)
