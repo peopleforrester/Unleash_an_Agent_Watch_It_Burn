@@ -307,13 +307,15 @@ by_hand = entry("## 2026-11-06 · #954 · run 17828 ·")
 check("run 17828's entry records criterion 3 live with the deployed prompt",
       "**Criterion 3: the 2-hour workshop flow, live with the deployed prompt.**" in by_hand
       and "landed the recipe signature 5 of 5" in by_hand)
-this = entry("## 2026-11-06 · #970 · run 17880 ·")
-check("#970's entry names the live check and the cluster it ran on",
-      "PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_two_hour_flow_live.py" in this)
-check("and records each beat's tally from the live run",
-      all(re.search(rf"`{re.escape(b.key)}` \d of {b.tries}", this) for b in live.BEATS),
-      [b.key for b in live.BEATS if not re.search(rf"`{re.escape(b.key)}` \d of {b.tries}", this)])
-check("and its exit code", re.search(r"exit (0|1)\b", this) is not None)
+for run in ("17880", "17902"):
+    this = entry(f"## 2026-11-06 · #970 · run {run} ·")
+    # The live command is wrapped across two lines in run 17902's entry, so whitespace is folded before the match.
+    flat = " ".join(this.split())
+    check(f"#970's run {run} entry names the live check and the cluster it ran on",
+          "PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_two_hour_flow_live.py" in flat)
+    missing = [b.key for b in live.BEATS if not re.search(rf"`{re.escape(b.key)}` \d of {b.tries}", flat)]
+    check(f"and records each beat's tally from run {run}'s live run", not missing, missing)
+    check(f"and run {run}'s exit code", re.search(r"exit(ed)? (0|1)\b", flat) is not None)
 
 print("== the split ==")
 src = (HERE / "test_two_hour_flow_live.py").read_text(encoding="utf-8")
