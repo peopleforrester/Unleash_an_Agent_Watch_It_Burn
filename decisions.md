@@ -21943,6 +21943,27 @@ checks fail; against one with no rules, four fail.
 **The suites (run 17764, at `cfff4535`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`280 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `6/6 gitattributes union checks passed` among them) and then the tier: `63 checks
 ran (the offline suite and 62 tier tests) in 36m40s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+## 2026-11-06 · #892 · run 17763 · A test holds the PROGRESS.md entries of #759, #905 and #915
+
+**What.** Test review run 17398 found that no test checked #759's criterion "Update PROGRESS.md with a changelog
+entry", and runs 17654 and 17750 reported the same gap on #892 for #915 and #905. New
+`verify/test_progress_entries.py` (offline suite) covers all three issues, four entries in all: #759's of
+2026-11-03 (`verify/dd_traces.py`), #759's live check of 2026-11-05, #905's allergen card and #915's masked prompts on
+`/display`. Each must be one line in [Unreleased], under a ### heading, starting with its dated head, and must hold
+the facts it records (file names, the command, the counts, what is owed, its decisions.md pointer) as literal text.
+
+**Why one file and literals.** It follows `verify/test_progress_764.py` (#808), which holds #764's entry the same
+way: a changelog line is history, so its facts are read as the text it carries, not from the code, which a later
+change moves under its own entry. One table-driven file holds the three issues, since the checks are the same for
+each; #764's test is left as it is. The heads are checked to be distinct, and none is the start of another, so
+`#759:` and `#759, live check:` each find their own line.
+
+**Shown to fail.** The finder runs on PROGRESS.md with each entry removed, moved below [Unreleased], undated, doubled
+and with no heading above it, and finds nothing each time. By hand, with #915's line deleted, #759's live-check line
+undated and `topic-on-3` changed in #905's line, the test printed 23 FAIL lines and exited 1; with PROGRESS.md as
+committed it exits 0 with 72 PASS lines.
+
+**Not yet run on a cluster.** Nothing is owed: the test reads only PROGRESS.md.
 
 No dependency was added.
 ## 2026-11-05 · #921 · run 17641 · guard-proxy's /prompts gains `witches`, each prompt's witch name at its index; the change goes to guard-proxy-agenticburn
