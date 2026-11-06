@@ -78,11 +78,18 @@ if [[ -z "${DD_API_KEY}" || -z "${DD_APP_KEY}" ]]; then
   fi
 fi
 if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
+  # The keys reach kubectl on a file descriptor, never in its argv, where any user on the host reads them in the
+  # process list, and the Secret is written by replace, falling back to create, never by apply, whose
+  # last-applied-configuration annotation would hold a second copy of both keys (#977, as fleet.sh's
+  # datadog_secret_manifest does). A replace also drops the copy an apply by an earlier build left behind.
+  dd_secret_manifest() {
+    kubectl --context "${CONTEXT}" -n "$1" create secret generic datadog-secret \
+      --from-env-file=<(printf 'api-key=%s\napp-key=%s\n' "${DD_API_KEY}" "${DD_APP_KEY}") --dry-run=client -o yaml
+  }
   for ns in datadog monitoring security; do
     kubectl --context "${CONTEXT}" create namespace "${ns}" --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
-    kubectl --context "${CONTEXT}" -n "${ns}" create secret generic datadog-secret \
-      --from-literal=api-key="${DD_API_KEY}" --from-literal=app-key="${DD_APP_KEY}" \
-      --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
+    dd_secret_manifest "${ns}" | kubectl --context "${CONTEXT}" -n "${ns}" replace -f - >/dev/null 2>&1 \
+      || dd_secret_manifest "${ns}" | kubectl --context "${CONTEXT}" -n "${ns}" create -f - >/dev/null
   done
   log "    datadog-secret created in datadog/monitoring/security (datadog agent + falcosidekick read it)"
 else

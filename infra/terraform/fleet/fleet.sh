@@ -968,6 +968,19 @@ reload_datadog_consumers()   { bash "${INFRA_DIR}/reload-datadog-consumers.sh" "
 run_datadog_orgs_verify()    { bash "${INFRA_DIR}/../verify/datadog-orgs.sh" "$1" "$2"; }
 age_minutes()                { local now then; now="$(date +%s)"; then="$(date -d "$1" +%s 2>/dev/null || echo "${now}")"; echo $(( (now - then) / 60 )); }
 
+# The datadog-secret manifest for namespace $1 holding api-key=$2 and app-key=$3, as kubectl's client-side dry run
+# prints it (#977). The keys reach kubectl on a file descriptor, a process substitution the printf builtin writes, so
+# they are never in kubectl's argv, where any user on the host reads them in the process list while kubectl runs: the
+# same as terminal_auth_manifest (#944). The manifest carries no annotation. The caller writes it by replace, falling
+# back to create, and never by apply: a client-side apply stores a second copy of both keys in the
+# kubectl.kubernetes.io/last-applied-configuration annotation, and a server-side apply keeps that copy up to date on a
+# Secret that already carries it. A replace writes the whole object, so it drops a copy an earlier apply left behind.
+datadog_secret_manifest() {
+    local ns="$1" api="$2" app="$3"
+    kubectl -n "${ns}" create secret generic datadog-secret \
+        --from-env-file=<(printf 'api-key=%s\napp-key=%s\n' "${api}" "${app}") --dry-run=client -o yaml 2>/dev/null
+}
+
 # Identity, admin secret and the cluster's own key must match what datadog_keys_for says. Repairs by
 # rewriting datadog-secret, re-running the identity script, and restarting the consumers.
 repair_datadog() {
@@ -997,9 +1010,12 @@ repair_datadog() {
     local ns
     for ns in datadog monitoring security; do
         KUBECONFIG="${kcfg}" kubectl create namespace "${ns}" --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
-        KUBECONFIG="${kcfg}" kubectl -n "${ns}" create secret generic datadog-secret \
-            --from-literal=api-key="${api}" --from-literal=app-key="${app}" \
-            --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
+        # Replace, falling back to create, never apply (#977): see datadog_secret_manifest.
+        { KUBECONFIG="${kcfg}" datadog_secret_manifest "${ns}" "${api}" "${app}" \
+              | KUBECONFIG="${kcfg}" kubectl -n "${ns}" replace -f - >/dev/null 2>&1 \
+          || KUBECONFIG="${kcfg}" datadog_secret_manifest "${ns}" "${api}" "${app}" \
+              | KUBECONFIG="${kcfg}" kubectl -n "${ns}" create -f - >/dev/null 2>&1; } \
+            || log "  ${name}: could not write datadog-secret in ${ns}"
     done
     local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
     KUBECONFIG="${kcfg}" CONTEXT="${ctx}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" WITB_PUBLIC_HOST="${want_host}" \

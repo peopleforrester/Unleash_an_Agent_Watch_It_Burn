@@ -34,10 +34,15 @@ case "\$*" in
 esac
 exit 0
 S
-# kubectl answers from files the test controls; every mutation is recorded.
+# kubectl answers from files the test controls; every mutation is recorded. Keys handed over on a file descriptor
+# (--from-env-file, #977) are logged a line each, apart from the argv, so a check can hold the argv to carrying none.
+# What reaches apply, replace and create on stdin is kept in a file of its own; replace fails while no_secret
+# exists, as it does on a cluster without the Secret, and create fails while no_create exists.
 cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
 echo "kubectl $*" >>"${CALLS}"
+env=""; for a in "$@"; do [[ "${a}" == --from-env-file=* ]] && env="$(cat "${a#--from-env-file=}")"; done
+[[ -z "${env}" ]] || while IFS= read -r l; do echo "env-file ${l}"; done <<<"${env}" >>"${CALLS}"
 case "$*" in
   *"config current-context"*) echo "ctx-test" ;;
   *"get applications.argoproj.io -n argocd -o json"*) cat "${T}/apps.json" 2>/dev/null || echo '{"items":[]}' ;;
@@ -53,7 +58,11 @@ case "$*" in
   *"-n agent get configmaps,secrets -o name"*) cat "${T}/objs" 2>/dev/null ;;
   *"get secret datadog-secret -o jsonpath={.data.api-key}"*) printf '%s' "$(cat "${T}/live_key" 2>/dev/null)" | base64 ;;
   *"get secret datadog-admin-secret"*) [[ -f "${T}/admin_present" ]] && exit 0; exit 1 ;;
-  *"create namespace"*|*"create secret generic"*) echo "kind: Placeholder" ;;
+  *"create namespace"*) echo "kind: Placeholder" ;;
+  *"create secret generic"*) echo "kind: Secret"; [[ -z "${env}" ]] || printf '%s\n' "${env}" ;;
+  *"apply -f -"*) cat >>"${T}/applied" ;;
+  *"replace -f -"*) cat >>"${T}/replaced"; [[ -f "${T}/no_secret" ]] && exit 1; exit 0 ;;
+  *"create -f -"*) cat >>"${T}/created"; [[ -f "${T}/no_create" ]] && exit 1; exit 0 ;;
 esac
 exit 0
 S
@@ -104,10 +113,30 @@ printf '%s' "$(src 'public_host_for watch-it-burn-attendee-002')" >"${T}/public_
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "missing identity: identity script runs with the cluster name and admin key, consumers reloaded" \
   'grep -q "identity-script CLUSTER_NAME=watch-it-burn-attendee-002 admin=ADMIN_API" "${CALLS}" && grep -q "^reload ctx-test acct" "${CALLS}"'
-: >"${CALLS}"; printf 'watch-it-burn-attendee-002' >"${T}/identity"; printf 'STALE_JUNE_KEY' >"${T}/live_key"
+written() { rm -f "${T}/applied" "${T}/replaced" "${T}/created"; }
+: >"${CALLS}"; written; printf 'watch-it-burn-attendee-002' >"${T}/identity"; printf 'STALE_JUNE_KEY' >"${T}/live_key"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "key drift: datadog-secret rewritten in all three namespaces and consumers reloaded" \
-  '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ROW2_API" "${CALLS}")" -eq 3 ]] && grep -q "^reload" "${CALLS}"'
+  '[[ "$(grep -c "create secret generic datadog-secret --from-env-file=/dev/fd/[0-9]* --dry-run=client -o yaml" "${CALLS}")" -eq 3 ]] && grep -q "^reload" "${CALLS}"'
+check "both keys reach kubectl on a file descriptor, once per namespace (#977)" \
+  '[[ "$(grep -cx "env-file api-key=ROW2_API" "${CALLS}")" -eq 3 && "$(grep -cx "env-file app-key=ROW2_APP" "${CALLS}")" -eq 3 ]]'
+check "neither key is on any kubectl command line" '! grep "^kubectl " "${CALLS}" | grep -q "ROW2_API\|ROW2_APP"'
+check "each namespace's Secret is written by replace, from a manifest holding both keys" \
+  '( for ns in datadog monitoring security; do grep -qx "kubectl -n ${ns} replace -f -" "${CALLS}" || exit 1; done ) &&
+   [[ "$(grep -cx "api-key=ROW2_API" "${T}/replaced")" -eq 3 && "$(grep -cx "app-key=ROW2_APP" "${T}/replaced")" -eq 3 ]]'
+check "never applied (the only applies are the three namespaces'), so no last-applied annotation copies a key" \
+  '[[ "$(grep -c "^kubectl apply -f -$" "${CALLS}")" -eq 3 ]] && ! grep -q "ROW2_A" "${T}/applied" 2>/dev/null && ! grep -q "datadog-secret.*--save-config" "${CALLS}"'
+check "and not created over what replace wrote" '[[ ! -e "${T}/created" ]]'
+: >"${CALLS}"; written; touch "${T}/no_secret"
+src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
+check "with no Secret to replace, each namespace's is created from a manifest holding both keys" \
+  '( for ns in datadog monitoring security; do grep -qx "kubectl -n ${ns} create -f -" "${CALLS}" || exit 1; done ) &&
+   [[ "$(grep -cx "api-key=ROW2_API" "${T}/created")" -eq 3 ]] && ! grep -q "ROW2_A" "${T}/applied" 2>/dev/null'
+: >"${CALLS}"; written; : >"${T}/stderr"; touch "${T}/no_create"
+src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
+check "a Secret neither replaced nor created is logged by namespace, and the repair goes on to the reload" \
+  '[[ "$(grep -c "watch-it-burn-attendee-002: could not write datadog-secret in " "${T}/stderr")" -eq 3 ]] && grep -q "^reload" "${CALLS}"'
+rm -f "${T}/no_secret" "${T}/no_create"; written
 : >"${CALLS}"; printf 'ROW2_API' >"${T}/live_key"; rm -f "${T}/admin_present"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "attendee without the admin secret: repaired (dual shipping restored)" 'grep -q "identity-script" "${CALLS}"'
@@ -173,7 +202,7 @@ rm -f "${T}/no_admin_secret"; : >"${CALLS}"; printf 'watch-it-burn-private' >"${
 printf '%s' "$(src 'public_host_for watch-it-burn-private')" >"${T}/public_host"
 src 'repair_datadog watch-it-burn-private /dev/null acct'
 check "once the key exists, repair writes datadog-secret in all three namespaces and reloads the consumers" \
-  '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ADMIN_API" "${CALLS}")" -eq 3 ]] && grep -q "^reload ctx-test acct" "${CALLS}"'
+  '[[ "$(grep -cx "env-file api-key=ADMIN_API" "${CALLS}")" -eq 3 && "$(grep -c "^kubectl -n [a-z]* replace -f -$" "${CALLS}")" -eq 3 ]] && grep -q "^reload ctx-test acct" "${CALLS}"'
 : >"${T}/stderr"
 
 echo "== converge alone turns Datadog on for clusters whose keys arrived after bring-up (#635) =="
@@ -199,7 +228,9 @@ WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 src 'provider_write_kubeconfig() {
 check "converge reaches repair_datadog on both clusters and runs the identity script for each" \
   'grep -q "^identity-script CLUSTER_NAME=watch-it-burn-community " "${CALLS}" && grep -q "^identity-script CLUSTER_NAME=watch-it-burn-private " "${CALLS}"'
 check "it writes datadog-secret in all three namespaces of both clusters and reloads both" \
-  '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ADMIN_API" "${CALLS}")" -eq 6 && "$(grep -c "^reload ctx-test " "${CALLS}")" -eq 2 ]]'
+  '[[ "$(grep -cx "env-file api-key=ADMIN_API" "${CALLS}")" -eq 6 && "$(grep -c "^kubectl -n [a-z]* replace -f -$" "${CALLS}")" -eq 6 && "$(grep -c "^reload ctx-test " "${CALLS}")" -eq 2 ]]'
+check "and no key reaches a kubectl command line or an apply on either" \
+  '! grep "^kubectl " "${CALLS}" | grep -q "ADMIN_API\|ADMIN_APP" && ! grep -q "ADMIN_A" "${T}/applied" 2>/dev/null'
 check "it logs the own-key-drift it repaired, for each cluster" \
   '[[ "$(grep -c "watch-it-burn-[a-z]*: repairing datadog (.*own-key-drift" "${T}/stderr")" -eq 2 ]]'
 check "the verifier after it runs too, and the agent tools repair found nothing to do" \

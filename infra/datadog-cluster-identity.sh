@@ -73,17 +73,25 @@ fi
 
 # The Agent takes each additional endpoint as a JSON literal in an env var, so the JSON is built here once
 # and the CR reads it verbatim. Shapes per docs.datadoghq.com/agent/configuration/dual-shipping (2026-09-05).
-metrics_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '{("https://app."+$s): [$k]}')"
-process_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '{("https://process."+$s): [$k]}')"
-orch_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '{("https://orchestrator."+$s): [$k]}')"
-logs_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '[{api_key: $k, Host: ("agent-http-intake.logs."+$s), Port: 443, is_reliable: true}]')"
+# jq reads the key from its environment, which only this user can read, not from an --arg on its command line,
+# which every user on the host can (#977).
+metrics_json="$(ADMIN_API="${ADMIN_API}" jq -cn --arg s "${SITE}" '{("https://app."+$s): [$ENV.ADMIN_API]}')"
+process_json="$(ADMIN_API="${ADMIN_API}" jq -cn --arg s "${SITE}" '{("https://process."+$s): [$ENV.ADMIN_API]}')"
+orch_json="$(ADMIN_API="${ADMIN_API}" jq -cn --arg s "${SITE}" '{("https://orchestrator."+$s): [$ENV.ADMIN_API]}')"
+logs_json="$(ADMIN_API="${ADMIN_API}" jq -cn --arg s "${SITE}" '[{api_key: $ENV.ADMIN_API, Host: ("agent-http-intake.logs."+$s), Port: 443, is_reliable: true}]')"
+# The admin key, and the four endpoint blobs that each carry it, reach kubectl on a file descriptor, never in its
+# argv, where any user on the host reads them in the process list (#977). Each value is one line: jq -c prints no
+# newline inside a blob, and kubectl's env file splits a line at its first "=" only. The Secret is written by
+# replace, falling back to create, never by apply, whose last-applied-configuration annotation would hold a second
+# copy of the key; a replace also drops the copy an apply by an earlier run left behind.
+admin_secret_manifest() {
+    kubectl --context "${CONTEXT}" -n "$1" create secret generic datadog-admin-secret \
+        --from-env-file=<(printf 'api-key=%s\nadditional-endpoints=%s\nprocess-additional-endpoints=%s\norchestrator-additional-endpoints=%s\nlogs-additional-endpoints=%s\n' \
+            "${ADMIN_API}" "${metrics_json}" "${process_json}" "${orch_json}" "${logs_json}") \
+        --dry-run=client -o yaml
+}
 for ns in ${NAMESPACES}; do
-    kubectl --context "${CONTEXT}" -n "${ns}" create secret generic datadog-admin-secret \
-        --from-literal=api-key="${ADMIN_API}" \
-        --from-literal=additional-endpoints="${metrics_json}" \
-        --from-literal=process-additional-endpoints="${process_json}" \
-        --from-literal=orchestrator-additional-endpoints="${orch_json}" \
-        --from-literal=logs-additional-endpoints="${logs_json}" \
-        --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
+    admin_secret_manifest "${ns}" | kubectl --context "${CONTEXT}" -n "${ns}" replace -f - >/dev/null 2>&1 \
+        || admin_secret_manifest "${ns}" | kubectl --context "${CONTEXT}" -n "${ns}" create -f - >/dev/null
 done
 log "datadog-admin-secret in ${NAMESPACES// /\/}: ${CLUSTER_NAME} dual-ships to the instructor org"
