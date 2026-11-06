@@ -25320,3 +25320,94 @@ changed; the port-forwards were closed.
 RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 32m30s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. `test_ai_layer_rollout.py` passed in it, the by-name mount checks and the edits to
 `workshop-mcp-server.py`, `tool_audit.py` and `server.py` among its checks.
+## 2026-11-06 · #938 · run 17836 · The Joker's shell banner checked on the published images and on watch-it-burn-community
+
+**What this run found.** `bash verify/prior-drafts.sh 938 origin/staging` printed NONE, so there was no draft to port.
+push-jokers.yml had already pushed #714's re-pin: both tags serve the digests images.lock pins, so its run log did not
+need reading. `verify/test_c6_joker_public.py` already held the published layer's `etc/villain-banner.sh` against
+`images/villains/villain-banner.sh` byte for byte and the config's Env against build.sh's `ENV=` flag (#829's
+`a30b2ba5`). It followed build.sh's ENV wherever it pointed, so this run adds one check that build.sh's ENV is
+`/etc/villain-banner.sh` itself, the path busybox sh reads and the issue names.
+
+**The published Jokers (2026-11-06, crane v0.22.1 from verify/e2e-tools.lock).**
+
+```
+$ verify/.tools/bin/crane digest ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0
+sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52
+$ verify/.tools/bin/crane digest ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal
+sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0
+```
+
+`python3 verify/test_c6_joker_public.py` passed every check, among them `etc/villain-banner.sh is
+images/villains/villain-banner.sh, byte for byte` and `PORT and ENV are the ones build.sh sets` for each Joker, and
+the new `build.sh's ENV is /etc/villain-banner.sh, the banner's path in the layer (#938)`.
+
+**Live on watch-it-burn-community (this run's KUBECONFIG, `--context` on every call).** The Joker from
+`games/villain-apps/deploy-villain.yaml`, with its namespace rewritten to a scratch one:
+
+```
+$ kubectl --context watch-it-burn-community create ns joker-938-r17836
+namespace/joker-938-r17836 created
+$ sed "s/namespace: apps/namespace: joker-938-r17836/" games/villain-apps/deploy-villain.yaml | kubectl --context watch-it-burn-community apply -f -
+deployment.apps/villain-app created
+service/villain-app created
+$ kubectl --context watch-it-burn-community -n joker-938-r17836 rollout status deploy/villain-app --timeout=180s
+deployment "villain-app" successfully rolled out
+```
+
+The interactive shell, run under `script -qec` for a pty, with `exit` typed after four seconds (the first `exit` is
+the pty echoing the typed input before the shell starts; the escape codes are the banner's green):
+
+```
+$ kubectl --context watch-it-burn-community -n joker-938-r17836 exec -it deploy/villain-app -- sh
+exit
+^[[32m01001010 01001111 01001011 01000101 01010010   uplink to maintenance-shell ............ OK
+>> image signature ......... none   >> registry vetted ......... nope   >> admission ......... waved through
+>> elevating privileges .... 4%  12%  57%  98%  just kidding, I only print text
+^[[0mACCESS GRANTED... just kidding, you deployed me. Why so trusting about admission control?
+HAHAHA! The Joker
+/ # exit
+```
+
+```
+$ kubectl --context watch-it-burn-community -n joker-938-r17836 logs deploy/villain-app
+HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control?
+HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control? (serving the proof on :8080)
+HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control?
+HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control?
+$ kubectl --context watch-it-burn-community -n joker-938-r17836 exec deploy/villain-app -- echo ok | od -c
+0000000   o   k  \n
+0000003
+$ kubectl --context watch-it-burn-community delete ns joker-938-r17836 --wait=true --timeout=180s
+namespace "joker-938-r17836" deleted
+$ kubectl --context watch-it-burn-community get ns joker-938-r17836
+Error from server (NotFound): namespaces "joker-938-r17836" not found
+```
+
+The logs carry only the laugh, and the plain exec printed `ok` and a newline, nothing else. The cluster is left as
+found.
+
+**The Docker Hub live check.** A run brings no cluster or nodegroup up, so it ran on the two that are up:
+
+```
+$ COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_no_docker_hub_live.py
+  PASS  watch-it-burn-community runs pods (60)
+        0 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-community names a Docker Hub image (0 found)
+  PASS  watch-it-burn-private runs pods (77)
+        16 container status name(s) a node cached from Docker Hub (not judged; see the docstring)
+  PASS  no pod or pod template on watch-it-burn-private names a Docker Hub image (0 found)
+No pod or pod template on either cluster names a Docker Hub image.
+exit=0
+```
+
+The community cluster's one node (nodegroup `default-6eefb129f568d91814a3ca6ecf`, created 2026-11-01) prints 0. The
+private cluster's one node was created 2026-10-28, before the ghcr.io copies, and all 16 names are its cache: each pod's
+spec names lab-platform's `ghcr.io/peopleforrester/lab-platform/mirror/...` copy while containerd reports the Docker Hub
+name it first pulled the image by (postgres for Backstage and kagent, grafana-mcp, five KubeArmor images, the OTel
+collector, Grafana, Tempo, Falco, falcoctl twice and falcosidekick twice).
+
+**Not yet run on a cluster.** A new nodegroup on watch-it-burn-private, where `verify/test_no_docker_hub_live.py`
+should print 0 cached status names for that cluster too. A run cannot bring a nodegroup up.
+
+No dependency was added.
