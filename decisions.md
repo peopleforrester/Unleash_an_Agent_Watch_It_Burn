@@ -24982,6 +24982,11 @@ test that starts a local otelcol-contrib: `test_collector_act2_redaction_e2e.py`
 collector that exits still ends the wait at once, and the act2 test's failure now says whether the collector exited or
 was still not answering, and how long it waited. All five passed after the change.
 
+**The suites (run 17810, at `45551393`).** `bash verify/run-e2e-tools.sh` printed `285 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `65 checks ran (the offline suite and 64 tier tests) in 45m38s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new `test_input_guard_host.sh` passed in the offline suite. The
+prose gate printed `prose gate: pass`.
+
 **Followup.** HC-666 narrated without a tool call in two of the three admin runs here. #856 owns that beat; the
 probe's verdict for the Night Before hangs on it.
 
