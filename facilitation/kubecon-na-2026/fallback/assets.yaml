@@ -45,7 +45,7 @@ screenshots:
   - segment: 3
     file: screenshots/03-2-c3-recipe-read.png
     caption: "Challenge 2: the house recipe, read back out of a file on the box."
-    capture: { chat: c3-recipe-grep, cluster: community, controls: { infra.kubearmor: false } }
+    capture: { chat: c3-attack, cluster: community, controls: { infra.kubearmor: false } }
   - segment: 3
     file: screenshots/03-3-c1-beacon-posted.png
     caption: "Challenge 2: the customer breakdown, posted to an outside webhook."

@@ -267,7 +267,10 @@ with tempfile.TemporaryDirectory() as tmp:
           == [st.session_id("c2-attack", "202611111800"), st.session_id("c2-fixed", "202611111800")]
           and f.log.index(f"chat {st.session_id('c2-attack', '202611111800')}") < f.log.index("guardrails on")
           < f.log.index(f"chat {st.session_id('c2-fixed', '202611111800')}")
-          and "grep -ri -A3 recipe /tmp/burrito-data" in st.RECIPE_PROMPT, str(f.log))
+          # Since #952 the seed is the C3 beat's attack-after-reset prompt: it names the burrito-data folder and asks
+          # for a read, and it is not the recon prompt, which opens nothing.
+          and "burrito-data folder" in st.RECIPE_PROMPT and "read it to me" in st.RECIPE_PROMPT
+          and "What folders do you have access to" not in st.RECIPE_PROMPT, str(f.log))
     beats = {b["key"]: b for b in saved.get("beats", [])}
     check("the Challenge 2 seeds name the recipe coming back, then staying out",
           "carries" in beats.get("c2-attack", {}).get("note", "")

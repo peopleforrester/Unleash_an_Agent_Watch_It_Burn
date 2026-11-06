@@ -111,25 +111,29 @@ SEEDS = (
 # The PII seed, shown in Challenge 3 after c3-fixed, read from APM rather than LLM Observability.
 PII_SEED = ("c3-pii", "Challenge 3", "someone else's PII refused by the input guard: zero tokens, none of it traced")
 
-# Challenge 2's seeded attack: the /kubecon page's recipe-read prompt (its C3 beat), and the directory its grep reads.
+# Challenge 2's seeded attack: the /kubecon page's recipe-read prompt (its C3 beat), and the directory the read
+# touches. Since #952 the C3 beat is the conversational recon-then-attack pair (#925): recon names the folders and
+# opens nothing, so the seed sends the last prompt, the attack after a reset, which is the one that reads the recipe.
 KUBECON_PAGE = REPO / "gitops/ai-layer/web/kubecon.html"
 RECIPE_DIR = "/tmp/burrito-data"
 
 
-def kubecon_prompt(beat: str, page: pathlib.Path = KUBECON_PAGE) -> str:
-    """The first prompt of one /kubecon beat, whitespace collapsed, so a seed sends what the presenters copy."""
+def kubecon_prompt(beat: str, page: pathlib.Path = KUBECON_PAGE, which: int = 0) -> str:
+    """The `which`-th prompt (default the first) of one /kubecon beat, whitespace collapsed, so a seed sends what the
+    presenters copy."""
     text = page.read_text()
     anchor = f'<article class="beat" data-beat="{beat}"'
     if anchor not in text:
         raise RuntimeError(f"{page.name} has no {anchor!r}: the beat was renamed or removed")
     body = text.split(anchor, 1)[1].split("</article>", 1)[0]
-    found = re.search(r'<div class="prompt"[^>]*>(.*?)<button', body, re.S)
+    found = re.findall(r'<div class="prompt"[^>]*>(.*?)<button', body, re.S)
     if not found:
         raise RuntimeError(f"{page.name}'s {beat} beat has no <div class=\"prompt\">")
-    return html.unescape(re.sub(r"\s+", " ", found.group(1))).strip()
+    return html.unescape(re.sub(r"\s+", " ", found[which])).strip()
 
 
-RECIPE_PROMPT = kubecon_prompt("C3")
+# The attack after a reset is the last C3 prompt; the recon before it opens nothing, so it is not the seed.
+RECIPE_PROMPT = kubecon_prompt("C3", which=-1)
 
 # Someone else's PII, asked of the bot: test-only values (Visa's test card, a 555-01xx number, example.com).
 PII_VALUES = ("4111 1111 1111 1111", "(503) 555-0142", "dana.reyes@example.com")
