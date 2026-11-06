@@ -26218,3 +26218,9 @@ draft. The issue's acceptance criteria, written into its body by run 17905, are 
 had: the decision recorded (heading, one `**Slide 17` paragraph, one verdict), the link rule for a "changes" verdict
 (no link, another repo's link), the "unchanged" verdict backed by the folder `burrito-data` and "no agent-task issue
 is filed", and a mutated copy for each.
+
+**The suites (run 17927, at `46aacfa0`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`304 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
+47m32s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `test_952_slide17_decision.py` printed "All #952 slide-17
+decision checks passed." and `test_chat_turn_cancel.py` printed "All /chat turn cancel checks passed." The prose gate
+printed `prose gate: pass`. This run touched neither cluster.
