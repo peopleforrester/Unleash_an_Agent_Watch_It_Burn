@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-import socket
 import subprocess
 import sys
 import tempfile
@@ -38,6 +37,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+import otelcol_local  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -126,12 +126,6 @@ SPANS = {
 NAMES = sorted(s["name"] for spans in SPANS.values() for s in spans)
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def run(profile: str, with_act2: bool) -> tuple[dict[str, dict], str, str]:
     """The profile's traces processors (with Act 2 appended last when asked); returns spans by name, the exporter's
     whole file and the collector log."""
@@ -142,41 +136,45 @@ def run(profile: str, with_act2: bool) -> tuple[dict[str, dict], str, str]:
         procs.append(ACT2)
         processors[ACT2] = act2
     gates = feature_gate_args(profile)
-    port = free_port()
     got: dict[str, dict] = {}
     raw = ""
     with tempfile.TemporaryDirectory() as d:
         out = pathlib.Path(d) / "spans.json"
-        cfg = {
-            "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
-            "processors": processors,
-            "exporters": {"file": {"path": str(out)}},
-            "service": {"telemetry": {"metrics": {"level": "none"}},
-                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs, "exporters": ["file"]}}},
-        }
-        cfg_file = pathlib.Path(d) / "config.yaml"
-        cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+
+        def config(port: int) -> pathlib.Path:
+            cfg = {
+                "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
+                "processors": processors,
+                "exporters": {"file": {"path": str(out)}},
+                "service": {"telemetry": {"metrics": {"level": "none"}},
+                            "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
+                                                     "exporters": ["file"]}}},
+            }
+            cfg_file = pathlib.Path(d) / "config.yaml"
+            cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+            return cfg_file
+
         env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
         act = "Act 2" if with_act2 else "Act 1"
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *gates],
+        val = subprocess.run([str(OTELCOL), "validate", f"--config={config(0)}", *gates],
                              capture_output=True, text=True, env=env)
         check(f"{profile} {act}: the collector accepts the traces processors", val.returncode == 0, val.stderr[-1500:])
-        log = (pathlib.Path(d) / "collector.log").open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *gates], stdout=log, stderr=subprocess.STDOUT,
-                                env=env)
+        # The send clock starts once the collector says it is ready, on a port it holds (#969): see otelcol_local.
+        collector = otelcol_local.start(lambda port: [str(OTELCOL), f"--config={config(port)}", *gates],
+                                        pathlib.Path(d) / "collector.log", env=env)
         try:
             body = json.dumps({"resourceSpans": [
                 {"resource": {"attributes": [kv("service.name", svc)]}, "scopeSpans": [{"spans": spans}]}
                 for svc, spans in SPANS.items()]}).encode()
             sent, deadline = False, time.time() + 30
-            while not sent and time.time() < deadline and proc.poll() is None:
+            while collector.ready and not sent and time.time() < deadline and collector.proc.poll() is None:
                 try:
-                    req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=body,
+                    req = urllib.request.Request(f"http://127.0.0.1:{collector.port}/v1/traces", data=body,
                                                  headers={"Content-Type": "application/json"})
                     sent = urllib.request.urlopen(req, timeout=5).status == 200
                 except OSError:
                     time.sleep(0.3)
-            check(f"{profile} {act}: the collector took the turn", sent)
+            check(f"{profile} {act}: the collector took the turn", sent, collector.detail())
             deadline = time.time() + 30  # the batch processor holds spans up to its timeout
             while sent and len(got) < len(NAMES) and time.time() < deadline:
                 time.sleep(0.5)
@@ -187,10 +185,8 @@ def run(profile: str, with_act2: bool) -> tuple[dict[str, dict], str, str]:
                             for s in ss["spans"]:
                                 got[s["name"]] = s
         finally:
-            proc.terminate()
-            proc.wait(timeout=15)
-            log.close()
-        return got, raw, (pathlib.Path(d) / "collector.log").read_text()
+            collector.stop()
+        return got, raw, collector.log()
 
 
 def attrs(item: dict) -> dict:
