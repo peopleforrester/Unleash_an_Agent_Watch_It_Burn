@@ -26409,8 +26409,18 @@ the istiod rule was applied in place: the waypoint logged `connected to delta up
 and a fresh pod wearing the waypoint's label reached istiod on 15012 and timed out on 15010 and 15014, while an
 unlabelled pod timed out on all three. In the agent namespace itself, `verify/test_mesh_live.py` passed every check
 but the two that need this change promoted (weather-feed carries the label, and was redirected), including the new
-evil-mcp-shim to `/healthz` check against the live, unenrolled feed. The scratch namespace was deleted;
-the agent namespace, istiod, the CNI and ztunnel were not changed. `watch-it-burn-community` was not touched (it
+evil-mcp-shim to `/healthz` check against the live, unenrolled feed.
+
+One call failed. The last probe in `check-980-17960`, made after the istiod rule was applied, got `api.open-meteo.com`
+200 and `geocoding-api.open-meteo.com` an EOF in the TLS handshake, on a waypoint that had just reconnected after
+10 minutes without istiod. The namespace was already deleted when it was read, so a second one,
+`check-980-17960b`, was built the same way with the istiod rule in from the start and one enrolled feed pod. Its
+waypoint came up at 18:12:04 UTC, and four rounds of the two Open-Meteo calls each answered 200 in under a second.
+istiod closed its stream at 18:44:37 and the waypoint reconnected in the same second (`id=2`); four more rounds
+after that answered 200 each, and the waypoint logged no warning or error. So the one EOF did not recur once the
+waypoint could reach istiod.
+
+Both scratch namespaces were deleted. The agent namespace, istiod, the CNI and ztunnel were not changed. `watch-it-burn-community` was not touched (it
 carries no Istio, #860).
 
 **Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` with this change
