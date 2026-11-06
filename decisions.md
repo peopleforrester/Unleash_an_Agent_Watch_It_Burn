@@ -23627,4 +23627,12 @@ show `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` ending in `/v1/logs`, and after a few ch
 should print 0 while the `Tool execution` lines still appear. kagent rolls the pod when the Agent's env changes; if it
 does not, the Agent CR bounce in docs/DECISION-LOG.md applies. Owed to the next run on #903.
 
+**The suites (run 17813, at `64f174b1`).** The first `bash verify/run-e2e-tools.sh` printed `285 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `66 checks ran (the offline suite and 65 tier tests) in 43m46s`, with one
+red: `test_public_images_served.py` printed `public.ecr.aws gave no anonymous token: URLError: <urlopen error
+_ssl.c:1012: The handshake operation timed out>`. Run alone right after, it exited 0. The second full run printed
+`285 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `66 checks ran (the offline suite and 65 tier tests) in
+51m53s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The timeout is the host's reach to public.ecr.aws, not a
+check of this change; it is in the run's report as a followup.
+
 No dependency was added.
