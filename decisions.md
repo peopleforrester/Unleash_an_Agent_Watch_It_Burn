@@ -28621,3 +28621,13 @@ were, and both reds were found in them or under the gate's load.
   the PATCHes it did count. Six runs under the same load passed.
 
 **Not changed from the draft.** Everything else in run 17963's three commits, and its entry above, stands.
+
+**The suites (run 18039, at `d0d87c3e`).** `bash verify/run-tests.sh` alone printed `310 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`. `bash verify/run-e2e-tools.sh` ran three times. The first, at `9f1fb4d8`, ran
+`74 checks ran (the offline suite and 73 tier tests) in 19m14s, 4 at a time` with every tier test green and the
+offline suite red, exit=1. Its log was in `/tmp`, and something on the host removed it before the failing test was
+read, so that red is not named; it is filed as a follow-up. The second and third, logged under the run directory as
+`e2e-tools.2.log` and `e2e-tools.3.log`, each printed `310 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`74 checks ran (the offline suite and 73 tier tests) in 13m23s, 4 at a time` (11m59s for the third),
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No cluster check applies: the change is to the gate's runner and two
+offline tests, which reach no cluster.
