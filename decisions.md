@@ -24767,3 +24767,12 @@ words, so the reword guard from "Tests own their inputs" is not owed elsewhere.
 
 **Not yet run on a cluster.** Nothing here touches a cluster: the change is one offline test that reads two
 tracked Markdown files. Nothing is owed on a cluster for this entry.
+
+**The suites (run 17853, at `5d109842`).** Run 17847 wrote this change and committed it, then was stopped for
+repeating one identical log poll: each foreground wait used the shell tool's default 120 s limit, so it returned at
+once and was issued again. Its E2E run never wrote an exit line. Run 17853 reran the suite with a log of its own and
+waited on it with `timeout 560` under a 600 s tool limit. `bash verify/run-e2e-tools.sh` printed `293 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, with `test_948_live_check_owed.py` among them, then
+`69 checks ran (the offline suite and 68 tier tests) in 31m35s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The
+one `FAIL` line in the log is `test_datadog_secret_fields_render.py`'s own empty-app-key case, which that test
+expects to fail and holds as a PASS.
