@@ -27787,3 +27787,11 @@ in Go, the same header on the requests `forwardChat` sends through `agentRPC`. T
 re-pins `gitops/ai-layer/guard-proxy` and `verify/test_chat_witch_name.py` holds the header.
 
 **Suites.** Recorded in the next entry once `bash verify/run-e2e-tools.sh` ends.
+
+## 2026-11-06 · #995 · run 18028 · Suite results
+
+`bash verify/run-e2e-tools.sh` at `a2b3da3e` ran the offline suite (`309 tests ran`, `ALL OFFLINE RENDER-GATE TESTS
+GREEN`) and then the tier: `75 checks ran (the offline suite and 74 tier tests) in 46m03s`, `ALL E2E TOOLS TIER
+CHECKS GREEN`, exit 0. The new `verify/test_deployments_witch_line_e2e.py` is one of the 74. No dependency was added:
+the new test fetches mcp 1.29.1 and pyyaml 6.0.2 through uv, the versions images/workshop-mcp already pins. The prose
+gate printed `prose gate: pass`.
