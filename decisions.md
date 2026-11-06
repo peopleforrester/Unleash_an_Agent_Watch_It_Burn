@@ -22694,3 +22694,17 @@ watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`.
 **Left as it is.** Both full-moon answers on private left out the card's "skips the sauce, to be safe". That is the
 model reading the card, as run 17720 recorded for Kelpie Queso. The cost counters were left where the probes and chats
 moved them, far under the $25 cap. The scripts and their logs are in this run's directory, not the repo.
+
+**The suites (run 17768, at `a618dace`).** The first `bash verify/run-e2e-tools.sh`, at `994561a0`, went red in the
+offline suite on `test_verify_harness.py`: its check that no light-suite test runs kubectl reads any `["kubectl",`
+literal, and the new argv check in `verify/test_kubecon_probe.py` wrote one. `a618dace` compares the argv as the
+workshop-mcp log check does, and the run was stopped and started again. The second printed `280 tests ran`, with one
+offline failure, then `64 checks ran (the offline suite and 63 tier tests) in 56m10s`. Every tier test passed, the
+real PromptInjection and PII Regex scanners among them, and the one failure was `run-tests.sh (the offline suite)`.
+Inside it the only red check was `test_chat_turn_cancel.py`'s "the turn ends at PROXY_TIMEOUT, not later (4.98s)",
+against a 2.5 s bound. Its log shows why. guard-proxy wrote `forward_error` at 03:39:22.209, when the scaled 1 s
+deadline passed, and `task_cancel` at 03:39:26.180, and the 502 came back after the cancel. So the pinned `proxy.py`
+answers the room only once its tasks/cancel call returns, and on the loaded shared host that call took about 4 s.
+The check passed in the first run and alone afterwards. The cause is in guard-proxy-agenticburn, which no run can
+push, so it is filed as a followup with this output. `bash verify/run-tests.sh` run again printed `280 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The prose gate printed `prose gate: pass`. No dependency was added.
