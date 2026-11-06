@@ -26596,3 +26596,7 @@ row; a run on staging alone passed. The test sets `JOKER_SCALE_DOWN_SECONDS` to 
 earlier case can fire during a later one, and the check counted any PATCH as an apply, the Timer's PATCH to
 `/deployments/<name>/scale` included. It now counts only the applies. With a stray `/scale` PATCH put into `calls`
 before that check (a copy of the test, run once), the old check fails on it and the new one passes.
+
+**The suites at the final commit (`4ad86f60`, on `13fc72b8`).** `bash verify/run-e2e-tools.sh`, detached as above,
+printed `73 checks ran (the offline suite and 72 tier tests) in 53m49s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; its offline suite ran 309 tests and printed
+`ALL OFFLINE RENDER-GATE TESTS GREEN`.
