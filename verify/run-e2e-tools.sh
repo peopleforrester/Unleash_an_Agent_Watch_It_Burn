@@ -59,13 +59,18 @@ fail=0
 ran=0
 failed_names=()
 
+timings=()
+
 run_one() { # $1: label, rest: command
-    local label="$1" rc=0
+    local label="$1" rc=0 started="${SECONDS}"
     shift
     printf '\n== %s ==\n' "${label}"
     ran=$((ran + 1))
     "$@" || rc=$?
     [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${label} (exit ${rc})"); }
+    # Each test's seconds, so a gate that runs out of time shows in its tail where the time went (#1005).
+    printf -- '-- %s took %ds\n' "${label}" "$((SECONDS - started))"
+    timings+=("$((SECONDS - started)) ${label}")
 }
 
 # The gate runs this in place of the Test command, so main stays gated on the offline suite as well.
@@ -111,6 +116,8 @@ if [[ "${tier}" -eq 0 ]]; then
 fi
 
 # The time taken, since a run waits on this in the background and sets its limit from it (#796).
+printf '\nThe slowest checks:\n'
+printf '%s\n' "${timings[@]}" | sort -rn | head -n 10 | awk '{ t = $1; $1 = ""; printf "  %4ds %s\n", t, substr($0, 2) }'
 printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds\n' "${ran}" "${tier}" \
     "$((SECONDS / 60))" "$((SECONDS % 60))"
 if [[ "${fail}" -eq 0 ]]; then
