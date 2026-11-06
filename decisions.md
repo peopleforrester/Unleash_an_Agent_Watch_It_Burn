@@ -27682,3 +27682,15 @@ check read the reaper's PATCH as an apply. The check now counts only a PATCH on 
 `/scale` subresource, and prints the PATCHes it saw when it fails. Sixteen copies run at once then passed 16 of 16.
 The refusal is still read the same way: no error means a fail, an applied object means a fail, and so does any
 PATCH on `deployments/tron`.
+
+**Suites and the live check (run 17993, at `b99c5148`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`308
+tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, test_public_images.py among them) and then the tier: `74 checks
+ran (the offline suite and 73 tier tests) in 43m36s`, exit 1, on two network reads that touch nothing this change
+does. test_datadog_log_services_render.py's `helm template external-secrets` got `EOF` from
+`https://charts.external-secrets.io/index.yaml`, and test_platform_baseline_sister.py got `HTTP Error 403: rate limit
+exceeded` from api.github.com, read without a token on a host many runs share. Run alone right after, each passed,
+exit 0. Both are filed as followups. `python3 verify/test_kubecon_failover_attendee_live.py` with both contexts
+passed 26 of 26 checks, `ALL KUBECON FAILOVER ATTENDEE CHECKS PASSED`, exit 0: community to private, fault at 8.1 s,
+promoted at 89.7 s, composer back at 102.2 s; private to community, fault at 3.7 s, promoted and composer back at
+88.1 s, the witch name `Victoria the Basilisk` the same in the header, after the switch and after a refresh. After
+it, every Deployment on both clusters was ready. The prose gate printed `prose gate: pass`.
