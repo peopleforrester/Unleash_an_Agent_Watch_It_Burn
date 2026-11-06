@@ -22257,3 +22257,41 @@ comments, not PROGRESS.md, so nothing in the test changed. The suites are run ag
 **The suites (run 17779, at `9a6e60d1`, on staging `d91e8bf8`).** `bash verify/run-e2e-tools.sh` printed "64 checks
 ran (the offline suite and 63 tier tests) in 38m52s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline
 suite printed "282 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_progress_entries.py` among them.
+
+## 2026-11-06 · #893 · run 17780 · A test reads decisions.md for #759's record of the trace read: the command, its exit and the recent trace it printed
+
+**Why.** Test review run 17398 found that no test checked the last part of a #759 criterion, "A run reads back one
+recent BurritoBot trace through that access and records the command in decisions.md". `verify/test_dd_traces_live.py`
+does the read and `verify/test_dd_traces.py` judges the reader against a fake org, but nothing read decisions.md, so
+the record could be lost or never written and every suite would stay green. `verify/prior-drafts.sh 893 origin/staging`
+printed NONE, and the issue has no comments.
+
+**The test.** `verify/test_dd_traces_record.py` is offline and runs in `bash verify/run-tests.sh`. It splits
+decisions.md into entries at each `## ` line and fails unless one entry headed with #759 (not `#759's`) records the
+read whole:
+- The access: `. "$HECATON_CLUSTER_ENV"` on a line of its own, a `python3 verify/dd_traces.py` command after it, and
+  the secret `fleet_monitors.SECRET_ID` named in the entry.
+- The command: it is run through `dd_traces.main` against a fake org of three traces, with a keys stub, and must ask
+  for the pair as the profile and region AGENTS.md gives a run's session (accen-dev, us-west-2), exit 0, and print
+  exactly one trace, the newest. So `--traces 3`, `--scopes`, `--json`, `--trace <old id>` or another profile fails.
+- The outcome: the entry says the command exited 0.
+- The output: after the command, the header `dd_traces.main` prints for `ml_app:burritobot` over the command's own
+  `--minutes`, then a trace line and a span line of the shape `show_trace` prints. The test first renders a trace with
+  `show_trace` and checks its own patterns match, so a change to the reader's output names the patterns.
+- Recent: the newest timestamp before the source step (`At 2026-11-05T08:29Z` in the record) is when the command ran,
+  and the trace must have started inside the command's window before then, with one minute of clock skew.
+
+Today it passes on the 2026-11-05 #759 entry (run 17391): trace 0d630795c18555edbaca6bf41eece528, started 07:49:47Z,
+40 minutes before the 08:29Z run, inside the 1440-minute window. The two 2026-11-03 #759 entries are refused (no exit 0,
+no output), as they should be, since those runs could not do the read.
+
+**It fails when the record stops holding.** The test then cuts the entry it found in nine ways and checks each is
+refused, and each was refused for its own reason: the command removed, `--traces 1` made `--traces 3`, the profile
+changed, the command replaced by a `--scopes` one, the source step removed, the trace line removed, the header's
+window off by one minute, the run stamp moved two days on, and "exited 0" removed. Before each cut it checks the
+literal it replaces is in the record, and exits naming it and decisions.md when it is not.
+
+**Not yet run on a cluster.** Nothing is owed. The test reads the tree only; the live read it holds the record of is
+`verify/test_dd_traces_live.py`, run green by run 17742 on 2026-11-05T23:04Z.
+
+No dependency was added.
