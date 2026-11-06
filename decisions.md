@@ -24691,3 +24691,8 @@ next real failure will show. No cluster was touched.
 **Not yet run on a cluster.** Nothing is owed: the test runs the feed locally and reads Open-Meteo.
 
 No dependency was added.
+
+**The suites (run 17871, at `74e71b44`).** `bash verify/run-e2e-tools.sh` printed `299 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, the new `test_weather_feed_client.py` among them, then `71 checks ran
+(the offline suite and 70 tier tests) in 30m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+`test_weather_feed_e2e.py` passed in the tier against live Open-Meteo.
