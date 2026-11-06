@@ -26141,3 +26141,19 @@ cluster; the `ls` on `legacy` adds one KubeArmor Block alert to the private clus
 RENDER-GATE TESTS GREEN`, `72 checks ran (the offline suite and 71 tier tests) in 32m34s`, `ALL E2E TOOLS TIER CHECKS
 GREEN` and `exit=0`; `test_kubecon_c3_recipe_block.py` ended `All /kubecon C3 recipe-block checks passed.` The prose
 gate printed `prose gate: pass`.
+## 2026-11-06 · #972 · run 17924 · Run 17893's draft ported
+
+**Context.** Run 17893's draft (53845c01, 2047d83e on `origin/agent/972-17893`) ended claim-stale, not on a gate, so
+none of it reached staging. `bash verify/prior-drafts.sh 972 origin/staging` printed START with a CLEAN verdict: staging
+had only appended to decisions.md and PROGRESS.md since its base, and staging had not touched the test file.
+
+**Decision.** Both commits cherry-picked as they stood, with no change to `verify/test_kubecon_c3_recipe_block.py`. On
+this run's base (001de828) it prints every check PASS and all 13 mutations fail the check each one breaks.
+
+**Live check (2026-11-06, read only).** With the session sourced, `kubectl --context watch-it-burn-private get cm -A
+-o json` still serves `kubecon.html` from `agent/console-src-cc5gt65fhk` with sha256 `db37e7a2b3dd93c8...`, the same
+bytes as the repo file, and the community cluster has no `kubecon.html` in any ConfigMap. The private cluster has no
+KubeArmorPolicy at this point, so the guardrails are off there now. The criterion covers only the page, so the toggle
+was left as it was. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** Nothing: the test reads repo files, and the served page is the one it passes on.
