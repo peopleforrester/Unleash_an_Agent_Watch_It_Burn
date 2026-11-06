@@ -27307,8 +27307,14 @@ StatefulSet, DaemonSet, ReplicaSet, Job, CronJob or Pod in the agent namespace w
    `cr.agentgateway.dev` and `ghcr.io/kagent-dev`).
 2. It owns itself (no ownerReferences). A Deployment's ReplicaSets and Pods go with it, and deleting them alone would
    only make the owner recreate them.
-3. It runs a container or init container from outside `registry.burritobot.co`.
-4. `deny-external-registries` reads Deny: the policy reads it on every pass with `resource.Get`, after the cheaper
+3. Argo CD does not apply it: no managedFields entry whose manager starts with `argocd`, the rule `fleet.sh reset-bot`
+   (`clear_bot_workloads`) already uses. deploy_app applies with force, so a room manifest named `guard-proxy` puts
+   the room label and its image on the platform's own Deployment. Without this condition the sweep would delete
+   guard-proxy. All 13 live platform workloads in agent are applied by `argocd-controller` or owned by kagent's Agent.
+   The run's first commit lacked this condition. It came in once `verify/test_reset_bot.sh`'s "nothing Argo CD owns"
+   case turned up in the suite's log, and the first suite run was stopped to rerun on the fix.
+4. It runs a container or init container from outside `registry.burritobot.co`.
+5. `deny-external-registries` reads Deny: the policy reads it on every pass with `resource.Get`, after the cheaper
    conditions.
 
 So the cluster ends holding what `deny-external-registries` would now admit from BurritoBot. Challenge 3's
@@ -27365,6 +27371,21 @@ matching that namespace with the same `resource.Get` gate:
 
 Both clusters run `kyverno-cleanup-controller` v1.19.1 (1 ready), and both `kyverno:cleanup-controller` roles
 aggregate on `rbac.kyverno.io/aggregate-to-cleanup-controller`.
+
+**The Argo CD condition, live (namespace `wib-990-probe3`, removed after).** Two labelled public-image Deployments of
+zero replicas were made, identical but for their field manager: `argo-made` server-side applied as
+`argocd-controller`, `mcp-made` as `workshop-mcp`. The committed policy text, narrowed to the namespace with its gate
+held true, ran at 19:09:01Z. It deleted `mcp-made` and kept `argo-made`, so the cleanup controller reads managedFields.
+The policy, its ClusterRole and the namespace were deleted at 19:10Z, and `kubectl get dpol` read `No resources found`.
+
+**`verify/test_room_cleanup_live.py` before the change is deployed (run 17969, 18:36Z to 18:46Z).**
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 -u verify/test_room_cleanup_live.py` failed as it should with the
+policy not yet synced. It failed the four install checks ("the DeletingPolicy is installed as git writes it", "its
+last pass reported no error", "the cleanup controller may delete Deployments", "and may read
+deny-external-registries"). It passed the rest with the switch at `['Audit']`: both probe Deployments created, the
+switch unchanged while it waited, the public one still there, the internal one still there, every platform Deployment
+still there, and the probe Deployments gone again. It exited 1. The first attempt, under a 400-second `timeout`, was
+killed before its output was flushed. A read afterwards found neither probe Deployment on the cluster.
 
 **Not yet run on a cluster.** The committed policy, synced by Argo CD from staging, on both KubeCon clusters:
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_room_cleanup_live.py`, which needs `kyverno-breakout`

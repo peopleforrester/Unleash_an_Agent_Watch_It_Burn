@@ -142,9 +142,17 @@ deploy_app(workload("CronJob", "room-cron", PUBLIC, api="batch/v1"))
 deploy_app(workload("Deployment", "maintenance-shell", INTERNAL))
 deploy_app(workload("Deployment", "joker-agatha", INTERNAL))
 deploy_app(workload("CronJob", "internal-cron", INTERNAL, api="batch/v1"))
+# A room manifest named after a platform Deployment: deploy_app applies it with force over Argo CD's object.
+deploy_app(workload("Deployment", "guard-proxy", PUBLIC))
 
 room = {name: obj for name, obj in applied.items()}
-check("deploy_app applied every room workload the test asked for", len(room) == 13, str(sorted(room)))
+check("deploy_app applied every room workload the test asked for", len(room) == 14, str(sorted(room)))
+# The API server's record of who applied what, as `kubectl get --show-managed-fields` reads it on the cluster.
+WORKSHOP_MCP = {"manager": "workshop-mcp", "operation": "Apply", "apiVersion": "apps/v1"}
+for obj in room.values():
+    obj["metadata"]["managedFields"] = [WORKSHOP_MCP]
+room["guard-proxy"]["metadata"]["managedFields"].insert(
+    0, {"manager": "argocd-controller", "operation": "Apply", "apiVersion": "apps/v1"})
 check("the landing page's image is outside the internal registry",
       room.get("tron", {}).get("spec", {}).get("template", {}).get("spec", {}).get("containers", [{}])[0]
       .get("image", "").startswith("public.ecr.aws/"))
@@ -208,6 +216,8 @@ else:
     for name, why in (("maintenance-shell", "Challenge 3's maintenance-shell, from registry.burritobot.co"),
                       ("joker-agatha", "a room Joker from registry.burritobot.co"),
                       ("internal-cron", "a CronJob from registry.burritobot.co"),
+                      ("guard-proxy", "the platform's guard-proxy, which Argo CD applies, after the room's manifest "
+                                      "of that name put the room label and a public image on it"),
                       ("agentgateway", "the platform's agentgateway, external but never deploy_app's"),
                       ("workshop-agent", "BurritoBot itself, from ghcr.io/kagent-dev"),
                       ("guard-proxy-abc12", "a platform Pod"),

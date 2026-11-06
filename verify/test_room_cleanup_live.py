@@ -20,6 +20,8 @@ In order, this:
    says nothing;
 7. always deletes what it created, so the cluster is left as it was found.
 
+It takes about 10 minutes from a busy host, where each kubectl call took about 15 seconds (run 17969).
+
 Usage: COMMUNITY_CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] python3 verify/test_room_cleanup_live.py
 """
 from __future__ import annotations

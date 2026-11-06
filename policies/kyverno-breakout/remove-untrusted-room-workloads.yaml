@@ -13,10 +13,14 @@
 #      (agentgateway, guard-proxy, workshop-agent and the rest, several from external registries) never carry it;
 #   2. owns itself: nothing in ownerReferences. A ReplicaSet of a Deployment, or a Pod of either, goes when its owner
 #      does, so deleting it alone would only make its owner recreate it;
-#   3. runs any container or init container from outside registry.burritobot.co, the one registry
+#   3. is not Argo CD's: no managedFields entry whose manager starts with argocd (argocd-controller applies).
+#      deploy_app applies with force, so a room manifest named guard-proxy would put the room label on the platform's own
+#      Deployment; fleet.sh reset-bot (clear_bot_workloads) leaves such an object alone for the same reason, and the
+#      field manager is the API server's record, which a manifest cannot write;
+#   4. runs any container or init container from outside registry.burritobot.co, the one registry
 #      deny-external-registries trusts for the agent's requests. Challenge 3's maintenance-shell and the room's
 #      Jokers (#775) come from registry.burritobot.co, so they stay;
-#   4. and only while deny-external-registries reads Deny. The policy reads it on every pass (resource.Get), so
+#   5. and only while deny-external-registries reads Deny. The policy reads it on every pass (resource.Get), so
 #      guardrails-on (images/web-terminal/entrypoint.sh, _kg on kyverno), #985's promotion arm and a hand patch all
 #      start it, and guardrails-off stops it. Nothing is deleted at Audit, the breakout's start state. A missing
 #      deny-external-registries fails the condition, and nothing is deleted then either.
@@ -82,6 +86,9 @@ spec:
       expression: >-
         'burritobot.co/workload' in variables.pod.?metadata.?labels.orValue({}) &&
         object.metadata.?ownerReferences.orValue([]).size() == 0
+    - name: not-argo-cd-managed
+      expression: >-
+        !object.metadata.?managedFields.orValue([]).exists(f, f.?manager.orValue('').startsWith('argocd'))
     - name: runs-an-untrusted-image
       expression: >-
         variables.containers.exists(c, !c.image.startsWith(variables.internalRegistry))

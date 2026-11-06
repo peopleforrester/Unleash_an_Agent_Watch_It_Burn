@@ -179,7 +179,13 @@ check("it deletes only while deny-external-registries reads Deny, so nothing goe
       dcond.get("guardrails-on") == 'resource.Get("policies.kyverno.io/v1", "validatingpolicies", "", '
       "\"deny-external-registries\") .spec.validationActions.exists(a, a == 'Deny')", str(dcond.get("guardrails-on")))
 check("and reads that policy last, after the cheap conditions",
-      list(dcond) == ["deployed-for-the-room", "runs-an-untrusted-image", "guardrails-on"], str(list(dcond)))
+      list(dcond) == ["deployed-for-the-room", "not-argo-cd-managed", "runs-an-untrusted-image", "guardrails-on"],
+      str(list(dcond)))
+check("an object Argo CD applies is never deleted, even one deploy_app also applied over (as reset-bot holds)",
+      dcond.get("not-argo-cd-managed") == "!object.metadata.?managedFields.orValue([]).exists(f, "
+      "f.?manager.orValue('').startsWith('argocd'))"
+      and 'not any(x.startswith("argocd") for x in m)' in (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8"),
+      str(dcond.get("not-argo-cd-managed")))
 mcp_src = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text(encoding="utf-8")
 check("the room's workloads are known by the label deploy_app stamps on every one, burritobot.co/workload",
       'WORKLOAD_LABEL = "burritobot.co/workload"' in mcp_src
