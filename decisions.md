@@ -27520,3 +27520,7 @@ code for it. The one slow growth the test found, #14's `shown` set at about 24 t
 
 **Not yet run on a cluster.** Nothing is owed: the load test is offline by design, and this run changed no code.
 
+**The suites (run 18008, at `ffd04744`).** Only this entry changed. `bash verify/run-tests.sh` printed `308 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The prose gate printed `prose gate: pass`. The tools tier
+(`bash verify/run-e2e-tools.sh`) was not run, since no code, test or tool pin changed. No dependency was added. The
+log is `/var/lib/hecaton/runs/18008/run-tests.log`.
