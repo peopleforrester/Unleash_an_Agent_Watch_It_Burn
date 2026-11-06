@@ -25418,3 +25418,18 @@ ran, after it had polled the log with the same command several times in a row. R
 (the offline suite and 67 tier tests) in 29m26s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
 `test_c6_joker_public.py` passed in the tier with the new ENV check. The issue's body now carries an `## Acceptance
 criteria` list written from its request.
+
+**Run 17888, ported and checked again (2026-11-06).** Run 17875 ended `claim-stale`, so `c07d2462` and `dc49a0b4`
+never reached staging. `bash verify/prior-drafts.sh 938 origin/staging` printed START from `origin/agent/938-17836`
+with a CLEAN verdict and one decisions.md APPEND, and both commits cherry-picked onto staging's `68f58776` with no
+conflict. Nothing in the draft changed. This run then repeated each check on the current base:
+`crane digest` returned `sha256:0765b359...` for `busybox-1.38.0` and `sha256:793db299...` for
+`busybox-1.38.0-internal`. `python3 verify/test_c6_joker_public.py` ended `Both Jokers are public, at images.lock's
+pins, and are this checkout's page Jokers.` On watch-it-burn-community, the same commands as above, run in the scratch
+namespace `joker-938-r17888`, printed the same banner on `exec -it ... -- sh`. The logs held three laugh lines and
+nothing else, `exec deploy/villain-app -- echo ok | od -c` printed `o k \n`, and after `delete ns joker-938-r17888`,
+`get ns` returned NotFound. `verify/test_no_docker_hub_live.py` exited 0 with the same counts: 0 cached names on
+community (node `ip-10-0-31-163`, nodegroup `default-6eefb129f568d91814a3ca6ecf`, created 2026-11-01T02:59:31Z)
+and 16 on private (node `ip-10-0-90-162`, nodegroup `default-aedde2b7df72fcb8a654102c71`, created
+2026-10-28T11:51:23Z, before the ghcr.io copies). The private nodegroup is still the one item under "Not yet run on
+a cluster" above.
