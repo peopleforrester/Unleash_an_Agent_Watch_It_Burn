@@ -26412,3 +26412,40 @@ changed.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
 59m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+
+## 2026-11-06 · #989 · run 17968 · test_enforce_floor fetches a chart repo again once when helm says it cannot be reached
+
+**What happened.** In run 17888 (#938) the tools tier went red on one check after 33 minutes: `helm template --repo
+https://charts.external-secrets.io` in `verify/test_enforce_floor.py` said the repo "is not a valid chart repository
+or cannot be reached" on its index.yaml. A moment later the URL answered 200 and the test passed on its own.
+
+**The change.** `verify/helm_fetch.py` holds `run_helm(cmd)`. It runs the helm command, and when it fails with an
+error that contains "cannot be reached", which is how helm reports a failed fetch of a repo's index.yaml, it waits 5
+seconds and runs it once more. When the second attempt also fails, the error it returns names both attempts and
+helm's last stderr line from each (`attempt 1: ...; attempt 2: ...`), so a lasting outage still fails the check and
+says what helm said each time. Any other helm error (a version the repo lacks, a bad values file, a template error)
+fails on the first attempt, since a second fetch cannot change it. `helm_render` in `test_enforce_floor.py` now calls
+`run_helm(cmd)` instead of `subprocess.run(cmd, ...)`. A retry that rescues a render prints a `note:` line naming the
+first error, so a flaky repo stays visible in the log.
+
+**Why a retry and not a cached chart.** The issue offered either. Pulling every chart into `verify/.tools` would add a
+second pinned store beside `e2e-tools.lock` with its own checksums and fetch step, for every chart repo the apps
+name, and the first fetch into it would meet the same dropped index. One more attempt answers the failure that was
+seen at the cost of 5 seconds when it happens.
+
+**Scope.** Only `test_enforce_floor.py` uses the helper here, as the issue asks. `verify/app_render.py`,
+`verify/test_datadog_log_services_render.py`, `verify/test_image_registry_render.py` and
+`verify/test_kubearmor_config_render.py` also fetch remote charts with one attempt; moving them onto `run_helm` is
+filed as a followup in the run's report.
+
+**Its test.** `verify/test_helm_fetch.py` runs in the offline suite with a fake helm that answers from a script and
+counts its calls. A repo that answers at once is called once; one unreachable answer then a render is called twice
+and returns the render; two unreachable answers stop at two calls, and the error names attempt 1
+and attempt 2 with each message and not the warning line above it; a missing chart version is called once and its
+message is returned alone. It also reads `test_enforce_floor.py` for the `run_helm(cmd)` call. Before the change the
+last three checks fail; after it all 19 pass.
+
+**Live checks.** None: this is a cluster-free tools-tier test, and neither cluster is read or changed by it. Run on its
+own with the host's helm v4.2.1, `test_enforce_floor.py` rendered every Helm chart application and passed them; its one
+red, `ai-layer.yaml: renders`, was the guard-proxy submodule not yet checked out in this worktree, which
+`ensure-submodules.sh` fetches at the start of the suite.

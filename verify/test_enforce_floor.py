@@ -12,6 +12,8 @@ import json, pathlib, subprocess, sys, tempfile
 
 import yaml
 
+from helm_fetch import run_helm
+
 
 def load_all(text):
     """Tolerant loader: charts emit tags the safe loader rejects; only the shape matters here."""
@@ -51,9 +53,10 @@ def helm_render(app):
             oci = repo if repo.startswith("oci://") else f"oci://{repo}"
             cmd = ["helm", "template", app["metadata"]["name"], f"{oci.rstrip('/')}/{chart}", "--version", ver,
                    "-n", app["spec"]["destination"].get("namespace", "default"), "-f", str(vals)] + extra
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            return None, r.stderr.strip().splitlines()[-1][:160] if r.stderr.strip() else "helm failed"
+        # A repo that cannot be reached is fetched once more before the render fails (#989); see helm_fetch.py.
+        r, err = run_helm(cmd)
+        if err:
+            return None, err
         return load_all(r.stdout), None
 
 
