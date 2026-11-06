@@ -26583,3 +26583,9 @@ them. Then, on the public bot, the twelve asks above (six as Agatha the Banshee,
 Deployments deleted after) should each add one `ok: true` wall row for `joker-<the name>` with the maintenance-shell
 image, and each reply should name `maintenance-shell-attackme.burritobot.co/joker-<the name>/`. This run could not
 show five in a row live itself: it may not deploy, and the change is what makes them land.
+
+**The suites (run 17936, at `9df2fad5`).** The first `bash verify/run-e2e-tools.sh` reached the one-hour cap on the
+run's background job, after its offline suite had printed `309 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+and was stopped inside the tools tier. Run again, detached so the cap did not apply, it printed `73 checks ran (the
+offline suite and 72 tier tests) in 67m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; its offline suite ran
+309 tests, the two new `test_deploy_app_*` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
