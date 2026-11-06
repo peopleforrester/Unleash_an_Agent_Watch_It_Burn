@@ -208,6 +208,13 @@ for asked in ("apache", "2048"):
     check(f"{asked!r}, an old alias, is no longer steered to a pin: it is read as the official name it is",
           not err and container(out).get("image") == f"{MIRROR}{asked}:latest", err or str(container(out)))
 
+
+
+def _earlier_scale_down(path: str) -> bool:
+    """A PATCH on another Deployment's scale subresource: the reaper of an earlier deploy, never an apply of tron."""
+    return path.endswith("/scale") and "/deployments/tron/" not in path
+
+
 print("== criterion 2: no pull reaches Docker Hub, under any of its registry names ==")
 check("_DOCKER_HUB names the bare form and Docker Hub's four hosts", len(m._DOCKER_HUB) == 5 and "" in m._DOCKER_HUB)
 D = "@sha256:" + "a" * 64
@@ -221,8 +228,11 @@ for reg in m._DOCKER_HUB:
               not err and container(out).get("image") == want, err or str(container(out).get("image")))
     for asked in (f"{at}bitnami/redis:7", f"{at}trongame/tron:latest", f"{at}library/someone/tron"):
         reply, out, err = deploy(workload("tron", asked))
+        # An earlier deploy's scale-to-zero Timer (JOKER_SCALE_DOWN_SECONDS, 0.3 s here) can fire while this one runs
+        # on a loaded host and PATCH that Deployment's /scale; it is not an apply of tron, so it is left out (#1005).
+        applied = [(c[0], c[1]) for c in calls if c[0] == "PATCH" and not _earlier_scale_down(c[1])]
         check(f"{asked!r}: outside the official library, refused before any apply",
-              bool(err) and not out and not [c for c in calls if c[0] == "PATCH"], reply or err)
+              bool(err) and not out and not applied, f"{reply or err} {applied}")
         check(f"{asked!r}: the refusal names why (outside Docker's official library, no Docker Hub pulls) and how",
               err.startswith("deploy failed for Deployment/tron: ") and "outside Docker's official library" in err
               and "pulls nothing from Docker Hub" in err and "registry it is published on" in err

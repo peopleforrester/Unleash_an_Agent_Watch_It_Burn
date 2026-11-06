@@ -221,8 +221,10 @@ done
 # The time taken, since a run waits on this in the background and sets its limit from it (#796).
 printf '\nThe slowest checks:\n'
 slowest
-printf '\n%d checks ran (the offline suite and %d tier tests, %d at a time) in %dm%02ds\n' "${ran}" "${tier}" \
-    "${JOBS}" "$((SECONDS / 60))" "$((SECONDS % 60))"
+# The line keeps the shape the suite records in decisions.md quote and test_952_suite_record.py reads; the job count
+# follows it.
+printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds, %d at a time\n' "${ran}" "${tier}" \
+    "$((SECONDS / 60))" "$((SECONDS % 60))" "${JOBS}"
 if [[ "${fail}" -eq 0 ]]; then
     printf '\nALL E2E TOOLS TIER CHECKS GREEN\n'
 else
