@@ -27873,7 +27873,9 @@ check in `verify/test_audience_event.py`, "no Datadog share link or room-view QR
 its pattern `p\.datadoghq\.com` also matched inside `app.datadoghq.com`, the traces URL slide 1 lists and the "Ophelia
 Thorn" link opens, which segment 1 now quotes. A share link's host is `p.datadoghq.com` itself, so the pattern now
 needs the host to start at `p.`, and a new check holds that it still finds a share link and passes the traces URL. The
-run-of-show keeps the URL.
+run-of-show keeps the URL. The second run failed `verify/test_two_domains.py`'s "kubecon.html shows no agenticburn":
+segment 1's story on the page cited the deck's issue by its repo name. The citation is in this entry, so the page drops
+it.
 
 **Read live, read-only.** The pages the slides link, fetched at this run:
 
