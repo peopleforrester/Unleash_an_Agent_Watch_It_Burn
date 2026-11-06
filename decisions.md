@@ -26110,3 +26110,41 @@ also records whether check 2 passes on both clusters, which closes #629.
 tests) in 28m01s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. `verify/test_datadog_sandbox_names.py` and
 `verify/test_probe_pod_admission.py`, which runs the newly labelled probe pod through every workshop Kyverno policy,
 passed in it.
+
+## 2026-11-06 · #629 · Run 17932 ports run 17338's branch onto staging b4180a8f, and checks Backstage's log rule live with a probe pod
+
+**Why this run.** Run 17338's seven commits did not land: hecaton's rebase onto staging hit a conflict. The attempt
+before this run stopped on hecaton's own workspace (its Podman socket was missing), before it changed anything, so
+there was no repo cause to fix. `verify/prior-drafts.sh 629 origin/staging` named `origin/agent/629-17338` as the
+start, with seven drift lines, all edits in place.
+
+**The port.** This run cherry-picked the seven commits onto staging b4180a8f as 717f1fa0, a94e2517, 02f61045,
+47ff539c, 17267baa, dcb70b30 and 5280b65e. The first one conflicted in two files, and both keep each side:
+- `infra/datadog-fleet/fleet_monitors.py`: staging's #485 constants (NO_GROUP and SIGNAL_WINDOW) stay beside the
+  draft's CLUSTER_PREFIX and ENV_FILTER_RE.
+- `verify/test_fleet_monitors.py`: staging's signal-window check stays, and the logs signal it builds on now
+  searches `env:burritobot-kubecon-na-26` in place of `kube_cluster_name:burritobot-*`, as the draft's other checks do.
+
+The other five drifted files (workshop-mcp-server.py after 24307b11, the collector values after a9e7798f,
+monitors.yaml after 47546090 and 0c239a97, test_c6_villain_endpoint.py after 7709b619) took the draft's hunks with
+no conflict, and staging's changes to them are still there. `python3 verify/test_fleet_monitors.py` passes on the
+result. Nothing else in the draft changed.
+
+**Live checks, 2026-11-06, both clusters at staging b4180a8f.**
+- `verify/test_burritobot_cluster_live.py`, CONTEXT=watch-it-burn-community and then CONTEXT=watch-it-burn-private:
+  PASS on both.
+- `verify/test_datadog_sandbox_live.py` at 15:10Z with WIB_DD_LOOKBACK_MIN=60: checks 1, 3, 4 and 5 PASS. Check 2
+  FAILS on two services alone, `backstage` and `rootHttpRouter` on burritobot-private. The room Joker and probe pod
+  offenders of 11-05 are gone from the hour.
+- Backstage's fix is the `ad.datadoghq.com/backstage.logs` annotation in 717f1fa0, which reaches the cluster only
+  through Argo CD. This run checked the same rule on a probe pod, `maskprobe-977930` in namespace agent on private,
+  built by `verify/probe_pod.py` and carrying the annotation for its own container with service
+  `burritobot-live-probe`. It printed Backstage-shaped JSON lines with `"service": "rootHttpRouter"`. In the sandbox
+  org (`/api/v2/logs/events/search`, `pod_name:maskprobe-977930`) every line arrived with service
+  `burritobot-live-probe`, `env:burritobot-kubecon-na-26`, `kube_cluster_name:burritobot-private` and the attribute
+  `backstage_service: rootHttpRouter`. Without the annotation, the Backstage pod's logs show the opposite: the
+  pod's labels name `burritobot-backstage` and Datadog files the lines as `rootHttpRouter`. The probe pod was
+  deleted, and the cluster is as this run found it.
+
+**Not yet run on a cluster.** `verify/test_datadog_sandbox_live.py` with WIB_DD_LOOKBACK_MIN=60, an hour after this
+branch is on staging and Argo CD has synced `backstage` on private. Check 2 passing then closes #629.
