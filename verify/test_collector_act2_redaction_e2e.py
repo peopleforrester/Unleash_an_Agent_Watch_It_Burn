@@ -37,7 +37,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import COLLECTOR_START_S, REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -168,7 +168,7 @@ def run(profile: str, with_act2: bool) -> tuple[dict[str, dict], str, str]:
             body = json.dumps({"resourceSpans": [
                 {"resource": {"attributes": [kv("service.name", svc)]}, "scopeSpans": [{"spans": spans}]}
                 for svc, spans in SPANS.items()]}).encode()
-            sent, deadline = False, time.time() + 30
+            sent, started, deadline = False, time.time(), time.time() + COLLECTOR_START_S
             while not sent and time.time() < deadline and proc.poll() is None:
                 try:
                     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=body,
@@ -176,7 +176,10 @@ def run(profile: str, with_act2: bool) -> tuple[dict[str, dict], str, str]:
                     sent = urllib.request.urlopen(req, timeout=5).status == 200
                 except OSError:
                     time.sleep(0.3)
-            check(f"{profile} {act}: the collector took the turn", sent)
+            why = ("" if sent else f"the collector exited {proc.returncode}" if proc.poll() is not None
+                   else f"the collector was still not answering on 127.0.0.1:{port} after {COLLECTOR_START_S} s")
+            check(f"{profile} {act}: the collector took the turn", sent,
+                  f"{why} (waited {time.time() - started:.0f} s)")
             deadline = time.time() + 30  # the batch processor holds spans up to its timeout
             while sent and len(got) < len(NAMES) and time.time() < deadline:
                 time.sleep(0.5)

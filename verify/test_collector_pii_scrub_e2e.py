@@ -34,7 +34,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import COLLECTOR_START_S, REPO, collector_config, feature_gate_args  # noqa: E402
 from pii_scrub_cases import ATTENDEE, ATTENDEE_SCRUBBED, UNTOUCHED, c5_record  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
@@ -127,7 +127,7 @@ with tempfile.TemporaryDirectory() as d:
         body = json.dumps({"resourceSpans": [
             {"resource": {"attributes": [kv("service.name", svc)]}, "scopeSpans": [{"spans": spans}]}
             for svc, spans in SPANS.items()]}).encode()
-        sent, deadline = False, time.time() + 30
+        sent, deadline = False, time.time() + COLLECTOR_START_S
         while not sent and time.time() < deadline and proc.poll() is None:
             try:
                 req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=body,

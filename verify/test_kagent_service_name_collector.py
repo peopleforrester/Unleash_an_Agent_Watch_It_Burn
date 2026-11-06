@@ -32,7 +32,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import PROFILE_APP, REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import COLLECTOR_START_S, PROFILE_APP, REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -125,7 +125,7 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
             return r.status
 
     try:
-        deadline = time.time() + 30
+        deadline = time.time() + COLLECTOR_START_S
         while True:
             try:
                 post("/v1/traces", {"resourceSpans": []})
