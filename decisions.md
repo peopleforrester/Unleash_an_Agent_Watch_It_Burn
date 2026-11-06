@@ -22253,3 +22253,7 @@ region. Since then staging took #958's `.gitattributes`, which merges PROGRESS.m
 driver, and run 17779 rebased the two commits onto staging `d91e8bf8` with no conflict: the #892 bullet now follows
 #891's and #958's. Staging changed none of the four entries the test reads, and #891's new test reads #759's issue
 comments, not PROGRESS.md, so nothing in the test changed. The suites are run again below.
+
+**The suites (run 17779, at `9a6e60d1`, on staging `d91e8bf8`).** `bash verify/run-e2e-tools.sh` printed "64 checks
+ran (the offline suite and 63 tier tests) in 38m52s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline
+suite printed "282 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_progress_entries.py` among them.
