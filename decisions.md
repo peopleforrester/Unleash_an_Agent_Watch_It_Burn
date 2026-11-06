@@ -23050,3 +23050,16 @@ session, so the four student accounts were not read; preflight reads them when i
 
 **Left open.** The opus agreement in accen-dev, and the agreements in the four student accounts, are Michael's to
 accept; until opus is accepted the Night Before preflight reads FAIL on that one line. Filed as a follow-up.
+
+**Run 17801: the resume and the rebase onto staging.** Run 17542 finished this work and wrote its report, then
+ended `failed (executor-error)` on a file missing from hecaton's own release directory
+(`config/pool-policy.yaml`); nothing in this change caused it. Run 17801 took over the workspace. Staging had moved
+141 commits, and `verify/draft-drift.sh` named four paths edited in place there: decisions.md,
+the run-of-show, the cluster root and `verify/test_e2e_tools_tier.py`. Staging's edits to the cluster root leave
+`bedrock_tiers` and `tutor_model` as they were, and its run-of-show edits do not touch the Night Before preflight
+bullet. The tier test is the one overlap: run 17542's second commit gave that test's scratch runners a `TMPDIR` of
+their own, and staging made the same fix on #909. So that commit was dropped, with its decisions.md paragraph and the
+suite record taken at it, and this branch is one change commit on top of staging `ec03eb5f`. On the rebased tree
+both preflight tests pass (35 and 30 checks), and the live preflight on accen-dev at 2026-11-06T03:53Z printed the
+same four Bedrock lines as on 2026-11-05: nova, haiku and sonnet-4-6 (tier and tutor) AVAILABLE, opus-4-8
+NOT_AVAILABLE. `anthropic.claude-sonnet-5` still reads NOT_AVAILABLE, which nothing binds now.
