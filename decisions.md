@@ -24444,3 +24444,56 @@ to print `PASS` and exit 0.
 **The suites (run 17844, at `3bcd7bf7`).** `bash verify/run-e2e-tools.sh` printed `291 tests ran`, `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, `70 checks ran (the offline suite and 69 tier tests) in 32m28s`, `ALL E2E TOOLS TIER CHECKS
 GREEN` and `exit=0`; `test_wall_more_count_e2e.py` ran in the tier. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #955 · run 17843 · The audit state was lost with run 17588's worktree; a script rebuilds it from AWS, and tanjiro-wsl2 is the states machine
+
+**Context.** `bash verify/prior-drafts.sh 955 origin/staging` printed NONE. #955 asked for two things: copy run 17588's
+audit state, `infra/terraform/aws/audit/states/accen-dev.tfstate`, off its worktree before the worktree is retired,
+and install the daily drift cron on the machine that holds the fleet states.
+
+**The state was already gone.** `/var/lib/hecaton/worktrees/1270196839-795-17588` no longer exists: run 17711 took
+the workspace over, merged as `2cb0484d`, which fits the workspace having been retired with that run rather than on 2026-11-19. A search of
+every path this host allows a run to read found no `accen-dev*.tfstate`. tanjiro-wsl2's checkout has an
+`audit/states/accen-dev.tfstate` that manages nothing (serial 28, `resources: []`), which is escalation 822's partial
+apply after its teardown. So there was nothing left to copy. All 13 resources still stand in accen-dev: recorder
+`watch-it-burn` recording with last status `SUCCESS`, the delivery channel to
+`watch-it-burn-audit-515966504359-us-west-2`, the trail, and the role `watch-it-burn-config-recorder` with
+`config-delivery` and `AWS_ConfigRole`.
+
+**The fix: rebuild the state from AWS.** Every resource in the root has a fixed name built from the account id and
+the region, so `infra/terraform/aws/audit/import-state.sh <profile>` imports each of the 13 by that name, runs the
+refresh-only settle step, applies `-target=aws_s3_bucket.audit` and ends on `plan -detailed-exitcode`, exiting 1
+unless the plan says no changes. The targeted apply is there because an import leaves `force_destroy` false and the
+config says true; a plan right after the 13 imports showed exactly that one change and nothing else. `force_destroy`
+is Terraform's own flag and S3 has no copy of it. The script refuses a state that already manages a resource (data
+sources do not count), so it never imports over a live state. `verify/test_audit_import_state.py` runs it on fake
+terraform and aws ahead of the no-cloud stubs, holds its import list to main.tf's resources one for one, and checks
+the ids, the call order, the refusal, a failed import, an unclean plan and the usage errors. With
+`aws_s3_bucket_ownership_controls.audit` deleted from the list, the test failed naming it. docs/floor.md gives the
+command. Destroying the root after the event was the other option #955 named. It is not taken: a rebuilt state can
+do the destroy later, and the record is wanted for the KubeCon session.
+
+**Live, in accen-dev, with this run's session (`hecaton-run-17843`).** In this worktree, from 08:59Z: the 13
+imports, then `import-state: states/accen-dev.tfstate rebuilt; plan: no changes`, exit 0, in 2m58s. A second run
+refused, naming `aws_cloudtrail.fleet`, exit 1. `python3 infra/terraform/drift/drift-report.py --accounts accen-dev
+--region us-west-2` then exited 2 with 0 drifted states, `audit accen-dev` under Clean states, the recorder recording,
+and only `watch-it-burn-community` and `watch-it-burn-private` unmanaged (both made by `user/nwuser` on 2026-10-28).
+CloudTrail holds 257 events by this session between 08:55 and 09:03Z (S3, Config, CloudTrail, STS, EKS) and none of
+them has `readOnly` false, so the rebuild changed nothing in AWS. That state is in this worktree only, so it is
+retired with it as well: the copy to keep is the one rebuilt on tanjiro.
+
+**The machine: tanjiro-wsl2.** Read through `sources-elevated fleet tanjiro-wsl2`: the checkout at
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` has the same `main.tf`, `drift-report.py` and
+`scheduled-drift.sh` as staging (sha256 compared). It has terraform 1.15.6, aws 2.38.5 with `accen-dev` and the four
+`aws1-student3x` profiles (`accen-dev` answers as `user/nwuser` in 515966504359), gh signed in, PyYAML 6.0.2, and cron
+active. Its crontab has no `wib-drift` line. megumi-wsl2 timed out on ssh again (port 22). No fleet cluster state is on
+tanjiro (`infra/terraform/fleet/states/` is empty), and none is anywhere else a run can read, so no machine holds the
+fleet states today. tanjiro is the one that can, and docs/floor.md's schedule now names it. The run changes no file
+outside its clone, so the rebuild on tanjiro and the crontab line are this run's escalations, with the exact commands
+in its report. The rebuild reads the script from `origin/staging` and stops if it is not there yet.
+
+**Not yet run on a cluster.** On tanjiro-wsl2, once this is on staging: `import-state.sh accen-dev` from the
+checkout, expected `plan: no changes`, then `drift-report.py --accounts accen-dev --region us-west-2` without
+`--post` reading `audit accen-dev` as clean. Then the cron line from docs/floor.md, and `crontab -l` showing one
+`# wib-drift` line. The two KubeCon clusters stay unmanaged in every report until each one is brought into a state or
+registered in `infra/terraform/drift/known-unmanaged.yaml`; that is a follow-up.

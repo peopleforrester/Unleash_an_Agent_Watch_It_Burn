@@ -182,6 +182,10 @@ it has not shown that thing is free of drift.
 ( crontab -l 2>/dev/null; echo '17 6 * * * <repo>/infra/terraform/drift/scheduled-drift.sh # wib-drift' ) | crontab -
 ```
 
+The machine is tanjiro-wsl2, with `<repo>` as `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` (#955,
+2026-11-06). It is the operator machine runs reach: it has terraform, aws with every fleet profile, gh signed in,
+PyYAML and a running cron. megumi-wsl2 does not answer ssh. The states the report plans go there.
+
 `scheduled-drift.sh` supplies the PATH that cron does not have, keeps a dated copy of each report, and
 posts the result to a single open GitHub issue titled "Fleet drift report". It comments if that issue
 is already open and opens it if not. A clean day is posted only when the issue is open.
@@ -214,6 +218,21 @@ were created: the role's managed and inline policies, the bucket's policy, lifec
 empty `tags` map on all three. The #795 apply of 2026-11-05 showed exactly that, three resources "changed
 outside of Terraform" minutes after the apply. Settled, the report reads the state as clean, and a later
 out-of-band change to one of those attributes still shows as drift.
+
+A lost audit state is rebuilt from AWS, on the machine that is to keep it:
+
+```bash
+terraform -chdir=infra/terraform/aws/audit init
+infra/terraform/aws/audit/import-state.sh <profile>
+```
+
+Every resource in the root has a fixed name built from the account id and the region, so the script imports
+each one by that name, settles the state as above, and ends on a plan that has to say no changes. Only
+`force_destroy` on the bucket differs after an import, because it is a Terraform setting AWS has no copy of;
+a targeted apply of the bucket writes it into the state and changes nothing in AWS. The script refuses a
+state that already manages a resource. Run 17588 (#795) applied the root in accen-dev from a hecaton
+worktree that has since been retired, its state with it; on 2026-11-06 the script rebuilt that state from
+AWS in 3 minutes, and the drift report read it as clean (#955).
 
 It creates a Config recorder for the six `AWS::EKS::` types, the S3 bucket, bucket-policy and account
 public-access-block types, IAM users, user policies, roles, role policies and managed policies (where the
