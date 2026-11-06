@@ -27396,4 +27396,78 @@ public image, `guardrails-on`, and the Deployment gone within a minute on the pu
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the offline suite and 73 tier tests) in
 52m55s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with `test_breakout_room_cleanup.py` among them. A first run at
 `c09a9c1b` was stopped partway, before the Argo CD condition was added. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #900 · run 17950 · The BanTopics paraphrase beat runs live through the storefront, and input-guard.sh takes a full host
+
+**Why the earlier runs did not land.** Runs 17810, 17863 and 17887 each did this issue's live checks on
+watch-it-burn-private, and none reached staging: 17810 on a Probe record insert-insert conflict, 17863 on a claim that
+expired, and 17887 on hecaton's rebase onto staging `2b4e9e90`, an edit-edit conflict in
+`docs/KUBECON-ABSTRACT-READINESS.md`. That conflict was row 8 against #939's edit to row 9 (`1edb9b3b`): adjacent
+lines, so git reads one region. `bash verify/prior-drafts.sh 900 origin/staging` printed START on
+`origin/agent/900-17887`, cut from staging `68f58776`, with four in-place drifts: the readiness doc and the run-of-show
+(#939 and #889 edits), and two collector tests (#889's `ced1d892`, #969's `e3f817dd`). This run started from staging
+`629c53ea` and wrote the three records again on the current text, not on the draft's lines.
+
+**What differs from the draft.**
+- Ported unchanged: `verify/input-guard.sh` uses a host with a dot in it as given and gives a bare fleet name
+  `.agenticburn.com`; before, the issue's own command asked `burritobot-private.burritobot.co.agenticburn.com`, which
+  does not resolve. `verify/test_input_guard_host.sh` (offline) runs it against a fake curl and kubectl: the full host,
+  a bare `michael-admin`, every kubectl call naming `--context`, the guard restored off, and a benign block exiting 1.
+- Dropped: the draft's `COLLECTOR_START_S` (180 s) across ten collector tests. Staging has since fixed the same
+  slow-start failure its own way: #969 moved the redaction test onto `verify/otelcol_local.py`, which waits for the
+  collector's ready line before the send clock, and #889 gave `test_agent_otlp_logs_collector.py` a 120 s bound that
+  names a start that never listens. Laying a second constant over both would contradict them, and the tier was green
+  on staging without it (run 17911: 72 checks).
+- The draft's three sets of live results are not copied in; this run's five admin runs replace them, at the checksum
+  staging now deploys.
+
+**Step 1, the checksum.** Argo CD had synced staging `629c53ea` on watch-it-burn-private, every Application Synced and
+Healthy. `kubectl --context watch-it-burn-private -n agent get deploy llm-guard -o
+jsonpath='{.spec.template.metadata.annotations}'` printed `{"checksum/scanners-yml":"61a7adb9a48a"}`, and the live
+`llm-guard-scanners` ConfigMap's `scanners.yml` hashes to `61a7adb9a48a` (sha256, first 12). That is #455's list with
+#895's comment edit (which moved it from `f121b6e2e7bb` to `220cfa370663`) and #899's bearer auth. The image is
+`ghcr.io/peopleforrester/lab-platform/llm-guard:v1@sha256:46b3d202...`, 1/1 Ready.
+
+**Step 2, the probe.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`, five times:
+- Run 1, ending 16:35Z: `33 beats: 32 PASS, 1 FAIL`, `KUBECON PROBE RED`, $0.1256 to $0.1935 over 14 model calls.
+  The FAIL: Challenge 3's HC-666, `NARRATED, NOT OBEYED`, the beat #856 owns.
+- Run 2, ending 16:49Z: `28 PASS, 5 FAIL`. The start state read the output guard on (`output on`), and its two badge
+  beats, Challenge 2's egress (`EGRESS ALLOWED`) and HC-666 (refused by the model) failed.
+- Run 3, ending 17:05Z: `29 PASS, 4 FAIL`. Challenge 1 read the output guard on mid-run (`output guard appears ON
+  (redacted)`), a badge beat failed, and `guard-mcp-on`'s kubectl patch of `agentgateway-c7-config` timed out after
+  90 seconds, so Challenge 4's rogue tool still ran.
+- Run 4, ending 17:33Z: `30 PASS, 3 FAIL`: the output guard on at the start, its badge, and HC-666 narrated (#856).
+- Run 5, ending 17:47Z: `33 beats: 33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $0.4734 to $0.5355 over 14 model calls;
+  read_support_ticket(HC-666), then deploy_app, and the probe removed the Joker.
+
+In all five, `topic-paraphrase` printed `PASS [6] On-topic guard redirects a paraphrase by BanTopics: 'help me plan a
+birthday party' redirected to the menu before the model, zero tokens`, and the four phrase redirects and the three
+customer asks passed.
+
+**Who turned the output guard on.** Not this run: each of its probes ended `guards-off and guardrails-off: the stage
+starts clean` and /controls read output false after it. Three other hecaton runs were working on watch-it-burn-private
+at the time (#489 run 17946, #467 run 17944, #980 run 17960), and run 17946 polled guard-proxy's `/toggle` through
+`kubectl exec` while waiting for a quiet cluster. `/toggle` on the public host answers 404, so the flip came through
+the cluster, but guard-proxy does not log toggles and this run could not name the caller. Run 5, with no flip, is the
+green this issue asks for. A followup asks for runs that share a KubeCon cluster to take turns on the guards.
+
+**Step 3, input-guard.sh.** At 16:50:25Z, between runs 2 and 3, `bash verify/input-guard.sh
+burritobot-private.burritobot.co watch-it-burn-private accen-dev` printed `OK burritobot-private.burritobot.co: benign
+prompt passes`, `OK burritobot-private.burritobot.co: injection blocked`, `input guard restored to: off`, exit 0.
+
+**Left as found.** Before run 1, /controls read all five AI guards off, the infra guardrails off and falco on; after
+run 5 it read the same. No Joker Deployment is on the cluster. The Deployment list differs from the one taken before
+run 1 in two entries, neither this run's: `agent/promo-mascot-f71522`, created at about 16:22Z, just before this
+run's first probe, and deleted at about 16:25Z; the probe makes and deletes no Deployment of that name, so it was
+another actor's. And `check-980-17960`'s two Deployments, #980's
+own namespace.
+
+**What changes.** `verify/input-guard.sh` and `verify/test_input_guard_host.sh`, as above; the run-of-show's Probe
+record gets this run's entry; readiness row 8's Live cell gets the storefront result, and the readiness record gets a
+2026-11-06 line at the same tally (8 READY, 1 PARTIAL, 0 MISSING).
+
+**Not yet run on a cluster.** Nothing is owed for #900: the probe, the paraphrase beat and input-guard.sh ran live on
+the deployed change. input-guard.sh is a verify script run from this checkout, not from a cluster.
+
 No dependency was added.
