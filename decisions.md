@@ -23166,3 +23166,7 @@ afresh. The check is a chat naming an ingredient and its `tool_input` in worksho
 `"ingredient"`. Owed to the next run on #902. The missing rollout trigger is filed as a follow-up.
 
 No dependency was added to the repo; the Bedrock probe ran boto3 1.40.70 in a throwaway `uv run --with`.
+
+**The suites (run 17812, at `778f2a8b`).** `bash verify/run-e2e-tools.sh` printed `285 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `66 checks ran (the offline suite and 65 tier tests)
+in 41m25s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
