@@ -22333,3 +22333,7 @@ deployments carry `checksum/proxy-py` `dfca2b1fe758`. That is the state the 2026
 carries `witches` yet. No prompt text was printed and nothing on either cluster was changed.
 
 **Not yet run on a cluster.** The same check the 2026-11-05 entry names, after the repin syncs.
+
+**The suites (run 17783, at `10707be4` on staging `4aba39c8`).** `bash verify/run-e2e-tools.sh` printed `281 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `64 checks ran (the offline suite and 63
+tier tests) in 51m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
