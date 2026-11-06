@@ -23852,3 +23852,7 @@ So the criterion has a test that fails when it stops holding, in the repo that o
 **Live.** No cluster is involved: the wall runs on Railway, and this run touched neither cluster.
 
 **Not yet run on a cluster.** Nothing from this issue.
+
+**Suites (run 17824, at `11bceea3`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`288 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `66 checks ran (the offline suite and 65 tier tests) in 36m49s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added.
