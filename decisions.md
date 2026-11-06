@@ -22460,3 +22460,9 @@ there, `loadSaved` and the guard in `save()` are not, so both still serve the ol
 `https://attackme.burritobot.co` (watch-it-burn-community) and on `https://burritobot-private.burritobot.co`
 (watch-it-burn-private), send a prompt with a cuss word and then a clean one. The bot answers both, only the clean
 one is in "Your saved prompts" and in `localStorage` `wib-saved`, and it is still the only one after a reload.
+
+**The suites (run 17755, at `b2cbf1a3`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`bash verify/run-tests.sh`),
+which printed `278 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then the tier: `64 checks ran (the offline
+suite and 63 tier tests) in 38m21s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_chat_coc.py` and
+`test_fresh_context.py` passed in the offline suite, and `test_chat_saved_coc_e2e.py`, `test_chat_coc_e2e.py`,
+`test_audience_page_e2e.py` and the other storefront page tests passed in the tier.
