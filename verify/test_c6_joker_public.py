@@ -143,6 +143,10 @@ port = re.search(r"--env PORT=(\d+)", BUILD)
 env = re.search(r"--env ENV=(\S+)", BUILD)
 check("build.sh sets PORT, which the maintenance-shell Service targets, and ENV, the shell banner (#714)",
       port is not None and env is not None)
+# The banner's path is the one busybox sh reads and the one the issue names (#938): a different ENV in build.sh would
+# otherwise move the layer member this file holds along with it.
+check("build.sh's ENV is /etc/villain-banner.sh, the banner's path in the layer (#938)",
+      env is not None and env.group(1) == "/etc/villain-banner.sh", env.group(1) if env else "no --env ENV= flag")
 
 for name, ref, page_dir, cmd in JOKERS:
     print(f"\n== {name}, {ref}, answers an anonymous pull at images.lock's pin ==")
