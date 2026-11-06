@@ -1,5 +1,5 @@
 # ABOUTME: Offline: the self-heal drill reads Argo CD's operationState the way v3.5 writes it, and docs/floor.md
-# ABOUTME: names every PreSync Job ai-layer runs, since those set how long a full-sync heal takes (#795).
+# ABOUTME: names ai-layer's gate Jobs, which are no longer PreSync hooks a full-sync heal waits on (#795, #898).
 """Offline: python3, PyYAML and the repo.
 
 The two operationStates below are trimmed from the syncs that put agent/platform-console-egress back on
@@ -83,22 +83,30 @@ if not missing:
     check("the drill reads the operationState as soon as the policy is back, before it waits for the sync to end",
           DRILL.index(ANCHORS[0]) < DRILL.index(ANCHORS[1]))
 
-print("== docs/floor.md names every PreSync Job ai-layer runs ==")
+print("== ai-layer runs no hook Job, and docs/floor.md names its wave -1 gate Jobs ==")
+# #898: the gates were PreSync hooks, and every full sync deleted, re-created and ran them before it applied the
+# drill's policy. They are now plain Jobs at sync-wave -1, which a full sync re-applies as a no-op. A hook Job added
+# back to ai-layer would bring the slow path back, so it fails here, and floor.md has to name each gate.
 FLOOR = (REPO / "docs/floor.md").read_text(encoding="utf-8")
 kust = yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8"))
-jobs = []
+hooks, gates = [], []
 for res in kust.get("resources") or []:
     path = REPO / "gitops/ai-layer" / res
     if not path.is_file():
         continue
     for doc in yaml.safe_load_all(path.read_text(encoding="utf-8")):
         ann = ((doc or {}).get("metadata") or {}).get("annotations") or {}
-        if (doc or {}).get("kind") == "Job" and ann.get("argocd.argoproj.io/hook") == "PreSync":
-            jobs.append(doc["metadata"]["name"])
-check(f"ai-layer has PreSync Jobs to name ({', '.join(sorted(jobs))})", bool(jobs))
-for job in sorted(jobs):
-    check(f"floor.md names the PreSync Job `{job}`", f"`{job}`" in FLOOR)
-check("floor.md says a full-sync heal runs them before the policy is back", "full sync" in FLOOR)
+        if (doc or {}).get("kind") != "Job":
+            continue
+        if "argocd.argoproj.io/hook" in ann:
+            hooks.append(doc["metadata"]["name"])
+        elif ann.get("argocd.argoproj.io/sync-wave") == "-1":
+            gates.append(((doc["metadata"].get("labels") or {}).get("app.kubernetes.io/name")) or doc["metadata"]["name"])
+check(f"ai-layer has no hook Job, so a full-sync heal waits on none ({', '.join(sorted(hooks)) or 'none'})", not hooks)
+check(f"ai-layer has its wave -1 gate Jobs to name ({', '.join(sorted(gates))})", sorted(gates) == ["kubearmor-gate", "otel-gate"])
+for job in sorted(gates):
+    check(f"floor.md names the gate Job `{job}`", f"`{job}`" in FLOOR)
+check("floor.md says a full sync no longer runs the gates (#898)", "full sync" in FLOOR and "#898" in FLOOR)
 
 print()
 if failures:

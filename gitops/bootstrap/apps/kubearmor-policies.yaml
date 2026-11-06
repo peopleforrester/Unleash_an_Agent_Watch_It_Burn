@@ -10,8 +10,8 @@
 #
 # This is the SOLE C3 inline-prevention block since Tetragon was retired 2026-08-30. KubeArmor's enforcer
 # was proven to engage on our AL2023/containerd nodes (2026-07-18 and 2026-08-30, both live). Enforcement
-# depends on workshop-mcp being admitted after the KubeArmor webhook is up: the ai-layer PreSync gate
-# (gitops/ai-layer/kubearmor-ordering-gate.yaml) guarantees that ordering.
+# depends on workshop-mcp being admitted after the KubeArmor webhook is up: the ai-layer gate Job at
+# sync-wave -1 (gitops/ai-layer/kubearmor-ordering-gate.yaml, a PreSync hook until #898) guarantees that ordering.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

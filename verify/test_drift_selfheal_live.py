@@ -83,8 +83,10 @@ def heal_kind(op: dict, created: str) -> str:
     When the app already synced the revision git is at, self-heal syncs only the resources that are out of sync:
     `operation.sync.resources` lists them and no hook runs, so the policy is back in about a second. When
     `staging` has moved since the app last synced, even by a commit that leaves its manifests alone, the same
-    delete starts a full sync to the new revision, and ai-layer's PreSync gates (kubearmor-gate, otel-gate) run
-    before the policy is applied: 20.1, 25.2 and 27.2 s on 2026-11-05 against the 30 s window (#795). A selective
+    delete starts a full sync to the new revision. While ai-layer's gates (kubearmor-gate, otel-gate) were PreSync
+    hooks, that sync ran them before the policy was applied: 20.1, 25.2 and 27.2 s on 2026-11-05 against the 30 s
+    window (#795). Since #898 they are plain wave -1 Jobs that a full sync re-applies without running, so a full
+    sync names its PreSync Jobs as none, and one that lists a Job again means a hook is back. A selective
     heal can also be followed at once by a full sync to a revision that just landed (10:41Z that day on
     watch-it-burn-private), which is why the start time is compared and not assumed."""
     started = op.get("startedAt") or ""

@@ -52,7 +52,7 @@ spec:
     # EKS), not the VPC CIDR. Easy to miss because "the apiserver is in the VPC" is true of the ENI and
     # false of the ClusterIP the pods actually dial.
     #
-    # Required once this policy went namespace-wide: the ai-layer PreSync hook (kubearmor-gate) runs in
+    # Required once this policy went namespace-wide: the ai-layer gate Job (kubearmor-gate) runs in
     # this namespace and calls the API to wait for the KubeArmor webhook. Without this allow it times
     # out, the hook fails, and ai-layer never syncs at all, so widening the deny silently froze the
     # whole layer rather than just blocking exfil. Caught on watch-it-burn-r2-1 2026-08-28.

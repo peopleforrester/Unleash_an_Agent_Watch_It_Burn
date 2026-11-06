@@ -50,16 +50,34 @@ What that means on the day:
   again. That costs nothing after a quiet spell: once 300 s have passed since the last heal, the next
   heal is immediate, whatever the count.
 
-**A heal takes one of two paths, and only one of them is quick.** If the app has already synced the
-revision `staging` is at, self-heal syncs only the objects that are out of sync. No hook runs, and a
-deleted object is back in about a second. If `staging` has moved since the app last synced, even by a
-commit that changes none of its manifests, the app still reads Synced and nothing syncs, so the next
-delete starts a full sync to the new revision. For `ai-layer` that runs its two PreSync Jobs,
-`kubearmor-gate` and `otel-gate`, before anything is applied. On 2026-11-05 (#795) the full path brought
-the drill's policy back in 20.1, 25.2 and 27.2 s, inside the 30 s window with as little as 3 s to spare,
-and the quick path in 1.2 to 3.1 s. So the first heal after each commit on `staging` is the slow one, and
-every heal after it at the same revision is quick. A lab-platform cluster, whose revision is pinned, takes
-the slow path only once. The drill prints which path the heal took.
+**A heal takes one of two paths.** If the app has already synced the revision `staging` is at,
+self-heal syncs only the objects that are out of sync. No hook runs, and a deleted object is back in
+about a second. If `staging` has moved since the app last synced, even by a commit that changes none of
+its manifests, the app still reads Synced and nothing syncs, so the next delete starts a full sync to the
+new revision, which applies every object of the app, wave by wave, with 2 s between waves.
+
+Until #898 that full sync was the slow path for `ai-layer`. Its two ordering gates, `kubearmor-gate` and
+`otel-gate`, were PreSync hooks, and a full sync deleted, re-created and ran them before it applied
+anything. On 2026-11-05 (#795) the full path brought the drill's policy back in 20.1, 25.2 and 27.2 s,
+inside the 30 s window with as little as 3 s to spare, against 1.2 to 3.1 s for the selective path; on
+2026-11-06 a full sync on watch-it-burn-private spent 24 of its 29 s on the hooks. Since #898 the gates
+are plain Jobs at sync-wave -1, and everything else in `ai-layer` is at wave 0. On a fresh cluster Argo
+CD holds wave 0 until each gate Job is Complete, so workshop-mcp is still admitted after the KubeArmor
+webhook and guard-proxy after the OTel webhook. A later full sync re-applies the Complete Jobs unchanged,
+which runs no pod, so a heal no longer waits on the gates. A gate runs again only when its Job is
+renamed: the name carries a hash of the Job and its script, and `verify/test_ai_layer_gates.py` names
+the new one after an edit. The drill prints which path the heal took. On a full sync it names its PreSync
+Jobs as none, and a Job named there means a hook is back.
+
+If a gate's pod cannot run for 10 minutes, its Job fails, and every later `ai-layer` sync then fails
+naming it. Auto-sync does not retry a revision whose sync failed, so delete the Job and ask for a sync,
+which re-creates and runs it:
+
+```bash
+kubectl --context "$CONTEXT" -n agent delete job -l app.kubernetes.io/name=kubearmor-gate   # or otel-gate
+kubectl --context "$CONTEXT" -n argocd patch application ai-layer --type merge \
+  -p '{"operation":{"initiatedBy":{"username":"floor"},"sync":{"prune":true}}}'
+```
 
 **No Git webhook is configured**, on either kind of cluster, so a pushed commit reaches a `staging` cluster
 within 180 s, not seconds. If a beat needs a push to land in seconds, it has to say so on the run sheet and

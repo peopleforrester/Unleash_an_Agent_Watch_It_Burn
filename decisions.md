@@ -22843,3 +22843,77 @@ pods on watch-it-burn-community and 75 on watch-it-burn-private. It only read; n
 **The suites (run 17795, at `c3c7fc7e`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`283 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `64 checks ran (the offline suite and 63 tier tests) in
 53m11s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No code changed and no dependency was added.
+
+## 2026-11-06 · #898 · run 17796 · ai-layer's ordering gates are plain wave -1 Jobs, not PreSync hooks, so a full-sync self-heal does not wait on them
+
+**What changed.** `kubearmor-gate` and `otel-gate` (gitops/ai-layer/kubearmor-ordering-gate.yaml and
+otel-ordering-gate.yaml) were PreSync hooks. Every full sync of ai-layer deleted their eight objects, waited for the
+deletion, re-created them and ran both Jobs before it applied anything, and the first self-heal after any commit on
+staging is a full sync. They are now plain Sync-phase resources: every object of both files at
+`argocd.argoproj.io/sync-wave: "-1"`, no hook annotations, and everything else in ai-layer is at wave 0. Of the
+issue's options this is the first one. The window in docs/floor.md and the drill's `WINDOW_S` stay at 30 s.
+
+**Why the ordering still holds.** Argo CD v3.5.7's sync engine (`gitops-engine/pkg/sync/sync_context.go` at the tag)
+marks a plain resource Running after it is applied and, in a sync with more than one wave, does not start the next
+wave until every Running task reads Healthy; a Job reads Progressing until its Complete condition
+(`pkg/health/health_job.go`). So on a fresh cluster wave 0 (workshop-mcp, guard-proxy) is applied only after both
+gates passed, as with the hooks. That is the ordering inside ai-layer only: argocd-cm on watch-it-burn-private has
+no health customization for `argoproj.io_Application`, so the bootstrap's app waves order when each Application is
+created and do not wait on ai-layer's health, before this change or after it. Within one wave the engine applies kinds in order, so the ServiceAccount,
+ConfigMap and RBAC exist before the Job's pod is created; that is why all of a gate's objects share wave -1, which
+costs one 2 s wave step (`delayBetweenSyncWaves`, controller/sync.go) rather than two.
+
+**What a plain Job needs.**
+- *A name that changes with it.* A Job's pod template is immutable, so the Jobs are `kubearmor-gate-d92910c4` and
+  `otel-gate-0353f97d`: the first 8 hex of a sha256 over the Job's spec and its script's data. Any edit renames the
+  Job, Argo CD prunes the old one and runs the new. `verify/test_ai_layer_gates.py` computes it and names the right
+  suffix when it is stale.
+- *No TTL.* `ttlSecondsAfterFinished: 120` is gone: a Job the cluster deletes reads as missing, and self-heal would
+  re-create and re-run it every two minutes.
+- *A label for recovery.* `app.kubernetes.io/name: <gate>` on the Job, so the recovery delete does not need the hash.
+- `backoffLimit` 1 to 3, so a pod lost to a node goes again before the Job fails.
+
+**What is given up, said once.** The gate runs when its Job is first created, not on every full sync, so a rollout of
+workshop-mcp on a running cluster no longer re-checks KubeArmor first. KubeArmor is up by then on every cluster this
+runs on. The failure mode moves: the gate script exits 0 on every path, so a gate Job fails only when its pod cannot
+run for `activeDeadlineSeconds` (600). A Failed Job reads Degraded and fails every later ai-layer sync naming it, and
+auto-sync does not retry a revision whose sync failed (controller/appcontroller.go `autoSync`), so it needs a
+delete and a requested sync; docs/floor.md has both commands. The hooks' BeforeHookCreation retried that case by
+itself on the next revision. #407's park, a fixed-name HookSucceeded hook left behind, cannot happen to a plain
+resource.
+
+**Live check, watch-it-burn-private, 2026-11-06 03:47 to 04:20 UTC.** Read-only except one scratch namespace.
+- *Where the time goes now.* staging moved to ec03eb5f and a full sync of ai-layer ran at 03:47:22Z, finishing at
+  03:47:51Z (29 s). The controller log: hook deletion 03:47:22 to 03:47:28, hook re-creation to 03:47:33, the Jobs
+  applied at 03:47:34 and Succeeded at 03:47:43 (otel-gate) and 03:47:44 (kubearmor-gate), and
+  `networkpolicy.networking.k8s.io/platform-console-egress serverside-applied` at 03:47:46. 24 s of the 29 went to the
+  hooks.
+- *Admission.* `kubectl apply --server-side --dry-run=server` of the rendered gate objects: both Jobs, both
+  ServiceAccounts, ClusterRoles and ClusterRoleBindings admitted. The two ConfigMaps were refused by Kyverno's
+  `block-argocd-drift` for this run's principal, which is that policy working (it exempts Argo CD); it covers
+  Deployments, ConfigMaps and Services only, not Jobs, so the recovery delete is admitted.
+- *A completed Job re-applied.* In namespace `hecaton-898-scratch`, a Job with the gate's pod spec and a one-line
+  command, applied with `--server-side --force-conflicts --field-manager=argocd-controller` as Argo CD applies,
+  ran to Complete. `kubectl diff --server-side` of the same manifest printed nothing (exit 0); a second apply kept
+  resourceVersion 7241314 and the uid, `succeeded` stayed 1, and no second pod started. The same Job with its command
+  edited was refused: `The Job "probe-gate" is invalid: spec.template: Invalid value`, which is why the name is
+  hashed. The namespace was deleted; `get namespace` then read NotFound.
+- *KubeArmor today.* workshop-mcp on both clusters carries `kubearmor-policy=enabled` (pods from 2026-11-05 21:10Z
+  and 21:13Z).
+
+**Not yet run on a cluster.** Once hecaton promotes this, on watch-it-burn-private: the transition sync should
+create `job/kubearmor-gate-d92910c4` and `job/otel-gate-0353f97d` in `agent`, both Complete, with ai-layer Synced and
+Healthy. Then, on the first heal after the next staging commit,
+`CONTEXT=watch-it-burn-private python3 verify/test_drift_selfheal_live.py` must print `healed by a full sync to
+revision <rev>, PreSync Jobs run first: none` and the policy back within its 30 s, and
+`kubectl --context watch-it-burn-private -n agent get pods -l app=workshop-mcp -o
+jsonpath='{.items[*].metadata.annotations.kubearmor-policy}'` must still print `enabled`. The fresh-cluster ordering
+(workshop-mcp admitted after the gate on a first sync) needs a bring-up, which a run does not do; the next bring-up
+checks it with `verify/run-e2e.sh`'s KubeArmor checks.
+
+**Tests.** `verify/test_ai_layer_gates.py` (new, offline) holds the shape: no hook annotation in either gate file,
+every object at wave -1, the hashed name, no TTL, the label, the script exiting 0 on every path and
+`activeDeadlineSeconds` outlasting its waits plus a minute, and no other ai-layer object at wave -1 or lower or a
+hook. `verify/test_ai_layer_rollout.py` checks the render the same way. `verify/test_drift_selfheal_ops.py` now
+fails if ai-layer has a hook Job and requires docs/floor.md to name both gates and #898. The drill's docstring says a
+full sync now names no PreSync Job.

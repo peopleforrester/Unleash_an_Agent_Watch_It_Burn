@@ -1,5 +1,5 @@
-# ABOUTME: ArgoCD PreSync hook that blocks ai-layer (workshop-mcp) from deploying until the KubeArmor
-# ABOUTME: daemonset + controller webhook are Ready, so the workshop-mcp pod is admitted AFTER the webhook
+# ABOUTME: Wave -1 gate Job that holds ai-layer's wave 0 (workshop-mcp) until the KubeArmor daemonset +
+# ABOUTME: controller webhook are Ready, so the workshop-mcp pod is admitted AFTER the webhook
 # ABOUTME: and gets the kubearmor-policy=enabled annotation (validated 2026-07-18: enforcement needs this).
 #
 # WHY: KubeArmor annotates pods for ENFORCEMENT at admission via its controller's mutating webhook.
@@ -7,8 +7,8 @@
 # controller ASYNC after its Application reports Healthy, so ai-layer (wave 3) otherwise races ahead and
 # workshop-mcp comes up un-annotated -> KubeArmor observes but does not block (proven live). A manual
 # `kubectl rollout restart` is NOT an option on armed clusters: Kyverno block-argocd-drift denies it.
-# This gate is the GitOps-native fix: ai-layer's PreSync waits for KubeArmor readiness, then the workload
-# is admitted through the live webhook.
+# This gate is the GitOps-native fix: ai-layer's wave -1 waits for KubeArmor readiness, then the workload
+# (wave 0) is admitted through the live webhook.
 #
 # SOFT-FAIL BY DESIGN: the gate always exits 0 (proceed) after at most ~7 min. If KubeArmor is ready it
 # proceeds immediately (normal path). If KubeArmor is genuinely broken it proceeds anyway rather than wedge
@@ -17,7 +17,10 @@
 # so a soft-fail means C3 runs UNENFORCED, not dual-run. That is the deliberate trade: one un-blocked
 # challenge beats wedging the entire demo. The gate has been reliable in practice, so this is a last resort.
 #
-# All resources are PreSync hooks: RBAC + script at hook wave 0, the Job at hook wave 1. kustomize's
+# All resources are plain Sync-phase resources at sync-wave -1, not hooks (#898): the Job's comment says why.
+# Within one wave Argo CD applies kinds in order, so the ServiceAccount, ConfigMap and RBAC exist before the
+# Job. The gate runs when its Job is first created: on a fresh cluster, and after an edit renames it. A
+# rollout of workshop-mcp on a running cluster no longer waits on it; KubeArmor is up by then. kustomize's
 # `namespace: agent` lands the namespaced pieces in agent; the ClusterRole/Binding are cluster-scoped.
 # Image is the workshop's own ghcr.io image (allowed by restrict-image-registries; has python). The gate
 # talks to the API with its ServiceAccount token (read-only on the KubeArmor resources it checks).
@@ -27,9 +30,7 @@ kind: ConfigMap
 metadata:
   name: kubearmor-gate-script
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 data:
   gate.py: |
     # ABOUTME: Poll the k8s API for KubeArmor readiness (daemonset + controller + webhook), then exit 0.
@@ -109,18 +110,14 @@ kind: ServiceAccount
 metadata:
   name: kubearmor-gate
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: kubearmor-gate
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
@@ -137,9 +134,7 @@ kind: ClusterRoleBinding
 metadata:
   name: kubearmor-gate
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -152,22 +147,32 @@ subjects:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kubearmor-gate
+  name: kubearmor-gate-d92910c4
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    # HookSucceeded ALONE parks every later sync of this Application (#407). The Job has a fixed name, and
-    # Argo CD only deletes a HookSucceeded hook when the WHOLE sync succeeded, so a failed gate, or a
-    # successful gate in a sync that failed for any other reason, leaves the Job in place. The next sync
-    # then tries to create a Job that already exists and the operation sits in Running, indefinitely,
-    # with nothing reporting an error: a committed fix to agentgateway-config was confirmed Synced by
-    # Argo CD and could not reach the pod for two days because of this. BeforeHookCreation deletes the
-    # stale Job immediately before creating the new one, which is the documented general-purpose pairing.
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "1"
+    # A plain Sync-phase resource at wave -1, not a hook (#898). Everything else in ai-layer is at wave 0, and Argo
+    # CD applies wave 0 only once this Job reads Healthy, which for a Job is Complete: so on the first sync the
+    # gated pods are admitted after the gate passed, as before. A later full sync re-applies this unchanged, already
+    # Complete Job, which is a no-op that reads Healthy at once, so no pod runs and a self-heal does not wait on it.
+    # The PreSync hook it replaces was deleted, re-created and run on every full sync: 20.1 to 27.2 s of a 30 s heal.
+    #
+    # The name carries a hash of this Job's spec and its script, because a Job's pod template is immutable: an edit
+    # in place would fail every sync. Any edit gives a new name instead, Argo CD prunes the old Job and runs the new
+    # one. verify/test_ai_layer_gates.py computes the hash and names the right suffix when this one is stale.
+    #
+    # No ttlSecondsAfterFinished: a finished Job that the cluster deletes reads as missing, and self-heal would
+    # re-create and re-run it. No hook delete policy either; the #407 park (a fixed-name HookSucceeded hook left
+    # behind) cannot happen to a plain resource. Its own failure mode: the gate script always exits 0, so the Job
+    # fails only when its pod cannot run for activeDeadlineSeconds. A Failed Job reads Degraded and fails every
+    # later ai-layer sync, naming this Job, until it is deleted: `kubectl --context "$CONTEXT" -n agent delete job
+    # -l app.kubernetes.io/name=kubearmor-gate`, then a requested sync of ai-layer re-creates it (auto-sync does not retry
+    # a revision whose sync failed; docs/floor.md has both commands). Kyverno's block-argocd-drift does not cover
+    # Jobs, so that delete is admitted.
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/name: kubearmor-gate
 spec:
-  backoffLimit: 1
+  backoffLimit: 3
   activeDeadlineSeconds: 600
-  ttlSecondsAfterFinished: 120
   template:
     metadata:
       # The Datadog Agent tags this pod's logs from these labels (#662), as on every BurritoBot pod.

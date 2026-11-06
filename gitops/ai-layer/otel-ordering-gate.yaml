@@ -1,19 +1,20 @@
-# ABOUTME: PreSync gate: wait for the OTel operator's pod webhook to be SERVING and the Instrumentation to
-# ABOUTME: exist before the Agent CR is applied, so BurritoBot's pod is admitted WITH instrumentation.
+# ABOUTME: Wave -1 gate Job: wait for the OTel operator's pod webhook to be SERVING and the Instrumentation to
+# ABOUTME: exist before ai-layer's wave 0 and the Agent CR are applied, so BurritoBot's pods are admitted WITH instrumentation.
 #
 # Why. The operator's pod webhook (mpod.kb.io) fails open. When the Agent CR landed before the webhook was
 # serving, kagent's Deployment created the BurritoBot pod with its inject annotation and nothing injected,
 # and that cluster never produced an agent trace. Nine of ten fresh clusters on 2026-09-06. Same shape as
 # kubearmor-ordering-gate.yaml; fleet.sh converge holds the runtime backstop (repair_agent_injection).
+#
+# A plain Sync-phase Job at wave -1 since #898, not a PreSync hook, so a full-sync self-heal does not re-run it;
+# the Job's comment and kubearmor-ordering-gate.yaml's header say how the ordering still holds on a fresh cluster.
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: otel-gate-script
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 data:
   gate.py: |
     import json, os, ssl, sys, time, urllib.request, urllib.error
@@ -66,18 +67,14 @@ kind: ServiceAccount
 metadata:
   name: otel-gate
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: otel-gate
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 rules:
   - apiGroups: [""]
     resources: ["endpoints"]
@@ -91,9 +88,7 @@ kind: ClusterRoleBinding
 metadata:
   name: otel-gate
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-1"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -106,22 +101,32 @@ subjects:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: otel-gate
+  name: otel-gate-0353f97d
   annotations:
-    argocd.argoproj.io/hook: PreSync
-    # HookSucceeded ALONE parks every later sync of this Application (#407). The Job has a fixed name, and
-    # Argo CD only deletes a HookSucceeded hook when the WHOLE sync succeeded, so a failed gate, or a
-    # successful gate in a sync that failed for any other reason, leaves the Job in place. The next sync
-    # then tries to create a Job that already exists and the operation sits in Running, indefinitely,
-    # with nothing reporting an error: a committed fix to agentgateway-config was confirmed Synced by
-    # Argo CD and could not reach the pod for two days because of this. BeforeHookCreation deletes the
-    # stale Job immediately before creating the new one, which is the documented general-purpose pairing.
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "1"
+    # A plain Sync-phase resource at wave -1, not a hook (#898). Everything else in ai-layer is at wave 0, and Argo
+    # CD applies wave 0 only once this Job reads Healthy, which for a Job is Complete: so on the first sync the
+    # gated pods are admitted after the gate passed, as before. A later full sync re-applies this unchanged, already
+    # Complete Job, which is a no-op that reads Healthy at once, so no pod runs and a self-heal does not wait on it.
+    # The PreSync hook it replaces was deleted, re-created and run on every full sync: 20.1 to 27.2 s of a 30 s heal.
+    #
+    # The name carries a hash of this Job's spec and its script, because a Job's pod template is immutable: an edit
+    # in place would fail every sync. Any edit gives a new name instead, Argo CD prunes the old Job and runs the new
+    # one. verify/test_ai_layer_gates.py computes the hash and names the right suffix when this one is stale.
+    #
+    # No ttlSecondsAfterFinished: a finished Job that the cluster deletes reads as missing, and self-heal would
+    # re-create and re-run it. No hook delete policy either; the #407 park (a fixed-name HookSucceeded hook left
+    # behind) cannot happen to a plain resource. Its own failure mode: the gate script always exits 0, so the Job
+    # fails only when its pod cannot run for activeDeadlineSeconds. A Failed Job reads Degraded and fails every
+    # later ai-layer sync, naming this Job, until it is deleted: `kubectl --context "$CONTEXT" -n agent delete job
+    # -l app.kubernetes.io/name=otel-gate`, then a requested sync of ai-layer re-creates it (auto-sync does not retry
+    # a revision whose sync failed; docs/floor.md has both commands). Kyverno's block-argocd-drift does not cover
+    # Jobs, so that delete is admitted.
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/name: otel-gate
 spec:
-  backoffLimit: 1
+  backoffLimit: 3
   activeDeadlineSeconds: 600
-  ttlSecondsAfterFinished: 120
   template:
     metadata:
       # The Datadog Agent tags this pod's logs from these labels (#662), as on every BurritoBot pod.

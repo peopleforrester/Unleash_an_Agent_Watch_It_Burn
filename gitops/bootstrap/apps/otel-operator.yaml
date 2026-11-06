@@ -30,7 +30,7 @@ spec:
     #   node memory limits   121%               120%
     #
     # The failure mode is what makes this worth holding rather than living with. The operator fails to
-    # reach the API server on startup, its admission webhook never serves, the otel-gate sync hook waits
+    # reach the API server on startup, its admission webhook never serves, the otel-gate Job waits
     # on that webhook forever, and the ai-layer Application parks in Running. Every later change to
     # ai-layer is then blocked, with nothing reporting an error: a committed and synced fix to
     # agentgateway-config was observed unable to reach its pod for exactly this reason.

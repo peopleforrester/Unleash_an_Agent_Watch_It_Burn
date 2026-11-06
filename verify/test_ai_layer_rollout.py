@@ -84,29 +84,37 @@ with tempfile.TemporaryDirectory(dir=REPO) as tmp:
     check("editing lab.html changes the console pod template (so Argo CD rolls it)", before != after)
 
 print("== the OTel ordering gate runs before the AI layer's pods (and the Agent CR, a wave later since #707) ==")
-gate = [d for d in docs if d["kind"] == "Job" and d["metadata"]["name"] == "otel-gate"]
-check("otel-gate Job is a PreSync hook", bool(gate) and gate[0]["metadata"]["annotations"].get("argocd.argoproj.io/hook") == "PreSync")
+WAVE = "argocd.argoproj.io/sync-wave"
+gate = [d for d in docs if d["kind"] == "Job" and d["metadata"]["name"].startswith("otel-gate-")]
+# #898: the gates are plain Sync-phase Jobs at wave -1, not PreSync hooks, so a full-sync self-heal does not re-run
+# them; Argo CD holds wave 0 until a wave -1 Job is Complete. verify/test_ai_layer_gates.py holds the source shape
+# (hash-suffixed name, no TTL, bounded script); this holds the render Argo CD applies.
+check("otel-gate Job renders at sync-wave -1 and is not a hook",
+      len(gate) == 1 and gate[0]["metadata"]["annotations"].get(WAVE) == "-1"
+      and "argocd.argoproj.io/hook" not in gate[0]["metadata"]["annotations"])
 check("otel-gate waits on the webhook endpoints and the Instrumentation",
       any(d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith("otel-gate-script") and "endpoints/otel-operator-opentelemetry-operator-webhook" in d["data"]["gate.py"] and "instrumentations/watch-it-burn-python" in d["data"]["gate.py"] for d in docs))
 
-# #407: a fixed-name PreSync Job carrying HookSucceeded ALONE is never cleaned up unless the whole sync
-# succeeded, so one failed gate parks every later sync of ai-layer with the Application still reading
-# Running. Both gates must carry BeforeHookCreation as well, and both must be bounded: the gate exits 0
-# on its deadline (degrade) and the Job carries activeDeadlineSeconds as the backstop for a pod that
-# never starts at all.
+# Both gates must be bounded: the gate exits 0 on its deadline (degrade) and the Job carries
+# activeDeadlineSeconds as the backstop for a pod that never starts at all. And nothing the gates hold back may
+# render at their wave or before it, or it would be admitted before the webhook it waits for.
 for name in ("otel-gate", "kubearmor-gate"):
-    job = next((d for d in docs if d["kind"] == "Job" and d["metadata"]["name"] == name), None)
+    job = next((d for d in docs if d["kind"] == "Job" and d["metadata"]["name"].startswith(f"{name}-")), None)
     check(f"{name} Job is present", job is not None)
     if not job:
         continue
-    policy = job["metadata"]["annotations"].get("argocd.argoproj.io/hook-delete-policy", "")
-    check(f"{name} carries BeforeHookCreation, so a failed gate cannot park the next sync",
-          "BeforeHookCreation" in policy)
+    check(f"{name} is a plain resource at wave -1, so a full sync re-applies it rather than re-running it",
+          job["metadata"]["annotations"].get(WAVE) == "-1"
+          and not any(k.startswith("argocd.argoproj.io/hook") for k in job["metadata"]["annotations"]))
     check(f"{name} Job has an activeDeadlineSeconds backstop",
           isinstance(job["spec"].get("activeDeadlineSeconds"), int))
     script = next((d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith(f"{name}-script")), None)
     check(f"{name} script is bounded by a deadline and exits rather than waiting forever",
           script is not None and "deadline" in script["data"]["gate.py"] and "sys.exit(0)" in script["data"]["gate.py"])
+early = sorted(f"{d['kind']}/{d['metadata']['name']}" for d in docs
+               if int(((d["metadata"].get("annotations") or {}).get(WAVE)) or 0) <= -1
+               and "-gate" not in d["metadata"]["name"])
+check(f"only the gates render at wave -1 or lower ({', '.join(early) or 'none else'})", not early)
 
 # The degrade path is only useful if it says what it was waiting for. A gate that gives up silently
 # sends the next person tracing a stuck Application back to an operator in another namespace.

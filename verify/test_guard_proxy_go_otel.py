@@ -135,7 +135,7 @@ def strip_ann(d):
 check("the rest of the guard-proxy Deployment is untouched (the cutover changes the image and command, not this)",
       strip_ann(guard_proxy(with_otel)) == strip_ann(guard_proxy(without_otel)))
 
-print("== the PreSync gate waits for the Instrumentation inject-sdk names ==")
+print("== the OTel ordering gate waits for the Instrumentation inject-sdk names ==")
 gate = (AI_LAYER / "otel-ordering-gate.yaml").read_text()
 check(f"otel-ordering-gate.yaml waits on instrumentations/{after.get(SDK)} in namespace {ai_ns}",
       f"/namespaces/{ai_ns}/instrumentations/{after.get(SDK)}" in gate)
