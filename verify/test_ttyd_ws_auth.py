@@ -51,6 +51,8 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 import ttyd_ws  # noqa: E402
 
+UPGRADE_BOUND = 60.0  # seconds ttyd gets to answer each upgrade on loopback
+
 ENTRYPOINT = REPO / "gitops/ai-layer/web-terminal/entrypoint.sh"
 LOCK = REPO / "verify/e2e-tools.lock"
 CREDENTIAL = "presenter:wib-770-not-a-real-password"
@@ -142,7 +144,10 @@ with tempfile.TemporaryDirectory() as t:
         def probe(path: str, message: bytes | None, *, auth: str | None, protocol: str | None) -> tuple:
             before = (started(), logged())
             headers = {"Authorization": auth} if auth else None
-            r = ttyd_ws.first_message("127.0.0.1", port, path, message, headers=headers, protocol=protocol, wait=2.0)
+            # ttyd gets UPGRADE_BOUND to answer the upgrade. The default 10 s ran out in run 17949's tools tier, at
+            # load average near 60, and the test passed alone; a bound that runs out still raises, never a PASS.
+            r = ttyd_ws.first_message("127.0.0.1", port, path, message, headers=headers, protocol=protocol, wait=2.0,
+                                      timeout=UPGRADE_BOUND)
             time.sleep(0.3)  # a start the socket's close raced is still written by now
             return r, started() - before[0], logged() - before[1]
 

@@ -121,6 +121,7 @@ _CACHE: list[str] = []
 # A terraform call that has not finished in this long is a stalled registry download, not a slow one: the aws
 # provider is ~800 MB, and a run that waited on it with no bound held the whole E2E tier for 15 minutes (#572).
 TERRAFORM_TIMEOUT = 600
+PLUGIN_START_TIMEOUT = "timeout while waiting for plugin to start"  # terraform's words when a provider misses its minute
 
 
 def _plugin_cache() -> str:
@@ -154,13 +155,26 @@ def render(root: str, edit=None) -> dict:
             (work / "main.tf").write_text(edit(text) if edit else text, encoding="utf-8")
             env = {**os.environ, "TF_PLUGIN_CACHE_DIR": os.environ.get("TF_PLUGIN_CACHE_DIR") or _plugin_cache(),
                    "TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE": "true"}
-            def run(*a):
+            def run_once(*a):
                 try:
                     return subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True, env=env,
                                           timeout=TERRAFORM_TIMEOUT)
                 except subprocess.TimeoutExpired:
                     raise SystemExit(f"FAIL: terraform {a[0]} of {root} did not finish within {TERRAFORM_TIMEOUT}s; "
                                      "a provider download from registry.terraform.io has stalled")
+
+            def run(*a):
+                # Terraform gives a provider a fixed minute to start, and no setting changes it. On a loaded host the
+                # aws provider (about 840 MB) missed it once in run 17949's tools tier, at load average near 40, and
+                # the same render passed alone. So that one error, and only it, gets the same command once more; a
+                # second miss fails, naming both.
+                r = run_once(*a)
+                if r.returncode and PLUGIN_START_TIMEOUT in (r.stderr + r.stdout):
+                    print(f"  note: terraform {a[0]} of {root} timed out starting a provider; running it once more")
+                    r = run_once(*a)
+                    if r.returncode and PLUGIN_START_TIMEOUT in (r.stderr + r.stdout):
+                        r.stderr = f"(the provider failed to start on both tries)\n{r.stderr}"
+                return r
             # No lockfile is copied: the committed cluster lock trails the module's provider floor, and this renders
             # documents, it does not apply them.
             r = run("init", "-input=false", "-no-color")
