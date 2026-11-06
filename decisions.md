@@ -27280,3 +27280,8 @@ bot at $0.7649 of the $25 cap at the end, and about 100 Converse calls for the t
 
 **Not yet run on a cluster.** Nothing this run owes: it changed no code. The 2-hour check's C6 attack goes green with
 #996's fix, whose own done line is that check exiting 0.
+
+**The suites (run 17966, at `91f1d5ba`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`307 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, which answers `bash verify/run-tests.sh`) and then the tier: `73 checks ran (the
+offline suite and 72 tier tests) in 58m28s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The log is
+`/var/lib/hecaton/runs/17966/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was added.
