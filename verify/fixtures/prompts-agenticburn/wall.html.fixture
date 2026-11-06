@@ -1,0 +1,496 @@
+<!-- ABOUTME: The fleet-wide prompt wall at prompts.agenticburn.com, in BurritoBot chrome. -->
+<!-- ABOUTME: Streams merged prompts over SSE (polling /api/prompts as a fallback), one card per 1.5 s. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Wall</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%AC</text></svg>">
+<style>
+  :root{
+    /* BurritoBot palette, copied from gitops/ai-layer/web/burritbot.html so the
+       wall reads as the same product as the thing being attacked. */
+    --dd:#632CA6; --acn:#A100FF; --accent:#8A00D6; --cream:#FDF6EE;
+    --lav:#ECE3FB; --ink:#2b2230; --mid:#4A4A4A; --line:#e4d8f5;
+    --bg:#160f1c; --card:#221a2a; --rim:#C77DFF;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--cream);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    display:flex; flex-direction:column;
+  }
+  /* FLUID TYPE. This renders on a projector at the back of Room 327 and on a
+     4K display, so nothing here is a fixed pixel size. */
+  header{
+    display:flex; align-items:center; gap:12px; padding:clamp(10px,1.4vw,18px) clamp(14px,2vw,28px);
+    background:linear-gradient(90deg,var(--dd),var(--accent)); border-bottom:2px solid #120d18;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-weight:800; font-size:clamp(16px,2vw,30px); color:#fff}
+  .logo{width:clamp(26px,3vw,44px); height:clamp(26px,3vw,44px)}
+  .sub{font-weight:600; opacity:.85; font-size:clamp(11px,1.1vw,16px)}
+  .spacer{flex:1}
+  .count{font-variant-numeric:tabular-nums; font-weight:700; font-size:clamp(13px,1.4vw,22px); color:#fff}
+  /* "+N more": prompts that arrived since the last card and are not on it (#18).
+     Always on screen, so the room can see the wall is sampling, not stalled. */
+  .more{
+    font-variant-numeric:tabular-nums; font-weight:800; font-size:clamp(13px,1.4vw,22px);
+    color:#fff; background:rgba(0,0,0,.22); border-radius:999px; padding:3px 12px;
+  }
+  .more.zero{opacity:.55}
+
+  /* Cluster picker. This was a wrapped strip of one pill per cluster, which is
+     fine at 5 and unusable at 53: it ate most of the screen before a single
+     prompt was visible. Same information, folded into a searchable dropdown. */
+  .picker{position:relative}
+  .pickbtn{
+    display:flex; align-items:center; gap:8px; cursor:pointer; color:#fff;
+    background:rgba(0,0,0,.22); border:1px solid rgba(255,255,255,.28); border-radius:999px;
+    padding:6px 13px; font:inherit; font-weight:700; font-size:clamp(12px,1.2vw,18px);
+  }
+  .pickbtn:hover{background:rgba(0,0,0,.34)}
+  .pickbtn .caret{opacity:.75; font-size:.8em}
+  .panel{
+    position:absolute; right:0; top:calc(100% + 8px); width:min(340px,80vw); z-index:50;
+    background:#221a2a; border:1px solid #3a2c48; border-radius:12px;
+    box-shadow:0 14px 40px rgba(0,0,0,.55); overflow:hidden;
+  }
+  .panel[hidden]{display:none}
+  .panel input{
+    width:100%; border:0; border-bottom:1px solid #3a2c48; background:#1a1322; color:var(--cream);
+    padding:11px 14px; font:inherit; font-size:clamp(13px,1.3vw,17px); outline:none;
+  }
+  .panel input::placeholder{color:#8d84a0}
+  .list{max-height:min(58vh,420px); overflow-y:auto}
+  .opt{
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left; cursor:pointer;
+    background:none; border:0; color:var(--cream); font:inherit; padding:9px 14px;
+    font-size:clamp(12px,1.2vw,16px);
+  }
+  .opt:hover{background:#2e2338}
+  .opt[aria-selected="true"]{background:#31204a; font-weight:700}
+  .opt .dot{width:9px; height:9px; border-radius:50%; background:var(--c,#888); flex:none}
+  .opt .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .opt .n{opacity:.6; font-variant-numeric:tabular-nums; font-size:.9em}
+  .opt.down .nm{opacity:.5; text-decoration:line-through}
+  .none{padding:14px; opacity:.55; font-size:clamp(12px,1.2vw,16px)}
+  .filterbar{
+    display:none; align-items:center; gap:10px; padding:8px clamp(14px,2vw,28px);
+    background:#31204a; border-bottom:1px solid #43305f; font-size:clamp(12px,1.2vw,17px);
+  }
+  .filterbar.on{display:flex}
+  .filterbar button{
+    background:rgba(255,255,255,.14); border:0; color:#fff; border-radius:999px;
+    padding:3px 11px; cursor:pointer; font:inherit; font-size:.92em;
+  }
+
+  #stream{flex:1; overflow-y:auto; padding:clamp(12px,1.6vw,24px); display:flex; flex-direction:column; gap:clamp(8px,1vw,14px)}
+  .card{
+    background:var(--card); border-left:6px solid var(--c,#888); border-radius:10px;
+    padding:clamp(10px,1.2vw,18px) clamp(12px,1.4vw,22px);
+    box-shadow:0 2px 10px rgba(0,0,0,.35); animation:in .35s ease-out;
+  }
+  @keyframes in{from{opacity:0; transform:translateY(-14px)}to{opacity:1; transform:none}}
+  @media (prefers-reduced-motion:reduce){.card{animation:none}}
+  .meta{display:flex; align-items:center; gap:9px; margin-bottom:6px; font-size:clamp(11px,1.1vw,16px)}
+  .who{font-weight:800; color:var(--c,#ccc)}
+  /* A prompt with no witch name reads as a plain description, not as a name. */
+  .who.anon{font-weight:600; font-style:italic; opacity:.75}
+  .when{opacity:.5; font-variant-numeric:tabular-nums}
+  .text{font-size:clamp(15px,1.9vw,30px); line-height:1.45; white-space:pre-wrap; word-break:break-word}
+  .card{position:relative}
+  /* Always visible, never hover-gated. Copying a prompt is a deliberate act
+     during the session, and a control that only appears on hover cannot be
+     found on a projector, on a touch screen, or by someone who is not already
+     pointing at the right card. */
+  .copy{
+    position:absolute; top:8px; right:8px; cursor:pointer; font:inherit;
+    background:#22C55E; border:1px solid #16A34A; color:#06240F;
+    border-radius:7px; padding:4px 12px; font-size:clamp(10px,1vw,14px); font-weight:800;
+    letter-spacing:.02em;
+  }
+  .copy:hover{background:#3BE07A; border-color:#22C55E}
+  .copy:focus-visible{outline:2px solid #7CF0AD; outline-offset:2px}
+  /* Confirmation has to differ from the resting state, which is now itself
+     green: deeper ground, light text. */
+  .copy.done{background:#0E7C3A; border-color:#0E7C3A; color:#fff}
+
+  #empty{margin:auto; text-align:center; opacity:.55; font-size:clamp(14px,1.6vw,24px); padding:40px; line-height:1.6}
+  footer{padding:10px 0 16px; text-align:center}
+  .spons{font-size:clamp(12px,1.3vw,20px); color:#b9b3cc; display:inline-flex; gap:8px; align-items:center; white-space:nowrap}
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true"><symbol id="cauldron" viewBox="0 0 32 32">
+  <path d="M10 27.5 l-2.2 3" stroke="#120d18" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M22 27.5 l2.2 3" stroke="#120d18" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M3.6 17 a12.4 11.5 0 0 0 24.8 0 z" fill="#120d18"/>
+  <ellipse cx="16" cy="17" rx="13.2" ry="3.6" fill="#C77DFF"/>
+  <ellipse cx="16" cy="17" rx="13.2" ry="3.6" fill="none" stroke="#120d18" stroke-width="1.1"/>
+  <ellipse cx="16" cy="17.1" rx="10.2" ry="2.3" fill="#E040FB"/>
+  <circle cx="10.6" cy="16.6" r="1.25" fill="#FBD3FF"/>
+  <circle cx="21" cy="16.9" r="1" fill="#FBD3FF"/>
+  <g transform="rotate(-20 16 9)">
+    <rect x="11" y="0.8" width="10" height="15.5" rx="5" fill="#F5CE8B" stroke="#7A4A16" stroke-width="1.3"/>
+    <path d="M11.6 4.4 a5 3.4 0 0 1 8.8 0 z" fill="#E0B36A" stroke="#7A4A16" stroke-width="1.1" stroke-linejoin="round"/>
+    <path d="M12.2 8.6 h7.6 M12.4 11.8 h7.2" stroke="#C0863C" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  <path d="M26.6 4.6 l0.85 2.2 l2.2 0.85 l-2.2 0.85 l-0.85 2.2 l-0.85 -2.2 l-2.2 -0.85 l2.2 -0.85 z" fill="#FFD86B"/>
+</symbol></svg>
+
+<header>
+  <div class="brand">
+    <svg class="logo"><use href="#cauldron"/></svg>
+    BurritoBot <span class="sub">· live prompt wall</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="count"><span id="total">0</span> prompts</div>
+  <div class="more zero" id="more" aria-live="off">+0 more</div>
+  <div class="picker">
+    <button class="pickbtn" id="pickbtn" aria-haspopup="listbox" aria-expanded="false">
+      <span class="dot" id="pickdot" style="width:9px;height:9px;border-radius:50%;background:#C77DFF"></span>
+      <span id="picklabel">All clusters</span>
+      <span class="caret">&#9662;</span>
+    </button>
+    <div class="panel" id="panel" hidden>
+      <input id="search" type="search" placeholder="Search clusters..." autocomplete="off" aria-label="Search clusters">
+      <div class="list" id="list" role="listbox"></div>
+    </div>
+  </div>
+</header>
+
+<div class="filterbar" id="filterbar">
+  <span>Showing <strong id="filtername"></strong> only</span>
+  <button id="clearfilter">Show all</button>
+</div>
+
+<div id="stream"><div id="empty">Waiting for the first prompt.<br>Every BurritoBot on the fleet feeds this screen.</div></div>
+
+<footer>
+  <span class="spons">Co-sponsored by <strong style="color:#B98CFF">Datadog</strong> &amp; <strong style="color:#5DB3BF">Neo4j</strong>
+  </span>
+</footer>
+
+<script>
+const PINNED = {{ pinned | tojson }};
+const stream = document.getElementById('stream');
+const totalEl = document.getElementById('total');
+const panel = document.getElementById('panel');
+const pickbtn = document.getElementById('pickbtn');
+const picklabel = document.getElementById('picklabel');
+const pickdot = document.getElementById('pickdot');
+const search = document.getElementById('search');
+const list = document.getElementById('list');
+const filterbar = document.getElementById('filterbar');
+const filtername = document.getElementById('filtername');
+const moreEl = document.getElementById('more');
+let cursor = 0, total = 0, clusters = [], filter = null;
+const counts = {};
+
+// Per-cluster colour, so a card is identifiable at a glance from the back of
+// the room. Derived from the name so it is stable across restarts and needs no
+// central registry as clusters are claimed mid-session. attackme is pinned to
+// the workshop purple rather than hashed, because it is the one the room knows.
+function colour(name){
+  if (name === PINNED) return '#C77DFF';
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h}, 72%, 68%)`;
+}
+
+function ago(ts){
+  const s = Math.max(0, Math.floor(Date.now()/1000 - ts));
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
+}
+
+// --- cluster picker -------------------------------------------------------
+// One pill per cluster was fine at 5 and unusable at 53, where the strip ate
+// the screen before a single prompt was visible. The dropdown carries the same
+// per-cluster state (colour, reachability, capture, count) behind a search box.
+
+function renderList(){
+  const q = search.value.trim().toLowerCase();
+  list.innerHTML = '';
+  const all = document.createElement('button');
+  all.className = 'opt';
+  all.setAttribute('role', 'option');
+  all.setAttribute('aria-selected', String(filter === null));
+  all.style.setProperty('--c', '#C77DFF');
+  all.innerHTML = `<span class="dot"></span><span class="nm">All clusters</span><span class="n">${clusters.length}</span>`;
+  all.onclick = () => setFilter(null);
+  if (!q) list.appendChild(all);
+
+  const hits = clusters.filter(c => c.name.toLowerCase().includes(q));
+  for (const c of hits){
+    const o = document.createElement('button');
+    o.className = 'opt' + (c.ok ? '' : ' down');
+    o.setAttribute('role', 'option');
+    o.setAttribute('aria-selected', String(filter === c.name));
+    o.style.setProperty('--c', colour(c.name));
+    const state = !c.ok ? 'unreachable' : (c.enabled === false ? 'capture off' : (counts[c.name] || 0));
+    const nm = document.createElement('span');
+    nm.className = 'nm'; nm.textContent = c.name;   // cluster names are data, not markup
+    o.innerHTML = '<span class="dot"></span>';
+    o.appendChild(nm);
+    const n = document.createElement('span');
+    n.className = 'n'; n.textContent = state;
+    o.appendChild(n);
+    o.onclick = () => setFilter(c.name);
+    list.appendChild(o);
+  }
+  if (!hits.length && q){
+    const none = document.createElement('div');
+    none.className = 'none'; none.textContent = 'No cluster matches "' + search.value.trim() + '"';
+    list.appendChild(none);
+  }
+}
+
+function setFilter(name){
+  filter = name;
+  picklabel.textContent = name || 'All clusters';
+  pickdot.style.background = name ? colour(name) : '#C77DFF';
+  filterbar.classList.toggle('on', !!name);
+  if (name) filtername.textContent = name;
+  applyFilter();
+  closePanel();
+}
+
+function applyFilter(){
+  for (const card of stream.children){
+    if (!card.dataset || !card.dataset.cluster) continue;
+    card.hidden = !!filter && card.dataset.cluster !== filter;
+  }
+}
+
+function openPanel(){
+  panel.hidden = false;
+  pickbtn.setAttribute('aria-expanded', 'true');
+  search.value = ''; renderList(); search.focus();
+}
+function closePanel(){
+  panel.hidden = true;
+  pickbtn.setAttribute('aria-expanded', 'false');
+}
+pickbtn.onclick = e => { e.stopPropagation(); panel.hidden ? openPanel() : closePanel(); };
+panel.onclick = e => e.stopPropagation();
+document.addEventListener('click', closePanel);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+search.addEventListener('input', renderList);
+document.getElementById('clearfilter').onclick = () => setFilter(null);
+
+// --- cards ----------------------------------------------------------------
+
+function copyButton(text){
+  const b = document.createElement('button');
+  b.className = 'copy';
+  b.type = 'button';
+  b.textContent = 'Copy';
+  b.title = 'Copy this prompt to the clipboard';
+  b.onclick = async ev => {
+    ev.stopPropagation();
+    // The exact text as shown, and nothing else: no cluster label, no
+    // timestamp. That is what makes it paste cleanly into a search box.
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      // Clipboard API needs a secure context and can still be refused. Fall
+      // back to a selection-based copy rather than failing silently.
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (__) {}
+      document.body.removeChild(ta);
+    }
+    b.textContent = 'Copied'; b.classList.add('done');
+    setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('done'); }, 1400);
+  };
+  return b;
+}
+
+// What a card says when the feed carries no witch name for its prompt: a
+// cluster from before Unleash#921, an A2A prompt, or a visitor who never chose
+// a name. It describes the sender rather than inventing a name for them.
+const NO_NAME = 'someone who gave no name';
+
+function addCard(e){
+  document.getElementById('empty')?.remove();
+  // Newest at the TOP, so the room reads the latest without chasing a scroll.
+  const atTop = stream.scrollTop < 120;
+  const card = document.createElement('div');
+  card.className = 'card';
+  // The cluster is metadata only (#16): it drives the cluster filter and the
+  // card's colour, and its name is never shown on the card.
+  card.dataset.cluster = e.cluster;
+  card.dataset.seq = e.seq;
+  card.style.setProperty('--c', colour(e.cluster));
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const who = document.createElement('span');
+  // The sender's witch name, so one name follows each person through the
+  // session. textContent: the name is attendee-chosen data, not markup.
+  const witch = (typeof e.witch === 'string') ? e.witch.trim() : '';
+  who.className = witch ? 'who' : 'who anon';
+  who.textContent = witch || NO_NAME;
+  const when = document.createElement('span');
+  when.className = 'when'; when.dataset.ts = e.ts; when.textContent = ago(e.ts);
+  meta.append(who, when);
+  const text = document.createElement('div');
+  // textContent, never innerHTML: this is untrusted attendee free text on a
+  // projector. Moderated upstream for language, not for markup.
+  text.className = 'text'; text.textContent = e.text;
+  card.append(copyButton(e.text), meta, text);
+  card.hidden = !!filter && e.cluster !== filter;
+  stream.prepend(card);
+  // Trim the OLDEST, which is now the last child.
+  while (stream.children.length > 300) stream.removeChild(stream.lastChild);
+  if (atTop) stream.scrollTop = 0;
+}
+
+// --- one card per window (#18) ------------------------------------------------
+// At 500 people the wall gets 8 to 17 prompts a second, which no room can read.
+// So a prompt that arrives is held, not drawn: at most one card goes up per
+// CARD_INTERVAL_MS, the newest prompt that arrived since the last card, and the
+// rest are counted in "+N more" and dropped, never queued for a later card. The
+// server still sends every viewer every prompt; only what is drawn is sampled.
+const CARD_INTERVAL_MS = 1500;
+
+// The throttle on its own, with the clock and the timer passed in, so a test can
+// drive it on a fake clock. now() is in ms; schedule(fn, ms) runs fn once, later.
+//
+// The card is not on a free-running tick. The first prompt held after a quiet
+// spell arms one timer, which fires no sooner than intervalMs after the previous
+// card (so two cards are never closer than that) and no sooner than half a window
+// after it was armed. That half window is what keeps "+N more" readable: prompts
+// reach the page in batches (each server poll, each poll of the fallback), and a
+// card drawn in the same instant as its batch would clear the count before anyone
+// saw it, as on the platform's own /display page.
+function makeThrottle({intervalMs, now, schedule, show, setCount}){
+  let held = null, count = 0, armed = false, last = -Infinity;
+  function tick(){
+    const e = held;
+    held = null; count = 0; armed = false; last = now();
+    show(e);
+    setCount(0);
+  }
+  return {
+    // Every prompt that should reach the screen comes through here, once.
+    offer(e){
+      held = e;
+      count += 1;
+      setCount(count);
+      if (armed) return;
+      armed = true;
+      schedule(tick, Math.max(intervalMs / 2, last + intervalMs - now()));
+    },
+  };
+}
+
+// "+N more": every prompt that arrived since the last card and is not on screen,
+// the one about to be drawn included. Back to 0 each time a card goes up.
+function setMore(n){
+  moreEl.textContent = '+' + n + ' more';
+  moreEl.classList.toggle('zero', n === 0);
+}
+setMore(0);
+
+const throttle = makeThrottle({
+  intervalMs: CARD_INTERVAL_MS,
+  // Monotonic, so a wall clock stepped by NTP cannot stall or rush the cards.
+  now: () => performance.now(),
+  schedule: (fn, ms) => setTimeout(fn, ms),
+  show: addCard,
+  setCount: setMore,
+});
+
+// Every seq this page has drawn. The stream and the polling fallback can both
+// deliver the same prompt after a drop, so this is the guard that draws each
+// prompt once however it arrives (#14). It is keyed by seq, never by text: two
+// people typing the same thing are two seqs, and both are drawn.
+const shown = new Set();
+// The server process this page's cursor and seqs belong to. A restarted server
+// numbers from 1 again, so its seqs would collide with the ones above.
+let boot = null;
+// False until the first snapshot is applied. That one is what was said before
+// the page opened, and it goes up at once, so a reloaded projector is not blank;
+// only what arrives after it is sampled (#18).
+let live = false;
+
+function apply(snap){
+  if (snap.boot){
+    if (boot === null) boot = snap.boot;
+    // A new process: reload rather than reconcile two numberings. The reload
+    // also picks up the page a redeploy shipped.
+    else if (snap.boot !== boot){ location.reload(); return; }
+  }
+  // The API returns oldest-first. Prepending in that order leaves the newest on
+  // top, which is the order the wall reads in, and leaves the newest last in
+  // the throttle's holding slot.
+  for (const e of snap.prompts || []){
+    // The cursor moves for every prompt, drawn or not, so reconnects and polls
+    // ask only for what follows it.
+    cursor = Math.max(cursor, e.seq);
+    // #14's guard runs first, so a replayed prompt is never held or counted
+    // twice. (#15's masked prompts never get this far: the server drops them.)
+    if (shown.has(e.seq)) continue;
+    shown.add(e.seq);
+    // The header and the picker count every prompt the fleet sent, not the
+    // cards drawn, which are a sample of them.
+    counts[e.cluster] = (counts[e.cluster] || 0) + 1;
+    total += 1; totalEl.textContent = total;
+    if (!live) addCard(e);
+    // With a cluster filter on, only that cluster's prompts compete for the
+    // card, or a busy fleet would fill the slot with cards the filter hides.
+    else if (!filter || e.cluster === filter) throttle.offer(e);
+  }
+  live = true;
+  if (snap.clusters) { clusters = snap.clusters; if (!panel.hidden) renderList(); }
+}
+
+setInterval(() => {
+  document.querySelectorAll('.when').forEach(el => { el.textContent = ago(Number(el.dataset.ts)); });
+}, 5000);
+
+// SSE is the live path. If it drops (flaky Wi-Fi, a laptop waking, a proxy
+// timeout, a redeploy), poll instead and reopen the stream, so the room screen
+// recovers on its own rather than needing a refresh.
+const RETRY_MS = {{ interval }} * 1000;
+let es = null, polling = null, retry = null;
+function startPolling(){
+  if (polling) return;
+  polling = setInterval(async () => {
+    try {
+      const r = await fetch('/api/prompts?since=' + cursor);
+      if (r.ok) apply(await r.json());
+    } catch (_) {}
+  }, RETRY_MS);
+}
+function stopPolling(){ if (polling){ clearInterval(polling); polling = null; } }
+function reconnectSoon(){ if (!retry) retry = setTimeout(connect, RETRY_MS); }
+function connect(){
+  retry = null;
+  if (es) es.close();
+  let s;
+  try {
+    // Built from the cursor as it is NOW, on every (re)connect.
+    s = es = new EventSource('/events?since=' + cursor);
+  } catch (_) { startPolling(); return; }
+  // The server's first frame arrives as soon as the stream is up.
+  s.onmessage = ev => { stopPolling(); apply(JSON.parse(ev.data)); };
+  s.onerror = () => {
+    // Close it ourselves. Left open, the browser reconnects to the url above,
+    // whose cursor is stale by now, and the server replays from there.
+    s.close();
+    if (es === s) es = null;
+    startPolling();
+    reconnectSoon();
+  };
+}
+fetch('/api/prompts').then(r => r.json()).then(apply).catch(() => {}).finally(connect);
+</script>
+</body>
+</html>

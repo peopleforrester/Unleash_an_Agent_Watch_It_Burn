@@ -23767,3 +23767,47 @@ No dependency was added.
 RENDER-GATE TESTS GREEN` for the offline suite, then `66 checks ran (the offline suite and 65 tier tests) in 46m51s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_lab_platform_operator_entry.py` passed its four cases and
 printed `ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN`.
+
+## 2026-11-06 · #933 · run 17822 · A test runs the wall's own page on a fake clock and holds it to one card per 1.5 s
+
+**What was missing.** #927's criterion for the prompt wall, that prompts arriving faster than one per 1.5 s add at
+most one card per 1.5 s window, was tested only on this repo's `/display` page. The wall's change landed in
+peopleforrester/prompts-agenticburn as #18, commit `6601313a`, the tip of that repo's `main` and `staging` on
+2026-11-06, with its own MiniRacer test. No test here read `templates/wall.html`. `bash verify/prior-drafts.sh 933
+origin/staging` printed NONE and the issue had no comments, so there was no draft to port.
+
+**Decided: a pinned copy for the gate, and a live half that reads the wall repo's main.** prompts-agenticburn is
+private, and the gate runs `bash verify/run-e2e-tools.sh` with no GitHub login, so the gate cannot fetch the page.
+`verify/fixtures/prompts-agenticburn/wall.html.fixture` is a byte copy of `templates/wall.html` at `6601313a`, held
+to its SHA-256 (`52323b00...`). The suffix is `.fixture`, not `.html`, because the ai-isms gate reads every changed
+`.html` file as this repo's prose, and the page names the repo with its hype verb. The copy only proves the rule on
+the bytes it holds, so `verify/test_wall_throttle_upstream_e2e.py` (live suite, run by hand with `run-e2e.sh`)
+reads `templates/wall.html` on the wall repo's `main` through `gh api`, runs the same checks on it, and fails when
+`main` has moved past the copy, naming the commit and SHA-256 to refresh it to. That turns red once
+prompts-agenticburn#22 (pause and pin) lands there, which is the point: the copy gets refreshed and rechecked.
+
+**The test.** `verify/wall-clock-harness.js` runs the page's last `<script>` in a node vm with its two Jinja
+expressions filled in (`{{ pinned | tojson }}`, `{{ interval }}`; any other one fails it), a stub DOM, a stub
+`/api/prompts` fetch, a stub `EventSource` the test pushes SSE frames into, and `setTimeout`, `setInterval` and
+`performance.now()` on a fake clock. It records the time of every card the page prepends to `#stream`.
+`verify/wall_throttle.py` holds the four floods: 17 prompts a second for 60 s as one SSE frame of 17 a second
+(the wall's `events()` sends one frame a second) and as one prompt every 59 ms, one prompt every 1.4 s for 30 s,
+and a burst of 200, then 200 more 10 ms after the card the first brought. On each, no two cards after the first
+snapshot are less than 1500 ms apart, each fixed 1.5 s window holds at most one, every card is a prompt that
+arrived and is drawn once, the snapshot's prompt goes up at once, and the flood keeps drawing (30, 30, 10 and 2
+cards at least), so a page that drew nothing does not pass. `verify/test_wall_throttle_e2e.py` (tools tier, needs
+node) runs them on the copy, checks its `CARD_INTERVAL_MS` is 1500, and applies three mutations, each on a literal
+it first checks the copy holds once: draw every arrival, drop the 1.5 s floor from the card's timer, and a 1 s
+interval. They fail 8, 7 and 7 checks. The page before #18 (`3b97ebe7`, read through `gh api`) fails 8 of 20.
+
+**Found live: the wall the room sees has no throttle yet.** `curl https://prompts.burritobot.co/` at 06:49Z
+served a page whose header still reads "Streams merged prompts over SSE, falling back to polling" and whose
+`apply()` draws every prompt (`addCard(e)` in the loop): it predates #14, #16 and #18. The Railway service is
+deployed from the CLI with no git source, so `main` does not ship on its own; prompts-agenticburn#20 asks for that
+`railway up` from `main`, which ships #18 with #14. The report files a follow-up there, blocked by #20, to run the
+upstream test and look at the live page after that deploy. No cluster is involved: the wall runs on Railway, and
+this run touched neither cluster.
+
+**Not yet run on a cluster.** Nothing: the change is tests only, and the live suite's new check
+(`python3 verify/test_wall_throttle_upstream_e2e.py`) was run by this run against the wall repo's `main` at
+`6601313a`, all checks PASS. No dependency was added.
