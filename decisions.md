@@ -24940,3 +24940,8 @@ read.
 **Checked.** Both tests passed against this clone and against GitHub on 2026-11-06. A clone made with `--no-tags` and a
 copy with one hex digit of the Portland pin changed each failed the offline test, naming the missing tag and the
 differing object. No tag was created, moved or deleted. No dependency was added.
+
+**The suites (run 17885, at `578fe7e6`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `73 checks ran (the offline suite
+and 72 tier tests) in 30m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_delivered_tags.py` and
+`test_delivered_tags_github_e2e.py` were among them, each all PASS. The prose gate printed `prose gate: pass`.
