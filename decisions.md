@@ -24621,3 +24621,14 @@ cluster was touched.
 **Not yet run on a cluster.** Nothing is owed: the test reads GitHub and runs that repo's suite locally.
 
 No dependency was added.
+
+**A broken test this run's suite found, fixed here (run 17835).** The first `bash verify/run-e2e-tools.sh`, at
+`13c80f0c`, went red in the offline suite on `test_chat_turn_cancel.py` alone: "guard-proxy logs forward_error, then
+task_cancel" saw `events ['forward_error']`, while the same output already held the proxy's `task_cancel` JSON line
+on stderr. The test slept a fixed 0.2 s after the agent received `tasks/cancel` and then read the events its logging
+handler had collected. The proxy's cancel thread logs `task_cancel` only after the agent answers, and its stderr
+handler writes the JSON line before the test's handler sees the record, so a thread stalled in that write on a loaded
+host misses the window. Run alone three times it passed. With `logging.StreamHandler.emit` slowed by 0.5 s for the
+`task_cancel` record, the old test failed with that exact check and the fixed one passed. The check now waits up to
+5 s for `task_cancel`, as the line above it already waits for the cancel itself, and holds that `forward_error` came
+first, which its label always said.

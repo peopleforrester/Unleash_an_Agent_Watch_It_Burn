@@ -160,8 +160,15 @@ cancels = [c for c in RunawayAgent.calls if c.get("method") == "tasks/cancel"]
 check("the agent receives one tasks/cancel", len(cancels) == 1, f"methods {[c.get('method') for c in RunawayAgent.calls]}")
 check("the cancel names the turn's task", bool(cancels) and cancels[0].get("params") == {"id": TASK},
       f"got {cancels[:1]}")
-time.sleep(0.2)
-check("guard-proxy logs forward_error, then task_cancel", "forward_error" in events and "task_cancel" in events,
+# The cancel thread logs task_cancel after the agent answers, and its JSON line goes to stderr before the Events
+# handler sees it. A fixed 0.2 s sleep went red in run 17835's suite, on a loaded host, with the task_cancel line
+# already on stderr: the thread was still in that write. So wait for the event, up to the same 5 s as the cancel.
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline and "task_cancel" not in events:
+    time.sleep(0.05)
+check("guard-proxy logs forward_error, then task_cancel",
+      "forward_error" in events and "task_cancel" in events
+      and events.index("forward_error") < events.index("task_cancel"),
       f"events {[e for e in events if e]}")
 methods = [c.get("method") for c in RunawayAgent.calls]
 check("nothing reaches the agent after the cancel", methods[-1:] == ["tasks/cancel"], f"methods {methods}")
