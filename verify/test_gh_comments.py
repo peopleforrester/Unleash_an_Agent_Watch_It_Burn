@@ -50,8 +50,9 @@ def stub_gh(bindir: pathlib.Path, exit_code: int, stdout: str = "", stderr: str 
     return gh
 
 
-def run_case(exit_code: int, stdout: str = "", stderr: str = "", with_gh: bool = True):
-    """The helper's Read and the checks check_read printed, with only the stub's directory on PATH."""
+def run_case(exit_code: int, stdout: str = "", stderr: str = "", with_gh: bool = True, what: str = "comments"):
+    """The helper's Read and the checks check_read printed, with only the stub's directory on PATH. what="body"
+    reads with read_body instead of read."""
     with tempfile.TemporaryDirectory() as td:
         bindir = pathlib.Path(td)
         if with_gh:
@@ -59,12 +60,12 @@ def run_case(exit_code: int, stdout: str = "", stderr: str = "", with_gh: bool =
         old = os.environ.get("PATH", "")
         os.environ["PATH"] = str(bindir)
         try:
-            got = gh_comments.read("owner/repo", 7)
+            got = (gh_comments.read_body if what == "body" else gh_comments.read)("owner/repo", 7)
         finally:
             os.environ["PATH"] = old
         args = (bindir / "args").read_text().split("\n") if (bindir / "args").exists() else []
     seen: list[tuple[str, bool, str]] = []
-    gh_comments.check_read(got, "owner/repo#7", lambda n, ok, d="": seen.append((n, ok, d)))
+    gh_comments.check_read(got, "owner/repo#7", lambda n, ok, d="": seen.append((n, ok, d)), what)
     return got, seen, args
 
 
@@ -134,6 +135,26 @@ got, _, _ = run_case(0, json.dumps([{"id": 1}]))
 check("JSON with no comments list is an error", "no comments list" in got.error, str(got))
 got, _, _ = run_case(0, json.dumps({"comments": ["text"]}))
 check("a comments list holding what is not a comment is an error", "not one" in got.error, str(got))
+
+print("== read_body reads the issue's body the same way (#946) ==")
+got, seen, args = run_case(0, json.dumps({"body": "The desk answers 200."}), what="body")
+check("read_body holds the body gh answers, and no comments", got.ok and got.body == "The desk answers 200."
+      and got.comments == [], str(got))
+check("gh is asked with `issue view 7 -R owner/repo --json body`, the read the gate's gh wrapper allows",
+      args[:7] == ["issue", "view", "7", "-R", "owner/repo", "--json", "body"], str(args))
+check("check_read(what='body') passes all four checks on it, the last naming the body",
+      [ok for _, ok, _ in seen] == [True] * 4 and seen[-1][0] == "owner/repo#7 has a body", str(seen))
+got, seen, _ = run_case(0, '{"body": "  "}', what="body")
+check("a blank body fails 'has a body', and only that", only_failure(seen) == "owner/repo#7 has a body", str(seen))
+got, seen, _ = run_case(4, stderr="To get started with GitHub CLI, please run:  gh auth login\n", what="body")
+check("read_body names a missing token as read does", "gh auth login" in got.missing and len(seen) == 1, str(got))
+got, seen, _ = run_case(1, stderr="gh: API rate limit exceeded for user ID 1. (HTTP 403)\n", what="body")
+check("read_body names a spent rate limit as read does, and check_read stops there",
+      bool(got.rate_limited) and [ok for _, ok, _ in seen] == [True, False], str(seen))
+for label, out in [("a list", "[]"), ("no body field", '{"title": "x"}'), ("a null body", '{"body": null}')]:
+    got, seen, _ = run_case(0, out, what="body")
+    check(f"output with {label} is an error naming the missing body",
+          "no body" in got.error and only_failure(seen) == "gh answers the read of owner/repo#7's body", str(got))
 
 print("== the three cause-comment tests read through the helper, and nothing reads anonymously ==")
 for name in CAUSE_TESTS:

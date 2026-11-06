@@ -24345,3 +24345,41 @@ image reference, so the constant's first name, `NAMED_APP_IMAGE = "nginx"`, read
 `PUBLIC_IMAGES` key, not an image, so `d1f71f69` names it `NAMED_APP_LISTED`. The second run, at `d1f71f69`, printed
 `292 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `68 checks ran (the offline suite and 67 tier tests)
 in 32m27s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #946 · run 17842 · A test holds the talk's support desk to 200 on both clusters, in the run-of-show and in #916
+
+**Context.** #931 corrected the support page the talk uses to the desk's own host, added the private cluster's desk
+and the `/support` 404 warning to the run-of-show's segment 4, and corrected #916's criterion, but the 200 on each
+cluster and #916's body were recorded only in this file (#946). `bash verify/prior-drafts.sh 946 origin/staging`
+printed NONE, and the issue had no comments, so nothing earlier was reused.
+
+**Decision.** One list of the desk hosts, `verify/support_desk_hosts.py`: per cluster, the host the talk gives the room
+(`support.burritobot.co` for watch-it-burn-community, `support-burritobot-private.burritobot.co` for
+watch-it-burn-private), the community desk's own name `support-attackme.burritobot.co`, each bot host, and HC-666's
+path. Two tests read it, split by need:
+
+- `verify/test_support_desk_named.py` (offline suite) holds segment 4 to each cluster's desk name, the warning that
+  neither bot host serves `/support` and that `https://attackme.burritobot.co/support` answers 404, and holds every
+  bot-host `/support` URL anywhere in the run-of-show to a 404 after it. It also reads the presenter page for the bare
+  desk. A renamed `### Segment 4:` heading exits naming the heading and the file.
+- `verify/test_support_desk_live.py` (tools tier) asks each desk host for `/` and `/ticket/HC-666`, which must answer
+  200 with `ticket_site.py`'s desk heading (and HC-666 on the ticket), asks each bot host for `/support`, which must
+  answer 404, and reads #916's body with gh's token. The body must name both desks as `https://` URLs, HC-666's path
+  and "serve no `/support`", and no "200 on ..." clause in it may list `/support`. Only a transport error is tried
+  again, three times; a status the host answers is never retried.
+
+`verify/gh_comments.py` gains `read_body`, the same `gh issue view` read as `read` with `--json body` (the form the
+gate's gh wrapper allows, #863), and `check_read` takes `what="body"`. `verify/test_gh_comments.py` covers it with a
+stub gh: the argv, a blank body, a missing token, a spent rate limit and three malformed answers.
+
+**Mutations.** With private's desk renamed in segment 4 and the 404 warning turned into "is the desk", the offline
+test failed three checks; with the heading renamed it exited naming it. With private's desk host pointed at a name the
+router does not carry and #916's body swapped for its first, `/support` form, the live test failed seven checks, the
+`/support` clause named.
+
+**Checked live, read only (08:50Z on 2026-11-06).** `python3 verify/test_support_desk_live.py` passed every check:
+200 on `/` and `/ticket/HC-666` of `support.burritobot.co`, `support-attackme.burritobot.co` and
+`support-burritobot-private.burritobot.co`, each page carrying the desk heading and HC-666; 404 on `/support` of
+`attackme.burritobot.co` and `burritobot-private.agenticburn.com`; and #916's body names both desks and no `/support`.
+`kubectl --context watch-it-burn-community get deploy -A` and the same on watch-it-burn-private each list `console`
+and `fake-ticket` in `agent` at 1/1, the desk behind `support-<cluster>` (`console.conf`). Nothing was changed.

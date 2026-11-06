@@ -1,6 +1,6 @@
-# ABOUTME: Reads an issue's comments with `gh issue view --json comments`, which carries gh's token, never GitHub's
+# ABOUTME: Reads an issue's comments or body with `gh issue view --json`, which carries gh's token, never GitHub's
 # ABOUTME: anonymous quota (#863). A missing gh or token, a spent rate limit and any other failed read each name themselves.
-"""Every comment on one GitHub issue, read with a token.
+"""Every comment on one GitHub issue, or its body, read with a token.
 
 Why (#863). The cause-comment tests asked api.github.com for an issue's comments anonymously. Every dispatched run on
 the host shares one IP, so one quota of 60 anonymous requests an hour, and in run 17065 (#814) the tools tier went
@@ -39,6 +39,7 @@ class Read:
     missing: str = ""
     rate_limited: str = ""
     error: str = ""
+    body: str = ""
 
     @property
     def ok(self) -> bool:
@@ -58,41 +59,61 @@ def _comment(c: object) -> dict | None:
             "url": c.get("url") or "?"}
 
 
-def read(owner_repo: str, number: str | int, timeout: int = 90) -> Read:
-    """Every comment on owner_repo#number, read with `gh issue view --json comments`, or why not."""
+def _view(owner_repo: str, number: str | int, field: str, timeout: int) -> tuple[object, Read | None]:
+    """`gh issue view <number> -R <owner_repo> --json <field>`, parsed, or the failed Read that says why not."""
     gh = shutil.which("gh")
     if not gh:
-        return Read([], missing="no gh on PATH: the comments are read with gh's token, and an anonymous read would "
-                                "share the host's one quota of 60 requests an hour (#863)")
-    cmd = [gh, "issue", "view", str(number), "-R", owner_repo, "--json", "comments"]
+        return None, Read([], missing="no gh on PATH: the issue is read with gh's token, and an anonymous read would "
+                                    "share the host's one quota of 60 requests an hour (#863)")
+    cmd = [gh, "issue", "view", str(number), "-R", owner_repo, "--json", field]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return Read([], error=f"`gh issue view` did not answer within {timeout}s")
+        return None, Read([], error=f"`gh issue view` did not answer within {timeout}s")
     said = _last_lines(p.stderr) or _last_lines(p.stdout)
     if p.returncode == GH_NO_AUTH_EXIT:
-        return Read([], missing="gh has no token: run `gh auth login`, or set GH_TOKEN or GITHUB_TOKEN"
-                                + (f" (gh said: {said})" if said else ""))
+        return None, Read([], missing="gh has no token: run `gh auth login`, or set GH_TOKEN or GITHUB_TOKEN"
+                                    + (f" (gh said: {said})" if said else ""))
     if p.returncode != 0:
         if RATE_LIMIT.search(p.stderr) or RATE_LIMIT.search(p.stdout):
-            return Read([], rate_limited=f"gh issue view exit {p.returncode}: {said}")
-        return Read([], error=f"gh issue view exit {p.returncode}: {said or 'no output'}")
+            return None, Read([], rate_limited=f"gh issue view exit {p.returncode}: {said}")
+        return None, Read([], error=f"gh issue view exit {p.returncode}: {said or 'no output'}")
     try:
         doc = json.loads(p.stdout)
     except ValueError as e:
-        return Read([], error=f"gh issue view printed what is not JSON ({e}): {p.stdout[:200]!r}")
+        return None, Read([], error=f"gh issue view printed what is not JSON ({e}): {p.stdout[:200]!r}")
+    return doc, None
+
+
+def read(owner_repo: str, number: str | int, timeout: int = 90) -> Read:
+    """Every comment on owner_repo#number, read with `gh issue view --json comments`, or why not."""
+    doc, failed = _view(owner_repo, number, "comments", timeout)
+    if failed:
+        return failed
     raw = doc.get("comments") if isinstance(doc, dict) else None
     if not isinstance(raw, list):
-        return Read([], error=f"gh issue view printed no comments list: {p.stdout[:200]!r}")
+        return Read([], error=f"gh issue view printed no comments list: {json.dumps(doc)[:200]!r}")
     comments = [_comment(c) for c in raw]
     if None in comments:
-        return Read([], error=f"gh issue view printed a comment that is not one: {p.stdout[:200]!r}")
+        return Read([], error=f"gh issue view printed a comment that is not one: {json.dumps(doc)[:200]!r}")
     return Read(comments)
 
 
-def check_read(got: Read, issue: str, check: Callable[[str, bool, str], None]) -> None:
+def read_body(owner_repo: str, number: str | int, timeout: int = 90) -> Read:
+    """owner_repo#number's body, read with `gh issue view --json body` (#946), or why not. The body is Read.body."""
+    doc, failed = _view(owner_repo, number, "body", timeout)
+    if failed:
+        return failed
+    body = doc.get("body") if isinstance(doc, dict) else None
+    if not isinstance(body, str):
+        return Read([], error=f"gh issue view printed no body: {json.dumps(doc)[:200]!r}")
+    return Read([], body=body)
+
+
+def check_read(got: Read, issue: str, check: Callable[[str, bool, str], None], what: str = "comments") -> None:
     """The read's named checks, in order, each printed only when the one before it held: a token to read with, a
-    quota not spent, an answer, and at least one comment. So the one FAIL names what stopped the read."""
+    quota not spent, an answer, and at least one comment (or, with what="body", a body that is not empty). So the
+    one FAIL names what stopped the read."""
     check("gh is on PATH with a token, so the read does not spend the host's shared anonymous quota (#863)",
           not got.missing, got.missing)
     if got.missing:
@@ -100,7 +121,10 @@ def check_read(got: Read, issue: str, check: Callable[[str, bool, str], None]) -
     check("GitHub's rate limit on gh's token is not spent", not got.rate_limited, got.rate_limited)
     if got.rate_limited:
         return
-    check(f"gh answers the read of {issue}'s comments", not got.error, got.error)
+    check(f"gh answers the read of {issue}'s {what}", not got.error, got.error)
     if got.error:
         return
-    check(f"{issue} has at least one comment", bool(got.comments), "none")
+    if what == "body":
+        check(f"{issue} has a body", bool(got.body.strip()), "empty")
+    else:
+        check(f"{issue} has at least one comment", bool(got.comments), "none")
