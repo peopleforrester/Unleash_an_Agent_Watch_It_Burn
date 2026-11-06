@@ -25042,3 +25042,5 @@ records, and the cluster left as found.
 **The suites (run 17863, at `8fd9350d` on staging `bfa53288`).** `bash verify/run-e2e-tools.sh` printed `295 tests ran`
 and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suite and 70 tier tests) in 28m35s`, `ALL
 E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+Rebased once more onto staging `68f58776` (18 commits on, one of them, #962's `7f3cdb4a`, an edit far from the Probe
+record), cleanly; `bash verify/run-tests.sh` there printed `301 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
