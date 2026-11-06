@@ -21582,3 +21582,14 @@ pinning the resolver lock through the `coredns` addon's `configuration_values`
 `verify/c1-exfil-block.sh`, built by #728, asserts on a fresh attendee cluster that with the fix applied the DNS
 collector records nothing new for the same stage-2b request, while the beacon stays held and Bedrock and in-cluster
 resolution still answer so BurritoBot still replies.
+
+**The suites (run 17752, at `d8866463`).** `bash verify/run-e2e-tools.sh` printed `267 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), with
+`test_c1_dns_exfil_fix.py` among them, then `58 checks ran (the offline suite and 57 tier tests) in 40m10s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log's one `FAIL` line, `security datadog-secret fields: api-key;
+missing: app-key(empty)`, is the output of a negative fixture whose next check prints PASS. The run before this one,
+17583, saw `test_e2e_tools_tier.py` fail in its offline pass: `mktemp` could not create a directory under `/tmp`, and
+the log ends with `getwd: no such file or directory`, so the run's temp space and working directory went away while
+the suite ran. That run was then stopped for repeating one identical poll command; this run polled with a different
+command each time. Run alone, and in this run's full pass, the test is green. The log is
+`/var/lib/hecaton/runs/17752/e2e-tools.log`.
