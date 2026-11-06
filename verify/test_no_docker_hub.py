@@ -15,7 +15,7 @@ Two checks, each of which a new Docker Hub pull fails:
    (verify/docker_hub.py). The fields read are YAML `image:` keys, with a Helm values map's registry, repository
    and tag joined and an Argo CD Application's `values:` string parsed too; `--image` flags in shell scripts; and,
    in Python, every NAME_IMAGE string and every NAME_IMAGES dict value (ticket_site.py's C6 and room images,
-   workshop-mcp's PUBLIC_IMAGES). A build base is one too: a Dockerfile FROM line, a `buildah from` line in any
+   workshop-mcp's LANDING_IMAGE). A build base is one too: a Dockerfile FROM line, a `buildah from` line in any
    tracked file (the Backstage README's), and a shell NAME_BASE= assignment (images/villains/build.sh's JOKER_BASE).
    A name a kustomization or an Application's kustomize.images replaces (llm-guard, set by the ai-layer Application)
    is not a pull, and neither is a placeholder images.lock lists as not-an-image, nor a FROM naming an earlier stage.
@@ -59,7 +59,8 @@ GATE = ("verify/docker_hub.py", "verify/test_no_docker_hub.py", "verify/test_no_
         "verify/test_images_lock_live_judge.py")
 # (file, the text on the line): the lines that name Docker Hub in order to refuse it. Each carries (#714) in a comment.
 REFUSED = (
-    # deploy_app refuses a Docker Hub image PUBLIC_IMAGES does not carry, so it lists every name Docker Hub goes by.
+    # deploy_app moves a Docker Hub official image to public.ecr.aws and refuses any other, so it lists every name
+    # Docker Hub goes by.
     ("gitops/ai-layer/workshop-mcp-server.py", '_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io"'),
     # A render must not carry the Docker Hub reference a lab-platform mirror/ copy replaces.
     ("verify/mirror_copies.py", 'HUB = "docker.io"'),
@@ -70,9 +71,6 @@ REFUSED = (
     ("verify/test_demo_app_web_image.py", '"docker.io/library/nginx:1.27-alpine" not in lock'),
     # The run-of-show's C2 fallback row names no Docker Hub image.
     ("verify/test_promo_villains.py", '"docker.io/" not in row'),
-    # deploy_app reads a Docker Hub name for PUBLIC_IMAGES' pinned copy, and refuses one the list does not carry.
-    ("verify/test_public_images.py", '("docker.io/library/nginx:1.27-alpine", "nginx"), ("docker.io/nginx", "nginx")'),
-    ("verify/test_public_images.py", '"docker.io/someone/tron", "index.docker.io/library/tron"'),
 )
 PLAIN_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]*$")
 

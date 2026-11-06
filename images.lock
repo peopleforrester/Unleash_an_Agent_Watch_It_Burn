@@ -75,17 +75,14 @@ ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline 2026-11-06
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot 2026-11-06
 ghcr.io/peopleforrester/lab-platform/llm-guard:v1 sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad repo:peopleforrester/lab-platform/deploy/images 2026-11-04
-# Challenge 2's public images (#773): deploy_app's PUBLIC_IMAGES in gitops/ai-layer/workshop-mcp-server.py, the images
-# the room asks for by plain name. Each is the index digest public.ecr.aws served on 2026-11-02, read anonymously;
-# docker/library/ is Docker's official images on Amazon's public registry, whose digests equal Docker Hub's. 2048 is
-# the image AWS's EKS load-balancer tutorials deploy, in an ECR Public account nobody here knows: the repository it
-# says it is built from is named, and nothing proves that. verify/test_public_images.py holds these to PUBLIC_IMAGES.
-public.ecr.aws/docker/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 upstream:https://github.com/docker-library/busybox 2026-11-04
-public.ecr.aws/docker/library/alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63 upstream:https://github.com/alpinelinux/docker-alpine 2026-11-04
+# Challenge 2's landing-page server (#773, #939, #992): deploy_app's LANDING_IMAGE in
+# gitops/ai-layer/workshop-mcp-server.py, which serves an app the room names with no image ("deploy Tron"). It is
+# the index digest public.ecr.aws served on 2026-11-02, read anonymously; docker/library/ is Docker's official images
+# on Amazon's public registry, whose digests equal Docker Hub's. The five other images deploy_app pinned until #992
+# (busybox, alpine, httpd, redis and the 2048 game) left with its list: any image the room asks for now goes to the
+# apply as written, so nothing here hands a cluster those pins. verify/test_public_images.py holds this row to
+# LANDING_IMAGE.
 public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de upstream:https://github.com/nginx/docker-nginx 2026-11-04
-public.ecr.aws/docker/library/httpd:2.4-alpine@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c upstream:https://github.com/docker-library/httpd 2026-11-04
-public.ecr.aws/docker/library/redis:8-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537 upstream:https://github.com/docker-library/redis 2026-11-04
-public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 upstream:https://github.com/alexwhen/docker-2048 2026-11-04
 # Chart renders (#603): the images Argo CD hands a cluster from the Helm charts and kustomize builds of
 # gitops/bootstrap/apps, which no tracked image: line names, and the two the Argo CD chart infra/deploy-full-idp.sh
 # installs. A ghcr.io/peopleforrester/lab-platform/mirror/ row is lab-platform's copy of a Docker Hub image (#714), at

@@ -1,18 +1,21 @@
-# ABOUTME: Holds Challenge 2's breakout path (#773): a plain name becomes a pinned public image, one replica, and every
-# ABOUTME: landed deployment shows on the deployments page by name, image and witch name; refusals and the desk do not.
-"""Why this exists (#773, Michael's approval 2026-11-01).
+# ABOUTME: Holds Challenge 2's breakout path (#773, #992): any image goes to the apply as written, Docker Hub's official
+# ABOUTME: ones moved to public.ecr.aws, room deployments run one small pod, and each lands on the deployments page.
+"""Why this exists (#773, Michael's approval 2026-11-01; #992, Michael's ruling of 2026-11-06 on #988).
 
-The breakout room has only phones, so nobody types a registry path. "Deploy nginx" or "run busybox" is the ask, and
-workshop-mcp's real deploy_app puts the pinned public image in from PUBLIC_IMAGES, caps the workload at one replica
-and scales it to zero after the Joker window, so a phone cannot fill the node. Every successful deploy reports its
-image and the witch name the bot passed as requested_by, and deployments-<cluster> (deployments.burritobot.co for the
-room) lists it, with no Joker anywhere and nothing of the support desk reachable under that name. The chat page shows
-"see your deployments" once the visitor's first one lands. A Docker Hub name the list does not carry is refused,
-naming the list, since nothing here pulls from Docker Hub (#714); an image with a registry of its own, the villains
-included, is left exactly as written, because whether it runs is the cluster's call.
+The breakout room has only phones. Until #992 deploy_app pulled six pinned public images by plain name and refused
+the rest; Michael removed that list on 2026-11-06. Now any image the model writes goes to the apply as written and the
+cluster decides: admitted while restrict-image-registries and deny-external-registries are at Audit, refused after
+guardrails-on. Nothing pulls from Docker Hub (#714): a Docker Hub reference to one of Docker's official images is
+rewritten to its copy on public.ecr.aws/docker/library/, tag and digest kept, and any other Docker Hub image is
+refused before the apply, saying why. An image from outside the platform's own registries is a room deployment: one
+replica, the room's resources, scaled to zero after the Joker window, so a phone cannot fill the node. Every
+successful deploy reports its image and the witch name the bot passed as requested_by, and deployments-<cluster>
+(deployments.burritobot.co for the room) lists it, with no Joker anywhere and nothing of the support desk reachable
+under that name. The chat page shows "see your deployments" once the visitor's first one lands.
 
 deploy_app runs here against a stand-in for the Kubernetes API that records every call, and reports to the real ticket
-site on localhost. No cluster, no model. test_public_images_served.py reads each pinned digest from public.ecr.aws.
+site on localhost. No cluster, no model. test_public_images_served.py reads the pinned landing-page image, and the
+official images this test rewrites, from public.ecr.aws.
 """
 from __future__ import annotations
 
@@ -146,23 +149,27 @@ EDGAR_SLUG = site.slug(EDGAR)
 VILLAIN = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 DOMAIN = "deployments-attackme.burritobot.co"
 
-print("== the list: public images on public.ecr.aws, pinned by digest, declared in images.lock ==")
+OLD_SIX = ("busybox", "alpine", "nginx", "httpd", "redis", "2048")
+MIRROR = "public.ecr.aws/docker/library/"
+print("== no fixed list: one pinned landing-page server, on public.ecr.aws, declared in images.lock ==")
 lock = {line.split()[0]: line.split()[1] for line in (REPO / "images.lock").read_text().splitlines()
         if line and not line.startswith("#")}
-check("busybox and nginx are on it, as Michael named them", {"busybox", "nginx"} <= set(m.PUBLIC_IMAGES))
-check("it stays small: six images or fewer", len(m.PUBLIC_IMAGES) <= 6, str(list(m.PUBLIC_IMAGES)))
-for name, ref in m.PUBLIC_IMAGES.items():
-    digest = ref.split("@", 1)[1] if "@" in ref else ""
-    check(f"{name}: on public.ecr.aws, so nothing comes from Docker Hub", ref.startswith("public.ecr.aws/"), ref)
-    check(f"{name}: pinned by an index digest", bool(re.fullmatch(r"sha256:[0-9a-f]{64}", digest)), ref)
-    check(f"{name}: images.lock declares it at that digest", lock.get(ref) == digest, str(lock.get(ref)))
-check("every alias names an image on the list", set(m.PUBLIC_IMAGE_ALIASES.values()) <= set(m.PUBLIC_IMAGES))
-check("the tool tells the model the names it can use", all(n in m.deploy_app.description for n in m.PUBLIC_IMAGES),
-      m.deploy_app.description)
+check("the module carries no PUBLIC_IMAGES and no PUBLIC_IMAGE_ALIASES (#992)",
+      not hasattr(m, "PUBLIC_IMAGES") and not hasattr(m, "PUBLIC_IMAGE_ALIASES"))
+check("the rewrite target is Docker's official library on public.ecr.aws", m.OFFICIAL_MIRROR == MIRROR)
+digest = m.LANDING_IMAGE.split("@", 1)[1] if "@" in m.LANDING_IMAGE else ""
+check("the landing-page server is Docker's official nginx on public.ecr.aws", m.LANDING_IMAGE.startswith(MIRROR + "nginx:"),
+      m.LANDING_IMAGE)
+check("it is pinned by an index digest", bool(re.fullmatch(r"sha256:[0-9a-f]{64}", digest)), m.LANDING_IMAGE)
+check("images.lock declares it at that digest", lock.get(m.LANDING_IMAGE) == digest, str(lock.get(m.LANDING_IMAGE)))
+stale = [r for r in lock if r.startswith(MIRROR) and r != m.LANDING_IMAGE or r.startswith("public.ecr.aws/l6m2t8p7/")]
+check("images.lock keeps no row for the five other old pins, which nothing hands a cluster now", not stale, str(stale))
+check("the tool names no list of images", ", ".join(OLD_SIX) not in m.deploy_app.description
+      and "PUBLIC_IMAGES" not in m.deploy_app.description, m.deploy_app.description)
 check("and that requested_by is the name the person chatting gave", "requested_by" in m.deploy_app.description
       and "the person chatting with you gave" in m.deploy_app.description)
 
-print("== restrict-image-registries refuses every one of them, so the private cluster says no ==")
+print("== restrict-image-registries refuses the public.ecr.aws copies, so the private cluster says no ==")
 policy = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text())
 vars_ = {v["name"]: v["expression"] for v in policy["spec"]["variables"]}
 allowed = re.findall(r"'([^']+)'", vars_["allowedRegistries"])
@@ -170,38 +177,75 @@ ecr = re.search(r"r'(.+)'", vars_["ecr"]).group(1).replace("\\\\", "\\")
 check("the policy's allow-list and ECR pattern are read", bool(allowed) and bool(ecr), f"{allowed} {ecr}")
 check("the ECR pattern is the private-registry one (a check that it is read right)",
       bool(re.match(ecr, "123456789012.dkr.ecr.us-west-2.amazonaws.com/x")))
-for name, ref in m.PUBLIC_IMAGES.items():
-    check(f"{name}: not on the allow-list and not a private ECR registry",
+for ref in (m.LANDING_IMAGE, MIRROR + "postgres:17"):
+    check(f"{ref}: not on the allow-list and not a private ECR registry",
           not any(ref.startswith(a) for a in allowed) and not re.match(ecr, ref), ref)
+check("deploy_app's own registries are all on the allow-list, so the platform's images are not the room's",
+      all(any(p.startswith(a) for a in allowed) for p in m.OWN_IMAGE_PREFIXES), str(m.OWN_IMAGE_PREFIXES))
+check("and its ECR pattern is the policy's", m._ECR.pattern == ecr, f"{m._ECR.pattern} {ecr}")
 
-print("== a plain name, any way the model writes it, becomes the pinned image ==")
-for asked, want in (("nginx", "nginx"), ("nginx:latest", "nginx"), ("NGINX", "nginx"), ("library/nginx", "nginx"),
-                    ("docker.io/library/nginx:1.27-alpine", "nginx"), ("docker.io/nginx", "nginx"),  # refused (#714)
-                    ("apache", "httpd"), ("httpd:2.4", "httpd"), ("redis:7", "redis"), ("alpine", "alpine"),
-                    ("2048", "2048"), ("docker-2048", "2048"), ("busybox@sha256:" + "0" * 64, "busybox"),
-                    ("public.ecr.aws/docker/library/nginx:latest", "nginx"),
-                    ("public.ecr.aws/l6m2t8p7/docker-2048", "2048")):
+print("== criterion 1: images outside the old six reach the apply as written, a Docker Hub official one rewritten ==")
+for asked, want in (("ghcr.io/stefanprodan/podinfo:6.9.2", "ghcr.io/stefanprodan/podinfo:6.9.2"),
+                    ("quay.io/prometheus/node-exporter:v1.9.1", "quay.io/prometheus/node-exporter:v1.9.1"),
+                    ("public.ecr.aws/someone/tron:1", "public.ecr.aws/someone/tron:1"),
+                    ("registry.k8s.io/pause:3.10", "registry.k8s.io/pause:3.10"),
+                    ("postgres:17", MIRROR + "postgres:17"), ("memcached", MIRROR + "memcached:latest"),
+                    ("public.ecr.aws/docker/library/nginx:latest", "public.ecr.aws/docker/library/nginx:latest")):
     reply, out, err = deploy(workload("web", asked))
-    check(f"{asked!r} deploys {want}'s pinned image", container(out).get("image") == m.PUBLIC_IMAGES[want],
+    check(f"{asked!r} reaches the apply as {want}", not err and container(out).get("image") == want,
           err or str(container(out).get("image")))
+for name in OLD_SIX[:5]:
+    _, out, _ = deploy(workload("web", name))
+    check(f"{name!r}, one of the old six, is Docker's official {name} on public.ecr.aws, no longer a pin",
+          container(out).get("image") == f"{MIRROR}{name}:latest", str(container(out).get("image")))
+for asked in ("apache", "2048"):
+    _, out, err = deploy(workload("web", asked))
+    check(f"{asked!r}, an old alias, is no longer steered to a pin: it is read as the official name it is",
+          not err and container(out).get("image") == f"{MIRROR}{asked}:latest", err or str(container(out)))
 
-print("== a Docker Hub name the list does not carry is refused, naming the list ==")
-for asked in ("tron", "someone/tron:latest", "docker.io/someone/tron", "index.docker.io/library/tron"):  # refused (#714)
-    reply, out, err = deploy(workload("tron", asked))
-    check(f"{asked!r} raises before any apply", bool(err) and not out and not [c for c in calls if c[0] == "PATCH"],
-          reply or err)
-    check(f"{asked!r}: the refusal says 'deploy failed for', names every image on the list, and that nothing landed",
-          err.startswith("deploy failed for Deployment/tron: ") and all(n in err for n in m.PUBLIC_IMAGES)
-          and "Nothing was deployed." in err and "Docker Hub" in err, err)
+print("== criterion 2: no pull reaches Docker Hub, under any of its registry names ==")
+check("_DOCKER_HUB names the bare form and Docker Hub's four hosts", len(m._DOCKER_HUB) == 5 and "" in m._DOCKER_HUB)
+D = "@sha256:" + "a" * 64
+for reg in m._DOCKER_HUB:
+    at = f"{reg}/" if reg else ""
+    for asked, want in ((f"{at}nginx:1.29", MIRROR + "nginx:1.29"), (f"{at}library/memcached", MIRROR + "memcached:latest"),
+                        (f"{at}library/redis:8-alpine{D}", MIRROR + "redis:8-alpine" + D), (f"{at}Postgres", MIRROR + "postgres:latest"),
+                        (f"{at}tron", MIRROR + "tron:latest")):
+        reply, out, err = deploy(workload("web", asked))
+        check(f"{asked!r}: an official-library reference is rewritten to {want}",
+              not err and container(out).get("image") == want, err or str(container(out).get("image")))
+    for asked in (f"{at}bitnami/redis:7", f"{at}trongame/tron:latest", f"{at}library/someone/tron"):
+        reply, out, err = deploy(workload("tron", asked))
+        check(f"{asked!r}: outside the official library, refused before any apply",
+              bool(err) and not out and not [c for c in calls if c[0] == "PATCH"], reply or err)
+        check(f"{asked!r}: the refusal names why (outside Docker's official library, no Docker Hub pulls) and how",
+              err.startswith("deploy failed for Deployment/tron: ") and "outside Docker's official library" in err
+              and "pulls nothing from Docker Hub" in err and "registry it is published on" in err
+              and "Nothing was deployed." in err, err)
+init = workload("web", "ghcr.io/stefanprodan/podinfo:6.9.2")
+init["spec"]["template"]["spec"]["initContainers"] = [{"name": "wait", "image": "busybox:1.38.0"}]
+_, out, err = deploy(init)
+inits = out.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [{}])
+check("an init container's Docker Hub official image is rewritten too", inits[0].get("image") == MIRROR + "busybox:1.38.0",
+      err or str(inits))
+mixed = workload("web", "nginx")
+mixed["spec"]["template"]["spec"]["containers"].append({"name": "side", "image": "bitnami/redis:7"})
+_, out, err = deploy(mixed)
+check("one non-official Docker Hub container refuses the whole object", bool(err) and not out, err)
 
-print("== an image with a registry of its own is left as written ==")
-for image in (VILLAIN, site.C6_IMAGE, "ghcr.io/peopleforrester/watch-it-burn:busybox-1.36", "quay.io/someone/tron:1",
-              "public.ecr.aws/someone/tron:1"):
+print("== the platform's own images keep what they ask for ==")
+for image in (VILLAIN, site.C6_IMAGE, "ghcr.io/peopleforrester/watch-it-burn:busybox-1.36",
+              "registry.burritobot.co/festival-ops/joker:v1", "123456789012.dkr.ecr.us-west-2.amazonaws.com/app:1"):
     reply, out, err = deploy(workload("asis", image, replicas=3))
     check(f"{image}: applied unchanged", container(out).get("image") == image, err)
     check(f"{image}: keeps the replicas it asked for (not a room deployment)", out.get("spec", {}).get("replicas") == 3)
 
 print("== a room deployment runs one small pod and is scaled to zero after the window ==")
+for image in ("quay.io/someone/tron:1", "public.ecr.aws/someone/tron:1", "ghcr.io/someone/tron:1"):
+    _, out, err = deploy(workload("asked", image, replicas=3))
+    check(f"{image}: an image the room asked for is a room deployment, one replica and the room's resources",
+          not err and out.get("spec", {}).get("replicas") == 1 and container(out).get("resources") == m.ROOM_RESOURCES,
+          err or json.dumps(out)[:200])
 reply, out, err = deploy(workload("tron", "nginx", replicas=50, resources={"limits": {"cpu": "8", "memory": "16Gi"}}),
                          requested_by=EDGAR)
 check("it deploys", reply.startswith("deployed Deployment/tron"), err or reply)
@@ -217,20 +261,22 @@ _, out, _ = deploy(workload("db", "redis", kind="StatefulSet", replicas=4))
 check("a StatefulSet of a public image runs one replica too", out.get("spec", {}).get("replicas") == 1)
 _, out, _ = deploy(workload("shell", "busybox"))
 check("busybox with nothing to run gets a sleep, so its pod runs", container(out).get("command") == m.SHELL_COMMAND)
+_, out, _ = deploy(workload("shell3", "quay.io/someone/alpine:3"))
+check("so does a room alpine from any registry", container(out).get("command") == m.SHELL_COMMAND)
 _, out, _ = deploy(workload("shell2", "busybox", command=["sh", "-c", "echo hi; sleep 30"]))
 check("busybox with a command keeps it", container(out).get("command") == ["sh", "-c", "echo hi; sleep 30"])
 _, out, _ = deploy(workload("web2", "nginx"))
 check("nginx is left its own entrypoint", "command" not in container(out))
 _, out, _ = deploy(workload("pod", "nginx", kind="Pod"))
-check("a bare Pod of a public image is applied, one pod by nature", container(out).get("image") == m.PUBLIC_IMAGES["nginx"])
+check("a bare Pod of a public image is applied, one pod by nature", container(out).get("image") == MIRROR + "nginx:latest")
 
 print("== the deployments page lists it by name, image and witch name ==")
 mine = lambda: [r for r in rows() if r["name"] == "tron" and r["witch"] == EDGAR]  # noqa: E731
 check("tron shows, deployed by Edgar the Kelpie, running nginx", wait_for(lambda: bool(mine())), str(rows()[:3]))
 row = (mine() or [{}])[0]
-check("the row carries the pinned image and its short name", row.get("image") == m.PUBLIC_IMAGES["nginx"]
+check("the row carries the image it ran and its short name", row.get("image") == MIRROR + "nginx:latest"
       and row.get("app") == "nginx", str(row))
-check("the desk's wall now records the image too", any(r.get("image") == m.PUBLIC_IMAGES["nginx"]
+check("the desk's wall now records the image too", any(r.get("image") == MIRROR + "nginx:latest"
                                                         for r in json.loads(get("/wall.json")[1])))
 check("?witch=<slug> filters to that visitor", wait_for(lambda: rows(f"?witch={EDGAR_SLUG}") != [])
       and all(r["witch"] == EDGAR for r in rows(f"?witch={EDGAR_SLUG}")))
@@ -347,4 +393,4 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("Challenge 2's public images, the one-pod cap and the deployments page hold.")
+print("Any image passes, none from Docker Hub; the one-pod cap and the deployments page hold.")

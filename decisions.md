@@ -25977,3 +25977,77 @@ No dependency was added.
 **The suites (run 17912, at `2704b870`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `72 checks ran (the offline suite and 71 tier tests)
 in 44m29s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17912/e2e-tools.log`.
+
+## 2026-11-06 · #992 · run 17917 · deploy_app passes any image through, and moves Docker Hub's official images to public.ecr.aws
+
+**What changed.** This is the code half of #988 (Michael, 2026-11-06: remove the six-image allowlist; Whitney's #985
+records the agreement). `gitops/ai-layer/workshop-mcp-server.py` no longer has `PUBLIC_IMAGES`, `PUBLIC_IMAGE_ALIASES`,
+`_public_image_name`, `_resolve_public_images` or `NAMED_APP_LISTED`. The image the model writes goes to the apply as
+written, and the cluster decides: admitted while `restrict-image-registries` and `deny-external-registries` are at
+Audit, refused by them after `guardrails-on`. The one change deploy_app still makes to an image is #714's: nothing is
+pulled from Docker Hub. `_move_off_docker_hub` reads each container and init container: an image off Docker Hub is
+left exactly as written, a Docker Hub image in Docker's official library is rewritten, and any other Docker Hub image
+is refused before the apply. HC-666's Joker flow (#775, `registry.burritobot.co`) and the 2-hour workshop's
+promo-mascot image are untouched: both are the platform's own images, and `verify/test_room_jokers.py` passes with no
+edit.
+
+**Decided: what happens to a Docker Hub reference.** `_DOCKER_HUB` still lists the bare form and Docker Hub's four
+hosts. A reference under any of them whose repository has no namespace (`nginx`, `redis:8`) or the `library/` one
+(`library/memcached`, under any of the hosts) is rewritten to `public.ecr.aws/docker/library/<name>:<tag>`, tag and
+digest kept, `:latest` where it names no tag. That holds for every official image, the old six and the rest: Docker publishes every
+official image there at the same digests, and the tools tier now reads busybox, alpine, httpd, redis, postgres,
+memcached and rabbitmq from it. A bare name that is not an official image (`tron`) is rewritten the same way and is
+not refused. Docker Hub reads a bare name as `library/<name>` too, so the rewrite names exactly what Docker Hub would
+have served, and where that is nothing, the node reports an image it cannot pull. Telling the two apart would need a
+list of official images, which is the kind of list #988 removes. A Docker Hub image in any other namespace
+(`bitnami/redis`, `trongame/tron`, `library/someone/tron`) is refused before any apply, with the reason "is a Docker Hub
+image outside Docker's official library, and the cantina pulls nothing from Docker Hub", and is told to write the image
+with the registry it is published on or to send just the app's name. It is not rewritten to `public.ecr.aws/<namespace>/`:
+ECR Public aliases are not Docker Hub's namespaces, so that would pull whatever account happens to hold the alias.
+
+**Decided: how a name with no image is served.** A manifest that is only a plain-language name (#939: `Tron`,
+`Light Cycle Arena`, `festival landing page`) becomes a one-replica Deployment named after it on `LANDING_IMAGE`, one
+pinned web server: Docker's official nginx `1.29-alpine` on public.ecr.aws at the digest images.lock already held for
+it. With no list to match, a plain name is never read as an image, so `nginx`, `redis` and `2048` sent alone also get
+the landing page under their own name, and the reply says it serves a landing page and not an image of its own. A
+bare image reference (one with `/`, `:` or `@`, such as `redis:8` or `quay.io/...`) is that image, read as any other.
+The old aliases (`apache`, `2048` as an image) are gone: written as an image they are read as the official names they
+spell.
+
+**Decided: what `_shrink_room_deployment` applies to.** It keyed on the six images; it now keys on a room deployment,
+a workload with any container whose image is not the platform's own. The platform's own are `ghcr.io/peopleforrester/`
+(this repo's and lab-platform's packages, the C2 villains and the C6 image among them), `registry.burritobot.co/`
+(the Jokers) and an ECR registry, all three on `restrict-image-registries`' allow-list, which the offline test holds.
+A room deployment gets one replica, the room's resources and the scale to zero after `JOKER_SCALE_DOWN_SECONDS`, as
+the six did, so a phone still cannot fill the node with any image it names. So an image on quay.io, on another
+owner's ghcr.io path or on public.ecr.aws is now capped where before it kept its replicas, and the platform's images
+keep theirs as before. A room container whose repository is busybox or alpine and that has no command or args gets
+the `sleep 3600`, from any registry; an init container no longer does.
+
+**Pins and tests.** images.lock keeps the landing nginx row and drops the five other old pins (busybox, alpine, httpd,
+redis, the 2048 game), which nothing hands a cluster now. The tool description loses the list of names and says any
+image can be named and an official name is pulled from public.ecr.aws; the rest of its prose is #988's next child.
+`verify/test_public_images.py` sends `ghcr.io/stefanprodan/podinfo:6.9.2`, `quay.io/prometheus/node-exporter:v1.9.1`,
+`public.ecr.aws/someone/tron:1`, `registry.k8s.io/pause:3.10` and `postgres:17` and checks each reaches the apply as
+written, the last rewritten. It feeds official, bare non-official and namespaced references under every `_DOCKER_HUB`
+name and checks each is rewritten or refused as above. `verify/test_deploy_app_named_app.py` sends `Tron` and four
+other plain-language names and checks each applies a Deployment on `LANDING_IMAGE`. `test_public_images_served.py`
+(tools tier) reads `LANDING_IMAGE` and seven official images on public.ecr.aws. `test_no_docker_hub.py` drops its two
+REFUSED lines for test_public_images.py, which builds its Docker Hub references from `_DOCKER_HUB` and names no host.
+`test_deployments_page_live.py` builds the room Deployment with the new functions.
+
+**Live check (run 17917, both clusters, nothing created).** A server-side dry run as
+`system:serviceaccount:agent:workshop-mcp` of the Deployments deploy_app now builds. Both clusters read
+`deny-external-registries [Audit]` and `restrict-image-registries [Audit]`, and on each all four were admitted
+(`rc=0`): `nginx` as `public.ecr.aws/docker/library/nginx:latest`, `quay.io/prometheus/node-exporter:v1.9.1` and
+`ghcr.io/stefanprodan/podinfo:6.9.2` as written, and `Tron` on
+`public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de`,
+each at one replica. `CONTEXT=<cluster> python3 verify/test_deployments_page_live.py` did not reach this step on
+either cluster: its first step, `kubectl get --raw` of `fake-ticket:8080/proxy/deployments.json` through the API
+server's service proxy, timed out after 60 s, while the fake-ticket Service's endpoint read ready on both. That is
+filed as a follow-up and does not depend on this change.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs the ai-layer: a real deploy_app call
+through the bot for a quay.io image and for `Tron`, which `python3 verify/kubecon_probe.py` covers for Tron, and
+`CONTEXT=watch-it-burn-private python3 verify/test_deployments_page_live.py` after `guardrails-on`, for the refusal
+at Deny, once its service-proxy step answers.

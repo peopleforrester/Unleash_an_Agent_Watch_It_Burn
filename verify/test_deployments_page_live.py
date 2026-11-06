@@ -8,7 +8,7 @@
    page through the console (fleet.sh routes publishes it from WIB_VILLAIN_HOSTS), and a desk page under that name is
    a 404.
 3. A server-side dry run, as workshop-mcp, of the Deployment deploy_app makes from "deploy nginx" (one replica, the
-   room's resources, PUBLIC_IMAGES' nginx) is admitted where restrict-image-registries is Audit or absent (the public
+   room's resources, Docker's official nginx moved to public.ecr.aws, #992) is admitted where restrict-image-registries is Audit or absent (the public
    cluster, the attack) and refused by it where it is Deny (the private cluster, the fix). Nothing is created.
 
 What it leaves to a person: the model filling requested_by with the visitor's witch name, which needs a guard-proxy
@@ -109,11 +109,12 @@ obj = {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "tron
        "spec": {"replicas": 1, "selector": {"matchLabels": {"app": "tron"}},
                 "template": {"metadata": {"labels": {"app": "tron", m.WORKLOAD_LABEL: "tron"}},
                              "spec": {"containers": [{"name": "tron", "image": "nginx"}]}}}}
-m._resolve_public_images(obj, "Deployment/tron")
+m._move_off_docker_hub(obj, "Deployment/tron")
 m._default_limits(obj)
-m._shrink_room_deployment(obj)
-check("the manifest is deploy_app's: the pinned nginx, one replica",
-      obj["spec"]["template"]["spec"]["containers"][0]["image"] == m.PUBLIC_IMAGES["nginx"]
+if m._room_workload(obj):
+    m._shrink_room_deployment(obj)
+check("the manifest is deploy_app's: Docker's official nginx on public.ecr.aws, one replica",
+      obj["spec"]["template"]["spec"]["containers"][0]["image"] == m.OFFICIAL_MIRROR + "nginx:latest"
       and obj["spec"]["replicas"] == 1)
 r = kubectl("get", "validatingpolicies.policies.kyverno.io", "restrict-image-registries", "-o",
             "jsonpath={.spec.validationActions}")

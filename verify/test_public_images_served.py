@@ -1,13 +1,16 @@
-# ABOUTME: Reads each of Challenge 2's public images (#773) from public.ecr.aws anonymously: every tag still serves the
-# ABOUTME: digest deploy_app pins, and each image runs on linux/amd64, the only architecture these nodes have.
+# ABOUTME: Reads Challenge 2's landing-page image (#773, #992) and the official images deploy_app moves off Docker Hub
+# ABOUTME: from public.ecr.aws anonymously: each is served there, on linux/amd64, the only architecture these nodes have.
 # SUITE: e2e (needs the network: public.ecr.aws is asked for each manifest)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
-# Why. deploy_app turns "deploy nginx" into PUBLIC_IMAGES' reference, pinned by digest, and a node pulls it with no
-# credential. A digest the registry stopped serving would leave the room's deployment in ImagePullBackOff while the
-# page said it landed, and an image with no linux/amd64 build would never start (decisions.md, 2026-10-25, "No arm64
-# image"). The tag is read as well: when it has moved on, the pin still pulls and this prints that it moved, so a
-# refresh of the pin is a choice someone makes. verify/test_public_images.py holds the offline half.
+# Why. deploy_app serves an app the room names with no image ("deploy Tron") on LANDING_IMAGE, pinned by digest, and a
+# node pulls it with no credential. A digest the registry stopped serving would leave the room's deployment in
+# ImagePullBackOff while the page said it landed, and an image with no linux/amd64 build would never start
+# (decisions.md, 2026-10-25, "No arm64 image"). The tag is read as well: when it has moved on, the pin still pulls and
+# this prints that it moved, so a refresh of the pin is a choice someone makes. Since #992 deploy_app rewrites any
+# Docker official image named on Docker Hub to public.ecr.aws/docker/library/ (OFFICIAL_MIRROR), which holds only if
+# Amazon's registry carries Docker's official images, the old five pins and others besides: each of OFFICIAL is read
+# there at its tag. verify/test_public_images.py holds the offline half.
 from __future__ import annotations
 
 import hashlib
@@ -63,6 +66,10 @@ def paced() -> None:
 # five tries in all.
 # Any other error, or a sixth 429, still fails the check.
 RETRIES_ON_429 = 4
+# Docker official images as the room might name them on Docker Hub: the five pins #992 dropped, and others no list
+# here ever carried. Each tag is a multi-arch index on Docker Hub, and so on public.ecr.aws.
+OFFICIAL = ("busybox:1.38.0", "alpine:3.23", "httpd:2.4-alpine", "redis:8-alpine", "postgres:17", "memcached:1.6",
+            "rabbitmq:4")
 
 
 def opened(req: urllib.request.Request) -> bytes:
@@ -100,8 +107,8 @@ except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
     print(f"FAILED: public.ecr.aws gave no anonymous token: {type(e).__name__}: {e}")
     sys.exit(1)
 
-print("== every public image deploy_app pins is served by public.ecr.aws, with no credential ==")
-for name, ref in m.PUBLIC_IMAGES.items():
+print("== the landing-page image deploy_app pins is served by public.ecr.aws, with no credential ==")
+for name, ref in (("landing", m.LANDING_IMAGE),):
     path, _, digest = ref.partition("@")
     repo, _, tag = path.removeprefix("public.ecr.aws/").rpartition(":")
     try:
@@ -124,10 +131,25 @@ for name, ref in m.PUBLIC_IMAGES.items():
         now = f"{type(e).__name__}: {e}"
     print(f"  INFO  {name}: :{tag} now serves {now[:19]}..." + ("" if now == digest else " (moved on from the pin)"))
 
+print("== Docker's official images are on public.ecr.aws, where deploy_app moves a Docker Hub reference ==")
+for asked in OFFICIAL:
+    image, refused = m._off_docker_hub(asked)
+    repo, _, tag = image.removeprefix("public.ecr.aws/").rpartition(":")
+    check(f"{asked}: deploy_app moves it to {image}", not refused and image.startswith(m.OFFICIAL_MIRROR), refused)
+    try:
+        served, doc = fetch(TOKEN, repo, tag)
+    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+        check(f"{asked}: {image} answers an anonymous pull", False, f"{type(e).__name__}: {e}")
+        continue
+    check(f"{asked}: {image} answers an anonymous pull", served.startswith("sha256:"), served)
+    amd64 = [x for x in doc.get("manifests", []) if x.get("platform", {}).get("os") == "linux"
+             and x.get("platform", {}).get("architecture") == "amd64"]
+    check(f"{asked}: its index has a linux/amd64 image", bool(amd64))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("Every public image deploy_app pins is served, on linux/amd64.")
+print("The landing-page image and Docker's official images deploy_app moves to are served, on linux/amd64.")

@@ -506,105 +506,116 @@ def _name_room_joker(obj: dict, name: str) -> None:
     pod["subdomain"] = ROOM_JOKER_SERVICE
 
 
-# The public images the room can ask for by name (#773). In the breakout the room has only phones, so nobody types a
-# registry path: "deploy nginx" or "run busybox" is enough, and deploy_app puts the real image in. Each is a public
-# image off the public internet, on Amazon's public registry, public.ecr.aws, so nothing comes from Docker Hub (#714).
-# Each is pinned by its index digest (images.lock declares each one, verify/test_public_images.py holds the two
-# together).
-# restrict-image-registries does not allow public.ecr.aws, so where it is at Deny these are refused at admission, the
-# Challenge 2 "the platform says no" moment. 2048 is the game AWS's EKS tutorials deploy, from an account nobody here
-# knows: the lesson is the untrusted source (images/villains/README.md). A shell image with nothing to run gets a
-# sleep, so its pod stays up.
-PUBLIC_IMAGES = {
-    "busybox": "public.ecr.aws/docker/library/busybox:1.38.0"
-               "@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4",
-    "alpine": "public.ecr.aws/docker/library/alpine:3.23"
-              "@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849b6703d63",
-    "nginx": "public.ecr.aws/docker/library/nginx:1.29-alpine"
-             "@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
-    "httpd": "public.ecr.aws/docker/library/httpd:2.4-alpine"
-             "@sha256:070da7661f0be8a05430b2c125c0cde9e53176b4048c813024021969a0e3893c",
-    "redis": "public.ecr.aws/docker/library/redis:8-alpine"
-             "@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537",
-    "2048": "public.ecr.aws/l6m2t8p7/docker-2048:latest"
-            "@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965",
-}
-# What else a person or a model calls them.
-PUBLIC_IMAGE_ALIASES = {"apache": "httpd", "docker-2048": "2048", "game-2048": "2048", "2048-game": "2048"}
-SHELL_IMAGES = ("busybox", "alpine")
-SHELL_COMMAND = ["sleep", "3600"]
-# A room deployment (an image from PUBLIC_IMAGES) runs one replica, as small as a room Joker but with room for nginx's
-# and httpd's workers, and is scaled to zero after JOKER_SCALE_DOWN_SECONDS as a room Joker is: one pod per
-# deployment, so a phone cannot fill the node (Michael, #773).
+# deploy_app passes any image through (#988, #992; Michael, 2026-11-06). Until then it pulled only six pinned public
+# images (#773), steering the room to them by name; now the image the model writes goes to the apply as written, and
+# the cluster decides: admitted while restrict-image-registries and deny-external-registries are at Audit, refused by
+# them after guardrails-on, the Challenge 2 "the platform says no" moment. There is no list of images here.
+#
+# Nothing pulls from Docker Hub (#714). A Docker Hub reference names Docker's official library when its repository
+# has no namespace ("nginx", "redis:8") or the library/ one, and Docker publishes every official image to Amazon's
+# public registry, public.ecr.aws/docker/library/, at the same digests. So such a reference is rewritten to that copy,
+# tag and digest kept, ":latest" where it names no tag, which is what Docker Hub would have served. A bare name that is
+# no official image ("tron") names nothing on Docker Hub either; rewritten, it is the same miss on public.ecr.aws,
+# which the node reports as an image it cannot pull. A Docker Hub image in any other namespace (bitnami/redis) has no
+# copy deploy_app can name, since public.ecr.aws aliases are not Docker Hub's namespaces, so it is refused before any
+# apply, saying why and how to write it instead.
+OFFICIAL_MIRROR = "public.ecr.aws/docker/library/"
+# Every name Docker Hub goes by, so deploy_app can move a Docker Hub image off it or refuse it (#714).
+_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")  # refused (#714)
+# A manifest that is only an app's name ("Tron") is served by this one pinned web server, as the app's landing page
+# (#939, #992). images.lock declares it, and verify/test_public_images.py holds the two together.
+LANDING_IMAGE = ("public.ecr.aws/docker/library/nginx:1.29-alpine"
+                 "@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de")
+# The platform's own images: this repo's and lab-platform's packages (the C2 villains, the C6 image), the internal
+# registry (the HC-666 Jokers, #775), and an ECR registry. Any other image is one the room asked for, a room
+# deployment: one replica, as small as a room Joker but with room for a web server's workers, and scaled to zero after
+# JOKER_SCALE_DOWN_SECONDS as a room Joker is, so a phone cannot fill the node (Michael, #773). The 2-hour workshop's
+# images are all the platform's own, so its deployments keep what they ask for.
+OWN_IMAGE_PREFIXES = ("ghcr.io/peopleforrester/", "registry.burritobot.co/")
+_ECR = re.compile(r"^[^/]+\.dkr\.ecr\.[^/]+\.amazonaws\.com/")
 ROOM_RESOURCES = {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "50m", "memory": "64Mi"}}
 SCALED_KINDS = ("Deployment", "StatefulSet", "ReplicaSet")
-# Every name Docker Hub goes by, so deploy_app can refuse a Docker Hub image PUBLIC_IMAGES does not carry (#714).
-_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com")  # refused (#714)
+# A room shell image with nothing to run gets a sleep, so its pod stays up.
+SHELL_IMAGES = ("busybox", "alpine")
+SHELL_COMMAND = ["sleep", "3600"]
+
+
+def _split_image(image: str) -> tuple[str, str, str, str]:
+    """An image reference's registry ("" when it names none, which is Docker Hub), repository, tag and digest.
+
+    The registry and repository are lowercased, as a registry reads them; the tag and digest are kept as written."""
+    ref, _, digest = image.strip().partition("@")
+    head, _, rest = ref.partition("/")
+    registry, repo = (head, rest) if rest and ("." in head or ":" in head or head == "localhost") else ("", ref)
+    last = repo.rsplit("/", 1)[-1]
+    tag = ""
+    if ":" in last:
+        tag = last.split(":", 1)[1]
+        repo = repo[: len(repo) - len(last)] + last.split(":", 1)[0]
+    return registry.lower(), repo.lower(), tag, digest
 
 
 def _registry_and_repo(image: str) -> tuple[str, str]:
     """An image reference's registry ("" when it names none, which is Docker Hub) and repository, tag and digest off."""
-    ref = image.strip().lower().split("@", 1)[0]
-    head, _, rest = ref.partition("/")
-    registry, repo = (head, rest) if rest and ("." in head or ":" in head or head == "localhost") else ("", ref)
-    last = repo.rsplit("/", 1)[-1]
-    if ":" in last:
-        repo = repo[: len(repo) - len(last)] + last.split(":", 1)[0]
+    registry, repo, _, _ = _split_image(image)
     return registry, repo
 
 
-def _public_image_name(image: str) -> str | None:
-    """The PUBLIC_IMAGES name an image asks for; "" for a Docker Hub image the list does not carry; None for any other.
+def _off_docker_hub(image: str) -> tuple[str, str]:
+    """The reference deploy_app applies for an image, and "" or why it refuses it.
 
-    A Docker Hub reference is read for its repository, so "nginx", "nginx:latest" and nginx in Docker Hub's library/
-    namespace, under any of its registry names, all ask for nginx. The pinned image's own repository at any tag is that name too."""
-    registry, repo = _registry_and_repo(image)
-    if registry in _DOCKER_HUB:
-        repo = repo.removeprefix("library/")
-        name = PUBLIC_IMAGE_ALIASES.get(repo, repo)
-        return name if name in PUBLIC_IMAGES else ""
-    for name, pinned in PUBLIC_IMAGES.items():
-        if (registry, repo) == _registry_and_repo(pinned):
-            return name
-    return None
+    Any image off Docker Hub is returned exactly as written. A Docker Hub official image is its public.ecr.aws copy;
+    any other Docker Hub image is refused, with the reason."""
+    registry, repo, tag, digest = _split_image(image)
+    if registry not in _DOCKER_HUB:
+        return image, ""
+    name = repo.removeprefix("library/")
+    if not name or "/" in name:
+        return image, (f"{image.strip()} is a Docker Hub image outside Docker's official library, and the cantina pulls "
+                       "nothing from Docker Hub. Only Docker's official images (nginx, redis:8, postgres:17) have a "
+                       "copy it pulls instead, on public.ecr.aws: write the image with the registry it is published "
+                       "on (ghcr.io/..., quay.io/..., public.ecr.aws/...), or send just the app's name as the manifest")
+    return f"{OFFICIAL_MIRROR}{name}:{tag or 'latest'}" + (f"@{digest}" if digest else ""), ""
 
 
-def _resolve_public_images(obj: dict, what: str) -> list[str]:
-    """Put the pinned image in for every container that asks for a PUBLIC_IMAGES name, and return the names found.
-
-    Refuses a container that asks for a Docker Hub image the list does not carry, naming the list, so the model can
-    pick one. Any image with a registry of its own (ghcr.io/..., the villains included) is left exactly as written:
-    whether it may run is the cluster's call, which is the lesson."""
+def _move_off_docker_hub(obj: dict, what: str) -> None:
+    """Put the public.ecr.aws copy in for every container that names a Docker Hub official image, and refuse one that
+    names any other Docker Hub image. Every other image is left exactly as written: whether it may run is the
+    cluster's call, which is the lesson."""
     pod = _pod_spec(obj)
     if not isinstance(pod, dict):
-        return []
-    found: list[str] = []
+        return
     for key in ("initContainers", "containers"):
         for c in pod.get(key) or []:
             if not isinstance(c, dict) or not isinstance(c.get("image"), str) or not c["image"].strip():
                 continue
-            name = _public_image_name(c["image"])
-            if name is None:
-                continue
-            if not name:
-                _refuse(what, f"{c['image']} is a Docker Hub image, and the cantina does not pull from Docker Hub. "
-                              "The public images it pulls by name are " + ", ".join(PUBLIC_IMAGES) +
-                              ": put one of those names as the image, or send just the app's name as the manifest")
-            c["image"] = PUBLIC_IMAGES[name]
-            if name in SHELL_IMAGES and not c.get("command") and not c.get("args"):
-                c["command"] = list(SHELL_COMMAND)
-            found.append(name)
-    return found
+            image, refused = _off_docker_hub(c["image"])
+            if refused:
+                _refuse(what, refused)
+            c["image"] = image
+
+
+def _room_image(image: str) -> bool:
+    """Whether an image is one the room asked for: anything but the platform's own."""
+    ref = image.strip().lower()
+    return not ref.startswith(OWN_IMAGE_PREFIXES) and not _ECR.match(ref)
+
+
+def _room_workload(obj: dict) -> bool:
+    """Whether any container of a workload runs an image the room asked for."""
+    pod = _pod_spec(obj) or {}
+    return any(isinstance(c, dict) and isinstance(c.get("image"), str) and c["image"].strip()
+               and _room_image(c["image"])
+               for key in ("initContainers", "containers") for c in pod.get(key) or [])
 
 
 # A manifest that is only an app's name (#939). Challenge 2's ask is "deploy Tron onto this cluster", and on
 # 2026-11-04, 2026-11-05 and 2026-11-06 the public bot called deploy_app with the manifest "Tron" every time it got
-# that far, five calls in five, so the room's own Challenge 2 ask landed nothing. A name is taken as the app it names:
-# deploy_app writes the Deployment, named after the app, with the listed image the name asks for ("nginx", "apache",
-# "the 2048 game"), and an app the list does not carry (Tron, which has no image on public.ecr.aws) is served by
-# NAMED_APP_LISTED, the public web server, as its landing page, the row #773's deployments page shows as "tron (nginx)".
-# A bare image reference ("redis:8", "ghcr.io/...") is that image, read by _resolve_public_images as any other.
-NAMED_APP_LISTED = "nginx"
+# that far, five calls in five, so the room's own Challenge 2 ask landed nothing. A plain name is taken as the app it
+# names: deploy_app writes the Deployment, named after the app, served by LANDING_IMAGE as its landing page, the row
+# #773's deployments page shows as "tron (nginx)". With no list of images (#992), a plain name is never read as an
+# image, so "redis" is a landing page named redis too. A bare image reference ("redis:8", "ghcr.io/...") is that
+# image, read by _move_off_docker_hub as any other.
 # Words around an app's name that are not the name: "deploy the Tron app", "please run nginx".
 _NAME_FILLER = frozenset("a an the please deploy run install launch start set up get put app application image "
                          "container public standard manifest default for me of onto on to this cluster".split())
@@ -613,22 +624,19 @@ _NAME_WORDS = 4
 _PLAIN_LINE = re.compile(r"^(?!.*[{}\[\]])(?!.*:\s)[^\n]{1,200}$")
 
 
-def _named_app(text: str) -> tuple[dict, str]:
-    """The Deployment an app's name or a bare image reference asks for, and the listed name it runs ("" for an image
-    named in full). Refuses text that names no app, so a sentence is not deployed as one."""
+def _named_app(text: str) -> tuple[dict, bool]:
+    """The Deployment an app's name or a bare image reference asks for, and whether it serves the landing page (False
+    for an image named in full). Refuses text that names no app, so a sentence is not deployed as one."""
     text = text.strip().strip("\"'`").strip()
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/:@-]*", text) and any(ch in text for ch in "/:@"):
-        image, listed = text, ""
+        image, landing = text, False
         words = [_registry_and_repo(text)[1].rsplit("/", 1)[-1]]
     else:
         words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _NAME_FILLER]
         if not words or len(words) > _NAME_WORDS:
             _refuse("the manifest", "it must be a single object with apiVersion and kind, or just the name of the app "
                                     "to deploy (for example nginx)")
-        asked = ["-".join(words)] + words
-        listed = next((PUBLIC_IMAGE_ALIASES.get(n, n) for n in asked if PUBLIC_IMAGE_ALIASES.get(n, n) in PUBLIC_IMAGES),
-                      NAMED_APP_LISTED)
-        image = listed
+        image, landing = LANDING_IMAGE, True
     name = re.sub(r"[^a-z0-9]+", "-", "-".join(words).lower()).strip("-")[:63].strip("-")
     if not _DNS_LABEL.match(name):
         _refuse("the manifest", f"{text[:80]!r} names no app to deploy; send a Kubernetes manifest or the app's name")
@@ -636,16 +644,21 @@ def _named_app(text: str) -> tuple[dict, str]:
     return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},
             "spec": {"replicas": 1, "selector": {"matchLabels": dict(labels)},
                      "template": {"metadata": {"labels": dict(labels)},
-                                  "spec": {"containers": [{"name": name, "image": image}]}}}}, listed
+                                  "spec": {"containers": [{"name": name, "image": image}]}}}}, landing
 
 
 def _shrink_room_deployment(obj: dict) -> None:
-    """One replica and tiny resources for a workload running a PUBLIC_IMAGES image."""
+    """One replica and tiny resources for a room deployment, and a sleep for a room shell image with nothing to run."""
     if obj.get("kind") in SCALED_KINDS and isinstance(obj.get("spec"), dict):
         obj["spec"]["replicas"] = 1
     for c in (_pod_spec(obj) or {}).get("containers") or []:
-        if isinstance(c, dict):
-            c["resources"] = json.loads(json.dumps(ROOM_RESOURCES))
+        if not isinstance(c, dict):
+            continue
+        c["resources"] = json.loads(json.dumps(ROOM_RESOURCES))
+        image = c.get("image") if isinstance(c.get("image"), str) else ""
+        if (_room_image(image) and _registry_and_repo(image)[1].rsplit("/", 1)[-1] in SHELL_IMAGES
+                and not c.get("command") and not c.get("args")):
+            c["command"] = list(SHELL_COMMAND)
 
 
 def _first_image(obj: dict) -> str:
@@ -914,11 +927,10 @@ def _refused_as_invalid(code: int, body: str) -> bool:
 
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
-                      "Containers without CPU or memory limits get the cantina's defaults. For a common public app, "
-                      "the image can be just its name: " + ", ".join(PUBLIC_IMAGES) + "; the cantina pulls that "
-                      "public image itself. The manifest can also be just the app's name (\"nginx\", \"Tron\"): the "
-                      "cantina writes a Deployment of that name, running the listed image the name asks for, and "
-                      "serves any other app on nginx. requested_by is the name the person chatting with you gave (for example "
+                      "Containers without CPU or memory limits get the cantina's defaults. Any image can be named; a "
+                      "Docker official image's plain name (nginx, redis:8) is pulled from its copy on public.ecr.aws. "
+                      "The manifest can also be just the app's name (\"Tron\"): the cantina writes a Deployment of "
+                      "that name, serving a landing page on nginx. requested_by is the name the person chatting with you gave (for example "
                       "\"Edgar the Kelpie\"), so the cantina's deployments page credits them.")
 def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     """REAL server-side apply of a single namespaced resource — C2 (the Joker/grill-zone image)."""
@@ -961,10 +973,11 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     ns = _ns()
     obj["metadata"]["namespace"] = ns
     _mend_workload(obj, name)
-    room = _resolve_public_images(obj, f"{kind}/{name}")
+    _move_off_docker_hub(obj, f"{kind}/{name}")
     _default_limits(obj)
     _shrink_room_joker(obj, name)
     _name_room_joker(obj, name)
+    room = _room_workload(obj)
     if room:
         _shrink_room_deployment(obj)
     _stamp_workload(obj, name)
@@ -996,8 +1009,10 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
             return f"deployed {kind}/{name} in {ns}. Once its pod is ready it answers at {address}"
         if named is not None:
             # Says which image it runs, so the bot does not tell the room the cantina found a Tron image.
-            what = f"the public {named} image" if named else "the image"
-            return f"deployed {kind}/{name} in {ns}, running {what} {_first_image(obj)}."
+            if named:
+                return (f"deployed {kind}/{name} in {ns}, serving a landing page on the public nginx web server "
+                        f"{_first_image(obj)}, not an image of its own.")
+            return f"deployed {kind}/{name} in {ns}, running the image {_first_image(obj)}."
         return f"deployed {kind}/{name} in {ns}."
     # Raised, not returned, so FastMCP answers it as an error result (isError) and the collector marks the
     # execute_tool deploy_app span ERROR with error.type tool_error, as run_shell's failures are (#463, #712).
