@@ -27694,3 +27694,22 @@ passed 26 of 26 checks, `ALL KUBECON FAILOVER ATTENDEE CHECKS PASSED`, exit 0: c
 promoted at 89.7 s, composer back at 102.2 s; private to community, fault at 3.7 s, promoted and composer back at
 88.1 s, the witch name `Victoria the Basilisk` the same in the header, after the switch and after a refresh. After
 it, every Deployment on both clusters was ready. The prose gate printed `prose gate: pass`.
+## 2026-11-06 · #928 · run 18004 · The wall's pause and pin landed in prompts-agenticburn, so #928 closes
+
+**What landed.** prompts-agenticburn#22, which run 17766 filed with #928's five criteria, was closed at
+2026-11-06T19:48Z. Its commit `a07dcad1df70` ("Add per-viewer pause (button and Space) and click-to-pin to the wall
+(#22)") is the head of that repo's staging and of its main: the GitHub compare of `a07dcad1df70` against each reads
+identical. Run 18004 changes no code here; this entry records that #928's work is done in the repo its text names.
+
+**Checked by this run.** The repo's tarball at `a07dcad1df70`, fetched through `gh api` into this run's directory,
+ran `uv run ruff check . && uv run pytest`: "All checks passed!" and 105 tests passed, exit 0. Its
+`templates/wall.html` has the header button `#pausebtn` (label "Pause" or "Paused", `aria-pressed`), a Space handler
+that calls `togglePause()`, `throttle.resume()`, and the `#pinslot` above the stream with `unpin()`.
+`test_wall_page.py` holds the five tests that cover the criteria:
+`test_pause_freezes_the_page_and_resume_draws_the_newest_with_no_request`,
+`test_while_paused_no_card_is_added_or_removed_even_at_the_300_cap`, `test_a_timer_armed_before_the_pause_never_draws`,
+`test_space_toggles_pause_once_and_never_while_typing` and
+`test_click_pins_one_card_above_the_stream_and_the_trim_never_takes_it`.
+
+**Not yet run on a cluster.** Nothing: the wall runs on Railway, outside both clusters. Its live look after the next
+wall deploy is owed in prompts-agenticburn, as #22's report records.
