@@ -24649,3 +24649,7 @@ origin/staging` printed CLEAN for `origin/agent/937-17835`, rebased onto `a1ac06
 its burst tests with `uv run --frozen pytest`. That test holds #927's fake-clock criterion, and this one holds the
 whole `uv run ruff check . && uv run pytest`. Both sit in the live suite for the same reason, so neither replaces the
 other. Live again at the rebase: `main` and `staging` both at `6601313a76c9`, `All checks passed!` and `90 passed`.
+
+**The suites (run 17850, at `c990271d`).** `bash verify/run-e2e-tools.sh` printed `293 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `69 checks ran (the offline suite and 68 tier tests) in 29m46s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. `test_chat_turn_cancel.py` passed in it.
