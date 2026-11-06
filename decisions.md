@@ -44825,3 +44825,37 @@ HC-900 was free when the check started and is free again: the cluster is as foun
 which now name the step in words), `test_tests_own_inputs.py`, `test_live_check_cleanup.py` and
 `test_desk_ticket_live.py`. The whole Test and E2E commands were not run here; validation runs the tests that read the
 changed files.
+## 2026-11-06 · #205 · run 17941 · Both acceptance cases pass live again on staging's code, and the issue is closed out
+
+**Context.** Run 17941 is a re-dispatch of #205 after escalation 808 was dropped as run work: drop
+`AWS::Config::ConfigurationRecorder` from the audit root's recorded types, test that the default carries no
+`AWS::Config::` type, and apply the root with the run's own accen-dev session. `bash verify/prior-drafts.sh 205
+origin/staging` printed NONE: every #205 draft is on staging or followed there by later work. That work is #795's run
+17588 (`621c3a2c` dropped the type and added the test, `7ac20c1c` added the settle step, and the root was applied in
+accen-dev) and #955's runs 17843 to 17884 (`3bea8ac1` rebuilt the lost audit state, now kept on tanjiro-wsl2 with the
+daily `# wib-drift` cron line). So no code was owed. The attempt before this one ended failed (workspace): hecaton
+could not reach the podman socket of the uid 103 pool. That is hecaton's host, not this repo. In this run's pool
+(uid 112) `podman ps` answers, and no repo file changed for it. #205's body gained an Acceptance criteria section.
+
+**What accen-dev showed, 2026-11-06 at 16:10Z.** The session is the role `hecaton-run` (session
+`hecaton-run-17941`) in 515966504359. Recorder `watch-it-burn` is recording, last status `SUCCESS`; trail
+`watch-it-burn` is logging, last delivery 16:14Z; `wib-community` holds one key, its own `AKIAXQIQABWT2L7UOXQ5`.
+
+**Kubernetes plane, the NetworkPolicy drill.** `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`, exit 0
+and `Self-heal drill passed.` on both clusters. agent/platform-console-egress came back as a new uid with Argo CD's
+tracking annotation and git's spec after 7.6 s on watch-it-burn-community (a full sync to revision `24670870`) and
+10.8 s on watch-it-burn-private (a full sync to `629c53ea`), inside the documented 30 s. The sync after each delete
+ended `Succeeded`, and each cluster had gone 300 s without a sync on ai-layer first.
+
+**AWS plane, the attendee key and the out-of-band bucket.** As in run 17588, a second, temporary access key was
+minted for `wib-community` into a mode-700 temp directory, then
+`DRIFT_PROFILE=accen-dev ATTENDEE_CLUSTER=watch-it-burn-community WIB_ATTENDEE_ACCOUNTS=accen-dev
+ATTENDEE_KEY_CSV=<that csv> python3 verify/test_drift_aws_live.py` ran, exit 0, `AWS-plane drift acceptance
+passed.` The attendee's CreateBucket for `wib-drift-attendee-515966504359-20261106161854` was refused with
+AccessDenied (`no identity-based policy allows the s3:CreateBucket action`). After 84 s Config had a configuration
+item for the operator's `wib-drift-oob-515966504359-20261106161854`, and CloudTrail had the attendee's refused call.
+The next drift report exited 2 with the bucket in its Unmanaged table, the operator as creator and Config's record,
+and the bucket was deleted. The temporary key and its CSV were then deleted. Read back after: `wib-community` holds
+only `AKIAXQIQABWT2L7UOXQ5`, and no `wib-drift` bucket is left. Both clusters and the account are as found.
+
+**Not yet run on a cluster.** Nothing: this run changed no code, and both live checks ran.
