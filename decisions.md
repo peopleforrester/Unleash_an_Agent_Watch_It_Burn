@@ -23635,4 +23635,130 @@ _ssl.c:1012: The handshake operation timed out>`. Run alone right after, it exit
 51m53s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The timeout is the host's reach to public.ecr.aws, not a
 check of this change; it is in the run's report as a followup.
 
+## 2026-11-05 · #873 · run 17449 · Attendee seats admit lab-platform-operator in the group lab-platform:learner-apps
+
+**What changed.** `infra/terraform/aws/cluster/main.tf` gives every attendee seat (`role=attendee`) an EKS access
+entry for `arn:aws:iam::<the seat's account>:role/lab-platform-operator`, type STANDARD, Kubernetes group
+`lab-platform:learner-apps`, with no access policy associated. lab-platform's `labctl harvest` probes each seat's
+workshop apps as that role in every account but the harvest's own (lab-platform#370), and until now each seat
+admitted only its creator and its student, so one harvest across the five accounts got a 401 from every seat
+outside its base account. The new output `lab_platform_operator_entry` names the admitted ARN, or is empty.
+
+**Why the entry is conditional.** lab-platform makes the role in every account except the base credentials' own
+(lab-platform `docs/aws-accounts.md`, "Creating the role"), and EKS refuses an entry whose principal does not exist
+(checked live below). So the root looks the role up by name (`data.aws_iam_roles` with `^lab-platform-operator$`)
+and makes the entry only where it is found. A seat built before the role reached its account gets the entry at its
+next apply. The community and admin clusters get none: the harvest pools only seats, and lab-platform refuses those
+two clusters at its own entries.
+
+**A role made again.** EKS binds an entry to the principal's unique id, and lab-platform removes the role from an
+account once its event is over. A role made again under the same name has a new id, and the old entry no longer
+admits it while its ARN, which is all Terraform compares, is unchanged. A `terraform_data` holding the role's
+`unique_id` is in the entry's `replace_triggered_by`, so the next apply replaces the entry.
+
+**What the entry grants.** Only what the group's RBAC grants. #874 (now in staging, `gitops/learner-apps-access`,
+synced on the attendee profile) binds `lab-platform:learner-apps` to get on the eight workshop apps' Service
+proxies, as an attendee's check does, and nothing else. On a seat without that Application the entry authenticates
+and is granted nothing.
+
+**Test.** `verify/test_lab_platform_operator_entry.py` (E2E tools tier) copies the root into an empty directory,
+initialises it against the committed lock, and runs `terraform test` with the cases in
+`verify/fixtures/lab_platform_operator_entry.tftest.hcl` against a mocked aws provider, so no AWS call is made: a
+seat in an account with the role gets one entry with the right ARN, the one group and type, the root's only access
+policy association stays the student's, and the entry follows the role's unique id; a seat in an account without the
+role, the community cluster and the admin cluster get none. With the `role=attendee` condition removed from the
+root, the community and admin cases fail.
+
+**Live check (watch-it-burn-private, account 515966504359, us-west-2, 12:45Z).** With the run's session sourced:
+
+- `aws eks create-access-entry --cluster-name watch-it-burn-private --principal-arn
+  arn:aws:iam::515966504359:role/lab-platform-operator --kubernetes-groups lab-platform:learner-apps --type STANDARD`
+  made the entry: `kubernetesGroups` `["lab-platform:learner-apps"]`, username
+  `arn:aws:sts::515966504359:assumed-role/lab-platform-operator/{{SessionName}}`. So the role exists in accen-dev,
+  and the entry's shape is one EKS takes.
+- `aws eks list-associated-access-policies` on it returned `"associatedAccessPolicies": []`.
+- The same call for `role/wib-873-no-such-role-x7` was refused: `InvalidParameterException ... The specified
+  principalArn is invalid: invalid principal.` That is why the root looks the role up first.
+- `aws eks delete-access-entry` removed the entry, and `list-access-entries` afterwards listed the five entries the
+  cluster held before (the EKS service role, the node group role, `hecaton-run`, `nwuser` and `wib-private`). Left as
+  found.
+
+The run's session cannot call IAM (its `get-role` answers `InvalidClientTokenId`), and it reaches accen-dev only, so
+whether the other four accounts hold the role was not read here; the lookup makes an account without it plan no entry.
+
+**Not yet run on a cluster.** No attendee seat is up, and a run brings none up. The next seat build (`fleet.sh up`)
+plans the entry; then `aws eks describe-access-entry --cluster-name <seat> --principal-arn
+arn:aws:iam::<account>:role/lab-platform-operator` and one `labctl harvest` across the accounts, after #874, show a
+seat outside the base account answering the probe.
+
+No dependency was added.
+
+**The suites (run 17449, on c98a0831).** `bash verify/run-e2e-tools.sh` ran 58 checks (the offline suite and 57 tier
+tests) in 32m31s and exits 0 with `ALL E2E TOOLS TIER CHECKS GREEN`. The offline suite inside it ran 263 tests,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, and `verify/test_lab_platform_operator_entry.py` printed
+`ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN` with its four cases passed.
+
+## 2026-11-05 · #873 · run 17536 · Run 17449's draft ported onto staging, and the tier test owns its temp directory
+
+**The port.** Run 17449's two commits (`agent/873-17449`) did not land: its `tests` gate failed and the gate's output
+was not quoted on the issue. `verify/prior-drafts.sh 873 origin/staging` named the draft CLEAN apart from a
+decisions.md append, so both commits were cherry-picked onto staging at `92dfea31`, keeping both sides' entries.
+Two things differ from the draft. #874 reached staging between the two runs, so the main.tf comment and the entry
+above now name its RBAC (`gitops/learner-apps-access`, group `lab-platform:learner-apps`, the same group the access
+entry carries) instead of calling it a follow-up. And `verify/test_e2e_tools_tier.py` changed, as below.
+
+**Why the tier test changed.** This run's first offline suite failed one test, `test_e2e_tools_tier.py`, six checks
+in its #865 case, each with `mktemp: failed to create directory via template '/tmp/tmp.XXXXXXXXXX': No such file or
+directory`. The run's `/tmp` had been removed from outside its sandbox at 14:54:53Z (`stat /tmp` showed a directory
+with zero links; no file in this repo removes it), and that case's fixture environment carries no `TMPDIR`, so the
+runner's `mktemp -d` fell back to `/tmp` even though the run's own `TMPDIR` pointed at a working directory. The three
+fixture environments in that test now set `TMPDIR` to the case's own scratch directory, so the test no longer
+depends on the host's `/tmp`. With that change the test passes on this host (317 checks, exit 0). Whether the same
+missing `/tmp` is what failed 17449's gate is not known, since that output was not quoted.
+
+**Live check (accen-dev, us-west-2, 15:05Z, read-only).** `aws eks list-clusters` listed only
+`watch-it-burn-community` and `watch-it-burn-private`, so no attendee seat is up to plan the entry on.
+`aws eks list-access-entries --cluster-name watch-it-burn-private` listed the same five entries run 17449 left
+(the EKS service role, the node group role, `hecaton-run`, `nwuser`, `wib-private`), so its test entry is gone.
+
+**Not yet run on a cluster.** The same as run 17449's entry above: the next seat build plans the entry, and
+`aws eks describe-access-entry` on that seat plus one `labctl harvest` across the accounts show it working.
+
+**The suites (run 17536, at `580d292f`).** `bash verify/run-e2e-tools.sh` printed `266 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `59 checks ran (the offline suite and 58 tier
+tests) in 31m00s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_lab_platform_operator_entry.py` passed its
+four cases and printed `ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN`.
+
+## 2026-11-06 · #873 · run 17821 · Run 17536's draft ported onto staging again; the tier test's TMPDIR edit dropped for #909's
+
+**Why it did not land.** Run 17536 ended with an executor error on hecaton's side (its release had no
+`config/publication.yaml`), not a gate failure, so nothing in the draft needed a fix. `verify/prior-drafts.sh 873
+origin/staging` named `agent/873-17536` with four drift lines, all edits in place, and START from it.
+
+**What differs from the draft.** Three things.
+
+- `verify/test_e2e_tools_tier.py` is not changed. Staging gave its fixture environments their own `TMPDIR` in #909
+  (`be97ab92`) and #775 (`fa53301d`), the same fix the draft carried, so the draft's copy of it is left out.
+- Staging's cluster root now reads the lab VPC (`data "aws_vpc" "lab"`, #906) for a cluster API rule's CIDR. The
+  test's mock provider gives that data source a fixed `cidr_block` of `10.0.0.0/16`, so the rule plans on a valid
+  CIDR rather than a generated string.
+- The main.tf comment no longer says the role is never made in the base account. `aws iam get-role --role-name
+  lab-platform-operator` in accen-dev (515966504359) answered `arn:aws:iam::515966504359:role/lab-platform-operator`,
+  id `AROAXQIQABWT5VQALPVAP`, so the comment now says only that an account may not hold the role, which is what the
+  lookup handles.
+
+The rest (main.tf's entry, its output, the spec sentence, the test and its four cases) is the draft's, applied on
+staging at `b7a654ee` with no conflict. Rereading the staging commits the drift lines name: `d24363fa` moved the
+tutor's model and `da2a0cf2` edited a different part of the spec; neither touches the access entries.
+
+**Live check (accen-dev, us-west-2, 2026-11-06, read-only).** `aws eks list-clusters` listed only
+`watch-it-burn-community` and `watch-it-burn-private`, tagged `role=community` and none, so no attendee seat is up.
+`aws eks list-access-entries` on each listed five entries (the EKS service role, the node group role, `hecaton-run`,
+`nwuser`, and `wib-community` or `wib-private`), and neither holds a `lab-platform-operator` entry, which is what the
+root plans for a cluster that is not a seat. Nothing was changed.
+
+**Not yet run on a cluster.** The same as run 17449's entry above: the next seat build (`fleet.sh up`) plans the
+entry, then `aws eks describe-access-entry --cluster-name <seat> --principal-arn
+arn:aws:iam::<account>:role/lab-platform-operator` and one `labctl harvest` across the accounts show it working.
+
 No dependency was added.

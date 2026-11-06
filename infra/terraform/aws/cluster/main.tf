@@ -802,8 +802,70 @@ resource "aws_eks_access_policy_association" "attendee_admin" {
   depends_on = [aws_eks_access_entry.attendee]
 }
 
+# --- lab-platform's harvest probe -------------------------------------------------------------------
+#
+# lab-platform's `labctl harvest` probes each seat's workshop apps through the seat's API server before it
+# pools the seat (lab-platform#370), as the identity that read the seat's account. In the harvest's own (base)
+# account that is the base credentials; in every other attendee account it is the role lab-platform creates
+# there, lab-platform-operator (lab-platform docs/aws-accounts.md, "Creating the role"). Without this entry the
+# role is refused with a 401 on every seat outside the base account, and each account had to be harvested with
+# its own creator's key and the files joined with `labctl merge-pool` (#873).
+#
+# The entry carries the Kubernetes group lab-platform:learner-apps and no access policy, so all it can do is
+# what that group's RBAC grants: get on the eight workshop apps' Service proxies, the read an attendee's check
+# makes. That RBAC is gitops/learner-apps-access, synced on the attendee profile (#874); until it is on the seat
+# the entry authenticates and is granted nothing.
+#
+# Seats only (role=attendee): the harvest pools nothing else, and lab-platform refuses the community and admin
+# clusters at its own entries. An account may not hold the role (the harvest's base account needs none, and
+# lab-platform makes it per account), and EKS refuses an entry for a principal that does not exist, so the entry
+# is made where the role is found. A seat built before the role
+# was created in its account gets the entry at its next apply.
+locals {
+  lab_platform_operator_role = "lab-platform-operator"
+}
+
+data "aws_iam_roles" "lab_platform_operator" {
+  name_regex = "^${local.lab_platform_operator_role}$"
+}
+
+locals {
+  admit_lab_platform_operator = var.role == "attendee" && length(data.aws_iam_roles.lab_platform_operator.names) == 1
+}
+
+data "aws_iam_role" "lab_platform_operator" {
+  count = local.admit_lab_platform_operator ? 1 : 0
+  name  = local.lab_platform_operator_role
+}
+
+# EKS binds an entry to its principal's unique id. lab-platform removes the role from an account once an event
+# is over, and a role made again under the same name has a new id that the old entry no longer admits, while
+# the ARN Terraform compares is unchanged. Tracking the id makes the next apply replace the entry.
+resource "terraform_data" "lab_platform_operator_id" {
+  count = local.admit_lab_platform_operator ? 1 : 0
+  input = data.aws_iam_role.lab_platform_operator[0].unique_id
+}
+
+resource "aws_eks_access_entry" "lab_platform_operator" {
+  count         = local.admit_lab_platform_operator ? 1 : 0
+  cluster_name  = module.eks.cluster_name
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.lab_platform_operator_role}"
+  type          = "STANDARD"
+  # The group lab-platform's harvest probe and an attendee's check share. No access policy is associated.
+  kubernetes_groups = ["lab-platform:learner-apps"]
+  lifecycle {
+    replace_triggered_by = [terraform_data.lab_platform_operator_id[count.index]]
+  }
+}
+
 output "attendee_iam_user" {
   value = aws_iam_user.attendee.name
+}
+
+# The ARN the harvest probe is admitted as on this seat, or "" where it is not (a roster cluster, the base
+# account, or an account whose role lab-platform has not made yet).
+output "lab_platform_operator_entry" {
+  value = try(aws_eks_access_entry.lab_platform_operator[0].principal_arn, "")
 }
 
 output "tutor_bedrock_role_arn" {
