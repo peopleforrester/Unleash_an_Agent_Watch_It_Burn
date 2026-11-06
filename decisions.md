@@ -25184,5 +25184,8 @@ the next run on #953 re-runs the four beats live on https://attackme.burritobot.
 chat page with the probe marker, and records every reply. This run changed no rule, so there is nothing new for the
 cluster to take yet.
 
-**The suites (run 17848).** Running; recorded in the follow-up commit. This run changed only this prose entry,
-no code, test or gitops path, so the offline suite and the tools tier are expected to match the base's green.
+**The suites (run 17848, at `c42ad648`).** This run changed only this prose entry, no code, test or gitops path.
+`bash verify/run-e2e-tools.sh` printed `292 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline
+suite, then `69 checks ran (the offline suite and 68 tier tests) in 30m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. `test_recipe_persona.py` and `test_recipe_block_coverage.py`, the offline guards for this rule, are among
+them and stay green because the rule is unchanged. The prose gate printed `prose gate: pass`.
