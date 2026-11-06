@@ -25862,3 +25862,114 @@ guardrails-off, and the 13:33Z read above shows both clusters as this run found 
 **The suites (run 17910, at `a8a14773`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 37m18s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #985 · run 17912 · A KubeCon standby that takes attackme has Kyverno admission armed before the router sends the room to it, and the new holder is linked to the other bot's cluster
+
+**The question.** Once #988 and #991 take the six-image list out of `deploy_app`, the public cluster admits any image
+until `guardrails-on` in Segment 3's step 5. If a room deployment takes attackme's cluster down, the watcher (#643)
+promotes a standby within about a minute, and that standby starts in the KubeCon start state (#774), all four
+Kubernetes guardrails off. The same ask can then take it down too, and the next one: an outage loop. Michael signed
+off on 2026-11-06 for the run to pick the design.
+
+**The design.** `infra/terraform/fleet/backups.py`'s watcher, at every promotion of the community role (automatic,
+or `backups.py promote` by hand, the roster cluster included):
+
+1. **Arms Kyverno admission on the incoming cluster before the router moves.** `arm_floor` patches
+   `restrict-image-registries` and `deny-external-registries` to `[Deny]` and reads each back, with an isolated
+   kubeconfig and the cluster's own `--context`, the same patch `guardrails-on`'s Kyverno step makes
+   (`images/web-terminal/entrypoint.sh`, `_kg on kyverno`). Only after that is the router table written and
+   reloaded. Argo CD keeps the change, since both Applications ignore `/spec/validationActions`.
+2. **Leaves RBAC, KubeArmor and egress as the start state has them,** for `guardrails-on`.
+3. **Links the new holder with the other role's holder** once the router has taken the table, by running
+   `fleet.sh guardrails-link <community>@<region> <private>@<region>` (with `WIB_LINK_TOKEN_TRIES=3`, so the
+   watcher waits at most about 30 seconds on a token). An admin promotion links too. Without this, `guardrails-on`
+   from the private bot's terminal reaches the dead roster cluster, prints a failure on stage, and never reaches the
+   cluster the room is on.
+
+A private standby is not armed: the room's phones reach the public bot, and Whitney's step-4 attack on the private
+bot needs its guardrails off. The arm and link follow each role's bootstrap profile, read from fleet.sh's
+`bootstrap_profile_for_role` (event.sh's `WIB_ROSTER_PROFILES`). Only `kubecon-community` is armed, and the link
+runs only when both roles are `kubecon-*`. So the 2-hour workshop's `burn` and `admin` profiles get neither.
+
+A standby that cannot be armed still takes the hostname, and the watcher's log and `logs/failover.jsonl` say so
+(`armed: false`). A room on a dead cluster is an outage now; a room on an unarmed one is only the chance of one, and
+`guardrails-on` closes it. A link that fails leaves the promotion standing (`linked: false`), and the log names the
+`guardrails-link` command to run by hand.
+
+**Why Kyverno alone, and not all four at promotion.** The room's way to take a cluster down is a workload BurritoBot
+deploys for it, and Kyverno admission is the one guardrail of the four that stands in that path. The other three
+do not touch the cluster's health. The broad and scoped `workshop-agent` Roles (`gitops/ai-layer/resources.yaml`,
+`c8-broad-role.yaml` and `c5-scoped-role.yaml`) carry the same workload verbs and differ only in which Secrets agent-sa
+reads. KubeArmor guards the recipe files and egress the way out. Arming all four would take Challenge 1's CEO read and
+Challenge 2's recipe read and beacon post away from the room on a promoted cluster as well. With Kyverno alone those
+three still land, and only the attack that can cause the loop is refused.
+
+**Why at promotion, and not at the standby's build.** Arming at the build would leave nothing new on the promotion
+path. But a standby could be reset between its build and its promotion (a rehearsal's `guardrails-off`, a hand
+reset), and nothing would notice. The patch at promotion is idempotent and quick, it is checked right before the room
+arrives, and it covers the by-hand fail-back to the roster cluster too.
+
+**How it fits Segment 3's switch moment.** Before step 5, a promoted public bot refuses a public image. The
+presenters can say the replacement cluster came up with admission on; the room still has the recipe read and the
+beacon post, and the chat page shows the Kyverno badge already lit there. Step 5 runs as written: on the promoted
+cluster the Kyverno line repeats what the promotion did, and the link means the other three arm on both clusters.
+A promotion after step 5 gets Kyverno and the link, not the other three, so the run-of-show says to run
+`guardrails-on` again from the private bot's terminal (it is safe to repeat). This run did not make the watcher copy
+the private cluster's switch state onto the standby: that needs the Role, KubeArmorPolicy and NetworkPolicy
+manifests on the fleet host, and one presenter command already restores it. The run-of-show's "After a promotion on
+stage" carries all of this, and Segment 3's start state names the exception.
+
+**Standby builds no longer link.** `backups.py up` builds each region with `fleet.sh instructors up all`, which
+under the KubeCon profiles ended by linking the default roster pair in that region. Outside us-west-2 that failed and
+was masked by the converge after it. In us-west-2, the six-hours wave would put the roster pair back over a link the
+watcher had made for a promotion earlier in the window. `region_steps` now passes `WIB_NO_LINK=1`, and fleet.sh's
+`instructors up` skips the pair link when it is set.
+
+**The 2-hour workshop and the Portland tag.** No 2-hour workshop file changed. The arm and the link turn on only for
+the KubeCon profiles, `WIB_NO_LINK` is set only by `backups.py up`, and `verify/test_backups_floor.py` drives a
+promotion under `WIB_ROSTER_PROFILES=workshop` and checks that nothing is patched or linked.
+`delivered/devopsdays-portland-2026` is a tag, and this run did not touch it.
+
+**The offline test.** `verify/test_backups_floor.py` builds the watcher with `make_watcher`, as `backups.py watch`
+does, and drives promotions through it. Fake `aws` and `kubectl` scripts play the EKS clusters, each one's two
+registry policies kept in a state file. A stub fleet.sh records the link, and the router's reload script records
+every cluster's policy state at the moment it takes a table. It checks:
+
+- b01 is at Deny on both policies, and already was when the router took the table.
+- The two patches on b01 are the only changes made, and every call names its kubeconfig and context.
+- No other cluster moved.
+- The link is `watch-it-burn-community-b01@us-east-2 watch-it-burn-private@us-west-2`.
+- The private standby stays at Audit and is linked with attackme's holder.
+- A by-hand fail-back arms the roster cluster.
+- A failed arm or link leaves the promotion standing and is recorded.
+- The workshop profiles arm and link nothing.
+
+**The live check (watch-it-burn-community, 13:39 to 13:44 UTC).** With `. "$HECATON_CLUSTER_ENV"`, both clusters'
+two policies read `["Audit"]`, and `lab-bootstrap` on community is labelled `kubecon-community`. A server-side dry
+run of a `public.ecr.aws/docker/library/busybox:1.38.0` pod in `agent` printed `pod/floor-probe-985 created (server
+dry run)`, as the run's role and as `system:serviceaccount:agent:agent-sa`. Then `backups.py`'s own functions were
+run against the roster cluster, standing in for a promoted one:
+
+- `console_lb` printed `k8s-agent-console-6d7d3fd8cd-932f5f880aa49b92.elb.us-west-2.amazonaws.com`, so the shared
+  kubeconfig helper works live.
+- `arm_floor` printed `(True, 'Kyverno admission at Deny (restrict-image-registries, deny-external-registries)')`,
+  and both policies read `["Deny"]`.
+- The same dry run, as agent-sa, was refused: `admission webhook "vpol.validate.kyverno.svc-fail" denied the
+  request: Policy restrict-image-registries failed: Images must come from allowed registries`.
+- A `ghcr.io/stefanprodan/podinfo:6.9.2` pod, which `restrict-image-registries` allows, was refused by
+  `deny-external-registries`: `BurritoBot may run images only from the internal registry, registry.burritobot.co`.
+- Argo CD reconciled `kyverno-registry-policy` at 13:41:14Z and `kyverno-breakout` at 13:43:17Z. Both stayed
+  Synced, and both policies still read `["Deny"]` at 13:43:22Z.
+
+At 13:43:45Z both policies were patched back to `["Audit"]` and read back so on both clusters, and the busybox dry
+run was admitted again. The cluster was left as found. No pod was created; every probe was a server-side dry run.
+
+**Not yet run on a cluster.** A promotion of a real KubeCon standby, with the watcher arming it and linking it to the
+private cluster, waits on a KubeCon-profile standby, which a dispatched run cannot build. #986 owns that failover
+test. When it runs, the check is: `backups.py watch --drill watch-it-burn-community` with the standbys up promotes
+b01; b01's two policies read `["Deny"]` before attackme routes to it; `logs/failover.jsonl` shows `armed: true` and
+`linked: true`; and `guardrails-on` from the private bot's terminal then ends `Both clusters, this one and
+watch-it-burn-community-b01: all four Kubernetes guardrails are on.` The live guardrails-link through the watcher was
+not run either: it would rewrite both clusters' `guardrails-peer` Secrets.
+
+No dependency was added.

@@ -542,6 +542,29 @@ them and moves a hostname when its cluster fails:
   page exist only where the room landed them, so a C6 already shown on the old
   cluster has to land again before `maintenance-shell-` answers. A presenter's open
   terminal still points at the old cluster, so reopen it from the hostname.
+  - **The Kubernetes guardrails (#985).** One thing differs from the
+    start state. A public standby that takes attackme has Kyverno admission armed
+    before the router sends the room to it: both registry policies at Deny, so the
+    image that took the old cluster down cannot land on the new one, and no other
+    public image can either. The room's chat page shows the Kyverno badge lit there.
+    RBAC, KubeArmor and egress stay off until `guardrails-on`, so the room's Challenge 1
+    read and Challenge 2's recipe read and beacon post still land. A private standby
+    keeps the start state, all four off. A promotion by hand with `backups.py promote`
+    arms the public cluster the same way, the roster cluster included.
+    - **The link.** Once the router has moved, the watcher links the new holder with
+      the other bot's cluster (`fleet.sh guardrails-link`), so `guardrails-on` from the
+      private bot's terminal reaches the pair that serves the room now. The watcher's
+      log names any link that failed, with the command to run by hand, and
+      `logs/failover.jsonl` records `armed` and `linked` for each promotion.
+    - **Before Segment 3's step 5.** If a public image ask comes back refused on a
+      promoted public bot, that is the promotion's Kyverno: say the cluster that replaced
+      the one the room took down came up with admission on. The room still has the recipe read
+      and the beacon post.
+    - **Step 5 itself** runs as written. On a promoted public cluster the Kyverno line
+      repeats what the promotion did; the other three guardrails arm on both clusters.
+    - **A promotion after step 5** gets Kyverno and the link but not the other
+      three: run `guardrails-on` again from the private bot's terminal (it is safe to
+      repeat), and both clusters carry all four again.
 
 #### Bring-up and teardown commands
 
@@ -851,7 +874,10 @@ words (rounds-agenticburn#58).
 **Start state (#774).** Both clusters start with the four Kubernetes guardrails
 present and off, so nothing below is armed when the segment opens. Before #774 the
 private cluster had them armed from the start; #774 changed that, merged into staging
-on 2026-11-03, and the switch in step 5 is what arms them now.
+on 2026-11-03, and the switch in step 5 is what arms them now. The one exception
+is a public standby that took attackme before step 5: it came up with Kyverno
+admission already at Deny (#985, "After a promotion on stage"
+above).
 
 1. **The pre-AI questions.** The slide reads:
 

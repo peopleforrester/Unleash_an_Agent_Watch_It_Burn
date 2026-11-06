@@ -755,6 +755,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       guardrails-on in either terminal arms the four Kubernetes guardrails on both. Defaults to
                       watch-it-burn-community and watch-it-burn-private in WIB_REGION. 'instructors up' runs it
                       when event.sh's WIB_ROSTER_PROFILES is kubecon. Each link is checked from this host first.
+                      A standby build (WIB_NO_LINK) is not linked; backups.py links a standby when it
+                      takes a hostname (#985).
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -3390,8 +3392,12 @@ cmd_instructors() {
     [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${role_filter}"
     # The KubeCon pair arms together (#774): each one's terminal needs the other's endpoint and switch token, which
     # exist only once both are built. A run that built one role, or one presenter's set, says what is left to run.
+    # A standby build (backups.py up) sets WIB_NO_LINK: the watcher links a standby when it takes a hostname (#985),
+    # and a link here would put the roster pair back over that one.
     if [[ -z "${WIB_NO_BOOTSTRAP:-}" && "${WIB_ROSTER_PROFILES:-}" == "kubecon" ]]; then
-        if [[ -n "${WIB_DRY_RUN}" ]]; then
+        if [[ -n "${WIB_NO_LINK:-}" ]]; then
+            log "standbys: not linked at build; backups.py links a standby when it takes a hostname (#985)"
+        elif [[ -n "${WIB_DRY_RUN}" ]]; then
             log "dry run: would link the KubeCon pair's guardrails switch (guardrails-link)"
         elif [[ -z "${role_filter}" && -z "${owner_filter}" ]]; then
             cmd_guardrails_link || _rc=1

@@ -33,6 +33,13 @@ apex repo's reload script. promoted.tsv records the holder so a later `fleet.sh 
 fails back on its own: a cluster that failed once is not trusted with the room again until a person says so with
 `promote`.
 
+At the KubeCon breakout (#985) a cluster that takes attackme's hostname, by the watcher or by `promote`, has
+Kyverno admission armed first: both registry policies at Deny, before the router is touched, so the room cannot
+deploy onto it the off-registry image that may have taken the cluster before it down. RBAC, KubeArmor and egress
+stay as the standby's start state has them, for `guardrails-on`. After the router takes the new table, the new holder
+is linked with the other role's holder (fleet.sh guardrails-link), so `guardrails-on` from either terminal reaches
+the pair that serves the room now. The 2-hour workshop's profiles have nothing to arm, and nothing is armed there.
+
 Every kubectl call is made with an isolated kubeconfig and an explicit --context, and every aws call with an
 explicit AWS_PROFILE and --region (AGENTS.md, kube-context safety).
 """
@@ -226,28 +233,96 @@ def self_check(base: str, host: str, chat: bool = True, timeout: float = 10, cha
     return True, "healthy" + ("" if chat else " (no chat this tick)")
 
 
-# --- AWS: a cluster's console LB -------------------------------------------------------------------------------
+# --- AWS: a cluster's kubectl, its console LB, and the KubeCon floor -------------------------------------------
+def cluster_kubectl(c: Cluster, account: str, d: str) -> tuple[list[str], dict[str, str]] | None:
+    """The kubectl argv prefix for one cluster, with an isolated kubeconfig in `d` and the cluster's own context,
+    and the environment to run it in; None when there is no kubeconfig for it or the context is another cluster's."""
+    kcfg = os.path.join(d, "kubeconfig")
+    env = {**os.environ, "AWS_PROFILE": account}
+    try:
+        r = subprocess.run(["aws", "eks", "update-kubeconfig", "--kubeconfig", kcfg, "--name", c.name,
+                            "--region", c.region], capture_output=True, text=True, timeout=45, env=env)
+        if r.returncode != 0:
+            return None
+        ctx = subprocess.run(["kubectl", "--kubeconfig", kcfg, "config", "current-context"],
+                             capture_output=True, text=True, timeout=15, env=env).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if not ctx.endswith(f"/{c.name}"):   # rule 8: the context must be the cluster asked for
+        log(f"  {c.name}: its kubeconfig points at '{ctx or 'nothing'}', not this cluster; not used")
+        return None
+    return ["kubectl", "--kubeconfig", kcfg, "--context", ctx], env
+
+
 def console_lb(c: Cluster, account: str) -> str | None:
     """The console Service's LB hostname, read with an isolated kubeconfig and the cluster's own context."""
     with tempfile.TemporaryDirectory() as d:
-        kcfg = os.path.join(d, "kubeconfig")
-        env = {**os.environ, "AWS_PROFILE": account}
+        got = cluster_kubectl(c, account, d)
+        if got is None:
+            return None
+        kc, env = got
         try:
-            r = subprocess.run(["aws", "eks", "update-kubeconfig", "--kubeconfig", kcfg, "--name", c.name,
-                                "--region", c.region], capture_output=True, text=True, timeout=45, env=env)
-            if r.returncode != 0:
-                return None
-            ctx = subprocess.run(["kubectl", "--kubeconfig", kcfg, "config", "current-context"],
-                                 capture_output=True, text=True, timeout=15, env=env).stdout.strip()
-            if not ctx.endswith(f"/{c.name}"):   # rule 8: the context must be the cluster asked for
-                log(f"  {c.name}: its kubeconfig points at '{ctx or 'nothing'}', not this cluster; not used")
-                return None
-            r = subprocess.run(["kubectl", "--kubeconfig", kcfg, "--context", ctx, "-n", "agent", "get", "svc",
-                                "console", "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"],
+            r = subprocess.run(kc + ["-n", "agent", "get", "svc", "console", "-o",
+                                     "jsonpath={.status.loadBalancer.ingress[0].hostname}"],
                                capture_output=True, text=True, timeout=30, env=env)
         except (subprocess.TimeoutExpired, OSError):
             return None
         return r.stdout.strip() or None
+
+
+# The KubeCon floor (#985): the profile whose clusters get it when they take a hostname, and what it is. Kyverno
+# admission is the one guardrail of the four that stands between the room and the cluster's health: the room's way
+# to take a cluster down is a workload BurritoBot deploys for it, and both registry policies at Deny admit images
+# from registry.burritobot.co alone. RBAC changes only which Secrets agent-sa reads (the scoped and broad Roles
+# carry the same workload verbs), KubeArmor guards the recipe files and egress the way out, so those three stay off
+# until guardrails-on, and the room's Challenge 1 and Challenge 2 reads still land on a promoted cluster.
+FLOOR_PROFILE = "kubecon-community"
+FLOOR_POLICIES = ("restrict-image-registries", "deny-external-registries")
+FLOOR_PATCH = json.dumps([{"op": "replace", "path": "/spec/validationActions", "value": ["Deny"]}])
+
+
+def arm_floor(c: Cluster, account: str) -> tuple[bool, str]:
+    """(armed, why) for one cluster: each floor policy patched to Deny and read back as Deny, guardrails-on's own
+    Kyverno step (images/web-terminal/entrypoint.sh, _kg on kyverno). Argo CD keeps the change, since both
+    Applications ignore /spec/validationActions."""
+    with tempfile.TemporaryDirectory() as d:
+        got = cluster_kubectl(c, account, d)
+        if got is None:
+            return False, "no kubeconfig for it"
+        kc, env = got
+        for p in FLOOR_POLICIES:
+            try:
+                subprocess.run(kc + ["patch", "validatingpolicy", p, "--type=json", "-p", FLOOR_PATCH],
+                               capture_output=True, text=True, timeout=30, env=env)
+                now = subprocess.run(kc + ["get", "validatingpolicy", p, "-o",
+                                           "jsonpath={.spec.validationActions[0]}"],
+                                     capture_output=True, text=True, timeout=30, env=env).stdout.strip()
+            except (subprocess.TimeoutExpired, OSError) as e:
+                return False, f"{p}: {type(e).__name__}"
+            if now != "Deny":
+                return False, f"{p} reads {now or 'nothing'} after the patch, not Deny"
+    return True, "Kyverno admission at Deny (" + ", ".join(FLOOR_POLICIES) + ")"
+
+
+# How long a link may hold the watcher: two kubeconfigs, two token reads and two Secret writes, normally seconds.
+LINK_TIMEOUT = 180
+
+
+def link_step(community: Cluster, admin: Cluster) -> tuple[dict, list[str]]:
+    """The fleet.sh run that links the KubeCon pair serving the room now, both ways. Three token reads at most,
+    not fleet.sh's thirty, since the watcher waits on it."""
+    return ({"WIB_LINK_TOKEN_TRIES": "3"},
+            [str(FLEET), "guardrails-link", f"{community.name}@{community.region}", f"{admin.name}@{admin.region}"])
+
+
+def link_pair(community: Cluster, admin: Cluster, timeout: float = LINK_TIMEOUT) -> tuple[bool, str]:
+    e, cmd = link_step(community, admin)
+    try:
+        r = subprocess.run(cmd, env={**run_env(), **e}, cwd=HERE, capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as ex:
+        return False, type(ex).__name__
+    last = (r.stderr.strip().splitlines() or [""])[-1]
+    return r.returncode == 0, last[-300:]
 
 
 # --- promotion -------------------------------------------------------------------------------------------------
@@ -291,10 +366,15 @@ class Watcher:
 
     def __init__(self, pools: dict[str, list[Cluster]], hosts: dict[str, str], router: Router,
                  promoted: pathlib.Path, events: pathlib.Path, lb_of: Callable[[Cluster], str | None],
-                 check: Callable[[str, str, bool], tuple[bool, str]], fail_after: int = 3, drill: str = ""):
+                 check: Callable[[str, str, bool], tuple[bool, str]], fail_after: int = 3, drill: str = "",
+                 arm: Callable[[Cluster], tuple[bool, str]] | None = None, arm_roles: Iterable[str] = (),
+                 link: Callable[[Cluster, Cluster], tuple[bool, str]] | None = None):
         self.pools, self.hosts, self.router = pools, hosts, router
         self.promoted, self.events = promoted, events
         self.lb_of, self._check, self.fail_after, self.drill = lb_of, check, fail_after, drill
+        # The KubeCon floor (#985): arm is run on a cluster of an arm_roles role before it takes the hostname, and
+        # link(community holder, admin holder) once the router has taken the table. None and () off the breakout.
+        self.arm, self.arm_roles, self.link = arm, frozenset(arm_roles), link
         self.fails = {r: 0 for r in pools}
         self.lbs: dict[str, str | None] = {}
 
@@ -390,12 +470,13 @@ class Watcher:
         text, n = repoint(table, old_up, new_up)
         if n == 0:
             log(f"{role}: no row of the table points at {old_up}; nothing to repoint"); return False
+        armed = self.arm_before(role, c, host)
         self.router.write(text)
         if not self.router.apply():
             self.router.write(table)
             log(f"{role}: the router did NOT take the new table, so {host} stays on {failed or old_up}; "
                 f"the table on disk is put back and the next tick tries again")
-            self.event(role=role, host=host, failed=failed, why=why, promoted=c.name, applied=False)
+            self.event(role=role, host=host, failed=failed, why=why, promoted=c.name, applied=False, armed=armed)
             return False
         holders = read_promoted(self.promoted)
         if c.wave == "roster":
@@ -404,9 +485,48 @@ class Watcher:
             holders[role] = c.name
         write_promoted(self.promoted, holders)
         log(f"{role}: PROMOTED {c.name} ({c.region}): {n} host(s) now route to {new_up}, {host} included")
+        linked = self.relink(role, c, text)
         self.event(role=role, host=host, failed=failed, why=why, promoted=c.name, region=c.region, rows=n,
-                   applied=True)
+                   applied=True, armed=armed, linked=linked)
         return True
+
+    def arm_before(self, role: str, c: Cluster, host: str) -> bool | None:
+        """The floor on `c` before it takes the hostname: True armed, False tried and failed, None not this role's.
+        A cluster that cannot be armed still takes the hostname: a room on a dead cluster is an outage now, and an
+        unarmed one is only the chance of one, which guardrails-on closes."""
+        if self.arm is None or role not in self.arm_roles:
+            return None
+        try:
+            ok, how = self.arm(c)
+        except Exception as e:  # noqa: BLE001 - a failed arm must not stop the promotion
+            ok, how = False, f"{type(e).__name__}: {e}"
+        if ok:
+            log(f"{role}: ARMED {c.name} before it takes {host}: {how}")
+        else:
+            log(f"{role}: could NOT arm {c.name} ({how}); it takes {host} anyway. Run guardrails-on from the "
+                f"private bot's terminal once the link below is made")
+        return ok
+
+    def relink(self, role: str, c: Cluster, table: str) -> bool | None:
+        """Link the new holder with the other role's holder, so guardrails-on reaches the pair serving the room."""
+        other = "admin" if role == "community" else "community"
+        if self.link is None or other not in self.hosts:
+            return None
+        up = upstream_of(table, self.hosts[other])
+        peer = self.holder(up) if up else None
+        if peer is None:
+            log(f"{role}: no known cluster holds {self.hosts[other]}, so {c.name} is not linked; guardrails-on "
+                f"reaches only the cluster it runs on until 'fleet.sh guardrails-link' is run by hand")
+            return False
+        community, admin = (c, peer) if role == "community" else (peer, c)
+        try:
+            ok, why = self.link(community, admin)
+        except Exception as e:  # noqa: BLE001 - the promotion has happened; a failed link is logged, not raised
+            ok, why = False, f"{type(e).__name__}: {e}"
+        log(f"{role}: guardrails switch {'LINKED' if ok else 'NOT linked'}: {community.name} <-> {admin.name}"
+            + ("" if ok else f" ({why}); run 'fleet.sh guardrails-link {community.name}@{community.region} "
+                              f"{admin.name}@{admin.region}' by hand"))
+        return ok
 
 
 # --- the commands ----------------------------------------------------------------------------------------------
@@ -418,6 +538,11 @@ class Ctx:
         self.pools = load_pools(pathlib.Path(self.env["WIB_ROSTER_FILE"]), pathlib.Path(self.env["WIB_BACKUPS_FILE"]),
                                 self.env["WIB_REGION"])
         self.hosts = {r: fleet_call("public_host_for", p[0].name) for r, p in self.pools.items() if p}
+        # Each role's bootstrap profile for this event (fleet.sh bootstrap_profile_for_role, from event.sh's
+        # WIB_ROSTER_PROFILES): the KubeCon floor and link (#985) follow it, so the 2-hour workshop gets neither.
+        self.profiles = {r: fleet_call("bootstrap_profile_for_role", r) for r in self.pools}
+        if not all(self.profiles.values()):
+            raise SystemExit(f"backups: could not read each role's bootstrap profile from {FLEET}: {self.profiles}")
         self.promoted = pathlib.Path(self.env["WIB_PROMOTED_FILE"])
         self.logs = pathlib.Path(self.env["LOG_DIR"])
 
@@ -483,7 +608,9 @@ def region_steps(x: Ctx, region: str, cs: list[Cluster], verb: str, apply: bool 
     converged (repairs, the Bedrock pin in its region, the Datadog verifier) and then self-checked on its own LB."""
     env = {"WIB_ROSTER_FILE": "<roster>", "WIB_REGION": region, "WIB_NO_ROUTES": "1", "WIB_NO_INGEST": "1"}
     if verb == "up":
-        return [({**env, "WIB_NO_VERIFY": "1"}, [str(FLEET), "instructors", "up", "all"]),
+        # WIB_NO_LINK: a standby is linked to the other KubeCon cluster when it takes a hostname (Watcher.relink,
+        # #985), not at its build, which would re-link the roster pair over a link the watcher made.
+        return [({**env, "WIB_NO_VERIFY": "1", "WIB_NO_LINK": "1"}, [str(FLEET), "instructors", "up", "all"]),
                 ({"WIB_REGION": region}, [str(FLEET), "converge"] + [c.name for c in cs])]
     return [({**env, **({"WIB_APPLY": "1"} if apply else {})}, [str(FLEET), "instructors", "down", "all"])]
 
@@ -613,10 +740,14 @@ def cmd_down(x: Ctx, a) -> int:
 
 
 def make_watcher(x: Ctx, a) -> Watcher:
+    kubecon = all(p.startswith("kubecon-") for p in x.profiles.values())
     return Watcher(x.pools, x.hosts, x.router(), x.promoted, x.logs / "failover.jsonl",
                    lb_of=lambda c: console_lb(c, x.account),
                    check=lambda lb, host, chat: self_check(f"https://{lb}", host, chat),
-                   fail_after=getattr(a, "fail_after", 3), drill=getattr(a, "drill", "") or "")
+                   fail_after=getattr(a, "fail_after", 3), drill=getattr(a, "drill", "") or "",
+                   arm=lambda c: arm_floor(c, x.account),
+                   arm_roles=[r for r, p in x.profiles.items() if p == FLOOR_PROFILE],
+                   link=link_pair if kubecon else None)
 
 
 def cmd_status(x: Ctx, a) -> int:
