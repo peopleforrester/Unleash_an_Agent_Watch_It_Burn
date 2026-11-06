@@ -116,8 +116,8 @@ check("the object is an apps/v1 Deployment named tron in agent",
       json.dumps(out)[:300])
 check("its one container is named tron and runs the pinned public nginx image (Tron has none of its own)",
       container(out).get("name") == "tron" and container(out).get("image") == NGINX, str(container(out)))
-check("NAMED_APP_IMAGE is a listed public image, so nothing is pulled from Docker Hub (#714)",
-      getattr(m, "NAMED_APP_IMAGE", "") in m.PUBLIC_IMAGES)
+check("NAMED_APP_LISTED is a listed public image, so nothing is pulled from Docker Hub (#714)",
+      getattr(m, "NAMED_APP_LISTED", "") in m.PUBLIC_IMAGES)
 check("it is a room deployment: one replica and the room's resources (#773)",
       out.get("spec", {}).get("replicas") == 1 and container(out).get("resources") == m.ROOM_RESOURCES,
       str(out.get("spec", {}).get("replicas")) + " " + str(container(out).get("resources")))

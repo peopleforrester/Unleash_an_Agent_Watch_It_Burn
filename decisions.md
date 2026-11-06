@@ -24284,7 +24284,7 @@ deploy:
 - The Deployment is named after the app (`tron`, `tron-game`, `2048-game`), with one container of that name and the
   selector `app: <name>`.
 - Its image is the listed public image the name asks for (nginx, apache as httpd, the 2048 game, and so on). An app
-  the list does not carry, Tron among them, gets `NAMED_APP_IMAGE`, nginx, as its landing page. The ticket asks for a
+  the list does not carry, Tron among them, gets `NAMED_APP_LISTED`, nginx, as its landing page. The ticket asks for a
   festival landing page, and #773's own example row on the deployments page reads "tron (nginx)".
 - A bare image reference (`redis:8`, `ghcr.io/...`) is that image, so `_resolve_public_images` reads it as it reads
   any container's image: a Docker Hub name off the list is still refused (#714), and an image with its own registry is
@@ -24303,7 +24303,7 @@ deploy:
 2026-11-06 found only two TRON blockchain node images, and the 2026-11-01 Deployment `trongame/tron:latest` was a Docker
 Hub name that sat in ImagePullBackOff until #714 deleted it. Adding a game image to the list would need a new pinned
 image on a registry this repo publishes to, which a run cannot do. The beat's point is "any public image off the
-internet lands", and the listed nginx is one. Swapping in a real game later is one line, `NAMED_APP_IMAGE`, plus the
+internet lands", and the listed nginx is one. Swapping in a real game later is one line, `NAMED_APP_LISTED`, plus the
 image in `PUBLIC_IMAGES` and `images.lock`.
 
 **Tests.** The new `verify/test_deploy_app_named_app.py` (offline) runs the real `deploy_app` against a stand-in API

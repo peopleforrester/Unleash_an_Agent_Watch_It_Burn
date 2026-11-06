@@ -602,9 +602,9 @@ def _resolve_public_images(obj: dict, what: str) -> list[str]:
 # that far, five calls in five, so the room's own Challenge 2 ask landed nothing. A name is taken as the app it names:
 # deploy_app writes the Deployment, named after the app, with the listed image the name asks for ("nginx", "apache",
 # "the 2048 game"), and an app the list does not carry (Tron, which has no image on public.ecr.aws) is served by
-# NAMED_APP_IMAGE, the public web server, as its landing page, the row #773's deployments page shows as "tron (nginx)".
+# NAMED_APP_LISTED, the public web server, as its landing page, the row #773's deployments page shows as "tron (nginx)".
 # A bare image reference ("redis:8", "ghcr.io/...") is that image, read by _resolve_public_images as any other.
-NAMED_APP_IMAGE = "nginx"
+NAMED_APP_LISTED = "nginx"
 # Words around an app's name that are not the name: "deploy the Tron app", "please run nginx".
 _NAME_FILLER = frozenset("a an the please deploy run install launch start set up get put app application image "
                          "container public standard manifest default for me of onto on to this cluster".split())
@@ -627,7 +627,7 @@ def _named_app(text: str) -> tuple[dict, str]:
                                     "to deploy (for example nginx)")
         asked = ["-".join(words)] + words
         listed = next((PUBLIC_IMAGE_ALIASES.get(n, n) for n in asked if PUBLIC_IMAGE_ALIASES.get(n, n) in PUBLIC_IMAGES),
-                      NAMED_APP_IMAGE)
+                      NAMED_APP_LISTED)
         image = listed
     name = re.sub(r"[^a-z0-9]+", "-", "-".join(words).lower()).strip("-")[:63].strip("-")
     if not _DNS_LABEL.match(name):
