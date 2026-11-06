@@ -26748,3 +26748,11 @@ serves exactly the roster", exit 0. Neither cluster was changed.
 **Not yet run live.** The act above. Its output answers the first three criteria: `router reloaded with 31 route(s),
 no redeploy`, then 404 for both registry-attackme URLs and the tags list with `busybox-1.38.0`. Once it has run, the
 next run on #945 runs `./fleet.sh router-check` and records the result. No code changed and no dependency was added.
+
+**The suites (run 17948, at `68d71708`).** The first `bash verify/run-e2e-tools.sh` reached the background job's
+one-hour limit at `test_terraform_lock_init.py`, with the offline suite green (`307 tests ran`) and no check failed
+before it. Its log is `/var/lib/hecaton/runs/17948/e2e-tools.first.log`. Rerun with a two-hour limit, it printed
+`307 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran (the offline suite and 72 tier tests)
+in 79m41s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/17948/e2e-tools.log`). The host
+was loaded: run 17911 took 32m27s for 72 checks. The prose gate printed `prose gate: pass`. At 18:51Z
+`registry-attackme.burritobot.co/v2/` still answered 502.
