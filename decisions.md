@@ -24338,3 +24338,10 @@ then:
 4. deletes the `tron` Deployment the check made, leaving community as found.
 
 No dependency was added.
+
+**The suites (run 17837).** The first `bash verify/run-e2e-tools.sh`, at `07541068`, ran 68 checks in 37m38s and
+exited 1 on one: the offline `test_no_docker_hub.py` (#714's gate) reads every Python `NAME_IMAGE` string as an
+image reference, so the constant's first name, `NAMED_APP_IMAGE = "nginx"`, read as a Docker Hub pull. It holds a
+`PUBLIC_IMAGES` key, not an image, so `d1f71f69` names it `NAMED_APP_LISTED`. The second run, at `d1f71f69`, printed
+`292 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `68 checks ran (the offline suite and 67 tier tests)
+in 32m27s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
