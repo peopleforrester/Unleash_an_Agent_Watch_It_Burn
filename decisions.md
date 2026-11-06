@@ -24609,3 +24609,7 @@ there, and found both done.
 
 **Not yet run on a cluster.** Nothing. The first cron post to the "Fleet drift report" issue lands at 11:17Z and will
 list the two clusters until #979 is done.
+
+**The suites (run 17868, at `fd72fbb5`).** `bash verify/run-e2e-tools.sh` printed `297 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suite and 70 tier tests) in 30m05s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`.
