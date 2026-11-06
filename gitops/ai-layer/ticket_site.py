@@ -274,18 +274,51 @@ def plain_refusal(detail: str) -> str:
     return f"Refused by the cluster (HTTP {code.group(1)})." if code else "Refused by the cluster."
 
 
-def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> dict:
+def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "", kind: str = "") -> dict:
     # The witch is the name deploy_app says the person gave (#773), taken only when the vocabulary makes it, as the
     # cookie is; a Joker's own name still says whose it is when the model passed none.
     witch = name_from_display(requested_by) or (name_from_slug(name.removeprefix("joker-"))
                                                 if name.startswith("joker-") else None) or ""
     row = {"name": name[:63], "who": who_deployed(name, witch), "witch": witch, "image": str(image)[:300],
-           "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
-           "at": time.strftime("%H:%M:%S"), "ts": time.time()}
+           "kind": str(kind)[:40], "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
+           "at": time.strftime("%H:%M:%S"), "ts": time.time(), "removed": ""}
     with _lock:
         LANDINGS.insert(0, row)
         del LANDINGS[1000:]
     return row
+
+
+# --- what is no longer on the cluster (#1022) -------------------------------------------------------------------
+# A landed row is the room's ask, and the cluster can take the app off afterwards: since #990, once guardrails-on arms
+# Kyverno, remove-untrusted-room-workloads deletes within a minute each room workload from outside
+# registry.burritobot.co (Tron's landing page, any public image). workshop-mcp's presence report (_report_presence)
+# posts the names of the Deployments and Pods in the namespace to /present every 15 seconds, and a landed row whose name
+# is no longer among its kind's is marked removed, with the time the desk first saw it gone. The row stays, so the page
+# is still the record of what the room asked for, and now says which of those apps the cluster has since taken off.
+# The desk holds no token and makes no call for this: workshop-mcp reads with its own.
+#
+# A row is checked only when it landed before the report's lists were read: the report says how long ago its read
+# began (listed_seconds_ago, on workshop-mcp's clock, so no two clocks are compared), and a row that landed later may be
+# missing from a list that was read before it existed. REMOVED_GRACE_SECONDS more covers the post's own trip, which
+# workshop-mcp gives 5 seconds. A row of a kind the report does not list (a ConfigMap, a Service, a row with no kind) is
+# never marked. A removed row stays removed: a later deploy of the same name is its own row.
+REMOVED_GRACE_SECONDS = 10.0
+MAX_PRESENT_BODY = 1_000_000
+
+
+def mark_present(present: dict, listed_seconds_ago: float, now: float | None = None) -> int:
+    """Mark removed every landed row the presence report shows gone; returns how many it marked."""
+    now = time.time() if now is None else now
+    before = now - max(0.0, listed_seconds_ago) - REMOVED_GRACE_SECONDS
+    names = {str(k): {str(n) for n in v} for k, v in present.items() if isinstance(v, list)}
+    marked = 0
+    with _lock:
+        for r in LANDINGS:
+            if (r["ok"] and not r.get("removed") and r.get("kind") in names and r["ts"] < before
+                    and r["name"] not in names[r["kind"]]):
+                r["removed"] = time.strftime("%H:%M:%S", time.localtime(now))
+                marked += 1
+    return marked
 
 
 # --- deployments.burritobot.co (#773) ----------------------------------------------------------------------------
@@ -293,7 +326,7 @@ def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_
 # image as the short name's hover text: what the room deployed in Challenge 2, projected and on phones. The witch name
 # is the one the chat request itself carried (workshop-mcp's _request_witch); a deploy with no browser behind it, a
 # probe or a scripted test, reads "Someone deployed ...". A refusal is not shown: the room learns that from the bot's
-# reply.
+# reply. A row the cluster has since taken off reads "..., removed at <time>" (#1022, mark_present above).
 # The page names no Joker and links to nothing on the desk, so it gives away no later challenge. The console serves it
 # at deployments-<cluster> and deployments.burritobot.co (console.conf), and /deployments.json on the chat page's own
 # host, so the chat page can show "see your deployments" once the visitor's first one lands.
@@ -313,13 +346,13 @@ def deployments(witch_slug: str = "") -> list[dict]:
         rows = [r for r in rows if r.get("witch") and slug(r["witch"]) == witch_slug]
     # app is what the line names: the image's short name, or the resource's own name for one that runs no image.
     return [{"name": r["name"], "image": r.get("image", ""), "app": image_label(r.get("image", "")) or r["name"],
-             "witch": r.get("witch", ""), "at": r["at"]} for r in rows[:200]]
+             "witch": r.get("witch", ""), "at": r["at"], "removed": r.get("removed", "")} for r in rows[:200]]
 
 
 _DEPLOY_STYLE = ("body{font:22px/1.45 system-ui,sans-serif;max-width:60rem;margin:5vh auto;padding:0 1.25rem;"
                  "color:#1c1330;background:#ffffff}h1{font-size:1.6rem;margin:0 0 .3rem}.meta{color:#6b5f80;"
                  "font-size:.8em}ul{list-style:none;padding:0}li{border-bottom:1px solid #e6def3;padding:.55rem 0}"
-                 "b{color:#6a2bd9}code{font-size:.85em}")
+                 "b{color:#6a2bd9}code{font-size:.85em}.removed{color:#6b5f80}.removed b{color:#6b5f80}")
 _DEPLOY_SCRIPT = """<script>
 const WITCH=%s;
 async function tick(){try{const r=await fetch('/deployments.json'+(WITCH?'?witch='+encodeURIComponent(WITCH):''),
@@ -329,7 +362,8 @@ return;}
 ul.replaceChildren(...rows.map(x=>{const li=document.createElement('li');const b=document.createElement('b');
 b.textContent=x.witch||'Someone';li.appendChild(b);li.appendChild(document.createTextNode(' deployed '));
 const c=document.createElement('code');c.textContent=x.app;if(x.image){c.title=x.image;}li.appendChild(c);
-li.appendChild(document.createTextNode(' at '+x.at));return li;}));}catch(e){}}
+li.appendChild(document.createTextNode(' at '+x.at+(x.removed?', removed at '+x.removed:'')));
+if(x.removed){li.className='removed';}return li;}));}catch(e){}}
 tick();setInterval(tick,3000);
 </script>"""
 
@@ -343,8 +377,8 @@ def _deploy_page(title: str, lead: str, witch_slug: str | None, empty: str) -> s
 
 
 def deployments_page() -> str:
-    return _deploy_page("Everything BurritoBot deployed", "Every app BurritoBot put on the cluster, newest first.", "",
-                        "Nothing deployed yet.")
+    return _deploy_page("Everything BurritoBot deployed", "Every app BurritoBot put on the cluster, newest first. An app "
+                        "the cluster has since taken off stays on the list, marked removed.", "", "Nothing deployed yet.")
 
 
 def mine_page(name: str | None) -> str:
@@ -421,7 +455,8 @@ def me_page(name: str) -> str:
     jokers = [r for r in LANDINGS if r["name"] == f"joker-{slug(name)}" or r.get("witch") == name]
     rows = "".join(f"<li>{'landed' if r['ok'] else 'refused'} at {r['at']}: <code>{html.escape(r['name'])}</code>"
                    f"{' (' + html.escape(r['detail']) + ')' if r['detail'] else ''}"
-                   f"{' &middot; scaled to zero after 5 minutes' if r['ok'] and time.time() - r['ts'] > SCALE_DOWN_SECONDS else ''}"
+                   f"{' &middot; removed from the cluster at ' + r['removed'] if r.get('removed') else ''}"
+                   f"{' &middot; scaled to zero after 5 minutes' if r['ok'] and not r.get('removed') and time.time() - r['ts'] > SCALE_DOWN_SECONDS else ''}"
                    "</li>" for r in jokers) or "<li>Nothing deployed for you yet.</li>"
     return _shell("Your desk", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
 <h2>Your Joker: <code>joker-{html.escape(slug(name))}</code></h2><ul>{rows}</ul>
@@ -533,9 +568,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._page(render([one], f"Ticket {one['id']}"))
 
-    def _read(self) -> bytes | None:
+    def _read(self, limit: int = MAX_BODY * 3) -> bytes | None:
         n = int(self.headers.get("Content-Length") or 0)
-        if n > MAX_BODY * 3:
+        if n > limit:
             self._page(_shell("Too long", "<p>That ticket is too long.</p>"), 413)
             return None
         return self.rfile.read(n)
@@ -545,7 +580,9 @@ class Handler(BaseHTTPRequestHandler):
         if DEPLOYMENTS_HOST.match((self.headers.get("Host") or "").lower()):
             self._send(404, {"error": "not found"})   # the deployments page takes no tickets and no reports
             return
-        raw = self._read()
+        # A presence report names every Deployment in the namespace, the room's Jokers among them, so it may run past
+        # a ticket's limit. Only the cluster reaches /present (console.conf).
+        raw = self._read(MAX_PRESENT_BODY if url.path == "/present" else MAX_BODY * 3)
         if raw is None:
             return
         if url.path == "/submit":
@@ -570,7 +607,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {"error": "name is required"})
                 return
             self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or ""),
-                                           str(d.get("image") or ""), str(d.get("requested_by") or "")))
+                                           str(d.get("image") or ""), str(d.get("requested_by") or ""),
+                                           str(d.get("kind") or "")))
+        elif url.path == "/present":
+            # In-cluster only, as /landed is: workshop-mcp's presence report (#1022).
+            try:
+                d = json.loads(raw or b"{}")
+                present, ago = d["present"], d["listed_seconds_ago"]
+                if not isinstance(present, dict) or isinstance(ago, bool) or not isinstance(ago, (int, float)):
+                    raise TypeError
+            except (ValueError, KeyError, TypeError):
+                self._send(400, {"error": "present ({kind: [name, ...]}) and listed_seconds_ago are required"})
+                return
+            self._send(200, {"marked": mark_present(present, float(ago))})
         else:
             self._send(404, {"error": "not found"})
 

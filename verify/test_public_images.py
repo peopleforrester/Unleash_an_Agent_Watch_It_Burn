@@ -380,7 +380,7 @@ check("it fills from /deployments.json", "fetch('/deployments.json'" in page)
 script = page[page.find("<script>"):page.find("</script>")]
 check("each line is '<witch name> deployed <image short name> at <time>' (#995)",
       "b.textContent=x.witch||'Someone';" in script and "createTextNode(' deployed ')" in script
-      and "c.textContent=x.app;" in script and "createTextNode(' at '+x.at)" in script, script)
+      and "c.textContent=x.app;" in script and "createTextNode(' at '+x.at+" in script, script)
 check("a line with no witch name reads 'Someone deployed ...'", "x.witch||'Someone'" in script)
 check("the full image is the short name's hover text", "c.title=x.image;" in script)
 check("no deployment name in parentheses, no 'deployed by', no 'landed', and no Joker anywhere",

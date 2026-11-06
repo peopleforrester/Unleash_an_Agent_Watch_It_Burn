@@ -19,6 +19,7 @@ import re
 import ssl
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -698,14 +699,14 @@ def _request_witch() -> str:
     return " ".join(str(headers.get(WITCH_HEADER) or "").split())[:80]
 
 
-def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> None:
+def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "", kind: str = "") -> None:
     """Tell the support desk what was deployed, for its wall, the visitor's /me and the deployments page (#773): the
-    image it runs and who asked for it. Best effort: a desk that does not answer never changes what deploy_app
-    returns."""
+    image it runs, who asked for it, and its kind, which the desk matches against _report_presence's lists (#1022).
+    Best effort: a desk that does not answer never changes what deploy_app returns."""
     def send() -> None:
         try:
             body = {"name": name, "ok": ok, "detail": detail[:400], "image": image[:300],
-                    "requested_by": requested_by[:80]}
+                    "requested_by": requested_by[:80], "kind": kind[:40]}
             req = urllib.request.Request(f"{TICKET_SITE_URL}/landed", method="POST",
                                          data=json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json"})
@@ -713,6 +714,73 @@ def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"deploy report to the support desk failed: {e}", flush=True)
     threading.Thread(target=send, daemon=True).start()
+
+
+# What is still on the cluster (#1022). The desk records what deploy_app landed, and the cluster can take it off
+# afterwards: since #990, once guardrails-on arms Kyverno, remove-untrusted-room-workloads deletes within a minute every
+# room workload from outside registry.burritobot.co. So every PRESENCE_SECONDS this lists the Deployments and Pods in
+# the namespace, the two workload kinds deploy_app can land (the Role grants create on no other), and posts their names
+# to the desk's /present, which marks a landed row "removed" once its name is gone. The lists are read with this pod's
+# own token, whose list on both kinds every Role the switch and the challenges apply keeps (broad, c5, c6, c8), so no
+# new grant is needed and the desk keeps holding no token. A failed read posts nothing: the desk never marks a row
+# removed on a list it did not get.
+PRESENCE_SECONDS = float(os.environ.get("PRESENCE_REPORT_SECONDS", "15"))
+PRESENCE_KINDS = (("Deployment", "/apis/apps/v1", "deployments"), ("Pod", "/api/v1", "pods"))
+
+
+def _present_names() -> tuple[dict | None, str]:
+    """{kind: [name, ...]} for each of PRESENCE_KINDS in the namespace, or (None, why) when any list fails."""
+    ns = _ns()
+    present: dict[str, list[str]] = {}
+    for kind, base, plural in PRESENCE_KINDS:
+        code, body = _req("GET", f"{base}/namespaces/{ns}/{plural}")
+        if code != 200:
+            return None, f"listing {plural} answered HTTP {code}: {_status_message(body)[:200]}"
+        try:
+            items = json.loads(body).get("items")
+        except (ValueError, AttributeError):
+            return None, f"listing {plural} answered something that is not a list"
+        if not isinstance(items, list):
+            return None, f"listing {plural} answered something that is not a list"
+        # A Pod row is a bare Pod deploy_app made, so a Pod some controller owns (a Deployment's) is left out, which
+        # keeps the post small on a namespace holding the room's hundreds of Jokers.
+        present[kind] = sorted({str(i["metadata"]["name"]) for i in items
+                                if isinstance(i, dict) and isinstance(i.get("metadata"), dict)
+                                and i["metadata"].get("name")
+                                and not (kind == "Pod" and i["metadata"].get("ownerReferences"))})
+    return present, ""
+
+
+def _report_presence() -> str:
+    """One read and one post to the desk; "" when both worked, else what failed. The post says how long ago the read
+    began, on this pod's own clock, so the desk checks only rows that landed before it, whatever the two clocks read."""
+    started = time.monotonic()
+    present, why = _present_names()
+    if present is None:
+        return why
+    try:
+        body = {"present": present, "listed_seconds_ago": round(time.monotonic() - started, 3)}
+        req = urllib.request.Request(f"{TICKET_SITE_URL}/present", method="POST", data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5).read()
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return f"posting to the support desk failed: {e}"
+    return ""
+
+
+def _report_presence_forever() -> None:
+    """The loop the pod runs beside the MCP server. It prints only when the outcome changes, so a desk or an API that
+    stays down for the whole session writes one line, not one every PRESENCE_SECONDS."""
+    last = None
+    while True:
+        try:
+            why = _report_presence()
+        except Exception as e:  # noqa: BLE001  (a missing token file raises out of _req; the loop must outlive it)
+            why = f"{type(e).__name__}: {e}"
+        if why != last:
+            print(f"presence report failed: {why}" if why else "presence report: working", flush=True)
+            last = why
+        time.sleep(PRESENCE_SECONDS)
 
 
 def _scale_to_zero(base: str, ns: str, plural: str, name: str) -> None:
@@ -1021,7 +1089,7 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
             if code in (200, 201):
                 obj = plain
     _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}",
-            image=_first_image(obj), requested_by=requested_by)
+            image=_first_image(obj), requested_by=requested_by, kind=kind)
     if code in (200, 201) and ((room and kind in SCALED_KINDS)
                                or (kind == "Deployment" and name.startswith(JOKER_PREFIX))):
         t = threading.Timer(JOKER_SCALE_DOWN_SECONDS, _scale_to_zero, args=(base, ns, plural, name))
@@ -1079,5 +1147,6 @@ def _run_shell(command: str) -> str:
 
 if __name__ == "__main__":
     _seed_local_data()
+    threading.Thread(target=_report_presence_forever, name="presence", daemon=True).start()
     # Streamable HTTP so agentgateway / kagent can front the server over the network in-cluster.
     mcp.run(transport="streamable-http")

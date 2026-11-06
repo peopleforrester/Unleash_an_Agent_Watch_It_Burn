@@ -27795,3 +27795,67 @@ GREEN`) and then the tier: `75 checks ran (the offline suite and 74 tier tests) 
 CHECKS GREEN`, exit 0. The new `verify/test_deployments_witch_line_e2e.py` is one of the 74. No dependency was added:
 the new test fetches mcp 1.29.1 and pyyaml 6.0.2 through uv, the versions images/workshop-mcp already pins. The prose
 gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1022 · run 18072 · The deployments page keeps each row and marks the ones the cluster took off "removed at <time>"
+
+`verify/prior-drafts.sh 1022 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging `e4fb9a3e` with no draft to port. The issue asks for a choice and leaves it open. This repo is rank 1 on
+hecaton's priority list, where a go-ahead proceeds, so the run made the choice itself, as #990's run did.
+
+**The choice: mark the row, keep it.** The run-of-show calls the page a record of the room's asks, and a record that
+drops a row once Kyverno deletes the app would hide the very beat #990 added: the room watches Tron's landing page go
+after `guardrails-on`. A plain history, the other option, leaves the projector saying "deployed" for an app that is no
+longer there, which is the bug the issue names. So every landed row stays, and one whose app is gone from the cluster
+reads "<witch> deployed <app> at <time>, removed at <time>", greyed. The page's lead says so: "An app the cluster has
+since taken off stays on the list, marked removed." The visitor's /me page says "removed from the cluster at <time>"
+on the same rows. The line says "removed", not "removed by Kyverno": the desk sees only that the object is gone, and
+`fleet.sh reset-bot` or a hand delete takes rows off too.
+
+**Who reads the cluster: workshop-mcp, not the desk.** The issue suggests the console or the desk. The desk
+(fake-ticket) holds no ServiceAccount token and makes no outbound call, and `verify/test_fake_ticket.py` holds both, so
+giving the room-facing site a token would be a new grant on the one pod every phone reaches. workshop-mcp already holds
+a token bound to the workshop-agent Role, and every Role it can run under keeps list on Deployments and Pods: the
+shipped one, `c5-scoped-role.yaml` (which `guardrails-on` applies), `c6-least-privilege-role.yaml` (`guard-agency-on`),
+and both C8 Roles. The C1 egress set `guardrails-on` applies allows every agent pod TCP 443 to the VPC and service CIDRs,
+and in-namespace traffic, so the read and the post both survive the switch. So workshop-mcp gains a loop, started on a
+thread beside the MCP server, that every 15 seconds (`PRESENCE_REPORT_SECONDS`) lists the namespace's Deployments and
+its Pods no controller owns, the two workload kinds deploy_app can land, and posts the names to the desk's new
+`POST /present`. No grant changes. deploy_app's `/landed` report now carries the object's kind, and the desk marks a
+landed row removed when its kind is in the report and its name is not.
+
+**When a row is never marked.** A failed list posts nothing, so a broken read never marks a row. A row of a kind the
+report does not list (a ConfigMap, a Service, a row with no kind) is never checked. A row that landed after the
+report's lists were read is not checked against them: the post carries `listed_seconds_ago`, measured on workshop-mcp's
+own monotonic clock, so the desk compares no two clocks, and the desk adds 10 seconds (`REMOVED_GRACE_SECONDS`) for the
+post's trip, which workshop-mcp caps at 5. A marked row stays marked; a redeploy of the same name is its own row. The
+loop prints a line only when its outcome changes ("presence report: working" or "presence report failed: <why>"), and
+catches anything `_req` raises, such as a missing token file, so it outlives a bad pass.
+
+**The edges.** `/present` is refused on the desk's public host (`console.conf`, beside `/landed`), and the deployments
+host takes no POST at all, as before. `/present` accepts up to 1 MB, since a report naming the room's hundreds of Jokers
+can pass a ticket's 24 KB limit; a ticket's limit is unchanged.
+
+**Tests.** `verify/test_deployments_removed.py` (offline) holds the marking rules, `/present` over HTTP, deploy_app's
+kind, the presence report against a stubbed API (both lists, owned Pods left out, a failed list posting nothing, a desk
+that does not answer), list on both kinds under all five Role texts, the desk still tokenless, the page's lead and
+script, and the run-of-show line. `verify/test_deployments_removed_e2e.py` (tools tier) runs the real desk and
+workshop-mcp's real report over HTTP, then the page's own script in node, which reads "Tabitha the Troll deployed nginx
+at <time>, removed at <time>" with the `removed` class, and the Joker still there with none. `verify/test_public_images.py`
+matched the script's old literal `createTextNode(' at '+x.at)` and now matches its prefix, in the same commit.
+`verify/test_deployments_removed_live.py` is the live half.
+
+**Live check, run 18072, both clusters, read-only.** Both read `deny-external-registries` at `["Audit"]`, with no
+egress set in agent (the switch off), and the live workshop-agent Role was the broad one. `kubectl auth can-i list
+deployments` and `list pods` as `system:serviceaccount:agent:workshop-mcp` in agent read `yes` on both. The presence read
+itself, run inside each live workshop-mcp pod (`kubectl exec deploy/workshop-mcp -c shim -- python -`) with the pod's
+own token, listed 11 Deployments and no bare Pods on each, in 0.062 s (community) and 0.074 s (private), a 244-byte
+post. The bug itself is on the community cluster now: its desk's `/deployments.json` listed `joker-agatha-the-banshee`
+three times (23:28:20, 23:29:14, 23:32:13) while no such Deployment was in agent. The rollout restarts the desk, which
+keeps its rows in memory, so those rows go with it.
+
+**Not yet run on a cluster.** The change itself, once Argo CD syncs it from staging:
+`CONTEXT=watch-it-burn-community python3 verify/test_deployments_removed_live.py`, which reads workshop-mcp's
+"presence report: working", lands a zero-replica probe Deployment on the desk, and holds its row unmarked while it
+exists and marked within 90 seconds of its deletion. It leaves the probe's line on that cluster's page until the desk
+restarts, so not while a room watches. The stage beat is owed too: a room deploy of a public image, `guardrails-on`,
+and the line greyed with "removed at" within about a minute and a quarter.
