@@ -31369,3 +31369,9 @@ rules.
   `guardrails-on`, the same ask is denied by Kyverno. These are the issue's owed checks.
 - `verify/test_deployments_page_live.py` section 3's admitted branch, with the guardrails off, and the fallback shot 03-1
   retaken.
+
+**The suites (run 17981, at `1e997d05`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`306 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`; one fewer than #993's 307, since `test_deploy_app_named_app.py` is removed) and then
+the tier: `73 checks ran (the offline suite and 72 tier tests) in 41m49s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
+The log is `/var/lib/hecaton/runs/17981/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was
+added.
