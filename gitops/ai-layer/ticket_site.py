@@ -289,8 +289,11 @@ def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_
 
 
 # --- deployments.burritobot.co (#773) ----------------------------------------------------------------------------
-# Every successful deployment, by its name, the image it runs and the witch name of whoever asked: what the room
-# deployed in Challenge 2, projected and on phones. A refusal is not shown: the room learns that from the bot's reply.
+# Every successful deployment, one line each, "<witch name> deployed <image short name> at <time>" (#995), the full
+# image as the short name's hover text: what the room deployed in Challenge 2, projected and on phones. The witch name
+# is the one the chat request itself carried (workshop-mcp's _request_witch); a deploy with no browser behind it, a
+# probe or a scripted test, reads "Someone deployed ...". A refusal is not shown: the room learns that from the bot's
+# reply.
 # The page names no Joker and links to nothing on the desk, so it gives away no later challenge. The console serves it
 # at deployments-<cluster> and deployments.burritobot.co (console.conf), and /deployments.json on the chat page's own
 # host, so the chat page can show "see your deployments" once the visitor's first one lands.
@@ -308,7 +311,8 @@ def deployments(witch_slug: str = "") -> list[dict]:
         rows = [r for r in LANDINGS if r["ok"]]
     if witch_slug:
         rows = [r for r in rows if r.get("witch") and slug(r["witch"]) == witch_slug]
-    return [{"name": r["name"], "image": r.get("image", ""), "app": image_label(r.get("image", "")),
+    # app is what the line names: the image's short name, or the resource's own name for one that runs no image.
+    return [{"name": r["name"], "image": r.get("image", ""), "app": image_label(r.get("image", "")) or r["name"],
              "witch": r.get("witch", ""), "at": r["at"]} for r in rows[:200]]
 
 
@@ -323,9 +327,9 @@ async function tick(){try{const r=await fetch('/deployments.json'+(WITCH?'?witch
 if(!rows.length){const li=document.createElement('li');li.className='meta';li.textContent=%s;ul.replaceChildren(li);
 return;}
 ul.replaceChildren(...rows.map(x=>{const li=document.createElement('li');const b=document.createElement('b');
-b.textContent=x.name;li.appendChild(b);if(x.app){const c=document.createElement('code');c.textContent=' ('+x.app+')';
-c.title=x.image;li.appendChild(c);}li.appendChild(document.createTextNode(' deployed by '+(x.witch||
-'someone who gave no name')+' at '+x.at));return li;}));}catch(e){}}
+b.textContent=x.witch||'Someone';li.appendChild(b);li.appendChild(document.createTextNode(' deployed '));
+const c=document.createElement('code');c.textContent=x.app;if(x.image){c.title=x.image;}li.appendChild(c);
+li.appendChild(document.createTextNode(' at '+x.at));return li;}));}catch(e){}}
 tick();setInterval(tick,3000);
 </script>"""
 

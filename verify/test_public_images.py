@@ -9,9 +9,12 @@ guardrails-on. Nothing pulls from Docker Hub (#714): a Docker Hub reference to o
 rewritten to its copy on public.ecr.aws/docker/library/, tag and digest kept, and any other Docker Hub image is
 refused before the apply, saying why. An image from outside the platform's own registries is a room deployment: one
 replica, the room's resources, scaled to zero after the Joker window, so a phone cannot fill the node. Every
-successful deploy reports its image and the witch name the bot passed as requested_by, and deployments-<cluster>
-(deployments.burritobot.co for the room) lists it, with no Joker anywhere and nothing of the support desk reachable
-under that name. The chat page shows "see your deployments" once the visitor's first one lands.
+successful deploy reports its image and a witch name, and deployments-<cluster> (deployments.burritobot.co for the room)
+lists it, one line "<witch name> deployed <image short name> at <time>" with the full image as hover text (#995), with
+no Joker anywhere and nothing of the support desk reachable under that name. Since #995 the witch name is the
+X-Witch-Name header on the tools/call's own request, which kagent copies from guard-proxy's A2A request (the Agent's
+allowedHeaders), and the model's requested_by is read only when there is none; a deploy with no browser behind it reads
+"Someone deployed ...". The chat page shows "see your deployments" once the visitor's first one lands.
 
 deploy_app runs here against a stand-in for the Kubernetes API that records every call, and reports to the real ticket
 site on localhost. No cluster, no model. test_public_images_served.py reads the pinned landing-page image, and the
@@ -54,6 +57,11 @@ def load(name: str, path: pathlib.Path):
 class _StandInMCP:
     def __init__(self, *a, **kw):
         pass
+
+    def get_context(self):
+        # No request in flight, as the real FastMCP has none outside its transport; deploy_app reads the
+        # request's X-Witch-Name through it (#995) and so finds no name here.
+        raise LookupError("a stand-in FastMCP: no MCP request in flight")
 
     def tool(self, *a, **kw):
         def keep(f):
@@ -102,13 +110,27 @@ def workload(name: str, image: str, kind: str = "Deployment", replicas: int = 5,
             "spec": {"replicas": replicas, "selector": {"matchLabels": {"app": name}}, "template": pod}}
 
 
-def deploy(obj: dict, requested_by: str = "") -> tuple[str, dict, str]:
-    """deploy_app's reply, the object it applied, and the refusal it raised ("" when none)."""
+def from_request(headers: dict):
+    """A get_context whose tools/call arrived with these headers, shaped as mcp 1.29.1's Context where deploy_app
+    reads it (request_context.request.headers); a starlette Headers is case-insensitive, so the keys are lowercase."""
+    rc = types.SimpleNamespace(request=types.SimpleNamespace(headers={k.lower(): v for k, v in headers.items()}),
+                               request_id=1)
+    return lambda: types.SimpleNamespace(request_context=rc)
+
+
+def deploy(obj: dict, requested_by: str = "", headers: dict | None = None,
+           manifest: str | None = None) -> tuple[str, dict, str]:
+    """deploy_app's reply, the object it applied, and the refusal it raised ("" when none). With headers, the call
+    arrives as a tools/call on a request carrying them; without, there is no request in flight (the stand-in's)."""
     calls.clear()
+    if headers is not None:
+        m.mcp.get_context = from_request(headers)
     try:
-        reply = m.deploy_app(yaml.safe_dump(obj), requested_by=requested_by)
+        reply = m.deploy_app(yaml.safe_dump(obj) if manifest is None else manifest, requested_by=requested_by)
     except RuntimeError as e:
         return "", {}, str(e)
+    finally:
+        m.mcp.__dict__.pop("get_context", None)
     applies = [c for c in calls if c[0] == "PATCH" and c[2].get("kind") == obj["kind"]]
     return reply, (applies[0][2] if applies else {}), ""
 
@@ -299,6 +321,51 @@ joker = f"joker-{site.slug(site.NAME_SPACE[3])}"
 deploy(workload(joker, site.C6_IMAGE))
 check("a room Joker with no requested_by is still credited from its name",
       wait_for(lambda: any(r["name"] == joker and r["witch"] == site.NAME_SPACE[3] for r in rows())))
+
+print("== the witch name comes from the chat request, not the model's requested_by (#995) ==")
+check("deploy_app reads the X-Witch-Name header guard-proxy sends", m.WITCH_HEADER == "x-witch-name")
+_agent = next(d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text()) if d
+              and d.get("kind") == "Agent")
+_entries = {(e.get("mcpServer") or {}).get("name"): e.get("mcpServer") or {} for e in _agent["spec"]["declarative"]["tools"]}
+check("the Agent's workshop-mcp entry has kagent copy X-Witch-Name from the chat request onto its MCP calls",
+      [h.lower() for h in _entries.get("workshop-mcp", {}).get("allowedHeaders") or []] == [m.WITCH_HEADER],
+      str(_entries.get("workshop-mcp", {}).get("allowedHeaders")))
+check("the rogue evil-mcp entry is handed no header from the request",
+      not _entries.get("evil-mcp", {}).get("allowedHeaders"), str(_entries.get("evil-mcp")))
+AGATHA = "Agatha the Banshee"
+deploy(workload("chat-tron", "nginx"), headers={"X-Witch-Name": EDGAR})
+check("a deploy from the chat page with no requested_by in the tool call carries the visitor's witch name",
+      wait_for(lambda: any(r["name"] == "chat-tron" and r["witch"] == EDGAR for r in rows())), str(rows()[:3]))
+deploy(workload("chat-told", "nginx"), requested_by=AGATHA, headers={"X-Witch-Name": EDGAR})
+check("the request's name wins over a different requested_by (a ticket cannot credit someone else)",
+      wait_for(lambda: any(r["name"] == "chat-told" and r["witch"] == EDGAR for r in rows())), str(rows()[:3]))
+inside = workload("chat-inside", "nginx")
+inside["requested_by"] = AGATHA
+deploy(inside, headers={"X-Witch-Name": EDGAR})
+check("and over one the model wrote into the manifest (#906)",
+      wait_for(lambda: any(r["name"] == "chat-inside" and r["witch"] == EDGAR for r in rows())), str(rows()[:3]))
+deploy(workload("chat-spaced", "nginx"), headers={"X-Witch-Name": "  Edgar   the Kelpie "})
+check("its spacing is evened out, as requested_by's is",
+      wait_for(lambda: any(r["name"] == "chat-spaced" and r["witch"] == EDGAR for r in rows())), str(rows()[:3]))
+room_joker = f"joker-{site.slug(site.NAME_SPACE[5])}"
+deploy(workload(room_joker, site.ROOM_IMAGE), headers={"X-Witch-Name": EDGAR})
+check("an HC-666 Joker is credited to the person chatting, not to the name the Deployment was given",
+      wait_for(lambda: any(r["name"] == room_joker and r["witch"] == EDGAR for r in rows())), str(rows()[:3]))
+deploy(workload("probe-redis", "redis"), headers={})
+check("a tools/call with no browser behind it (no header, no requested_by) has no witch",
+      wait_for(lambda: any(r["name"] == "probe-redis" and r["witch"] == "" for r in rows())), str(rows()[:3]))
+deploy(workload("probe-named", "redis"), requested_by=AGATHA, headers={"Mcp-Session-Id": "probe"})
+check("with no header, the model's requested_by is still read, as before the guard-proxy half is pinned",
+      wait_for(lambda: any(r["name"] == "probe-named" and r["witch"] == AGATHA for r in rows())), str(rows()[:3]))
+probe = next((r for r in rows() if r["name"] == "probe-redis"), {})
+check("its row names the image's short name, which the page reads as 'Someone deployed redis at ...'",
+      probe.get("app") == "redis" and probe.get("image") == MIRROR + "redis:latest", str(probe))
+check("the short name drops the registry, the path, the tag and the digest",
+      site.image_label("registry.burritobot.co:5000/burritobot/tron-lightcycle-game:v2@sha256:" + "a" * 64)
+      == "tron-lightcycle-game" and site.image_label("tron-lightcycle-game") == "tron-lightcycle-game")
+site.record_landing("settings", True, "", image="")
+check("a resource that runs no image is named by its own name, never a blank",
+      any(r["name"] == "settings" and r["app"] == "settings" for r in rows()))
 status["code"] = 403
 deploy(workload("refused-one", "nginx"), requested_by=EDGAR)
 status["code"] = 201
@@ -310,7 +377,15 @@ print("== deployments-<cluster> serves the page and nothing of the desk ==")
 code, page = get("/", host=DOMAIN)
 check("/ is the deployments page", code == 200 and "Everything BurritoBot deployed" in page, f"{code}")
 check("it fills from /deployments.json", "fetch('/deployments.json'" in page)
-check("it says 'deployed by' and names no Joker anywhere", "deployed by" in page and "joker" not in page.lower())
+script = page[page.find("<script>"):page.find("</script>")]
+check("each line is '<witch name> deployed <image short name> at <time>' (#995)",
+      "b.textContent=x.witch||'Someone';" in script and "createTextNode(' deployed ')" in script
+      and "c.textContent=x.app;" in script and "createTextNode(' at '+x.at)" in script, script)
+check("a line with no witch name reads 'Someone deployed ...'", "x.witch||'Someone'" in script)
+check("the full image is the short name's hover text", "c.title=x.image;" in script)
+check("no deployment name in parentheses, no 'deployed by', no 'landed', and no Joker anywhere",
+      "x.name" not in script and "'('" not in script and "deployed by" not in page and "landed" not in page.lower()
+      and "joker" not in page.lower() and "gave no name" not in page)
 check("it links to nothing (no desk, no ticket, no other host)", "<a " not in page and "support" not in page.lower())
 check("rows are written with textContent, so a name cannot inject markup", "textContent" in page and "innerHTML" not in page)
 for path in ("/HC-666", "/ticket?id=HC-666", "/wall", "/me", "/submit", "/HC-7731"):

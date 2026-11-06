@@ -27718,3 +27718,72 @@ wall deploy is owed in prompts-agenticburn, as #22's report records.
 and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then the tools tier printed "73 checks ran (the offline suite and 72 tier
 tests) in 39m55s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/18004/e2e-tools.log`.
 The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-06 · #995 · run 18028 · The deployments page credits the chat request's witch name, not the model's argument
+
+**What changed.** Each line on deployments.burritobot.co (`deployments_page()`'s script in
+`gitops/ai-layer/ticket_site.py`) now reads "<witch name> deployed <image short name> at <time>", the full image as
+the short name's hover text, and "Someone deployed <image short name> at <time>" when the deploy carried no name. The
+deployment's own name in parentheses and "deployed by" are gone. A resource that runs no image is named by its own
+name, so a line never reads "deployed  at". `/deployments.json` keeps its fields; `app` is that name.
+
+**The path the name takes (the issue left it to the run).** guard-proxy already validates the chat page's witch
+name and hands it to the model as a second text part; the model then had to copy it into `deploy_app`'s
+`requested_by`, and on 2026-11-06 113 of the 149 rows on deployments.burritobot.co had no witch. The name now rides
+the request as a header, so no model step is on the path:
+1. guard-proxy sends `X-Witch-Name: <name>` on its A2A requests to the agent (the guard-proxy half, below).
+2. kagent copies it onto every MCP call of that task: the Agent's workshop-mcp entry names it in `allowedHeaders`
+   (`gitops/workshop-agent/agent.yaml`). Read at kagent v0.10.1, the runtime this Agent runs (`golang-adk:0.10.1`):
+   a2a-go's JSON-RPC handler stores the HTTP request headers as the call's RequestMeta, a non-blocking
+   `message/send` runs the task under `context.WithoutCancel` of that context, so the headers survive, and
+   `go/adk/pkg/mcp/registry.go`'s `headerRoundTripper` sets each allowed header from it on the MCP HTTP request.
+   The CRD on watch-it-burn-community carries the field (`spec.declarative.tools[].mcpServer.allowedHeaders`).
+   evil-mcp names none.
+3. agentgateway's :3000 route is a plain HTTP proxy, and its :3001 MCP route forwards request headers to
+   workshop-mcp, as `X-Agent-Identity` already shows (tool_audit.py, #190).
+4. `deploy_app` reads it with `_request_witch()` (`mcp.get_context().request_context.request.headers`) and takes it
+   ahead of `requested_by` and ahead of a `requested_by` written into the manifest (#906). The desk still shows a
+   name only when the vocabulary makes it (`name_from_display`).
+
+`requested_by` stays as the fallback when the request carries no header. Until guard-proxy sends it, that keeps
+today's behaviour, and after, it only reaches requests with no browser behind them. The system prompt's guest-name
+paragraph is unchanged: HC-666 still needs the model to name the Joker `joker-<slug>`.
+
+**Tests.** `verify/test_public_images.py` (offline) holds the header against a stand-in request context: a call with
+the header and no `requested_by` is credited to it, the header wins over a different `requested_by` and over one in
+the manifest, a probe with no header reads no witch, and the Agent's workshop-mcp entry names `X-Witch-Name` while
+evil-mcp names nothing. Its page checks now pin the new line and no longer "deployed by". The new
+`verify/test_deployments_witch_line_e2e.py` (tools tier) serves workshop-mcp on mcp 1.29.1 and pyyaml 6.0.2 over
+streamable HTTP, calls `deploy_app` with the real MCP client with and without the header, reads the real desk's rows
+back, and runs the page's own script in node on them: "Edgar the Kelpie deployed tron-lightcycle-game at
+21:51:20" with hover `ghcr.io/someone/tron-lightcycle-game:2`, and "Someone deployed redis at 21:51:20" for the
+probe. With `_request_witch()` taken out of `deploy_app`, each test failed 6 checks. The 13 offline stand-in FastMCPs
+that load workshop-mcp gained a `get_context` that raises `LookupError`, as no request is in flight there.
+`verify/test_deployments_page_live.py` gained the live checks for the page's line and for the Agent CR and its
+rendered config Secret carrying the header, and its `kubectl()` turns a 60 s timeout into a failed check.
+
+**Live check (run 18028).** `CONTEXT=watch-it-burn-community` and `CONTEXT=watch-it-burn-private python3
+verify/test_deployments_page_live.py`, before this change is on either cluster: the page is served, names no Joker,
+keeps the full image as hover text, a desk page under that name is a 404, and the room's nginx is admitted
+(`restrict-image-registries` at Audit on both). The three #995 checks read red, as they must until Argo CD syncs this
+commit: the page still writes "deployed by", and neither the Agent CR nor its config Secret names `X-Witch-Name`
+(`allowed_headers` is absent from the workshop-mcp `http_tools` entry). Step 1, the fake-ticket site through the API
+server's service proxy, timed out after 60 s on both clusters; before this run's change to `kubectl()` it ended the
+script with a traceback. That is filed as a followup. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.**
+- `verify/test_deployments_page_live.py` on watch-it-burn-community, once hecaton promotes this run: the #995 line
+  check and both `X-Witch-Name` checks green.
+- The owed check from the issue: on the public bot (`https://attackme.burritobot.co`), after guard-proxy's half is
+  pinned and synced, a deploy from the chat page shows on deployments.burritobot.co under the sender's witch name.
+  Until then a deploy still reads the name only when the model passes `requested_by`.
+
+**The guard-proxy half (comment for #995, to file in guard-proxy-agenticburn).** On each HTTP POST a `/chat` turn
+makes to `AGENT_URL + "/"` (the `message/send` and each `tasks/get` poll), send the header `X-Witch-Name` with the
+witch name exactly as the turn already forwards it in the second text part, only when the name passed
+`_WITCH_NAME_RE` (proxy.py) or `witchNameRE` (`internal/server/chat.go`), and no header otherwise. In proxy.py that is
+`fwd_headers["X-Witch-Name"] = witch` beside `fwd_headers = {"Content-Type": "application/json"}` in the chat forward;
+in Go, the same header on the requests `forwardChat` sends through `agentRPC`. The `/a2a` passthrough and
+`tasks/cancel` send none. The second text part stays: HC-666 needs the model to know the name. Then this repo
+re-pins `gitops/ai-layer/guard-proxy` and `verify/test_chat_witch_name.py` holds the header.
+
+**Suites.** Recorded in the next entry once `bash verify/run-e2e-tools.sh` ends.

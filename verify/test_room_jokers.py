@@ -48,6 +48,11 @@ class _StandInMCP:
     def __init__(self, *a, **kw):
         pass
 
+    def get_context(self):
+        # No request in flight, as the real FastMCP has none outside its transport; deploy_app reads the
+        # request's X-Witch-Name through it (#995) and so finds no name here.
+        raise LookupError("a stand-in FastMCP: no MCP request in flight")
+
     def tool(self, *a, **kw):
         return lambda f: f
 

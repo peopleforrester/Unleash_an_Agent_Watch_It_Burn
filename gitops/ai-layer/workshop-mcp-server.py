@@ -677,6 +677,27 @@ def _status_message(body: str) -> str:
     return str(msg or body)
 
 
+# The visitor's witch name, from the chat request itself (#995). Before it, the deployments page credited a deploy only
+# when the model copied the name guard-proxy hands it into requested_by, and most of the 2026-11-06 "tron" lines read
+# "someone who gave no name". guard-proxy sends the name it forwards from the chat page as this header on its A2A
+# request to the agent; kagent copies it onto the agent's MCP calls to workshop-mcp, the one header the Agent's
+# workshop-mcp entry names in allowedHeaders (gitops/workshop-agent/agent.yaml); agentgateway forwards request headers
+# to MCP targets, as it does X-Agent-Identity (tool_audit.py). A request with no browser behind it (a probe, a
+# scripted test) carries none. Like requested_by it is declared, not authenticated: the desk shows it only when the
+# name vocabulary makes it (ticket_site.name_from_display), and guard-proxy forwards only a name of that shape.
+WITCH_HEADER = "x-witch-name"
+
+
+def _request_witch() -> str:
+    """The X-Witch-Name of the tools/call in flight, "" when there is none or no request at all (a direct call)."""
+    try:
+        request = mcp.get_context().request_context.request
+    except (ValueError, LookupError):  # called outside the transport: there is no request to read
+        return ""
+    headers = getattr(request, "headers", None) or {}
+    return " ".join(str(headers.get(WITCH_HEADER) or "").split())[:80]
+
+
 def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> None:
     """Tell the support desk what was deployed, for its wall, the visitor's /me and the deployments page (#773): the
     image it runs and who asked for it. Best effort: a desk that does not answer never changes what deploy_app
@@ -954,7 +975,10 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
         # Kubernetes object has the field, so it is taken out and read as the name the argument would have carried.
         inside = obj.pop("requested_by")
         written_by = written_by or (inside.strip() if isinstance(inside, str) else "")
-    requested_by = str(requested_by or "").strip() or written_by
+    # The chat request's own witch name first (#995), so a room deploy is credited whether or not the model passed one,
+    # and a name a ticket talks the model into writing never stands in for the person chatting. The model's
+    # requested_by, or the one it wrote into the manifest, is read only when the request carries no name.
+    requested_by = _request_witch() or str(requested_by or "").strip() or written_by
     named = None
     if isinstance(obj, (str, int)) and not isinstance(obj, bool):
         # Only a name, "Tron" or 2048 (#939): the Deployment it asks for, with the image it runs.

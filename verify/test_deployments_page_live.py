@@ -11,11 +11,16 @@
    room's resources, Docker's official nginx moved to public.ecr.aws, #992) is admitted where restrict-image-registries is Audit or absent (the public
    cluster, the attack) and refused by it where it is Deny (the private cluster, the fix). Nothing is created.
 
-What it leaves to a person: the model filling requested_by with the visitor's witch name, which needs a guard-proxy
-pin that forwards the name (#762) and a real chat, and the chat page's "see your deployments" link appearing.
+2b. The chat request's witch name reaches workshop-mcp without the model (#995): the Agent CR's workshop-mcp entry
+   names X-Witch-Name in allowedHeaders, and kagent rendered it into the agent's config Secret.
+
+What it leaves to a person: a real chat on a cluster whose guard-proxy pin sends X-Witch-Name (the guard-proxy half of
+#995), its deploy showing on deployments.<domain> under the sender's witch name, and the chat page's "see your
+deployments" link appearing.
 """
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import os
@@ -49,13 +54,23 @@ def finish() -> None:
 
 
 def kubectl(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["kubectl", "--context", CONTEXT, *args], input=stdin, capture_output=True, text=True,
-                          timeout=60)
+    """kubectl on CONTEXT; one that runs past 60 s is a failed call naming the timeout, so its check fails, never a
+    traceback that ends the run before the later checks (2026-11-06: the service proxy hung on both clusters)."""
+    cmd = ["kubectl", "--context", CONTEXT, *args]
+    try:
+        return subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 124, "", f"kubectl {' '.join(args)[:120]} timed out after 60 s")
 
 
 class _StandInMCP:
     def __init__(self, *a, **kw):
         pass
+
+    def get_context(self):
+        # No request in flight, as the real FastMCP has none outside its transport; deploy_app reads the
+        # request's X-Witch-Name through it (#995) and so finds no name here.
+        raise LookupError("a stand-in FastMCP: no MCP request in flight")
 
     def tool(self, *a, **kw):
         return lambda f: f
@@ -89,6 +104,10 @@ if public:
             page = resp.read().decode("utf-8", "replace")
         check(f"https://{host}/ is the deployments page", "Everything BurritoBot deployed" in page)
         check("and names no Joker", "joker" not in page.lower())
+        check("each line reads '<witch name> deployed <image short name> at <time>', 'Someone' with no name (#995)",
+              "b.textContent=x.witch||'Someone';" in page and "createTextNode(' deployed ')" in page
+              and "deployed by" not in page)
+        check("with the full image as the short name's hover text", "c.title=x.image;" in page)
     except (urllib.error.URLError, TimeoutError) as e:
         check(f"https://{host}/ answers", False, f"{type(e).__name__}: {e}")
     try:
@@ -99,6 +118,25 @@ if public:
     except (urllib.error.URLError, TimeoutError) as e:
         code = f"{type(e).__name__}: {e}"
     check("a desk page under that name is a 404", code == 404, str(code))
+
+print("== 2b. the chat request's witch name reaches workshop-mcp, the kagent half (#995) ==")
+r = kubectl("-n", "agent", "get", "agent", "workshop-agent", "-o", "json")
+try:
+    tools = {(t.get("mcpServer") or {}).get("name"): t.get("mcpServer") or {}
+             for t in json.loads(r.stdout)["spec"]["declarative"]["tools"]} if r.returncode == 0 else {}
+except (ValueError, KeyError):
+    tools = {}
+check("the Agent CR's workshop-mcp entry names X-Witch-Name in allowedHeaders",
+      "X-Witch-Name" in (tools.get("workshop-mcp", {}).get("allowedHeaders") or []), r.stderr.strip()[:200])
+r = kubectl("-n", "agent", "get", "secret", "workshop-agent", "-o", "jsonpath={.data.config\\.json}")
+try:
+    rendered = json.loads(base64.b64decode(r.stdout)) if r.returncode == 0 else {}
+except ValueError:
+    rendered = {}
+mcp_tools = [t for t in rendered.get("http_tools") or [] if "deploy_app" in (t.get("tools") or [])]
+check("kagent rendered it into the agent's config Secret, which the ADK runtime reads",
+      bool(mcp_tools) and "X-Witch-Name" in (mcp_tools[0].get("allowed_headers") or []),
+      str([t.get("allowed_headers") for t in mcp_tools]))
 
 print("== 3. the room's nginx is admitted or refused as restrict-image-registries is set here ==")
 sys.modules["tool_audit"] = types.SimpleNamespace(AuditedFastMCP=_StandInMCP)

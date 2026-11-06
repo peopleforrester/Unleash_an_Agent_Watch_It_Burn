@@ -386,6 +386,13 @@ spec:
           # "tool_use ids ... without tool_result" (seen live on r1-1). Excessive agency is the point:
           # the agent just applies what it's told, any image (#988), and Kyverno admission says no only once
           # restrict-image-registries and deny-external-registries are at Deny: guardrails-on arms them (#774).
+          # The visitor's witch name rides the chat request itself (#995): guard-proxy sends it as X-Witch-Name on
+          # its A2A request, and kagent copies the headers named here from that request onto every MCP call to
+          # workshop-mcp (go/adk/pkg/mcp/registry.go, headerRoundTripper, read at kagent v0.10.1), where deploy_app
+          # credits the deploy to it whether or not the model passed requested_by. Only workshop-mcp gets it; the
+          # rogue evil-mcp entry below names no header.
+          allowedHeaders:
+            - X-Witch-Name
         # Per-agent audit identity (#190). kagent sends Tool.headersFrom on every request to this
         # server (go/core/internal/controller/translator/agent/compiler.go), agentgateway forwards it to
         # workshop-mcp, and gitops/ai-layer/tool_audit.py stamps it on each tool call's audit line. The
