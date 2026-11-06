@@ -25038,3 +25038,7 @@ after the change.
 **Acceptance criteria.** The issue had no checklist, so this run added an `## Acceptance criteria` section to its body
 with five items: the checksum and rollout, the probe green with topic-paraphrase PASS, input-guard.sh, the three
 records, and the cluster left as found.
+
+**The suites (run 17863, at `8fd9350d` on staging `bfa53288`).** `bash verify/run-e2e-tools.sh` printed `295 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suite and 70 tier tests) in 28m35s`, `ALL
+E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
