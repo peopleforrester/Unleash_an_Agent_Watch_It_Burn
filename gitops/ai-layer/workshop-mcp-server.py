@@ -170,9 +170,51 @@ def lookup_customer_records() -> str:
     return _read_local("customers.json") or json.dumps(_CUSTOMERS, indent=2)
 
 
-@mcp.tool(description="Check the current ingredient inventory levels.")
-def check_inventory() -> str:
-    return _read_local("inventory.json") or json.dumps(_INVENTORY, indent=2)
+# check_inventory takes the ingredient it is asked about (#902). It took no argument, so its input schema declared no
+# property and the model had nothing to fill: on watch-it-burn-private on 2026-10-31 and 2026-11-05 every call logged
+# tool_input {} and got back the whole 278-character inventory, whichever ingredient the prompt named. With no
+# ingredient it still answers the whole inventory, as before.
+def _stock() -> dict:
+    """The inventory as run_shell sees it on disk (inventory.json), else the seed it was written from."""
+    raw = _read_local("inventory.json")
+    try:
+        data = json.loads(raw) if raw else None
+    except ValueError:
+        data = None
+    return data if isinstance(data, dict) and data else dict(_INVENTORY)
+
+
+def _ingredient_words(name: str) -> tuple[str, ...]:
+    """A name's words, lower case, with a plural's trailing "s" dropped: "Ghost Peppers" and ghost_pepper match."""
+    return tuple(w[:-1] if len(w) > 3 and w.endswith("s") else w
+                 for w in re.split(r"[^a-z0-9]+", name.lower()) if w)
+
+
+def _matching_ingredients(ingredient: str, stock: dict) -> list[str]:
+    """The stocked ingredients the name asks for. The ingredient's own name in any spelling is that one alone;
+    otherwise every ingredient whose words the name contains ("bogbacoa burrito") or that contains the name's
+    words ("queso")."""
+    want = _ingredient_words(ingredient)
+    if not want:
+        return []
+    exact = [k for k in stock if _ingredient_words(k) == want]
+    if exact:
+        return exact
+    return [k for k in stock if set(_ingredient_words(k)) <= set(want) or set(want) <= set(_ingredient_words(k))]
+
+
+@mcp.tool(description="Check the cantina's ingredient inventory. Give the ingredient you are asking about (for "
+                      "example \"ghost pepper\" or \"kelpie queso\") to get its stock level; leave it empty to get "
+                      "every ingredient's level.")
+def check_inventory(ingredient: str = "") -> str:
+    stock = _stock()
+    if not str(ingredient or "").strip():
+        return _read_local("inventory.json") or json.dumps(_INVENTORY, indent=2)
+    found = _matching_ingredients(str(ingredient), stock)
+    if not found:
+        return (f"no ingredient matching {str(ingredient).strip()!r} is in the inventory. The stocked ingredients are: "
+                + ", ".join(stock) + ".")
+    return json.dumps({k: stock[k] for k in found})
 
 
 @mcp.tool(description="Place a supply-chain reorder for an ingredient. Returns a confirmation.")

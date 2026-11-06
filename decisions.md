@@ -23109,3 +23109,60 @@ nothing on either cluster changed.
 **The suites (run 17809, at `1c2f6c71`).** `bash verify/run-e2e-tools.sh` printed `284 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite, then `65 checks ran (the offline suite and 64 tier tests) in 38m02s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-06 · #902 · run 17812 · check_inventory takes the ingredient it is asked about
+
+**What was wrong.** On watch-it-burn-private on 2026-10-31 and 2026-11-05 every check_inventory call workshop-agent made
+logged `tool_input {}` (guard-proxy-agenticburn#29). The cause is the tool's schema, not the model. `check_inventory()`
+in `gitops/ai-layer/workshop-mcp-server.py` took no argument, so the schema FastMCP builds from its signature declared
+no property. Read live from the running workshop-mcp pod on watch-it-burn-private (tools/list over `127.0.0.1:8000/mcp`):
+`"inputSchema": {"properties": {}, "title": "check_inventoryArguments", "type": "object"}`. The model had nothing to
+fill, and every call answered the same 278-character `json.dumps(_INVENTORY, indent=2)`.
+
+**Decided: it takes an ingredient.** It is the one business tool a chat asks about one thing at a time ("how many ghost
+peppers"), and `reorder_supply` already takes its `item`. `check_inventory(ingredient: str = "")`:
+- an ingredient in any spelling (`ghost_pepper`, `Ghost Peppers`, `Toe-Fu`) answers that one level as JSON,
+  `{"ghost_pepper": 12}`; a part of a name (`queso`) or a name with more words (`Bogbacoa burrito`) answers every
+  stocked ingredient it matches, and a sentence naming two (`ghost pepper and witch hazel`) answers both;
+- one the cantina does not stock answers that it is not in the inventory and lists what is, so the model can ask again;
+- no ingredient, or a blank one, answers the whole inventory as before, so a call with `{}` still works and the
+  tool-audit tests that call it so are unchanged;
+- the levels are read from `inventory.json` on disk, which run_shell sees, and the seed when it is unreadable.
+
+The description now tells the model to give the ingredient. The argument is optional. A required one
+would turn every `{}` call into a validation error, and "what is in stock" is a fair question too.
+
+**Tests.** `verify/test_check_inventory_ingredient.py` (offline, 22 checks) holds the signature, the description and
+each answer above. `verify/test_check_inventory_schema_e2e.py` (tools tier) imports the server with mcp==1.29.1, as
+images/workshop-mcp pins it, beside the real `tool_audit.py`: tools/list's inputSchema has an `ingredient` string
+property and requires nothing, a call with `{"ingredient": "ghost pepper"}` answers `{"ghost_pepper": 12}` and its
+audit line's `tool_input` carries the ingredient, and a call with `{}` answers the whole inventory.
+
+**Live check, run 17812 (watch-it-burn-private, the cluster left as found).** In pod `workshop-mcp-75bcdb57f8-l6ntd`, the
+changed server.py, copied to `/tmp/probe-902` and imported in a one-off python3 with the image's own mcp (`mcp 1.29.1`)
+and `WORKSHOP_DATA_DIR=/tmp/probe-902/data`, printed `SCHEMA {"properties": {"ingredient": {"default": "", "title":
+"Ingredient", "type": "string"}}, ...}`, `ONE {"ghost_pepper": 12}` for `{"ingredient": "Ghost Peppers"}` with
+`"tool_input":{"ingredient":"Ghost Peppers"}` in its audit line, and `EVERY_LEN 278` for `{}`. `/tmp/probe-902` was
+removed and `/tmp` held only `burrito-data` after. Nothing bound a port and the running server was not touched.
+
+Then the model half of the issue's question, asked of Bedrock directly: Converse on workshop-agent's own model,
+ModelConfig `bedrock-nova`, application inference profile
+`arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/88hce5o0zw45` (Nova Pro), temperature 0, with
+only check_inventory as its tool, two prompts, each twice per schema:
+
+| schema | "How many ghost peppers do we have in stock?" | "Check the inventory for kelpie queso, then for witch hazel." |
+|---|---|---|
+| old (no property) | `[{}]`, `[{}]` | `[{}, {}]`, `[{}, {}]` |
+| new | `[{"ingredient": "ghost pepper"}]` twice | `[{"ingredient": "kelpie queso"}, {"ingredient": "witch hazel"}]` twice |
+
+So Nova Pro fills the argument when the schema declares one; the `{}` was the schema.
+
+**Not yet run on a cluster.** The change running in workshop-mcp. The Deployment carries no checksum annotation for
+`workshop-mcp-src` (guard-proxy's `checksum/proxy-py` is the pattern), so an Argo sync updates the mounted file but the
+running python keeps the old schema until the pod restarts: after promotion, `kubectl --context watch-it-burn-private -n
+agent rollout restart deployment/workshop-mcp` (and the same on watch-it-burn-community), then
+`kubectl --context watch-it-burn-private -n agent rollout restart deployment/workshop-agent` so the agent lists the tools
+afresh. The check is a chat naming an ingredient and its `tool_input` in workshop-mcp's log
+(`kubectl --context watch-it-burn-private -n agent logs deploy/workshop-mcp | grep check_inventory`), which should carry
+`"ingredient"`. Owed to the next run on #902. The missing rollout trigger is filed as a follow-up.
+
+No dependency was added to the repo; the Bedrock probe ran boto3 1.40.70 in a throwaway `uv run --with`.
