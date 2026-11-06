@@ -112,11 +112,12 @@ def connect(host: str, port: int, path: str, *, tls: bool = False, server_name: 
 
 def first_message(host: str, port: int, path: str, message: bytes | None, *, tls: bool = False,
                   server_name: str | None = None, headers: dict[str, str] | None = None,
-                  protocol: str | None = "tty", wait: float = 3.0) -> Result:
+                  protocol: str | None = "tty", wait: float = 3.0, timeout: float = 10.0) -> Result:
     """Opens the socket, sends `message` as its one binary frame (none when None), and listens for `wait`
-    seconds. Stops early at a close frame or a dropped connection. Answers a close with a close."""
+    seconds. Stops early at a close frame or a dropped connection. Answers a close with a close. `timeout` bounds
+    the connect and the wait for the upgrade's answer; one that runs out raises, so it never reads as a refusal."""
     sock, status, rest = connect(host, port, path, tls=tls, server_name=server_name, headers=headers,
-                                 protocol=protocol)
+                                 protocol=protocol, timeout=timeout)
     res = Result(status=status, close_code=None, output=b"", frames=[], eof=False)
     if status != 101:
         sock.close()

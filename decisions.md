@@ -32987,3 +32987,15 @@ Spans go only once the collector logs "Everything is ready", as `test_trace_shap
 free_port's port is free for any process until the collector binds it. `test_collector_one_root_e2e.py` and
 `test_tool_failure_status_e2e.py` had the same 30-second send loop and get the same bound, wait and message; each
 passes as is and fails naming the port with the bound at 0.
+
+**Two more that failed under load, in the second tools-tier run.** It ran `73 checks (the offline suite and 72 tier
+tests) in 61m24s`, at load average 40 to 60, and exited 1 on two tests, each of which then passed alone.
+`verify/test_iam_policy_structural.py` stopped at "terraform plan of boundary failed ... timeout while waiting for
+plugin to start": Terraform gives a provider one fixed minute to start, with no setting to change it, and the aws
+provider missed it. `verify/iam_plan_render.py` now runs a step once more on those words alone, as the probe re-sends
+a Bedrock 424 once (#889); a second miss fails naming both, and any other failure is never re-run.
+`verify/test_iam_plan_render_plugin_start.py` holds this with a stub terraform: one miss renders, two fail, a
+different error runs once. `verify/test_ttyd_ws_auth.py` died on a `TimeoutError` in `ttyd_ws.connect`, whose socket
+waits 10 seconds for the upgrade's answer. `ttyd_ws.first_message` now takes a `timeout` and passes it on, and the
+loopback test gives ttyd 60 seconds; a bound that runs out still raises, so it never reads as a refusal. The live
+check-tls path keeps the 10-second default.
