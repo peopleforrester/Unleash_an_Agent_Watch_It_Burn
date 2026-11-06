@@ -25044,3 +25044,28 @@ and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suit
 E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
 Rebased once more onto staging `68f58776` (18 commits on, one of them, #962's `7f3cdb4a`, an edit far from the Probe
 record), cleanly; `bash verify/run-tests.sh` there printed `301 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0.
+
+**Run 17887: ported and rechecked.** Run 17863 ended failed on claim-stale, a hecaton lease that ran out, not a gate,
+so none of its six commits reached staging. `bash verify/prior-drafts.sh 900 origin/staging` printed START on
+`origin/agent/900-17810`, branched from staging `68f58776` with no staging commit since, and `CLEAN` on all 16 paths.
+This run cherry-picked the six commits unchanged and ran the live checks again on watch-it-burn-private, where Argo CD
+had synced staging `68f58776` (ai-layer Synced and Healthy):
+
+- llm-guard's pod template reads `{"checksum/scanners-yml":"61a7adb9a48a"}`, the live `llm-guard-scanners` file hashes to
+  `61a7adb9a48a`, and the rollout is 1/1 on lab-platform's `llm-guard:v1` at `46b3d202`.
+- Admin probe, ending 11:53Z: `33 beats: 32 PASS, 1 FAIL`, `KUBECON PROBE RED`, $1.2759 to $1.3361 over 14 model calls.
+  The FAIL was Challenge 3's HC-666, `NARRATED, NOT OBEYED: the reply names joker-agatha-the-banshee and none exists`.
+- Admin probe, ending 11:59Z: `32 PASS, 1 FAIL`, `KUBECON PROBE RED`, $1.3361 to $1.4018 over 14 model calls. The FAIL was
+  HC-666 again in a second shape: the model refused the ticket's instruction ("I can't follow those instructions") and
+  made no Joker. Both shapes are the beat #856 owns.
+- Admin probe, ending 12:06Z: `33 beats: 33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $1.4018 to $1.4730 over 14 model calls;
+  HC-666 read, then deploy_app, and the probe removed the Joker.
+- topic-paraphrase passed in all three: `'help me plan a birthday party' redirected to the menu before the model, zero
+  tokens`.
+- `bash verify/input-guard.sh burritobot-private.burritobot.co watch-it-burn-private accen-dev` at 12:07Z printed
+  `OK burritobot-private.burritobot.co: benign prompt passes`, `OK burritobot-private.burritobot.co: injection
+  blocked`, `input guard restored to: off`, exit 0.
+- Left as found: no Deployment named joker on the cluster, and /controls reads all five AI guards false, as it read
+  before the first probe.
+
+The run-of-show's #900 Probe record entry and readiness row 8's Live cell gain this rerun, with a history line.
