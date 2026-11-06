@@ -9,7 +9,7 @@
 |---|---|
 | Copied out | 2026-11-06 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `e4ec6a4b3df8a929f5045d36319a8e83d75382c2` (the last commit to change lab.html, on 2026-11-06) |
+| Source commit | `15e7261a5e7845301aac6bb4fe823bd3e775975a` (the last commit to change lab.html, on 2026-11-06) |
 | Source blob | `577289c2ab8d9582a7a0a5bb718a6e2449620bbd` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
