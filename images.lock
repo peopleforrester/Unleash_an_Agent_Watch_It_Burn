@@ -31,7 +31,8 @@
 # at the end; run 17393 copied those dates the same way. The third save, on 2026-11-06, saved the eight rows written
 # after both: both Jokers, re-pinned (#714), the three llm-guard-cpu-offline rows (#719), the node and debian rows,
 # which #714 moved to lab-platform#353's ghcr.io copies, and llm-guard at lab-platform#341's rebuild (#895); run 17809
-# copied those dates the same way. Every row that owes a copy is saved at its current digest.
+# copied those dates the same way. Every row that owes a copy was saved at its current digest, until #991 added
+# Challenge 2's four games below on 2026-11-06, whose saved column is - until the next save.
 # verify/test_images_lock.py holds every reference to a row here.
 ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node 2026-11-06
 ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts 2026-11-06
@@ -75,14 +76,18 @@ ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline 2026-11-06
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot 2026-11-06
 ghcr.io/peopleforrester/lab-platform/llm-guard:v1 sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad repo:peopleforrester/lab-platform/deploy/images 2026-11-04
-# Challenge 2's landing-page server (#773, #939, #992): deploy_app's LANDING_IMAGE in
-# gitops/ai-layer/workshop-mcp-server.py, which serves an app the room names with no image ("deploy Tron"). It is
-# the index digest public.ecr.aws served on 2026-11-02, read anonymously; docker/library/ is Docker's official images
-# on Amazon's public registry, whose digests equal Docker Hub's. The five other images deploy_app pinned until #992
-# (busybox, alpine, httpd, redis and the 2048 game) left with its list: any image the room asks for now goes to the
-# apply as written, so nothing here hands a cluster those pins. verify/test_public_images.py holds this row to
-# LANDING_IMAGE.
-public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de upstream:https://github.com/nginx/docker-nginx 2026-11-04
+# Challenge 2's games (#991): the four images BurritoBot's system prompt (gitops/workshop-agent/agent.yaml) names by
+# exact image and digest, so a guest's "deploy Tron" pulls the Tron game and not a guess. deploy_app applies an image as
+# written since #991, so these are what a room deployment of a named game pulls, and nothing pulls them otherwise. Each
+# digest is the linux/amd64 image its registry served anonymously on 2026-11-06 (run 17981), the only architecture these
+# nodes have; Tron's and Infinite Mario's tags are indexes, and the row is the amd64 image inside. Tron and 2048 name no
+# source repo (the Tron image's labels name only its maintainer, and the 2048 image carries no labels), so each tarball,
+# once saved, is the only copy. Docker Hub serves Tron and Tetris. verify/test_public_images.py holds these rows to the
+# prompt, and verify/test_public_images_served.py (tools tier) reads each from its registry.
+docker.io/iamassif731/tron-lightcycle-game:latest@sha256:610c7c0e6aa86a280b08a753efca90443b9dd7ca4e45d207ef276952f5470f22 sha256:610c7c0e6aa86a280b08a753efca90443b9dd7ca4e45d207ef276952f5470f22 none -
+public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 none -
+quay.io/kenmoini/infinite-mario:2a94aae@sha256:146c00f5aad055a7b8ed3a2771551a0accb9cf611a3f8963e45d01c57d8754d2 sha256:146c00f5aad055a7b8ed3a2771551a0accb9cf611a3f8963e45d01c57d8754d2 upstream:https://github.com/kenmoini/mariohtml5 -
+docker.io/bsord/tetris:0.5.5@sha256:2ffffd2f8834dd13734654eeec142aedbd95e6880e52d692a9e59fd9aa2f9634 sha256:2ffffd2f8834dd13734654eeec142aedbd95e6880e52d692a9e59fd9aa2f9634 upstream:https://github.com/bsord/tetris -
 # Chart renders (#603): the images Argo CD hands a cluster from the Helm charts and kustomize builds of
 # gitops/bootstrap/apps, which no tracked image: line names, and the two the Argo CD chart infra/deploy-full-idp.sh
 # installs. A ghcr.io/peopleforrester/lab-platform/mirror/ row is lab-platform's copy of a Docker Hub image (#714), at

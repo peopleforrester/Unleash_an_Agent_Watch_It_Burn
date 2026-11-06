@@ -86,8 +86,10 @@ by hand at the first full rehearsal (Challenge 1's Datadog trace and the
 Each segment's narration covers its missing beat. Challenge 2's public image (03-1)
 was taken on 2026-11-06, after #939: the room's Tron ask had not deployed on the
 public bot in four tries on 2026-11-04 and 2026-11-05, because the model sent
-`deploy_app` the manifest "Tron", and `deploy_app` now deploys that name on the
-public nginx image.
+`deploy_app` the manifest "Tron". The shot shows `deploy_app` as #939 left it, which
+deployed that name on a public nginx image. Since #991 `deploy_app` refuses a bare
+name and BurritoBot's prompt names the Tron game's exact image, so 03-1 is owed a
+retake on the bot that runs #991.
 
 Each shot says how it is made (`capture` in `assets.yaml`):
 

@@ -1,33 +1,43 @@
-# ABOUTME: Reads Challenge 2's landing-page image (#773, #992) and the official images deploy_app moves off Docker Hub
-# ABOUTME: from public.ecr.aws anonymously: each is served there, on linux/amd64, the only architecture these nodes have.
-# SUITE: e2e (needs the network: public.ecr.aws is asked for each manifest)
+# ABOUTME: Reads Challenge 2's four games (#991) from their registries anonymously: each image BurritoBot's prompt names
+# ABOUTME: is served at its pinned digest with no credential, and is linux/amd64, the only architecture these nodes have.
+# SUITE: e2e (needs the network: Docker Hub, quay.io and public.ecr.aws are each asked for their manifests)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
-# Why. deploy_app serves an app the room names with no image ("deploy Tron") on LANDING_IMAGE, pinned by digest, and a
-# node pulls it with no credential. A digest the registry stopped serving would leave the room's deployment in
-# ImagePullBackOff while the page said it landed, and an image with no linux/amd64 build would never start
-# (decisions.md, 2026-10-25, "No arm64 image"). The tag is read as well: when it has moved on, the pin still pulls and
-# this prints that it moved, so a refresh of the pin is a choice someone makes. Since #992 deploy_app rewrites any
-# Docker official image named on Docker Hub to public.ecr.aws/docker/library/ (OFFICIAL_MIRROR), which holds only if
-# Amazon's registry carries Docker's official images, the old five pins and others besides: each of OFFICIAL is read
-# there at its tag. verify/test_public_images.py holds the offline half.
+# Why. Since #991 deploy_app applies the image the bot writes and picks none itself, so BurritoBot's system prompt
+# (gitops/workshop-agent/agent.yaml) names four games by exact image and digest: Tron, 2048, Infinite Mario and Tetris.
+# A guest's "deploy Tron" pulls that pin, anonymously, on a node. A digest the registry stopped serving would leave the
+# room's deployment in ImagePullBackOff while the page said it landed, and an image with no linux/amd64 build would
+# never start (decisions.md, 2026-10-25, "No arm64 image"). Each pin is the amd64 image itself, not an index, so its
+# config is read for its platform. Two of the four are on Docker Hub, where a manifest GET counts against the
+# anonymous pull limit of the address it comes from; this reads two such manifests a run. verify/test_public_images.py
+# holds the offline half: the prompt's pins equal images.lock's rows, and deploy_app applies them as written.
+# verify/test_public_images_retry.py lifts opened(), token() and the names they use out of this file and runs them
+# offline.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import pathlib
+import re
 import socket
 import sys
 import time
-import types
 import urllib.error
 import urllib.request
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+from docker_hub import HUB_HOSTS  # noqa: E402
+
+# Docker Hub's names, from the gate's own list, so this file names no Docker Hub host (test_no_docker_hub.py, check 2):
+# the name a reference uses, and the host its v2 API answers on.
+HUB, HUB_API = HUB_HOSTS[0], HUB_HOSTS[2]
 ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
                     "application/vnd.docker.distribution.manifest.list.v2+json",
                     "application/vnd.docker.distribution.manifest.v2+json"))
+INDEX_TYPES = ("application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json")
 failures: list[str] = []
 
 
@@ -35,29 +45,6 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {'PASS' if ok else 'FAIL'}  {name}" + (f"  ({detail})" if detail and not ok else ""))
     if not ok:
         failures.append(name)
-
-
-class _StandInMCP:
-    def __init__(self, *a, **kw):
-        pass
-
-    def get_context(self):
-        # No request in flight, as the real FastMCP has none outside its transport; deploy_app reads the
-        # request's X-Witch-Name through it (#995) and so finds no name here.
-        raise LookupError("a stand-in FastMCP: no MCP request in flight")
-
-    def tool(self, *a, **kw):
-        return lambda f: f
-
-
-sys.modules["tool_audit"] = types.SimpleNamespace(AuditedFastMCP=_StandInMCP)
-spec = importlib.util.spec_from_file_location("workshop_mcp_served", REPO / "gitops/ai-layer/workshop-mcp-server.py")
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
-
-
-def token() -> str:
-    return json.loads(opened(urllib.request.Request(f"https://{REGISTRY}/token/")))["token"]
 
 
 def paced() -> None:
@@ -73,8 +60,8 @@ def paced() -> None:
 # No answer at all is not a no either (#976). Run 17813's tier went red on one TLS handshake to the token endpoint that
 # timed out, and passed on its own a minute later: the registry had said nothing about any image. A timeout or a
 # dropped connection, on the connect, the handshake or the read, is tried again 5 s later, three tries in all. When
-# every try gets no answer, opened() raises Unreachable, which names the registry, and the test fails on that alone,
-# so an unreachable registry never reads as an image that is not served.
+# every try gets no answer, opened() raises Unreachable, which names the registry the request went to, and the test
+# fails on that alone, so an unreachable registry never reads as an image that is not served.
 # The resolver is on that path too (#1029). Run 17937's tier went red on one "[Errno -3] Temporary failure in name
 # resolution" for public.ecr.aws, read as an image that does not pull, and passed 23 of 23 on its own twice. A
 # temporary resolver failure (EAI_AGAIN) is no answer, retried on the same budget. Any other resolver failure (the
@@ -82,14 +69,11 @@ def paced() -> None:
 # find the registry, which is no verdict on an image either.
 # Any other error (an HTTP status that is not 429, a certificate the host cannot verify), or a fifth 429, still fails
 # at once.
+# REGISTRY is the one whose token endpoint takes no scope, token()'s default; since #991 the games are on three.
 REGISTRY = "public.ecr.aws"
 RETRIES_ON_429 = 4
 RETRIES_ON_NO_ANSWER = 2
 NO_ANSWER_WAIT = 5
-# Docker official images as the room might name them on Docker Hub: the five pins #992 dropped, and others no list
-# here ever carried. Each tag is a multi-arch index on Docker Hub, and so on public.ecr.aws.
-OFFICIAL = ("busybox:1.38.0", "alpine:3.23", "httpd:2.4-alpine", "redis:8-alpine", "postgres:17", "memcached:1.6",
-            "rabbitmq:4")
 
 
 class Unreachable(Exception):
@@ -133,89 +117,100 @@ def opened(req: urllib.request.Request) -> bytes:
             time.sleep(min(int(wait), 30) if wait.isdigit() else 2 ** limited)
         except OSError as e:
             if unresolved(e):
-                raise Unreachable(f"{REGISTRY}'s name did not resolve on this host, for {req.full_url}: "
+                raise Unreachable(f"{req.host}'s name did not resolve on this host, for {req.full_url}: "
                                   f"{type(e).__name__}: {e}") from e
             if not no_answer(e):
                 raise
             silent += 1
             if silent > RETRIES_ON_NO_ANSWER:
-                raise Unreachable(f"{REGISTRY} gave no answer to {req.full_url} on {silent} tries, {NO_ANSWER_WAIT} s "
+                raise Unreachable(f"{req.host} gave no answer to {req.full_url} on {silent} tries, {NO_ANSWER_WAIT} s "
                                   f"apart; the last: {type(e).__name__}: {e}") from e
             time.sleep(NO_ANSWER_WAIT)
 
 
-def fetch(tok: str, repo: str, ref: str, accept: str = ACCEPT) -> tuple[str, dict]:
+def token(url: str = f"https://{REGISTRY}/token/") -> str:
+    """An anonymous pull token from a registry's token service (token_url names each one's)."""
+    return json.loads(opened(urllib.request.Request(url)))["token"]
+
+
+def token_url(host: str, repo: str) -> str:
+    scope = f"repository:{repo}:pull"
+    if host == HUB_API:
+        return f"https://auth.{HUB}/token?service=registry.{HUB}&scope={scope}"
+    if host == "quay.io":
+        return f"https://quay.io/v2/auth?service=quay.io&scope={scope}"
+    return f"https://{host}/token/"
+
+
+def split(ref: str) -> tuple[str, str, str]:
+    """The registry host the v2 API answers on, the repository, and the pinned digest."""
+    path, _, digest = ref.partition("@")
+    host, _, repo = path.partition("/")
+    repo = repo.rsplit(":", 1)[0] if ":" in repo.rsplit("/", 1)[-1] else repo
+    return (HUB_API if host == HUB else host), repo, digest
+
+
+def fetch(host: str, tok: str, repo: str, ref: str) -> tuple[str, dict]:
     paced()
-    req = urllib.request.Request(f"https://public.ecr.aws/v2/{repo}/manifests/{ref}",
-                                 headers={"Authorization": f"Bearer {tok}", "Accept": accept})
-    # The digest is the sha256 of the bytes served, computed here: ECR Public sends no Docker-Content-Digest on a GET.
+    req = urllib.request.Request(f"https://{host}/v2/{repo}/manifests/{ref}",
+                                 headers={"Authorization": f"Bearer {tok}", "Accept": ACCEPT})
+    # The digest is the sha256 of the bytes served, computed here: not every registry sends Docker-Content-Digest.
     raw = opened(req)
     return "sha256:" + hashlib.sha256(raw).hexdigest(), json.loads(raw)
 
 
-def blob(tok: str, repo: str, digest: str) -> dict:
+def blob(host: str, tok: str, repo: str, digest: str) -> dict:
     paced()
-    req = urllib.request.Request(f"https://public.ecr.aws/v2/{repo}/blobs/{digest}",
+    req = urllib.request.Request(f"https://{host}/v2/{repo}/blobs/{digest}",
                                  headers={"Authorization": f"Bearer {tok}"})
     return json.loads(opened(req))
 
 
 def unreachable(e: Unreachable) -> None:
-    """The registry gave no answer: this says nothing of the pins still unread, so it fails as that, by name."""
-    print(f"\nFAILED: {REGISTRY} is unreachable from this host, and the images not yet read have no verdict: {e}")
+    """A registry gave no answer: this says nothing of the pins still unread, so it fails as that, by name."""
+    print(f"\nFAILED: a game's registry is unreachable from this host, and the images not yet read have no verdict: {e}")
     for f in failures:
         print(f"  - failed before it stopped answering: {f}")
     sys.exit(1)
 
 
+PROMPT = yaml.safe_load((REPO / "gitops/workshop-agent/agent.yaml").read_text())["spec"]["declarative"]["systemMessage"]
+GAMES = dict(re.findall(r"^\s*- (Tron|2048|Infinite Mario|Tetris): (\S+)$", PROMPT, re.M))
+check("the prompt names the four games", sorted(GAMES) == ["2048", "Infinite Mario", "Tetris", "Tron"], str(GAMES))
+
 try:
-    TOKEN = token()
+    TOKENS = {game: token(token_url(*split(ref)[:2])) for game, ref in GAMES.items()}
 except Unreachable as e:
     unreachable(e)
 except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
-    print(f"FAILED: {REGISTRY} gave no anonymous token: {type(e).__name__}: {e}")
+    print(f"FAILED: a game's registry gave no anonymous token: {type(e).__name__}: {e}")
     sys.exit(1)
 
 try:
-    print(f"== the landing-page image deploy_app pins is served by {REGISTRY}, with no credential ==")
-    for name, ref in (("landing", m.LANDING_IMAGE),):
-        path, _, digest = ref.partition("@")
-        repo, _, tag = path.removeprefix(f"{REGISTRY}/").rpartition(":")
+    print("== each game the prompt names is served at its pin, with no credential, on linux/amd64 ==")
+    for game, ref in GAMES.items():
+        host, repo, digest = split(ref)
+        tok = TOKENS[game]
         try:
-            served, doc = fetch(TOKEN, repo, digest)
+            served, doc = fetch(host, tok, repo, digest)
         except (urllib.error.URLError, TimeoutError, ValueError) as e:
-            check(f"{name}: {digest[:19]}... answers an anonymous pull", False, f"{type(e).__name__}: {e}")
+            check(f"{game}: {host}/{repo}@{digest[:19]}... answers an anonymous pull", False,
+                  f"{type(e).__name__}: {e}")
             continue
-        check(f"{name}: {digest[:19]}... answers an anonymous pull", served == digest, served)
-        if "manifests" in doc:
-            amd64 = [x for x in doc["manifests"] if x.get("platform", {}).get("os") == "linux"
-                     and x.get("platform", {}).get("architecture") == "amd64"]
-            check(f"{name}: the index has a linux/amd64 image", bool(amd64))
-        else:
-            cfg = blob(TOKEN, repo, doc["config"]["digest"])
-            check(f"{name}: the image is linux/amd64", (cfg.get("os"), cfg.get("architecture")) == ("linux", "amd64"),
-                  f"{cfg.get('os')}/{cfg.get('architecture')}")
-        try:
-            now, _ = fetch(TOKEN, repo, tag)
-        except (urllib.error.URLError, TimeoutError, ValueError) as e:
-            now = f"{type(e).__name__}: {e}"
-        moved = "" if now == digest else " (moved on from the pin)"
-        print(f"  INFO  {name}: :{tag} now serves {now[:19]}...{moved}")
-
-    print(f"== Docker's official images are on {REGISTRY}, where deploy_app moves a Docker Hub reference ==")
-    for asked in OFFICIAL:
-        image, refused = m._off_docker_hub(asked)
-        repo, _, tag = image.removeprefix(f"{REGISTRY}/").rpartition(":")
-        check(f"{asked}: deploy_app moves it to {image}", not refused and image.startswith(m.OFFICIAL_MIRROR), refused)
-        try:
-            served, doc = fetch(TOKEN, repo, tag)
-        except (urllib.error.URLError, TimeoutError, ValueError) as e:
-            check(f"{asked}: {image} answers an anonymous pull", False, f"{type(e).__name__}: {e}")
+        check(f"{game}: {host}/{repo}@{digest[:19]}... answers an anonymous pull", served == digest, served)
+        is_index = doc.get("mediaType") in INDEX_TYPES or "manifests" in doc
+        check(f"{game}: the pin is one image, not an index", not is_index, str(doc.get("mediaType")))
+        if is_index or not isinstance(doc.get("config"), dict):
             continue
-        check(f"{asked}: {image} answers an anonymous pull", served.startswith("sha256:"), served)
-        amd64 = [x for x in doc.get("manifests", []) if x.get("platform", {}).get("os") == "linux"
-                 and x.get("platform", {}).get("architecture") == "amd64"]
-        check(f"{asked}: its index has a linux/amd64 image", bool(amd64))
+        try:
+            cfg = blob(host, tok, repo, doc["config"]["digest"])
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+            check(f"{game}: its config answers", False, f"{type(e).__name__}: {e}")
+            continue
+        check(f"{game}: the image is linux/amd64", (cfg.get("os"), cfg.get("architecture")) == ("linux", "amd64"),
+              f"{cfg.get('os')}/{cfg.get('architecture')}")
+        ports = sorted((cfg.get("config") or {}).get("ExposedPorts") or {})
+        print(f"  INFO  {game}: exposes {', '.join(ports) or 'no port'}")
 except Unreachable as e:
     unreachable(e)
 
@@ -225,4 +220,4 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("The landing-page image and Docker's official images deploy_app moves to are served, on linux/amd64.")
+print("The four games BurritoBot's prompt names are served at their pins, on linux/amd64.")

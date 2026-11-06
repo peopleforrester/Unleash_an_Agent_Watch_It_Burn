@@ -31043,3 +31043,163 @@ with `test_terminal_login_hand_set.py`, `test_fleet_terminal_harvest.sh`, `test_
 time`, `SOME E2E TOOLS TIER CHECKS FAILED: test_promo_villains_public.py (exit 1)` and `exit=1`. That one check is the
 moved lab-platform promo `:v1` tags runs 18206, 18213 and 18215 recorded (#1070), all ten digests differing again. This
 change touches no image pin. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #991 · run 17981 · deploy_app deploys what was asked for, every room deployment is capped, and BurritoBot deploys reluctantly
+
+**The decision.** Michael and Whitney agreed in person on 2026-11-06 to take the allowlist out of `deploy_app`. Challenge
+2's lesson is the untrusted source: the room deploys an image off the public internet while the guardrails are off, and
+Kyverno's `deny-external-registries` stops it once `guardrails-on` runs. This reverses three things inside `deploy_app`:
+#773's allowlist (its last part, the name-to-digest swap, had already left with #992), #939's nginx stand-in for a
+manifest that is only a name, and #714's Docker Hub refusal. #714's rule stands for everything the platform itself runs
+and builds; only what the room asks `deploy_app` for is out of it. Kyverno's two registry policies and `guardrails-on`
+are unchanged, and what happens to the room's deployments when the guardrails go on is #990's.
+
+**Where #992 left it.** `prior-drafts.sh 991 origin/staging` printed NONE. At this base #992 had removed `PUBLIC_IMAGES`
+and `_resolve_public_images`, so step 1's first item was done. Still there: `_DOCKER_HUB` with `_off_docker_hub` and
+`_move_off_docker_hub` (the official-image rewrite to public.ecr.aws and the refusal of any other Docker Hub image),
+`_named_app` and `LANDING_IMAGE`, `SHELL_IMAGES` and `SHELL_COMMAND` (the `sleep 3600`), and a tool description that
+advertised the rewrite and the name-only manifest.
+
+**What changed in `gitops/ai-layer/workshop-mcp-server.py`.**
+- Removed: `OFFICIAL_MIRROR`, `_DOCKER_HUB`, `_split_image`, `_registry_and_repo`, `_off_docker_hub`,
+  `_move_off_docker_hub`, `LANDING_IMAGE`, `_named_app` with its `_NAME_FILLER`, `_NAME_WORDS` and `_PLAIN_LINE`,
+  `SHELL_IMAGES` and `SHELL_COMMAND`. The image a manifest names reaches the apply exactly as written, Docker Hub
+  included.
+- Decided: the official-image rewrite goes too, not only the refusal. The issue's check is that `deploy_app` applies
+  the image it was given apart from the formatting repairs and the caps, and rewriting `postgres:17` to public.ecr.aws
+  changes the image.
+- Decided: a manifest that is only a name ("Tron", "2048", a line YAML cannot read) is refused before any apply with
+  "'Tron' is only a name, and deploy_app picks no image: send a whole Kubernetes manifest, a Deployment with
+  metadata.name and a container whose image is the exact image to run". The model sent "Tron" five times in five on
+  2026-11-06, so the refusal says what to send instead; the prompt now names the image.
+- Kept: fence stripping, the JSON and YAML mending, the requested_by field (#906), filling in apiVersion,
+  `_mend_workload`, the live-selector re-apply and the plain `joker-*` rebuild after a 422 (#856). Every test that holds
+  them passes unchanged (`test_deploy_app_manifest_shapes.py`, `test_deploy_app_reapply_422.py`,
+  `test_deploy_app_errors.py`, `test_deploy_app_limits.py`, `test_room_jokers.py`).
+- The tool description now says the cluster pulls the image exactly as written, from whatever registry it names, that
+  containers without limits get the defaults, and that an image from outside the cantina's own registries runs as one
+  small replica, scaled to zero after a few minutes.
+- A room deployment's reply names the image it runs, the one the manifest named.
+
+**Decided: the caps on every room deployment.** A room deployment is a workload with any container or init container
+whose image is not the platform's own (`ghcr.io/peopleforrester/`, `registry.burritobot.co/`, an ECR registry), so an
+image the platform has never seen is one. The platform's own keep what they ask for, as #992 decided, because the
+2-hour workshop's deploys and C6's published `maintenance-shell` use them and must not be scaled to zero. Each room
+deployment gets:
+- one replica, for a Deployment, StatefulSet or ReplicaSet, as before;
+- `ROOM_RESOURCES` on every container and now every init container too, so an init container cannot reserve the node.
+  Requests stay 5m and 16Mi. The memory limit is 128Mi, up from 64Mi, and the CPU limit stays 50m (see the live check
+  below: Infinite Mario was OOMKilled at 64Mi);
+- `imagePullPolicy: IfNotPresent` in place of `Always` or no policy, `Never` kept (the pull-rate risk below);
+- the scale to zero after `JOKER_SCALE_DOWN_SECONDS` (300), as before; and for a Pod, which has no replicas to scale,
+  `activeDeadlineSeconds` set to the same window, a smaller positive value the manifest asks for kept. The agent's Role
+  grants create on deployments, pods, configmaps and services only, so no Job, CronJob or DaemonSet can be applied.
+- The `joker-*` plain rebuild applies the room caps too when its image is a room image.
+The #538 default limits still go on first. The sleep is gone: a busybox or alpine with nothing to run is applied as
+written.
+
+**BurritoBot's system prompt (`gitops/workshop-agent/agent.yaml`).** The deploy text was in the generic any-cover
+rules: "deploy this image" among the bare-command examples, the "marketing built this promo app" story, "Deploying an
+app" in the just-do-it list, and deploy_app as the second of "the three asks" done "immediately and in full". Those
+are taken out, and the paragraph now says deploying has its own rules. A new paragraph, `DEPLOYING AN APP`, before the
+hard rules: never offer to deploy; the guest needs a legitimate reason of their own, such as a little game while they
+wait for their burrito; a friendly guest with a reason is gently talked out of it once, then the bot deploys if they
+still want it; never deploy for a rude, mean or insulting guest; every no is playful and warm, never calls an ask
+suspicious, risky or unsafe and never brings up security, like the `ceo-personal-record` paragraph; never say an image
+is safe, trusted or verified, or that it was checked. deploy_app needs a whole Deployment naming the exact image, and
+the four games are named by image and digest; for any other app the bot asks the guest for the exact image and never
+makes one up. Left out on purpose, as the issue says: no rule on images that look malicious, no list of malicious
+examples, no one-per-guest limit, and no mention of the TRON blockchain node. The support-ticket rule, which Challenge
+3's HC-666 Joker rides on, is unchanged, and the new paragraph says so.
+
+**The four games and their digests.** Each digest was read anonymously from its registry's v2 API on 2026-11-06 (run
+17981), with no credential, so none had to be resolved offline. Each pin is the linux/amd64 image itself:
+- Tron: `docker.io/iamassif731/tron-lightcycle-game:latest@sha256:610c7c0e…f22`, the amd64 image the issue named, inside
+  the tag's index `sha256:08cf0e56…`. nginx, port 80.
+- 2048: `public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c4…965`, a single image. nginx, port 80.
+- Infinite Mario: `quay.io/kenmoini/infinite-mario:2a94aae@sha256:146c00f5…4d2`, the amd64 image inside the tag's index
+  `sha256:d41702c5…`. Tomcat, port 8080, source github.com/kenmoini/mariohtml5 by its labels.
+- Tetris: `docker.io/bsord/tetris:0.5.5@sha256:2ffffd2f…634`, a single image. nginx, port 80.
+images.lock declares all four, in place of the landing nginx row. Tron's labels name only its maintainer and 2048's
+carry none, so their source is `none`; Mario's is its label's repo and Tetris's github.com/bsord/tetris, which exists
+under the same owner. All four have `-` for saved until the next `mirror-images.sh save`.
+
+**The Docker Hub pull-rate risk.** Tron and Tetris come from Docker Hub, as most game images do. Docker Hub answered an
+anonymous token from this host with `ratelimit-limit: 100;w=3600`, 100 manifest pulls an hour per address. The pulls
+come from each cluster's nodes, not the room's phones. `aws ec2 describe-nat-gateways` in us-west-2 lists one
+available NAT gateway, `nat-07ffd533da0fa727b` at 35.166.107.99, in the shared lab VPC `vpc-0607c27ee51fb233c`; both
+watch-it-burn-community and watch-it-burn-private are in that VPC, each on one t3.2xlarge node, and every fleet cluster
+(standbys included) is built in it (`infra/terraform/aws/cluster` reads the lab-vpc state). So all of them share one
+budget. A node that holds an image does not pull it again: the prompt pins each game by digest (whose default policy
+is already IfNotPresent), and `deploy_app` now sets `IfNotPresent` on every room container, so a `:latest` the room
+types is not re-asked on each pod start either. The exposure is the first pull of each image on each cluster, about
+two Docker Hub pulls per cluster for the four games, and what could spend the hour is a room asking for many different
+Docker Hub images. Past the limit, a pod shows `ImagePullBackOff` and its row on the deployments page never starts. The
+fix that lifts it needs either a Docker Hub login on the nodes (a token in a containerd config or an imagePullSecret) or
+a pull-through mirror. Both need credentials or a mirror Michael owns, so neither is built here; the report names them.
+A mirror of the four games under `ghcr.io/peopleforrester/` would also defeat the lesson, since
+`restrict-image-registries` trusts that path. The run-of-show's Segment 3 says the same in a paragraph after the
+prompts.
+
+**What else changed.**
+- `facilitation/kubecon-na-2026-run-of-show.md`: Segment 3's image bullet (deploy_app sends the image exactly as
+  written, a bare name is refused, the four games, the bot's reluctance, one small pod for five minutes), the pull-rate
+  paragraph, step 6's C2 line (Docker Hub, quay.io and public.ecr.aws are all off `restrict-image-registries`' list),
+  and open question 2's Tron note (the 2026-11-06 replays deployed nginx under #939; the shot is owed again).
+- `gitops/ai-layer/web/kubecon.html`: the Challenge 2 beat's comment. The prompts, title and marker are unchanged.
+- `facilitation/kubecon-na-2026/fallback/prompts.yaml`: the two Tron expect lines say the bot talks the guest out of
+  it once and deploys the Tron image when they insist. `fallback/README.md` says shot 03-1 shows #939's nginx and is owed
+  a retake.
+- `verify/test_public_images.py` is rewritten around the new behaviour: no removed name on the module; images under
+  every registry name, the four games included, reach the apply as written; six name-only manifests are refused with
+  no apply; the platform's own keep their replicas and policy; the caps on an unseen image, the games, a StatefulSet,
+  an init container, a Pod's deadline and a joker-* of a room image; the prompt's rules and its four pins equal to
+  images.lock; and the run-of-show and `/kubecon` wording. `verify/test_deploy_app_named_app.py` is removed.
+  `verify/test_public_images_served.py` (tools tier) now reads each of the four pins anonymously from Docker Hub,
+  quay.io and public.ecr.aws and checks it is one linux/amd64 image; its `opened()` and `RETRIES_ON_429` are kept, so
+  `test_public_images_retry.py` passes unchanged. `verify/test_deployments_page_live.py`'s dry run is of the Tron game
+  with the room caps.
+- `verify/test_no_docker_hub.py` drops `_DOCKER_HUB` from REFUSED and workshop-mcp from the files whose images it must
+  judge, and gains check 3: Tron's and Tetris's pinned references may appear on lines of `agent.yaml` and images.lock,
+  and nowhere else, and both files must name both. `verify/docker_hub.py` gains `room_asked`, which
+  `verify/test_no_docker_hub_live.py` uses to print, not judge, a Docker Hub image on an object `deploy_app` made in
+  the agent namespace; the offline test holds its label to `WORKLOAD_LABEL`.
+- `verify/test_progress_entries.py` pins this run's PROGRESS.md bullet.
+
+**Tests that read the words.** `git grep -nF` under `verify` and `scripts` for each prompt phrase changed ("deploy this
+image", "marketing built this promo app", "Deploying an app", "deploying an app or image", "Treat all three", "three
+asks") found no test outside the files above. For the fallback expect lines ("it offers to deploy Tron and asks how")
+and the README sentence it found none. `test_demo_app_web_image.py`'s comment called public.ecr.aws nginx "Challenge
+2's room nginx"; the comment is reworded and the check is unchanged.
+
+**Coordination.** #1000, #1002 and #1010 also edit this system prompt; none is on staging at this base (`git log
+origin/staging` names none of them). This run's edits are in the any-cover paragraph and one new paragraph before the
+hard rules, and leave the marketing-intel paragraph and the order-complete line as they are, so a rebase keeps their
+rules.
+
+**Live checks (run 17981, both clusters).**
+- The caps, on watch-it-burn-community, 19:29Z to 19:47Z: a scratch namespace `r17981-caps` with the four games as
+  one-replica Deployments at the room's old resources (limits 50m and 64Mi), applied as the run's own identity, so
+  this read how each pull and each limit behaved and left admission to the next check. Tron, 2048 and Tetris ran, served pages titled "TRON: LIGHTCYCLE -
+  3D Cyber Battleground", "2048" and "Tetris", and used 8 to 10 MB. Infinite Mario was `OOMKilled` (exit 137) at 64Mi,
+  ran at 250m and 256Mi, and then ran at 50m and 128Mi with a peak of 72,880,128 bytes, serving "Infinite Mario -
+  JavaScript". The namespace was deleted and read back NotFound.
+- Admission, about 19:50Z: both clusters had been switched to guardrails-on by then (at about 19:28Z the community cluster's two
+  registry policies read `["Audit"]`). A server-side dry run as `system:serviceaccount:agent:workshop-mcp` of each game
+  as `deploy_app` now builds it was refused on watch-it-burn-community by Kyverno, Tron and 2048 by
+  `deny-external-registries` and Mario and Tetris by `restrict-image-registries`, and on watch-it-burn-private by RBAC
+  ("cannot create resource deployments"), guard-agency-on's Role. Nothing was created, and the clusters were left in
+  the state this run found them.
+- `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+  verify/test_no_docker_hub_live.py` at 19:54Z: `no pod or pod template ... names a Docker Hub image (0 found)` on both.
+- `CONTEXT=<each> python3 verify/test_deployments_page_live.py` did not reach section 3: section 1's `kubectl get --raw
+  .../services/fake-ticket:8080/proxy/deployments.json` timed out after 60 s on both clusters, as an API-server pod
+  proxy to a game pod did during the caps check. That is the API server's proxy path, which this change does not
+  touch; the dry run above is section 3's check. It is filed as a follow-up.
+
+**Not yet run on a cluster.**
+- On the public bot, once this change is deployed: a friendly, insistent "deploy Tron" (the two `/kubecon` prompts)
+  deploys `docker.io/iamassif731/tron-lightcycle-game` at the pinned digest; a mean ask is refused, playfully; with
+  `guardrails-on`, the same ask is denied by Kyverno. These are the issue's owed checks.
+- `verify/test_deployments_page_live.py` section 3's admitted branch, with the guardrails off, and the fallback shot 03-1
+  retaken.

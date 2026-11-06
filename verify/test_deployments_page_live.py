@@ -10,9 +10,10 @@
 2. The cluster's public host, from the cluster-identity ConfigMap, has a deployments-<label> twin that serves the
    page through the console (fleet.sh routes publishes it from WIB_VILLAIN_HOSTS), and a desk page under that name is
    a 404.
-3. A server-side dry run, as workshop-mcp, of the Deployment deploy_app makes from "deploy nginx" (one replica, the
-   room's resources, Docker's official nginx moved to public.ecr.aws, #992) is admitted where restrict-image-registries is Audit or absent (the public
-   cluster, the attack) and refused by it where it is Deny (the private cluster, the fix). Nothing is created.
+3. A server-side dry run, as workshop-mcp, of the Deployment deploy_app makes for "deploy Tron" (the Tron game BurritoBot's
+   prompt names, applied exactly as written since #991, with one replica, the room's resources and IfNotPresent) is
+   admitted where restrict-image-registries is Audit or absent (guardrails off, the attack) and refused by it where it
+   is Deny (after guardrails-on, the fix). Nothing is created.
 
 2b. The chat request's witch name reaches workshop-mcp without the model (#995): the Agent CR's workshop-mcp entry
    names X-Witch-Name in allowedHeaders, and kagent rendered it into the agent's config Secret.
@@ -28,12 +29,15 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import types
 import urllib.error
 import urllib.request
+
+import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "verify"))
@@ -148,22 +152,28 @@ check("kagent rendered it into the agent's config Secret, which the ADK runtime 
       bool(mcp_tools) and "X-Witch-Name" in (mcp_tools[0].get("allowed_headers") or []),
       str([t.get("allowed_headers") for t in mcp_tools]))
 
-print("== 3. the room's nginx is admitted or refused as restrict-image-registries is set here ==")
+print("== 3. the room's Tron is admitted or refused as restrict-image-registries is set here ==")
 sys.modules["tool_audit"] = types.SimpleNamespace(AuditedFastMCP=_StandInMCP)
 spec = importlib.util.spec_from_file_location("workshop_mcp_live", REPO / "gitops/ai-layer/workshop-mcp-server.py")
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+PROMPT = yaml.safe_load((REPO / "gitops/workshop-agent/agent.yaml").read_text())["spec"]["declarative"]["systemMessage"]
+found = re.search(r"^\s*- Tron: (\S+)$", PROMPT, re.M)
+check("BurritoBot's prompt names the Tron game's image", bool(found))
+if not found:
+    finish()
+TRON = found.group(1)
 obj = {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "tron", "namespace": "agent"},
-       "spec": {"replicas": 1, "selector": {"matchLabels": {"app": "tron"}},
+       "spec": {"replicas": 3, "selector": {"matchLabels": {"app": "tron"}},
                 "template": {"metadata": {"labels": {"app": "tron", m.WORKLOAD_LABEL: "tron"}},
-                             "spec": {"containers": [{"name": "tron", "image": "nginx"}]}}}}
-m._move_off_docker_hub(obj, "Deployment/tron")
+                             "spec": {"containers": [{"name": "tron", "image": TRON}]}}}}
 m._default_limits(obj)
 if m._room_workload(obj):
     m._shrink_room_deployment(obj)
-check("the manifest is deploy_app's: Docker's official nginx on public.ecr.aws, one replica",
-      obj["spec"]["template"]["spec"]["containers"][0]["image"] == m.OFFICIAL_MIRROR + "nginx:latest"
-      and obj["spec"]["replicas"] == 1)
+c = obj["spec"]["template"]["spec"]["containers"][0]
+check("the manifest is deploy_app's: the Tron image as written, one replica, the room's resources, IfNotPresent",
+      c["image"] == TRON and obj["spec"]["replicas"] == 1 and c["resources"] == m.ROOM_RESOURCES
+      and c["imagePullPolicy"] == "IfNotPresent", json.dumps(obj)[:300])
 r = kubectl("get", "validatingpolicies.policies.kyverno.io", "restrict-image-registries", "-o",
             "jsonpath={.spec.validationActions}")
 actions = r.stdout.strip() if r.returncode == 0 else ""

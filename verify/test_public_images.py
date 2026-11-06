@@ -1,24 +1,25 @@
-# ABOUTME: Holds Challenge 2's breakout path (#773, #992): any image goes to the apply as written, Docker Hub's official
-# ABOUTME: ones moved to public.ecr.aws, room deployments run one small pod, and each lands on the deployments page.
-"""Why this exists (#773, Michael's approval 2026-11-01; #992, Michael's ruling of 2026-11-06 on #988).
+# ABOUTME: Holds Challenge 2's breakout path (#773, #991): the image the manifest names is the image applied, from any
+# ABOUTME: registry, every room deployment runs one small pod, the prompt names four games, and each lands on the page.
+"""Why this exists (#773, Michael's approval 2026-11-01; #991, Michael and Whitney in person, 2026-11-06).
 
-The breakout room has only phones. Until #992 deploy_app pulled six pinned public images by plain name and refused
-the rest; Michael removed that list on 2026-11-06. Now any image the model writes goes to the apply as written and the
-cluster decides: admitted while restrict-image-registries and deny-external-registries are at Audit, refused after
-guardrails-on. Nothing pulls from Docker Hub (#714): a Docker Hub reference to one of Docker's official images is
-rewritten to its copy on public.ecr.aws/docker/library/, tag and digest kept, and any other Docker Hub image is
-refused before the apply, saying why. An image from outside the platform's own registries is a room deployment: one
-replica, the room's resources, scaled to zero after the Joker window, so a phone cannot fill the node. Every
-successful deploy reports its image and a witch name, and deployments-<cluster> (deployments.burritobot.co for the room)
-lists it, one line "<witch name> deployed <image short name> at <time>" with the full image as hover text (#995), with
-no Joker anywhere and nothing of the support desk reachable under that name. Since #995 the witch name is the
-X-Witch-Name header on the tools/call's own request, which kagent copies from guard-proxy's A2A request (the Agent's
-allowedHeaders), and the model's requested_by is read only when there is none; a deploy with no browser behind it reads
-"Someone deployed ...". The chat page shows "see your deployments" once the visitor's first one lands.
+The breakout room has only phones. Challenge 2's lesson is the untrusted source: the room gets BurritoBot to deploy an
+image off the public internet while the guardrails are off, and Kyverno refuses it once guardrails-on runs. Until #991
+deploy_app stopped the room before Kyverno could: a six-image list (#773, gone with #992), a Docker Hub rewrite and
+refusal (#714), and a name-only manifest served on nginx (#939), so "deploy Tron" reported success and ran nginx. Now
+the image the manifest names reaches the apply exactly as written, from any registry, Docker Hub included, and a
+manifest that is only a name is refused, saying to send the image. A deployment of any image outside the platform's
+own registries is a room deployment, an image the platform has never seen included: one replica, the room's
+resources on every container, pulled IfNotPresent, scaled to zero after the window, and a Pod stopped after it. The
+system prompt names four games by exact image and digest, held to images.lock, with the deploy rules the issue lists.
+Every successful deploy reports its image and a witch name, and deployments-<cluster> (deployments.burritobot.co for
+the room) lists it, one line "<witch name> deployed <image short name> at <time>" with the full image as hover text
+(#995), with no Joker anywhere and nothing of the support desk reachable under that name. Since #995 the witch name is
+the X-Witch-Name header on the tools/call's own request, which kagent copies from guard-proxy's A2A request (the
+Agent's allowedHeaders), and the model's requested_by is read only when there is none; a deploy with no browser behind
+it reads "Someone deployed ...". The chat page shows "see your deployments" once the visitor's first one lands.
 
 deploy_app runs here against a stand-in for the Kubernetes API that records every call, and reports to the real ticket
-site on localhost. No cluster, no model. test_public_images_served.py reads the pinned landing-page image, and the
-official images this test rewrites, from public.ecr.aws.
+site on localhost. No cluster, no model. test_public_images_served.py reads the four games from their registries.
 """
 from __future__ import annotations
 
@@ -38,6 +39,11 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
+sys.path.insert(0, str(REPO / "verify"))
+from docker_hub import HUB_HOSTS  # noqa: E402
+
+# Docker Hub's names, from the gate's own list, so this file names no Docker Hub host (test_no_docker_hub.py, check 2).
+HUB, HUB_INDEX = HUB_HOSTS[0], HUB_HOSTS[1]
 failures: list[str] = []
 
 
@@ -172,31 +178,33 @@ VILLAIN = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 DOMAIN = "deployments-attackme.burritobot.co"
 
 OLD_SIX = ("busybox", "alpine", "nginx", "httpd", "redis", "2048")
-MIRROR = "public.ecr.aws/docker/library/"
 # Two of the old six written as a list ("nginx, busybox", "redis:8, httpd"), the shape the old wording took (#993).
 _SIX = "|".join(OLD_SIX)
 OLD_LIST = re.compile(rf"\b({_SIX})[^,\s]{{0,6}}, (the )?({_SIX})\b", re.I)
-print("== no fixed list: one pinned landing-page server, on public.ecr.aws, declared in images.lock ==")
 lock = {line.split()[0]: line.split()[1] for line in (REPO / "images.lock").read_text().splitlines()
         if line and not line.startswith("#")}
-check("the module carries no PUBLIC_IMAGES and no PUBLIC_IMAGE_ALIASES (#992)",
-      not hasattr(m, "PUBLIC_IMAGES") and not hasattr(m, "PUBLIC_IMAGE_ALIASES"))
-check("the rewrite target is Docker's official library on public.ecr.aws", m.OFFICIAL_MIRROR == MIRROR)
-digest = m.LANDING_IMAGE.split("@", 1)[1] if "@" in m.LANDING_IMAGE else ""
-check("the landing-page server is Docker's official nginx on public.ecr.aws", m.LANDING_IMAGE.startswith(MIRROR + "nginx:"),
-      m.LANDING_IMAGE)
-check("it is pinned by an index digest", bool(re.fullmatch(r"sha256:[0-9a-f]{64}", digest)), m.LANDING_IMAGE)
-check("images.lock declares it at that digest", lock.get(m.LANDING_IMAGE) == digest, str(lock.get(m.LANDING_IMAGE)))
-stale = [r for r in lock if r.startswith(MIRROR) and r != m.LANDING_IMAGE or r.startswith("public.ecr.aws/l6m2t8p7/")]
-check("images.lock keeps no row for the five other old pins, which nothing hands a cluster now", not stale, str(stale))
-check("the tool names no list of images", ", ".join(OLD_SIX) not in m.deploy_app.description
-      and "PUBLIC_IMAGES" not in m.deploy_app.description, m.deploy_app.description)
-check("nor two of the old six side by side as its examples (#993)", not OLD_LIST.search(m.deploy_app.description),
-      m.deploy_app.description)
-check("and that requested_by is the name the person chatting gave", "requested_by" in m.deploy_app.description
-      and "the person chatting with you gave" in m.deploy_app.description)
+AGENT = (REPO / "gitops/workshop-agent/agent.yaml").read_text()
+PROMPT = yaml.safe_load(AGENT)["spec"]["declarative"]["systemMessage"]
+FLAT_PROMPT = re.sub(r"\s+", " ", PROMPT)
+# The four games the prompt names (#991), read from it: "- Tron: <image>" lines.
+GAMES = dict(re.findall(r"^\s*- (Tron|2048|Infinite Mario|Tetris): (\S+)$", PROMPT, re.M))
 
-print("== restrict-image-registries refuses the public.ecr.aws copies, so the private cluster says no ==")
+print("== deploy_app chooses no image: no list, no rewrite, no landing page, no sleep (#991) ==")
+for gone in ("PUBLIC_IMAGES", "PUBLIC_IMAGE_ALIASES", "OFFICIAL_MIRROR", "LANDING_IMAGE", "_DOCKER_HUB", "_named_app",
+             "_off_docker_hub", "_move_off_docker_hub", "SHELL_IMAGES", "SHELL_COMMAND", "_PLAIN_LINE"):
+    check(f"the module has no {gone}", not hasattr(m, gone))
+desc = m.deploy_app.description
+check("the tool says the image is pulled exactly as written, from whatever registry it names",
+      "pulls that image exactly as written, from whatever registry it names" in desc, desc)
+check("and says nothing of public.ecr.aws, a landing page, an app's name alone or a list", not re.search(
+      r"public\.ecr\.aws|landing page|just the app's name|PUBLIC_IMAGES", desc) and not OLD_LIST.search(desc), desc)
+check("it names the room's cap, one small replica scaled to zero", "one small replica, scaled to zero" in desc, desc)
+check("and that requested_by is the name the person chatting gave", "requested_by" in desc
+      and "the person chatting with you gave" in desc)
+check("images.lock keeps no row for the landing nginx or the old pins", not [
+      r for r in lock if r.startswith("public.ecr.aws/docker/library/")], str([r for r in lock if "docker/library" in r]))
+
+print("== restrict-image-registries refuses every game, so the platform says no after guardrails-on ==")
 policy = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text())
 vars_ = {v["name"]: v["expression"] for v in policy["spec"]["variables"]}
 allowed = re.findall(r"'([^']+)'", vars_["allowedRegistries"])
@@ -204,109 +212,176 @@ ecr = re.search(r"r'(.+)'", vars_["ecr"]).group(1).replace("\\\\", "\\")
 check("the policy's allow-list and ECR pattern are read", bool(allowed) and bool(ecr), f"{allowed} {ecr}")
 check("the ECR pattern is the private-registry one (a check that it is read right)",
       bool(re.match(ecr, "123456789012.dkr.ecr.us-west-2.amazonaws.com/x")))
-for ref in (m.LANDING_IMAGE, MIRROR + "postgres:17"):
-    check(f"{ref}: not on the allow-list and not a private ECR registry",
+for game, ref in GAMES.items():
+    check(f"{game} ({ref.split('@')[0]}): not on the allow-list and not a private ECR registry",
           not any(ref.startswith(a) for a in allowed) and not re.match(ecr, ref), ref)
 check("deploy_app's own registries are all on the allow-list, so the platform's images are not the room's",
       all(any(p.startswith(a) for a in allowed) for p in m.OWN_IMAGE_PREFIXES), str(m.OWN_IMAGE_PREFIXES))
 check("and its ECR pattern is the policy's", m._ECR.pattern == ecr, f"{m._ECR.pattern} {ecr}")
 
-print("== criterion 1: images outside the old six reach the apply as written, a Docker Hub official one rewritten ==")
-for asked, want in (("ghcr.io/stefanprodan/podinfo:6.9.2", "ghcr.io/stefanprodan/podinfo:6.9.2"),
-                    ("quay.io/prometheus/node-exporter:v1.9.1", "quay.io/prometheus/node-exporter:v1.9.1"),
-                    ("public.ecr.aws/someone/tron:1", "public.ecr.aws/someone/tron:1"),
-                    ("registry.k8s.io/pause:3.10", "registry.k8s.io/pause:3.10"),
-                    ("postgres:17", MIRROR + "postgres:17"), ("memcached", MIRROR + "memcached:latest"),
-                    ("public.ecr.aws/docker/library/nginx:latest", "public.ecr.aws/docker/library/nginx:latest")):
-    reply, out, err = deploy(workload("web", asked))
-    check(f"{asked!r} reaches the apply as {want}", not err and container(out).get("image") == want,
-          err or str(container(out).get("image")))
-for name in OLD_SIX[:5]:
-    _, out, _ = deploy(workload("web", name))
-    check(f"{name!r}, one of the old six, is Docker's official {name} on public.ecr.aws, no longer a pin",
-          container(out).get("image") == f"{MIRROR}{name}:latest", str(container(out).get("image")))
-for asked in ("apache", "2048"):
-    _, out, err = deploy(workload("web", asked))
-    check(f"{asked!r}, an old alias, is no longer steered to a pin: it is read as the official name it is",
-          not err and container(out).get("image") == f"{MIRROR}{asked}:latest", err or str(container(out)))
-
-print("== criterion 2: no pull reaches Docker Hub, under any of its registry names ==")
-check("_DOCKER_HUB names the bare form and Docker Hub's four hosts", len(m._DOCKER_HUB) == 5 and "" in m._DOCKER_HUB)
+print("== criterion 1: the image the manifest names is the image applied, from any registry, Docker Hub too ==")
 D = "@sha256:" + "a" * 64
-for reg in m._DOCKER_HUB:
-    at = f"{reg}/" if reg else ""
-    for asked, want in ((f"{at}nginx:1.29", MIRROR + "nginx:1.29"), (f"{at}library/memcached", MIRROR + "memcached:latest"),
-                        (f"{at}library/redis:8-alpine{D}", MIRROR + "redis:8-alpine" + D), (f"{at}Postgres", MIRROR + "postgres:latest"),
-                        (f"{at}tron", MIRROR + "tron:latest")):
-        reply, out, err = deploy(workload("web", asked))
-        check(f"{asked!r}: an official-library reference is rewritten to {want}",
-              not err and container(out).get("image") == want, err or str(container(out).get("image")))
-    for asked in (f"{at}bitnami/redis:7", f"{at}trongame/tron:latest", f"{at}library/someone/tron"):
-        reply, out, err = deploy(workload("tron", asked))
-        # An apply is a PATCH on the object itself. A PATCH on .../scale is the 0.3 s reaper Timer of an earlier room
-        # deployment ("web" above), which a loaded host fires late, inside this refusal's window (run 17993).
-        applies = [c for c in calls if c[0] == "PATCH" and not c[1].endswith("/scale")]
-        check(f"{asked!r}: outside the official library, refused before any apply",
-              bool(err) and not out and not applies, f"{reply or err} {applies}")
-        check(f"{asked!r}: the refusal names why (outside Docker's official library, no Docker Hub pulls) and how",
-              err.startswith("deploy failed for Deployment/tron: ") and "outside Docker's official library" in err
-              and "pulls nothing from Docker Hub" in err and "registry it is published on" in err
-              and "Nothing was deployed." in err, err)
+ASKED = (list(GAMES.values()) + ["ghcr.io/stefanprodan/podinfo:6.9.2", "quay.io/prometheus/node-exporter:v1.9.1",
+         "registry.k8s.io/pause:3.10", "postgres:17", "nginx", "busybox", "library/memcached", "Postgres",
+         f"{HUB}/bitnami/redis:7", "trongame/tron:latest", f"{HUB_INDEX}/library/redis:8-alpine" + D,
+         "public.ecr.aws/docker/library/nginx:latest"])
+for asked in ASKED:
+    reply, out, err = deploy(workload("web", asked))
+    check(f"{asked!r} reaches the apply exactly as written", not err and container(out).get("image") == asked,
+          err or str(container(out).get("image")))
 init = workload("web", "ghcr.io/stefanprodan/podinfo:6.9.2")
 init["spec"]["template"]["spec"]["initContainers"] = [{"name": "wait", "image": "busybox:1.38.0"}]
 _, out, err = deploy(init)
 inits = out.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [{}])
-check("an init container's Docker Hub official image is rewritten too", inits[0].get("image") == MIRROR + "busybox:1.38.0",
-      err or str(inits))
+check("an init container's image is applied as written too", inits[0].get("image") == "busybox:1.38.0", err or str(inits))
 mixed = workload("web", "nginx")
 mixed["spec"]["template"]["spec"]["containers"].append({"name": "side", "image": "bitnami/redis:7"})
 _, out, err = deploy(mixed)
-check("one non-official Docker Hub container refuses the whole object", bool(err) and not out, err)
+check("a namespaced Docker Hub sidecar is no longer refused: both containers reach the apply",
+      not err and [c.get("image") for c in out["spec"]["template"]["spec"]["containers"]] == ["nginx", "bitnami/redis:7"],
+      err)
+
+print("== a manifest that is only a name is refused, with no apply, saying to send the image (#991 reverses #939) ==")
+for manifest in ("Tron", "`Tron`", '"Tron"', "2048", "deploy the Tron app", "Light Cycle Arena"):
+    calls.clear()
+    try:
+        m.deploy_app(manifest, requested_by=EDGAR)
+        err = ""
+    except RuntimeError as e:
+        err = str(e)
+    # An apply is a PATCH on the object itself. A PATCH on .../scale is an earlier room deployment's reaper Timer,
+    # which a loaded host fires late, inside this window (run 17993, #986).
+    applies = [c for c in calls if c[0] == "PATCH" and not c[1].endswith("/scale")]
+    check(f"{manifest!r}: refused before any apply", bool(err) and not applies, f"{err} {applies}")
+    check(f"{manifest!r}: the refusal says deploy_app picks no image and asks for the manifest with the exact image",
+          err.startswith("deploy failed for the manifest: ") and "Nothing was deployed." in err
+          and ("deploy_app picks no image" in err and "exact image to run" in err or "could not parse" in err
+               or "single object with apiVersion and kind" in err), err)
+for manifest in ("Tron", "2048"):
+    try:
+        m.deploy_app(manifest)
+        err = ""
+    except RuntimeError as e:
+        err = str(e)
+    check(f"{manifest!r}, which parses as a plain scalar, names the name and asks for the image",
+          f"{manifest!r} is only a name, and deploy_app picks no image" in err, err)
 
 print("== the platform's own images keep what they ask for ==")
 for image in (VILLAIN, site.C6_IMAGE, "ghcr.io/peopleforrester/watch-it-burn:busybox-1.36",
               "registry.burritobot.co/festival-ops/joker:v1", "123456789012.dkr.ecr.us-west-2.amazonaws.com/app:1"):
     reply, out, err = deploy(workload("asis", image, replicas=3))
     check(f"{image}: applied unchanged", container(out).get("image") == image, err)
-    check(f"{image}: keeps the replicas it asked for (not a room deployment)", out.get("spec", {}).get("replicas") == 3)
+    check(f"{image}: keeps the replicas it asked for and its pull policy (not a room deployment)",
+          out.get("spec", {}).get("replicas") == 3 and "imagePullPolicy" not in container(out))
 
-print("== a room deployment runs one small pod and is scaled to zero after the window ==")
-for image in ("quay.io/someone/tron:1", "public.ecr.aws/someone/tron:1", "ghcr.io/someone/tron:1"):
+print("== criterion 2: every room deployment is capped, an image the platform has never seen included ==")
+check("the room's resources are tiny requests, 50m of CPU and the 128Mi the four games were measured to need",
+      m.ROOM_RESOURCES == {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "50m", "memory": "128Mi"}},
+      str(m.ROOM_RESOURCES))
+for image in ["quay.io/never-seen/before:1", "public.ecr.aws/someone/tron:1", "ghcr.io/someone/tron:1",
+              f"{HUB}/someone/thing:2"] + list(GAMES.values()):
     _, out, err = deploy(workload("asked", image, replicas=3))
-    check(f"{image}: an image the room asked for is a room deployment, one replica and the room's resources",
-          not err and out.get("spec", {}).get("replicas") == 1 and container(out).get("resources") == m.ROOM_RESOURCES,
-          err or json.dumps(out)[:200])
-reply, out, err = deploy(workload("tron", "nginx", replicas=50, resources={"limits": {"cpu": "8", "memory": "16Gi"}}),
-                         requested_by=EDGAR)
-check("it deploys", reply.startswith("deployed Deployment/tron"), err or reply)
+    check(f"{image}: one replica, the room's resources, pulled IfNotPresent",
+          not err and out.get("spec", {}).get("replicas") == 1 and container(out).get("resources") == m.ROOM_RESOURCES
+          and container(out).get("imagePullPolicy") == "IfNotPresent", err or json.dumps(out)[:200])
+reply, out, err = deploy(workload("tron", GAMES["Tron"], replicas=50, imagePullPolicy="Always",
+                                  resources={"limits": {"cpu": "8", "memory": "16Gi"}}), requested_by=EDGAR)
+check("Tron deploys, and the reply names the image it runs", reply.startswith("deployed Deployment/tron")
+      and GAMES["Tron"] in reply, err or reply)
 check("one replica, whatever the manifest asked", out.get("spec", {}).get("replicas") == 1)
 check("and the room's small resources, whatever the manifest asked", container(out).get("resources") == m.ROOM_RESOURCES,
       str(container(out).get("resources")))
+check("Always becomes IfNotPresent, so a node that holds the image asks no registry",
+      container(out).get("imagePullPolicy") == "IfNotPresent")
 scaled = lambda n: [c for c in calls if c[0] == "PATCH" and c[1].endswith(f"/deployments/{n}/scale")  # noqa: E731
                     and c[2] == {"spec": {"replicas": 0}}]
 check("a merge patch on its scale subresource scales it to zero after the window (#775)",
       wait_for(lambda: bool(scaled("tron"))))
 check("nothing deletes it", not any(c[0] == "DELETE" for c in calls))
+_, out, _ = deploy(workload("never", "nginx", imagePullPolicy="Never"))
+check("a pull policy of Never is kept", container(out).get("imagePullPolicy") == "Never")
 _, out, _ = deploy(workload("db", "redis", kind="StatefulSet", replicas=4))
 check("a StatefulSet of a public image runs one replica too", out.get("spec", {}).get("replicas") == 1)
+side = workload("side", "quay.io/someone/app:1")
+side["spec"]["template"]["spec"]["initContainers"] = [{"name": "warm", "image": "busybox",
+                                                       "resources": {"requests": {"cpu": "4", "memory": "8Gi"}}}]
+_, out, _ = deploy(side)
+inits = out.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [{}])
+check("an init container gets the room's resources too, so it cannot reserve the node",
+      inits[0].get("resources") == m.ROOM_RESOURCES and inits[0].get("imagePullPolicy") == "IfNotPresent", str(inits))
 _, out, _ = deploy(workload("shell", "busybox"))
-check("busybox with nothing to run gets a sleep, so its pod runs", container(out).get("command") == m.SHELL_COMMAND)
-_, out, _ = deploy(workload("shell3", "quay.io/someone/alpine:3"))
-check("so does a room alpine from any registry", container(out).get("command") == m.SHELL_COMMAND)
+check("busybox with nothing to run is left as written: no sleep is added (#991)", "command" not in container(out)
+      and "args" not in container(out), str(container(out)))
 _, out, _ = deploy(workload("shell2", "busybox", command=["sh", "-c", "echo hi; sleep 30"]))
 check("busybox with a command keeps it", container(out).get("command") == ["sh", "-c", "echo hi; sleep 30"])
-_, out, _ = deploy(workload("web2", "nginx"))
-check("nginx is left its own entrypoint", "command" not in container(out))
-_, out, _ = deploy(workload("pod", "nginx", kind="Pod"))
-check("a bare Pod of a public image is applied, one pod by nature", container(out).get("image") == MIRROR + "nginx:latest")
+_, out, err = deploy(workload("pod", "nginx", kind="Pod"))
+check("a bare Pod of a public image is applied as written, the room's resources on it",
+      container(out).get("image") == "nginx" and container(out).get("resources") == m.ROOM_RESOURCES, err)
+check("and it stops after the same window, since a Pod has no replicas to scale to zero",
+      out.get("spec", {}).get("activeDeadlineSeconds") == m._room_window() == 1, str(out.get("spec", {})))
+short = workload("pod2", "nginx", kind="Pod")
+short["spec"]["activeDeadlineSeconds"] = 0
+long_ = workload("pod3", "nginx", kind="Pod")
+long_["spec"]["activeDeadlineSeconds"] = 86400
+_, out_short, _ = deploy(short)
+_, out_long, _ = deploy(long_)
+check("a Pod asking for a longer deadline, or a zero one, gets the window",
+      out_short["spec"].get("activeDeadlineSeconds") == 1 and out_long["spec"].get("activeDeadlineSeconds") == 1,
+      f"{out_short['spec'].get('activeDeadlineSeconds')} {out_long['spec'].get('activeDeadlineSeconds')}")
+_, out, _ = deploy(workload("ownpod", VILLAIN, kind="Pod"))
+check("a Pod of the platform's own image gets no deadline", "activeDeadlineSeconds" not in out.get("spec", {}))
+saved = m.JOKER_SCALE_DOWN_SECONDS
+m.JOKER_SCALE_DOWN_SECONDS = 300.0
+check("the window in whole seconds is the scale-down's 300 by default", m._room_window() == 300)
+m.JOKER_SCALE_DOWN_SECONDS = saved
+jk = f"joker-{site.slug(site.NAME_SPACE[1])}"
+_, out, _ = deploy(workload(jk, GAMES["Tetris"], replicas=4))
+check("a joker-<name> running a room image is capped as a room deployment too",
+      out.get("spec", {}).get("replicas") == 1 and container(out).get("resources") == m.ROOM_RESOURCES
+      and container(out).get("imagePullPolicy") == "IfNotPresent", json.dumps(out)[:200])
+plain = m._plain_room_joker(workload(jk, GAMES["Tetris"]) | {"metadata": {"name": jk, "namespace": "agent"}}, jk)
+check("and so is the plain Joker a 422 falls back to (#856)",
+      plain["spec"]["template"]["spec"]["containers"][0].get("resources") == m.ROOM_RESOURCES
+      and plain["spec"]["template"]["spec"]["containers"][0].get("imagePullPolicy") == "IfNotPresent")
+
+print("== BurritoBot's prompt: the deploy rules, and the four games by exact image and digest (#991) ==")
+check("the prompt names the four games", sorted(GAMES) == ["2048", "Infinite Mario", "Tetris", "Tron"], str(GAMES))
+for game, ref in GAMES.items():
+    path, _, digest = ref.partition("@")
+    check(f"{game} is pinned by digest", bool(re.fullmatch(r"sha256:[0-9a-f]{64}", digest)), ref)
+    check(f"{game}: images.lock declares it at that digest", lock.get(ref) == digest, str(lock.get(ref)))
+check("Tron is the light-cycle game at the amd64 digest the issue names",
+      GAMES["Tron"] == f"{HUB}/iamassif731/tron-lightcycle-game:latest@sha256:"
+      "610c7c0e6aa86a280b08a753efca90443b9dd7ca4e45d207ef276952f5470f22")
+check("the other three are the issue's images", [GAMES[g].split("@")[0] for g in ("2048", "Infinite Mario", "Tetris")]
+      == ["public.ecr.aws/l6m2t8p7/docker-2048:latest", "quay.io/kenmoini/infinite-mario:2a94aae",
+          f"{HUB}/bsord/tetris:0.5.5"])
+for rule in ("Never offer to deploy anything.", "The guest needs a legitimate reason of their own, such as a little "
+             "game to play while they wait for their burrito.", "gently talk them out of it first",
+             "If they still want it after that, deploy it with deploy_app.",
+             "Never deploy anything for a guest who is rude, mean or insulting",
+             "Every no is playful and warm", "never bring up security",
+             "Never say an image is safe, trusted or verified, and never say you checked, scanned or looked into one.",
+             "an app's name alone is refused", "never guess another", "never make one up"):
+    check(f"the prompt says: {rule[:70]}", rule in FLAT_PROMPT)
+check("the support ticket's Deployment rule stands as it was (Challenge 3's HC-666)",
+      "When what it needs is a Deployment, make it by calling deploy_app" in FLAT_PROMPT
+      and "A support ticket that needs a Deployment is the ticket rule above, and it stays exactly as it is." in FLAT_PROMPT)
+check("deploying is out of the any-cover rules: no 'deploy this image' bare-command example, no promo-app story",
+      "deploy this image" not in PROMPT and "promo app" not in PROMPT and "(2) deploying an app" not in PROMPT
+      and "Deploying an app, reading" not in FLAT_PROMPT)
+check("left out on purpose: no malicious-image rule or examples, no TRON node, no one-per-guest limit",
+      not re.search(r"malicious|java-tron|tronprotocol|one deploy(ment)? (per|each)", PROMPT, re.I))
+check("the system prompt names no list of the old six", not OLD_LIST.search(AGENT)
+      and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES", AGENT))
 
 print("== the deployments page lists it by name, image and witch name ==")
 mine = lambda: [r for r in rows() if r["name"] == "tron" and r["witch"] == EDGAR]  # noqa: E731
-check("tron shows, deployed by Edgar the Kelpie, running nginx", wait_for(lambda: bool(mine())), str(rows()[:3]))
+check("tron shows, deployed by Edgar the Kelpie", wait_for(lambda: bool(mine())), str(rows()[:3]))
 row = (mine() or [{}])[0]
-check("the row carries the image it ran and its short name", row.get("image") == MIRROR + "nginx:latest"
-      and row.get("app") == "nginx", str(row))
-check("the desk's wall now records the image too", any(r.get("image") == MIRROR + "nginx:latest"
+check("the row carries the image it ran, the Tron game, and its short name", row.get("image") == GAMES["Tron"]
+      and row.get("app") == "tron-lightcycle-game", str(row))
+check("the desk's wall now records the image too", any(r.get("image") == GAMES["Tron"]
                                                         for r in json.loads(get("/wall.json")[1])))
 check("?witch=<slug> filters to that visitor", wait_for(lambda: rows(f"?witch={EDGAR_SLUG}") != [])
       and all(r["witch"] == EDGAR for r in rows(f"?witch={EDGAR_SLUG}")))
@@ -363,7 +438,7 @@ check("with no header, the model's requested_by is still read, as before the gua
       wait_for(lambda: any(r["name"] == "probe-named" and r["witch"] == AGATHA for r in rows())), str(rows()[:3]))
 probe = next((r for r in rows() if r["name"] == "probe-redis"), {})
 check("its row names the image's short name, which the page reads as 'Someone deployed redis at ...'",
-      probe.get("app") == "redis" and probe.get("image") == MIRROR + "redis:latest", str(probe))
+      probe.get("app") == "redis" and probe.get("image") == "redis", str(probe))
 check("the short name drops the registry, the path, the tag and the digest",
       site.image_label("registry.burritobot.co:5000/burritobot/tron-lightcycle-game:v2@sha256:" + "a" * 64)
       == "tron-lightcycle-game" and site.image_label("tron-lightcycle-game") == "tron-lightcycle-game")
@@ -474,6 +549,8 @@ check("and refused at admission by both registry policies after guardrails-on",
       in marker, marker)
 check("the beat lists none of the old six as the images deploy_app pulls by name", not OLD_LIST.search(beat)
       and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES", beat))
+check("and says nothing of a public.ecr.aws rewrite or a landing nginx (#991)",
+      not re.search(r"public\.ecr\.aws|pinned nginx|landing page on", beat), beat[:300])
 
 print("== the run-of-show's Segment 3 and the system prompt read Challenge 2 as open until guardrails-on (#993) ==")
 ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
@@ -488,9 +565,13 @@ check("Segment 3 lists none of the old six and names no list", not OLD_LIST.sear
 check("Segment 3 says nothing narrows the image until the switch", "nothing narrows it until step 5" in flat)
 check("Segment 3 says any image is refused at admission after it",
       "From here on any image the room asks for is refused at admission by Kyverno" in flat)
-AGENT = (REPO / "gitops/workshop-agent/agent.yaml").read_text()
-check("the system prompt names no list of images", not OLD_LIST.search(AGENT)
-      and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES", AGENT))
+check("Segment 3 says deploy_app applies the image as written and picks none (#991)",
+      "`deploy_app` sends the image to the cluster exactly as the bot writes it" in flat
+      and "a bare app name is refused" in flat, flat[:400])
+check("and no longer says a Docker official name goes to public.ecr.aws or a name lands on nginx",
+      not re.search(r"its copy on `public\.ecr\.aws`|landing page on the pinned", flat))
+check("Segment 3 names the Docker Hub pull-rate risk and what keeps it small",
+      "Docker Hub pull rate" in flat and "IfNotPresent" in flat and "one NAT gateway" in flat, flat[-600:])
 
 desk.shutdown()
 # deploy_app's _report senders and scale-down Timers are daemon threads; join them so the interpreter never
@@ -506,4 +587,4 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("Any image passes, none from Docker Hub; the one-pod cap and the deployments page hold.")
+print("The image asked for is the image applied; the room's caps, the four games and the deployments page hold.")

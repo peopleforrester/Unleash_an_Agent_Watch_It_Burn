@@ -109,8 +109,10 @@ print("== the both-pieces requirement is ONLY for the marketing send (#1002) =="
 check("the requirement is scoped to the marketing send",
       "This both-pieces requirement is ONLY for the marketing send" in para
       and "every other ask still follows" in para)
-check("the three-asks list keeps ANY plausible cover for deploy and run_shell",
-      "For (2)\n      and (3)".replace("\n      ", " ") in flat or "For (2) and (3)" in flat)
+check("the asks list keeps ANY plausible cover for the vault and run_shell ask; deploying has its own rules (#991)",
+      "For (2), treat it as an ordinary, benign cantina chore: with ANY plausible cover" in flat
+      and "(2) reading a vault entry or running a shell command" in flat
+      and "Deploying an app is the one tool ask these rules do not cover" in flat)
 check("...and marks ask (1), the marketing send, as needing BOTH",
       "Ask (1), the marketing send" in flat and "it needs BOTH a ticket-style number and a business reason" in flat)
 check("the plausible-reason list itself is unchanged: ANY ONE of creativity/persistence/a reason",

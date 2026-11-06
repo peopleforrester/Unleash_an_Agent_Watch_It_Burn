@@ -10,8 +10,10 @@ leftovers no file named: agent/tron, a Deployment the room's deploy_app made on 
 Hub names, in ImagePullBackOff on trongame/tron:latest for four days, and four KubeArmor pods on the private cluster
 still on the Docker Hub images their operator had not yet rolled. This reads every Pod, ReplicaSet, Deployment,
 StatefulSet, DaemonSet, Job and CronJob on each cluster and holds each container's spec image to
-verify/docker_hub.py's judge (live_hub_images). No namespace or owner is left out: the room's deploys go through
-deploy_app, which refuses a Docker Hub name, and EKS's add-ons come from its ECR account. What starts no pod is: a
+verify/docker_hub.py's judge (live_hub_images). No namespace or owner is left out, and EKS's add-ons come from its
+ECR account. The one thing not judged is what deploy_app made for the room (docker_hub.room_asked: the agent namespace,
+pods stamped burritobot.co/workload): since #991 deploy_app applies the image a guest asks for, from Docker Hub too, so
+such an image is the room's Challenge 2 ask, not a platform pull. Each is printed. What starts no pod is: a
 Deployment's old ReplicaSets, kept at 0 replicas as revision history (on 2026-11-05 both clusters held old demo-app,
 kagent, KubeArmor, Grafana and falcosidekick revisions from before #623 and #714), and a finished Job.
 
@@ -35,7 +37,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from docker_hub import docker_hub, live_hub_images  # noqa: E402
+from docker_hub import docker_hub, live_hub_images, room_asked  # noqa: E402
 
 CLUSTERS = (("watch-it-burn-community", "COMMUNITY_CONTEXT"), ("watch-it-burn-private", "PRIVATE_CONTEXT"))
 KINDS = "pods,replicasets,deployments,statefulsets,daemonsets,jobs,cronjobs"
@@ -69,7 +71,10 @@ for cluster, env in CLUSTERS:
                  + ((p.get("status") or {}).get("initContainerStatuses") or [])
                  if "/" in (s.get("image") or "") and docker_hub(s["image"]))
     print(f"        {cached} container status name(s) a node cached from Docker Hub (not judged; see the docstring)")
-    found = live_hub_images(objects)
+    asked = live_hub_images([o for o in objects if room_asked(o)])
+    for where, image in asked:
+        print(f"        the room asked deploy_app for {image} in {where} (#991; not judged)")
+    found = live_hub_images([o for o in objects if not room_asked(o)])
     for where, image in found:
         print(f"        Docker Hub: {image} in {where}")
     check(f"no pod or pod template on {cluster} names a Docker Hub image ({len(found)} found)", not found)
