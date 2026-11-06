@@ -25604,3 +25604,7 @@ called railway. That is the clone path the act takes. Nothing on either cluster 
 **Not yet run live.** The act above. Its output answers the first two criteria: `wall-check: the wall shows every
 roster cluster and holds no prompts`, `"prompts": []`, and `PASS the prompt sent after the reset reached the wall in
 <n>s`. No code changed in this run.
+
+**The suites (run 17898, at `0019d2c1`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `72 checks ran (the offline suite and 71 tier tests) in 31m41s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
