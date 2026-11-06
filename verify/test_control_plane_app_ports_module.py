@@ -2,6 +2,7 @@
 # ABOUTME: root means them, so 8080 and 3000 open from the security group the control-plane ENIs carry.
 # SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
+# E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 """Why this is not the offline test. Terraform converts a module input to its declared object type and drops any
 attribute the type does not name, without an error, so a misspelt `source_cluster_security_group` would plan a
 rule with no source at all and `terraform validate` would still pass. This test fetches the module the root pins

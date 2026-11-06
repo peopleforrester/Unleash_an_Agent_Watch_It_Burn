@@ -2,6 +2,7 @@
 # ABOUTME: .terraform/) succeeds against its committed lock and leaves the lock byte-for-byte unchanged.
 # SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
+# E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 #
 # #468: the cluster root's lock pinned aws 6.51.0 while the EKS module it resolved needed >= 6.59.0. That only
 # showed on a machine with no older module cached, so this runs every init in an empty temp directory.
