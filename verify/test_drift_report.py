@@ -93,6 +93,11 @@ if key == "configservice describe-configuration-recorders":
     out({"ConfigurationRecorders": acct.get("recorders", [])})
 if key == "configservice describe-configuration-recorder-status":
     out({"ConfigurationRecordersStatus": [{"name": r["name"], "recording": True} for r in acct.get("recorders", [])]})
+if key == "iam get-policy":
+    if opt("--policy-arn") == f"arn:aws:iam::{acct['id']}:policy/watch-it-burn-permissions-boundary" and acct.get("boundary"):
+        out({"Policy": {"PolicyName": "watch-it-burn-permissions-boundary"}})
+    sys.stderr.write("An error occurred (NoSuchEntity) when calling the GetPolicy operation: Policy was not found.\n")
+    sys.exit(254)
 if key == "configservice get-resource-config-history":
     if opt("--resource-id") in acct.get("config_has", []):
         out({"configurationItems": [{"configurationItemCaptureTime": "2026-10-03T09:05:00Z"}]})
@@ -189,6 +194,7 @@ FIXTURE = {
         "creators": {"hand-made-by-hand": ["CreateBucket", "arn:aws:iam::111111111111:user/someone-by-hand"]},
         "recorders": RECORDER,
         "config_has": ["hand-made-by-hand"],
+        "boundary": True,
     },
     "aws1-student31": {
         "id": "222222222222",
@@ -197,6 +203,7 @@ FIXTURE = {
                      STANDBY: {"region": "us-east-1"}, "watch-it-burn-community-b04": {"region": "us-east-2"}},
         "creators": {"watch-it-burn-community-b04": ["CreateCluster", "arn:aws:iam::222222222222:user/operator"]},
         "recorders": [],
+        "boundary": True,
     },
 }
 C002 = "fleet/states/watch-it-burn-attendee-002-drifted"
@@ -369,6 +376,25 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
     check("the creator is the create that succeeded, not a refused attempt on the same name",
           "user/attendee" not in unmanaged)
     check("nor a create of another resource under the same event name", "not-the-creator" not in unmanaged)
+
+    print("== an account with no recorder and no permissions boundary is told to apply the boundary first (#981) ==")
+    iam = [c for c in env.calls("aws") if c[:2] == ["iam", "get-policy"]]
+    check("the full run asked IAM for the boundary in the account without a recorder only, by its ARN, with its "
+          f"profile and region (got {iam})",
+          len(iam) == 1 and "arn:aws:iam::222222222222:policy/watch-it-burn-permissions-boundary" in iam[0]
+          and iam[0][iam[0].index("--profile") + 1] == "aws1-student31"
+          and iam[0][iam[0].index("--region") + 1] == "us-west-2")
+    # The 2026-11-06 report's own case: aws1-student31 to 34 hold no recorder, no trail and no boundary, and the audit
+    # root's data "aws_iam_policy" lookup fails at plan there, so "apply infra/terraform/aws/audit" alone is wrong.
+    env.fx["aws1-student31"]["boundary"] = False
+    rc, out = env.run()
+    config = section(out, "## AWS Config")
+    check("its line names the boundary root, then the audit root",
+          "aws1-student31: NO recorder in us-west-2, and no watch-it-burn-permissions-boundary: apply "
+          "infra/org/boundary, then infra/terraform/aws/audit, for this account" in config)
+    check("it is still one account without Config, and the exit is still findings",
+          rc == 2 and "1 account(s) without a Config record" in out)
+    env.fx["aws1-student31"]["boundary"] = True
 
     print("== drift is what the refresh found, not what the plan would change ==")
     (env.tf / f"{C002}.tfstate").rename(env.root / "parked-002.tfstate")

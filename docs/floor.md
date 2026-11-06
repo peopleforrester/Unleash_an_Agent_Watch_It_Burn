@@ -175,7 +175,10 @@ writes a state. Each run covers three things:
    `infra/terraform/drift/known-unmanaged.yaml`. Whatever is left is a finding. Each finding shows who
    created it (from CloudTrail event history) and whether AWS Config has recorded it.
 3. **Whether the record is on.** Every account must have a Config recorder in us-west-2 that is
-   recording `AWS::S3::Bucket` and `AWS::EKS::Cluster`.
+   recording `AWS::S3::Bucket` and `AWS::EKS::Cluster`. For an account with no recorder, the report
+   also asks IAM for `watch-it-burn-permissions-boundary`. The audit root looks that policy up by name,
+   so where it is missing the line says to apply `infra/org/boundary` first and the audit root after it.
+   On 2026-11-06 aws1-student31 to aws1-student34 had neither (#981).
 
 The accounts are `WIB_ATTENDEE_ACCOUNTS`, read from `fleet.sh` when the environment does not set it, so
 the report covers the accounts the fleet builds in. Run it on the machine that holds the states. Anywhere

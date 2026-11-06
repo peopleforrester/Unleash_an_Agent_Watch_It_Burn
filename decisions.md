@@ -26346,3 +26346,50 @@ listening on <port> after 0 s".
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17911/e2e-tools.log`. The two
 runs before it are `e2e-tools.first.log` (stopped after `test_finale_cap.py` failed offline) and
 `e2e-tools.second.log` (offline green, the tier 71 of 72 on the collector start above).
+
+## 2026-11-06 · #981 · run 17961 · The first daily drift report triaged: two clusters are #979's, four accounts need the boundary before the audit root
+
+**Context.** #981 is the "Fleet drift report" issue that `scheduled-drift.sh` opened on tanjiro-wsl2 at 11:17Z, its
+first cron post (#955). It lists six findings: watch-it-burn-community and watch-it-burn-private unmanaged in
+accen-dev, and no Config recorder in aws1-student31 to aws1-student34. `bash verify/prior-drafts.sh 981 origin/staging`
+printed NONE, and the issue had no comments. Its body gained an Acceptance criteria section.
+
+**The two clusters are #979's.** #979, open and being worked, asks for exactly these two to be imported into a cluster
+state or registered in `known-unmanaged.yaml`, and also covers accen-dev's lab VPC and boundary states that this
+report's Notes say are missing. Nothing for them is done here, so the two runs do not race on the same files.
+
+**The four accounts, read from AWS on tanjiro-wsl2 at 17:05Z** (through `sources-elevated fleet tanjiro-wsl2`, read-only
+calls). Each of aws1-student31 (948731545609), 32 (891472436879), 33 (250699659274) and 34 (783241407859) has no
+Config recorder in us-west-2, no CloudTrail trail and no EKS cluster, and `iam get-policy` for
+`watch-it-burn-permissions-boundary` answers NoSuchEntity. accen-dev has the policy (created 2026-10-24), the
+`watch-it-burn` trail and the two clusters. The KubeCon roster and every standby in `backups.tsv` live in accen-dev,
+so the student accounts hold nothing today. They stay in `WIB_ATTENDEE_ACCOUNTS`, and #795's step 2 asks for the
+audit root in each fleet account after its boundary, so the fix is to apply both roots there, not to drop the
+accounts from the report.
+
+**What was wrong in the report: its fix for those four would fail.** The report told each of them "apply
+infra/terraform/aws/audit for this account". The audit root reads the boundary with `data "aws_iam_policy"`, so in an
+account without it that apply fails at plan with "no matching IAM Policy found". `check_config` now asks IAM for the
+policy by its ARN when an account has no recorder, and where it is missing the line reads "NO recorder in us-west-2,
+and no watch-it-burn-permissions-boundary: apply infra/org/boundary, then infra/terraform/aws/audit, for this
+account". The call is made only for an account without a recorder, so a healthy account costs no extra call.
+`verify/test_drift_report.py` holds both forms of the line and that the call names the account's ARN, profile and
+region; on the old report its two new checks failed. docs/floor.md's item 3 says the same.
+
+**Live.** The changed report, piped to python3 on tanjiro-wsl2 without writing a file there, run with
+`--accounts aws1-student31,aws1-student32,aws1-student33,aws1-student34 --region us-west-2` and no `--post`, printed
+`4 finding(s)`, `0 unmanaged resource(s)`, the new line for each of the four, and exited 2. While reading the
+checkout there this run also ran `git fetch -q origin staging` in it, which moved only its remote-tracking ref; the
+checkout is still detached at `ec03eb5f` with its files unchanged.
+
+**Not done here: the applies.** The states belong on tanjiro-wsl2 (docs/floor.md, "The schedule"), and a run writes
+no file outside its clone, so the boundary and audit applies with their refresh-only settles are this run's
+escalation, as the accen-dev rebuild was for run 17843. The command, run in
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, stops on an account that already has a recorder or a
+boundary, and ends on a report of the four accounts. The checkout's `boundary/main.tf` differs from staging by four
+comment lines only, and `audit/main.tf`, the boundary template and `event.sh` match staging by sha256. Its cost is the
+audit root's, cents a day per account. After it, the four Config lines read `ok: recorder watch-it-burn is recording`
+and Clean states lists `boundary` and `audit` for each of the four.
+
+**Not yet run on a cluster.** The escalated apply on tanjiro-wsl2, then `python3 infra/terraform/drift/drift-report.py
+--region us-west-2` there, expected to list only #979's two clusters until #979 lands.
