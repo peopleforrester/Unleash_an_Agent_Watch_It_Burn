@@ -27476,6 +27476,8 @@ idle host. It now calls `friendly_attendee_name` straight, with no fork per slot
 (300 s), and an expression that runs past it fails as `FAIL fleet.sh did not answer '<expr>' within <n> s`, which
 a copy with the bound at 0.001 s printed. The test passes, still with 720 distinct slots.
 
+**The suites (run 17950, at `3ca01bec` on staging `629c53ea`).** `bash verify/run-e2e-tools.sh` printed `308 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran (the offline suite and 72 tier tests) in 49m17s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17950/e2e-tools.log`; the two before it are `e2e-tools.first.log` (stopped by the job limit) and `e2e-tools.second.log` (the `test_round_names_retired.py` timeout above). The prose gate printed `prose gate: pass`.
+
 **Not yet run on a cluster.** Nothing is owed for #900: the probe, the paraphrase beat and input-guard.sh ran live on
 the deployed change. input-guard.sh is a verify script run from this checkout, not from a cluster.
 
