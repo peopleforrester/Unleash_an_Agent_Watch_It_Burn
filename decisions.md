@@ -25555,3 +25555,8 @@ added.
 **Suites (run 17879, at `7446279f`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`301 tests ran`, `ALL
 OFFLINE RENDER-GATE TESTS GREEN`, test_otelcol_local.py among them) and then the tier: `72 checks ran (the offline
 suite and 71 tier tests) in 30m35s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The prose gate printed `prose gate: pass`.
+
+**Ported by run 17892.** Run 17879 ended claim-stale, so its two commits (`7446279f`, `ff4a0652`) never reached
+staging. `bash verify/prior-drafts.sh 969 origin/staging` printed CLEAN for `origin/agent/969-17879`: staging had
+only appended to decisions.md since its base `1503aaa9`. Run 17892 cherry-picked both commits unchanged; nothing in
+the code differs from the draft. `python3 verify/test_otelcol_local.py` passed its 15 checks in 8 s on the port.
