@@ -36219,3 +36219,24 @@ wall-clock, and about 120 s of that is vLLM's own once the 164 s above is taken 
 against 143 s on community and 179 s on private, since it shared the node's bandwidth with the rest of the
 platform's first pulls. The platform's requests without vLLM come to about 5775m CPU, so 1500m leaves 635m.
 
+**The teardown.** `WIB_APPLY=1 ./fleet.sh down watch-it-burn-attendee-099` ran from 19:05:52Z to 19:34:56Z. Terraform
+printed "Destroy complete! Resources: 71 destroyed." Its backstop swept one load balancer and its two target groups,
+three EBS volumes and two security groups that the in-cluster drain had not finished, and deleted the log group
+`/aws/eks/watch-it-burn-attendee-099/cluster`. It exited 1 on one line, `deregister:watch-it-burn-attendee-099`,
+because `labctl` is not on this host's PATH. The bare build never registered the cluster (`WIB_NO_BOOTSTRAP=1`
+skips the ingest), so there was nothing to deregister. Its routes step found no apex-agenticburn checkout beside
+this worktree, so it wrote, pushed and reloaded nothing. Afterwards `aws eks list-clusters` listed only the two
+shared clusters, `wib-attendee-099` was gone from IAM, no running instance carried the cluster's tag, and
+`./cleanup-log-groups.sh` found "0 orphan(s)". The stand-in VPC state, the kubeconfig and the logs stay under the
+gitignored `infra/terraform/fleet/states/`.
+
+**Not yet run on a cluster.** A build from staging once this branch is promoted, with no hand step:
+`CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference` on a fresh t3.2xlarge, timed to every Application
+Healthy, then `CONTEXT=<ctx> python3 verify/local-inference-live.py`. It should come in near 1640 s with vllm-qwen3
+Synced on its own. It checks the promoted manifest; the numbers above do not wait on it.
+
+**The suites (run 17970, at `decbe1fa`).** `bash verify/run-e2e-tools.sh` printed `308 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `73 checks ran (the offline suite and 72 tier tests) in 55m10s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. `verify/test_platform_baseline.py`'s negative case for "measured: true with no numbers"
+now removes vllm's `build_seconds` and `requests` itself, since the entry is measured and the case can no longer
+count on them being absent. No dependency was added.
