@@ -21965,6 +21965,11 @@ committed it exits 0 with 72 PASS lines.
 
 **Not yet run on a cluster.** Nothing is owed: the test reads only PROGRESS.md.
 
+**The suites (run 17763, at `9f89face`).** `bash verify/run-e2e-tools.sh` printed "63 checks ran (the offline suite
+and 62 tier tests) in 37m20s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite, `bash
+verify/run-tests.sh`, printed "279 tests ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_progress_entries.py`
+among them.
+
 No dependency was added.
 ## 2026-11-05 · #921 · run 17641 · guard-proxy's /prompts gains `witches`, each prompt's witch name at its index; the change goes to guard-proxy-agenticburn
 
