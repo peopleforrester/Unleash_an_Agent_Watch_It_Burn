@@ -26402,3 +26402,13 @@ the change it prints nothing and exits 1. The names still in these files stand a
 **Not yet run on a cluster.** The reworded sheet and tool description reach the clusters once hecaton promotes this
 run. The live check that a plain-language ask for an image outside the old six lands with the guardrails off and is
 refused after `guardrails-on` is #994's.
+
+**Read live, read-only.** `kubectl get validatingpolicy restrict-image-registries deny-external-registries` on
+watch-it-burn-community and watch-it-burn-private printed `["Audit"]` for both policies on both clusters, the
+guardrails-off state in which the reworded sheet and Segment 3 say any image lands. Nothing on either cluster was
+changed.
+
+**The suites (run 17938, at `2009025b`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`307 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
+59m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
+added.
