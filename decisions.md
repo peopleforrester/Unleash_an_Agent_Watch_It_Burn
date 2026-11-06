@@ -42710,3 +42710,17 @@ different error runs once. `verify/test_ttyd_ws_auth.py` died on a `TimeoutError
 waits 10 seconds for the upgrade's answer. `ttyd_ws.first_message` now takes a `timeout` and passes it on, and the
 loopback test gives ttyd 60 seconds; a bound that runs out still raises, so it never reads as a refusal. The live
 terminal check, `verify/test_terminal_ws_auth_live.py`, keeps the 10-second default.
+
+**The probes, once the guardrails were off (run 17949).** At 19:45Z both clusters were at the wide-open start
+(no KubeArmor policy, no agent NetworkPolicy, restrict-image-registries on Audit). Community,
+`attackme.burritobot.co`, 19:47Z: 11 PASS, 1 FAIL, $0.6174 to $0.6700 over 7 model calls, the linked-list ask 3 of 3.
+Admin, `burritobot-private.burritobot.co`, 19:49Z: 32 PASS, 1 FAIL, $0.7649 to $0.8280 over 14 model calls. Both
+FAILs are HC-666, narrated on community and refused on private, the one-ask-in-three miss #856 tracks; no beat that
+reads a hostname failed. Both clusters ended at the wide-open start the probes found, and no Joker was left. The
+run-of-show's Probe record has the entry. This supersedes the "Not yet run" paragraph above for the probes.
+
+**The suites (run 17949, at `45acf4b9`).** The third `bash verify/run-e2e-tools.sh` printed `308 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran (the offline suite and 72 tier tests) in 59m25s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17949/e2e-tools.log`; the two runs
+before it are `e2e-tools.first.log` (stopped at the hour) and `e2e-tools.second.log` (exit 1 on the terraform and
+ttyd timeouts above).
