@@ -127,7 +127,7 @@ with tempfile.TemporaryDirectory() as tmp:
             return r.status
 
     try:
-        deadline = time.time() + 30
+        deadline = time.time() + collector_render.COLLECTOR_START_S
         while True:
             try:
                 post({"resourceSpans": []})

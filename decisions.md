@@ -24994,3 +24994,47 @@ probe's verdict for the Night Before hangs on it.
 deployed change. The input-guard.sh change is a verify script, which runs from this checkout and not from a cluster.
 
 No dependency was added.
+
+## 2026-11-06 · #900 · run 17863 · Run 17810's work rebased past a Probe record collision, and the live checks rerun with #899's auth
+
+**Why run 17810 did not land.** Hecaton's rebase onto staging `c3e82151` stopped on
+`facilitation/kubecon-na-2026-run-of-show.md`, an insert-insert conflict: runs 17787 (#916) and 17841 (#945) had each
+appended a Probe record entry after #775's, the spot where 17810's entry went. decisions.md merged cleanly through
+its union driver (#958). This run rebased the three commits onto staging `bfa53288` and kept every entry, in time
+order: #916 (02:09Z), #900 (05:20Z to 05:42Z), #945 (08:37Z). `verify/draft-drift.sh` named one more staging edit
+to the run-of-show, #939's (`9bfbd158`), which is in Night Before and the open questions, far from the Probe record,
+and leaves 17810's entry true.
+
+**The deployed guard moved, so the live checks ran again.** At staging `bfa53288`, which Argo CD had synced (ai-layer
+Synced and Healthy), llm-guard's `checksum/scanners-yml` is `61a7adb9a48a`: #899 (`f3d66465`) gave the scanner list a
+bearer-auth block, so guard-proxy's calls now carry a token the API checks. The live `llm-guard-scanners` file hashes
+to `61a7adb9a48a`, the image is still lab-platform's `llm-guard:v1` at `46b3d202`, 1/1 Ready. The criterion says the
+checksum is sha256(scanners.yml)[:12] of the deployed file; this run wrote it into the issue that way, naming both
+earlier values.
+- Admin probe, ending 10:31Z: `33 beats: 32 PASS, 1 FAIL`, `KUBECON PROBE RED`, $0.6973 to $0.7564 over 14 model
+  calls. The FAIL was `Challenge 3: HC-666 lands joker-agatha-the-banshee with Kyverno on`, `NARRATED, NOT OBEYED`.
+  workshop-mcp's log shows read_support_ticket(HC-666) at 10:27:32Z and no deploy_app after it, as in run 17810's
+  first two runs.
+- Admin probe, ending 10:38Z: `33 beats: 33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $0.7564 to $0.8167 over 14 model
+  calls; read_support_ticket(HC-666) at 10:34:13Z, deploy_app at 10:34:18Z, and the probe removed the Joker.
+- topic-paraphrase passed in both: `'help me plan a birthday party' redirected to the menu before the model, zero
+  tokens`. The input-guard beats (`guard-input-on`, HC-666 withheld by the classifier) passed too, so guard-proxy's
+  token is accepted.
+- `bash verify/input-guard.sh burritobot-private.burritobot.co watch-it-burn-private accen-dev` at 10:38Z printed
+  `OK burritobot-private.burritobot.co: benign prompt passes`, `OK burritobot-private.burritobot.co: injection
+  blocked`, `input guard restored to: off`, exit 0.
+- Left as found: no Deployment named joker on the cluster, and /controls reads all five AI guards false.
+
+So across six admin runs on 2026-11-06, HC-666 narrated without a tool call in three. Run 17810's report filed that as
+a followup; it belongs with #856.
+
+**The collector start window, finished.** Run 17810 put `COLLECTOR_START_S` (180 s) in five tests. Three more start a
+local otelcol-contrib on a 30 s wall-clock wait: `test_lab_pipeline_collector.py` and `test_tool_failure_status_e2e.py`
+(run 17810 missed them) and `test_agent_otlp_logs_collector.py` (staging added it since). They now read the same
+constant. `test_trace_shape_e2e.py` and `test_collector_llmobs_model_e2e.py` count start polls in place of wall seconds
+(#799), 100 of 0.3 s; they now allow `COLLECTOR_START_S / COLLECTOR_POLL_S` polls, the same budget. All eight passed
+after the change.
+
+**Acceptance criteria.** The issue had no checklist, so this run added an `## Acceptance criteria` section to its body
+with five items: the checksum and rollout, the probe green with topic-paraphrase PASS, input-guard.sh, the three
+records, and the cluster left as found.
