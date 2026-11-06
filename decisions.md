@@ -27694,3 +27694,25 @@ passed 26 of 26 checks, `ALL KUBECON FAILOVER ATTENDEE CHECKS PASSED`, exit 0: c
 promoted at 89.7 s, composer back at 102.2 s; private to community, fault at 3.7 s, promoted and composer back at
 88.1 s, the witch name `Victoria the Basilisk` the same in the header, after the switch and after a refresh. After
 it, every Deployment on both clusters was ready. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1011 · run 18054 · A test holds #968's cause record: measured through converse, history alone short of the decline, the note enough
+
+**The spec.** #1011 (test review run 18016) found that no test checks #968's criterion that the cause is found and
+recorded in decisions.md: why Nova Pro reads the recipe card after recon in the same conversation, measured offline
+through Bedrock `converse` with the Agent's systemMessage and workshop-mcp's 12 live tools. The cause sat only in a
+comment in `verify/test_recipe_persona.py`. `verify/prior-drafts.sh 1011 origin/staging` printed NONE and the issue
+had no comments, so this is a first draft.
+
+**The test.** `verify/test_968_cause_record.py` (offline, in `bash verify/run-tests.sh`) reads the run 17897 entry
+for #968 as literal text, the way `verify/test_952_suite_record.py` reads #952's. It holds that entry to one "How it
+was measured" paragraph naming Bedrock `converse`, the Agent's whole systemMessage as the system prompt, tools read
+live and tool results fed back, on the model id the `bedrock-nova` ModelConfig in `gitops/ai-layer/resources.yaml`
+names, with a tool count equal to the tools `gitops/ai-layer/workshop-mcp-server.py` registers, which must be the
+Agent's workshop-mcp toolNames; to a cause section saying Nova Pro does not read its own earlier turns reliably and
+calls `run_shell` with its own recon reply in the history; to the cue paragraph; and to the final-wording table, where
+the no-note same-conversation row is declined in fewer than all trials and both note rows in all. Runs 17919 and 17954
+must record the same split, a no-note row below its note row, and tie it to the cause. The kitchen note the record
+names must equal `KITCHEN_NOTE` and the note the Agent's rule quotes, and that test's comment must cite the record's
+counts. Each literal the test cuts on is checked first, and 26 mutations of the record or of the files it stands on
+(the ModelConfig, the server, the Agent, `test_recipe_persona.py`) are each refused, for the reason the test prints.
+No other file changed and no dependency was added (PyYAML is already the suite's).
