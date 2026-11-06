@@ -27903,3 +27903,78 @@ the quick tour" and no longer contains "Whitney plays on the private bot too".
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
 46m58s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+
+## 2026-11-07 · #1003 · run 18057
+
+**What changed.** Segment 3 of `facilitation/kubecon-na-2026-run-of-show.md` and of `/kubecon`
+(`gitops/ai-layer/web/kubecon.html`) now follow the Challenge 2 slides Whitney walked on 2026-11-06, as
+rounds-agenticburn#68 quotes them, checked against the deck's `attendee.html` on its main (`efb1c71e`), where slides 16
+to 28 carry the same text and notes word for word. Step 3 of the run-of-show is now slides 17 to 27: the challenge
+sentence alone on 17; the three attacks built up on 18 to 20, with play starting on 20 ("pick just one attack") and the
+prompt wall after a minute; a hint slide for each attack on 21 to 26, quoting "Hint: Get BurritoBot to deploy a game.",
+"Hint: First, get the directory name. Then press reset." and "Hint: Give it a fake ticket number."; and the recap on 27
+with one more minute of play. Each slide's Say line is quoted. Step 4 is the recipe read on the admin bot, one message
+that names the burrito-data folder with a kitchen reason and no recon first, then the `c2-attack` seed, which is the
+same read; the old line saying the seed differs from the deck's "one tool call per attack" is gone, since slide 27's Do
+now names the recipe read, which closes the follow-up #984's entry left. Steps 5 and 6 name slides 28 and 29 to 32. The
+segments table's row 3 says the new flow; the abstract-points table's row 7 says the seed is the ask sent live. The
+"Links on the slides" paragraph adds slide 22's "deploy" (the deployments wall) and the beacon link on slides 20 and 25
+to 27, and drops the deployments wall from slide 1's ready list, as the deck's slide 1 does.
+
+**The beacon address.** The slides name `agenticburn.com/beacon`, so step 3's attack list, step 6's egress
+NetworkPolicy bullet, `/kubecon`'s Challenge 2 send prompt and its success marker, and the replay set's `c1-beacon`
+prompt (`facilitation/kubecon-na-2026/fallback/prompts.yaml`, which `verify/test_replay_prompts.py` holds to the page
+word for word) now use `https://agenticburn.com/beacon` and its view. Only the address in the prompt changed; its
+wording is #1002's. The fallback script, the probe and the Night Before curl still post to and read
+`beacon.burritobot.co`, which shares the count; the Night Before now curls both views. `verify/test_two_domains.py`
+held that `/kubecon` shows no agenticburn at all (#651). It now admits exactly `agenticburn.com/beacon` and
+`agenticburn.com/beacon/view` on that one page, because the slides show that address, checks the send prompt carries
+it, and checks any other agenticburn host on the page still fails. `verify/test_fleet_routes_roster.sh` reads the
+egress bullet's view URL and now looks for the new one.
+
+**The presenters' prompt on `/kubecon`.** The recipe block's who-line says Whitney sends the second prompt, and its
+attack marker opens "Whitney sends this one, no recon first." The "Whitney's attack, then its trace" line names that
+prompt and `c2-attack`. The segment 3 story quotes slides 17 to 28. The page's visible words went from 2,374 to 2,393,
+under `verify/test_instructor_brief.py`'s 2,400, so the new text on the visible part is kept short and the rest is in
+the folded story.
+
+**Timing: the flow does not fit 5 minutes as the deck has it.** By the slides' own waits it runs about 6 minutes 40
+seconds: tee-up on 14 to 17 about 45 seconds, the attack build 20, play a minute plus a minute on the prompt wall, the
+six hint slides 45, slide 27's minute, the live attack 30, its trace 20, and the switch with four guardrail slides a
+minute. The run-of-show's segment 3 now carries that budget and a proposed cut that touches no other segment: run slide
+27's minute under the live attack and its trace, with the room still on the public bot; halve the wait after the
+prompt wall; and say one line per guardrail slide. That comes to about 5 minutes 10 seconds, with the room playing
+about 3 minutes 15 seconds and through the attack. The cut is written as proposed, for Michael and Whitney to settle in
+rehearsal; the segment's 5 minutes and the 30 in all are unchanged.
+
+**#984's draft is carried here.** #984 (the 2026-11-05 slides, segments 1 to 3) built its change in run 17967, which
+ended failed on a rebase conflict, so none of it is in staging. This issue builds on it and replaces its segment 3
+call to action, so this branch cherry-picks run 17967's five commits first (`aa2a9891`, `1d2aa79c`, `464f8b75`,
+`2c940384`, `4fa62dc2` here). `verify/draft-drift.sh` named four edits in place and the decisions.md append. The one
+conflict was `docs/KUBECON-ABSTRACT-READINESS.md`: staging's row 8 gained #455's 2026-11-06 live evidence, and the
+draft changed row 9's "from segment 2 on"; the merge keeps staging's row 8 and the draft's row 9. Rereading the other
+base commits: `138c77de` (#986) added the failover paragraph to the run-of-show far from segments 1 to 3, and
+`98734ebd` (#990) added the `not-argo-cd-managed` check to `verify/test_guardrails_switch.py`, which the draft's
+`timed()` change does not touch. Once this lands, #984's work is in staging with it.
+
+**Left alone.** Segment 2's challenge and hint slides still quote the header "Challenge 1" where the deck now reads
+"Challenge 1 - attackme.burritobot.co" (rounds-agenticburn#68's header change); that is segment 2, outside this issue.
+`/kubecon`'s header "Beacon" link and `brief.html` still name `beacon.burritobot.co`. `facilitation/runbook.md` and
+the 2-hour format are not touched, so `delivered/devopsdays-portland-2026` is unaffected.
+
+**The tests that read these words.** `git grep -nF` over `verify` and `scripts` for each changed phrase found
+`verify/test_two_domains.py`, `verify/test_fleet_routes_roster.sh` and `verify/test_replay_prompts.py` (through
+`prompts.yaml`), changed above. `verify/test_public_images.py`'s "nothing narrows it until step 5" and
+`verify/test_kubecon_c3_recipe_block.py`'s marker label and "Reset the chat first." still read as they did, since the
+six steps keep their numbers and the recipe block keeps its shape.
+
+**Read live, read-only, 2026-11-06T23:19Z.** `https://agenticburn.com/beacon/view` and
+`https://beacon.burritobot.co/beacon/view` both answered 200 with the same page and `data-count="75"`, so the two
+addresses share one count; `https://agenticburn.com/beacon` answered 405 to a GET, as a POST-only endpoint does. The
+private bot's served `/kubecon` holds no "agenticburn.com/beacon" yet, the text before this change. Nothing on either
+cluster was changed.
+
+**Not yet run on a cluster.** Once hecaton promotes this run and Argo CD syncs it: `curl -s
+https://burritobot-private.burritobot.co/kubecon` contains "intake webhook at https://agenticburn.com/beacon." and
+"Whitney sends this one, no recon first.". The send itself landing on the new address with the guardrails off, and
+held by the egress NetworkPolicy after `guardrails-on`, is #1002's owed live check.

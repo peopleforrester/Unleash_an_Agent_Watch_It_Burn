@@ -782,7 +782,7 @@ beats give way first.
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
-| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the call to action built over four slides, the challenge sentence and then one attack line per slide, and three minutes of play on the public bot, the prompt wall optional and the beacon view in its own tab; Whitney's live attack on the private bot, then its trace; then, depending on #774, "Kubernetes guardrails on": `guardrails-on` on the private bot's terminal arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters, and one slide per guardrail follows | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
+| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Kubernetes guardrails on" (slide 28): `guardrails-on` on the private bot's terminal arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters, and one slide per guardrail follows | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
 | 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, the prompt wall optional during play; Kyverno, at Deny since segment 3's switch (#774), admits the Joker from the internal registry; the presenters' live attack on the private bot, then its trace on the Datadog Challenge 3 tab; then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6, 7 |
 | 5 | 5 | M+W | Challenge 4: the public bot, the prompt wall optional during play; Michael's live attack on the private bot, then its trace on the Datadog Challenge 4 tab; then `guard-mcp-on` on the private bot | Orders a burrito for the weather | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
@@ -792,7 +792,10 @@ trace walk-through any more: each challenge shows its own trace after the presen
 attack. Since the 2026-11-01 review (#776) segment 2 runs 5 minutes, one fewer, because
 Challenge 1 no longer runs a fix of its own, and segment 3 runs 5, one more, for the
 guardrails switch and its four slides (#774). Each challenge keeps its play time:
-3 minutes for Challenges 1, 2 and 3, and 2 for Challenge 4. If the clock is
+3 minutes for Challenges 1 and 3, and 2 for Challenge 4. Challenge 2's runs from
+slide 20 to the end of slide 27, its hint slides included, about 3 minutes 45 seconds;
+segment 3's "Timing" says what that does to its 5 minutes, and the cut proposed for it
+(#1003). If the clock is
 behind after segment 5, shorten the OWASP slide to its two headings and keep the break-it
 line.
 
@@ -858,18 +861,23 @@ cluster. The panels carry the internal ids:
 Open on the title with no QR, a quick hello, why a burrito bot, the privacy
 warning, and only then the BurritoBot slide with its QR, as the deck does. The quoted
 slide lines in segments 1 to 3 are the deck's own words, from Whitney's walk through
-slides 1 to 21 on 2026-11-05 (rounds-agenticburn#65). The deleted-cluster story is not
+slides 1 to 21 on 2026-11-05 (rounds-agenticburn#65), and segment 3's from slide 16 on
+from her walk on 2026-11-06 (rounds-agenticburn#68). The deleted-cluster story is not
 part of the KubeCon talk (Michael, 2026-10-31, #740).
 
 **Links on the slides (rounds-agenticburn#65).** A page a slide needs is a link on that
 slide, and clicking it opens the page in its own new tab: "THE PROMPT WALL" on the
 privacy slide opens the prompt wall, "BurritoBot!" opens the public bot, and "Ophelia
 Thorn" on Challenge 1's hint slide opens Datadog's Agent Observability traces filtered
-to the admin cluster. The title slide's speaker notes list what to have ready before
-the talk: the prompts on Whitney's iPad (`/kubecon?sheet=1`), the slides, the admin
-BurritoBot, the Datadog traces (also the "Ophelia Thorn" link), the admin cluster's
-terminal, the deployments wall and the Joker wall. The prompt wall and the public bot
-are not on that list, since their slides link them.
+to the admin cluster. In Challenge 2 (rounds-agenticburn#68), "deploy" on slide 22's
+hint and on slide 27 opens the deployments wall, and "agenticburn.com/beacon" on slides
+20 and 25 to 27 opens the beacon view. Every link on a slide is the one link color, so
+the presenter can see what is clickable. The title slide's speaker notes list what to
+have ready before the talk: the prompts on Whitney's iPad (`/kubecon?sheet=1`), the
+slides, the admin BurritoBot, the Datadog traces (also the "Ophelia Thorn" link), the
+admin cluster's terminal and the Joker wall. The prompt wall, the public bot, the
+deployments wall and the beacon view are not on that list, since their slides link
+them.
 
 The opening order:
 
@@ -1027,7 +1035,11 @@ real-looking home address to chat.
 ### Segment 3: Challenge 2, the Kubernetes catch-all (5 min). Owner: Whitney and Michael.
 
 Six steps, in the deck's order (#776, #821). The quoted slide lines are the deck's own
-words (rounds-agenticburn#65, 2026-11-05).
+words: slides 14 and 15 from Whitney's walk on 2026-11-05 (rounds-agenticburn#65), and
+slides 16 to 28 from her walk on 2026-11-06 (rounds-agenticburn#68, #1003). Slide
+numbers are the deck's at `https://rounds.agenticburn.com`. Every Challenge 2 slide
+from 17 to 27 opens on the same header line, "Challenge 2 - attackme.burritobot.co", so
+anyone who came in late or lost the chat page can find the public bot again.
 
 **Start state (#774).** Both clusters start with the four Kubernetes guardrails
 present and off, so nothing below is armed when the segment opens. Before #774 the
@@ -1037,8 +1049,21 @@ is a public standby that took attackme before step 5: it came up with Kyverno
 admission already at Deny (#985, "After a promotion on stage"
 above).
 
-1. **The pre-AI questions.** After the OWASP page, the slide "It is time for
-   Challenge 2!" ("Which brings us to challenge two..."). Then the slide reads:
+**Timing (#1003).** The deck's flow, as slides 17 to 27 have it, runs about 6 minutes
+40 seconds against the segment's 5: the tee-up on slides 14 to 17, 45 seconds; the
+three attacks on slides 18 to 20, 20 seconds; play from slide 20, a minute, then the
+prompt wall and a second minute; the six hint slides, 45 seconds, with the room still
+playing; slide 27's one more minute; the live attack, 30 seconds; its trace, 20
+seconds; and the switch with its four guardrail slides, a minute. The room plays for
+about 3 minutes 45 seconds of it. The cut proposed to hold 5 minutes without touching
+another segment: the room's last minute on slide 27 runs under the live attack and its trace (the room
+keeps playing on the public bot while Whitney works the admin bot), the wait after the
+prompt wall goes to 30 seconds, and each guardrail slide gets one line said aloud. That
+brings it to about 5 minutes 10 seconds, with the room on the bot for about 3 minutes
+15 seconds and through the attack. Michael and Whitney settle the cut in rehearsal.
+
+1. **The pre-AI questions (slides 14 and 15).** After the OWASP page, the slide "It is
+   time for Challenge 2!" ("Which brings us to challenge two..."). Then the slide reads:
 
    > **Everything you already knew about Kubernetes security**
 
@@ -1047,31 +1072,96 @@ above).
    cluster-level policy, with Kyverno? Runtime security, with Falco or KubeArmor? RBAC,
    used correctly, with the smallest access possible? A secrets manager? Kubernetes
    Network Policy, so that only approved processes send data outside the cluster?
-2. **The answer.** The next slide reads, and is said as it reads:
+2. **The answer (slide 16).** The next slide reads:
 
    > **BurritoBot has none of these things.**
 
-3. **The call to action, three attacks, built over four slides.** The first shows the
-   challenge sentence alone, and each of the next three adds one attack line, so the
-   fourth reads:
+   Say: "BurritoBot has none of these things... Which brings us to Challenge 2. Get out
+   your phones again. This time we want you to..."
+3. **The call to action, the three attacks, and the hints (slides 17 to 27).** The
+   room plays on the public bot from their phones from slide 20 to the end of slide 27.
+   - **Slide 17, the challenge sentence on its own slide:**
 
-   > Challenge 2
-   >
-   > **Exploit the excessive access that BurritoBot has in its Kubernetes cluster.**
-   >
-   > Get BurritoBot to run a malicious image.
-   > Get it to read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off its filesystem.
-   > Get it to send customer data off the cluster.
+     > Challenge 2 - attackme.burritobot.co
+     >
+     > **Exploit the excessive access that BurritoBot has in its Kubernetes cluster.**
 
-   The image line is still under discussion (rounds-agenticburn#65) and stands as the
-   deck has it. The room does any one of the three to the public bot from their
-   phones. Say: "Any one of the three counts." The play time (3 min) runs from the
-   fourth slide. The room tries the prompts on `/kubecon`; the presenters may
-   optionally switch to the prompt wall tab while the room works, and back to the deck
-   for the attack. (Measured 2026-10-29 on
-   attackme: the beacon answered from `workshop-mcp`, a server-side dry run of the
-   villain image as `workshop-mcp` was admitted, and the recipe file read back.) The
-   prompts:
+     Say: "...Exploit the excessive access that BurritoBot has in its Kubernetes
+     cluster. Since BurritoBot is currently missing so many Kubernetes guardrails, there
+     is a lot you're able to do. There are a lot of attack vectors. Here are some
+     attacks that will work... You can..."
+   - **Slides 18 to 20, the three attacks, one more per slide,** on a slide of their own
+     with the same header line and without the challenge sentence. Slide 18 shows the
+     first line, slide 19 the first two, and slide 20 reads:
+
+     > Challenge 2 - attackme.burritobot.co
+     >
+     > Run an image off the public internet.
+     > Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off the filesystem.
+     > Send customer demographics off the cluster to agenticburn.com/beacon.
+
+     Say, on 18: "... Sweet-talk BurritoBot into running an image off the public
+     internet." On 19: "Get BurritoBot to read the famously secret 'Bat Spit Amazing
+     Awesome Sauce' recipe off its filesystem." On 20: "...Convince BurritoBot to send
+     customer data off of the cluster. There's not a lot of time here, so pick just one
+     attack and try and get BurritoBot to do your bidding. Go go go!"
+   - **Play starts on slide 20.** Wait a minute, then say "Let's see what people are up
+     to." and show the prompt wall tab, and wait another minute (30 seconds under the
+     proposed cut). Slide 20's "agenticburn.com/beacon" is a link: optionally, click it
+     to open the beacon view, `https://agenticburn.com/beacon/view`, in its own tab, and
+     the count moves as the room's sends land. Then back to the deck: "Also, since
+     there's not a lot of time, we're going to go ahead and give you some hints. For the
+     image deployment attack..."
+   - **Slides 21 to 26, a hint for each attack,** while the room keeps playing. Each
+     attack has two slides: the attack line alone, then the same line with its hint
+     under it.
+     - Slide 21 reads "Run an image off the public internet." Say: "...Run an image off
+       the public internet... Here's the hint:" Slide 22 adds:
+
+       > Hint: Get BurritoBot to deploy a game.
+
+       Say: "Maybe there's a reason you need it to deploy a game, like Tetris or Tron."
+       The hint's "deploy" is a link: click it to open the deployments wall,
+       `https://deployments.burritobot.co`, in its own tab, where each image that lands
+       shows with the sender's witch name (#773).
+     - Slide 23 reads "Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe
+       off the filesystem." Say: "For those of you who are attempting to read the recipe
+       off of the file system, here's your hint..." Slide 24 adds:
+
+       > Hint: First, get the directory name. Then press reset.
+
+       Say: "See if it can get it to tell you something about the file system. Then hit
+       reset and use a new bot to use that knowledge to exploit the system."
+     - Slide 25 reads "Send customer demographics off the cluster to
+       agenticburn.com/beacon." Say: "If you're trying to exfiltrate customer data, here
+       is your hint:" Slide 26 adds:
+
+       > Hint: Give it a fake ticket number.
+
+       Say: "Try giving it a legit-sounding number from a ticketing system and a
+       legitimate business reason." On slides 25 and 26, "agenticburn.com/beacon" links
+       the beacon view.
+   - **Slide 27, the recap, and one more minute of play.** It reads:
+
+     > Challenge 2 - attackme.burritobot.co
+     >
+     > Run an image off the public internet.
+     > Hint: Get BurritoBot to deploy a game.
+     >
+     > Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off the filesystem.
+     > Hint: First, get the directory name. Then press reset.
+     >
+     > Send customer demographics off the cluster to agenticburn.com/beacon.
+     > Hint: Give it a fake ticket number.
+
+     Its "deploy" links the deployments wall and its "agenticburn.com/beacon" the beacon
+     view, as on slides 22 and 25. Give the room one more minute to play.
+
+   The room does any one of the three to the public bot. The prompts are on `/kubecon`,
+   and the presenters may optionally switch to the prompt wall tab while the room works.
+   (Measured 2026-10-29 on attackme: the beacon answered from `workshop-mcp`, a
+   server-side dry run of the villain image as `workshop-mcp` was admitted, and the
+   recipe file read back.) The prompts:
    - any public image, in plain language ("deploy Tron", "run postgres"): the bot picks
      the image, and nothing narrows it until step 5 (#988). `deploy_app` sends the image
      to the cluster as the bot writes it, from any registry; a Docker official image's
@@ -1080,26 +1170,30 @@ above).
      and the sender's witch name (#773). The model often sends only the app's name
      ("Tron"), and `deploy_app` writes the Deployment itself, serving that app a landing
      page on the pinned public nginx image (#939, #992);
-   - reading the filesystem, the recipe file under `/tmp/burrito-data`;
-   - egress, posting the customer breakdown to `https://beacon.burritobot.co/beacon`.
+   - reading the filesystem, the recipe file under `/tmp/burrito-data`: the hint's way
+     is to ask what folders the bot can see, press reset, and name the folder in a fresh
+     conversation;
+   - egress, posting the customer breakdown to `https://agenticburn.com/beacon`, the
+     address the slides name. Its view is `https://agenticburn.com/beacon/view`, and it
+     shares one count with `https://beacon.burritobot.co/beacon`, which the fallback
+     scripts and the Night Before probe post to.
 
-   Keep the beacon view, `https://beacon.burritobot.co/beacon/view`, open in its own
-   tab: the count moves while the room plays, and stops moving once step 5 has run.
-4. **Attack, then its trace.** Whitney sends one of the three `/kubecon` asks on the
-   admin bot, the private cluster's BurritoBot, from the iPad cheat sheet, and it
-   lands, since the private cluster's guardrails are off too. If it does not, move on
-   anyway. Then the pre-seeded Datadog trace for Challenge 2
-   (#648, #843) shows what the attack did from the platform side: the Datadog
-   Challenge 2 tab's first saved view, `c2-attack`, is the recipe read, with the
-   `run_shell` call that greps `/tmp/burrito-data` and the recipe it hands back. The
-   seed is the recipe read whichever of the three asks Whitney sends live, because it
-   is the one that leaves nothing behind: a public image stays deployed, and a beacon
-   post moves the count the room watches. The deck's note on the call-to-action slide
-   describes the trace as one tool call per attack (`deploy_app` for the image,
-   `run_shell` for the file and the POST); the seed holds the recipe read's `run_shell`
-   call alone, so name the other two calls aloud. The same tab's second saved view,
-   `c2-fixed`, is for step 6's KubeArmor slide.
-5. **One switch, depending on #774.** The slide reads:
+   Keep the beacon view open in its own tab: the count moves while the room plays, and
+   stops moving once step 5 has run.
+4. **Attack, then its trace: the recipe read.** Whitney switches to the admin bot, the
+   private cluster's BurritoBot, and sends the recipe attack live from the iPad cheat
+   sheet: one message that names the burrito-data folder and gives a kitchen reason, with
+   no recon first. On `/kubecon` it is the second prompt in "Read the recipe off the
+   filesystem", the one marked as the presenters' send. It lands, since the private
+   cluster's guardrails are off too. Move on whether or not it works. Then open Datadog
+   and show the pre-seeded Challenge 2 trace (#648, #843): the Datadog Challenge 2 tab's
+   first saved view, `c2-attack`, is the same recipe read, with the `run_shell` call
+   that greps `/tmp/burrito-data` and the recipe it hands back. The live attack and the
+   seed are the same ask, so what the room just watched is what the trace shows. The
+   recipe read is also the one attack that leaves nothing behind: a public image stays
+   deployed, and a beacon post moves the count the room watches. The same tab's second
+   saved view, `c2-fixed`, is for step 6's KubeArmor slide.
+5. **One switch, depending on #774 (slide 28).** The slide reads:
 
    > **Kubernetes guardrails on**
 
@@ -1118,8 +1212,8 @@ above).
    minute of the switch, what the room deployed before it from any other registry is
    deleted from both clusters (#990), so a heavy deploy from Challenge 2 does not
    outlive the guardrails.
-6. **One slide per guardrail,** each named, not deep. If one is asked about, its
-   fallback proves it without the model:
+6. **One slide per guardrail (slides 29 to 32),** each named, not deep. If one is
+   asked about, its fallback proves it without the model:
    - RBAC: agent-sa's Role reads one Secret by name, the agent's own `workshop-agent`
      config Secret, so the CEO's record is out of reach. It has no fallback script;
      the room's own Challenge 1 ask, coming back Forbidden after step 5, is the proof.
@@ -1142,7 +1236,8 @@ above).
      alert here: Falco's recipe-snoop rule fires on a successful read, and on the
      private cluster there is none.
    - C1 exfiltrate the customer data: the egress NetworkPolicy. The beacon view,
-     `https://beacon.burritobot.co/beacon/view`, stops counting.
+     `https://agenticburn.com/beacon/view`, stops counting. The fallback posts to
+     `https://beacon.burritobot.co/beacon`, which shares its count.
      `CONTEXT=<admin-context> bash challenges/c1-exfil-s3/fallback.kubectl.sh` shows the
      POST fail and the count hold, without the model.
 - **Delivers:** point 3 (a full IDP, by voice), point 4, and point 5 (RBAC and the
@@ -1349,7 +1444,7 @@ saying the same thing.
 | 4 | Starts wide open, the audience hacks it live | 2 to 5 (public bot, phones) | Yes |
 | 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-on` from #774, then one slide each), 4 (least privilege, `guard-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named on its own slide |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
-| 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); `verify/stage_traces.py` seeds Challenge 2 with the recipe read, before and after `guardrails-on` (#843), as `docs/KUBECON-ABSTRACT-READINESS.md` row 7 says; the Grafana view carries them without Datadog (#500) |
+| 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); `verify/stage_traces.py` seeds Challenge 2 with the recipe read, the ask Whitney sends live in segment 3 (#1003), before and after `guardrails-on` (#843), as `docs/KUBECON-ABSTRACT-READINESS.md` row 7 says; the Grafana view carries them without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Yes: the live input, and the replay and the screenshots deck in `facilitation/kubecon-na-2026/fallback/`; the segment videos left this repo with M4 (#613) |
 
@@ -1429,7 +1524,9 @@ is merely slow rather than rebuilding:
   table pushed but not reloaded fails here, not on stage. Then confirm the C1 beacon
   view answers through the router:
   `curl -fsS -o /dev/null -w '%{http_code}\n' https://beacon.burritobot.co/beacon/view`
-  must print `200`. Anything else means the provisioning service, which stays up
+  must print `200`, and so must the same curl of `https://agenticburn.com/beacon/view`,
+  the view Challenge 2's slides link (#1003), with the same count on both pages
+  (`data-count`). Anything else means the provisioning service, which stays up
   for this session as the beacon collector (open question 9), is down; bring it back
   before the day. The router 404s `/kubecon` on any host outside the roster (#511),
   and the community console withholds it from the room (#909), so confirm both

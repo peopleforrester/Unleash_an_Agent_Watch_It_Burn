@@ -199,7 +199,7 @@ check "the Night Before writes the roster table and checks the router before che
    (( $(line_of "./fleet.sh routes roster") < $(line_of "./fleet.sh router-check") &&
       $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls --closed-terminal attackme") ))'
 check "the C1 beat names the beacon view by URL" \
-  'grep -A3 -E "^ *- C1 exfiltrate" "${ROS}" | grep -qF "https://beacon.burritobot.co/beacon/view"'
+  'grep -A3 -E "^ *- C1 exfiltrate" "${ROS}" | grep -qF "https://agenticburn.com/beacon/view"'
 
 echo "== offline means offline =="
 check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'

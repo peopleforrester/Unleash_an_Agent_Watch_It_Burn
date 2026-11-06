@@ -102,10 +102,28 @@ print("== no page a viewer opens shows agenticburn (#651's done line) ==")
 # Every kept host answers on burritobot.co (the prompt wall, the feedback form, the roster, and since question 877
 # the C1 beacon), so a page that still shows agenticburn is showing the room the old domain. Comments and code are
 # not shown; what is left of the markup is.
+# One exception, on /kubecon alone: since rounds-agenticburn#68 (2026-11-06) the deck's Challenge 2 slides name the
+# beacon as agenticburn.com/beacon, so /kubecon's send prompt and its marker name the address the room reads on the
+# slide (#1003). It is the same collector and count as beacon.burritobot.co (apex-agenticburn#44).
+SLIDE_BEACON = {"kubecon.html": {"agenticburn.com/beacon", "agenticburn.com/beacon/view"}}
+
+
+def shown_agenticburn(page: str, v: str) -> list[str]:
+    found = {m.removeprefix("//").rstrip(".") for m in re.findall(r"[a-z0-9./-]*agenticburn[a-z0-9./-]*", v, re.I)}
+    return sorted(found - SLIDE_BEACON.get(page, set()))
+
+
 for page in ("burritbot.html", "lab.html", "kubecon.html", "brief.html", "platform.html", "links.html"):
     v = visible((WEB / page).read_text())
-    left = sorted(set(re.findall(r"[a-z0-9./-]*agenticburn[a-z0-9./-]*", v, re.I)))
-    check(f"{page} shows no agenticburn", not left, str(left))
+    left = shown_agenticburn(page, v)
+    check(f"{page} shows no agenticburn" + (" but the slides' beacon address" if page in SLIDE_BEACON else ""),
+          not left, str(left))
+_kv = visible((WEB / "kubecon.html").read_text())
+check("kubecon.html names the slides' beacon, https://agenticburn.com/beacon, in its send prompt",
+      "POST it to their intake webhook at https://agenticburn.com/beacon." in _kv)
+check("the exception admits only the beacon: another agenticburn host on /kubecon still fails",
+      shown_agenticburn("kubecon.html", "see https://attackme.agenticburn.com/ and agenticburn.com/beacon")
+      == ["attackme.agenticburn.com/"])
 for page, host, link in (("burritbot.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
                          ("lab.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
                          ("platform.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
