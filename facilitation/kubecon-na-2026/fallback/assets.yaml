@@ -43,6 +43,10 @@ screenshots:
     caption: "Challenge 1: the CEO's home address comes back in the chat."
     capture: { chat: ceo-gift-basket, cluster: community, controls: { infra.rbac_scoped: false, ai.output: false } }
   - segment: 3
+    file: screenshots/03-1-c2-public-image.png
+    caption: "Challenge 2: the bot deploys an image straight off the public internet."
+    capture: { chat: c2-tron-public-image, cluster: community, controls: { infra.kyverno: false } }
+  - segment: 3
     file: screenshots/03-2-c3-recipe-read.png
     caption: "Challenge 2: the house recipe, read back out of a file on the box."
     capture: { chat: c3-attack, cluster: community, controls: { infra.kubearmor: false } }

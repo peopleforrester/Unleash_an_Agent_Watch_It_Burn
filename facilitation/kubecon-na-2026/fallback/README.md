@@ -79,15 +79,15 @@ the same list, written into it by `python3 scripts/check-fallback-assets.py
 differ). A shot that is not there shows as a red MISSING card. The PNGs are committed
 into `screenshots/`.
 
-The deck holds 12 shots, every segment from 1 to 6, taken on the two live clusters
-on 2026-11-04. Three planned shots are not in it. Two were to be taken by hand at the
-first full rehearsal (Challenge 1's Datadog trace and the `guardrails-on` terminal),
-and that rehearsal's recording left this repo with M4. The third is Challenge 2's
-public image: the room's Tron ask did not deploy on the public bot in four tries
-on 2026-11-04 and 2026-11-05, so there is no screen to take. The model sent
-`deploy_app` the manifest "Tron" each time; since #939 `deploy_app` deploys that
-name on the public nginx image, and the shot is taken once the change runs on the
-community bot. Each segment's narration covers its missing beat.
+The deck holds 13 shots, every segment from 1 to 6, taken on the two live clusters
+on 2026-11-04 and 2026-11-06. Two planned shots are not in it. They were to be taken
+by hand at the first full rehearsal (Challenge 1's Datadog trace and the
+`guardrails-on` terminal), and that rehearsal's recording left this repo with M4.
+Each segment's narration covers its missing beat. Challenge 2's public image (03-1)
+was taken on 2026-11-06, after #939: the room's Tron ask had not deployed on the
+public bot in four tries on 2026-11-04 and 2026-11-05, because the model sent
+`deploy_app` the manifest "Tron", and `deploy_app` now deploys that name on the
+public nginx image.
 
 Each shot says how it is made (`capture` in `assets.yaml`):
 
