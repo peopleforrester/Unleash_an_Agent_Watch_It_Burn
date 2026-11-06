@@ -23356,3 +23356,14 @@ $25 cap after the probes) and about 450 direct Nova Pro calls for the measuremen
 back off; promo-mascot and the C6 artifact were deleted. The scripts, their logs and the recorded tool results are in
 the run's directory, not the repo. No dependency was added to the repo; the measurements ran boto3 1.40.70 and PyYAML
 6.0.3 through `uv run --with`, in the run's directory only.
+
+**The suites (run 17806, at `aa7886de`).** The first `bash verify/run-e2e-tools.sh` printed `285 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then `65 checks ran (the offline suite and 64 tier tests) in 36m05s` with one failure,
+`test_collector_act2_redaction_e2e.py`, and `exit=1`. Inside it only the attendee profile's Act 1 failed: "the
+collector took the turn" was false, so no span reached the exporter, and the collector's log was empty. Run alone
+right after, the test passed every check, and the second full run printed `285 tests ran`, `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, `65 checks ran (the offline suite and 64 tier tests) in 50m16s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The test reads nothing this change touched. Its send loop gives the local otelcol-contrib 30 seconds to
+take the turn, and an empty log fits a collector that had not started in that time on the loaded shared host; a port
+taken between `free_port()` and the bind would fit too. The cause is not proven, so it is filed as a followup with
+this output rather than changed here. The prose gate printed `prose gate: pass`.
