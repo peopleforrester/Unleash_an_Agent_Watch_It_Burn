@@ -22409,3 +22409,9 @@ guard, which is still cpu.5.
 print `ghcr.io/peopleforrester/lab-platform/llm-guard:v1@sha256:46b3d202…`, the rollout must reach Ready, and
 `bash verify/input-guard.sh <host> <kube-context> accen-dev` (burritobot-private on watch-it-burn-private, attackme on
 watch-it-burn-community) must pass the benign prompt and block the injection through the deployed rebuild.
+
+**Suites (run 17781, at `41f5c52f`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`281 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `64 checks ran (the offline suite and 63 tier tests) in 50m33s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. In the tier, Kyverno's offline key check passed lab-platform's llm-guard at
+46b3d202 against the workshop key and failed it under a wrong one, and the chart render put the llm-guard Deployment on
+the rebuild at ghcr.io and at the cache path. No dependency was added.
