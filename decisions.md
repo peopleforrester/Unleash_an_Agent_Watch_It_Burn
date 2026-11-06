@@ -26092,3 +26092,7 @@ ran (the offline suite and 71 tier tests) in 42m07s`, `ALL E2E TOOLS TIER CHECKS
 unchanged. It reran the test against the copies as they stood before #952 (`d6de37e1^`) with the current `/kubecon`:
 the catalog, `lab.html`, `LAB-TEXT.md` and `prompts.yaml` checks each printed FAIL and the test exited 1; with the
 whole pre-#952 tree it exited 1 on `/kubecon` holding one C3 prompt. Nothing in the test differs from the draft.
+
+**The suites (run 17925, at `30182b69`).** `bash verify/run-e2e-tools.sh` printed `304 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, with `ALL C3 PROMPT COPY CHECKS GREEN` among them, then `73 checks
+ran (the offline suite and 72 tier tests) in 48m35s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
