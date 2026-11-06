@@ -25249,3 +25249,48 @@ stopped it for repeating itself (stop reason `loop`) before the tier finished. T
 reran the suite as one background job and waited on it in four bounded waits of under ten minutes each. It printed
 `292 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `69 checks ran (the offline suite and 68 tier tests) in
 30m52s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+## 2026-11-06 · #965 · run 17872 · workshop-mcp and evil-mcp-shim already roll on a server.py change; a test now holds it for every generated source
+
+**What the issue said.** #965 read workshop-mcp's Deployment in `gitops/ai-layer/resources.yaml`, saw that it mounts
+`workshop-mcp-src` with no checksum annotation, unlike guard-proxy's `checksum/proxy-py`, and concluded that a change
+to `workshop-mcp-server.py` or `tool_audit.py` syncs green while the old process keeps answering. It proposed a
+`checksum/workshop-mcp-src` annotation and asked the same of evil-mcp-shim's `server.py`.
+
+**What is true.** That was true before #252 and is not now. The 2026-09-06 entry for #252 turned the kustomize content
+hash on for the whole ai-layer bundle (`generatorOptions.disableNameSuffixHash: false`). A change to a generated
+source renames its ConfigMap (`workshop-mcp-src-<hash>`), kustomize rewrites the Deployment's volume to the new name,
+the pod template changes, and Argo CD rolls the pod. The `checksum/proxy-py` annotation stayed only because `/controls`
+reports it in the room, which that entry says. A rendered probe in this run showed it: appending one line to
+`workshop-mcp-server.py` and `server.py` moved workshop-mcp from `workshop-mcp-src-gdtg56h2kf` to
+`workshop-mcp-src-tcdmgfhtmd` and evil-mcp-shim from `evil-mcp-src-78t5dt5d9d` to `evil-mcp-src-267k9d288t`.
+
+**What was missing.** A test that holds it for these two. `verify/test_ai_layer_rollout.py` checked only that editing
+`web/lab.html` rolls the console. It now reads every `files:` entry of every `configMapGenerator`, appends a line to
+each in a copy, renders, and fails naming the file and the Deployment whose pod template did not change. It holds by
+name that workshop-mcp mounts `workshop-mcp-src` built from `workshop-mcp-server.py` and `tool_audit.py`, and that
+evil-mcp-shim mounts `evil-mcp-src` built from `server.py`, so the probe cannot pass by finding no consumer. That is
+24 sources over 8 generators, and the whole test now takes about 17 s. With `disableNameSuffixHash: true` set by hand the test failed 5 checks,
+the two new by-name mount checks among them. No checksum annotation was added: it would be a second, hand-bumped
+mechanism for what the hash already does, and a forgotten bump would only fail a test. A comment at each of the two
+volumes in `resources.yaml` says why there is none.
+
+**Does workshop-agent need a restart?** No. workshop-agent runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`, which
+builds its MCP toolsets with `google.golang.org/adk/v2` v2.1.0 (kagent `go/go.mod` at v0.10.1). That version's
+`tool/mcptoolset/set.go` `Tools()` calls `ListTools` on the server each time it is asked, with no cache, and
+`client.go` reconnects when the session is lost. A changed schema or description reaches the next turn. A new tool
+name is different: the Agent CR's `toolNames` filter it, and a change there changes the Agent, which kagent rolls.
+
+**Live check (run 17872, 2026-11-06, both clusters, read only).** On `watch-it-burn-community` and
+`watch-it-burn-private`, Argo CD's `ai-layer` was `Synced` and `Healthy` at staging `30982703`. Each cluster's
+workshop-mcp mounted `workshop-mcp-src-gdtg56h2kf`, the name this tree renders, and its pod was 39 minutes old, the
+same age as that ConfigMap: the last `workshop-mcp-server.py` change (#939, `24307b11`) rolled it with nobody
+restarting it. Each `RemoteMCPServer/workshop-mcp` listed 12 tools, with `check_inventory` described as taking an
+ingredient (#902) and `deploy_app` taking a bare app name (#939). The workshop-mcp logs showed a `ListToolsRequest`
+every 60 s from the kagent controller's discovery. workshop-agent's pods were 79 and 169 minutes old, older than
+workshop-mcp's, and needed nothing. evil-mcp-shim mounted `evil-mcp-src-78t5dt5d9d` on both, the rendered name;
+`server.py` has not changed since. Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** Nothing is owed. The change is a test and two comments; the rollout it holds is already
+live, as above.
+
+No dependency was added.
