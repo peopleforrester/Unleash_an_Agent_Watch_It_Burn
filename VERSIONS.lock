@@ -44,12 +44,13 @@ agentgateway           OSS v1.7.0  (released 2026-10-27, GitHub releases agentga
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `scanners`, not `scores`)
                        digest: sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba (OCI index: linux/amd64 + linux/arm64;
                        resolved from Docker Hub 2026-10-25 and checked against the body's sha256, #603; upstream protectai/llm-guard archived July 2026)
-                       deployed image is not this one: llm-guard-cpu-offline's ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5,
-                       built from llm-guard-cpu-offline 31962f2 with the prompt-injection and BanTopics zero-shot models baked in (digest
-                       sha256:4c66fd0f..., set by kustomize.images in gitops/bootstrap/apps/ai-layer.yaml, #719 question 1041); it replaced
-                       lab-platform's llm-guard:v1 (sha256:6cdbf3a2..., #652, #730) and returns to lab-platform's rebuild after lab-platform#341;
-                       all have images.lock rows by digest (#603); netcup's image archive holds lab-platform's llm-guard (2026-11-04)
-                       and laiyer/llm-guard-api (2026-11-05), and cpu.5's saved tarball waits on mirror-images.sh save on netcup
+                       deployed image is not this one: lab-platform's ghcr.io/peopleforrester/lab-platform/llm-guard:v1 as rebuilt
+                       under lab-platform#341, with the prompt-injection and BanTopics zero-shot models baked in and OpenTelemetry past
+                       GHSA-xcq7-p3pf-p88h (digest sha256:46b3d202..., signed 2026-11-05, set by kustomize.images in
+                       gitops/bootstrap/apps/ai-layer.yaml, #895); it replaced llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5
+                       (sha256:4c66fd0f..., #719 question 1041), which had replaced v1 before the rebuild (sha256:6cdbf3a2..., #652, #730);
+                       all have images.lock rows by digest (#603); netcup's image archive holds the old v1 (2026-11-04) and
+                       laiyer/llm-guard-api (2026-11-05), and the rebuild's and cpu.5's tarballs wait on mirror-images.sh save on netcup
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.

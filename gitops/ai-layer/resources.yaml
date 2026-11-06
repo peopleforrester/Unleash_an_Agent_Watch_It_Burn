@@ -195,27 +195,28 @@ spec:
       # reads scanners.yml once, at start, and the ConfigMap's name is stable, so without it a scanner change
       # syncs green on a running cluster and the old scanners keep answering (guard-proxy's checksum/proxy-py
       # below is the same fix). verify/test_input_pii_guard.py fails when it is not sha256(scanners.yml)[:12].
-      annotations: { checksum/scanners-yml: "f121b6e2e7bb" }
+      annotations: { checksum/scanners-yml: "220cfa370663" }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          # llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5 (#719, question 1041), built from llm-guard-cpu-offline
-          # 31962f2: CPU-only torch, the vendored API source (src/ verbatim), OpenTelemetry past GHSA-xcq7-p3pf-p88h,
-          # and two classifiers baked in with HF offline, prompt-injection at /home/user/models/prompt-injection
-          # (Hub revision 90c9989b, #241, #414) and BanTopics' zero-shot model at /home/user/models/zero-shot
-          # (8e7e5af5, #455). Its entrypoint refuses APP_WORKERS above 1, and it exits when a scanner cannot be built (#7 there).
+          # lab-platform's llm-guard:v1 as rebuilt under lab-platform#341 (#895), built there from pinned inputs:
+          # CPython 3.12 by digest, the API's 130 distributions by sha256 (torch from PyTorch's CPU index, OpenTelemetry
+          # past GHSA-xcq7-p3pf-p88h), the source at images/llm-guard's commit, and two classifiers baked in with HF
+          # offline, prompt-injection at /home/user/models/prompt-injection (Hub revision 90c9989b, #241, #414) and
+          # BanTopics' zero-shot model at /home/user/models/zero-shot (8e7e5af5, #455). From question 1041 (#719) to
+          # #895 it ran llm-guard-cpu-offline's cpu.5, which bakes the same two models at the same paths.
           # "llm-guard" is a kustomize image name, not a pullable reference: the ai-layer Application
-          # (gitops/bootstrap/apps/ai-layer.yaml) sets it by digest, so the return to lab-platform's image after
-          # lab-platform#341 (#652, #622) is a change to that one entry.
+          # (gitops/bootstrap/apps/ai-layer.yaml) sets it to {{ .Values.imageRegistry }}/llm-guard:v1 by
+          # digest, because a lab-platform image takes the registry the root passes down (#622).
           image: llm-guard
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:
             - { name: APP_WORKERS, value: "1" }
-            # lab-platform's entrypoint binds loopback unless told the pod's namespace is the network boundary;
-            # cpu.5 binds 0.0.0.0 and does not read it. Kept so the return to lab-platform's image is one repin.
+            # The entrypoint binds loopback unless told the pod's namespace is the network boundary, as every
+            # lab-platform image that listens does; without this the pod answers nothing on 8000.
             - { name: NETWORK_BOUNDARY, value: sandbox }
             - name: AUTH_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
@@ -278,7 +279,7 @@ data:
         # guard-proxy's injection stage, read_support_ticket's check and verify/stage_traces.py, so it never
         # runs when TOPIC_GUARD is off. Topics and threshold are verify/topic_cases.py's CLASSIFIER, measured
         # by verify/test_topic_classifier.py; narrow labels, because a broad "entertainment" took vague menu
-        # asks. The zero-shot model (deberta-v3-base-zeroshot-v2.0 at 8e7e5af5) is baked into cpu.5 here, so
+        # asks. The zero-shot model (deberta-v3-base-zeroshot-v2.0 at 8e7e5af5) is baked into the image, so
         # it loads at start with no network; verify/test_llm_guard_bantopics_image.py fails this entry on an
         # image not known to carry it, which would stop LLM Guard at start (lazy_load is off).
         params:

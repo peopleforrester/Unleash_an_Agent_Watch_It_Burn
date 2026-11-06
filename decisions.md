@@ -22337,3 +22337,75 @@ carries `witches` yet. No prompt text was printed and nothing on either cluster 
 **The suites (run 17783, at `10707be4` on staging `4aba39c8`).** `bash verify/run-e2e-tools.sh` printed `281 tests
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `64 checks ran (the offline suite and 63
 tier tests) in 51m06s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #895 · run 17781 · LLM Guard returns to lab-platform's llm-guard:v1, rebuilt under lab-platform#341
+
+**What was waited on, and what arrived.** Question 1041 (#719) ran the guard on llm-guard-cpu-offline's cpu.5 until
+lab-platform#341 posted a rebuilt, signed llm-guard digest. Run 17480 there posted it on 2026-11-05:
+`ghcr.io/peopleforrester/lab-platform/llm-guard:v1` at
+`sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a`, signed at 13:20:51Z (Rekor log index
+3694102931), with BanTopics' zero-shot model baked at /home/user/models/zero-shot and the OpenTelemetry set at 1.45.1
+and 0.66b1, past GHSA-xcq7-p3pf-p88h. lab-platform's staging `deploy/watch-it-burn/images.tsv` names that digest for
+llm-guard; its main still names 6cdbf3a2 until its heavy gate promotes. No earlier draft of #895 exists
+(`verify/prior-drafts.sh 895 origin/staging` printed NONE).
+
+**Read back here, anonymously, on 2026-11-06.** ghcr.io's v1 tag answers `docker-content-digest` 46b3d202, and the tag
+list holds `sha256-46b3d202….sig`. The image's config runs as 1000:1000 in /home/user/app with entrypoint.sh, exposes
+8000, and sets WIB_PI_MODEL_DIR, WIB_ZS_MODEL_DIR=/home/user/models/zero-shot and HF_HUB_OFFLINE=1. Its five layers
+are 1,857,788,652 bytes.
+
+**What changes,** every place the two #719 entries name:
+- `gitops/bootstrap/apps/ai-layer.yaml`: the one kustomize.images entry is
+  `llm-guard={{ .Values.imageRegistry }}/llm-guard:v1@sha256:46b3d202…` again, so a cache root gets the cache's copy.
+- `gitops/ai-layer/resources.yaml`: the container's comments name the rebuild, and NETWORK_BOUNDARY's comment is #652's
+  again. The BanTopics comment inside scanners.yml said the model "is baked into cpu.5 here"; it now says the image. That
+  edit changes sha256(scanners.yml), so `checksum/scanners-yml` moves from `f121b6e2e7bb` to `220cfa370663`
+  (`verify/test_input_pii_guard.py`). The pod rolls on the image change anyway.
+- `images.lock`: the `llm-guard` row is `ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:46b3d202…`, source
+  `repo:peopleforrester/lab-platform/deploy/images`, saved `-` until `mirror-images.sh save .` runs on netcup. The four
+  declared rows stay: cpu.4, cpu.5 (deployed from question 1041 to here), the zero-shot image, and v1 at 6cdbf3a2. That
+  last one keeps its ref `…/llm-guard:v1` although the tag has moved, because netcup's manifest.tsv holds its save under
+  that ref and digest (`verify/images_saved.py`); the comment above it says the tag moved.
+- `VERSIONS.lock`, `policies/kyverno/verify-image-signatures.yaml` (header only; the lab-platform llm-guard globs were
+  kept for this return), `docs/MASTER-RECREATION-SPEC.md` and readiness row 8 name the rebuild as deployed.
+- Left as written: PROJECT_STATE.md, the run-of-show's open item 1, readiness history and `verify/topic_cases.py` record
+  what was measured on cpu.5 on 2026-11-05, which stays true.
+
+**Tests.** `verify/test_llm_guard_image.py` holds the entry, its parse at `{{ .Values.imageRegistry }}/llm-guard`, tag v1
+and the digest, the images.lock row, and again that no file under gitops/ names a watch-it-burn llm-guard build. Its
+APP_WORKERS=1 check stays, worded for one process loading the two classifiers once. `verify/test_llm_guard_bantopics_image.py`
+adds 46b3d202 to BAKES_ZERO_SHOT, requires it as the pinned digest, and checks the gate passes a BanTopics entry with it
+and still fires on v1 at 6cdbf3a2 and on an unknown digest. `verify/test_image_signing.py`, `verify/test_kyverno_cel_policies.py`
+(Kyverno's offline key check now verifies the rebuild's signature at ghcr.io and reads its cache path, and fails it
+under a wrong key), `verify/test_bootstrap_chart_render.py` and `verify/test_image_registry_render.py` (no
+`ghcr.io/peopleforrester` reference left at a cache path, #622's check before #719 loosened it) are back to their #652
+shape with the new digest.
+
+**Live check, watch-it-burn-private, 2026-11-06 01:49 to 01:58 UTC.** Both clusters ran cpu.5 at 4c66fd0f, Ready 1/1,
+Argo CD's ai-layer Synced at staging d91e8bf8; this change reaches them once hecaton promotes it. One probe Pod was
+started in `agent` with the llm-guard Deployment's own pod spec (uid 1000, APP_WORKERS=1, NETWORK_BOUNDARY=sandbox,
+its probes, limits, auth Secret and the deployed `llm-guard-scanners`, BanTopics included), the image swapped for the
+rebuild, and a label the Service does not select.
+- **Admission.** A server-side dry run and then the create were admitted by Kyverno's `verify-image-signatures`, so the
+  workshop key verifies the rebuild's signature on a live cluster.
+- **Start.** The node already held the image (lab-platform's run 17480 had run it there). The container started at
+  01:49:13Z and the pod was Ready at 01:49:52Z, 39 s, inside the startup probe's 300 s. Its log shows the scanners file
+  read from /home/user/app/config, two `Device set to use cpu` lines, `Application startup complete` and uvicorn on
+  0.0.0.0:8000.
+- **Scans,** through `kubectl port-forward` to `/analyze/prompt` with the Deployment's token. With BanTopics suppressed,
+  as guard-proxy's injection stage asks: "what proteins do you have?" valid (PromptInjection -1.0), and both
+  injections, input-guard.sh's and #719's, refused at PromptInjection 1.0. With PromptInjection suppressed, as the
+  topic stage asks: the 20 asks of `verify/topic_cases.py` that guard-proxy's phrase lists leave to BanTopics were all
+  judged as written, 16 off-topic paraphrases refused and 4 vague menu asks passed, as cpu.5 judged them on 2026-11-05.
+- **Left as found.** The Pod was deleted and the token copy removed; the Deployment still ran cpu.5, Ready 1/1.
+
+**input-guard.sh.** `bash verify/input-guard.sh burritobot-private watch-it-burn-private accen-dev` printed `OK
+burritobot-private: benign prompt passes`, `OK burritobot-private: injection blocked`, `input guard restored to: off`,
+exit 0. /controls read input_blocklist and input_classifier false before and after. That ran through the deployed
+guard, which is still cpu.5.
+
+**Not yet run on a cluster.** Once promoted, on either cluster:
+`kubectl --context <ctx> -n agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must
+print `ghcr.io/peopleforrester/lab-platform/llm-guard:v1@sha256:46b3d202…`, the rollout must reach Ready, and
+`bash verify/input-guard.sh <host> <kube-context> accen-dev` (burritobot-private on watch-it-burn-private, attackme on
+watch-it-burn-community) must pass the benign prompt and block the injection through the deployed rebuild.

@@ -22,15 +22,15 @@ spec:
     targetRevision: "{{ .Values.revision }}"
     path: gitops/ai-layer
     kustomize:
-      # LLM Guard's image (#719, question 1041): llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5, by digest, the
-      # image that bakes BanTopics' zero-shot model for #455, signed with the workshop key. It is a watch-it-burn
-      # image on ghcr.io and public, so it is named literally and not at the root's imageRegistry, which is
-      # lab-platform's (#622). resources.yaml names it by the kustomize image name llm-guard, and Argo CD's
-      # kustomize (`kustomize edit set image`) sets that name here. When lab-platform#341 posts a signed rebuild,
-      # this entry returns to "llm-guard={{ .Values.imageRegistry }}/llm-guard:<tag>@<digest>" (#652).
-      # verify/test_llm_guard_image.py holds the reference.
+      # LLM Guard's image (#895): lab-platform's llm-guard:v1 as lab-platform#341 rebuilt it, by digest, at the
+      # registry the root passes down (#622, #652). The rebuild bakes BanTopics' zero-shot model at
+      # /home/user/models/zero-shot (WIB_ZS_MODEL_DIR) beside the prompt-injection classifier, carries OpenTelemetry
+      # past GHSA-xcq7-p3pf-p88h, and is signed with the workshop key. From question 1041 (#719) to #895 the guard ran
+      # llm-guard-cpu-offline's cpu.5 instead. resources.yaml names it by the kustomize image name llm-guard, and
+      # Argo CD's kustomize (`kustomize edit set image`) sets that name here, so a root passing an ECR pull-through
+      # cache path gets the cache's copy. verify/test_llm_guard_image.py holds the reference.
       images:
-        - "llm-guard=ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791"
+        - "llm-guard={{ .Values.imageRegistry }}/llm-guard:v1@sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a"
       # The KubeCon presenter page, withheld from the community cluster (#909). With console.kubeconBrief false, the
       # burn and kubecon-community profiles' value, the no-kubecon-brief component takes kubecon.html out of the
       # console-src ConfigMap, so /kubecon on attackme is a 404 while the private cluster still serves it. The guard

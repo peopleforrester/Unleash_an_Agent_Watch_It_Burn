@@ -13,9 +13,9 @@
 #
 # LAB-PLATFORM (#669)
 #
-# From #652 to question 1041 (#719) the llm-guard Deployment ran ghcr.io/peopleforrester/lab-platform/llm-guard:v1 by
-# digest. It runs llm-guard-cpu-offline's cpu.5 now, a watch-it-burn image the first glob below covers, and returns to
-# lab-platform's image after lab-platform#341, so these globs stay. That image is named
+# Since #652 the llm-guard Deployment runs ghcr.io/peopleforrester/lab-platform/llm-guard:v1 by digest, since #895
+# lab-platform#341's rebuild of it; from question 1041 (#719) to #895 it ran llm-guard-cpu-offline's cpu.5, a
+# watch-it-burn image the first glob below covers. lab-platform's image is named
 # at whatever registry the root passes as imageRegistry, which may be an ECR pull-through cache
 # (<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform). lab-platform signs
 # with this same workshop key (its deploy/images/cosign.pub is this key byte for byte, and its

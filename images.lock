@@ -12,8 +12,9 @@
 # declared rows. Each digest was read from its registry on 2026-10-30, except llm-guard's and web's, the kustomize
 # image names gitops/bootstrap/apps sets. web was read anonymously from lab-platform's v1 tag on 2026-10-31 (in place
 # of Docker Hub's nginx:1.27-alpine, #715) and equals its row in lab-platform's deploy/watch-it-burn/images.tsv.
-# llm-guard is llm-guard-cpu-offline's cpu.5 since question 1041 (#719), read anonymously from ghcr.io on 2026-11-02;
-# it replaced lab-platform's llm-guard:v1 at sha256:6cdbf3a2… (#730) until lab-platform#341's rebuild. postgres, the
+# llm-guard is lab-platform's llm-guard:v1 as lab-platform#341 rebuilt it (#895), read anonymously from ghcr.io's v1 tag
+# on 2026-11-06 and equal to its row in lab-platform's deploy/watch-it-burn/images.tsv on staging; from question 1041 (#719) to
+# #895 it was llm-guard-cpu-offline's cpu.5, and before that v1 at sha256:6cdbf3a2… (#730). postgres, the
 # kustomize name gitops/bootstrap/apps/backstage.yaml sets, is lab-platform's mirror/ copy at its copies.tsv digest,
 # and nothing here names a Docker Hub image any more (#714).
 # The two Dockerfile bases, node and debian, are lab-platform#353's mirror/ copies, each the linux/amd64 image of the
@@ -28,8 +29,8 @@
 # here from its manifest.tsv. The second save, on 2026-11-05 with Docker Hub pulled anonymously, saved the nine that
 # one left: the three Docker Hub rows (laiyer/llm-guard-api, node, debian), Argo CD v3.5.7 and the five run-time rows
 # at the end; run 17393 copied those dates the same way. Still -: both Jokers, re-pinned after both saves (#714), and
-# llm-guard at cpu.5 with the three llm-guard-cpu-offline rows (#719), and the node and debian rows, which #714 moved
-# to lab-platform#353's ghcr.io copies, all written after both saves.
+# the three llm-guard-cpu-offline rows (#719), the node and debian rows, which #714 moved to lab-platform#353's
+# ghcr.io copies, and llm-guard at lab-platform#341's rebuild (#895), all written after both saves.
 # verify/test_images_lock.py holds every reference to a row here.
 ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node -
 ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts -
@@ -45,7 +46,7 @@ ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 
 cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python 2026-11-04
-llm-guard ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline -
+llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a repo:peopleforrester/lab-platform/deploy/images -
 ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx 2026-11-04
@@ -65,10 +66,10 @@ ghcr.io/regclient/regctl:v0.11.7-alpine@sha256:e9e208e2420fbf9fd47ae24ad4dd4ac40
 laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard 2026-11-05
 # llm-guard-cpu-offline's images as that repo reported them on #719, each digest read anonymously from ghcr.io on
 # 2026-11-02: cpu.4 (PromptInjection only), cpu.5 (PromptInjection and BanTopics, signed with the workshop key on
-# 2026-11-01; the deployed llm-guard row above since question 1041), and the zero-shot weights' scratch image that
-# llm-guard-cpu-offline's Dockerfile at 31962f2 builds cpu.5 from. lab-platform's llm-guard:v1, deployed before
-# question 1041, is kept by the digest the llm-guard row carried (#730), saved on netcup on 2026-11-04, for the
-# return to it after lab-platform#341.
+# 2026-11-01; the deployed llm-guard from question 1041 to #895), and the zero-shot weights' scratch image that
+# llm-guard-cpu-offline's Dockerfile at 31962f2 builds cpu.5 from. lab-platform's llm-guard:v1 as it was before
+# lab-platform#341's rebuild moved the tag, deployed until question 1041, is kept by the digest the llm-guard row
+# carried then (#730), the one saved on netcup on 2026-11-04.
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c2fc935f2208d0c4a84198b29e93307ab2e88debdd045a919ae9f repo:peopleforrester/llm-guard-cpu-offline -
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline -
 ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot -

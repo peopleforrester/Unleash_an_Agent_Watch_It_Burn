@@ -305,14 +305,13 @@ r = render("-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--se
 check("a guardrails.validationAction that is neither Audit nor Deny: the render fails, naming it", r.returncode != 0
       and "guardrails.validationAction is the action of the two guardrails" in r.stderr, r.stderr.strip()[:200])
 
-print("== LLM Guard's image, set through kustomize.images: cpu.5 by digest, at every root's registry (#719) ==")
+print("== LLM Guard's image, set through kustomize.images at the root's registry (#652, #895) ==")
 # resources.yaml names the container by the kustomize image name llm-guard; ai-layer.yaml's kustomize.images sets it.
 # Argo CD runs `kustomize edit set image` with each entry, which writes the entries kustomize_images() returns
 # (measured with kustomize v5.8.1, Argo CD v3.4.4's), so the scratch overlay below is what Argo CD builds.
-# Since question 1041 (#719) the entry names llm-guard-cpu-offline's cpu.5, a public watch-it-burn image, literally:
-# it does not take the root's imageRegistry, which is lab-platform's (#622), so a cache root runs the same reference.
-LLM_GUARD = ("ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5"
-             "@sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791")
+# Since #895 the entry is lab-platform#341's rebuild of llm-guard:v1 at the root's imageRegistry, as before question
+# 1041 (#719) moved it to cpu.5 for a while.
+LLM_GUARD = "llm-guard:v1@sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a"
 CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
 
 
@@ -334,11 +333,12 @@ check("gitops/ai-layer builds with kustomize", base is not None and base.returnc
       base.stderr.strip()[:300] if base else "no kubectl")
 from registry_allowlist import allowed  # noqa: E402
 
-for label, args in (("unset", ()), ("at the cache path", ("--set", f"imageRegistry={CACHE}"))):
+for label, registry, args in (("unset", LAB_PLATFORM_GHCR, ()), ("at the cache path", CACHE,
+                                                                ("--set", f"imageRegistry={CACHE}"))):
     entries = kustomize_images(ai_layer(*args))
-    check(f"{label}: ai-layer sets one image, llm-guard, to {LLM_GUARD}",
-          entries == [{"name": "llm-guard", "newName": "ghcr.io/peopleforrester/watch-it-burn",
-                       "newTag": "llm-guard-0.3.16-cpu.5", "digest": LLM_GUARD.split("@", 1)[1]}], str(entries))
+    check(f"{label}: ai-layer sets one image, llm-guard, to {registry}/{LLM_GUARD}",
+          entries == [{"name": "llm-guard", "newName": f"{registry}/llm-guard", "newTag": "v1",
+                       "digest": LLM_GUARD.split("@", 1)[1]}], str(entries))
     if not (KUBECTL and base and base.returncode == 0 and entries):
         continue
     (REPO / "tmp").mkdir(exist_ok=True)
@@ -350,7 +350,7 @@ for label, args in (("unset", ()), ("at the cache path", ("--set", f"imageRegist
     got = workload_images(k.stdout) if k.returncode == 0 else {}
     want = workload_images(base.stdout)
     key = "Deployment/llm-guard/llm-guard-api"
-    check(f"{label}: the llm-guard Deployment runs {LLM_GUARD}", got.get(key) == LLM_GUARD,
+    check(f"{label}: the llm-guard Deployment runs {registry}/{LLM_GUARD}", got.get(key) == f"{registry}/{LLM_GUARD}",
           k.stderr.strip()[:300] or str(got.get(key)))
     check(f"{label}: restrict-image-registries allows it", allowed(got.get(key, "")))
     check(f"{label}: no other container's image changes", {n: i for n, i in got.items() if n != key}
