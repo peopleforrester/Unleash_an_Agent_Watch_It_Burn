@@ -25810,3 +25810,9 @@ differing object. No tag was created, moved or deleted. No dependency was added.
 This run cherry-picked its test commit onto staging at `96918d69` with no conflict; `verify/draft-drift.sh` read
 the draft as clean, with staging only appending to decisions.md. The code is unchanged from the draft. Both tests
 passed again here: the clone's two delivered tags and GitHub's are the pinned objects on the pinned commits.
+
+**Suite results, run 17903.** `bash verify/run-e2e-tools.sh` exited 0: the offline suite ran 301 tests green,
+`test_delivered_tags.py` among them, and the tools tier printed "73 checks ran (the offline suite and 72 tier tests)
+in 42m23s" and "ALL E2E TOOLS TIER CHECKS GREEN", with `test_delivered_tags_github_e2e.py` green against GitHub.
+
+**Not yet run on a cluster.** Nothing: the tests read git refs, not a cluster.
