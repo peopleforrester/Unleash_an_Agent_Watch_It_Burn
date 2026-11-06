@@ -24730,3 +24730,9 @@ holds to the two pods question 947 chose, so it is a followup and not done here.
 promoted: after promotion, `kubectl --context watch-it-burn-private -n argocd get application gateway-api` should read
 Synced and Healthy, and `kubectl --context watch-it-burn-private get gatewayclass istio-waypoint` should read
 Accepted. The next run on #728 reads both.
+
+**The suites (run 17846, at `6b7f6921`).** `bash verify/run-e2e-tools.sh` printed `293 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), with
+`test_gateway_api_crds.py` among them, then `70 checks ran (the offline suite and 69 tier tests) in 30m54s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_gateway_api_crds_upstream.py` and the render gates over
+the new `gateway-api` Application among the tier tests. The log is `/var/lib/hecaton/runs/17846/e2e-tools.log`.
