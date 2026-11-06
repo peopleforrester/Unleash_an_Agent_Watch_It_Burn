@@ -22558,3 +22558,35 @@ a `test_guardrails_switch.py` addition, the run-of-show, internal-registry and r
 the system prompt or this rule's test, and the rebase was clean. `bash verify/run-tests.sh` on the rebased tree:
 `283 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The tools tier result above stands for the change; the delta
 adds no tier test.
+## 2026-11-06 · #603 · run 17790 · Eight rows changed after the second save are unsaved, all eight now pull, and a third netcup save is escalated
+
+**Where it stands.** No save has run since 2026-11-05. Through sources, the image archive's `manifest.tsv` still has
+75 lines (66 dated 2026-11-04 and 9 dated 2026-11-05, all with this repo's origin), and the newest log is
+`save-Unleash_an_Agent_Watch_It_Burn-2026-11-05.log`. Since that save, staging changed eight rows, so each has no
+manifest line at its current digest: the node and debian bases, which #714 moved to lab-platform#353's ghcr.io
+copies; both Jokers, which #714 re-pinned when it added the shell banner; and llm-guard with the three
+llm-guard-cpu-offline rows, cpu.4, cpu.5 and the zero-shot model image, which #719 added. `mirror-images.sh check .`,
+read through sources from llm-coding-workflow and run on this checkout, reports 26 references, 57 declared rows and
+8 problems, each one of these eight rows "never saved".
+
+**All eight now pull.** On 2026-11-06 ghcr.io served each of the seven distinct digests anonymously (llm-guard and
+cpu.5 share one): node `e053394f`, debian `a3bba7dc`, C6's Joker `0765b359`, the breakout Joker `793db299`, cpu.5
+`4c66fd0f`, cpu.4 `3322db6a` and the zero-shot image `c01ca964`. The breakout Joker, which had answered "manifest
+unknown" until now, is served at its row's digest: #775 is closed, and push-jokers.yml's runs on staging and on
+main on 2026-11-05 all ended in success. So nothing outside netcup holds the save back any more, and a third save should end with every owed row
+saved.
+
+**Why this run did not save them.** The archive is `~michael/repos/private/image-archive`, which this run's user cannot
+read or write, so a tarball written anywhere else would not be retained, and a saved date for it would be false.
+The save runs as michael on netcup, in a fresh clone of staging, with an empty Docker config so the expired Docker
+Hub token (llm-coding-workflow#433) is not sent, and with its log in the archive. That command is this run's
+escalation. Its clone uses the ssh URL, so the manifest's origin column matches the 75 lines already there. The
+next run on #603 copies the new dates into images.lock, each checked against the manifest at the row's current
+digest, as runs 17350 and 17393 did, and the issue closes when check reports no problem.
+
+**Live check (run 17790).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_images_lock_live.py` printed "Every image both clusters run has an images.lock row.", exit 0, with 0
+images without a row on either cluster (75 pods on watch-it-burn-private). It only read; nothing on either cluster
+changed.
+
+**Not yet run on a cluster.** Nothing: the save runs on netcup, not on a cluster.
