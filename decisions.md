@@ -22306,3 +22306,30 @@ command still reads a recent trace through the run's access.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces_record.py` among them) and then the tier: `64 checks ran (the
 offline suite and 63 tier tests) in 40m07s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed
 `prose gate: pass`.
+## 2026-11-06 · #921 · run 17783 · the follow-ups are filed, the wall's half has landed, and #921 waits on guard-proxy-agenticburn#59
+
+**Where #921 stands.** Run 17761's records (the 2026-11-05 #921 entry above) reached staging as `4aba39c8`. Its two
+follow-ups are now filed: guard-proxy-agenticburn#59 carries the `witches` diff and contract for guard-proxy's
+`GET /prompts`, and lab-platform#374 relays `witches` beside `prompts` in lab-platform's event prompt feed. The wall's
+half, prompts-agenticburn#16, closed on 2026-11-05 (its staging `2ae75bf8`): the wall pairs `prompts[i]` with
+`witches[i]`, keeps `cluster` on each entry for the filter, and shows "someone who gave no name" in italics when the
+name is `""`, the same no-name wording as the 2026-11-05 entry. So step 4 of that entry's owed list is done, and steps
+1 and 3 are those two issues. `verify/prior-drafts.sh 921 origin/staging` has nothing to port: every #921 commit is in
+staging.
+
+**Owed, in order (updated).**
+1. guard-proxy-agenticburn#59 lands on guard-proxy-agenticburn's main (still `c5f71f3` on 2026-11-06).
+2. Michael repins `gitops/ai-layer/guard-proxy` (pinned at `0f0c809`) to that commit and sets `checksum/proxy-py` in
+   `gitops/ai-layer/resources.yaml` (now `dfca2b1fe758`) to its proxy.py's hash.
+3. lab-platform#374, so an event lab-platform provisions shows names too.
+4. The live `/prompts` read after the repin, under "Not yet run on a cluster" in the 2026-11-05 entry.
+
+#921 stays open until step 2 and the live read are done; this run reports it waiting on guard-proxy-agenticburn#59.
+
+**Live, 2026-11-06 (read only).** `kubectl --context <ctx> -n agent exec deploy/guard-proxy -c proxy -- python3 -c
+<GET 127.0.0.1:8080/prompts, print its keys, item types and the length of witches>` printed
+`['enabled', 'prompts'] True 0 [] no-witches` on both watch-it-burn-community and watch-it-burn-private, and both
+deployments carry `checksum/proxy-py` `dfca2b1fe758`. That is the state the 2026-11-05 entry recorded: neither cluster
+carries `witches` yet. No prompt text was printed and nothing on either cluster was changed.
+
+**Not yet run on a cluster.** The same check the 2026-11-05 entry names, after the repin syncs.
