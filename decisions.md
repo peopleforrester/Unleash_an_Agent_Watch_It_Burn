@@ -23418,6 +23418,18 @@ Amazing Awesome Sauce"), not a folder, so the recon step does not depend on lear
 #951 chose is `burrito-data`, the name #925's prompts already use, so nothing the folder name carries reaches slide 17.
 No deck change is needed and no agent-task issue is filed.
 
+**The `/kubecon` word budget.** The recon prompt is new visible text on the page, and `verify/test_instructor_brief.py`
+held the visible page under 2,300 words: the first full suite run failed it at 2,376. The two C3 markers were cut terse
+(2,339), and the budget rises to 2,400, as #773 (2,100) and #844 (2,300) raised it for content they added; the test's
+comment records #952 as the reason. The prompts themselves are #925's wording and cannot shrink, since
+`verify/test_replay_prompts.py` holds them equal to `prompts.yaml` word for word.
+
 **Not yet run on a cluster.** The live recon, same-conversation refusal, reset and attack on the public bot are #953,
 and the KubeArmor block-still-holds and workshop-still-works checks are #954; both run after this reaches the clusters
-through Argo CD.
+through Argo CD. This change touches no cluster, so no live check runs here.
+
+**The suites (run 17818, at `b3d7dad6`).** Run 17805 was stopped for repeating one short poll of the suite log; run 17818
+reran the suite from the start. `bash verify/run-e2e-tools.sh` ran the offline suite (`284 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `65 checks ran (the offline suite and 64 tier tests) in
+51m34s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `verify/test_kubecon_prompt_sheet_e2e.py` passed: "The iPad
+prompt sheet carries every /kubecon prompt, in order."
