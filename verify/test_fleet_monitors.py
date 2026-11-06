@@ -763,6 +763,8 @@ org = FakeOrg()
 rc, text = run(["--apply"], org, env={}, keys=no_keys_read)
 check(f"--apply without {fm.APP_KEY_ENV} exits 1, reads no keys and calls nothing",
       rc == 1 and fm.APP_KEY_ENV in text and "read-only" in text and org.calls == [])
+check("the refusal names the secret's write-app-key field, where the write key is kept since 2026-11-05 (#489)",
+      "write-app-key" in text and fm.SECRET_ID in text)
 for mode in (["--apply"], ["--check"]):
     org = FakeOrg(org="event-001")
     rc, text = run(mode, org)

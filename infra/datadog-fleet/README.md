@@ -48,8 +48,20 @@ from the file is deleted, and the dashboard is matched by title, so its URL is s
 For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student orgs, so
 both clusters ship there (#629). The application key in `watch-it-burn/datadog` is read-only, which is all
 `--check` needs, so `--apply` takes its application key from `WIB_FLEET_MONITORS_APP_KEY`: an unscoped key
-Whitney issues from her own user (Datadog refuses log monitors created with a scoped one). Both modes refuse an
-org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`, as `verify/datadog-orgs.sh` uses).
+issued from a user in that org (Datadog refuses log monitors created with a scoped one). Since 2026-11-05 the
+same secret holds one as `write-app-key`, an unscoped key from Michael's user in Whitney's sandbox org, beside
+`api-key`, `app-key` and `site`, so a dispatched run reads it with its own AWS session and passes it on that one
+command:
+
+```bash
+WIB_FLEET_MONITORS_APP_KEY="$(aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog \
+  --profile accen-dev --region us-west-2 --query SecretString --output text \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["write-app-key"])')" \
+  infra/terraform/fleet/fleet.sh monitors --apply --session START/END
+```
+
+Both modes refuse an org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`, as
+`verify/datadog-orgs.sh` uses).
 
 `--notify @handle` (repeatable) adds a Datadog notification handle to every monitor. Without it the
 monitors still change state on the dashboard and the Monitors page, but they page nobody.

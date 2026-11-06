@@ -38,7 +38,8 @@ fleet.sh gives the clusters). The org name must start with WIB_DD_POOL_PREFIX (d
 verify/datadog-orgs.sh and room_view.py), so the monitors are never written into, or checked against, some other
 org. The application key in that secret is read-only, which --check needs and --apply cannot use: the apply
 writes monitors, downtimes and dashboards. --apply therefore takes the application key from
-WIB_FLEET_MONITORS_APP_KEY in this command's environment, a key Whitney issues from her own user. It must be
+WIB_FLEET_MONITORS_APP_KEY in this command's environment, a key from a user in that org; since 2026-11-05 the
+secret's write-app-key field holds one, from Michael's user (#489), read into the variable per command. It must be
 unscoped: Datadog refuses log monitors created with a scoped one. Key values are never printed.
 
 The session window. The no-traces and agent-obs-silent monitors only mean something while students are at
@@ -902,8 +903,9 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
         return 0
 
     if a.apply and not env.get(APP_KEY_ENV):
-        print(f"FAILED: --apply needs {APP_KEY_ENV}, an unscoped application key from Whitney's user in the sandbox "
-              "org; the key in watch-it-burn/datadog is read-only", file=sys.stderr)
+        print(f"FAILED: --apply needs {APP_KEY_ENV}, an unscoped application key from a user in the sandbox org; "
+              f"{SECRET_ID}'s app-key is read-only, and its write-app-key field holds that key (2026-11-05)",
+              file=sys.stderr)
         return 1
     prefix = env.get("WIB_DD_POOL_PREFIX", "Datadog")
     try:
