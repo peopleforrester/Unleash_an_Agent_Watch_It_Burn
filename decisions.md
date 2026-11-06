@@ -24653,3 +24653,41 @@ other. Live again at the rebase: `main` and `staging` both at `6601313a76c9`, `A
 **The suites (run 17850, at `c990271d`).** `bash verify/run-e2e-tools.sh` printed `293 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `69 checks ran (the offline suite and 68 tier tests) in 29m46s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. `test_chat_turn_cancel.py` passed in it.
+
+## 2026-11-06 · #964 · run 17871 · test_weather_feed_e2e.py prints the feed's error status, body and timing instead of an HTTPError traceback
+
+**What happened.** Run 17801 on #882 saw `test_weather_feed_e2e.py` die on its first request with `HTTP Error 502:
+Bad Gateway` from the local weather feed. The feed answers 502 only when its own Open-Meteo call fails, and it puts
+that failure in the body's `error` field, but the test's bare `urlopen` raised before the body was read. Run alone a
+few minutes later it passed, so the cause was never named.
+
+**What changed.** A new helper, `verify/weather_feed_client.py`, makes one GET and returns the status, the JSON body
+(or the raw body when it is not JSON) and the seconds taken, for error statuses as well as 200. A connection that
+fails outright still raises. The e2e test asks for both `/current` requests through it. A non-200 live reading is a
+failed check whose detail reads like `HTTP 502 after 8.1s, error: 'weather service unavailable: <urlopen error timed
+out>'`, and the reading checks that need a body are not run on an error answer, so they no longer raise a
+KeyError on top of it. The unknown-city check prints the same line when it is not a 404. A failed run prints the
+feed's own log, which has a timestamped warning for each upstream failure. There is no retry: one failed request is
+still a failed test, as the issue and the no-fallback rule ask. The feed itself is unchanged.
+
+**Reading the next failure.** The time on the line says which way it went. Near 8 s is the feed's `TIMEOUT` running
+out on Open-Meteo (`timed out`); a short time with `HTTP Error 429` is rate limiting; a short time with another
+`HTTP Error` or a refused connection is Open-Meteo answering an error. Whether the feed's timeout or the tier's
+scheduling should change is decided then, from that line, as the issue says.
+
+**The offline test.** `verify/test_weather_feed_client.py` serves the feed's real `Handler` on loopback with its
+Open-Meteo call replaced, and holds that a connect timeout, an upstream 429, a read timeout and a forecast without its
+`current` block each come back through the client as a 502 that names the cause, with one upstream call per
+request; that a reading and an unknown city still read as before; that an HTML 502 is shown raw; that a refused
+connection still raises; and that the e2e test sends both requests through the client and prints the feed log on
+failure.
+
+**Live check (run 17871).** `python3 verify/test_weather_feed_e2e.py` against Open-Meteo passed all 10 checks. On a
+throwaway copy whose feed pointed its geocoding URL at an unroutable address, it failed with `FAIL  the feed answers
+200 for Salt Lake City  (HTTP 502 after 8.1s, error: 'weather service unavailable: <urlopen error timed out>')` and
+printed the feed log with the matching `upstream lookup for 'Salt Lake City' failed` warning, which is what the
+next real failure will show. No cluster was touched.
+
+**Not yet run on a cluster.** Nothing is owed: the test runs the feed locally and reads Open-Meteo.
+
+No dependency was added.
