@@ -23433,3 +23433,47 @@ reran the suite from the start. `bash verify/run-e2e-tools.sh` ran the offline s
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `65 checks ran (the offline suite and 64 tier tests) in
 51m34s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `verify/test_kubecon_prompt_sheet_e2e.py` passed: "The iPad
 prompt sheet carries every /kubecon prompt, in order."
+## 2026-11-06 · #916 · run 17787 · Every part of #916 reads green live; only registry-attackme's 502, outside the criteria, waits on the next routes publish
+
+**Where the issue stood.** #916's parts were split out by planning run 17600 and done on 2026-11-05: #918 published
+the routes (apex-agenticburn main `1e602e1`, router reloaded 19:12Z), #919 read internal-registry on private as
+Synced and Healthy, #920 made and recorded the three HC-666 asks, and #931 corrected the support criterion and took
+`registry-attackme` out of the table `fleet.sh` writes. `verify/prior-drafts.sh 916 origin/staging` printed NONE:
+run 17600's draft is in staging. Run 17786, the attempt before this one, ended with no report: its session refused
+every shell, web fetch and file write, so it ran nothing. That was the session's permissions, not the repo, and no
+code changes here.
+
+**Live check (run 17787), read only, 2026-11-06 02:09Z, at staging `b2e5060d`.** From `infra/terraform/fleet/`:
+
+```
+$ ./fleet.sh router-check
+  PASS  the router serves attackme.burritobot.co
+  PASS  the router serves burritobot-private.burritobot.co
+router-check: the router serves exactly the roster
+exit=0
+$ ./fleet.sh wall-check
+  PASS  https://prompts.burritobot.co/healthz answers 200
+  PASS  the wall shows attackme
+  PASS  the wall shows burritobot-private
+wall-check: the wall shows every roster cluster
+exit=0
+```
+
+`curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` printed
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}` and exit 0. Status codes: 200 on that tags list
+and on `registry-burritobot-private.burritobot.co`'s; 502 on `registry-attackme.burritobot.co/v2/`; 200 on
+`https://deployments.burritobot.co`; 200 on `/`, `/prompts` and `/cost` of `attackme.burritobot.co` and
+`burritobot-private.agenticburn.com`; 200 on `/` and `/ticket/HC-666` of `support.burritobot.co`,
+`support-attackme.burritobot.co` and `support-burritobot-private.burritobot.co`, each ticket page naming HC-666.
+`kubectl --context watch-it-burn-private -n argocd get application internal-registry -o wide` printed `Synced
+Healthy` at `b2e5060dd73e33bfd2badb2a426279bc1f22a0eb`, and the registry pod read `2/2 Running`. Community carries no
+internal-registry Application, as #931 records, and no Joker Deployment. Nothing was changed on either cluster.
+
+**Still red, outside #916's criteria.** `registry-attackme.burritobot.co` answers 502, because the live table still
+carries the row #931 retired. The next `./fleet.sh routes roster` drops it. That pushes apex-agenticburn's main and
+reloads the router, which a dispatched run's governance forbids even with Michael's go on #916, so it goes to the
+coordinator through the report, as does #916's closing comment, since a run writes no issue comments.
+
+**Not yet run on a cluster.** Nothing for #916's criteria. After the next routes publish,
+`curl -s -o /dev/null -w '%{http_code}\n' https://registry-attackme.burritobot.co/v2/` should print the router's 404,
+and `./fleet.sh router-check` should still end "the router serves exactly the roster".

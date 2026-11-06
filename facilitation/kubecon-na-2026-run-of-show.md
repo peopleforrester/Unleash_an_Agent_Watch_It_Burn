@@ -420,6 +420,17 @@ input guard, and the ask then made no Joker. `guardrails-off` from the private t
 start state. Not yet rolled: the registry still serves the Joker at `sha256:0dbe92d4...`, since #714's new pin reached
 its ConfigMap without restarting the pod; the seed checksum (#775) rolls it once Argo CD syncs.
 
+**2026-11-06, #916 closed out on both clusters.** Hecaton run 17787, at 02:09Z, at staging `b2e5060d`, read only.
+`./fleet.sh router-check` ended "the router serves exactly the roster" and `./fleet.sh wall-check` "the wall shows
+every roster cluster", both exit 0. `curl -fsS` of `registry.burritobot.co`'s maintenance-shell tags list printed
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `deployments.burritobot.co` read 200, and so did
+`/`, `/prompts` and `/cost` on `attackme.burritobot.co` and `burritobot-private.agenticburn.com`. `support.burritobot.co`,
+`support-attackme.burritobot.co` and `support-burritobot-private.burritobot.co` read 200 on `/` and on
+`/ticket/HC-666`, each page naming HC-666. internal-registry on watch-it-burn-private read `Synced Healthy` at
+`b2e5060d`, its pod `2/2 Running`, and no Joker was left on community. The HC-666 asks are #920's above. Still red,
+outside #916's criteria: `registry-attackme.burritobot.co` answers 502 until the next `./fleet.sh routes roster`
+drops its row (#931).
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
