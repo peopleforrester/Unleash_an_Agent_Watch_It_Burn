@@ -1,8 +1,9 @@
 # ABOUTME: ArgoCD Application for the CPU vLLM that serves Qwen3-1.7B to agentgateway's /local route. Listed by
 # ABOUTME: values-local-inference.yaml only, never by a fleet profile (#394, question 657).
 #
-# A 4-CPU, 10Gi model server is fine on one instructor or demo cluster and wrong on fifty student nodes, so no
-# fleet profile lists it: verify/test_local_inference.py fails if any list but values-local-inference.yaml does.
+# A model server asking 1500m CPU and 10Gi (limits 6 CPU / 16Gi) is fine on one instructor or demo cluster and
+# wrong on fifty student nodes, so no fleet profile lists it: verify/test_local_inference.py fails if any list but
+# values-local-inference.yaml does.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
