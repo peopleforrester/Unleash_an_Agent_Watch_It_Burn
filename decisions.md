@@ -27391,3 +27391,9 @@ killed before its output was flushed. A read afterwards found neither probe Depl
 `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_room_cleanup_live.py`, which needs `kyverno-breakout`
 synced past this change, once with the switch on and once off. The stage beat itself is owed too: a room deploy of a
 public image, `guardrails-on`, and the Deployment gone within a minute on the public bot.
+
+**The suites (run 17969, at `011320c4`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`307 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the offline suite and 73 tier tests) in
+52m55s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with `test_breakout_room_cleanup.py` among them. A first run at
+`c09a9c1b` was stopped partway, before the Argo CD condition was added. The prose gate printed `prose gate: pass`.
+No dependency was added.
