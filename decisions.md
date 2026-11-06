@@ -24213,3 +24213,48 @@ same way. They are outside #944, which is about the terminal login, and are name
 **Suites (run 17840, at `91a4e0c4`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`291 tests ran`, `ALL
 OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `69 checks ran (the offline suite and 68 tier tests) in 32m57s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #945 · run 17841 · The table without registry-attackme is on apex main; the router reload waits on a Railway login
+
+**Where the issue stood.** `verify/prior-drafts.sh 945 origin/staging` printed NONE, and the issue had no comments.
+#931's change is on staging, so `fleet.sh` no longer writes `registry-attackme` on either domain. Question 1092's
+answer (run 17817, under #916) has every run do the publish itself through the `sources-elevated` wrapper and, if it
+still refuses, put the exact command in `escalate` with the refusal quoted.
+
+**The push half is already done.** `gh api repos/peopleforrester/apex-agenticburn/commits/main` reads `a93679a`,
+"routes: regenerate agenticburn.com router map from live fleet (31 hosts)", committed at 03:47Z on 2026-11-06, and its
+`routes.map` holds no `registry-attackme` line. tanjiro-wsl2's checkout at
+`/home/michael/repos/agenticburn/apex-agenticburn` is at the same commit, level with `origin/main`. So
+`./fleet.sh routes roster` would regenerate the same 31 rows and push nothing new; what it still owes is the reload.
+
+**The reload, through the wrapper (08:38:50Z).**
+
+```
+$ sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2 'cd /home/michael/repos/agenticburn/apex-agenticburn && scripts/reload-routes.sh /home/michael/repos/agenticburn/apex-agenticburn/routes.map'
+08:38:50 table /home/michael/repos/agenticburn/apex-agenticburn/routes.map carries 31 route(s)
+08:38:50 staging the table on the watch-it-burn-apex /config volume
+Unauthorized. Please run `railway login` again.
+08:38:51 FATAL: failed to stage /config/routes.map.new over railway ssh; the live table is untouched
+reload exit=1
+```
+
+The wrapper did not refuse; Railway did, as at 05:57Z for run 17817. `reload-routes.sh` stages the table over
+`railway ssh`, which needs a user login, not a project token. `railway whoami` answers Unauthorized on tanjiro-wsl2
+and on this host, and megumi-wsl2's ssh timed out. A Railway login is Michael's own sign-in, so the report waits on
+him for it (class own-login) and escalates the reload command. Nothing on the router or its volume changed.
+
+**Read live, read only (08:37Z to 08:39Z).** `registry-attackme.burritobot.co/v2/` and
+`registry-attackme.agenticburn.com/v2/` answered 502, before and after the failed reload.
+`registry-burritobot-private.burritobot.co/v2/` and `registry.burritobot.co/v2/` answered 200, and `curl -fsS` of
+`registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list` printed
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended "the router
+serves exactly the roster", exit 0: it compares the bot hosts in the router's `roster.json` with the roster, and the
+registry rows are not in that list, so the stale row does not show there. Neither cluster was touched.
+
+**Still owed, once Railway is logged in on tanjiro-wsl2.** From the apex checkout,
+`scripts/reload-routes.sh /home/michael/repos/agenticburn/apex-agenticburn/routes.map` (or `./fleet.sh routes roster`
+from `infra/terraform/fleet/`, which does the same and pushes nothing new), then `./fleet.sh router-check`, then
+`curl -s -o /dev/null -w '%{http_code}\n' https://registry-attackme.burritobot.co/v2/`, which should print the router's
+404, and the tags list above, which should still list `busybox-1.38.0`.
+
+**Not yet run on a cluster.** Nothing: the change is records only. No dependency was added.

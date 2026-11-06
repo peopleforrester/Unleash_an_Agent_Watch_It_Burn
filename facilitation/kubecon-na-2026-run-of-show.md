@@ -431,6 +431,19 @@ every roster cluster", both exit 0. `curl -fsS` of `registry.burritobot.co`'s ma
 outside #916's criteria: `registry-attackme.burritobot.co` answers 502 until the next `./fleet.sh routes roster`
 drops its row (#931).
 
+**2026-11-06, the routes republish for #945, not yet live.** Hecaton run 17841, 08:37Z to 08:39Z, at staging
+`9530f450`. apex-agenticburn's main on GitHub is `a93679a` (03:47Z, 31 hosts), which already leaves out both
+`registry-attackme` rows, so the push half of `./fleet.sh routes roster` has nothing left to change. The router reload
+did not run: `scripts/reload-routes.sh routes.map` from tanjiro-wsl2's apex checkout stopped with "Unauthorized. Please
+run `railway login` again." and "failed to stage /config/routes.map.new over railway ssh; the live table is
+untouched", exit 1. No host this run reaches is logged in to Railway. So the live table is still `1e602e1`'s:
+`registry-attackme.burritobot.co/v2/` and `registry-attackme.agenticburn.com/v2/` answer 502, and
+`registry.burritobot.co` and `registry-burritobot-private.burritobot.co` answer 200, the tags list printing
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended "the router serves
+exactly the roster", exit 0, since it reads the bot hosts in the router's `roster.json` and the registry rows are
+not among them. The reload waits on a Railway
+login on tanjiro-wsl2.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
