@@ -725,20 +725,29 @@
     if(inp){ inp.disabled=!up; inp.placeholder = up ? "Tell BurritoBot what you'd like…" : "BurritoBot backend is starting up — give it a moment…"; }
     if(btn) btn.disabled=!up;
   }
+  // The checks run every 12 seconds and can overlap: while the cluster is unreachable each one waits out the
+  // router's 5-second retry budget twice (/controls, then /guards). So a check that set out before a standby took
+  // the hostname can land after a newer one has already found the standby up, and it greyed the composer out again
+  // until the next check (the #986 failover drill, 2026-11-06). A check's answer counts only when no check that
+  // started after it has already landed.
+  let backendStarted=0, backendLanded=0;
   async function checkBackend(){
+    const mine=++backendStarted;
+    const current=function(){ if(mine<backendLanded) return false; backendLanded=mine; return true; };
     refreshCap();
     // /controls is both the liveness probe AND the badge source: it returns 200 whenever the proxy is
     // up (even if it cannot read the cluster, in which case infra fields are false/null and only the AI
     // badges light). One fetch drives both, and it is the authoritative answer to "what is guarding me".
     try{ const r=await fetch('/controls',{method:'GET',cache:'no-store'});
-         if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false);
+         if(r.ok){ if(!current()) return; setBackendUp(true); unreachable=0; noBurritos(false);
                    try{ applyControls(await r.json()); }catch(e){}
                    return; } }catch(e){}
     // Fall back to /guards for a proxy image that predates /controls, so the AI badges still light.
     try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'});
-         if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false);
+         if(r.ok){ if(!current()) return; setBackendUp(true); unreachable=0; noBurritos(false);
                    try{ applyControls(await r.json()); }catch(e){}
                    return; } }catch(e){}
+    if(!current()) return;
     setBackendUp(false);
   }
   // Show the ACTIVE spend ceiling next to the counter (#138). The backend reports whichever cap would bite

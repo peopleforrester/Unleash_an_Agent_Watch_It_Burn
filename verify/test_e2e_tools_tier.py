@@ -59,10 +59,10 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway "
-      f"({sorted(tools)})",
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver, agentgateway "
+      f"and caddy ({sorted(tools)})",
       set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd", "crane",
-                     "weaver", "agentgateway"})
+                     "weaver", "agentgateway", "caddy"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -124,6 +124,14 @@ check(f"agentgateway is the deployed gateway image's version ({want.group(1) if 
 check("the agentgateway artifact is that version's release binary",
       "agentgateway" in tools and bool(want) and tools["agentgateway"][3]
       == f"https://github.com/agentgateway/agentgateway/releases/download/{want.group(1)}/agentgateway-linux-amd64")
+
+# caddy runs the apex router's cluster leg in verify/failover_drill.py (#986). The router image lives in
+# apex-agenticburn, so the lock's comment names its version and this holds the artifact to that version's release.
+check("caddy is v2.11.4, the Caddy the apex router image runs, as the lock's comment says",
+      "caddy" in tools and tools["caddy"][1] == "v2.11.4" and "Caddy v2.11.4" in LOCK.read_text())
+check("the caddy artifact is that version's release tarball, its binary the member",
+      "caddy" in tools and tools["caddy"][3:] == [
+          "https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_linux_amd64.tar.gz", "caddy"])
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
