@@ -25096,3 +25096,38 @@ Markdown files the test does not read. No dependency was added.
 
 **Not yet run on a cluster.** Nothing from this issue. The live DNS-exfil validation that reads the delegation stays
 owed under `#728`, as the note's "Validation owed on a cluster" section already tracks.
+
+## 2026-11-06 · #974 · run 17905 · A test holds #952's slide-17 decision and its rounds-agenticburn issue rule
+
+`verify/prior-drafts.sh 974 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging at `96918d69`. Test review run 17827 (#974) found that no test checked #952's criterion: whether the chosen
+folder name changes slide 17 is decided and recorded in decisions.md, and, if it does, an agent-task issue is filed on
+`rounds-agenticburn` and its link recorded. #952's entry (run 17805) records "Slide 17 is unchanged, so no
+`rounds-agenticburn` issue." The issue had no checklist, so this run added an "Acceptance criteria" section to its
+body first.
+
+**The test.** `verify/test_952_slide17_decision.py` (offline) reads the "## 2026-11-06 · #952 · run 17805" entry. It
+needs exactly one paragraph opening `**Slide 17`, and that paragraph's bold label must state exactly one verdict:
+"Slide 17 changes" or "Slide 17 is unchanged". A "changes" verdict must link an issue on
+`peopleforrester/rounds-agenticburn`, as a URL or as `owner/repo#N`. An "unchanged" verdict must say "no agent-task
+issue is filed" and name the folder it was decided for ("The folder #951 chose is `burrito-data`").
+
+**Why it also reads the folder in use.** The verdict is about one folder name. The test holds that name equal to the
+folder #951's entry records as chosen and to the folder the `c3-attack` prompt in
+`facilitation/kubecon-na-2026/fallback/prompts.yaml` sends (`verify/test_replay_prompts.py` already holds that prompt
+equal to the `/kubecon` sheet word for word). If a later change moves the room to another folder, the recorded
+verdict covers a name nobody uses, and the test fails with a message asking for the slide-17 question to be decided
+again and recorded. The test does not read the deck itself: rounds-agenticburn is another repo, and the criterion is
+about the record here.
+
+**It can fail.** Each anchor it cuts on is checked first and the test exits naming the literal and the file when it is
+gone. The verdict is then re-run against mutated copies, and each one fails: the #952 heading struck, the slide-17
+paragraph removed, the paragraph doubled, a label with no verdict, a label with both, "changes" with no link, "changes"
+linking another repo's issue, "unchanged" without the no-issue sentence, a folder #951 did not choose, #951's entry
+recording another folder, and the attack prompt sending another folder. A "changes" verdict with a rounds-agenticburn
+link passes in both link forms.
+
+**Live.** No cluster is involved: the test reads two repo files, and this run touched neither cluster. No dependency
+was added (the test uses PyYAML, which the offline suite already needs).
+
+**Not yet run on a cluster.** Nothing from this issue.
