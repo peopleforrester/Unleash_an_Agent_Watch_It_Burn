@@ -83,6 +83,49 @@ with tempfile.TemporaryDirectory(dir=REPO) as tmp:
     after = next(d for d in render(copy) if d["kind"] == "Deployment" and d["metadata"]["name"] == "console")["spec"]["template"]
     check("editing lab.html changes the console pod template (so Argo CD rolls it)", before != after)
 
+# #965. Every file a configMapGenerator reads is a source some pod loads, and most of them are Python a process
+# reads once at start: workshop-mcp's server.py and tool_audit.py, evil-mcp-shim's server.py. A change to one has
+# to change the pod template of every Deployment that mounts its ConfigMap, or Argo CD syncs green and the old
+# code keeps answering. The hash suffix is what does it, so no checksum annotation is needed for these; this
+# probes each source file in turn and fails naming the file and the Deployment that would not roll.
+print("== a change to any generated ConfigMap's source rolls every Deployment that mounts it (#965) ==")
+kust = yaml.safe_load((AI_LAYER / "kustomization.yaml").read_text())
+sources = [(g["name"], entry.split("=", 1)[-1]) for g in kust.get("configMapGenerator", []) for entry in g.get("files", [])]
+
+
+def mounted_by(docs_, gen):
+    """Names of the Deployments whose volumes mount the hashed ConfigMap rendered from generator `gen`."""
+    pat = re.compile(rf"^{re.escape(gen)}-[a-z0-9]{{10}}$")
+    return sorted(d["metadata"]["name"] for d in docs_ if d["kind"] == "Deployment"
+                  and any(pat.match((v.get("configMap") or {}).get("name", ""))
+                          for v in d["spec"]["template"]["spec"].get("volumes", [])))
+
+
+templates = {d["metadata"]["name"]: d["spec"]["template"] for d in docs if d["kind"] == "Deployment"}
+consumers = {gen: mounted_by(docs, gen) for gen in {g for g, _ in sources}}
+# The two the issue named, held by name so the probe below can never pass by finding no consumer at all.
+check(f"workshop-mcp mounts workshop-mcp-src (mounted by {consumers.get('workshop-mcp-src')})",
+      "workshop-mcp" in consumers.get("workshop-mcp-src", []))
+check(f"evil-mcp-shim mounts evil-mcp-src (mounted by {consumers.get('evil-mcp-src')})",
+      "evil-mcp-shim" in consumers.get("evil-mcp-src", []))
+check("workshop-mcp-src reads workshop-mcp-server.py and tool_audit.py",
+      {"workshop-mcp-server.py", "tool_audit.py"} <= {f for g, f in sources if g == "workshop-mcp-src"})
+check("evil-mcp-src reads server.py", ("evil-mcp-src", "server.py") in sources)
+with tempfile.TemporaryDirectory(dir=REPO) as tmp:
+    copy = pathlib.Path(tmp) / "ai-layer"
+    shutil.copytree(AI_LAYER, copy, symlinks=True)
+    for gen, rel in sources:
+        src = copy / rel
+        check(f"{gen}'s source {rel} exists", src.is_file())
+        if not src.is_file():
+            continue
+        original = src.read_bytes()
+        src.write_bytes(original + b"\n# rollout probe (#965)\n")
+        probed = {d["metadata"]["name"]: d["spec"]["template"] for d in render(copy) if d["kind"] == "Deployment"}
+        src.write_bytes(original)
+        for dep in consumers[gen]:
+            check(f"editing {rel} changes the {dep} pod template (so Argo CD rolls it)", probed[dep] != templates[dep])
+
 print("== the OTel ordering gate runs before the AI layer's pods (and the Agent CR, a wave later since #707) ==")
 WAVE = "argocd.argoproj.io/sync-wave"
 gate = [d for d in docs if d["kind"] == "Job" and d["metadata"]["name"].startswith("otel-gate-")]

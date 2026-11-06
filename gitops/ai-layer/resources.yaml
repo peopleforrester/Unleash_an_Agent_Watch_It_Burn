@@ -667,6 +667,9 @@ spec:
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=burritobot-evil-mcp,service.version=1.0.0,deployment.environment.name=burritobot-kubecon-na-26"
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+      # No checksum annotation for server.py, unlike guard-proxy's: evil-mcp-src carries the kustomize content
+      # hash (#252), so a server.py change renames the ConfigMap, changes this pod template, and Argo CD rolls the
+      # pod. verify/test_ai_layer_rollout.py edits each generated source and fails if a Deployment would not roll (#965).
       volumes:
         - name: src
           configMap: { name: evil-mcp-src }
@@ -846,6 +849,10 @@ spec:
             - name: WIB_PUBLIC_HOST
               valueFrom: { configMapKeyRef: { name: cluster-identity, key: public-host, optional: true } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+      # server.py and tool_audit.py are read once, at start. A change to either renames workshop-mcp-src through
+      # the content hash (#252), which changes this pod template, so Argo CD rolls the pod: no checksum annotation and
+      # no hand restart. workshop-agent lists the tools from this server on every turn, so it needs no restart either.
+      # verify/test_ai_layer_rollout.py fails if an edit to either file would not roll this Deployment (#965).
       volumes:
         - name: src
           configMap: { name: workshop-mcp-src }
