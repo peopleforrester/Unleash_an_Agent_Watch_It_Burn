@@ -89,8 +89,13 @@ check("init hides the Datadog button only when the event asks and the host is pu
 check("the public test is the same publicHosts list the Terminal hide uses",
       "var onPublic=pubHosts.indexOf(location.hostname)>=0;" in init
       and "if(vtb && ev.hideTerminalOnPublic===true && onPublic) vtb.hidden=true;" in init)
-check("no Datadog share link or room-view QR is back in the run-of-show (#767)",
-      not re.search(r"p\.datadoghq\.com|/s/[A-Za-z0-9-]{6,}|room-view-qr|datadog-room/share\.json", ROS))
+# A share link's host is p.datadoghq.com itself; the presenters' traces page, app.datadoghq.com, which the deck's
+# "Ophelia Thorn" link opens (#984), ends in the same letters and is not one, so the host must start at "p.".
+_SHARE = re.compile(r"(?<![\w.-])p\.datadoghq\.com|/s/[A-Za-z0-9-]{6,}|room-view-qr|datadog-room/share\.json")
+check("the share-link pattern finds a p.datadoghq.com share link and passes app.datadoghq.com",
+      bool(_SHARE.search("https://p.datadoghq.com/sb/abc-123")) and bool(_SHARE.search("p.datadoghq.com"))
+      and not _SHARE.search("https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot"))
+check("no Datadog share link or room-view QR is back in the run-of-show (#767)", not _SHARE.search(ROS))
 
 print("== the projector QR encodes the knob's public URL ==")
 svg = QR.read_text(encoding="utf-8") if QR.exists() else ""

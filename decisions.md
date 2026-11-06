@@ -27868,7 +27868,12 @@ all, are unchanged. `facilitation/runbook.md`, the 2-hour workshop's runbook, st
 **The tests that read these words.** `git grep -nF` over `verify` and `scripts` for each phrase changed found no test
 pinning the old wording. The tests that read these parts (`verify/test_instructor_brief.py`,
 `verify/test_kubecon_abstract_readiness.py`, `verify/test_fleet_wall_check.sh`, `verify/test_fleet_routes_roster.sh`)
-pass unchanged; `/kubecon`'s visible page is 2,374 words, under the test's 2,400.
+pass unchanged; `/kubecon`'s visible page is 2,374 words, under the test's 2,400. The first tools-tier run failed one
+check in `verify/test_audience_event.py`, "no Datadog share link or room-view QR is back in the run-of-show (#767)":
+its pattern `p\.datadoghq\.com` also matched inside `app.datadoghq.com`, the traces URL slide 1 lists and the "Ophelia
+Thorn" link opens, which segment 1 now quotes. A share link's host is `p.datadoghq.com` itself, so the pattern now
+needs the host to start at `p.`, and a new check holds that it still finds a share link and passes the traces URL. The
+run-of-show keeps the URL.
 
 **Read live, read-only.** The pages the slides link, fetched at this run:
 
