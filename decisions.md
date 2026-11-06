@@ -21823,10 +21823,28 @@ Considered and not done, as #784's research comment of 2026-11-05 explains: pinn
 before it tags (a `-dev` schema that changed three times on 2026-11-05) and `gen_ai.usage.cost` on the chat span (the
 copy drops that span, so nothing would read it).
 
-**Live, this run.** Only the reads above, all read only; nothing on either cluster was changed. No fresh chat was sent.
+**Live, this run, the optional read.** `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session --wait
+500` sent one probe chat to each bot (community 00:10:40Z, session `wib-aoflow-burritobot-public-20261106001040`;
+private 00:14:45Z, session `wib-aoflow-burritobot-private-20261106001040`) and printed `AGENT OBSERVABILITY GREEN`,
+4 spans each. `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json` on each trace:
+- community, trace `4ece8903a9b659af90f0edb3e6c14fb3`: one `generate_content` llm row named `us.amazon.nova-pro-v1:0`,
+  6156 in and 79 out, `cost_estimate_status:success`, `estimated_total_cost` 5177600 (1e-9 USD), tagged
+  `witb.bedrock.application_profile` with community's nova ARN (`.../5l72jg8rnz71`);
+- private, trace `ce0270252528508c9e0daaa0d23473b9`: the same, 6156 in and 81 out, `success`, 5184000, with private's
+  nova ARN (`.../88hce5o0zw45`).
+Both estimates are the tokens at Nova Pro's 0.80 and 3.20 USD per million. `python3 verify/dd_traces.py --profile
+accen-dev --minutes 20 --traces 1 --apm --json` then read APM: community's chat (APM trace
+`5f7dd073d1a370c7aa6320800faaab9a`) has guard-proxy's `chat` span (service `burritobot`) at 6156 and 79 and its one
+`generate_content` span (service `burritobot-agent`, named by the ARN) at 6156 and 79; private's (APM trace
+`c68a9d5bbb586068223cafd1ab7d2925`) reads 6156 and 81 on both. One model call per turn, so each sum is that call's
+counts and they match. APM also holds the copy's own trace per turn, named by the system id
+(`bf41271bf4fbfc26c00368c4b885ce4f`, `b6ac35341217f479a66dd0c943f0b491`), the extra trace the 2026-11-02 · #783 entry
+describes. The probe marker kept both chats off the room's feed; nothing else on either cluster was changed.
 
 **Not yet run on a cluster.** The coordinator's answer to question 1088 says these are not required to close #784;
-they are named here as owed. Run 17459's record above is the last reading of the first two (2026-11-05).
+they are named here as owed. This run's read above is the last reading of the first two (2026-11-06), and they stay
+listed, with their commands, for the next change to the pin, the collector or the profile map. The third has never
+run on a cluster.
 1. *A fresh chat's row shows tokens and cost.* `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session
    --wait 540`, then `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json` on each trace it prints:
    every llm row names `us.amazon.nova-pro-v1:0`, has input and output tokens, reads `cost_estimate_status:success`
@@ -21840,3 +21858,10 @@ they are named here as owed. Run 17459's record above is the last reading of the
    say (a staging commit to that cluster's values file), send a chat carrying `DEMO-SENTINEL-ACT1-9f3c2a`, and read
    its trace with `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json`, and APM with `--apm`: every
    input and output reads `[DEMO-REDACTED]` and the sentinel is in no span. Then revert the flip.
+
+**The suites (run 17756, at `49f42fcd`).** `bash verify/run-e2e-tools.sh` printed `278 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `63 checks ran (the offline suite
+and 62 tier tests) in 39m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_e2e_tools_tier.py` passed on
+staging's TMPDIR fix, as did `test_collector_act2_redaction.py`, `test_genai_semconv_pin.py`,
+`test_chat_span_token_counts.py`, `test_cost_gauge_unchanged.py` and, in the tier,
+`test_collector_act2_redaction_e2e.py` and `test_collector_llmobs_model_e2e.py`.
