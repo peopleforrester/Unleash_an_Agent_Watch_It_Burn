@@ -25779,3 +25779,29 @@ the same bar: the command, each beat's tally and the exit code.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `72 checks ran (the offline suite and 71 tier tests) in 32m28s`, `ALL E2E TOOLS
 TIER CHECKS GREEN` and `exit=0`. After the record check was extended (`6bba95df`), `bash verify/run-tests.sh` printed
 `301 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+## 2026-11-06 · #971 · run 17885 · A test holds the delivered tags: the local refs offline, GitHub's in the tools tier
+
+**Why.** #954's fourth criterion, that `delivered/devopsdays-portland-2026` is untouched, was checked by hand and
+written down twice above; no test read the tag. Test review run 17825 found that, and #971 asks for a test that
+fails when the criterion stops holding.
+
+**The pin.** `verify/delivered_tags.py` pins each `delivered/<event>` tag to its annotated tag object id and the
+commit it peels to: Portland is `0e5ff394c4f6fb92faddebc0de256921bf2c4c0e` on
+`17499c8e5e52b3bef2d9a9deb9e19ef4f7febbfd`, the ids #954 recorded. An annotated tag's id hashes its commit, type,
+name, tagger, date and message, so the one pin catches a moved tag, a deleted one, a lightweight tag put in its
+place, and one deleted and made again. `delivered/aiewf-2026` (`0d7bd25d5539667192d4fcd2dbfd0e9264941bf6` on
+`d15031a9e7943299dd75a5c9a8ffdd8017215b65`) is the same kind of record, tagged the same day, so it is pinned too.
+The issue names only Portland; a new delivered tag, KubeCon's, is not required to be pinned, so making it does not
+turn the suite red.
+
+**Two tests, split by need.** `verify/test_delivered_tags.py` (offline) reads this clone's refs. A `git clone` fetches
+tags with the commits, and hecaton's gate clone is a plain `git clone --shared` (checkrun.py), so the gate has
+them; a clone made with `--no-tags` fails, naming the fetch that brings them. It also holds the check to each way
+a tag can change in a scratch repo, and holds the ls-remote reader to fixture output. `verify/test_delivered_tags_github_e2e.py`
+(`# SUITE: e2e`, `# E2E TIER: tools`) runs `git ls-remote --tags` on the public GitHub repo with no credentials, since
+the origin here is hecaton's mirror and a change on GitHub alone reaches no clone. It fails when GitHub cannot be
+read.
+
+**Checked.** Both tests passed against this clone and against GitHub on 2026-11-06. A clone made with `--no-tags` and a
+copy with one hex digit of the Portland pin changed each failed the offline test, naming the missing tag and the
+differing object. No tag was created, moved or deleted. No dependency was added.
