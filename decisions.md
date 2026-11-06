@@ -32926,3 +32926,50 @@ read or changed.
 `/var/lib/hecaton/runs/18397/e2e-tools.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 9m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+## 2026-11-06 · #651 · run 17949 finds the retired hosts off the live router and checks both domains end to end
+
+The attempt before this run stopped on hecaton's host before it reached the repo: its podman socket at
+`/run/user/103/podman/podman.sock` was missing ("Cannot connect to Podman"), which is the dispatcher's workspace and
+not this repo, so nothing here changed for it. Escalation 817, which asked for `./fleet.sh routes roster` from
+Michael's own checkout, was dropped. The step it asked for is already live: apex-agenticburn's `routes.map` was
+published by `1e602e1` (2026-11-05 19:09Z, 33 hosts, #918) and `a93679a` (2026-11-06 03:47Z, 31 hosts, #945), and
+neither carries a kagent, hedgehog, wombat, unicorn, spider or mantis-shrimp row. So this run published nothing and
+changed no code. It added the issue's acceptance criteria and ran the live checks.
+
+**Argo CD.** On both clusters the `ai-layer` Application is Synced and Healthy at `629c53ea`, this run's base. The
+live `console-conf` ConfigMap on each has no line naming a retired prefix, and its host patterns name burritobot.co.
+
+**Read-only curl, 2026-11-06 about 16:20Z.** With `ssl_verify_result` 0 on both domains: attackme,
+burritobot-private, start and `/roster.json`, prompts and `/healthz`, feedback and `/quick`, rounds (302), the beacon
+view (`beacon.burritobot.co/beacon/view` and `agenticburn.com/beacon/view`), and grafana-, argocd-, backstage-,
+maintenance-shell-, support- and deployments- on both clusters (grafana-burritobot-private 302 to its login), and
+registry-burritobot-private. The router's "no route" 404 page on both domains: provisioning, walkthrough, rounds1,
+round1, michael-round1, mystery, bare backstage, monitoring, standalone grafana and argocd, harbor, s, x,
+brave-badger, michael-admin, and all six retired prefixes on both clusters. registry-attackme answers 502 on both;
+that row is #931's, and the live router drops it once the reload #945 waits on runs. The retired names still resolve,
+through the `*.agenticburn.com` and `*.burritobot.co` wildcard records the kept cluster hosts need, so the router's
+404 is the retirement, as the 2026-11-02 entry says.
+
+**The pages.** `/`, `/brief`, `/platform` and `/links` on attackme.burritobot.co, and those with `/lab` and `/kubecon`
+on burritobot-private.burritobot.co, carry no "agenticburn" in their visible text once scripts and styles are
+stripped. attackme answers 404 for `/lab` and `/kubecon`, which the router closes on the public bot on purpose.
+
+**fleet.sh.** `./fleet.sh router-check` printed a PASS for attackme.burritobot.co and burritobot-private.burritobot.co
+and "the router serves exactly the roster". `./fleet.sh wall-check` printed a PASS for prompts.burritobot.co/healthz
+and both clusters and "the wall shows every roster cluster". `start.burritobot.co/roster.json` names each cluster once.
+
+**The community probe, 16:25Z.** `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`: 6 PASS, 6 FAIL, `KUBECON PROBE RED`,
+$0.2814 to $0.3263 over 7 model calls. Every FAIL comes from the start state: both clusters had their guardrails armed
+about five minutes before, by another session (`block-recipe-snoop` and the agent egress NetworkPolicies 5 minutes
+old on each, Kyverno denying). With them on, the C1 record, the egress, the villain image, the recipe read and HC-666
+are meant to be refused, and they were. Every beat that reads a hostname passed: the kube-context and
+attackme.burritobot.co are one cluster, the burrito order is answered, the linked-list ask was answered 3 of 3, the
+cost counter moved and the projected feed is on and clean. This run did not turn the guardrails off or run the admin
+probe, which switches them on both clusters, since another session's check holds them on. The probe ran green on both
+burritobot.co names on 2026-11-05 (run 17556, the run-of-show's Probe record). Nothing the probe made is left: the
+Joker was never created and the villain image was refused.
+
+**Not yet run on a cluster.** Both probes on a wide-open start, once the guardrails are off again:
+`python3 verify/kubecon_probe.py community attackme.burritobot.co ...` and
+`python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co ...`, each to end `KUBECON PROBE GREEN`.
