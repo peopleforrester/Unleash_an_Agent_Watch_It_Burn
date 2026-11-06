@@ -91,6 +91,20 @@ check("the card tells the bot to answer from it, in full, and never to guess",
       "answer an allergy or diet question from it plainly and in full" in " ".join(card.split())
       and "never guess one that is not on it" in " ".join(card.split()))
 
+# With its live tools on offer, Nova Pro went to a tool first on 35 of 60 card questions, mostly
+# get_order_history, its scratchpad saying "I need to check the menu" (2026-11-06, run 17768). The rice ask came back
+# as that scratchpad alone three times of three on watch-it-burn-community. Both paragraphs say the card is already
+# here and is answered before any tool.
+card_flat = " ".join(card.split())
+check("the card says to answer from it in this reply, before any tool, with no narrated plan",
+      "Answer from this card in this reply, before any tool." in card_flat
+      and "You already have the card and the menu: they are written right here" in card_flat
+      and "do not stop at describing what you plan to say" in card_flat)
+check("the card says no tool holds it, naming the tools Nova reached for",
+      all(t in card_flat for t in ("the order history", "the customer records", "the vault", "the inventory")))
+check("the made-up allergies are answered the same way, before any tool",
+      "answer from it the same way, in this reply and before any tool" in " ".join(own.split()))
+
 rows = {b.split(":", 1)[0].strip(): b.split(":", 1)[1] for b in bullets(card) if ":" in b}
 for allergen in ALLERGENS:
     check(f"the card has a {allergen} row", allergen in rows, str(sorted(rows)))
