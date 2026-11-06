@@ -21747,10 +21747,96 @@ the next time the live suite runs after such a chat.
 `verify/test_e2e_tools_tier.py`, on five checks of its #865 section. Each said `mktemp: failed to create directory
 via template '/tmp/tmp.XXXXXXXXXX'`. This run's sandbox cannot write `/tmp`, and the test's three env builders passed
 PATH and HOME but no TMPDIR, so the runner it starts fell back to `/tmp`. Run 17432's host could write it, so the test
-passed there. The test now sets TMPDIR to its own scratch directory in all three builders (commit `9f983ea1`), as
-`verify/test_challenge_fallbacks.py` already does. It owns that input and no longer depends on the host's `/tmp`. Run
+passed there. The test now sets TMPDIR to its own scratch directory in all three builders (commit `9f983ea1` on
+run 17459's branch; staging carries the same fix as `fa53301d`, #775, and the port drops `9f983ea1`, as the
+2026-11-06 · #950 entry below says), as `verify/test_challenge_fallbacks.py` already does. It owns that input and no longer depends on the host's `/tmp`. Run
 alone, it passed 314 checks with exit 0.
 
 **The suites (run 17459, at `9f983ea1`).** `bash verify/run-e2e-tools.sh` printed `264 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `58 checks ran (the offline suite and 57 tier
 tests) in 35m01s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #950 · run 17756 · #784 closes: run 17459's live-step record is ported, with one line of evidence for each part
+
+**The port.** `bash verify/prior-drafts.sh 784 origin/staging` listed `origin/agent/784-17459` as DRAFT, 3 of 3
+commits not in staging, branched at `c96c9e3b`, with three drift lines, all edits in place: PROGRESS.md
+(`b880558f`), decisions.md (`f144c2b6`) and `verify/test_e2e_tools_tier.py` (`be97ab92`). Its LATER line names #949's
+`d340d502` and `f144c2b6`, which add offline tests for #784 and hold none of run 17459's live record, so that record
+is taken whole. 78cf54ee and 644dda08 were cherry-picked onto staging `f144c2b6`. Both conflicts were appends on both
+sides, and both sides are kept: staging's #923 and #876 PROGRESS.md lines next to the draft's line, and staging's
+entries through #949 ahead of the draft's two entries above. The merge had lost the blank line before the draft's
+heading, which is restored. The draft's PROGRESS.md line spoke for the live steps alone; it now reads as #784's one
+closing line.
+
+**9f983ea1 is dropped as superseded.** It set TMPDIR to the fixture's own directory in the three env builders of
+`verify/test_e2e_tools_tier.py` (`run`, the #865 runner env, and `run_live`). Staging already sets TMPDIR in all three:
+`fa53301d` (#775, 2026-11-05 18:10 +0100) made that change after the draft branched, and `be97ab92` (#909) then added
+the comment above `run`'s env. A port would add nothing the test does not already do. The draft's "A test fix the
+suites needed" paragraph named 9f983ea1 as the fix; it now names staging's `fa53301d` as well and says the port drops
+the draft's commit.
+
+**Each part of #784, with its evidence.**
+- *Token counts on guard-proxy's chat span.* The gitlink `gitops/ai-layer/guard-proxy` is `0f0c809d` (Michael's
+  `9f2b575c`), which carries guard-proxy-agenticburn#49 (`96d16214`). Read live on 2026-11-06 on both clusters, each
+  `kubectl` naming its `--context`: guard-proxy's `checksum/proxy-py` is `dfca2b1fe758`, equal to
+  `gitops/ai-layer/resources.yaml`; the sha256 of the proxy.py in `agent/guard-proxy-src-8t285g92fg`, first 12
+  characters, is `dfca2b1fe758`; and its lines 1669 and 1670 set `gen_ai.usage.input_tokens` and
+  `gen_ai.usage.output_tokens` on `chat_span`. `verify/test_chat_span_token_counts.py` holds the counts to that span
+  alone, and `verify/test_cost_gauge_unchanged.py` holds `gen_ai.client.cost` to its shape before #784.
+- *The Act 2 redaction targets.* `transform/redact_sentinel` in `gitops/otel-collector/otel-collector-act2-overlay.yaml`
+  sets `[DEMO-REDACTED]` on `gen_ai.input.messages` and `gen_ai.output.messages` (one message in the semconv shape),
+  `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, and `gcp.vertex.agent.llm_request`, `llm_response`,
+  `tool_call_args` and `tool_response`, in the span and span-event contexts. Before #784 it matched the
+  `gen_ai.content.prompt` and `gen_ai.content.completion` events, which nothing emits.
+  `verify/test_collector_act2_redaction_e2e.py` runs it in otelcol-contrib on every profile, and run 17406's probe at
+  Datadog's intake (trace `3cd4975613e25ec2a55f2952b747d0e6`) stored no copy of the sentinel.
+- *Neither KubeCon cluster loads the overlay.* Read live on 2026-11-06: both `otel-collector` Applications are Synced
+  and Healthy at `f144c2b6`. Community renders from `values.yaml` and `values-burn.yaml`, and its relay config
+  (`monitoring/otel-collector-opentelemetry-collector-agent`) names `transform/scrub_pii` and no
+  `transform/redact_sentinel`. Private renders from `values.yaml` alone and names neither, by design: the presenters'
+  cluster carries no attendee's text. No file under `gitops/` wires the overlay in, and
+  `verify/test_collector_act2_redaction.py` fails one that does.
+- *The v1.41.1 adoptions.* `weaver/registry/manifest.yaml` pins semantic-conventions v1.41.1 (2026-05-11), the last
+  release that carries the GenAI conventions. Two things are adopted, because Datadog's Agent Observability page maps
+  them: `gen_ai.usage.input_tokens` and `output_tokens`, declared on `span.witb.guard_proxy.chat`, and
+  `gen_ai.tool.definitions`, written by `transform/adk_model_content` on kagent's model calls.
+- *Why everything else stays at 1.37.* Datadog's page supports "OpenTelemetry 1.37+" GenAI conventions and documents
+  none of the `invoke_agent` client and internal split (v1.41), MCP's conventions and spans (v1.39),
+  `gen_ai.agent.version` (v1.40), or the cache and reasoning token attributes (v1.40, v1.41), which it maps only from
+  OpenInference and Langfuse. Emitting them would add attributes nothing reads. `peer.service` stays though v1.38
+  deprecates it, because Datadog's service map reads it. `verify/test_genai_semconv_pin.py` fails a registry group or a
+  collector rule that adopts any of these.
+
+**The move to open-telemetry/semantic-conventions-genai.** From semantic-conventions v1.42.0 (2026-06-12) every
+`gen_ai.*` convention is deprecated in the main repository and maintained in open-telemetry/semantic-conventions-genai.
+Read through the GitHub API on 2026-11-06, that repository has 0 tags and 0 releases, as on 2026-11-03 and
+2026-11-05; it was last pushed at 2026-11-05T21:56:29Z. The pin stays on v1.41.1. **Revisit trigger: the repository's
+first tagged release.** The revisit list:
+1. Add it to `weaver/registry/manifest.yaml` as the GenAI dependency (weaver 0.24.2 accepts a second one) and move
+   the guard-proxy groups' `gen_ai.*` refs to it.
+2. Check each convention against Datadog's page again, the not-adopted list above included.
+3. The renamed capture variable: the GenAI repository's content-capture configuration names
+   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT` (`NO_CONTENT`, `SPAN_ONLY`, `EVENT_ONLY`, `SPAN_AND_EVENT`), where
+   guard-proxy's container (`gitops/ai-layer/resources.yaml`) and proxy.py read
+   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`.
+Considered and not done, as #784's research comment of 2026-11-05 explains: pinning the GenAI repository by commit
+before it tags (a `-dev` schema that changed three times on 2026-11-05) and `gen_ai.usage.cost` on the chat span (the
+copy drops that span, so nothing would read it).
+
+**Live, this run.** Only the reads above, all read only; nothing on either cluster was changed. No fresh chat was sent.
+
+**Not yet run on a cluster.** The coordinator's answer to question 1088 says these are not required to close #784;
+they are named here as owed. Run 17459's record above is the last reading of the first two (2026-11-05).
+1. *A fresh chat's row shows tokens and cost.* `python3 verify/agent_obs_flow.py chat --profile accen-dev --own-session
+   --wait 540`, then `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json` on each trace it prints:
+   every llm row names `us.amazon.nova-pro-v1:0`, has input and output tokens, reads `cost_estimate_status:success`
+   with an `estimated_total_cost` above zero, and carries the cluster's nova ARN as `witb.bedrock.application_profile`.
+2. *guard-proxy's APM chat span counts equal the turn's `generate_content` sums.* Within 15 minutes of step 1,
+   `python3 verify/dd_traces.py --profile accen-dev --minutes 15 --apm --json`: in the chat's APM trace, the `chat`
+   span (service `burritobot`) carries `gen_ai.usage.input_tokens` and `output_tokens` equal to the sums over its
+   `generate_content` spans (service `burritobot-agent`). `WIB_LLMOBS_JUDGE_MINUTES=15 python3
+   verify/test_llmobs_chat_judge_live.py` then judges the same window's rows.
+3. *An Act 2 sentinel arrives as `[DEMO-REDACTED]`.* On one cluster in a rehearsal, flip Act 2 as the overlay's steps
+   say (a staging commit to that cluster's values file), send a chat carrying `DEMO-SENTINEL-ACT1-9f3c2a`, and read
+   its trace with `python3 verify/dd_traces.py --profile accen-dev --trace <id> --json`, and APM with `--apm`: every
+   input and output reads `[DEMO-REDACTED]` and the sentinel is in no span. Then revert the flip.
