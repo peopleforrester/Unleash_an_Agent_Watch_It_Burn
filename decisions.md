@@ -24127,3 +24127,30 @@ the same run again once it reaches the community cluster.
 RENDER-GATE TESTS GREEN` for the offline suite, then `66 checks ran (the offline suite and 65 tier tests) in 40m04s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
 
+
+## 2026-11-06 · #940 · run 17838 · The DNS collector build spec, a sibling of the beacon collector spec
+
+**What was missing.** The DNS stage of the Challenge 1 exfil beat (stage 2b in
+`docs/research/2026-10-31-c1-dns-exfil-beat.md`) had a tool side already built
+(`challenges/c1-exfil-s3/dns-exfil.py`, covered by `verify/test_c1_dns_exfil.py`) but no written spec for its
+far end: the authoritative nameserver that owns the delegated zone, the per-query log, and the `GET /dns/view`
+room view. #726 carried the collector and the view; planning run 17700 split the spec out as #940.
+`bash verify/prior-drafts.sh 940 origin/staging` printed NONE and the issue has no comments, so there was no
+earlier draft to port.
+
+**Decided: formalize the research doc into a sibling of the beacon spec.** `docs/dns-collector-spec.md` mirrors
+`docs/beacon-collector-spec.md` section for section (What exists today, Routes to add, the room view, Notes, the
+one hand-off, Both domains), at the same altitude: it names the channel, the pieces to build and the checks, and
+it does not specify how the tool produces the lookups. The nameserver answers every query under the delegated
+subdomain of `agenticburn.com` with NOERROR so the lookup succeeds, appends one record per query to the
+provisioning app's existing `/data` volume (`ts` in iso8601 UTC, source address, the full query name), and keeps
+a running count. `GET /dns/view` sits beside `/beacon/view` on the provisioning app: a count, the last ~50
+queries, and the payload reassembled in sequence by the marker and ordinal each query name carries. The deploy
+and storage pattern is the beacon's (Flask on the provisioning app, records under `/data`). The zone delegation
+is a one-time registrar change on Michael's side, the same shape as the beacon's apex repoint, per
+`infra/dns/README.md`. A code implementation is optional and may follow; the owed offline coverage, the hand-off
+and the live check are tracked by the sibling children (#724, #727, #728), not by this issue. The prose gate
+printed `prose gate: pass`.
+
+**Not yet run on a cluster.** Nothing: the change is one documentation file, and no dependency was added. This
+run touched neither the community nor the private cluster.
