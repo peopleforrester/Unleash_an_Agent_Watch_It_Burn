@@ -473,7 +473,7 @@ with tempfile.TemporaryDirectory() as t:
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
     check(f"the runner reached its tier and ran all four fixture tests (exit {r.returncode})",
-          "5 checks ran (the offline suite and 4 tier tests, 4 at a time)" in out, out)
+          re.search(r"5 checks ran \(the offline suite and 4 tier tests\) in \d+m\d\ds, 4 at a time", out), out)
     check("it fails, naming the three tests that called a cloud tool and not the kubectl one",
           r.returncode == 1 and all(f"  {n} (exit 1)" in r.stderr for n in
                                     ("test_calls_aws.sh", "test_calls_eksctl.sh", "test_calls_aws_env.py"))
@@ -520,7 +520,7 @@ with tempfile.TemporaryDirectory() as t:
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
     check(f"the runner ran the fixture tier test and passed (exit {r.returncode})",
-          r.returncode == 0 and "2 checks ran (the offline suite and 1 tier tests, 4 at a time)" in out, out)
+          r.returncode == 0 and re.search(r"2 checks ran \(the offline suite and 1 tier tests\) in \d+m\d\ds, 4 at a time", out), out)
     got = json.loads((tmp / "helm.json").read_text()) if (tmp / "helm.json").exists() else {}
     seen, listed = got.get("seen", {}), got.get("listed", {})
     for var in HELM_VARS:
@@ -577,7 +577,7 @@ with tempfile.TemporaryDirectory() as t:
     r = pool_run(tmp, {"PAIR_POLLS": "600"})
     out = r.stdout + r.stderr
     check(f"the five fixture checks pass, four at a time by default (exit {r.returncode})",
-          r.returncode == 0 and "6 checks ran (the offline suite and 5 tier tests, 4 at a time)" in out, out)
+          r.returncode == 0 and re.search(r"6 checks ran \(the offline suite and 5 tier tests\) in \d+m\d\ds, 4 at a time", out), out)
     check("the offline suite runs and is printed as a check of its own",
           block(r.stdout, "run-tests.sh (the offline suite)") == "offline suite ran\n", r.stdout)
     for me, other in (("pair_a", "pair_b"), ("pair_b", "pair_a"), ("plain", "tf_one")):
@@ -597,7 +597,7 @@ with tempfile.TemporaryDirectory() as t:
     r = pool_run(tmp, {"PAIR_POLLS": "20", "E2E_TOOLS_JOBS": "1"})
     out = r.stdout + r.stderr
     check(f"E2E_TOOLS_JOBS=1 runs one check at a time, so the pair that must meet fails (exit {r.returncode})",
-          r.returncode == 1 and "6 checks ran (the offline suite and 5 tier tests, 1 at a time)" in out
+          r.returncode == 1 and re.search(r"6 checks ran \(the offline suite and 5 tier tests\) in \d+m\d\ds, 1 at a time", out)
           and "pair_a never saw pair_b start" in block(r.stdout, "test_pair_a.sh")
           and "  test_pair_a.sh (exit 1)" in r.stderr, out)
 
