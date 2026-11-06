@@ -195,7 +195,7 @@ spec:
       # reads scanners.yml once, at start, and the ConfigMap's name is stable, so without it a scanner change
       # syncs green on a running cluster and the old scanners keep answering (guard-proxy's checksum/proxy-py
       # below is the same fix). verify/test_input_pii_guard.py fails when it is not sha256(scanners.yml)[:12].
-      annotations: { checksum/scanners-yml: "220cfa370663" }
+      annotations: { checksum/scanners-yml: "61a7adb9a48a" }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
@@ -248,6 +248,17 @@ data:
     # lazy download there failed and guard-proxy (fail-closed) refused every prompt for the rest of the
     # lab (#241). Loading at start is also what the readiness probe should gate on.
     app: { lazy_load: false, low_cpu_mem_usage: true, scan_prompt_timeout: 10, scan_output_timeout: 10 }
+    # Bearer auth on every /analyze and /scan call (#899). The API checks a token only when this block is here
+    # (src/app/app.py, _check_auth_function: no auth config is a no-op check), and this file replaces the image's
+    # own config, which carries the block, so until #899 the AUTH_TOKEN the Deployment sets was never read and
+    # anything that reached llm-guard:8000 was answered. The token is the llm-guard-auth Secret, which guard-proxy
+    # and the MCP server send as LLM_GUARD_TOKEN. Block style, not a { } flow map: the loader substitutes
+    # ${AUTH_TOKEN:} from the env, and in a flow map the braces end the map and the file does not parse. Unset, it
+    # is empty and every call is refused. /healthz takes no auth, so the probes are unchanged.
+    # verify/test_llm_guard_auth.py holds the block and the callers' token.
+    auth:
+      type: http_bearer
+      token: ${AUTH_TOKEN:}
     input_scanners:
       - type: PromptInjection
         # model_path loads the classifier from the directory baked into the image (local_files_only), so

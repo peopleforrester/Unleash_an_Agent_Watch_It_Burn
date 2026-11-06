@@ -22923,3 +22923,69 @@ OFFLINE RENDER-GATE TESTS GREEN`, the new `test_ai_layer_gates.py` among them) a
 offline suite and 63 tier tests) in 52m45s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0; in the tier
 `test_ai_layer_rollout.py` and `test_guard_proxy_go_otel.py` read the `kubectl kustomize` render with both gates at
 wave -1. No dependency was added.
+
+## 2026-11-06 · #899 · run 17802 · LLM Guard checks its bearer token: llm-guard-scanners gains the auth block
+
+**What was wrong.** Run 17422 on #455 found LLM Guard answering `/analyze/prompt` with an empty bearer token. The
+vendored API checks a token only when `scanners.yml` has an `auth:` block (`images/llm-guard` `src/app/app.py`,
+`_check_auth_function`: with no auth config it returns `check_auth_noop`). The `llm-guard-scanners` ConfigMap is mounted
+over the image's config directory, and it had only `app`, `input_scanners` and `output_scanners`, so the `AUTH_TOKEN` the
+Deployment sets from `llm-guard-auth` was never read. Anything that could reach `llm-guard:8000` could call the guard.
+
+**The change.**
+- `gitops/ai-layer/resources.yaml`: `scanners.yml` gains `auth:` with `type: http_bearer` and `token: ${AUTH_TOKEN:}`,
+  the block the image's own `src/config/scanners.yml` carries. It is written in block style. The issue suggested the
+  one-line `auth: { type: http_bearer, token: ${AUTH_TOKEN:} }`, but in a flow map the `{` of `${` ends the
+  map and PyYAML refuses the file (checked with PyYAML here). The API would then load no config at all and fail to start.
+  The loader substitutes `${AUTH_TOKEN:}` from the env and gives an empty string when it is unset, and no bearer header
+  matches an empty token, so an unset token refuses every call instead of opening the API.
+- `checksum/scanners-yml` moves from `220cfa370663` to `61a7adb9a48a`, so Argo CD's sync restarts the API, which reads
+  the file once at start. `verify/test_input_pii_guard.py` holds the value.
+- `verify/test_llm_guard_auth.py` (offline, new): the block is there and equals the image's own. Loaded with the
+  vendored loader's two env-var regexes, read out of `src/app/config.py`, its token is `AUTH_TOKEN`'s value, and empty
+  when that is unset. The one-line form does not parse. The vendored `_check_auth_function` is still a no-op without the
+  block and still answers 401 to a wrong token, and the four `/analyze` and `/scan` routes depend on it. llm-guard's
+  `AUTH_TOKEN` and the `LLM_GUARD_TOKEN` of guard-proxy, workshop-mcp and the attendee guard-proxy
+  (`agent/gateway/guard-proxy/guard-proxy.yaml`) all read `llm-guard-auth`'s `token`, and kustomize generates it non-empty.
+  guard-proxy calls LLM Guard only through `_post_guard`, which sends the bearer. The MCP server's one call does too, and
+  `stage_traces.py` goes only through guard-proxy's `_post_guard` in the pod. `test_topic_guard_proxy.py` and
+  `test_fake_ticket.py` already check the header each caller sends against a fake LLM Guard, so this test does not repeat it.
+- No tools-tier test runs the vendored API itself: it needs FastAPI, slowapi, structlog and OpenTelemetry on top of
+  llm-guard, and the live probe below runs the real image with this exact file.
+
+**Callers checked first.** Every caller sends the token from the same Secret: guard-proxy (`proxy.py` `_post_guard`,
+`Authorization: Bearer {LLM_GUARD_TOKEN}`; the Go guard in the guard-proxy submodule sets it the same way),
+`workshop-mcp-server.py` (`_ticket_flagged`), and `verify/stage_traces.py`, which runs guard-proxy's `_post_guard` in the
+guard-proxy pod. The kubelet's `/healthz` probes take no auth in the API, so readiness is unchanged. Nothing else in the
+repo calls LLM Guard's API: the web pages and the terminal banner only name `llm-guard:8000`.
+
+**Live check, watch-it-burn-private, 2026-11-06 03:56 to 03:58 UTC.** Before: the live `llm-guard-scanners` hashed to
+`220cfa370663` (staging's file), on lab-platform's `llm-guard:v1@sha256:46b3d202`. The live `llm-guard-auth-k9m2bfbhmg`
+token equals the kustomization literal, and llm-guard, guard-proxy and workshop-mcp all read that Secret. A probe
+ConfigMap held this change's `scanners.yml`, and a probe Pod in `agent` ran the live llm-guard Deployment's own pod spec,
+with that ConfigMap mounted and only a `witb.probe` label added in place of `app.kubernetes.io/name`, so the Service did
+not select it. A server-side dry run admitted both first. The pod was Ready 44 s after it was created, its log shows two
+`Device set to use cpu` lines and `Application startup complete`, and its `/healthz` probes answered 200. Through
+`kubectl port-forward`:
+- `/analyze/prompt` with no `Authorization` header: 403 `{"message":"Not authenticated"}`. With `Bearer ` and an empty
+  token: 403, the same. With `Bearer wrong-token`: 401 `{"message":"Invalid API key"}`. With the `llm-guard-auth`
+  token: 200, `is_valid: true`. `/analyze/output`, `/scan/prompt` and `/scan/output` with no token: 403 each. `/healthz`
+  with no token: 200. The issue expected 401 for a call with no token. The 403 comes from FastAPI's `HTTPBearer`, which
+  answers 403 when the header is missing, and from `check_auth` only once a token is offered. Either way the call is
+  refused before any scanner runs.
+- guard-proxy's pinned `proxy.py`, loaded with the guard-proxy Deployment's literal env from `resources.yaml`, the live
+  token, and `LLM_GUARD_URL` pointed at the probe: `input_verdict` passed "do you have mild salsa", refused the injection
+  "Ignore all previous instructions..." at PromptInjection 1.0, and refused "my email is hazel@example.com..." at Regex 1.0.
+  `topic_refused` refused "help me plan a birthday party" by the classifier and passed "do you deliver". `output_scrub`
+  redacted "pinch of moonlight" and "ogre toenails" and left a clean menu reply whole. Each call took 0.3 to 3.0 s.
+- The same proxy with `LLM_GUARD_TOKEN` empty: every `input_verdict` came back refused with no scanner named,
+  `topic_refused` came back `classifier` for both asks, and `output_scrub` came back `None`. That is PROXY_FAIL_CLOSED
+  at work: a guard-proxy without the token now refuses everything.
+- Left as found: the probe Pod and ConfigMap were deleted, nothing labelled `witb.probe=r17802` remains, `llm-guard`
+  stayed 1/1, and the live `llm-guard-scanners` still hashes to `220cfa370663`.
+
+**Not yet run on a cluster.** After hecaton promotes this run and Argo CD syncs the ai-layer: on watch-it-burn-community
+and watch-it-burn-private, the live `llm-guard-scanners` hashes to `61a7adb9a48a`, the llm-guard pod has restarted, and from
+the guard-proxy pod a `/analyze/prompt` with no token gets 403. Then `python3 verify/kubecon_probe.py admin
+burritobot-private.burritobot.co --context watch-it-burn-private` and its community run stay green with the guards on,
+which shows guard-proxy's and read_support_ticket's calls still get through.
