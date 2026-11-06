@@ -110,6 +110,8 @@ check("the live check fails, naming it, when a switch ran during the check",
       "no guardrails switch ran on the cluster while the check ran" in live)
 check("on a switch, the restore takes deny-external-registries' action for restrict-image-registries",
       'original["restrict-image-registries"] = der' in live)
+check("the live check names a scoped Role before its C2 steps (auth can-i as agent-sa and workshop-mcp)",
+      '"auth", "can-i", "create", "deployments"' in live and '("agent-sa", "workshop-mcp")' in live)
 switch_profiles = sorted(p for p in all_profiles() if "deny-external-registries" in flat(p))
 check("only the KubeCon profiles carry the switch's mark", switch_profiles == ["kubecon-community", "kubecon-private"],
       f"got {switch_profiles}")

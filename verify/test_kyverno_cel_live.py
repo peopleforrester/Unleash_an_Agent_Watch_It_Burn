@@ -261,6 +261,14 @@ def signed_deployment() -> dict:
 
 
 try:
+    # Steps 4 and 6 send C2's deploy_app as agent-sa and workshop-mcp. guardrails-on's scoped Role takes create on
+    # Deployments from both, so RBAC refuses them before Kyverno sees them: say that, not a policy failure (run 17944).
+    for sa in ("agent-sa", "workshop-mcp"):
+        r = kubectl("auth", "can-i", "create", "deployments", "-n", "agent", f"--as=system:serviceaccount:agent:{sa}")
+        check(f"{sa} may create Deployments in agent (C2's deploy_app; steps 4 and 6 need it)",
+              r.stdout.strip() == "yes",
+              "the workshop-agent Role is guardrails-on's scoped one" + (", set by the terminal's switch" if SWITCH
+                                                                         else "") + f": {out(r)}")
     print(f"== 4. Audit admits the villain, and the lab's jq names the rule (run {RUN}) ==")
     r = set_actions("restrict-image-registries", ["Audit"])
     check("restrict-image-registries set to Audit (the lab's starting state)", r.returncode == 0, out(r))
