@@ -21865,3 +21865,42 @@ and 62 tier tests) in 39m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `
 staging's TMPDIR fix, as did `test_collector_act2_redaction.py`, `test_genai_semconv_pin.py`,
 `test_chat_span_token_counts.py`, `test_cost_gauge_unchanged.py` and, in the tier,
 `test_collector_act2_redaction_e2e.py` and `test_collector_llmobs_model_e2e.py`.
+
+## 2026-11-06 · #929 · run 17767 · The wall's load test belongs to prompts-agenticburn, asked for there; nothing changes here
+
+**What this run found.** #929 asks for a load test of the prompt wall's page, `templates/wall.html`, and all five of
+its criteria name peopleforrester/prompts-agenticburn: the test lives there, runs under that repo's test command
+(`uv run ruff check . && uv run pytest`) and writes its numbers to that repo's decisions.md. The throttle it needs
+has landed: prompts-agenticburn#18 is closed, and its `6601313a` ("Draw one card per 1.5 s on the wall, the newest,
+with a +N more count") is the tip of that repo's `staging` and `main`. No issue there asks for the load test yet, and
+#929 has no comments. `bash verify/prior-drafts.sh 929 origin/staging` printed NONE, so there was no draft to port.
+
+**Why the test is not written here.** This run's governance confines its changes to this clone, and the wall repo's
+own CLAUDE.md says the same from its side: work only in that repo, and file an issue on a repo that has to change.
+The run's shell also refused `gh repo clone` of prompts-agenticburn, so the page could only be read through the
+GitHub API. A copy of the test in this repo would not meet the first or the fifth criterion and would test a page
+this repo does not ship.
+
+**What the wall's code says, read at `6601313a`, for the run that writes the test.**
+
+- The page reads `/events?since=<cursor>` (SSE), after one `fetch('/api/prompts')` whose answer goes up at once; only
+  what arrives after that first snapshot goes through `makeThrottle()`. The stream sends one `data:` frame a second
+  at most (`time.sleep(1)` in `events()`), so 17 prompts a second reach the page as batches of about 17, which is
+  the half-window case the throttle's comment describes.
+- The server keeps the newest `MAX_ENTRIES` (500) prompts, and `addCard()` trims the DOM to 300 cards, so the card
+  count is bounded by code. The `shown` set of seqs the page keeps for #14's duplicate guard is not trimmed, which is
+  about 5,100 numbers over the 5 minutes; the heap check is the one that would see it if it mattered.
+- `ingest()` is the stub point for the upstream: the test can feed it directly with `WALL_POLLER=off` (conftest.py
+  already sets it), so no cluster or roster is read.
+- The existing page test, `test_wall_page.py`, runs the page in MiniRacer on a fake browser. Frame time and JS heap
+  need a real headless browser (Chromium's `performance.memory` or the DevTools protocol), which is a new dev
+  dependency there, and a browser download that hecaton's rules put under an E2E command rather than the test
+  command. Which of the two it runs under, against the issue's fifth criterion, is that repo's call.
+
+**What was asked.** The report escalates one `gh issue create` on prompts-agenticburn, labeled `agent-task`, carrying
+#929's five criteria and the notes above. #929 is closed by that issue landing; the next run on #929 reads its
+numbers from prompts-agenticburn's decisions.md and records here where they are.
+
+**Not yet run on a cluster.** Nothing is owed: the load test is offline by design, and this run changed no code.
+
+**The suites (run 17767).** Only this entry changed. `bash verify/run-tests.sh` and the prose gate results are below.
