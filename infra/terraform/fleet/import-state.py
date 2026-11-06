@@ -16,7 +16,9 @@ group with a random suffix, and the set of resources follows the root's variable
    half-found set writes no state. NOT_IMPORTABLE lists the planned resources that are not in AWS at all. A security
    group rule the group does not carry is configuration committed after the build (#869's and #906's rules, on the
    KubeCon clusters): it is left out, and the last plan lists it as a create.
-4. It imports them one by one, runs the refresh-only apply docs/floor.md gives to settle a state, and plans again.
+4. It imports them one by one, writes the EKS module's time_sleep itself (WRITTEN says why), runs the refresh-only
+   apply docs/floor.md gives to settle a state, and plans again. A rebuild that stops part way is carried on with
+   --resume, which imports only what the state does not hold yet.
 
 Imports, a refresh-only apply and a plan only read AWS, so nothing in AWS changes. The last plan is the answer: exit
 0 when it has no change but the NOT_IMPORTABLE creates, 2 when the state is rebuilt and the plan still has changes
@@ -28,6 +30,7 @@ Usage (each root initialised first, `terraform -chdir=<root> init`):
   python3 infra/terraform/fleet/import-state.py network <profile>
   python3 infra/terraform/fleet/import-state.py cluster <profile> <name>
   ... --resolve-only   finds and prints every import id, imports nothing, writes no state
+  ... --resume         carries on a rebuild this script stopped, importing only what the state does not hold
 Run boundary and network first: a cluster's plan reads the boundary policy and takes its subnets from the lab VPC
 state. --region defaults to fleet.sh's WIB_REGION; a lab VPC outside the home region is not rebuilt by this script.
 """
@@ -50,6 +53,13 @@ STATE_DIR = FLEET / "states"
 # lab-platform operator's id tracker (an attendee seat's only). They stay as creates in the last plan; the next apply
 # records them without an AWS call.
 NOT_IMPORTABLE = {"null_resource", "terraform_data"}
+# Planned resources the script writes into the state itself, after the imports. The EKS module's time_sleep carries
+# the cluster's name, endpoint, version, service CIDR and CA in its triggers, and the node group, the access entries
+# and the addons read them from there. Terraform imports a time_sleep with no triggers, after which no expression
+# that reads them evaluates and the import fails; and with no time_sleep at all those reads are unknown, so the plan
+# would replace the node group and the access entries. So it is written with the triggers its module gives it, read
+# from the imported cluster, and the last plan shows a no-op for it only if they are what the module computes.
+WRITTEN = {"time_sleep"}
 # The cluster root's variables the script reads from AWS, and the cluster tags that name three of them (local.fleet_tags).
 CLUSTER_TAG_VARS = ("event", "hostname", "role")
 
@@ -427,9 +437,6 @@ class ClusterResolver(Resolver):
                               and module_of(rc["address"]) == module_of(address)], f"{address}: aliases in its module")
         return self.aws("kms", "describe-key", "--key-id", alias)["KeyMetadata"]["KeyId"]
 
-    def r_time_sleep(self, address, after, planned):
-        return f"{after.get('create_duration') or ''},{after.get('destroy_duration') or ''}"
-
 
 # ---------------------------------------------------------------- variables -------------------------------------
 
@@ -536,14 +543,55 @@ def plan_json(root: pathlib.Path, state: pathlib.Path, varargs: list[str], tmp: 
     return json.loads(show.stdout)
 
 
+def write_time_sleep(state: pathlib.Path, rc: dict) -> None:
+    """Add the EKS module's time_sleep to the state, its triggers read from the cluster in the same module (#979)."""
+    doc = json.loads(state.read_text())
+    mod = module_of(rc["address"])
+    clusters = [r for r in doc["resources"] if r["mode"] == "managed" and r["type"] == "aws_eks_cluster"
+                and r.get("module", "") == mod]
+    if len(clusters) != 1 or len(clusters[0]["instances"]) != 1:
+        raise Stop(f"{rc['address']}: the state holds {len(clusters)} clusters in {mod}, not one, to read its triggers from")
+    a = clusters[0]["instances"][0]["attributes"]
+    net = (a.get("kubernetes_network_config") or [{}])[0]
+    m = re.fullmatch(r"(.*)\.time_sleep\.([A-Za-z0-9_-]+)\[(\d+)\]", rc["address"])
+    if not m or m.group(1) != mod:
+        raise Stop(f"{rc['address']}: not a counted time_sleep in a module")
+    after = rc["change"]["after"] or {}
+    doc["resources"].append({
+        "module": mod, "mode": "managed", "type": "time_sleep", "name": m.group(2),
+        "provider": 'provider["registry.terraform.io/hashicorp/time"]',
+        "instances": [{"index_key": int(m.group(3)), "schema_version": 0, "sensitive_attributes": [],
+                       "dependencies": [f"{mod}.aws_eks_cluster.this"],
+                       "attributes": {
+                           "create_duration": after.get("create_duration"), "destroy_duration": after.get("destroy_duration"),
+                           "id": a.get("created_at") or "", "triggers": {
+                               "name": a["id"], "endpoint": a["endpoint"], "kubernetes_version": a["version"],
+                               "service_cidr": net.get("service_ipv6_cidr" if net.get("ip_family") == "ipv6"
+                                                       else "service_ipv4_cidr", ""),
+                               "certificate_authority_data": a["certificate_authority"][0]["data"]}}}]})
+    doc["serial"] = doc.get("serial", 0) + 1
+    state.write_text(json.dumps(doc, indent=2) + "\n")
+
+
+def state_addresses(root: pathlib.Path, state: pathlib.Path) -> set[str]:
+    if not state.is_file():
+        return set()
+    p = tf(root, "state", "list", f"-state={state}")
+    if p.returncode != 0:
+        raise Stop(f"terraform state list {state}: {last_line(p.stderr)}")
+    return {ln.strip() for ln in p.stdout.splitlines() if ln.strip()}
+
+
 def rebuild(kind: str, state: pathlib.Path, variables: list[tuple[str, str]], resolver: Resolver,
-            resolve_only: bool = False) -> int:
+            resolve_only: bool = False, resume: bool = False) -> int:
     root = ROOTS[kind]
     if not (root / ".terraform").is_dir():
         raise Stop(f"{root} is not initialised: run 'terraform -chdir={root} init' first")
     held = managed_in(state)
-    if held:
-        raise Stop(f"{state} already manages resources; refusing to import over it:\n  " + "\n  ".join(held))
+    if held and not resume:
+        raise Stop(f"{state} already manages resources; refusing to import over it (--resume carries on a rebuild "
+                   "this script stopped):\n  " + "\n  ".join(held))
+    done = state_addresses(root, state) if resume else set()
     varargs = [a for k, v in variables for a in ("-var", f"{k}={v}")]
     print(f"import-state: {kind} -> {state}")
     print("import-state: variables " + " ".join(f"{k}={v}" for k, v in variables))
@@ -554,18 +602,24 @@ def rebuild(kind: str, state: pathlib.Path, variables: list[tuple[str, str]], re
         odd = [rc["address"] for rc in planned if rc["change"]["actions"] != ["create"]]
         if odd:
             raise Stop(f"a plan against an empty state should only create, and it does more for {odd}")
-        imports, skipped, absent = [], [], []
+        imports, skipped, absent, written = [], [], [], []
         for rc in planned:
             if rc["type"] in NOT_IMPORTABLE:
                 skipped.append(rc["address"])
+                continue
+            if rc["type"] in WRITTEN:
+                written.append(rc)
+                continue
+            if rc["address"] in done:
+                print(f"import-state: already in the state (--resume): {rc['address']}")
                 continue
             try:
                 imports.append((rc["address"], resolver.resolve(rc, planned)))
             except Absent as e:
                 absent.append(rc["address"])
                 print(f"import-state: not in AWS, so not imported: {rc['address']}: {e}")
-        print(f"import-state: {len(imports)} to import, {len(absent)} not in AWS, {len(skipped)} not importable "
-              f"({', '.join(skipped) or 'none'})")
+        print(f"import-state: {len(imports)} to import, {len(absent)} not in AWS, {len(written)} written after the "
+              f"imports, {len(skipped)} not importable ({', '.join(skipped) or 'none'})")
         if resolve_only:
             for addr, rid in imports:
                 print(f"import-state: would import {addr} <- {rid}")
@@ -578,14 +632,20 @@ def rebuild(kind: str, state: pathlib.Path, variables: list[tuple[str, str]], re
             if p.returncode != 0:
                 raise Stop(f"import of {addr} ({rid}) failed: {last_line(p.stderr or p.stdout)}; "
                            f"{state} holds the imports before it")
+        for rc in written:
+            if rc["address"] in done:
+                continue
+            print(f"import-state: {rc['address']} written from the imported cluster")
+            write_time_sleep(state, rc)
         # The settle step docs/floor.md gives after an apply: it writes what AWS reads back and changes nothing in AWS.
         p = tf(root, "apply", "-input=false", "-no-color", "-refresh-only", "-auto-approve", f"-state={state}", *varargs)
         if p.returncode != 0:
             raise Stop(f"the refresh-only apply failed: {last_line(p.stderr or p.stdout)}")
         last = plan_json(root, state, varargs, tmp, "after")
-    pending = [f"{rc['address']} ({'/'.join(rc['change']['actions'])})" for rc in last.get("resource_changes", [])
+    pending = [changed(rc) for rc in last.get("resource_changes", [])
                if rc["mode"] == "managed" and rc["change"]["actions"] not in (["no-op"], ["read"])
                and not (rc["type"] in NOT_IMPORTABLE and rc["change"]["actions"] == ["create"])]
+    pending += [f"{a} (not in the state)" for a in written_missing(root, state, written)]
     if not pending:
         print(f"import-state: {state} rebuilt; plan: no changes")
         return 0
@@ -596,12 +656,35 @@ def rebuild(kind: str, state: pathlib.Path, variables: list[tuple[str, str]], re
     return 2
 
 
+def changed(rc: dict) -> str:
+    """`address (update: attr, attr)`: the top-level attributes a planned change touches, so the last plan's list says
+    what each change is without a second plan. A replace names the attributes that force it."""
+    ch = rc["change"]
+    before, after, unknown = ch.get("before") or {}, ch.get("after") or {}, ch.get("after_unknown") or {}
+    if ch.get("replace_paths"):
+        attrs = sorted({str(path[0]) for path in ch["replace_paths"] if path})
+    else:
+        attrs = sorted(k for k in set(before) | set(after) if k not in ("tags_all",) and
+                       (before.get(k) != after.get(k) or unknown.get(k) is True))
+        if not attrs and before.get("tags_all") != after.get("tags_all"):
+            attrs = ["tags_all"]
+    actions = "/".join(ch["actions"])
+    return f"{rc['address']} ({actions}{': ' + ', '.join(attrs) if attrs and ch['actions'] != ['create'] else ''})"
+
+
+def written_missing(root: pathlib.Path, state: pathlib.Path, written: list[dict]) -> list[str]:
+    held = state_addresses(root, state)
+    return [rc["address"] for rc in written if rc["address"] not in held]
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("kind", choices=sorted(ROOTS))
     ap.add_argument("profile", help="the fleet account's AWS profile, passed explicitly")
     ap.add_argument("name", nargs="?", help="the cluster's name (cluster only)")
     ap.add_argument("--region", help="default: fleet.sh's WIB_REGION")
+    ap.add_argument("--resume", action="store_true",
+                    help="carry on a rebuild this script stopped: import only what the state does not hold yet")
     ap.add_argument("--resolve-only", action="store_true",
                     help="find every import id and print them; import nothing and write no state")
     args = ap.parse_args(argv)
@@ -623,18 +706,18 @@ def main(argv: list[str]) -> int:
             event = one_tag(tags_of(aws("iam", "list-policy-tags", "--policy-arn", arn)["Tags"]), "event", name)
             return rebuild("boundary", ROOTS["boundary"] / f"states/{args.profile}.tfstate",
                            [("profile", args.profile), ("region", region), ("event", event)],
-                           BoundaryResolver(aws, account), args.resolve_only)
+                           BoundaryResolver(aws, account), args.resolve_only, args.resume)
         if args.kind == "network":
             res = NetworkResolver(aws, account, "watch-it-burn-lab-vpc")
             vpc = aws("ec2", "describe-vpcs", "--vpc-ids", res.vpc)["Vpcs"][0]
             event = one_tag(tags_of(vpc.get("Tags")), "event", f"lab VPC {res.vpc}")
             return rebuild("network", network_state(args.profile),
-                           [("profile", args.profile), ("region", region), ("event", event)], res, args.resolve_only)
+                           [("profile", args.profile), ("region", region), ("event", event)], res, args.resolve_only, args.resume)
         if not args.name.startswith("watch-it-burn-"):
             raise Stop(f"{args.name} is not a watch-it-burn-* cluster; the fleet builds no other")
         res = ClusterResolver(aws, account, args.name)
         variables = cluster_vars(aws, res, args.profile)
-        rc = rebuild("cluster", STATE_DIR / f"{args.name}.tfstate", variables, res, args.resolve_only)
+        rc = rebuild("cluster", STATE_DIR / f"{args.name}.tfstate", variables, res, args.resolve_only, args.resume)
         if not args.resolve_only:
             (STATE_DIR / f"{args.name}.account").write_text(f"{args.profile}\n")   # fleet.sh's record_membership
         return rc
