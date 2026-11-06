@@ -39,7 +39,7 @@ from pii_scrub_cases import ATTENDEE, ATTENDEE_SCRUBBED, UNTOUCHED, c5_record  #
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
-START_BOUND = float(os.environ.get("PII_SCRUB_START_BOUND", "120"))  # seconds the collector gets to take the spans
+START_BOUND = float(os.environ.get("COLLECTOR_START_BOUND", "120"))  # seconds the collector gets to take the spans
 
 failures: list[str] = []
 
@@ -130,9 +130,13 @@ with tempfile.TemporaryDirectory() as d:
             for svc, spans in SPANS.items()]}).encode()
         # The bound only stops a collector that never listens. 30 seconds ran out on a loaded host (load average
         # near 40, run 17949) with the collector still logging its OTTL rewrites, and the same test passed alone in
-        # 10 seconds, so a slow start gets START_BOUND, and one that never takes the spans is named with why.
+        # 10 seconds, so a slow start gets START_BOUND, and one that never takes the spans is named with why. Spans
+        # go only once the collector says it is ready, since free_port's port is free for any process until then (#799).
         sent, start = False, time.time()
         while not sent and time.time() - start < START_BOUND and proc.poll() is None:
+            if "Everything is ready" not in (pathlib.Path(d) / "collector.log").read_text():
+                time.sleep(0.3)
+                continue
             try:
                 req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=body,
                                              headers={"Content-Type": "application/json"})
