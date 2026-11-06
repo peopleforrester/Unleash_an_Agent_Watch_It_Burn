@@ -27664,3 +27664,8 @@ ran`, offline green; `74 checks ran (the offline suite and 73 tier tests) in 53m
 test_public_images_served.py, #992's: `public.ecr.aws/docker/library/httpd:2.4-alpine answers an anonymous pull
 (URLError: <urlopen error [Errno -3] Temporary failure in name resolution>)`. Run alone twice it passed 23 of 23,
 exit 0. It reads nothing this change touches; its handling of a transient resolver failure is filed as a followup.
+
+**Suites (run 17937, on this change rebased onto staging's `24670870`).** The second `bash verify/run-e2e-tools.sh`
+ran the offline suite (`308 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the
+offline suite and 73 tier tests) in 67m21s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, test_public_images_served.py
+passing. The prose gate printed `prose gate: pass`.
