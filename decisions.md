@@ -25816,3 +25816,45 @@ passed again here: the clone's two delivered tags and GitHub's are the pinned ob
 in 42m23s" and "ALL E2E TOOLS TIER CHECKS GREEN", with `test_delivered_tags_github_e2e.py` green against GitHub.
 
 **Not yet run on a cluster.** Nothing: the tests read git refs, not a cluster.
+## 2026-11-06 · #888 · run 17910 · The private cluster's drift was already cleared by #906; the admin probe reads GREEN on it
+
+`verify/prior-drafts.sh 888 origin/staging` printed NONE, and the issue's one comment is Michael's sign-off, so this
+run started from staging `3b42209c` with no draft to port.
+
+**What #888 found, and what had already fixed it.** Run 17370 (#651) saw, on 2026-11-05, no `kyverno-breakout`
+Application on watch-it-burn-private, `block-recipe-snoop` and `agent-egress-allowlist` applied outside the switch,
+and no `guardrails-switch/guardrails-peer` Secret. #906's run 17556 found the cause the same day (its entry above):
+both clusters' `lab-bootstrap` roots still rendered the pre-KubeCon `values-admin.yaml` and `values-burn.yaml`. It
+moved each root to its KubeCon profile, which pruned `network-policies` and `kubearmor-policies` (the owners of the
+two stray policies) and added `kyverno-breakout` and `guardrails-switch`, then ran `./fleet.sh guardrails-link
+watch-it-burn-community watch-it-burn-private` and opened each cluster's API to the other's nodes. This run changes
+no code. It checks the state #888 asks for and runs the admin probe.
+
+**The state read at 13:20Z and again at 13:33Z, after the probe.** On both clusters `lab-bootstrap` reads Synced
+and Healthy on `values-kubecon-private.yaml` (private) and `values-kubecon-community.yaml` (community), and
+`kyverno-breakout` reads Synced and Healthy. `kubectl get validatingpolicy` shows `deny-external-registries` and
+`restrict-image-registries` at `[Audit]` on both. `kubectl -n guardrails-switch get secret` shows `guardrails-peer`
+(keys `kubeconfig` and `name`) and `guardrails-switch-token` on both, 21h old. `kubectl get kubearmorpolicy -A`
+answers "No resources found" on both, and no `agent-egress-allowlist` NetworkPolicy is on either (the one egress
+policy on each is `agent/platform-console-egress`, the console's own). No `joker-*` Deployment is on either.
+`/controls` reads every badge false on both, except private's `falco: true`, which #906's entry explains: the
+`kubecon-private` profile installs Falco on purpose, and it is not one of the four guardrails.
+
+**The admin probe, 13:23Z to 13:33Z.** `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co
+--context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev` printed, among its beats:
+
+    PASS  [-] The kube-context is the named cluster                kube-context and https://burritobot-private.burritobot.co are the same cluster
+    PASS  [2] Start state: AI guards off, the four Kubernetes guardrails off AI guards off, C7 gateway rule open; RBAC broad, Kyverno at Audit, no KubeArmor policy, egress open
+    PASS  [3] guardrails-on: the four Kubernetes guardrails, both clusters $ kubectl --kubeconfig /home/student/.kube/peer --context watch-it-burn-community apply -f /home/student/challenges/c1-network-policy.yaml
+    PASS  [3] Armed: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked RBAC scoped, Kyverno Deny on both registry policies, KubeArmor Block, egress locked
+    PASS  [3] Challenge 2: a public image denied (deny-external-registries) denied at admission by deny-external-registries: no external registry for what the agent creates
+    PASS  [end] guards-off and guardrails-off: the stage starts clean every AI guard off, the rogue tools back, the C7 gateway rule open, the shipped Role back and the four Kubernetes guardrails off on both clusters: the stage starts clean
+    spend on burritobot-private.burritobot.co: $1.7667 -> $1.8242 over 14 model calls (record it on #503)
+    33 beats: 33 PASS, 0 FAIL
+    KUBECON PROBE GREEN
+
+Every other beat passed too: the badges before and after guardrails-on, the agentgateway pin, Challenges 1 to 4
+off and on, and the on-topic guard's redirects and pass-throughs. The probe ended with its own guards-off and
+guardrails-off, and the 13:33Z read above shows both clusters as this run found them.
+
+**Not yet run on a cluster.** Nothing: this run changes no code, and every check #888 names ran above.
