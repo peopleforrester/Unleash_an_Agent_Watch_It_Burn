@@ -27049,3 +27049,29 @@ runs recorded. The second, at `4ed4e37` with a two-hour limit, ran 73 checks (th
 - `test_terminal_login_request.py` timed out a 30s `bash -c` of fleet.sh's `_terminal_env_value` at load 68; rerun, the
   whole test took 53s and passed. `terminal_login_request.parsed_values` now gives each call 120s and names a call
   that never answers.
+
+## 2026-11-06 · #982 · run 17965 · The weather feed's e2e test prints a failed request's status, error and time, and the feed's log
+
+Run 17801 saw `verify/test_weather_feed_e2e.py` die on an uncaught `HTTPError: HTTP Error 502` for Salt Lake City.
+The feed (`gitops/ai-layer/weather_feed.py`) answers 502 only when its own call to Open-Meteo fails, puts the cause
+in the body's `error` field and logs `upstream lookup for ... failed: ...`; the test piped that log and never
+printed it. This is a child of #964 and changes only the test.
+
+**The helper is a module, `verify/weather_feed_probe.py`.** `request(url, timeout)` makes one GET, times it, catches
+`HTTPError` (and a refused or timed-out connection, as status `None`) and returns a `Reply` of status, body (parsed
+JSON, or the raw text) and elapsed seconds. `failure_line(what, reply, expected)` is the line a failed request
+prints: `/current for Salt Lake City: HTTP 502 (expected 200) after 0.03 s; error: <the error field>`. Importing it
+starts no feed and opens no socket, so the next child's offline test calls the same code. A module was chosen over
+importing the test itself so that test stays a plain script with `main()` behind `if __name__ == "__main__":`.
+
+**The test.** The live-reading request and the unknown-city request go through `request`. A live reading that is
+not a 200 with a JSON body prints the failure line, fails "the feed answers 200 with a JSON reading" with it, and
+does not run the five checks that read the body. An unknown city that is not a 404 prints the failure line with
+the `error` field. The feed's stdout and stderr are read with `communicate` after it is stopped and printed under
+"the feed's log" whenever any check failed. Nothing is retried. `call_tool` moved to module level, so an error
+before it was defined no longer turns into a `NameError` in the feed-down check.
+
+**Checked by hand.** The test passed live against Open-Meteo (10 checks, 9.5 s). A scratch copy whose feed had
+`GEOCODE` pointed at `https://127.0.0.1:9/` printed `HTTP 502 (expected 200) after 0.03 s; error: weather service
+unavailable: <urlopen error [Errno 111] Connection refused>`, the same for the unknown city against 404, then the
+feed's log with its three `upstream lookup ... failed` lines, and exited 1 on 3 failed checks.
