@@ -25774,3 +25774,8 @@ read NotFound after the probe. No dependency was added.
 
 **The record check.** `verify/test_two_hour_flow_live_checks.py` now holds each #970 run's entry (17880 and 17902) to
 the same bar: the command, each beat's tally and the exit code.
+
+**The suites (run 17902).** `bash verify/run-e2e-tools.sh` at `e0acc4c4`, the ported draft, printed `301 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `72 checks ran (the offline suite and 71 tier tests) in 32m28s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`. After the record check was extended (`6bba95df`), `bash verify/run-tests.sh` printed
+`301 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
