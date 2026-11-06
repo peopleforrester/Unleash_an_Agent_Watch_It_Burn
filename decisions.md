@@ -22246,3 +22246,10 @@ While the suites ran, staging moved to `d91e8bf8` (#958: `.gitattributes` gives 
 merge, and `verify/test_gitattributes_union.py` holds it). The branch rebased onto it with no conflict. The change since
 `9de5bb7f` is those two files and the two records, none of them a path this branch touches but the records. On the
 new base, `bash verify/run-tests.sh` printed `281 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`.
+
+**Rebase, run 17779.** Run 17763 ended `failed (rebase-conflict)`: its #892 bullet and the bullets of runs that landed
+first (#891, #958, #784) were all inserted at the top of PROGRESS.md's `### Added`, an insert-insert conflict in one
+region. Since then staging took #958's `.gitattributes`, which merges PROGRESS.md and decisions.md with git's union
+driver, and run 17779 rebased the two commits onto staging `d91e8bf8` with no conflict: the #892 bullet now follows
+#891's and #958's. Staging changed none of the four entries the test reads, and #891's new test reads #759's issue
+comments, not PROGRESS.md, so nothing in the test changed. The suites are run again below.
