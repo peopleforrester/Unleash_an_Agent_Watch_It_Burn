@@ -120,11 +120,13 @@ spec.loader.exec_module(proxy)  # safe: the server only starts under __main__
 proxy.Handler.log_message = lambda *a: None
 
 events: list[str] = []
+messages: dict[str, str] = {}
 
 
 class Events(logging.Handler):
     def emit(self, record):
         events.append(getattr(record, "event", ""))
+        messages.setdefault(getattr(record, "event", ""), record.getMessage())
 
 
 logging.getLogger("guard-proxy").addHandler(Events())
@@ -150,8 +152,16 @@ except ValueError:
 check("the room gets a 502", status == 502, f"got {status} {raw[:200]!r}")
 check("the 502 carries a sentence a phone can read, in the /chat shape",
       reply == {"reply": KITCHEN_DOWN, "guarded": False, "input_tokens": 0, "output_tokens": 0}, f"got {reply}")
-check(f"the turn ends at PROXY_TIMEOUT, not later ({took:.2f}s)",
-      took < proxy_timeout * SCALE + 1.5)
+# Which limit ended the turn is read from the proxy's own forward_error line, not from the wall clock. A bound of
+# PROXY_TIMEOUT + 1.5 s went red in run 17905's suite at 3.12 s on a host at load 18, and passed at 1.01 s on three
+# reruns (#974): the poll's sleep and the handler thread run late on a loaded host, so no tight wall-clock bound
+# holds there. The proxy names the limit it hit, "(PROXY_TIMEOUT)" or "(TURN_TIMEOUT)", in that line, which load
+# cannot change. The wall clock is kept only as a bound on a hang, far under the client's own 30 s.
+forward_msg = messages.get("forward_error", "")
+check("the turn ends at PROXY_TIMEOUT, not at TURN_TIMEOUT",
+      "forward deadline (PROXY_TIMEOUT) passed" in forward_msg and "TURN_TIMEOUT" not in forward_msg,
+      f"forward_error said {forward_msg!r}")
+check(f"the turn does not hang ({took:.2f}s, the client waits 30s)", took < 15)
 
 deadline = time.monotonic() + 5
 while time.monotonic() < deadline and not any(c.get("method") == "tasks/cancel" for c in RunawayAgent.calls):
