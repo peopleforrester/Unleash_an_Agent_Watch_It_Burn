@@ -1,13 +1,17 @@
-# ABOUTME: Render gate for what the Istio ambient mesh carries (#471): the console and guard-proxy are enrolled and
-# ABOUTME: nothing else is, no Ingress rule refuses their mesh traffic, and the pages say exactly that.
+# ABOUTME: Render gate for what the Istio ambient mesh carries (#471, #980): the console, guard-proxy and the weather
+# ABOUTME: feed are enrolled and nothing else is, no Ingress rule refuses their mesh traffic, and the pages say so.
 """Why this exists (#238, #471).
 
 For months the mesh enrolled nothing while the tour said it "encrypts all traffic between containers inside
 the cluster, automatically". #482 made the tour admit that, and on #471 Michael chose to keep Istio and
 enroll an application in it (question 947). The console and guard-proxy pods are enrolled: that hop carries
-every chat message, and neither pod sits behind an Ingress NetworkPolicy. These checks hold that state:
+every chat message, and neither pod sits behind an Ingress NetworkPolicy. The weather feed joined them in #980:
+the C1 stage-2b fix (challenges/c1-exfil-s3/fix/) shuts its direct 443 and sends Open-Meteo through an egress
+waypoint, and ztunnel steers only an enrolled pod's traffic to a waypoint. workshop-mcp and workshop-agent stay
+out: the stage-2 allowlist gives them no public address, so the fix has nothing to steer for them. These checks
+hold that state:
 
-- exactly those two pod templates carry the ambient label, and no namespace does;
+- exactly those three pod templates carry the ambient label, and no namespace does;
 - no Ingress NetworkPolicy selects an enrolled pod without admitting HBONE port 15008, which is how mesh
   traffic arrives (agentgateway and workshop-agent are behind port-exact rules, so they stay out);
 - agent's PeerAuthentication is PERMISSIVE, because the console is an ip-target NLB that the room reaches
@@ -30,7 +34,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 EVALUATION = "docs/research/2026-10-24-istio-ambient-evaluation.md"
 LABEL = "istio.io/dataplane-mode"
 RESOURCES = "gitops/ai-layer/resources.yaml"
-ENROLLED = ("console", "guard-proxy")  # Deployment names in RESOURCES (#471, question 947)
+ENROLLED = ("console", "guard-proxy", "weather-feed")  # Deployment names in RESOURCES (#471, question 947; #980)
 HBONE = 15008
 
 failures: list[str] = []
@@ -62,7 +66,7 @@ def has_key(node, key: str) -> bool:
 
 AI = docs(RESOURCES) + docs("gitops/workshop-agent/agent.yaml")  # #707
 
-# --- enrolment: the console and guard-proxy, nothing else ------------------------------------------------
+# --- enrolment: the console, guard-proxy and the weather feed, nothing else ----------------------------------
 # A text scan, not a YAML walk: Helm templates and shell scripts do not parse as YAML, and a label set in
 # one of them enrols a workload just the same. Comment lines are exempt.
 carriers = []
@@ -81,7 +85,7 @@ for d in AI:
     labels = d.get("spec", {}).get("template", {}).get("metadata", {}).get("labels") or {}
     if LABEL in labels:
         enrolled_labels[d["metadata"]["name"]] = labels
-check("the console and guard-proxy pod templates, and only they, are enrolled",
+check("the console, guard-proxy and weather-feed pod templates, and only they, are enrolled",
       sorted(enrolled_labels) == sorted(ENROLLED)
       and all(v[LABEL] == "ambient" for v in enrolled_labels.values()), f"{enrolled_labels}")
 ns_docs = docs("gitops/namespaces/namespaces.yaml")
@@ -93,6 +97,11 @@ check("no Namespace object carries the label, so enrolment stays per pod",
 policies = [(str(p.relative_to(REPO)), d) for p in sorted((REPO / "policies/network-policies").rglob("*.yaml"))
             for d in docs(str(p.relative_to(REPO)))]
 policies += [("gitops/ai-layer/chat-path-ingress.yaml", d) for d in docs("gitops/ai-layer/chat-path-ingress.yaml")]
+# The C1 stage-2b fix is applied in agent while the weather feed is enrolled (#980), so its policies count too.
+policies += [(str(p.relative_to(REPO)), d) for p in sorted((REPO / "challenges/c1-exfil-s3/fix").glob("*.yaml"))
+             for d in docs(str(p.relative_to(REPO)))]
+check("the Ingress scan reads the C1 stage-2b fix's NetworkPolicies",
+      any(rel.startswith("challenges/c1-exfil-s3/fix/") and d.get("kind") == "NetworkPolicy" for rel, d in policies))
 blocking = []
 for rel, d in policies:
     if d.get("kind") != "NetworkPolicy" or d.get("metadata", {}).get("namespace", "agent") != "agent":
@@ -112,8 +121,9 @@ check(f"no Ingress NetworkPolicy in agent selects an enrolled pod without admitt
 lab = (REPO / "gitops/ai-layer/web/lab.html").read_text()
 mesh_li = re.search(r'<li data-full><a href="https://istio\.io/[^"]*"[^>]*>Istio ambient mesh</a>(.*?)</li>', lab, re.S)
 tour = " ".join(re.sub(r"<[^>]+>", "", mesh_li.group(1)).split()) if mesh_li else ""
-check("the tour names the enrolled hop and how to see it, and claims nothing wider",
-      "console" in tour and "guard-proxy" in tour and "mutual TLS" in tour
+check("the tour names the enrolled hop and the weather feed, how to see them, and claims nothing wider",
+      "console" in tour and "guard-proxy" in tour and "mutual TLS" in tour and "weather feed" in tour
+      and "Only those two pods" not in tour
       and f"kubectl get pods -n agent -L {LABEL}" in tour and "connection complete" in tour
       and "encrypts all traffic" not in tour and "no namespace is enrolled" not in tour, tour or "no Istio tour bullet")
 c1 = (REPO / "challenges/c1-exfil-s3/README.md").read_text()
@@ -192,4 +202,4 @@ check("the student's terminal cannot write Istio security policy", not istio_wri
 if failures:
     print(f"\nFAIL: {len(failures)} check(s) failed: {failures}")
     sys.exit(1)
-print("\nPASS: the mesh carries the console-to-guard-proxy hop and nothing else, and the pages say so")
+print("\nPASS: the mesh carries the console, guard-proxy and the weather feed and nothing else, and the pages say so")

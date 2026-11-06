@@ -456,8 +456,9 @@ spec:
       # (#629). The service is the root span's name, burritobot, which Datadog takes as the LLM Obs ml_app.
       # istio.io/dataplane-mode: ambient enrols this pod, and the console, in the Istio ambient mesh (#471), so
       # the console-to-guard-proxy hop, which carries every chat message, is mutual TLS between two SPIFFE
-      # identities. Only these two pods: agentgateway and workshop-agent sit behind chat-path-ingress.yaml's
-      # port-exact Ingress rules, which mesh traffic (HBONE, port 15008) would not pass.
+      # identities. The weather feed is the third pod in the mesh (#980; see its Deployment for why). No other:
+      # agentgateway and workshop-agent sit behind chat-path-ingress.yaml's port-exact Ingress rules, which mesh
+      # traffic (HBONE, port 15008) would not pass.
       labels: { app.kubernetes.io/name: guard-proxy, tags.datadoghq.com/service: burritobot, tags.datadoghq.com/env: burritobot-kubecon-na-26, istio.io/dataplane-mode: ambient }
       # OTel Operator injects the Python SDK (init-container + PYTHONPATH) so proxy.py's manual spans
       # (PRD #22 M1) emit. The image carries no SDK; this annotation activates injection. References the
@@ -687,6 +688,16 @@ spec:
 # and all it does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps
 # Challenge 1's egress lock-down true for every pod that can run a tool. Its label is on the Kyverno
 # egressLabels list, so the agent cannot mint a pod that borrows this egress.
+#
+# istio.io/dataplane-mode: ambient enrols it in the Istio ambient mesh (#980), the third pod after the console and
+# guard-proxy (#471, question 947). The C1 stage-2b fix (challenges/c1-exfil-s3/fix/) shuts this pod's direct 443
+# and sends its two Open-Meteo hosts through an egress waypoint, and ztunnel steers only an enrolled pod's traffic
+# there: an unenrolled feed under the fix reached neither host (watch-it-burn-private, 2026-11-06). Before the fix
+# is applied nothing steers it, and its calls go out directly as before. No Ingress NetworkPolicy selects it, so
+# mesh traffic on HBONE port 15008 reaches it, and its one caller, evil-mcp-shim, is outside the mesh and arrives
+# in plain text, which agent's PERMISSIVE PeerAuthentication admits. workshop-mcp and workshop-agent stay out:
+# the stage-2 allowlist gives them no public address, enrolled or not, and enrolling one would hand it the
+# waypoint's route to Open-Meteo, which it does not have today.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -696,7 +707,7 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: weather-feed } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: weather-feed, tags.datadoghq.com/service: burritobot-weather-feed, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
+    metadata: { labels: { app.kubernetes.io/name: weather-feed, tags.datadoghq.com/service: burritobot-weather-feed, tags.datadoghq.com/env: burritobot-kubecon-na-26, istio.io/dataplane-mode: ambient } }
     spec:
       automountServiceAccountToken: false # it needs no cluster API, so it holds no token
       enableServiceLinks: false # no injected <SERVICE>_PORT=tcp://... variables to collide with its own settings

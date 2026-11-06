@@ -30,11 +30,12 @@
 #     traffic is TLS the waypoint passes through without terminating it, so an ALLOW rule with it never matches.
 #     The rule below matches the TLS SNI (`connection.sni`) instead. With it, both Open-Meteo hosts answered 200
 #     and example.com, steered to the same waypoint by a second ServiceEntry, was refused.
-# STILL OWED TO THE LIVE VALIDATION (#728)
 #   - Enrolment. ztunnel steers only an ambient-enrolled pod's traffic to the waypoint. A pod labelled
-#     istio.io/dataplane-mode=none reached example.com directly, past the waypoint. In `agent` only console
-#     and guard-proxy are enrolled (#471), so the weather feed has to be enrolled before this fix is applied,
-#     or agent-egress-fqdn.yaml shuts its only path to Open-Meteo.
+#     istio.io/dataplane-mode=none reached example.com directly, past the waypoint. So the weather-feed pod
+#     template carries istio.io/dataplane-mode: ambient (#980), and under the stage-2 policies and this fix a pod
+#     enrolled by that label alone, in a namespace with no mesh label, reached both Open-Meteo hosts through the
+#     waypoint and no other host; without the label it reached neither.
+# STILL OWED TO THE LIVE VALIDATION (#728)
 #   - DNS for the ServiceEntry hosts. resolution: DNS leaves the client resolving the host; the locked
 #     resolver (resolver-lockdown.yaml) forwards open-meteo.com for exactly this, so the name resolves and
 #     ztunnel then steers the connection to the waypoint. The steering was checked with the default resolver,
