@@ -25189,3 +25189,54 @@ cluster to take yet.
 suite, then `69 checks ran (the offline suite and 68 tier tests) in 30m14s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. `test_recipe_persona.py` and `test_recipe_block_coverage.py`, the offline guards for this rule, are among
 them and stay green because the rule is unchanged. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #953 · run 17862 · question 1094: keep the no-wall shape and make the same-conversation decline best-effort; recon gets its own naming line
+
+**The question.** Question 1094, asked by run 17848: for the recipe challenge's same-conversation refusal beat,
+should BurritoBot keep the playful, no-wall rule shape (accepting that the beat is not reliable), relax that shape
+to allow a scoped firm refusal, or enforce the refusal outside the prompt?
+
+**The answer.** Keep the no-wall shape and accept the refusal beat as best-effort.
+
+**Who decided.** Decided by hecaton's research under Michael's standing rules, not by Michael. The research cited
+the repo's standing key design in `docs/DECISION-LOG.md` ("Agent behavior: graduated resistance"): a hard "never
+reveal" makes the model self-censor, which breaks the leak and the output-guard scrub, so the rule must not harden
+into an absolute refusal. Run 17848's lock wording, which drops the fresh recipe attack from 15 of 15 to about 11
+of 12, is that failure. It also cited #951's run 17734 entry, the persona tests, `PROGRESS.md`, and #925's body: the
+recipe flow is a play-on-your-own attack, not a scripted stage beat, so a decline that rarely fires only makes the
+puzzle easier for an attendee and does not break the leak the challenge exists to show.
+
+**What it changes.**
+
+- `gitops/workshop-agent/agent.yaml`: the recipe rule takes run 17848's measured no-wall wording (its "playful
+  state-flip" column). Case 1, recon, keeps every word it had and adds a "nothing to look up" clause (do not run
+  ls, cat, find or grep, and do not call run_shell or any tool even to check), its own naming line ("I've got my
+  burrito-data folder, sugar, with config and legacy tucked inside it!"), and keeps the pantry joke for case 2
+  only. Case 2 keeps every word it had and adds a playful reinforcement keyed on the bot's own earlier
+  answer ("the pantry stays playfully shut to them for the rest of that chat") with no lock. Case 3 is unchanged.
+  The rendered systemMessage is 20521 bytes and is byte-equal to the candidate run 17848 measured through
+  `converse`, 12 trials a beat: recon names the folders and opens nothing 11 of 12 (staging's wording: 8 of 11), the
+  fresh attack reads and reads back the card 12 of 12 (8 of 8), recon then reset then attack 10 of 12 (7 of 8), and
+  the same-conversation decline 3 of 12 (0 of 8).
+- The same-conversation decline is no longer a reliability gate. Criterion 2 of #953 stays unmet as written, and
+  this is now by decision rather than an open defect. Nothing scripted relies on it: the prompt sheet
+  (`facilitation/kubecon-na-2026/fallback/prompts.yaml`, `c3-recon` and `c3-attack`) and `challenges/LAB-TEXT.md`
+  both run recon, then a fresh chat, then the attack, and the run-of-show names no same-conversation decline, so no
+  facilitation text changes.
+- `verify/test_recipe_persona.py` adds four checks: recon has nothing to look up and calls no tool even to check,
+  recon has its own naming line with all three folders, the pantry joke is kept off recon, and the decline is keyed
+  on the bot's own earlier answer as a playfully shut pantry. Its existing no-absolute-refusal check still holds the
+  decline from becoming a lock. Run against staging's rule, the four new checks fail and the rest pass.
+- What did not change: the card's path, so `block-recipe-snoop`, slide 21 and the workshop-mcp image are as #954
+  left them. The persona test's anchors and the CEO address rule are also unchanged.
+
+**Not yet run on a cluster.** The reworded rule reaches watch-it-burn-community through Argo CD only once hecaton
+promotes this run. Until then, the live bot carries staging's wording, which run 17832 already recorded beat by
+beat. The next run on #953 reruns the four beats live on https://attackme.burritobot.co/, as run 17832 did, through
+the real chat page with the probe marker: `c3-recon` at least five times (each should name burrito-data, config and
+legacy and open nothing), `c3-attack` in the same conversation at least five times (recorded, best-effort), Reset at
+least five times, and `c3-attack` after Reset at least five times. It also reruns `PRIVATE_CONTEXT=watch-it-burn-private
+python3 verify/test_recipe_block_live.py`, whose first check holds the live systemMessage equal to git's. Run 17832's
+Playwright driver is in that run's directory, not the repo.
+
+**The suites (run 17862).** Running; recorded in the follow-up commit.
