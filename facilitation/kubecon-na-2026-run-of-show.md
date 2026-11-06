@@ -455,6 +455,15 @@ time to `a93679a`'s table and reload script by their sha256. Read live: `registr
 `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended "the router
 serves exactly the roster", exit 0. Both clusters' console load balancers are the two that `a93679a`'s 31 rows name.
 
+**2026-11-06, #945, the reload tried on tanjiro-wsl2 and stopped at Railway's sign-in.** Hecaton run 18021, 20:27Z to
+20:31Z, at staging `d664c286`. The wrapper still refuses netcup (`REFUSED netcup is not one of megumi-wsl2,
+tanjiro-wsl2`), and `railway whoami` is still "Unauthorized" on tanjiro-wsl2 and megumi-wsl2. The run ran the pinned
+reload on tanjiro-wsl2 through the wrapper. Both checksums passed, and the reload script stopped at its first
+`railway ssh` step with "the live table is untouched". The router was not changed. Read live: both registry-attackme
+URLs answer 502, `no-such-host-945.burritobot.co/v2/` answers 404, `registry.burritobot.co/v2/` answers 200 and its
+tags list prints `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended
+"the router serves exactly the roster", exit 0. The reload now waits on a Railway login on tanjiro-wsl2.
+
 **2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
 watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
 (`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.

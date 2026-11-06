@@ -221,8 +221,12 @@ for reg in m._DOCKER_HUB:
               not err and container(out).get("image") == want, err or str(container(out).get("image")))
     for asked in (f"{at}bitnami/redis:7", f"{at}trongame/tron:latest", f"{at}library/someone/tron"):
         reply, out, err = deploy(workload("tron", asked))
+        # An apply is a PATCH of the object itself. A PATCH on a /scale subresource is the reaper's Timer from an
+        # earlier room deployment (JOKER_SCALE_DOWN_SECONDS=0.3 above), and on a loaded host it can fire inside this
+        # deploy's window and land in `calls`; counting it failed this check 7 of 12 times in parallel runs (#945).
+        applies = [c for c in calls if c[0] == "PATCH" and not c[1].endswith("/scale")]
         check(f"{asked!r}: outside the official library, refused before any apply",
-              bool(err) and not out and not [c for c in calls if c[0] == "PATCH"], reply or err)
+              bool(err) and not out and not applies, reply or err or str(applies))
         check(f"{asked!r}: the refusal names why (outside Docker's official library, no Docker Hub pulls) and how",
               err.startswith("deploy failed for Deployment/tron: ") and "outside Docker's official library" in err
               and "pulls nothing from Docker Hub" in err and "registry it is published on" in err
