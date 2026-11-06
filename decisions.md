@@ -25560,3 +25560,11 @@ suite and 71 tier tests) in 30m35s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. 
 staging. `bash verify/prior-drafts.sh 969 origin/staging` printed CLEAN for `origin/agent/969-17879`: staging had
 only appended to decisions.md since its base `1503aaa9`. Run 17892 cherry-picked both commits unchanged; nothing in
 the code differs from the draft. `python3 verify/test_otelcol_local.py` passed its 15 checks in 8 s on the port.
+
+**Suites and the real collector (run 17892).** `bash verify/run-e2e-tools.sh` on the port ran the offline suite
+(`301 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `72 checks ran (the offline suite and 71
+tier tests) in 33m15s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with all six of
+test_collector_act2_redaction_e2e.py's "the collector took the turn" checks passing. A forced collision through
+`otelcol_local.start` with the pinned otelcol-contrib, a listener held on the first port it was given, came up on the
+second port after two starts in 0.60 s, the first start's log carrying `address already in use`, as in run 17879.
+The prose gate printed `prose gate: pass`. No cluster check applies, and no dependency was added.
