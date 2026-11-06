@@ -27901,3 +27901,7 @@ outside guard-proxy's cap, and 10 chat calls through the private bot. maintenanc
 the probe, and the guards were left all off, as found. Port-forwards to workshop-mcp and evil-mcp read their tool
 lists; one `tools/call` read HC-7731. No dependency was added to the repo; the measurements ran boto3 1.40.70 through
 `uv run --with`, and the scripts and their logs are in the run's directory, not the repo.
+
+**The suites (run 18032, at `c4b0a067`).** `bash verify/run-e2e-tools.sh` printed `311 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `test_ticket_persona.py` among them, then `74 checks ran (the offline suite and 73 tier
+tests) in 45m48s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
