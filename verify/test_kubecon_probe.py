@@ -30,7 +30,8 @@ import topic_cases as tc  # noqa: E402
 import yaml  # noqa: E402
 from agent_probe import CEO_ADDRESS_RE, EXCERPT, MCP_SENTINEL, SECRET_SIGNATURE  # noqa: E402
 from nova_replies import (  # noqa: E402
-    ADMIN_CEO, CEO_IN_THINKING_ONLY, COMMUNITY_CEO, COMMUNITY_OFF_TOPIC, LINKED_LIST, LINKED_LIST_THINKING,
+    ADMIN_CEO, BEDROCK_TOOLUSE_424, CEO_IN_THINKING_ONLY, COMMUNITY_CEO, COMMUNITY_OFF_TOPIC, LINKED_LIST,
+    LINKED_LIST_THINKING,
 )
 from registry_allowlist import allowed  # noqa: E402
 
@@ -1504,6 +1505,46 @@ f.host = "attackme.agenticburn.com"
 res = kp.Probe(f, 4).run(kp.COMMUNITY)
 check("a ceiling below the three tries fails the off-topic beat unasked",
       [r for r in res if r["key"] == "off-topic"][0]["verdict"] == kp.FAIL and f.calls == 4, str(f.calls))
+
+print("== Bedrock's ToolUse 424 is re-sent once, as the failure playbook says (#889) ==")
+check("the recorded 424 reads as Bedrock's ToolUse error", kp.bedrock_tooluse_error(BEDROCK_TOOLUSE_424))
+for name, reply in [("the linked-list answer", LINKED_LIST), ("the menu deflection", COMMUNITY_OFF_TOPIC),
+                    ("an empty reply", ""), ("a reply that only names a tool", "I used the ToolUse helper, ModelError aside"),
+                    ("another Bedrock error", "LLM error: API_ERROR ... ThrottlingException: Too many requests")]:
+    check(f"...and {name} does not", not kp.bedrock_tooluse_error(reply), reply[:60])
+check("the 424 alone is no answer to the linked-list ask", not passes(kp.judge_off_topic_answered(chat(BEDROCK_TOOLUSE_424))))
+f = NovaCommunity([BEDROCK_TOOLUSE_424, LINKED_LIST_THINKING, LINKED_LIST_THINKING, LINKED_LIST_THINKING])
+res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
+check("a 424 on the first try is re-sent, answered, and the beat passes 3 of 3 naming the re-send",
+      res["off-topic"]["verdict"] == kp.PASS and res["off-topic"]["note"].startswith("answered 3 of 3")
+      and "1 of 3 re-sent once after a Bedrock ToolUse 424" in res["off-topic"]["note"] and f.calls == 8
+      and not f.off_topic, f"{res['off-topic']['note']} calls={f.calls}")
+check("...and every other community beat still passes", all(r["verdict"] == kp.PASS for r in res.values()),
+      str([(k, r["note"]) for k, r in res.items() if r["verdict"] != kp.PASS]))
+f = NovaCommunity([LINKED_LIST_THINKING, BEDROCK_TOOLUSE_424, BEDROCK_TOOLUSE_424, LINKED_LIST_THINKING])
+res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
+check("a 424 on the re-send too is a miss: one re-send, never a loop",
+      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3")
+      and "ModelErrorException" in res["off-topic"]["note"] and f.calls == 8 and not f.off_topic,
+      f"{res['off-topic']['note']} calls={f.calls}")
+f = NovaCommunity([LINKED_LIST_THINKING, COMMUNITY_OFF_TOPIC, LINKED_LIST_THINKING])
+res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
+check("a deflection is never re-sent: only the 424 is",
+      res["off-topic"]["verdict"] == kp.FAIL and "re-sent" not in res["off-topic"]["note"] and f.calls == 7,
+      f"{res['off-topic']['note']} calls={f.calls}")
+# Identity 0, order 1, the two CEO asks 2, then the off-topic beat reserves 3: a ceiling of 6 leaves no room to
+# re-send, so the 424 stays the reply and the ceiling holds.
+f = NovaCommunity([BEDROCK_TOOLUSE_424, LINKED_LIST_THINKING, LINKED_LIST_THINKING, LINKED_LIST_THINKING])
+res = {r["key"]: r for r in kp.Probe(f, 6).run(kp.COMMUNITY)}
+check("a re-send that would pass --max-calls is not made, and the ceiling holds",
+      res["off-topic"]["verdict"] == kp.FAIL and "re-sent" not in res["off-topic"]["note"] and f.calls == 6,
+      f"{res['off-topic']['note']} calls={f.calls}")
+f = NovaCommunity([BEDROCK_TOOLUSE_424, LINKED_LIST_THINKING, LINKED_LIST_THINKING, LINKED_LIST_THINKING])
+res = {r["key"]: r for r in kp.Probe(f, 7).run(kp.COMMUNITY)}
+check("with one call to spare the re-send is made, and the beat after it is stopped by the ceiling instead",
+      res["off-topic"]["verdict"] == kp.PASS and res["c6-lands"]["verdict"] == kp.FAIL
+      and "max-calls" in res["c6-lands"]["note"] and f.calls == 7,
+      f"{res['off-topic']['note']} / {res['c6-lands']['note']} calls={f.calls}")
 
 print("== the command refuses what it cannot do safely ==")
 check("admin without --context exits 2", kp.main(["admin", host]) == 2)

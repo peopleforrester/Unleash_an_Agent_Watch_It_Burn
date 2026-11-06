@@ -25,4 +25,9 @@ COMMUNITY_OFF_TOPIC = ("<thinking> The user's question is unrelated to the conte
                        "I should steer them back to the menu. </thinking>\n\nOh, sugar, my cauldron only bubbles with "
                        "burritos! Shall we start your order? First pick a base: Cilantro-Slime Rice, Black-Bog Rice or "
                        "Graveyard Greens.")
-LINKED_LIST_THINKING = f"<thinking> A coding question: answer it, then nudge back to the order. </thinking>\n\n{LINKED_LIST}"
+# The off-topic beat's miss on 2026-10-30 and 2026-11-05 (#889): Bedrock's 424 as kagent's Go runtime hands it back.
+# The RequestID is a stand-in; the rest is what the probe's note recorded.
+BEDROCK_TOOLUSE_424 = ("LLM error: API_ERROR operation error Bedrock Runtime: Converse, https response error "
+                       "StatusCode: 424, RequestID: 00000000-0000-0000-0000-000000000000, ModelErrorException: "
+                       "Model produced invalid sequence as part of ToolUse")
+LINKED_LIST_THINKING =f"<thinking> A coding question: answer it, then nudge back to the order. </thinking>\n\n{LINKED_LIST}"
