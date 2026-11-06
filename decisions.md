@@ -24123,3 +24123,7 @@ was switched: guards, policies and Deployments were left as found. No dependency
 **Not yet run on a cluster.** Nothing this issue asks for: the four steps ran live here. A reworded rule would need
 the same run again once it reaches the community cluster.
 
+**The suites (run 17832, at `05842f10`).** `bash verify/run-e2e-tools.sh` printed `290 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `66 checks ran (the offline suite and 65 tier tests) in 40m04s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+
