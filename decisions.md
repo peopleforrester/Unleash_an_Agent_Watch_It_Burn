@@ -26393,3 +26393,14 @@ and Clean states lists `boundary` and `audit` for each of the four.
 
 **Not yet run on a cluster.** The escalated apply on tanjiro-wsl2, then `python3 infra/terraform/drift/drift-report.py
 --region us-west-2` there, expected to list only #979's two clusters until #979 lands.
+
+**The suites (run 17961, at `f4475518`).** The third run of `bash verify/run-e2e-tools.sh` printed `307 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran (the offline suite and 72 tier tests) in 46m22s`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/17961/e2e-tools.log`). The two before it, at load
+averages of 27 to 40 on 16 cores: the first (`e2e-tools.first.log`) had the offline suite green, `test_drift_report.py`
+and `test_drift_floor.py` among it, and was stopped by its 60-minute job limit partway through the tier. The second
+(`e2e-tools.second.log`) had every tier test green and the offline suite red on one file this change does not touch,
+`test_challenge_fallbacks.py`: in C7's guarded case the `get_weather` exchange through the stub gateway got no answer
+(the stub server logged `BrokenPipeError` on its reply, so the client had already gone), and the put-back
+`guard-mcp-off` then went unrecorded. Run alone twice afterwards, at a load average near 35, it passed with no FAIL
+line. The cause was not found here, so it is filed as a follow-up with that output.
