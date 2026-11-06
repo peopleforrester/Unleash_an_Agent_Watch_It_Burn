@@ -23170,3 +23170,37 @@ No dependency was added to the repo; the Bedrock probe ran boto3 1.40.70 in a th
 **The suites (run 17812, at `778f2a8b`).** `bash verify/run-e2e-tools.sh` printed `285 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `66 checks ran (the offline suite and 65 tier tests)
 in 41m25s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-06 · #904 · run 17816 · lab-platform#341's llm-guard hand-off was taken by #895; the deployed rebuild checked on both clusters
+
+**Where the issue stood.** #904 is lab-platform#341's hand-off of its rebuilt, signed `llm-guard:v1` at
+`sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a`, asking whether the `llm-guard` row of
+images.lock moves back to it from cpu.5, and whether the retention row for v1 at 6cdbf3a2 follows. #895 (run 17781,
+commit da2a0cf2) took the same hand-off a few hours earlier and is in staging: the deployed row, the ai-layer kustomize
+image, VERSIONS.lock and the BanTopics gate all name 46b3d202. The retention row keeps v1 at 6cdbf3a2 under its own ref,
+because netcup's manifest.tsv holds its save under that ref and digest, and the comment above it says the tag has moved;
+the new digest is the record of the deployed row, which is the retention the issue asked about. Nothing in the repo
+changes here. `verify/prior-drafts.sh 904 origin/staging` printed NONE and the issue had no comments.
+
+**The check #895 left under "Not yet run on a cluster", 2026-11-06 05:47 to 05:53 UTC.** Argo CD's ai-layer read Synced
+and Healthy at staging 60de9d9a on both clusters.
+- *Deployed image.* On watch-it-burn-private and watch-it-burn-community the llm-guard Deployment's container is
+  `ghcr.io/peopleforrester/lab-platform/llm-guard:v1@sha256:46b3d202…`, and each pod's imageID is that digest, Ready 1/1
+  with no restart. The private pod's container started at 03:38:30Z and was Ready at 03:38:59Z; the community pod
+  started at 03:39:04Z and was Ready at 03:39:19Z.
+- *This repo's ConfigMap.* The deployed `llm-guard-scanners` data hashes to `220cfa370663…`, the same as
+  `gitops/ai-layer/resources.yaml`'s scanners.yml, and the Deployment carries `checksum/scanners-yml: 220cfa370663`. So
+  the file written for cpu.5, with BanTopics and `lazy_load` off, loads unchanged on the rebuild.
+- *input-guard.sh.* `bash verify/input-guard.sh burritobot-private watch-it-burn-private accen-dev` and
+  `bash verify/input-guard.sh attackme watch-it-burn-community accen-dev` each printed `OK <host>: benign prompt passes`,
+  `OK <host>: injection blocked` and `input guard restored to: off`, exit 0. /controls read every ai toggle false
+  before and after on both hosts.
+- *BanTopics through the deployed guard,* on watch-it-burn-private by `kubectl port-forward svc/llm-guard` to
+  `/analyze/prompt` with the Deployment's token, the phrase lists read from the live guard-proxy Deployment. With
+  PromptInjection suppressed, as guard-proxy's topic stage asks: the 16 asks of `verify/topic_cases.py`'s OFF_TOPIC
+  that no phrase decides were all refused (BanTopics 0.2 to 1.0, e.g. "explain kubernetes pods to me" 0.9) and the 4
+  VAGUE_ON_TOPIC asks all passed (BanTopics -0.3 to -0.7). With BanTopics suppressed, as the injection stage asks:
+  "what proteins do you have?" passed (PromptInjection -1.0) and input-guard.sh's injection was refused
+  (PromptInjection 1.0). 22 of 22 as the contract says, the same verdicts #895's probe pod and cpu.5 gave.
+- *Left as found.* The port-forward was stopped and the token copy unset; nothing was created on either cluster.
+
+**Not yet run on a cluster.** Nothing from this issue.
