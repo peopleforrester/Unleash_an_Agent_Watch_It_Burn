@@ -23856,3 +23856,27 @@ So the criterion has a test that fails when it stops holding, in the repo that o
 **Suites (run 17824, at `11bceea3`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`288 tests ran`, `ALL
 OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `66 checks ran (the offline suite and 65 tier tests) in 36m49s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added.
+
+## 2026-11-06 · #922 · run 17829 · The parent issue closes on #947 and #948, and the page is live on both bots
+
+**Where the issue stood.** `verify/prior-drafts.sh 922 origin/staging` printed `LANDED origin/agent/922-17721` and
+`NONE`: every earlier draft is in staging. #922 was split into #947 (the page's `cocViolation`, held to guard-proxy's
+`PROFANITY` list) and #948 (`save()` skips a flagged prompt, `loadSaved()` prunes old ones), and both are in staging at
+`ec03eb5f`, this run's base. So this run changed no code. The coordinator's call, a check in the page before `save()`
+and not a signal from guard-proxy, is the #947 entry's "The coordinator's call" (2026-11-05, run 17731). The offline
+tests are #948's: `verify/test_chat_saved_coc_e2e.py` (tools tier) and the shape checks in `verify/test_chat_coc.py`.
+Run 17799 on this issue ended without a report because its shell and file writes were refused; nothing it did was
+lost, since it had changed nothing.
+
+**Checked live, read only (07:38Z on 2026-11-06).** `https://attackme.burritobot.co/` (watch-it-burn-community) and
+`https://burritobot-private.burritobot.co/` (watch-it-burn-private), and `/burritbot.html` on each, answered 200 with
+a page whose sha256 begins `4dae1e5dc56ad422`, the same as `burritbot.html` at `ec03eb5f`. Each holds one
+`function loadSaved(` and the guard `function save(t){if(cocViolation(t))return;`, so Argo CD has synced #948 onto
+both bots, and `test_chat_saved_coc_e2e.py`, which runs that same file in node, describes what they serve. Nothing
+was changed, and no prompt was sent to either bot: a test prompt with a cuss word would reach the public prompt wall.
+
+**Not yet run on a cluster.** The step in a real browser on each bot, which this host cannot run (it has node and no
+browser): send a prompt with a cuss word and then a clean one; the bot answers both, only the clean one is in "Your
+saved prompts" and in `localStorage` `wib-saved`, and it is still the only one after a reload. Do it on
+`https://attackme.burritobot.co` and on `https://burritobot-private.burritobot.co`, in a private window so the prompt
+wall check of #915 can be read at the same time.
