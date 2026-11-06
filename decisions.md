@@ -21593,3 +21593,11 @@ the log ends with `getwd: no such file or directory`, so the run's temp space an
 the suite ran. That run was then stopped for repeating one identical poll command; this run polled with a different
 command each time. Run alone, and in this run's full pass, the test is green. The log is
 `/var/lib/hecaton/runs/17752/e2e-tools.log`.
+
+**Live check (run 17752, 2026-11-06, read-only, `--context watch-it-burn-private` on every call).** Nothing was
+applied, and neither cluster was changed. The `coredns` ConfigMap's Corefile carries `kubernetes cluster.local
+in-addr.arpa ip6.arpa` and the catch-all `forward . /etc/resolv.conf`, so the relay the fix closes is open there
+today. istiod runs `pilot:1.30.4-distroless`, the pinned version. The cluster has no `gateway.networking.k8s.io`
+CRD and no GatewayClass resource type, so the build-time item on Gateway API CRDs is settled: they are absent, and
+`egress-waypoint.yaml`'s Gateway cannot be applied on the admin cluster until a profile installs them. That install
+is filed as a followup of #727. The community cluster was not checked, since it never carries the fix (#860).
