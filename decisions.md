@@ -27795,3 +27795,36 @@ GREEN`) and then the tier: `75 checks ran (the offline suite and 74 tier tests) 
 CHECKS GREEN`, exit 0. The new `verify/test_deployments_witch_line_e2e.py` is one of the 74. No dependency was added:
 the new test fetches mcp 1.29.1 and pyyaml 6.0.2 through uv, the versions images/workshop-mcp already pins. The prose
 gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1013 · run 18067 · A test holds #968's "Not yet run on a cluster" record of the public-bot live run
+
+**What #1013 asks.** Test review run 18016 found that no test checked #968's last criterion: the live run on the
+public bot, once both changes are on the community cluster, is named under "Not yet run on a cluster" in the
+decisions.md entry. `verify/prior-drafts.sh 1013 origin/staging` printed NONE and the issue had no comments, so this
+is a first draft.
+
+**The test.** New, offline: `verify/test_968_not_yet_run_record.py`. It reads the run 17954 entry, the #968 work that
+merged, and holds that it carries exactly one `**Not yet run on a cluster.**` paragraph naming
+https://attackme.burritobot.co/ as the public bot, the beats `c3-recon` then `c3-attack` in one chat, Reset, then
+`c3-attack` in that order, and the gate "once this rule and guard-proxy's note are both on watch-it-burn-community".
+That paragraph says "as named in the two entries above", so the test also holds that the run 17897 and run 17919
+entries sit above it and each names the same run with the same gate (run 17897 words the beats without "in one
+chat", and says "the community cluster"; both forms are read). The names are checked for meaning too: both prompt
+ids are on the fallback sheet with recon first, the URL is `publicUrl` in event.js, the chat page has its Reset
+button, CLAUDE.md calls watch-it-burn-community the public community cluster, and the note the entry quotes is
+`KITCHEN_NOTE` in `verify/test_recipe_persona.py` and the note the rule in agent.yaml keys on. Each anchor exits
+naming its literal and file when it is gone. Each of 24 cuts of the real record (the heading, the paragraph, the
+label, a doubled paragraph, the URL, the private bot's URL in its place, the words "public bot", the beats struck or
+reordered, Reset, guard-proxy's note dropped from the gate, the private cluster in it, the gate struck, each earlier
+entry's paragraph, bot, Reset, gate and heading, and the entry moved above the two) is refused, and for the reason that cut aims at, so one check cannot mask another. No other
+test reads these words; nothing in the docs changed.
+
+**Live (run 18067), read only.** On watch-it-burn-community, the `workshop-agent` Agent's spec carries the kitchen
+note, so #968's rule is synced there. guard-proxy's half is still open as guard-proxy-agenticburn#63, so the live
+run the record names is not yet due, and the record is still correct to list it as not run.
+
+**Not yet run on a cluster.** Nothing new: this change is a test of the record. The public-bot live run stays as
+#968's run 17954 entry names it, due once guard-proxy-agenticburn#63 lands and this repo re-pins
+`gitops/ai-layer/guard-proxy`.
+
+**Suites.** Recorded in the next entry once `bash verify/run-e2e-tools.sh` ends.
