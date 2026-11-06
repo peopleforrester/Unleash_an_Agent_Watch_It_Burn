@@ -24811,3 +24811,10 @@ nothing: a dispatched run brings no change to a cluster itself.
 record, the recipe card, each read once to build the measurement inputs, leaving both clusters as found). About
 180 direct Nova Pro `converse` calls for the measurements, run through boto3 1.40.70 and PyYAML 6.0.3 under
 `uv run --with` in the run directory only. No dependency was added to the repo.
+
+**The suites (run 17877, at `93652519`).** `bash verify/run-e2e-tools.sh` ran the offline suite
+(`bash verify/run-tests.sh`): `300 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, with the new
+`verify/test_c8_persona.py` and the updated `verify/test_c8_teaching.py` and `verify/test_lab_text_export.py`
+among them. Then the tier: `72 checks ran (the offline suite and 71 tier tests) in 31m13s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/17877/e2e-tools.log`. The prose
+gate printed `prose gate: pass`.
