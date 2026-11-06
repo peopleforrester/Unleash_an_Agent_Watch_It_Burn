@@ -24970,6 +24970,18 @@ input_classifier, output, budget and topic all false.
 - `docs/KUBECON-ABSTRACT-READINESS.md`: row 8's Live cell gets the 2026-11-06 storefront result, and the record gets
   a 2026-11-06 line at the same tally (8 READY, 1 PARTIAL, 0 MISSING).
 
+**A tools-tier check that failed on load, and its fix.** The first `bash verify/run-e2e-tools.sh` at `ef5f1280`
+printed `285 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `65 checks ran (the offline suite and 64 tier
+tests) in 47m39s`, `SOME E2E TOOLS TIER CHECKS FAILED: test_collector_act2_redaction_e2e.py (exit 1)` and `exit=1`. Four
+checks failed, all in its burn Act 1 run, starting with `burn Act 1: the collector took the turn`. The collector's log
+ended on OTTL parse lines with no "Everything is ready", so it was still starting when the test's 30 s wait to post the
+turn ran out. The host's load average was 40. Run alone three times, the test passed each time. A check that passes on
+a rerun is broken, so the start wait is now `COLLECTOR_START_S` (180 s) in `verify/collector_render.py`, read by every
+test that starts a local otelcol-contrib: `test_collector_act2_redaction_e2e.py`, `test_adk_model_content_e2e.py`,
+`test_collector_one_root_e2e.py`, `test_collector_pii_scrub_e2e.py` and `test_kagent_service_name_collector.py`. A
+collector that exits still ends the wait at once, and the act2 test's failure now says whether the collector exited or
+was still not answering, and how long it waited. All five passed after the change.
+
 **Followup.** HC-666 narrated without a tool call in two of the three admin runs here. #856 owns that beat; the
 probe's verdict for the Night Before hangs on it.
 

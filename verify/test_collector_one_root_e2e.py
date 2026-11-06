@@ -43,7 +43,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import COLLECTOR_START_S, REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -227,7 +227,7 @@ def run_collector(profile: str) -> tuple[list[dict], str]:
                                 env=env)
         got: list[dict] = []
         try:
-            sent, deadline = False, time.time() + 30
+            sent, deadline = False, time.time() + COLLECTOR_START_S
             while not sent and time.time() < deadline and proc.poll() is None:
                 try:
                     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=otlp_body(),

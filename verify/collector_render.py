@@ -28,6 +28,11 @@ APPS = REPO / "gitops/bootstrap/apps"
 # test_collector_backends.py checks each profile lists exactly one of these).
 PROFILE_APP = {"instructor": APPS / "otel-collector.yaml", "attendee": APPS / "otel-collector-attendee.yaml",
                "burn": APPS / "otel-collector-burn.yaml"}
+# How long a test may wait for a local otelcol-contrib to start answering on its OTLP port. It was 30 s in each
+# test, and on 2026-11-06 (#900, run 17810) a collector on the shared host, at load average 40, was still parsing its
+# OTTL statements when 30 s ran out, so the turn was never posted and the checks after it failed; three reruns alone
+# passed. Start time is the host's, not the config's, so the wait is long and a collector that exits ends it at once.
+COLLECTOR_START_S = 180
 
 
 def deep_merge(base, over):
