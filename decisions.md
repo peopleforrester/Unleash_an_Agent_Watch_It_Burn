@@ -25298,3 +25298,20 @@ No dependency was added.
 **The suites (run 17872, at `a3cdc495`).** `bash verify/run-e2e-tools.sh` printed `298 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suite and 70 tier tests) in 29m55s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. `test_ai_layer_rollout.py` passed in it with the new checks.
+
+**Run 17890, the port (2026-11-06).** Run 17872 ended failed on hecaton's claim-stale, not on a gate, so its two
+commits never reached staging. `verify/prior-drafts.sh 965 origin/staging` read the draft as CLEAN against staging
+`68f58776`: staging had only appended to `decisions.md` and touched no path the draft changes (its one ai-layer edit
+since was `web/platform.html`). Both commits were cherry-picked unchanged; nothing in this entry above differs from
+the draft.
+
+**Live check again (run 17890, both clusters, read only).** `ai-layer` was `Synced` and `Healthy` at `68f58776` on
+`watch-it-burn-community` and `watch-it-burn-private`. Each workshop-mcp mounted `workshop-mcp-src-gdtg56h2kf` and
+each evil-mcp-shim `evil-mcp-src-78t5dt5d9d`, the names `kubectl kustomize gitops/ai-layer` renders from this tree.
+An MCP `tools/list` sent to each workshop-mcp over a port-forward returned 12 tools, with `check_inventory`'s input
+schema `{"ingredient": {"type": "string", "default": ""}}` (#902). The workshop-mcp logs, with timestamps, answer
+the restart question from the clusters as well as from the adk-go source: apart from the kagent controller's
+`ListToolsRequest` once a minute, every `CallToolRequest` follows a `ListToolsRequest` about a second earlier
+(community 10:20:20.351 then 10:20:21.541, private 11:23:50.387 then 11:23:51.399, UTC). workshop-agent asks
+for the tool list before it calls, so a changed schema reaches it with no restart. Nothing on either cluster was
+changed; the port-forwards were closed.
