@@ -25862,3 +25862,64 @@ guardrails-off, and the 13:33Z read above shows both clusters as this run found 
 **The suites (run 17910, at `a8a14773`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 37m18s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #977 · run 17929 · The Datadog keys reach kubectl on a file descriptor, and their Secrets are written by replace, never apply
+
+**What #977 asks.** #944 (run 17840) found that `infra/terraform/fleet/fleet.sh`'s Datadog repair writes
+`datadog-secret` in the datadog, monitoring and security namespaces with `--from-literal=api-key=<key>
+--from-literal=app-key=<key>` piped to `kubectl apply -f -`. The keys are then in kubectl's argv, which any user on the
+host reads in the process list while kubectl runs, and the client-side apply stores a second copy of both in the
+`kubectl.kubernetes.io/last-applied-configuration` annotation. The issue asks for the keys on a file descriptor and
+the write by `replace -f -`, falling back to `create -f -`, and for `infra/datadog-cluster-identity.sh` and
+`infra/deploy-full-idp.sh` to be looked at in the same pass. `verify/prior-drafts.sh 977 origin/staging` printed NONE
+and the issue had no comments, so this is a first draft.
+
+**What changed.**
+- `fleet.sh`: a new `datadog_secret_manifest <ns> <api> <app>` prints the Secret through `kubectl create secret
+  generic datadog-secret --from-env-file=<(printf 'api-key=%s\napp-key=%s\n' ...) --dry-run=client -o yaml`, the
+  same shape as #944's `terminal_auth_manifest`. `repair_datadog` pipes it to `kubectl -n <ns> replace -f -` and, when
+  that fails, a fresh copy to `create -f -`. Both failing now logs "could not write datadog-secret in <ns>" where the
+  old line ended in a silent `|| true`; the repair still goes on to the identity script and the reload.
+- `deploy-full-idp.sh`: the bring-up's `datadog-secret` write is the same, in a local `dd_secret_manifest`.
+- `datadog-cluster-identity.sh`: `datadog-admin-secret` holds the instructor org's API key and four dual-shipping
+  JSON blobs that each carry it. All five values now go in one env file and the Secret is written by replace, falling
+  back to create. The blobs were built by `jq --arg k "${ADMIN_API}"`, which put the same key on jq's command line;
+  jq now reads it as `$ENV.ADMIN_API`, from its environment, which only the same user can read.
+- Left on apply: the `cluster-identity` ConfigMaps and the namespaces, which hold no key.
+
+**Why one env file holds the blobs.** kubectl's env-file reader splits each line at its first `=` and keeps the rest
+verbatim, so the JSON's quotes, colons and any `=` survive; `jq -c` prints each blob on one line. Checked offline with
+the real kubectl (an `=` inside a value and an empty value), and in the tools tier below.
+
+**Tests.** `git grep -nF 'from-literal=api-key' -- verify` named `test_fleet_converge_repairs.sh` (three call-line
+checks) and `test_datadog_admin_key.sh` (the identity script's source checks). Both change with the code.
+- `test_fleet_converge_repairs.sh`: its kubectl shim logs a `--from-env-file`'s lines apart from the argv, keeps what
+  apply, replace and create read on stdin, and fails replace (no Secret) or create on a flag. New checks: both keys on
+  the fd once per namespace, neither on any kubectl argv, each namespace written by replace from a manifest holding
+  them, the only applies being the three namespaces, create used when there is no Secret, and both failing logged per
+  namespace. On the old fleet.sh 10 of its checks fail; on this one 81 passed, 0 failed.
+- `test_datadog_admin_key.sh`: reads the env-file form of the admin api key and counts the four blob lines; 23 passed.
+- New, offline: `test_datadog_secrets_off_argv.py` runs `deploy-full-idp.sh attendee` and the identity script with
+  kubectl, helm and aws fakes and a recording jq wrapper. It holds that no key is on any command line, no Secret
+  reaches an apply, the six Secrets are replaced (or created when replace fails), and the env file holds the five
+  admin values. On the old scripts 12 checks fail; on these, 17 passed.
+- New, tools tier: `test_datadog_secret_manifests_render.py` renders `datadog_secret_manifest` and both scripts'
+  Secrets with the pinned kubectl and `KUBECONFIG=/dev/null`, and holds that every value decodes exactly (each blob
+  equal to the JSON the Agent reads) and no manifest carries an annotation. 10 passed with the host's kubectl.
+
+**Live (run 17929).** Read-only on both clusters: `datadog-secret` in datadog, monitoring and security carries the
+`kubectl.kubernetes.io/last-applied-configuration` annotation on all six. `datadog_secret_manifest`'s output (with
+placeholder values) through `kubectl replace --dry-run=server -f -` against each of the six printed `ok,
+annotations after: [], data keys: ["api-key","app-key"]`; a server dry run persists nothing. Then on
+watch-it-burn-private, a scratch Secret `witb-977-probe` in `default`:
+1. The old path (`create --dry-run=client | apply -f -`): annotations `["kubectl.kubernetes.io/last-applied-configuration"]`.
+2. The helper's manifest, renamed, through `replace -f -`: `secret/witb-977-probe replaced`, annotations `[]`, data
+   the two placeholders.
+3. Deleted; `replace` printed `secrets "witb-977-probe" not found`, and `create -f -` wrote it with annotations `[]`.
+4. Deleted again; a final `get` printed NotFound. The clusters are as found.
+
+**Not yet run on a cluster.** `fleet.sh converge` on a cluster with own-key drift, which runs the real
+`repair_datadog` and so drops the annotation from all three live `datadog-secret`s, and the next `deploy-full-idp.sh`
+bring-up. Neither cluster has drift, and writing the real Secrets would restart the Datadog consumers. Afterwards
+`kubectl -n datadog get secret datadog-secret -o jsonpath='{.metadata.annotations}'` should print nothing. Until a
+repair or a bring-up runs, the annotation already on the six Secrets stays.

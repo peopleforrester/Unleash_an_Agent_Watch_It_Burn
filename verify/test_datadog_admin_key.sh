@@ -31,12 +31,14 @@ code() { grep -vE "^[[:space:]]*#" "$1"; }
 IDENT_SRC="$(code "${IDENT}")"; ORGS_SRC="$(code "${ORGS}")"
 
 echo "== the admin app key never reaches a cluster =="
-check "the identity script does not write an app-key literal" \
-    '! grep -q -- "--from-literal=app-key=" <<<"$IDENT_SRC"'
+# Since #977 the admin secret's values reach kubectl in an env file (key=value lines a printf writes), not as
+# --from-literal arguments, so the checks read both forms.
+check "the identity script does not write an app-key, as a literal or an env-file line" \
+    '! grep -qE -- "--from-literal=app-key=|app-key=%s" <<<"$IDENT_SRC"'
 check "it still writes the admin api-key, which dual shipping actually needs" \
-    'grep -q -- "--from-literal=api-key=" <<<"$IDENT_SRC"'
+    'grep -q -- "printf .api-key=%s" <<<"$IDENT_SRC"'
 check "all four dual-ship endpoint blobs are still built" \
-    '[[ "$(grep -c -- "-additional-endpoints=" <<<"$IDENT_SRC")" -ge 3 ]]'
+    '[[ "$(grep -o -- "additional-endpoints=%s" <<<"$IDENT_SRC" | wc -l)" -eq 4 ]]'
 check "the reason is recorded in the script, not just in the commit" \
     'grep -qi "read credential" "${IDENT}"'
 
