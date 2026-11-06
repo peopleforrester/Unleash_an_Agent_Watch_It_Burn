@@ -519,9 +519,11 @@ check("every prompt and toggle stays visible",
 # where the promo-mascot prompt was 41), and its marker was cut to one line to make room. 2,300 since #844: the
 # 2026-11-01 flow adds a visible cue per challenge for the presenters' attack and its trace, Challenge 1's close on
 # the OWASP page, Challenge 2's before-and-after markers and its guardrails-on switch beat; the story, notes and
-# fallbacks added with them are folded.
+# fallbacks added with them are folded. 2,400 since #952: C3's recipe read is now the conversational recon-then-attack
+# pair (#925), so it carries a second copy-ready prompt and a second success marker where it had one of each; the two
+# markers are cut terse to hold the growth to the recon prompt itself.
 _words = len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split())
-check(f"the visible page is under 2,300 words ({_words})", _words < 2300)
+check(f"the visible page is under 2,400 words ({_words})", _words < 2400)
 
 print("== the run-of-show links the page ==")
 check("the run-of-show drives from /kubecon", "/kubecon" in ROS)
