@@ -21,6 +21,7 @@ Some prerequisite is always left missing there, so the run stops before any chec
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
 import json
@@ -177,6 +178,15 @@ for t in tier:
     used = sorted(set(re.findall(r"\b(CONTEXT|IAM_PIPELINE_[A-Z]+|DD_API_KEY|DD_APP_KEY)\b", read)))
     check(f"{t.name} reads no CONTEXT, IAM_PIPELINE_* or Datadog key ({used})", not used)
     check(f"{t.name} calls no kubectl against a cluster", "--context" not in text)
+    # The runner runs checks at once (#1005), and a test that runs terraform shares the provider cache, which
+    # Terraform does not promise is safe for two writers: every such test takes its turn.
+    if re.search(r"\bTERRAFORM\b|iam_plan_render", text):
+        check(f"{t.name} runs terraform, so it carries `# E2E SERIAL: terraform`",
+              re.search(r"^# E2E SERIAL: terraform", text, re.M) is not None)
+serial_tests = sorted(t.name for t in tier if re.search(r"^# E2E SERIAL: terraform", t.read_text(), re.M))
+check(f"the four terraform tests are the serial ones ({serial_tests})",
+      serial_tests == ["test_control_plane_app_ports_module.py", "test_iam_policy_structural.py",
+                       "test_lab_platform_operator_entry.py", "test_terraform_lock_init.py"])
 
 runner = RUNNER.read_text()
 code = "\n".join(line for line in runner.splitlines() if not line.lstrip().startswith("#"))
@@ -192,8 +202,9 @@ for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAF
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
 check("run-e2e-tools.sh puts the fetched tools first on PATH, behind only the aws and eksctl stubs (#865)",
       'PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}"' in code)
-check("run-e2e-tools.sh stubs aws and eksctl, and only those two, with no-cloud.sh (#865)",
-      '. "${SCRIPT_DIR}/no-cloud.sh"' in code and 'no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl\n' in code)
+check("run-e2e-tools.sh stubs aws and eksctl, and only those two, with no-cloud.sh, in each check's own directory "
+      "(#865, #1005)",
+      '. "${SCRIPT_DIR}/no-cloud.sh"' in code and 'no_cloud_setup "${dir}/no-cloud" aws eksctl\n' in code)
 check("run-e2e-tools.sh runs each tier test through no_cloud_run",
       code.count('no_cloud_run "${tier_env[@]}"') == 2 and code.count('"${tier_env[@]}"') == 2)
 
@@ -309,6 +320,14 @@ def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path) -> subpro
     env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures")}
     return subprocess.run([BASH, str(script)], capture_output=True, text=True, timeout=120, env=env)
+
+
+def block(out: str, label: str) -> str:
+    """What the runner printed for one check: the lines between its `== label ==` heading and its `-- label took`."""
+    head, tail = f"\n== {label} ==\n", f"-- {label} took "
+    if head not in out or tail not in out.split(head, 1)[1]:
+        return f"<no whole block for {label}>"
+    return out.split(head, 1)[1].split(tail, 1)[0]
 
 
 def curl_calls(tmp: pathlib.Path) -> list[str]:
@@ -454,17 +473,21 @@ with tempfile.TemporaryDirectory() as t:
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
     check(f"the runner reached its tier and ran all four fixture tests (exit {r.returncode})",
-          "5 checks ran (the offline suite and 4 tier tests)" in out, out)
+          "5 checks ran (the offline suite and 4 tier tests, 4 at a time)" in out, out)
     check("it fails, naming the three tests that called a cloud tool and not the kubectl one",
           r.returncode == 1 and all(f"  {n} (exit 1)" in r.stderr for n in
                                     ("test_calls_aws.sh", "test_calls_eksctl.sh", "test_calls_aws_env.py"))
           and "test_calls_kubectl.sh (exit" not in r.stderr, r.stderr)
-    check("a test that swallows aws's failure and exits 0 still fails, and the call is named",
-          "    aws sts get-caller-identity" in r.stderr, r.stderr)
-    check("the eksctl call is named", "    eksctl utils write-kubeconfig --cluster watch-it-burn-private" in r.stderr,
-          r.stderr)
-    check("a python subprocess with env= of PATH alone still reaches the stub", "    aws eks list-clusters" in r.stderr,
-          r.stderr)
+    # The four run at once (#1005), so each call must be named in the block of the test that made it, not another's.
+    check("a test that swallows aws's failure and exits 0 still fails, and the call is named in its own block",
+          "    aws sts get-caller-identity" in block(r.stdout, "test_calls_aws.sh"), r.stdout)
+    check("the eksctl call is named in its test's block",
+          "    eksctl utils write-kubeconfig --cluster watch-it-burn-private" in block(r.stdout, "test_calls_eksctl.sh"),
+          r.stdout)
+    check("a python subprocess with env= of PATH alone still reaches the stub, named in its test's block",
+          "    aws eks list-clusters" in block(r.stdout, "test_calls_aws_env.py"), r.stdout)
+    check("the kubectl test's block names no cloud call", "TEST CALLED A CLOUD TOOL" not in
+          block(r.stdout, "test_calls_kubectl.sh"), block(r.stdout, "test_calls_kubectl.sh"))
     host = (tmp / "host.log").read_text() if (tmp / "host.log").exists() else ""
     check("nothing reached the host's aws or eksctl", host == "", host)
     kube = (tmp / "kubectl.log").read_text().splitlines() if (tmp / "kubectl.log").exists() else []
@@ -497,7 +520,7 @@ with tempfile.TemporaryDirectory() as t:
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
     check(f"the runner ran the fixture tier test and passed (exit {r.returncode})",
-          r.returncode == 0 and "2 checks ran (the offline suite and 1 tier tests)" in out, out)
+          r.returncode == 0 and "2 checks ran (the offline suite and 1 tier tests, 4 at a time)" in out, out)
     got = json.loads((tmp / "helm.json").read_text()) if (tmp / "helm.json").exists() else {}
     seen, listed = got.get("seen", {}), got.get("listed", {})
     for var in HELM_VARS:
@@ -509,6 +532,134 @@ with tempfile.TemporaryDirectory() as t:
     check("the three are separate directories", len({seen.get(v) for v in HELM_VARS}) == 3, str(seen))
     check("the Helm home is gone once the runner exits",
           all(seen.get(v) and not pathlib.Path(seen[v]).exists() for v in HELM_VARS), str(seen))
+
+print("== the tier runs its checks at once, each printed whole, and the terraform tests one at a time (#1005) ==")
+# Run one after another, the offline suite and the tier took more than the gate's hour on staging 629c53ea. The runner
+# now runs E2E_TOOLS_JOBS checks at once. Two fixture tests here meet: each says it has started, waits for the
+# other's mark and prints a second line, so they pass only when both run at the same time, and each one's two lines
+# must come out together. Two more carry `# E2E SERIAL: terraform`: each fails if the other's busy mark is there when
+# it starts, so they pass only when they take turns, and one of them meets a plain test, so taking turns holds no other
+# check back.
+MEET = ("echo \"$1 started\"\ntouch \"$PAIR_DIR/$1\"\nn=0\n"
+        "while [ ! -e \"$PAIR_DIR/$2\" ] && [ \"$n\" -lt \"$PAIR_POLLS\" ]; do sleep 0.1; n=$((n + 1)); done\n"
+        "[ -e \"$PAIR_DIR/$2\" ] || { echo \"$1 never saw $2 start\"; exit 1; }\necho \"$1 saw $2\"\n")
+TURN = ("[ ! -e \"$PAIR_DIR/busy\" ] || { echo \"$1 started while another terraform test ran\"; exit 1; }\n"
+        "touch \"$PAIR_DIR/busy\"\necho \"start $1\" >>\"$PAIR_DIR/turns\"\n")
+TURN_END = "sleep 1\necho \"end $1\" >>\"$PAIR_DIR/turns\"\nrm \"$PAIR_DIR/busy\"\n"
+POOL_TESTS = {
+    "test_pair_a.sh": ("", f"set -- pair_a pair_b\n{MEET}"),
+    "test_pair_b.sh": ("", f"set -- pair_b pair_a\n{MEET}"),
+    "test_tf_one.sh": ("# E2E SERIAL: terraform\n",
+                       f"set -- tf_one\n{TURN}set -- tf_one plain\n{MEET}set -- tf_one\n{TURN_END}"),
+    "test_tf_two.sh": ("# E2E SERIAL: terraform\n", f"set -- tf_two\n{TURN}{TURN_END}"),
+    "test_plain.sh": ("", f"set -- plain tf_one\n{MEET}"),
+}
+
+
+def pool_run(tmp: pathlib.Path, extra: dict[str, str]) -> subprocess.CompletedProcess:
+    pair = tmp / "pair"
+    shutil.rmtree(pair, ignore_errors=True)
+    pair.mkdir()
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair), **extra}
+    return subprocess.run([BASH, str(tmp / "verify" / RUNNER.name)], capture_output=True, text=True, timeout=240,
+                          env=env)
+
+
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\necho offline suite ran\nexit 0\n")
+    for name, (mark, body) in POOL_TESTS.items():
+        (vdir / name).write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{mark}{body}")
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
+    # 600 polls of 0.1 s: a minute for the partner to start, which only a broken runner needs.
+    r = pool_run(tmp, {"PAIR_POLLS": "600"})
+    out = r.stdout + r.stderr
+    check(f"the five fixture checks pass, four at a time by default (exit {r.returncode})",
+          r.returncode == 0 and "6 checks ran (the offline suite and 5 tier tests, 4 at a time)" in out, out)
+    check("the offline suite runs and is printed as a check of its own",
+          block(r.stdout, "run-tests.sh (the offline suite)") == "offline suite ran\n", r.stdout)
+    for me, other in (("pair_a", "pair_b"), ("pair_b", "pair_a"), ("plain", "tf_one")):
+        name = "test_tf_one.sh" if me == "tf_one" else f"test_{me}.sh"
+        check(f"{name} ran while {other} did, and its two lines are printed together under its heading",
+              block(r.stdout, name) == f"{me} started\n{me} saw {other}\n", block(r.stdout, name))
+    check("a terraform test runs beside a plain one", "tf_one saw plain\n" in block(r.stdout, "test_tf_one.sh"),
+          block(r.stdout, "test_tf_one.sh"))
+    turns = (tmp / "pair" / "turns").read_text().splitlines() if (tmp / "pair" / "turns").exists() else []
+    check("the two terraform tests took turns: one ended before the other started",
+          turns in (["start tf_one", "end tf_one", "start tf_two", "end tf_two"],
+                    ["start tf_two", "end tf_two", "start tf_one", "end tf_one"]), str(turns))
+    check("every check's seconds are printed, and the slowest listed at the end",
+          all(f"-- {n} took " in r.stdout for n in POOL_TESTS) and "\nThe slowest checks:\n" in r.stdout, r.stdout)
+
+    # One at a time, the two that must meet cannot: each gives up after 2 s and fails, naming the other.
+    r = pool_run(tmp, {"PAIR_POLLS": "20", "E2E_TOOLS_JOBS": "1"})
+    out = r.stdout + r.stderr
+    check(f"E2E_TOOLS_JOBS=1 runs one check at a time, so the pair that must meet fails (exit {r.returncode})",
+          r.returncode == 1 and "6 checks ran (the offline suite and 5 tier tests, 1 at a time)" in out
+          and "pair_a never saw pair_b start" in block(r.stdout, "test_pair_a.sh")
+          and "  test_pair_a.sh (exit 1)" in r.stderr, out)
+
+    for bad in ("0", "two", "-3"):
+        r = pool_run(tmp, {"PAIR_POLLS": "1", "E2E_TOOLS_JOBS": bad})
+        check(f"E2E_TOOLS_JOBS={bad} fails before any fetch or test, as a failure and not a skip (exit {r.returncode})",
+              r.returncode == 1 and "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip" in r.stderr
+              and f"E2E_TOOLS_JOBS is '{bad}', not a whole number of 1 or more" in r.stderr
+              and "== " not in r.stdout, r.stdout + r.stderr)
+
+print("== stopped by a signal, the runner names what still ran and stops it (#1005) ==")
+# The gate's timeout interrupts the command, then terminates it. The signal here goes to the runner alone, so what
+# the fixture started is stopped by the runner and not by a signal to its whole group.
+SLEEPER = ("echo \"sleeper started\"\nsleep 300 &\necho $! >\"$PAIR_DIR/sleep.pid\"\necho \"sleeping now\"\n"
+           "touch \"$PAIR_DIR/ready\"\nwait\n")
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (vdir / "test_ends.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\necho ended\n")
+    (vdir / "test_sleeper.sh").write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{SLEEPER}")
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
+    pair = tmp / "pair"
+    pair.mkdir()
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair)}
+    proc = subprocess.Popen([BASH, str(vdir / RUNNER.name)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            env=env, start_new_session=True)
+    polls = 0
+    while not (pair / "ready").exists() and proc.poll() is None and polls < 1200:
+        subprocess.run(["sleep", "0.1"])
+        polls += 1
+    ready = (pair / "ready").exists()
+    proc.terminate()
+    try:
+        stdout, stderr = proc.communicate(timeout=60)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, 9)
+        stdout, stderr = proc.communicate()
+    check("the sleeper reached its sleep before the signal", ready, stdout + stderr)
+    check(f"the stopped runner exits 1 (exit {proc.returncode})", proc.returncode == 1, stdout + stderr)
+    check("it says it was stopped and names the check still running, with its seconds and last lines",
+          "STOPPED by a signal after " in stdout and "  test_sleeper.sh, for " in stdout
+          and "      sleeping now" in stdout, stdout)
+    check("the check that had ended is printed whole before the stop", block(stdout, "test_ends.sh") == "ended\n",
+          stdout)
+    sleep_pid = int((pair / "sleep.pid").read_text()) if (pair / "sleep.pid").exists() else 0
+    gone, polls = False, 0
+    while sleep_pid and not gone and polls < 100:
+        try:
+            os.kill(sleep_pid, 0)
+            gone = pathlib.Path(f"/proc/{sleep_pid}/stat").read_text().split(") ", 1)[1].startswith("Z")
+        except (ProcessLookupError, FileNotFoundError):
+            gone = True
+        if not gone:
+            subprocess.run(["sleep", "0.1"])
+            polls += 1
+    check("what the check started is stopped with it", sleep_pid > 0 and gone, f"sleep pid {sleep_pid}")
+    if sleep_pid and not gone:
+        os.kill(sleep_pid, 9)
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(proc.pid, 9)
 
 print("== run-e2e.sh fetches the same tools and runs them first on PATH (#585) ==")
 RUN_E2E = VERIFY / "run-e2e.sh"
