@@ -440,6 +440,16 @@ for root, path in (("boundary", "infra/org/boundary/main.tf"), ("network", "infr
     missing = sorted(t for t in declared if t not in mod.NOT_IMPORTABLE and not hasattr(rules[root], f"r_{t}"))
     check(f"{path}: a rule for each resource type it declares", not missing, f"no rule for {missing}")
 
+print("The cluster root stays importable into an empty state:")
+main_tf = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
+ng = re.search(r"eks_managed_node_groups = \{\n    default = \{\n(.*?)\n    \}\n  \}", main_tf, re.S)
+if not ng:
+    sys.exit("anchor missing: 'eks_managed_node_groups = { default = {' is not in infra/terraform/aws/cluster/main.tf")
+# Left null, the module reads the version from time_sleep triggers, unknown with an empty state, and its data
+# "aws_eks_cluster_versions" count then fails every `terraform import` (run 17958, 2026-11-06).
+check("the default node group states kubernetes_version = var.kubernetes_version",
+      re.search(r"^\s*kubernetes_version\s*=\s*var\.kubernetes_version\s*$", ng.group(1), re.M) is not None)
+
 if failures:
     print(f"\nFAIL: {len(failures)} check(s): " + "; ".join(failures))
     sys.exit(1)
