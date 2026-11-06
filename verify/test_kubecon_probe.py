@@ -451,8 +451,10 @@ gw = kp.KubeconCluster("h", "ctx-admin", None, "/tmp/admin.kubeconfig", 5, runne
     gw_argv.append(argv), subprocess.CompletedProcess(argv, 0, stdout=GW_LOG, stderr=""))[1])
 got_gw = gw.gateway_tool_calls_since(dt.datetime(2026, 11, 6, 1, 18, 0, tzinfo=dt.timezone.utc))
 check("the gateway log is agentgateway-c7's, on the named context, from AUDIT_SKEW_S before the ask",
-      gw_argv == [["kubectl", "--context", "ctx-admin", "-n", "agent", "logs", "deploy/agentgateway", "-c",
-                   "agentgateway-c7", "--since-time=2026-11-06T01:17:50Z"]] and got_gw[-1] == "read_internal_config",
+      len(gw_argv) == 1 and gw_argv[0][0] == "kubectl"
+      and gw_argv[0][1:] == ["--context", "ctx-admin", "-n", "agent", "logs", "deploy/agentgateway", "-c",
+                             "agentgateway-c7", "--since-time=2026-11-06T01:17:50Z"]
+      and got_gw[-1] == "read_internal_config",
       str(gw_argv))
 try:
     kp.KubeconCluster("h", "ctx", None, None, 5, runner=lambda argv, **kw: subprocess.CompletedProcess(
