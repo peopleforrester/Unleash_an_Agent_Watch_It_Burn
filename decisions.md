@@ -22552,3 +22552,9 @@ rerun below on the new base.
 **The suites (run 17785, at `578884a0`, on staging `b2e5060d`).** `bash verify/run-e2e-tools.sh` ran the offline
 suite (`282 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `64 checks ran (the offline suite
 and 63 tier tests) in 48m12s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
+
+**Rebased again onto staging `2c19c8aa`.** Staging moved during the suite run (#892's `verify/test_progress_entries.py`,
+a `test_guardrails_switch.py` addition, the run-of-show, internal-registry and record entries); none of it touches
+the system prompt or this rule's test, and the rebase was clean. `bash verify/run-tests.sh` on the rebased tree:
+`283 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The tools tier result above stands for the change; the delta
+adds no tier test.
