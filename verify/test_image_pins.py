@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
+import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 # Registries we publish to or control the tags of. A third-party tag we merely consume is out of scope
@@ -35,9 +37,18 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
+def repo_yaml() -> list[pathlib.Path]:
+    """The repo's own YAML: tracked files and new ones git would track, never what .gitignore keeps out. In run 17944
+    a suite stopped mid-render left tmp/hecaton/app-render-*/ behind, and a walk of the whole worktree read that
+    render's kubearmor values as the repo's (#467)."""
+    r = subprocess.run(["git", "-C", str(REPO), "ls-files", "-z", "--cached", "--others", "--exclude-standard",
+                        "--", "*.yaml"], capture_output=True, text=True, check=True)
+    return sorted({REPO / f for f in r.stdout.split("\0") if f and (REPO / f).is_file()})
+
+
 def refs():
     """Yield (path, lineno, image reference) with any trailing comment removed."""
-    for path in REPO.rglob("*.yaml"):
+    for path in repo_yaml():
         if any(part in SKIP_DIRS for part in path.relative_to(REPO).parts):
             continue
         for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
@@ -54,6 +65,16 @@ _code = _probe.split("#", 1)[0]
 _m = IMAGE_LINE.match(_code)
 check("a tag-only reference with '@sha256' in its COMMENT is seen as unpinned",
       _m is not None and OURS.search(_m.group(1)) is not None and "@sha256:" not in _m.group(1))
+
+print("== the walk reads the repo's YAML and nothing .gitignore keeps out ==")
+(REPO / "tmp").mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=REPO / "tmp", prefix="image-pins-") as scratch:
+    planted = pathlib.Path(scratch) / "left-behind.yaml"
+    planted.write_text("image: ghcr.io/peopleforrester/watch-it-burn:unpinned\n", encoding="utf-8")
+    walked = repo_yaml()
+    check("a render left under the ignored tmp/ is not read", planted not in walked)
+check("a tracked manifest is read (policies/kyverno/restrict-image-registries.yaml)",
+      REPO / "policies/kyverno/restrict-image-registries.yaml" in walked)
 
 print("== every image from a registry we publish to carries a digest ==")
 unpinned = [(p, n, r) for p, n, r in refs() if OURS.search(r) and "@sha256:" not in r]

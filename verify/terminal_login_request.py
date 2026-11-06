@@ -85,6 +85,9 @@ def fleet_reads(fleet: pathlib.Path = FLEET, guard: pathlib.Path = GUARD) -> Nee
     return Need(m.group(1), keys, fn.group(0), digests)
 
 
+PARSER_TIMEOUT_S = 120
+
+
 def parsed_values(text: str, need: Need) -> list[str]:
     """The keys fleet.sh's own parser reads a non-empty value for from `text`, as if it were the env file."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -92,8 +95,12 @@ def parsed_values(text: str, need: Need) -> list[str]:
         env.write_text(text, encoding="utf-8")
         found = []
         for key in need.keys:
-            p = subprocess.run(["bash", "-c", need.parser + '\n_terminal_env_value "$1" "$2"', "_", key, str(env)],
-                               capture_output=True, text=True, timeout=30)
+            # 120s, not 30: one bash of this small parser took over 30s on the shared host at load 68 (run 17944).
+            try:
+                p = subprocess.run(["bash", "-c", need.parser + '\n_terminal_env_value "$1" "$2"', "_", key, str(env)],
+                                   capture_output=True, text=True, timeout=PARSER_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                raise RuntimeError(f"fleet.sh's _terminal_env_value did not answer for {key} in {PARSER_TIMEOUT_S}s")
             if p.returncode != 0:
                 raise RuntimeError(f"fleet.sh's _terminal_env_value exited {p.returncode}: {p.stderr.strip()[:200]}")
             if p.stdout:
