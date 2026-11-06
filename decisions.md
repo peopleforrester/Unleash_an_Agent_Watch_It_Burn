@@ -27036,3 +27036,16 @@ both read the guardrail state run 17950 was switching, and run 17286 passed both
 clusters to itself runs `CONTEXT=watch-it-burn-private python3 -u verify/test_kyverno_cel_live.py` with guardrails off
 and expects every check but the PolicyReport line green until the controller stall is fixed. The kyverno CLI on this
 host is v1.19.1.
+
+**The suites (run 17944).** The first `bash verify/run-e2e-tools.sh`, at `2ef76b3`, printed `308 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then was stopped at the one-hour background limit inside the tools tier, at
+`test_images_lock_render.py`: on this host at load 40 to 68 the tier runs slower than the 23 to 28 minutes earlier
+runs recorded. The second, at `4ed4e37` with a two-hour limit, ran 73 checks (the offline suite and 72 tier tests) in
+67m00s. Every tier test passed, and the offline suite failed on two tests this change does not touch, each fixed here:
+
+- `test_image_pins.py` walked the whole worktree, the ignored `tmp/` included, and read four unpinned kubearmor mirror
+  tags from `tmp/hecaton/app-render-3qtqgdgd/`, a render the stopped first suite left behind. It now reads `git ls-files
+  --cached --others --exclude-standard` and checks that a file planted under `tmp/` is not read.
+- `test_terminal_login_request.py` timed out a 30s `bash -c` of fleet.sh's `_terminal_env_value` at load 68; rerun, the
+  whole test took 53s and passed. `terminal_login_request.parsed_values` now gives each call 120s and names a call
+  that never answers.
