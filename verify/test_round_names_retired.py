@@ -94,10 +94,20 @@ def swept() -> list[pathlib.Path]:
     return out
 
 
+# How long one fleet_q expression may take. Each takes well under 2 s on an idle host; on 2026-11-06 (#900, run
+# 17950), at load average 51, the 720-slot loop below, then one $(...) subshell per slot, ran past the old 60 s and the
+# test died on a TimeoutExpired traceback. The loop now forks nothing per slot, and the bound is the host's, not the
+# expression's.
+FLEET_Q_TIMEOUT_S = 300
+
+
 def fleet_q(expr: str) -> str:
     """Run one expression against a sourced fleet.sh. No cloud access: pure functions only."""
-    r = subprocess.run(["bash", "-c", f"source '{FLEET}' >/dev/null 2>&1; {expr}"], cwd=FLEET.parent,
-                       capture_output=True, text=True, timeout=60)
+    try:
+        r = subprocess.run(["bash", "-c", f"source '{FLEET}' >/dev/null 2>&1; {expr}"], cwd=FLEET.parent,
+                           capture_output=True, text=True, timeout=FLEET_Q_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"FAIL  fleet.sh did not answer {expr!r} within {FLEET_Q_TIMEOUT_S} s")
     return r.stdout
 
 
@@ -172,7 +182,7 @@ for n in _roster:
     check(f"{n} reads as an instructor cluster by name", looks_instructor(n))
     check(f"and by its hostname {host!r}", bool(host) and looks_instructor(host))
     check(f"fleet.sh agrees {n} is a roster cluster", fleet_q(f"is_instructor_name {n} && echo yes") == "yes\n")
-_slots = fleet_q('for i in $(seq 1 720); do printf "%s\\n" "$(friendly_attendee_name "$i")"; done').split()
+_slots = fleet_q('for i in $(seq 1 720); do friendly_attendee_name "$i"; printf "\\n"; done').split()
 check(f"fleet.sh names all 720 attendee slots ({len(set(_slots))} distinct)", len(set(_slots)) == 720)
 check("no attendee slot's hostname reads as an instructor cluster",
       not [s for s in _slots if looks_instructor(s)])

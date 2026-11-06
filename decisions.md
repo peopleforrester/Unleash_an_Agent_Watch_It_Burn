@@ -27467,6 +27467,15 @@ own namespace.
 record gets this run's entry; readiness row 8's Live cell gets the storefront result, and the readiness record gets a
 2026-11-06 line at the same tally (8 READY, 1 PARTIAL, 0 MISSING).
 
+**A test that failed on load, and its fix.** The first `bash verify/run-e2e-tools.sh` at `3ffb41b3` printed `308 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, and was then stopped by the shell's 60-minute job limit inside the
+tools tier, at load average 51, with no tier check failed. Its rerun failed offline on
+`verify/test_round_names_retired.py`: `fleet_q`'s 60 s `subprocess.run` timeout ran out on the 720-slot name loop,
+which started one `$(...)` subshell per slot, and the test died on a TimeoutExpired traceback. The loop takes 1 s on an
+idle host. It now calls `friendly_attendee_name` straight, with no fork per slot, the bound is `FLEET_Q_TIMEOUT_S`
+(300 s), and an expression that runs past it fails as `FAIL fleet.sh did not answer '<expr>' within <n> s`, which
+a copy with the bound at 0.001 s printed. The test passes, still with 720 distinct slots.
+
 **Not yet run on a cluster.** Nothing is owed for #900: the probe, the paraphrase beat and input-guard.sh ran live on
 the deployed change. input-guard.sh is a verify script run from this checkout, not from a cluster.
 
