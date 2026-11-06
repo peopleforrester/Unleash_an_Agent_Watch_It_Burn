@@ -27669,3 +27669,16 @@ exit 0. It reads nothing this change touches; its handling of a transient resolv
 ran the offline suite (`308 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the
 offline suite and 73 tier tests) in 67m21s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, test_public_images_served.py
 passing. The prose gate printed `prose gate: pass`.
+
+**Ported by run 17993, and the gate's failure fixed.** Run 17937 ended `failed (validation)`: the gate's
+`bash verify/run-tests.sh` failed test_public_images.py, #992's, which this change does not touch. Run 17993
+cherry-picked run 17937's three commits onto staging `13fc72b8`, their own base, with no conflict
+(`verify/prior-drafts.sh` read the draft CLEAN). Run alone the test passed; twelve copies run at once on the shared
+host (load near 30 on 16 cores) failed in seven, every failure on "outside the official library, refused before any
+apply". That check asserted no PATCH at all reached the stand-in API, but deploy_app's scale-down Timer for a room
+deployment fires 0.3 s after the apply (`JOKER_SCALE_DOWN_SECONDS`) and PATCHes `.../deployments/web/scale` for the
+criterion 1 deployments named `web`. On a loaded host the Timer fires late, inside a later refusal's window, and the
+check read the reaper's PATCH as an apply. The check now counts only a PATCH on the object itself, not one on its
+`/scale` subresource, and prints the PATCHes it saw when it fails. Sixteen copies run at once then passed 16 of 16.
+The refusal is still read the same way: no error means a fail, an applied object means a fail, and so does any
+PATCH on `deployments/tron`.
