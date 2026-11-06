@@ -26346,3 +26346,103 @@ listening on <port> after 0 s".
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17911/e2e-tools.log`. The two
 runs before it are `e2e-tools.first.log` (stopped after `test_finale_cap.py` failed offline) and
 `e2e-tools.second.log` (offline green, the tier 71 of 72 on the collector start above).
+
+## 2026-11-06 · #979 · run 17958 · The KubeCon clusters, accen-dev's lab VPC and its boundary are rebuilt into states from AWS; the drift report reads all five accen-dev states as clean
+
+**Context.** Run 17843's drift report (#955) listed watch-it-burn-community and watch-it-burn-private as unmanaged:
+`user/nwuser` made both on 2026-10-28, and no machine a run can read holds their states. Its Notes also said accen-dev
+has no lab VPC and no boundary state. The issue asked for each cluster to be imported into a cluster-root state if
+it was built from `infra/terraform/aws/cluster`, or registered in `known-unmanaged.yaml` if not.
+`bash verify/prior-drafts.sh 979 origin/staging` printed NONE, and the issue had no comments, so there was no
+earlier draft.
+
+**Decision: import both, register neither.** Both were built from the cluster root by `fleet.sh`. Each carries
+`ManagedBy=terraform`, `Purpose=attendee-cluster`, `attendee=<name>` and `hostname` tags (local.fleet_tags), and
+the module's naming: `watch-it-burn-community-cluster-54c5a01d...` for the cluster role, `default-<suffix>` for the
+node group and its launch template, `<name>-node-*` for the node group's security group. Each is in the lab VPC
+`vpc-0607c27ee51fb233c`, which carries the network root's `Purpose=lab-shared-vpc`. A register entry would say
+"nobody manages these" of two clusters that are Terraform's and that `fleet.sh down` has to be able to destroy
+after the event, so they are brought into states. The lab VPC (22 resources) and the boundary policy (1) are
+brought in the same way.
+
+**How: `infra/terraform/fleet/import-state.py`.** #955's audit script imports a fixed list, which works because
+every name in that root is fixed. The cluster root's modules add a random suffix to the names of roles, policies,
+security groups, the node group and the launch template, and which resources exist follows the root's variables.
+So the script plans the root against an empty state, with the variables read from AWS (the cluster's tags, its
+node group, the launch template's user data and IMDS options), and treats every planned resource as one to import.
+It finds each one's import id in AWS from what uses it, never from the suffix: a pod-identity role through its
+association, the node role through the node group, an unnamed policy as the one left attached to its role. It
+finds every id before it imports any. Then it imports, settles with the refresh-only apply, and plans. Subcommands
+`boundary`, `network` and `cluster`; `--resolve-only`; `--resume`. Exit 0 clean, 2 rebuilt with changes still
+planned (listed with their attributes), 1 error. It refuses a state that already manages a resource unless
+`--resume` is given.
+
+**What the live run found, and what changed for it.**
+- *A count no import can get past.* The first `terraform import` failed on `Invalid count argument` in the node
+  group module's `data "aws_eks_cluster_versions"`. Its count reads the node group's version, which came from
+  `time_sleep.this[0].triggers`, unknown in an empty state. `terraform import` evaluates the whole configuration,
+  so every import failed, the cluster's own included. The default node group now states
+  `kubernetes_version = var.kubernetes_version`. That is the value the trigger carries, the cluster's version, and
+  the node group still waits for the cluster through the trigger's name. The plans after the rebuild show no change
+  to either node group's version.
+- *The time_sleep.* Terraform imports a `time_sleep` with no triggers, and the import then fails ("The given key
+  does not identify an element"), since the node group and the access entries read `triggers["name"]`. With no
+  time_sleep in the state at all, those reads are unknown, and `cluster_name` forces replacement, so the plan would
+  have replaced the node group and the access entries. The script writes the time_sleep into the state itself, its
+  triggers (name, endpoint, version, service CIDR, CA) taken from the imported cluster. The last plan shows it
+  unchanged on both clusters.
+- *Rules AWS does not hold.* Neither cluster has #869's node rules for 8080 and 3000 or #906's lab-VPC rule to
+  the API on 443. #906 was put in by hand as a rule from the other cluster's node group, described "... nodes to
+  this cluster API, the guardrails switch (#906)". A rule the security group provably lacks is not imported; the
+  plan creates it. Any other lookup that fails stops the resolve.
+- *watch-it-burn-private has no role tag.* It was built before #636 put `role=` on every cluster: none of its
+  resources carries one. The cluster root needs `var.role`, and `drift-report.py` refused a state without the tag.
+  Both scripts now take a roster cluster's role from its `infra/terraform/fleet/roster.tsv` row (`admin`), the data
+  `fleet.sh`'s role_for_cluster answers from, and the report's Notes say so. A cluster with no tag and no community
+  or admin row still stops both. Sourcing `fleet.sh` to call the function was tried first. Under the drift test's
+  sealed PATH it has no `dirname` and no `providers/`, and the roster is the same answer without either.
+- *A test that read a fixed window.* `verify/test_backups.py` looked for `subnet_ids = var.node_subnet_ids` in the
+  first 800 characters after `eks_managed_node_groups = {`. The comment above the new line moved it out of that
+  window. The test reads the whole block now.
+
+**Live, in accen-dev, with this run's session (`hecaton-run-17958`).** In this worktree: `import-state.py boundary
+accen-dev` exit 0, `plan: no changes`, in 1m12s (event `devopsdays-portland-2026`, read from the policy's tag).
+`import-state.py network accen-dev` exit 0, 22 imports, `plan: no changes`, 9m13s. The two clusters ran in
+parallel. Their first runs stopped at the time_sleep after 50 imports each. `--resume` finished community (exit 2).
+Private's resume stopped on `credential process timed out`, and a second `--resume` finished it (exit 2). Each
+reports 65 imports, 3 rules not in AWS, the time_sleep written, and the null_resource
+(`validate_cluster_service_cidr`) left for the next apply. Community's last plan has 33 changes, private's 41.
+Neither replaces the cluster, the node group or an access entry; the one replacement is each tutor profile
+(description and model, #882). The rest: the launch template's user data (#714's containerd part, so the next
+apply rolls the node), the agent and tutor policies without `bedrock:Converse`/`ConverseStream`, the `role` tag
+(private only), and settings AWS keeps no copy of (`force_destroy`, `force_detach_policies`, `force_update_version`,
+the addons' conflict settings). The `cluster_creator` access entry and the KMS key policy name `role/hecaton-run`,
+the identity this run planned as; on tanjiro, as `user/nwuser`, they match. The audit state was rebuilt here too
+with #955's `import-state.sh accen-dev` (`plan: no changes`), so the report covered every root.
+
+Then `python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region us-west-2`, exit 2: **0 drifted
+states**, Clean states (5) `lab VPC accen-dev, boundary accen-dev, audit accen-dev, cluster watch-it-burn-community,
+cluster watch-it-burn-private`, the recorder recording, and the one Note on private's role. The Unmanaged table holds
+neither KubeCon cluster. Its one row is `watch-it-burn-attendee-099`, which run 17970's session
+(`hecaton-run-17970`) created at 18:14:49Z, during this run, and whose state is in that run's worktree. It is not one
+of the two this issue is about. CloudTrail holds 3,230 events from this run's session between 16:52Z and 18:24Z, and
+every one is `readOnly`, so the rebuild changed nothing in AWS.
+
+**Not yet run where it counts.** These five states, and the audit one, are in this worktree, and they go when it is
+retired. A copy must not be taken to tanjiro-wsl2: rebuilt as `hecaton-run`, the creator entry and the KMS policy
+would plan as changed for `nwuser`. The states to keep are rebuilt on tanjiro, in
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, once its checkout holds this change. Run the three
+`terraform -chdir=... init`, then `import-state.py boundary accen-dev`, `network accen-dev`, `cluster accen-dev
+watch-it-burn-community` and `cluster accen-dev watch-it-burn-private` (docs/floor.md, "Rebuilding a lost state",
+about 80 minutes). Then `drift-report.py --accounts accen-dev --region us-west-2` without `--post`, which should
+read the five states (six with #955's audit rebuild there) as clean and list neither cluster. The run cannot touch
+that machine, so those commands are this run's escalation. The next `fleet.sh` apply of each KubeCon cluster makes
+the planned changes above, the node roll included; that apply is the operator's to schedule, not this run's.
+
+**Tests.** `verify/test_fleet_import_state.py` (new) holds the script against an AWS world of the clusters' shape:
+every import id, the two absent rules left out, the time_sleep's triggers, the variables, the refusals (a live
+state, two candidate node groups' security groups, an access entry AWS cannot answer for, a failed import), `--resume`
+and `--resolve-only`, the network root's composite ids, the role from the roster, and a rule for every resource type
+the three roots planned live (`verify/fixtures/import-state/planned-types.txt`) and every one their main.tf files
+declare. It also pins the node group's `kubernetes_version` line. `verify/test_drift_report.py` gains the
+roster-role case and the no-row refusal.
