@@ -357,6 +357,12 @@ module "eks" {
     default = {
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = var.instance_types
+      # The cluster's own version, stated (#979). Left null, the module reads it from time_sleep.this[0].triggers,
+      # which is unknown until the cluster and the time_sleep are both in the state, and its data
+      # "aws_eks_cluster_versions" count hangs on it, so `terraform import` into an empty state fails on every
+      # resource and a lost state cannot be rebuilt (fleet/import-state.py). The value is the same one the trigger
+      # carries, var.kubernetes_version, and the node group still waits for the cluster through the trigger's name.
+      kubernetes_version = var.kubernetes_version
       # The module falls back to the cluster's subnet_ids when this is null (coalesce in node_groups.tf).
       subnet_ids   = var.node_subnet_ids
       min_size     = var.node_min_size
