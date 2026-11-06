@@ -24699,3 +24699,7 @@ workshop-mcp's, and needed nothing. evil-mcp-shim mounted `evil-mcp-src-78t5dt5d
 live, as above.
 
 No dependency was added.
+
+**The suites (run 17872, at `a3cdc495`).** `bash verify/run-e2e-tools.sh` printed `298 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suite and 70 tier tests) in 29m55s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. `test_ai_layer_rollout.py` passed in it with the new checks.
