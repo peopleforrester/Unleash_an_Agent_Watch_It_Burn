@@ -12,7 +12,9 @@ bootstrap_chart.kyverno_policies for the profile the cluster's root names. This 
   * kubecon-community gets exactly restrict-image-registries and deny-external-registries, each from its app;
   * burn installs no Kyverno policy, and watch-it-burn-community runs burn, so the live check has no wall there;
   * the Kustomization the kyverno-policies app builds names every policy file in policies/kyverno;
-  * the label the live check reads is the one infra/deploy-full-idp.sh puts on lab-bootstrap, valued the profile.
+  * the label the live check reads is the one infra/deploy-full-idp.sh puts on lab-bootstrap, valued the profile;
+  * the live check guards against another run's guardrails switch on the KubeCon pair (run 17944), and the switch
+    still sets the objects that guard reads.
 """
 from __future__ import annotations
 
@@ -87,6 +89,31 @@ live = LIVE.read_text(encoding="utf-8")
 check("the live check reads lab-bootstrap's lab-platform/profile label",
       'PROFILE_LABEL = "lab-platform/profile"' in live and "applications.argoproj.io/lab-bootstrap" in live)
 check("the live check takes its policy set from bootstrap_chart.kyverno_policies", "kyverno_policies(profile)" in live)
+
+print("== the guard against another run's guardrails switch (run 17944) ==")
+# The live check's restore reads deny-external-registries for restrict-image-registries' action, and
+# block-recipe-snoop for whether the C1 NetworkPolicies belong on the cluster. That holds only while the terminal's
+# switch sets both registry policies together and arms KubeArmor with egress, so the anchors are checked here.
+ENTRY = REPO / "gitops/ai-layer/web-terminal/entrypoint.sh"
+entry = ENTRY.read_text(encoding="utf-8")
+for anchor in ("for p in restrict-image-registries deny-external-registries; do",
+               'on:kubearmor)  c=("$@" apply -f "$HOME/challenges/c3-kubearmor-policy.yaml")',
+               'on:egress)     c=("$@" apply -f "$HOME/challenges/c1-network-policy.yaml")',
+               "for g in rbac kyverno kubearmor egress; do"):
+    check(f"{ENTRY.relative_to(REPO)} carries {anchor[:60]!r}", anchor in entry,
+          "the guardrails switch changed: reread test_kyverno_cel_live.py's restore against it")
+check("the live check reads the switch's objects before and after (switch_mark)",
+      "mark0 = switch_mark() if SWITCH else {}" in live and "mark1 = switch_mark() if SWITCH else {}" in live)
+check("the live check marks a switch profile by deny-external-registries",
+      'SWITCH = "deny-external-registries" in want["ValidatingPolicy"]' in live)
+check("the live check fails, naming it, when a switch ran during the check",
+      "no guardrails switch ran on the cluster while the check ran" in live)
+check("on a switch, the restore takes deny-external-registries' action for restrict-image-registries",
+      'original["restrict-image-registries"] = der' in live)
+switch_profiles = sorted(p for p in all_profiles() if "deny-external-registries" in flat(p))
+check("only the KubeCon profiles carry the switch's mark", switch_profiles == ["kubecon-community", "kubecon-private"],
+      f"got {switch_profiles}")
+
 for profile in ("attendee", "full", "admin", "burn", "kubecon-community", "kubecon-private"):
     root = deploy_root(profile)
     label = ((root.get("metadata") or {}).get("labels") or {}).get("lab-platform/profile")

@@ -6,6 +6,7 @@ admin, kubecon-private or kubecon-community. Every missing prerequisite is a fai
 On 2026-11-05 watch-it-burn-private ran admin and watch-it-burn-community ran burn, which installs no Kyverno at all,
 so there the check stops at its prerequisites; on burn, steps 1 and 2 are `kubectl get clusterpolicy` and
 `kubectl get validatingpolicy,imagevalidatingpolicy`, each answered "the server doesn't have a resource type".
+On 2026-11-06 they ran kubecon-private and kubecon-community.
 
 What the cluster must hold is its profile's, read from the root Application lab-bootstrap's lab-platform/profile
 label (the label the web terminal reads, #774) and bootstrap_chart.kyverno_policies (#467): eleven on attendee,
@@ -35,6 +36,15 @@ In order, against CONTEXT:
      and its Pod runs.
 The cluster is put back as found: both policies' validationActions, and the C1 policies if this applied
 them. Everything it creates is labelled wib.test/run=<id> and deleted on the way out.
+
+The KubeCon pair is shared (#467, run 17944). Other runs' kubecon probes run the terminal's guardrails-on and
+guardrails-off on it, and each switch sets restrict-image-registries, deny-external-registries, the workshop-agent
+Role, block-recipe-snoop and the C1 NetworkPolicies. On 2026-11-06 run 17950's probe switched three times while this
+check ran, so steps 4 to 6 read another run's state, and the restore put back a state from before that run's last
+switch. So on a profile with the switch (deny-external-registries is its mark), the check reads the switch's own
+objects before and after, and when they moved it fails naming that. The restore then follows the switch's last word:
+restrict-image-registries takes deny-external-registries' action (the switch sets both together, and this check
+touches only the first), and the C1 NetworkPolicies are there exactly when block-recipe-snoop is.
 
 beat-01.sh and the C2 badge are not repeated here: run-e2e.sh runs run-all.sh (beat-01) and
 test_kubecon_probe's live probe.
@@ -122,6 +132,18 @@ def set_actions(policy: str, value: list[str]) -> subprocess.CompletedProcess:
                    "-p", json.dumps([{"op": "replace", "path": "/spec/validationActions", "value": value}]))
 
 
+def switch_mark() -> dict[str, str]:
+    """What the terminal's guardrails switch writes and this check never does: deny-external-registries' spec
+    generation, the workshop-agent Role's resourceVersion, and block-recipe-snoop's resourceVersion ('' when absent).
+    Every guardrails-on or guardrails-off that changes the cluster moves at least one of them."""
+    der = kjson("get", "validatingpolicies.policies.kyverno.io/deny-external-registries") or {}
+    role = kjson("-n", "agent", "get", "roles.rbac.authorization.k8s.io/workshop-agent") or {}
+    snoop = kjson("-n", "agent", "get", "kubearmorpolicies.security.kubearmor.com/block-recipe-snoop") or {}
+    return {"deny-external-registries generation": str((der.get("metadata") or {}).get("generation", "")),
+            "workshop-agent Role resourceVersion": str((role.get("metadata") or {}).get("resourceVersion", "")),
+            "block-recipe-snoop resourceVersion": str((snoop.get("metadata") or {}).get("resourceVersion", ""))}
+
+
 def app_state(name: str) -> tuple[str, str]:
     app = kjson("-n", "argocd", "get", f"applications.argoproj.io/{name}") or {}
     st = app.get("status") or {}
@@ -204,6 +226,15 @@ RUN_LABEL = f"wib.test/run={RUN}"
 LABELS = {"wib.test/run": RUN}
 original = {p: actions(p) for p in toggled}
 applied_c1 = ""
+# The KubeCon profiles carry the terminal's guardrails switch, which other runs' probes use (see the docstring).
+SWITCH = "deny-external-registries" in want["ValidatingPolicy"]
+mark0 = switch_mark() if SWITCH else {}
+
+
+def c1_manifest() -> str:
+    cm = next(d for d in yaml.safe_load_all(RESOURCES.read_text())
+              if d and d.get("kind") == "ConfigMap" and "c1-network-policy.yaml" in (d.get("data") or {}))
+    return cm["data"]["c1-network-policy.yaml"]
 
 
 def villain_deployment() -> dict:
@@ -290,9 +321,7 @@ try:
     print("== 7. our signed image still admits behind the Challenge 1 egress seal ==")
     if kjson("-n", "agent", "get", "networkpolicy", "agent-egress-allowlist") is None:
         # The attendee profile ships without it; apply what the student applies in Challenge 1.
-        cm = next(d for d in yaml.safe_load_all(RESOURCES.read_text())
-                  if d and d.get("kind") == "ConfigMap" and "c1-network-policy.yaml" in (d.get("data") or {}))
-        applied_c1 = cm["data"]["c1-network-policy.yaml"]
+        applied_c1 = c1_manifest()
         r = kubectl("apply", "-f", "-", stdin=applied_c1)
         check("the Challenge 1 NetworkPolicies are applied (this run put them on)", r.returncode == 0, out(r))
     else:
@@ -304,6 +333,21 @@ try:
     check("its Pod passes admission (verify-image-signatures) and runs", r.returncode == 0, out(r))
 finally:
     print("\n== restoring the cluster ==")
+    mark1 = switch_mark() if SWITCH else {}
+    moved = {k: f"{mark0[k] or '<absent>'} -> {mark1[k] or '<absent>'}" for k in mark0 if mark0[k] != mark1[k]}
+    if moved:
+        # Another run's guardrails switch ran meanwhile: put back what it last set, not what this check found.
+        der = actions("deny-external-registries")
+        if der is not None:
+            original["restrict-image-registries"] = der
+        armed = bool(mark1["block-recipe-snoop resourceVersion"])
+        r = kubectl("apply" if armed else "delete", "-f", "-", *([] if armed else ["--ignore-not-found"]),
+                    stdin=c1_manifest())
+        print(f"  a guardrails switch ran during the check ({'; '.join(f'{k} {v}' for k, v in moved.items())});"
+              f" restoring to its last state, guardrails {'on' if armed else 'off'}")
+        print(f"  Challenge 1 NetworkPolicies {'applied' if armed else 'removed'}: "
+              f"{'done' if r.returncode == 0 else 'FAILED: ' + out(r)}")
+        applied_c1 = ""
     for p, value in original.items():
         if value is not None:
             r = set_actions(p, value)
@@ -315,5 +359,10 @@ finally:
     if NS != "agent":
         kubectl("delete", "deployments", "-n", "agent", "-l", RUN_LABEL, "--ignore-not-found", "--wait=false")
     print(f"  cleanup ({RUN_LABEL}): {'done' if r.returncode == 0 else 'FAILED: ' + out(r)}")
+    if SWITCH:
+        check("no guardrails switch ran on the cluster while the check ran (steps 4 to 7 read this run's own state)",
+              not moved, "another run switched the guardrails: "
+              + "; ".join(f"{k} {v}" for k, v in moved.items())
+              + ". Run again when no other run's kubecon probe is on this cluster")
 
 finish()
