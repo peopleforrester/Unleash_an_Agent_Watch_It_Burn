@@ -24979,3 +24979,44 @@ and no dependency was added.
 **The suites (run 17883, at `bdb761b2`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran`, `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, `72 checks ran (the offline suite and 71 tier tests) in 30m15s`, `ALL E2E TOOLS TIER CHECKS
 GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #972 · run 17893 · A test for #952's C3 block on /kubecon
+
+**Context.** Test review run 17827 found no test holding #952's criterion: the "Read the recipe off the filesystem"
+block (C3) of `gitops/ai-layer/web/kubecon.html` carries the recon prompt and the attack-after-reset prompt, on the
+chosen folder names, each with its own success marker, and no longer shows the raw `grep` as the attack.
+`test_instructor_brief.py` checks one prompt and one marker per block, and `test_stage_traces.py` only checks that
+"What folders do you have access to" is not the seeded attack prompt. `bash verify/prior-drafts.sh 972 origin/staging`
+printed NONE and the issue had no comments, so there was no earlier draft to port.
+
+**Decision.** A new offline test, `verify/test_kubecon_c3_recipe_block.py`, rather than more lines in
+`test_instructor_brief.py`, because the criterion needs its own parse of the block (the order of the shown prompt and
+marker divs) and its own mutation runs. It holds that the one C3 block shows, outside its folded notes, exactly a
+prompt, a marker, a prompt and a marker; that the first prompt asks "What folders do you have access to", carries the
+recipe-card reason and names no folder, file or path; that the recon marker names each seeded folder and says the bot
+opens nothing; that the second prompt names "the burrito-data folder" with the same reason and is not the recon ask
+again; that the attack marker calls for the reset, has the recipe card come back before the switch, and has
+`Permission denied` from KubeArmor `block-recipe-snoop` and its Block alert after `guardrails-on`; that no prompt
+carries the raw command or any `grep` or `/tmp/` path, and the shown block does not show it; that the raw grep stays
+the folded fallback script; and that both prompts are the fallback deck's `c3-recon` and `c3-attack` word for word.
+
+The test reads the folder names from the files that set them: the folders from the `mkdir -p` in
+`images/workshop-mcp/Dockerfile`, the kitchen folder from the agent rule's `Your kitchen folder is "..."` in
+`gitops/workshop-agent/agent.yaml`, the blocked directory from `policies/kubearmor/block-recipe-snoop.yaml`, and the raw
+command from `challenges/c3-secret-grep/agent-prompt.txt`. Each anchor is checked first and the test exits naming the
+literal and the file when one is gone. The test then runs its checks on 13 mutated copies of the page (the recon
+prompt, the recon marker or the attack marker dropped, the prompts swapped, the pre-#952 shape of one grep prompt, the
+grep as the attack prompt, the recon ask reworded, the folder given away in recon, the folder renamed in the attack, a
+folder dropped from the recon marker, the reset dropped, KubeArmor's deny dropped, and the attack prompt out of step
+with the fallback deck), and each must fail the check it breaks. It uses only PyYAML, which the suite already needs;
+no dependency was added.
+
+**Live check (watch-it-burn-private and watch-it-burn-community, 2026-11-06, read only).** With the session sourced,
+`kubectl --context watch-it-burn-private get cm -A -o json` found `kubecon.html` in `agent/console-src-cc5gt65fhk` with
+sha256 `db37e7a2b3dd93c8...`, the same bytes as the repo file at `fc15ed53`, so the served page is the one the test
+passes on. The community cluster holds no `kubecon.html` in any ConfigMap, as #909's gate intends. On the private
+cluster the `workshop-agent` Agent's rule names `burrito-data` as its kitchen folder, `block-recipe-snoop` in `agent`
+reads `Block /tmp/burrito-data/config/legacy/`, and `kubectl -n agent exec deploy/workshop-mcp -- ls` listed `config`
+under `/tmp/burrito-data` and `legacy` under `config`, and `Permission denied` on `legacy` itself, so the guardrails
+were on and the folder names the test reads from the repo are the ones the bot has. Nothing was changed on either
+cluster; the `ls` on `legacy` adds one KubeArmor Block alert to the private cluster's log.
