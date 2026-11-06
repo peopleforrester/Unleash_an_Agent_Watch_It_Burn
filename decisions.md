@@ -26458,3 +26458,15 @@ fake `kubectl` call starts python3, each start took 1 to 3 seconds on the host a
 gives each toggle 300 seconds (`TOGGLE_LIMIT_SECONDS`), and one that reaches it exits naming the toggle and the limit
 in place of a traceback; with the limit set to 1 by hand it printed `FAIL: the toggle guard-mcp-on did not finish in
 1 seconds` and exited 1, and at 300 it passed. The toggles and their checks are unchanged.
+
+**The suites (run 17968, at `944f1373`).** Three runs of `bash verify/run-e2e-tools.sh`. The first went red in the
+offline suite on `test_c7_gateway_toggle.py` (above) and was stopped during the tier once that fix was committed. The
+second ran `308 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran ... in 55m43s` with one red,
+`test_iam_policy_structural.py`: terraform could not start the aws provider 6.72.0, "Failed to read any lines from
+plugin's stdout". The cached binary in this checkout's `verify/.tools/plugin-cache` was 436 MB of an 806 MB file,
+written at 19:47 while the stopped first run was in that test, so stopping the run had cut its download short.
+Removing that one provider directory made the test fetch it again and pass alone (`0 failure(s)`). The third ran
+`308 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran (the offline suite and 72 tier tests) in
+40m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`; `All enforce-floor checks passed.` with no retry needed on a
+real repo. Terraform reused a truncated provider from its plugin cache without checking it, which is filed as a
+followup in the run's report. The prose gate printed `prose gate: pass`. No dependency was added.
