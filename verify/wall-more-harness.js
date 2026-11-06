@@ -1,7 +1,7 @@
 // ABOUTME: Runs the prompt wall page's own inline script (prompts-agenticburn's wall.html, as served) in a node vm on
 // ABOUTME: a fake clock, a stub DOM, a fake /api/prompts and a fake /events stream, and prints each frame (#935).
 //
-// Usage: node verify/wall-clock-harness.js <page.html> <script.json>
+// Usage: node verify/wall-more-harness.js <page.html> <script.json>
 // The page is the rendered HTML the wall serves at /. The script is {"history": [entry, ...], "steps": [step, ...]}.
 // An entry is {"cluster", "text", "witch"}; the fake server numbers them from seq 1 as app.py's ingest() does, under
 // one boot id. The page's first fetch('/api/prompts') answers with the history. A step is one of:
