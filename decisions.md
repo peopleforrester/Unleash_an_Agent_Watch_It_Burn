@@ -24501,3 +24501,76 @@ registered in `infra/terraform/drift/known-unmanaged.yaml`; that is a follow-up.
 **The suites (run 17843, at `b2414963`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`292 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_audit_import_state.py` among them) and then the tier: `69 checks ran
 (the offline suite and 68 tier tests) in 31m05s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-06 · #956 · run 17845 · A fresh lab VPC, boundary or cluster state reads as drifted, so each is settled after its apply
+
+**Question.** Run 17588 on #795 found that a freshly applied audit root reads as drifted in the next
+`drift-report.py`, and added a refresh-only apply after the audit apply. #956 asked whether the other roots the
+report plans (the lab VPC in `aws/network`, the boundary in `infra/org/boundary` and the cluster root `fleet.sh`
+applies) show the same, and to settle them the same way if they do.
+
+**How it was checked.** The issue assumed this needed the operator machine's states. It did not: a fresh state
+can be made. Copies of the network and boundary roots, with only their AWS names changed (`watch-it-burn-drift956-*`)
+so they could not collide with the fleet's own VPC or boundary, were applied in accen-dev into scratch states, event
+tag `drift-check-956`. The VPC went to us-east-2 with `-var create_budget=false`, as the standby-region states are
+applied. Each was planned with the report's own command (`terraform plan -refresh-only -lock=false` and `show -json`,
+reading `resource_drift`), settled with `apply -refresh-only -auto-approve` and the same arguments, planned again,
+given a tag by hand, planned again, untagged, and destroyed.
+
+**What it printed.**
+- Boundary: the fresh state's plan had one resource in `resource_drift`, `aws_iam_policy.permissions_boundary`
+  (update), `tags: null -> {}`. After the settle (`Apply complete! Resources: 0 added, 0 changed, 0 destroyed.`) the
+  plan said `No changes. Your infrastructure still matches the configuration.` and `resource_drift` was empty. With a
+  tag `oob=drill` set on the policy by hand, the plan listed the policy again (`tags: {} -> {"oob": "drill"}`), so
+  the settle does not hide a real change; with it removed, the plan was clean.
+- Lab VPC: `Apply complete! Resources: 21 added`, then five resources in `resource_drift`, all updates:
+  `module.vpc.aws_route_table.private[0]` and `.public[0]` (`route: [] -> [0.0.0.0/0 ...]`, added by their own
+  `aws_route` resources), `module.vpc.aws_eip.nat[0]` (`association_id`, `network_interface`, `private_ip` and
+  `private_dns` filled in once the NAT gateway took the address), `module.vpc.aws_default_network_acl.this[0]`
+  (subnet ids and rules) and `module.vpc.aws_default_route_table.default[0]` (`propagating_vgws: null -> []`). After
+  the settle the plan said `No changes.` and `resource_drift` was empty. A tag set by hand on the VPC showed as
+  `module.vpc.aws_vpc.this[0]` drift. `Destroy complete! Resources: 21 destroyed.`, and afterwards us-east-2 held only
+  `vpc-029be867c4c5e4151` (the fleet's lab VPC), no address tagged `drift-check-956`, and no policy named
+  `*drift956*`. AWS was left as found.
+- Cluster root: not built. A dispatched run creates no cluster (CLAUDE.md, Dispatched runs, point 1). It holds the
+  same shapes as the two that drift: `aws_iam_policy.bedrock_invoke` and `aws_iam_policy.tutor_bedrock_invoke` carry
+  no resource `tags`, like the boundary's policy, and the EKS and pod-identity modules make IAM roles whose policies
+  sibling resources attach, like the audit root's role in #795. So it is settled too. The step costs one refresh per
+  cluster and changes nothing in AWS.
+
+**What changed.**
+- `fleet.sh` `up_one`: after a cluster apply that succeeds, `terraform apply -refresh-only -auto-approve` with the same
+  `-state`, `event` and variables, appended to the cluster's apply log. If it fails, the cluster is reported
+  `FAILED: <name> (built, but its state did not settle ...)`, the bootstrap still runs (the cluster exists) and the
+  run exits non-zero. `WIB_FORCE_UP=1` re-applies and settles. Re-running `up` without it would skip a healthy
+  cluster and never settle it.
+- Every documented apply of the lab VPC and boundary roots is followed by its refresh-only twin: `infra/terraform/README.md`,
+  `infra/org/README.md`, the boundary root's header, `docs/MASTER-RECREATION-SPEC.md` (and its line on what `up_one`
+  runs), `docs/BUILD-SPEC.md`, `infra/attendee-cluster/README.md`, `infra/shared-vpc/README.md`, the run-of-show's
+  two standby-region VPC applies and its boundary line, and the apply lines `preflight.sh`, `fleet.sh` (`read_vpc_for`)
+  and `backups.py` (`up` with no lab VPC) print. `fleet.sh`'s hint was two lines joined by a printed backslash; it is
+  now one line per command.
+- `docs/floor.md` has a new section, "Settling a fresh state", with these findings.
+
+**Tests.**
+- `verify/test_drift_settle.py` (offline): scans every tracked `.md`, `.tf`, `.sh` and `.py` file outside the history
+  records and `verify/`. For each `terraform apply` of the lab VPC, boundary or audit root that is not refresh-only, it
+  requires a refresh-only apply of the same root with the same arguments later on the line or within three lines. Its
+  parser is checked first on ten cases it owns (settled, unsettled, other arguments, another root, a settle above the
+  apply, one too far below, a quoted hint, backups.py's f-string, a cluster apply). It requires the 13 files that hold
+  those commands today to be found, and floor.md's section to name each root and both tests. On the base tree it fails
+  the settle check and the floor.md checks.
+- `verify/test_fleet_settle_after_apply.sh` (offline): runs `fleet.sh up watch-it-burn-attendee-001` with terraform
+  and aws shimmed. A good apply is followed by exactly one refresh-only, auto-approved apply with identical state,
+  chdir and variables, logged to the same apply log. A failed apply is not settled. A failed settle exits non-zero
+  and names the cluster. On the base `fleet.sh` 8 of its 13 checks fail.
+- `verify/test_preflight_boundary.sh`: two new checks that the boundary and lab VPC FAIL lines carry the settle with the
+  same arguments. Both fail on the base `preflight.sh`.
+- `verify/test_fleet_apply_failure_exit.sh`: its shim counted every apply as a build, and would have counted each
+  settle. The shim now answers a refresh-only apply with success and does not count it. The test's checks are
+  unchanged.
+
+**Not yet run on a cluster.** The `fleet.sh` settle runs at the next cluster build. A run cannot build one, so the
+first fleet bring-up after this lands checks it: `fleet.sh up <name>`, then
+`python3 infra/terraform/drift/drift-report.py` on the operator machine. The new cluster's state should read clean,
+with the refresh-only apply's output at the end of `fleet/logs/<name>.apply.log`.

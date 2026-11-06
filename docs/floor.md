@@ -199,6 +199,34 @@ credential for the fleet accounts first.
 driftctl is not used because it is in maintenance mode. If the states move off the laptop, HCP
 Terraform, Spacelift and env0 are the managed alternatives that run drift detection themselves.
 
+### Settling a fresh state
+
+Every root the report plans is applied twice: the apply, then a refresh-only apply with the same
+arguments. The second changes nothing in AWS. It writes into the state what AWS reads back for the
+objects the first apply just made, values the apply never wrote. Without it, the first drift report
+after any apply lists the fresh state as drifted, and the report cannot filter that out, because an
+out-of-band change to the same attributes looks identical.
+
+Each root shows it. On 2026-11-05 a fresh audit state read three resources as changed (#795). On
+2026-11-06 fresh copies of the lab VPC and boundary roots were applied into scratch states in
+accen-dev and planned the way the report plans them (#956). The lab VPC, in us-east-2, read five
+resources as changed: both route tables' routes, which their own `aws_route` resources add; the NAT
+address's association, which the NAT gateway makes; and the default network ACL and route table. The
+boundary read one, `tags: null -> {}` on its policy. After the refresh-only apply both plans said "No
+changes", and a tag set by hand on the policy and on the VPC still showed as drift. The cluster root
+was not built for this, since a dispatched run creates no cluster. It holds the same shapes: two
+untagged IAM policies like the boundary's, and IAM roles whose policies are attached by sibling
+resources, like the audit role.
+
+- **Clusters:** `fleet.sh` runs the refresh-only apply after each cluster apply that succeeds, into the
+  same apply log. A settle that fails fails the run, and `WIB_FORCE_UP=1` re-applies and settles.
+- **Lab VPC, boundary and audit roots:** they are applied by hand, and every documented command is
+  followed by its refresh-only twin: `infra/terraform/README.md`, `infra/org/README.md`, the boundary
+  and audit roots' headers, the recreation and build specs, the run-of-show, and the apply lines
+  `preflight.sh`, `fleet.sh` and `backups.py` print. `verify/test_drift_settle.py` fails a documented
+  apply of these roots that has no settle with the same arguments after it, and
+  `verify/test_fleet_settle_after_apply.sh` holds the `fleet.sh` step.
+
 ### AWS Config and CloudTrail
 
 `infra/terraform/aws/audit/` is applied once per fleet account, each into its own state, after the

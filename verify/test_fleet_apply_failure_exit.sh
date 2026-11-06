@@ -27,10 +27,12 @@ export WIB_TERMINAL_USER=placeholder-presenter WIB_TERMINAL_PASSWORD=placeholder
 
 # terraform: init and the lab-VPC outputs succeed; apply fails for every cluster whose name matches
 # TF_APPLY_FAIL (an ERE; empty fails nothing). Every apply is recorded, so the test can tell an apply that
-# failed from one that never ran.
+# failed from one that never ran. The refresh-only apply that settles a built cluster's state (#956) succeeds and
+# is not counted: it builds nothing, and test_fleet_settle_after_apply.sh holds it.
 cat >"${SHIM}/terraform" <<'S'
 #!/usr/bin/env bash
 case " $* " in
+  *" apply -refresh-only "*) exit 0 ;;
   *" apply "*)
     name="$(printf '%s\n' "$@" | sed -n 's/^-state=.*\/\(.*\)\.tfstate$/\1/p')"
     echo "${name}" >>"${T}/applies"

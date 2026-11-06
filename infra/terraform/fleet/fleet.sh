@@ -2047,6 +2047,19 @@ up_one() {
         log "  ok: ${name}"
         # Record which account this cluster was actually built in, so teardown never has to guess.
         record_membership "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+        # Settle the fresh state (#956). An apply leaves attributes AWS reads back unwritten: an untagged IAM
+        # policy's empty tags map, a role's policies attached by sibling resources, a route table's routes. The
+        # next drift report's refresh-only plan then lists the new cluster as changed outside Terraform. A
+        # refresh-only apply with the same arguments changes nothing in AWS and writes those values into the
+        # state, after which a real out-of-band change still shows (docs/floor.md, "Settling a fresh state").
+        if ! terraform -chdir="${CLUSTER_DIR}" apply -refresh-only -auto-approve -no-color \
+            -state="${STATE_DIR}/${name}.tfstate" -var "event=${WIB_EVENT}" "${tfvars[@]}" \
+            >>"${LOG_DIR}/${name}.apply.log" 2>&1; then
+            # The cluster is built, so the bootstrap below still runs; the run fails so the unsettled state is
+            # not missed. WIB_FORCE_UP=1 re-applies and settles it.
+            log "  FAILED: ${name} (built, but its state did not settle; see ${LOG_DIR}/${name}.apply.log)"
+            record_fail "${name}"
+        fi
         # Auto-bootstrap the IDP unless this provision is bare-only.
         [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}"
     else
@@ -3191,8 +3204,9 @@ read_vpc_for() {
     fi
     if [[ ! -f "${state}" ]]; then
         log "no lab VPC for account '${profile}' in ${WIB_REGION}. Apply it first:"
-        log "  terraform -chdir=${LAB_VPC_DIR} apply -state=${state#"${LAB_VPC_DIR}"/} \\"
-        log "    -var profile=${profile} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+        log "  terraform -chdir=${LAB_VPC_DIR} apply -state=${state#"${LAB_VPC_DIR}"/} -var profile=${profile} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+        log "then settle its state (#956):"
+        log "  terraform -chdir=${LAB_VPC_DIR} apply -refresh-only -auto-approve -state=${state#"${LAB_VPC_DIR}"/} -var profile=${profile} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
         exit 1
     fi
     VPC_ID="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${state}" -raw vpc_id 2>/dev/null || true)"

@@ -41,7 +41,11 @@ a cluster plan in an account without it fails at plan time, before any unbounded
 . infra/terraform/fleet/event.sh   # WIB_EVENT, the fleet's one `event` tag setting (#494)
 terraform -chdir=infra/org/boundary init
 terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+terraform -chdir=infra/org/boundary apply -refresh-only -auto-approve -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
 ```
+
+The second apply is refresh-only. It changes nothing in AWS and writes into the state the empty `tags` map AWS
+reads back for the new policy, so the next drift report does not list the fresh boundary as drifted (#956).
 
 `event` has no default, as in the network and cluster roots, so an apply that leaves it out fails rather than
 tagging the policy with a stale event (#507).

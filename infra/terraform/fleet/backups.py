@@ -557,8 +557,11 @@ def cmd_up(x: Ctx, a) -> int:
         if state is not None and not state.exists():
             lab = x.env["LAB_VPC_DIR"]
             log(f"up: {region} has no lab VPC for {x.account}. Apply it first:")
-            log(f"  terraform -chdir={lab} init && terraform -chdir={lab} apply -state=states/{state.name} "
-                f"-var profile={x.account} -var region={region} -var event={x.env['WIB_EVENT']}")
+            args = (f"-state=states/{state.name} -var profile={x.account} -var region={region} "
+                    f"-var event={x.env['WIB_EVENT']}")
+            # The refresh-only apply settles the fresh state, so the next drift report does not list it (#956).
+            log(f"  terraform -chdir={lab} init && terraform -chdir={lab} apply {args} "
+                f"&& terraform -chdir={lab} apply -refresh-only -auto-approve {args}")
             rc = 1
             if not a.dry_run:
                 continue

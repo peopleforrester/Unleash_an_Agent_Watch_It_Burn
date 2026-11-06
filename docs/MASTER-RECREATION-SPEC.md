@@ -165,8 +165,11 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
    . infra/terraform/fleet/event.sh   # WIB_EVENT: `event` has no default in any root (#494)
    terraform -chdir=infra/terraform/aws/network init
    terraform -chdir=infra/terraform/aws/network apply -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"
+   terraform -chdir=infra/terraform/aws/network apply -refresh-only -auto-approve -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"
    terraform -chdir=infra/terraform/aws/network apply -state=states/aws1-student31.tfstate -var profile=aws1-student31 -var region=us-west-2 -var event="${WIB_EVENT}"
-   # repeat for student32/33/34
+   terraform -chdir=infra/terraform/aws/network apply -refresh-only -auto-approve -state=states/aws1-student31.tfstate -var profile=aws1-student31 -var region=us-west-2 -var event="${WIB_EVENT}"
+   # repeat both for student32/33/34. The refresh-only apply settles the fresh state, so the next drift report
+   # does not list it as drifted (#956, docs/floor.md).
    ```
 3. **Provision clusters (auto-bootstraps the IDP):**
    ```bash
@@ -174,7 +177,7 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
    infra/terraform/fleet/fleet.sh up-fleet 50     # 50 per account across all 5, concurrent, disjoint name ranges
    infra/terraform/fleet/fleet.sh instructors up  # the roster: community (burn, pod_pids_limit=-1) + one admin per presenter
    ```
-   `WIB_NO_BOOTSTRAP=1` provisions bare. Each `up_one` runs `terraform -chdir=cluster apply -auto-approve -state=states/<name>.tfstate -var name=<name> -var vpc_id=<id> -var private_subnet_ids=<json>` then chains `deploy-full-idp.sh`.
+   `WIB_NO_BOOTSTRAP=1` provisions bare. Each `up_one` runs `terraform -chdir=cluster apply -auto-approve -state=states/<name>.tfstate -var name=<name> -var vpc_id=<id> -var private_subnet_ids=<json>`, then the same apply with `-refresh-only` to settle the fresh state (#956), then chains `deploy-full-idp.sh`.
 4. **(Manual single cluster) bootstrap** if bare:
    ```bash
    AWS_PROFILE=accen-dev aws eks update-kubeconfig --name watch-it-burn-attendee-001 --region us-west-2 --kubeconfig /tmp/c1.kubeconfig

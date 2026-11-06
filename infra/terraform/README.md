@@ -36,9 +36,11 @@ a from-scratch rewrite. Modeled directly on the Packt sister repo's proven two-t
 . fleet/event.sh
 terraform -chdir=../org/boundary init
 terraform -chdir=../org/boundary apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+#    Then settle the fresh state, or the next drift report lists it as drifted (#956, docs/floor.md).
+terraform -chdir=../org/boundary apply -refresh-only -auto-approve -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
 
-# 1. Provision the shared VPC once.
-cd aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}"
+# 1. Provision the shared VPC once, and settle its state the same way.
+cd aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}" && terraform apply -refresh-only -auto-approve -var profile=<profile> -var event="${WIB_EVENT}"
 
 # 2. Bring up N attendee clusters (parallel, capped). Attendee N takes the Nth non-admin row of
 #    watch-it-burn/datadog-pool and -pool-2, and bootstrap refuses it when there is none. With no per-attendee

@@ -11,6 +11,10 @@
 #   . infra/terraform/fleet/event.sh
 #   terraform -chdir=infra/org/boundary init
 #   terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+#   terraform -chdir=infra/org/boundary apply -refresh-only -auto-approve -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
+#
+# The refresh-only apply changes nothing in AWS. A fresh state holds a null tags map where AWS reads back an
+# empty one, and the next drift report lists the policy as drifted until the state is settled (#956).
 #
 # The document is the boundary's whole content and lives in the template, not here, so the pipeline's
 # offline checks and its effect tests read the same text this applies.

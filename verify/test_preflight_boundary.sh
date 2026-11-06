@@ -72,6 +72,7 @@ fail_line() { grep -F 'FAIL' "${OUT}" | grep -F -- "$1"; }
 reset_states() { rm -f "${NET}/terraform.tfstate" "${NET}"/states/*; }
 
 BAPPLY_DEV="terraform -chdir=${FLEET_DIR}/../../org/boundary init && terraform -chdir=${FLEET_DIR}/../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event=kubecon-na-2026"
+BSETTLE_DEV="terraform -chdir=${FLEET_DIR}/../../org/boundary apply -refresh-only -auto-approve -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event=kubecon-na-2026"
 
 echo "== everything in place: GREEN, and the boundary is checked by ARN in the account =="
 reset_states; echo vpc >"${NET}/terraform.tfstate"
@@ -90,6 +91,8 @@ check "PREFLIGHT FAILED"                       'has "PREFLIGHT FAILED"'
 check "FAIL names the boundary as MISSING"     'fail_line "watch-it-burn-permissions-boundary MISSING in accen-dev" >/dev/null'
 check "and carries the apply line, with the account's own boundary state" \
       'fail_line "${BAPPLY_DEV}" >/dev/null'
+check "followed by the refresh-only apply that settles the fresh state, with the same arguments (#956)" \
+      'fail_line "${BAPPLY_DEV} && ${BSETTLE_DEV}" >/dev/null'
 
 echo "== per account: only the account without the boundary fails, and its line names that account =="
 reset_states; echo vpc >"${NET}/terraform.tfstate"; echo vpc >"${NET}/states/aws1-student31.tfstate"
@@ -114,6 +117,8 @@ check "exit 1 with no lab VPC state"           '[[ "${rc}" -eq 1 ]]'
 check "FAIL line names -state=terraform.tfstate" \
       'fail_line "no lab VPC state" | grep -qF "terraform -chdir=${FLEET_DIR}/../aws/network apply -state=terraform.tfstate -var profile=accen-dev -var region=us-west-2 -var event=kubecon-na-2026"'
 check "and not states/accen-dev.tfstate"       '! fail_line "no lab VPC state" | grep -qF "states/accen-dev.tfstate"'
+check "and settles it after with the same arguments (#956)" \
+      'fail_line "no lab VPC state" | grep -qF "&& terraform -chdir=${FLEET_DIR}/../aws/network apply -refresh-only -auto-approve -state=terraform.tfstate -var profile=accen-dev -var region=us-west-2 -var event=kubecon-na-2026"'
 reset_states; : >"${NET}/terraform.tfstate"
 run accen-dev
 check "an EMPTY default state's line names terraform.tfstate" \

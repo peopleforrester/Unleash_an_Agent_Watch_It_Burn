@@ -557,8 +557,13 @@ which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
    . infra/terraform/fleet/event.sh
    terraform -chdir=infra/terraform/aws/network init
    AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-2.tfstate -var profile=accen-dev -var region=us-east-2 -var event="${WIB_EVENT}" -var create_budget=false
+   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -refresh-only -auto-approve -state=states/accen-dev.us-east-2.tfstate -var profile=accen-dev -var region=us-east-2 -var event="${WIB_EVENT}" -var create_budget=false
    AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-1.tfstate -var profile=accen-dev -var region=us-east-1 -var event="${WIB_EVENT}" -var create_budget=false
+   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -refresh-only -auto-approve -state=states/accen-dev.us-east-1.tfstate -var profile=accen-dev -var region=us-east-1 -var event="${WIB_EVENT}" -var create_budget=false
    ```
+
+   Each refresh-only apply settles the state its apply just wrote, so the next drift
+   report does not list the new VPC as drifted (#956).
 
    `event.sh` sets `WIB_EVENT` to `kubecon-na-2026`, the tag every fleet resource
    carries.
@@ -1169,7 +1174,7 @@ is merely slow rather than rebuilding:
   `watch-it-burn-permissions-boundary` by name, and an account without it fails both
   roster clusters at plan with "no matching IAM Policy found" after the lab VPC is
   already billing (#526). Apply it once per account, with that account's own state:
-  `. ./event.sh && terraform -chdir=../../org/boundary init && terraform -chdir=../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"`.
+  `. ./event.sh && terraform -chdir=../../org/boundary init && terraform -chdir=../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}" && terraform -chdir=../../org/boundary apply -refresh-only -auto-approve -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"`.
   The preflight in the next step reports it per account, and on a FAIL prints this
   line for the account that is missing it.
 - [ ] **Accounts and quota resolve, before anything is brought up (#534):**

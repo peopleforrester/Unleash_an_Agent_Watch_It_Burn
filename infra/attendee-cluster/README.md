@@ -35,7 +35,8 @@ run chokes. See `../SIZING.md`.
 ```bash
 # 1. Shared VPC, once. `event` has no default (#494); fleet/event.sh is its one setting.
 . infra/terraform/fleet/event.sh
-cd infra/terraform/aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}"
+#    The refresh-only apply settles the fresh state, so the next drift report does not list it (#956).
+cd infra/terraform/aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}" && terraform apply -refresh-only -auto-approve -var profile=<profile> -var event="${WIB_EVENT}"
 
 # 2. N attendee clusters (parallel, per-attendee isolated state).
 cd ../../fleet && ./fleet.sh up 60          # or: ./fleet.sh up watch-it-burn-attendee-007

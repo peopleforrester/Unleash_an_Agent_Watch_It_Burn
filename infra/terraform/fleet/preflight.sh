@@ -230,7 +230,8 @@ for acct in "${accounts[@]}"; do
 
     # The boundary has its own per-account state under infra/org/boundary/states/, the default account
     # included: it was never part of the lab VPC's single-account history.
-    boundary_apply="terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+    # The refresh-only apply after it settles the fresh state, so the next drift report does not list it (#956).
+    boundary_apply="terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT} && terraform -chdir=${BOUNDARY_DIR} apply -refresh-only -auto-approve -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
     if boundary_err="$(AWS_PROFILE="${acct}" aws iam get-policy \
             --policy-arn "arn:aws:iam::${actual}:policy/${BOUNDARY_NAME}" \
             --query 'Policy.PolicyName' --output text 2>&1 >/dev/null)"; then
@@ -270,7 +271,8 @@ for acct in "${accounts[@]}"; do
             vpc_state="${LAB_VPC_DIR}/terraform.tfstate"
         fi
     fi
-    vpc_apply="terraform -chdir=${LAB_VPC_DIR} apply -state=${vpc_state_arg} -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+    # Settled the same way as the boundary's (#956).
+    vpc_apply="terraform -chdir=${LAB_VPC_DIR} apply -state=${vpc_state_arg} -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT} && terraform -chdir=${LAB_VPC_DIR} apply -refresh-only -auto-approve -state=${vpc_state_arg} -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
     if [[ ! -f "${vpc_state}" ]]; then
         bad "no lab VPC state — apply it first: ${vpc_apply}"
     else
