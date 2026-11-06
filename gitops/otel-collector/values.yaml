@@ -294,6 +294,31 @@ config:
             - 'set(status.code, STATUS_CODE_ERROR) where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
             - 'set(attributes["error.type"], "tool_error") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+    # A server span that answered 5xx is an error (#894). Seen on watch-it-burn-community on 2026-11-05 (hecaton run
+    # 17389): an HC-666 chat reached guard-proxy while workshop-agent rolled to a new ReplicaSet, the forward got 503,
+    # and guard-proxy answered 502 "BurritoBot's kitchen isn't answering". proxy.py marks its agent.forward CLIENT span
+    # ERROR, but leaves its own POST /chat SERVER span unset, and that span is the turn's root in Agent Observability
+    # (transform/llmobs_one_root), whose copy drops agent.forward for carrying no gen_ai.* attribute. So the dropped
+    # chat was trace 39fba3d0574259a99e1a646ed1e89818 there: one agent row, 36 ms, status ok, the prompt in and
+    # nothing out. The HTTP semantic conventions (http-spans.md, Status) set status Error on a span whose code is 5xx,
+    # leave a server span's 4xx unset, and take the status code as a string for error.type when nothing more specific
+    # is known. So this marks any SERVER span, any service, from the code alone: the
+    # storefront turn, and anything else that answers 5xx. guard-proxy's 403, 429 and 400 stay unset, and a status
+    # an instrumentation already set (Ok is final, an Error keeps its own message) is left as it is.
+    #
+    # It runs here, on the traces pipeline, so APM, Tempo and the Agent Observability copy all read the same status.
+    # http.status_code is the pre-1.21 name for the same value (otelhttp's older releases). Each statement guards on
+    # STATUS_CODE_UNSET, so status.code is set last. verify/test_trace_shape_e2e.py sends a dropped chat and a capped one.
+    transform/http_server_error:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'set(cache["http_code"], attributes["http.response.status_code"]) where kind == SPAN_KIND_SERVER and IsInt(attributes["http.response.status_code"])'
+            - 'set(cache["http_code"], attributes["http.status_code"]) where kind == SPAN_KIND_SERVER and cache["http_code"] == nil and IsInt(attributes["http.status_code"])'
+            - 'set(attributes["error.type"], String(cache["http_code"])) where status.code == STATUS_CODE_UNSET and cache["http_code"] != nil and cache["http_code"] >= 500 and attributes["error.type"] == nil'
+            - 'set(status.message, Concat(["the server answered HTTP ", String(cache["http_code"])], "")) where status.code == STATUS_CODE_UNSET and cache["http_code"] != nil and cache["http_code"] >= 500'
+            - 'set(status.code, STATUS_CODE_ERROR) where status.code == STATUS_CODE_UNSET and cache["http_code"] != nil and cache["http_code"] >= 500'
     # The model call's own content, for Datadog's LLM Observability (#721). kagent's Go runtime (v0.10.1,
     # go/adk/pkg/telemetry/attributes.go) writes the model request and response to gcp.vertex.agent.llm_request and
     # gcp.vertex.agent.llm_response as json.Marshal of ADK's model.LLMRequest / model.LLMResponse (adk-go v2.1.0):
@@ -630,6 +655,7 @@ config:
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
           - transform/set_genai_provider # after the line above, so the spans it names get aws.bedrock too
           - transform/adk_tool_content # tool args/result under gen_ai.*, and a failed tool call as its one error
+          - transform/http_server_error # #894: a server span that answered 5xx is an error, the dropped chat's root
           - transform/adk_model_content # #721: the model call's request and reply as gen_ai.input/output.messages
           - transform/llmobs_apm_off # #746: APM's copy makes no Agent Observability rows; traces/llmobs does
         exporters:

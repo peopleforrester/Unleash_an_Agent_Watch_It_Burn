@@ -136,10 +136,26 @@ print("== a blocked tool call is ONE error: nothing marks the model call that re
 # transform/mark_tool_failure set STATUS_CODE_ERROR on the next model call too, so one block read as "2 errors"
 # (#320). That model call ended without an error, and the semconv says its status MUST be left unset.
 check("mark_tool_failure is gone from the processors", "transform/mark_tool_failure" not in declared)
-marks = [s for p, pc in (CFG.get("processors") or {}).items() for g in (pc.get("trace_statements") or [])
-         for s in g.get("statements", []) if "STATUS_CODE_ERROR" in s]
-check(f"every error mark reads a tool response, not a model call's messages ({len(marks)} marks)",
+HTTP_ERROR = "transform/http_server_error"
+marks = [s for p, pc in (CFG.get("processors") or {}).items() if p != HTTP_ERROR
+         for g in (pc.get("trace_statements") or []) for s in g.get("statements", []) if "STATUS_CODE_ERROR" in s]
+check(f"every tool error mark reads a tool response, not a model call's messages ({len(marks)} marks)",
       bool(marks) and all("gcp.vertex.agent.tool_response" in s and "input.messages" not in s for s in marks))
+
+print("== a server span that answered 5xx is an error, and nothing else is (#894) ==")
+# A chat the kitchen dropped (guard-proxy's 502) read as a green agent row in Agent Observability. The one other
+# error mark is the HTTP conventions' rule: a SERVER span's own status code, 500 or more, never a 4xx and never a
+# model call's messages. verify/test_trace_shape_e2e.py sends a dropped chat and a capped one through the collector.
+http = [s for g in (CFG["processors"].get(HTTP_ERROR) or {}).get("trace_statements", []) for s in g["statements"]]
+check(f"{HTTP_ERROR} is in the traces pipeline", HTTP_ERROR in traces)
+check("it reads the status code only on a SERVER span",
+      any("kind == SPAN_KIND_SERVER" in s and 'attributes["http.response.status_code"]' in s for s in http)
+      and all("kind == SPAN_KIND_SERVER" in s for s in http if 'set(cache["http_code"]' in s))
+http_marks = [s for s in http if "STATUS_CODE_ERROR" in s or "status.message" in s or 'attributes["error.type"]' in s]
+check(f"every mark it makes needs a code of 500 or more and a status still unset ({len(http_marks)} marks)",
+      len(http_marks) == 3 and all('cache["http_code"] >= 500' in s and "status.code == STATUS_CODE_UNSET" in s
+                                   for s in http_marks))
+check("and none reads a model call's messages", not any("messages" in s for s in http))
 
 print("== the lab describes what the trace actually contains ==")
 # Measured on watch-it-burn-michael-admin, 2026-09-07, after the transform went live:

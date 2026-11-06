@@ -35,6 +35,12 @@ The storefront turn (POST /chat, then guard-proxy's chat wrapper) and the raw A2
 are both sent. The copy travels under a trace id of its own (#783): sent under APM's, it was one trace at Datadog with
 APM's marked spans, and Agent Observability received nothing from 2026-11-01 ~15:55 UTC.
 
+#894 is a chat the kitchen dropped. On watch-it-burn-community on 2026-11-05 the forward got 503 while workshop-agent
+rolled, guard-proxy answered 502, and the turn's root read in Agent Observability as a green agent row with the prompt in
+and nothing out: proxy.py marks agent.forward, which the copy drops, and leaves POST /chat unset. That turn is sent as
+proxy.py writes it, and its root must be status ERROR in both copies, with error.type 502 as the HTTP conventions name
+it. A capped turn (429) is sent too, and stays unset: a server span's 4xx is not an error there.
+
 The interaction's spans and parentage are test_collector_one_root_e2e.py's (read from agentgateway v1.5.0, kagent
 v0.10.1 and a2a-sdk 0.3.26), with the a2a-sdk spans off as the workshop-agent runs, and the content of Challenge 1:
 the student's prompt, a run_shell curl to the beacon that the egress block stops, and get_marketing_intel, the two
@@ -86,6 +92,8 @@ GUARD, GATEWAY, AGENT = "burritobot", "burritobot-gateway", "burritobot-agent"
 MODEL = "us.amazon.nova-pro-v1:0"
 TRACE = "7c2e0f57a3b84d2f8e6a1b7c4d5e0265"
 TRACE_A2A = "0a2a0f57a3b84d2f8e6a1b7c4d5e0746"
+TRACE_DROPPED = "0d5ed0f57a3b84d2f8e6a1b7c4d50894"
+TRACE_CAPPED = "0c4900f57a3b84d2f8e6a1b7c4d50429"
 
 
 def messages(role: str, text: str) -> str:
@@ -109,7 +117,7 @@ SPANS = [
     # two, and agent.forward runs under it (proxy.py _handle_chat, pin fb6e2bf).
     ("chat-root", GUARD, "POST /chat", SERVER, None,
      {"gen_ai.operation.name": "chat", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
-      "gen_ai.output.messages": REPLY}),
+      "gen_ai.output.messages": REPLY, "http.response.status_code": 200}),
     ("chat", GUARD, "chat", INTERNAL, "chat-root",
      {"gen_ai.operation.name": "chat", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
       "gen_ai.output.messages": REPLY}),
@@ -198,8 +206,32 @@ A2A = [
      {"gen_ai.operation.name": "generate_content", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
       "gen_ai.output.messages": REPLY, "gen_ai.usage.input_tokens": 1702, "gen_ai.usage.output_tokens": 12}),
 ]
-ALL = SPANS + A2A
-TRACE_OF = {key: TRACE for key, *_ in SPANS} | {key: TRACE_A2A for key, *_ in A2A}
+# #894: the storefront turn whose forward failed (proxy.py _chat_turn, pin 0f0c809). The root has the prompt and no
+# reply, and _send's 502 as its http.response.status_code; the chat wrapper is open around the forward; agent.forward is
+# the one span proxy.py marks, with the HTTPError and the gateway's 503; urllib's POST under it saw the same 503.
+FORWARD_503 = "HTTP Error 503: Service Unavailable"
+DROPPED = [
+    ("drop-root", GUARD, "POST /chat", SERVER, None,
+     {"http.request.method": "POST", "url.path": "/chat", "gen_ai.operation.name": "chat",
+      "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT, "http.response.status_code": 502}),
+    ("drop-chat", GUARD, "chat", INTERNAL, "drop-root",
+     {"gen_ai.operation.name": "chat", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT}),
+    ("drop-forward", GUARD, "agent.forward", CLIENT, "drop-chat",
+     {"http.request.method": "POST", "url.full": "http://agentgateway.agent.svc.cluster.local:3000/",
+      "http.response.status_code": 503, "error.type": "HTTPError"}),
+    ("drop-forward-http", GUARD, "POST", CLIENT, "drop-forward",
+     {"http.url": "http://agentgateway.agent.svc.cluster.local:3000/", "http.response.status_code": 503}),
+    # A turn the rate cap refused: proxy.py answers 429 from _send before any forward.
+    ("capped-root", GUARD, "POST /chat", SERVER, None,
+     {"http.request.method": "POST", "url.path": "/chat", "gen_ai.operation.name": "chat",
+      "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT, "http.response.status_code": 429}),
+]
+# The statuses the instrumentation sets itself, as OTLP JSON. Every other span is sent unset.
+STATUS = {"drop-forward": {"code": ERROR[0], "message": FORWARD_503},
+          "drop-forward-http": {"code": ERROR[0]}}
+ALL = SPANS + A2A + DROPPED
+TRACE_OF = ({key: TRACE for key, *_ in SPANS} | {key: TRACE_A2A for key, *_ in A2A}
+            | {key: TRACE_CAPPED if key.startswith("capped") else TRACE_DROPPED for key, *_ in DROPPED})
 PARENT_OF = {key: parent for key, _, _, _, parent, _ in ALL}
 LLM_OPS = ("chat", "generate_content", "text_completion", "completion")  # Datadog's llm kind
 
@@ -239,6 +271,8 @@ def otlp_body() -> bytes:
                 "attributes": [kv(k, v) for k, v in attrs.items()]}
         if parent:
             span["parentSpanId"] = sid(parent)
+        if key in STATUS:
+            span["status"] = STATUS[key]
         by_service.setdefault(svc, []).append(span)
     return json.dumps({"resourceSpans": [
         {"resource": {"attributes": [kv("service.name", svc)]}, "scopeSpans": [{"spans": spans}]}
@@ -379,7 +413,7 @@ for profile in PROFILES:
     every = {key: got.get(f"{TRACE_OF[key]}/{sid(key)}", {}) for key, *_ in ALL}
     span = {key: every[key] for key, *_ in SPANS}
     missing = sorted(key for key, s in every.items() if not s)
-    check(f"{profile}: all {len(ALL)} spans of both turns reach APM", not missing,
+    check(f"{profile}: all {len(ALL)} spans of the four turns reach APM", not missing,
           f"missing {missing}\n        {waited}\n        collector log tail:\n{collector_log[-1500:]}")
 
     agent = {key: s for key, s in span.items() if s.get("service") == AGENT and key != "agent-server"}
@@ -505,6 +539,41 @@ for profile in PROFILES:
     errors = [s.get("name") for s in span.values() if is_error(s)]
     check(f"{profile}: exactly one error span, the count Agent Observability's trace list shows",
           errors == ["execute_tool run_shell"], str(errors))
+    check(f"{profile}: the turn that answered 200 is not red", not is_error(span["chat-root"]),
+          str(span["chat-root"].get("status")))
+
+    # #894: the dropped chat reads as an error in APM and in Agent Observability, on the root a presenter opens.
+    drop = every["drop-root"]
+    check(f"{profile}: the dropped chat's POST /chat (502) is status ERROR in APM", is_error(drop), str(drop.get("status")))
+    check(f"{profile}: with error.type 502, the HTTP conventions' value when nothing more specific is known",
+          attrs(drop).get("error.type") == "502", str(attrs(drop).get("error.type")))
+    check(f"{profile}: and a status message naming the code",
+          (drop.get("status") or {}).get("message") == "the server answered HTTP 502", str(drop.get("status")))
+    fwd = every["drop-forward"]
+    check(f"{profile}: agent.forward keeps the status and error.type proxy.py gave it",
+          is_error(fwd) and (fwd.get("status") or {}).get("message") == FORWARD_503
+          and attrs(fwd).get("error.type") == "HTTPError", f"{fwd.get('status')} {attrs(fwd).get('error.type')}")
+    check(f"{profile}: the chat wrapper, an INTERNAL span with no status code, is not marked",
+          not is_error(every["drop-chat"]) and "error.type" not in attrs(every["drop-chat"]))
+    dcopy = {k.split("/", 1)[1]: s for k, s in lgot.items() if k.startswith(copy_trace(TRACE_DROPPED) + "/")}
+    droot = dcopy.get(turn_id(TRACE_DROPPED), {})
+    check(f"{profile}: Agent Observability's copy of the dropped chat is one row, the root",
+          sorted(s.get("name") for s in dcopy.values()) == ["POST /chat"] and droot.get("service") == GUARD,
+          str(sorted(s.get("name") for s in dcopy.values())))
+    check(f"{profile}: that root is an agent row with the student's prompt and no reply",
+          attrs(droot).get("gen_ai.operation.name") == "invoke_agent"
+          and json.loads(attrs(droot).get("gen_ai.input.messages") or "null") == json.loads(PROMPT)
+          and "gen_ai.output.messages" not in attrs(droot), str(sorted(attrs(droot))))
+    check(f"{profile}: and it is status ERROR with error.type 502, so the dropped chat is not green",
+          is_error(droot) and attrs(droot).get("error.type") == "502"
+          and (droot.get("status") or {}).get("message") == "the server answered HTTP 502",
+          f"{droot.get('status')} error.type={attrs(droot).get('error.type')}")
+    capped = every["capped-root"]
+    check(f"{profile}: the capped chat's POST /chat (429) stays unset, as a server span's 4xx does",
+          not is_error(capped) and "error.type" not in attrs(capped), f"{capped.get('status')} {sorted(attrs(capped))}")
+    ccopy = {k.split("/", 1)[1]: s for k, s in lgot.items() if k.startswith(copy_trace(TRACE_CAPPED) + "/")}
+    check(f"{profile}: and its Agent Observability row is not red either",
+          len(ccopy) == 1 and not any(is_error(s) for s in ccopy.values()), str([s.get("status") for s in ccopy.values()]))
 
 print()
 if failures:

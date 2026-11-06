@@ -70,6 +70,7 @@ config:
           - transform/set_llmobs_workflow
           - transform/set_genai_provider
           - transform/adk_tool_content
+          - transform/http_server_error
           - transform/adk_model_content
           - transform/llmobs_apm_off
           - transform/scrub_pii
