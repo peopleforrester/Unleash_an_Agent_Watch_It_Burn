@@ -26699,3 +26699,10 @@ each as run 17832 ran them for #953, once this rule and guard-proxy's note are b
 `PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_recipe_block_live.py` and
 `PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_two_hour_flow_live.py`, both of which hold the live
 systemMessage equal to git's first, once this rule is synced to the private cluster.
+
+**The suites (run 17954, at `b19b67ce`; this paragraph only adds to the entry).** `bash verify/run-e2e-tools.sh`
+printed `307 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`,
+`test_two_hour_flow_live_checks.py` among them), then `73 checks ran (the offline suite and 72 tier tests) in 72m45s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. A first attempt of the same command was stopped by the background
+job's 60-minute limit inside the tools tier, after its offline suite had printed the same 307 green; the rerun had a
+2-hour limit. The prose gate printed `prose gate: pass`. No dependency was added to the repo.
