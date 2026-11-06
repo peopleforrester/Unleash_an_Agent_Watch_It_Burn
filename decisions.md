@@ -25858,3 +25858,7 @@ off and on, and the on-topic guard's redirects and pass-throughs. The probe ende
 guardrails-off, and the 13:33Z read above shows both clusters as this run found them.
 
 **Not yet run on a cluster.** Nothing: this run changes no code, and every check #888 names ran above.
+
+**The suites (run 17910, at `a8a14773`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 37m18s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`.
