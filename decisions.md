@@ -24836,3 +24836,49 @@ No file but this one changed, so no test changed. No dependency was added.
 **Suites (run 17854, at `200d790a`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`292 tests ran`, `ALL
 OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `69 checks ran (the offline suite and 68 tier tests) in 30m11s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #969 · run 17879 · The redaction tier test starts its collector through otelcol_local, which waits for the ready line and retries a taken port
+
+**What failed.** Run 17806 (#954) saw `verify/test_collector_act2_redaction_e2e.py` fail once in the tools tier and
+pass on the rerun: the attendee profile's Act 1 printed "the collector took the turn" false, no spans reached the
+exporter, and the collector log tail was empty. The send loop gave the local otelcol-contrib 30 seconds from its
+`Popen` to answer the POST, and printed nothing about the collector when it did not.
+
+**Which cause the empty log fits.** With a port held by another listener, the pinned otelcol-contrib v0.160.0 exits
+in 0.18 s with exit code 1 and logs `listen tcp 127.0.0.1:<port>: bind: address already in use` (measured on this host
+for this run). A collision therefore leaves a full log, not an empty one, and the old loop would have stopped on
+`proc.poll()` at once. An empty log after 30 seconds fits a collector that had not started on the loaded host (that
+tier run took 36m05s, against about 23 to 30 minutes on a quiet one). Both causes are now handled.
+
+**The change.**
+- `verify/otelcol_local.py` is new. `start(argv, log_file, env)` picks a port with `free_port()`, starts
+  `argv(port)`, and waits for the collector's own `Everything is ready` line, which it logs only once every receiver
+  is bound. The wait counts polls (600 at 0.3 s, so 180 s at least), not wall seconds, as #799 taught
+  `verify/test_trace_shape_e2e.py`. When the collector exits with `address already in use` in its log, it starts
+  again on a fresh port, up to 5 times. Once the collector is ready the port is its own, since Linux admits no
+  second listener on an address while one listens, so a POST reaches this collector and no other process. When the
+  start fails, `Collector.detail()` gives `proc.poll()` (the exit code, or "still running"), the polls and seconds
+  waited, the host's pressure stall over the wait, and the log of every attempt.
+- `verify/test_collector_act2_redaction_e2e.py` starts each collector with it. Its 30-second send clock starts only
+  once the collector is ready, and "the collector took the turn" prints `collector.detail()` when it is false. Its
+  own `free_port()` and `Popen` are gone; `validate` reads the same config written for port 0.
+- `verify/test_otelcol_local.py` (offline) holds the helper with a stand-in collector the test writes itself, which
+  logs the collector's lines and answers a POST with its pid. It forces each case: a port this test holds and
+  serves 200 on (the start comes up on a fresh port, and a POST reaches the stand-in, not the holder), every port
+  taken (the start gives up after its attempts and prints each one's log), a 2 s silent start (start() returns only
+  once ready, so the first POST is taken), a collector that never says it is ready (the detail reads
+  `proc.poll() = None (still running)` and an empty log), and one that exits 3 on another error (no retry, the exit
+  code and log printed). It also reads the redaction test's source for the helper and the detail.
+
+**Checked on this host.** `python3 verify/test_collector_act2_redaction_e2e.py` passed every check in 40 s. A forced
+collision with the real binary, a listener held on the first port given to `start()`, came up on the second port
+after two starts in 0.60 s, the first start's log carrying `address already in use`.
+
+**Not done here.** Six other tier tests start otelcol-contrib on a `free_port()` port with their own loop:
+test_collector_pii_scrub_e2e.py, test_tool_failure_status_e2e.py, test_collector_one_root_e2e.py and
+test_adk_model_content_e2e.py start the send clock at the `Popen`, and test_trace_shape_e2e.py and
+test_collector_llmobs_model_e2e.py wait for the ready line but do not retry a taken port. Moving them to
+`otelcol_local.start` is a followup issue, so that this change stays the one test #969 names.
+
+No cluster check applies: the change is to the tools tier's own test code, which runs no cluster. No dependency was
+added.
