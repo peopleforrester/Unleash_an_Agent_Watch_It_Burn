@@ -24574,3 +24574,7 @@ given a tag by hand, planned again, untagged, and destroyed.
 first fleet bring-up after this lands checks it: `fleet.sh up <name>`, then
 `python3 infra/terraform/drift/drift-report.py` on the operator machine. The new cluster's state should read clean,
 with the refresh-only apply's output at the end of `fleet/logs/<name>.apply.log`.
+
+**The suites (run 17845, at `eabe6c8e`).** `bash verify/run-e2e-tools.sh` printed `294 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `69 checks ran (the offline suite and 68 tier tests) in 30m34s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
