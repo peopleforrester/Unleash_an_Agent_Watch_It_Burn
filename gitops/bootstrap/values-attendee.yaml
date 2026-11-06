@@ -57,6 +57,7 @@ apps:
   - external-secrets
   - falco
   - falcosidekick
+  - gateway-api
   - grafana-dashboards
   - istio
   - kagent-crds

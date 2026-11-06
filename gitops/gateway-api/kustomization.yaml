@@ -1,0 +1,24 @@
+# ABOUTME: The Gateway API CRDs, standard channel v1.5.1, which an Istio ambient waypoint needs (#959). Vendored as the
+# ABOUTME: release's standard-install.yaml, byte for byte; the gateway-api Application syncs this directory.
+#
+# Why. The C1 stage-2b fix (#727) builds its forced egress proxy as an Istio ambient egress waypoint, a Gateway of
+# class istio-waypoint (challenges/c1-exfil-s3/fix/egress-waypoint.yaml). A Gateway needs gateway.networking.k8s.io,
+# and on 2026-11-06 watch-it-burn-private had none, so the waypoint could not be applied there. istiod creates the
+# istio, istio-remote and istio-waypoint GatewayClasses itself once these CRDs exist.
+#
+# Why v1.5.1. It is the sigs.k8s.io/gateway-api version Istio 1.30.4 builds against (go.mod at the 1.30.4 tag), and
+# Istio 1.30.4 is the pin in gitops/bootstrap/apps/istio.yaml. Move the two together.
+#
+# Why vendored rather than a git source on kubernetes-sigs/gateway-api. Every source here is this repo's or a chart at
+# one version, the render gates (verify/app_render.py) read in-repo paths, and a vendored copy builds with no third
+# host. standard-install.yaml is the release asset unchanged: its SHA-256 is the digest GitHub publishes for it,
+# 751002b3b91a87f7ae3bd2517c79a47a8d7ed6702901808a1cf9bd97d284f9b8, which verify/test_gateway_api_crds.py holds offline
+# and verify/test_gateway_api_crds_upstream.py checks against the release in the tools tier.
+#
+# What it holds: eight CRDs (BackendTLSPolicy, GatewayClass, Gateway, GRPCRoute, HTTPRoute, ListenerSet,
+# ReferenceGrant, TLSRoute) and the release's safe-upgrades ValidatingAdmissionPolicy and its binding, which refuse
+# experimental-channel CRDs over standard ones and any bundle older than v1.5.0. No workload, no image.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - standard-install.yaml

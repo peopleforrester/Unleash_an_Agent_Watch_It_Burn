@@ -144,10 +144,19 @@ check("the AuthorizationPolicy is an ALLOW targeting the egress-waypoint Gateway
       bool(ap) and ap["spec"].get("action") == "ALLOW"
       and any(r.get("name") == "egress-waypoint" and r.get("kind") == "Gateway"
               for r in ap["spec"].get("targetRefs", [])), str(ap.get("spec") if ap else None))
-ap_hosts = {h for rule in (ap or {}).get("spec", {}).get("rules", [])
-            for to in rule.get("to", []) for h in to.get("operation", {}).get("hosts", [])}
-check("the AuthorizationPolicy admits exactly the Open-Meteo hosts, nothing else",
-      ap_hosts == WEATHER_HOSTS, str(sorted(ap_hosts)))
+rules = (ap or {}).get("spec", {}).get("rules", [])
+ap_hosts = {v for rule in rules for w in rule.get("when", []) if w.get("key") == "connection.sni"
+            for v in w.get("values", [])}
+check("the AuthorizationPolicy admits exactly the Open-Meteo hosts by TLS SNI, nothing else",
+      ap_hosts == WEATHER_HOSTS and bool(rules)
+      and all(any(w.get("key") == "connection.sni" for w in rule.get("when", [])) for rule in rules),
+      str(sorted(ap_hosts)))
+# `operation.hosts` is HTTP-only. The waypoint passes this TLS through, so on Istio 1.30.4 an ALLOW rule with it
+# matched nothing and refused the Open-Meteo hosts as well (#959, checked on watch-it-burn-private).
+http_only = [k for rule in rules for to in rule.get("to", []) for k in to.get("operation", {})
+             if k in ("hosts", "notHosts", "paths", "notPaths", "methods", "notMethods")]
+check("no rule uses an HTTP-only operation field, which never matches the TLS the waypoint passes through",
+      not http_only, str(http_only))
 check("neither the ServiceEntry nor the allowlist names the exfil collector zone",
       not any(COLLECTOR_APEX in h for h in se_hosts | ap_hosts), str(sorted(se_hosts | ap_hosts)))
 

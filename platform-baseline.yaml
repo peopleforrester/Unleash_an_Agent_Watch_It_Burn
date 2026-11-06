@@ -395,15 +395,12 @@ components:
 
   - name: gateway-api
     sister: [gateway-api]
-    status: proposed
-    tier: 3
-    profile: none
-    recommendation: >
-      CRDs only, the prerequisite for kgateway and for agentgateway's controller mode. Neither runs here, so
-      nothing would read them. Adopt with whichever of those comes first.
-    cost:
-      measured: false
-      known: Five standard-channel CRDs, no workload.
+    status: adopted
+    apps: [gateway-api.yaml]
+    why: >
+      CRDs only, standard channel v1.5.1, on every profile that installs Istio (#959). The C1 stage-2b fix's egress
+      waypoint is a Gateway of class istio-waypoint, so it needs them; kgateway and agentgateway's controller mode,
+      which would read them too, still do not run here.
 
   # ---------------------------------------------------------------- 3-self-service
 

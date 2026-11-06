@@ -174,10 +174,16 @@ check("apps ingress admits neither HBONE 15008 nor the probe SNAT address, so ap
       HBONE not in ports and not any("169.254.7.127" in str(r) for r in ingress), f"ports={sorted(ports)}")
 
 # --- section 2.4: what a waypoint challenge would still need ------------------------------------------------
-gw_api = [str(p.relative_to(REPO)) for root in ("gitops", "infra") for p in (REPO / root).rglob("*")
-          if p.is_file() and "gateway.networking.k8s.io" in p.read_text(errors="replace")]
-check("nothing installs the Gateway API CRDs a waypoint needs", not gw_api,
-      f"{gw_api}: update section 2.4 of {EVALUATION}")
+# The first step, the Gateway API CRDs, is done (#959): gitops/gateway-api is the only place that defines them, and
+# section 2.4 says so. verify/test_gateway_api_crds.py holds the install itself.
+gw_api = sorted(str(p.relative_to(REPO)) for root in ("gitops", "infra") for p in (REPO / root).rglob("*")
+                if p.is_file() and re.search(r"(?m)^  group: gateway\.networking\.k8s\.io$", p.read_text(errors="replace")))
+check("the Gateway API CRDs a waypoint needs are defined in gitops/gateway-api alone",
+      gw_api == ["gitops/gateway-api/standard-install.yaml"], f"{gw_api}: update section 2.4 of {EVALUATION}")
+section = (REPO / EVALUATION).read_text(encoding="utf-8")
+check("section 2.4 marks the Gateway API CRD step done and names the gateway-api Application",
+      "~~Install the Gateway API CRDs~~ (done in #959)" in section and "the `gateway-api` Application" in section,
+      f"update section 2.4 of {EVALUATION}")
 role = one(AI, "ClusterRole", "console-terminal").get("rules", [])
 istio_write = [r for r in role if any(g in ("security.istio.io", "*") for g in r.get("apiGroups", []))
                and set(r.get("verbs", [])) & {"create", "update", "patch"}]

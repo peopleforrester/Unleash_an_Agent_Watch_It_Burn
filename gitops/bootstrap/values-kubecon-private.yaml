@@ -43,6 +43,7 @@ apps:
   - falco-talon
   - falco
   - falcosidekick
+  - gateway-api
   - grafana-dashboards
   - guardrails-switch
   - internal-registry

@@ -145,7 +145,7 @@ Istio's identity is the ServiceAccount: `spiffe://cluster.local/ns/<ns>/sa/<sa>`
 
 | Step | Why |
 |---|---|
-| Install the Gateway API CRDs | a waypoint is a Gateway with `gatewayClassName: istio-waypoint`, and nothing in `gitops/` or `infra/` installs the CRDs ([waypoints](https://istio.io/latest/docs/ambient/usage/waypoint/)) |
+| ~~Install the Gateway API CRDs~~ (done in #959) | a waypoint is a Gateway with `gatewayClassName: istio-waypoint` ([waypoints](https://istio.io/latest/docs/ambient/usage/waypoint/)); the `gateway-api` Application installs the standard-channel v1.5.1 CRDs on every profile that installs Istio |
 | Enrol `agent`, and relax STRICT first | see section 3: STRICT on an enrolled `agent` rejects the NLB, kagent's controller and anything else outside the mesh |
 | A ServiceAccount for the console | section 2.3 |
 | A waypoint for guard-proxy, `istio.io/use-waypoint` on its Service | L7 policy is enforced only at the waypoint |

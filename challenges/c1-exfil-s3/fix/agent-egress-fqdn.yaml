@@ -43,9 +43,9 @@ spec:
 ---
 # The egress waypoint is the single chokepoint allowed a public 443. It is an Istio-managed Deployment the
 # Gateway (egress-waypoint.yaml) creates; its pods carry the Gateway API gateway-name label. The L7
-# AuthorizationPolicy on the waypoint narrows what it actually connects to (the two Open-Meteo hosts), so
-# this L3/L4 allow of 443-to-anywhere is safe: it is the waypoint, not a workload, and it admits only the
-# allowlisted hostnames above L3/L4.
+# AuthorizationPolicy on the waypoint narrows what it actually connects to (the two Open-Meteo hosts, by TLS
+# SNI), so this L3/L4 allow of 443-to-anywhere is safe: it is the waypoint, not a workload, and it admits only
+# the allowlisted hostnames above L3/L4.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -55,8 +55,8 @@ metadata:
     app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   podSelector:
-    # The label Istio puts on a waypoint Deployment's pods for a Gateway named egress-waypoint. If the
-    # pinned Istio uses istio.io/gateway-name instead, match that at build time (owed check, #728).
+    # The label Istio puts on a waypoint Deployment's pods for a Gateway named egress-waypoint. Istio 1.30.4
+    # applies this one and not istio.io/gateway-name (read off the waypoint pod on watch-it-burn-private, #959).
     matchLabels: { gateway.networking.k8s.io/gateway-name: egress-waypoint }
   policyTypes: [Egress]
   egress:

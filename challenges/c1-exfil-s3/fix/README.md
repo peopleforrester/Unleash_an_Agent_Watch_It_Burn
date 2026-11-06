@@ -27,8 +27,8 @@ C7's weather working.
    name, the exfil collector's zone included, finds no upstream and comes back SERVFAIL without leaving the
    cluster. This is what stops the label-encoded lookups.
 2. `egress-waypoint.yaml` (option B). An Istio ambient egress waypoint, a `ServiceEntry` for the two
-   Open-Meteo hosts, and an `AuthorizationPolicy` that admits only those hosts at L7. Any other external
-   name steered to the waypoint is refused.
+   Open-Meteo hosts, and an `AuthorizationPolicy` that admits only those hosts, by the TLS SNI. Any other
+   external name steered to the waypoint is refused.
 3. `agent-egress-fqdn.yaml`. The NetworkPolicy deltas that make the waypoint the only public-443 path: the
    weather feed's direct `TCP 443` to anywhere is dropped, and the waypoint pod is the one workload granted
    a public 443. The stage-2 L3/L4 allowlist (`agent-egress-allowlist`), the DNS allow (`agent-allow-dns`)
@@ -55,14 +55,25 @@ locks that resolver, so the allow needs no change. Forwarding `amazonaws.com` an
 exfil path, because a name under either zone reaches that zone's own authoritative servers, which the
 attacker does not run.
 
+## Checked on the pinned Istio (`#959`)
+
+On 2026-11-06, on `watch-it-burn-private` (Istio 1.30.4), in a scratch namespace removed afterwards:
+
+- The ambient egress pattern works on 1.30.4, so it needs no Istio upgrade. istiod programmed the
+  waypoint, ztunnel steered each `ServiceEntry` host to it, and both Open-Meteo hosts answered 200.
+- The Gateway API CRDs are installed by the `gateway-api` Application (`gitops/bootstrap/apps/gateway-api.yaml`)
+  on every profile that installs Istio. istiod creates the `istio-waypoint` GatewayClass from them.
+- The waypoint pod carries `gateway.networking.k8s.io/gateway-name`, the label `agent-allow-egress-waypoint`
+  selects, and not `istio.io/gateway-name`.
+- The allowlist matches the TLS SNI. A rule on `operation.hosts` refused the Open-Meteo hosts too, because
+  `hosts` matches HTTP only and the waypoint passes this TLS through. With the SNI rule, `example.com`,
+  steered to the same waypoint, was refused and Open-Meteo was admitted.
+
 ## Owed at build time (before this is applied live, `#728`)
 
-- Istio version. The ambient egress-gateway pattern is documented against release-1.31 samples; the fleet
-  pins 1.30.4 (`gitops/bootstrap/apps/istio.yaml`). Confirm the waypoint egress pattern on the pinned
-  version, or carry the Istio upgrade that `#860` left open for the attendee and admin clusters.
-- Gateway API CRDs present on the cluster that carries the fix.
-- The waypoint pod label (`gateway.networking.k8s.io/gateway-name` or `istio.io/gateway-name`) matches what
-  the pinned Istio applies, so `agent-allow-egress-waypoint` selects it.
+- Enrol the weather feed in the mesh. ztunnel steers only an enrolled pod's traffic to the waypoint; a pod
+  outside the mesh reached `example.com` directly. In `agent` only the console and guard-proxy are enrolled
+  (`#471`), so without this `agent-egress-fqdn.yaml` shuts the weather feed's only path to Open-Meteo.
 - Pin the resolver lock through the `coredns` addon's `configuration_values`
   (`infra/terraform/aws/cluster/main.tf:324`), so the managed addon keeps it rather than reverting a
   ConfigMap edit.

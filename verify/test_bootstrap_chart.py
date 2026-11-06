@@ -237,13 +237,19 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
 # plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full,
 # plus workshop-agent, the Agent's own Application, which #707 added to every profile,
 # plus backstage, which #244 brought back from gitops/apps-disabled on attendee, admin and full,
-# plus learner-apps-access, lab-platform's learner group's read of the workshop apps, which #874 added to attendee alone.
+# plus learner-apps-access, lab-platform's learner group's read of the workshop apps, which #874 added to attendee alone,
+# plus gateway-api, the Gateway API CRDs an Istio waypoint needs, which #959 added to every profile that lists istio.
 WANT = {
-    "attendee": 30, "burn": 19, "admin": 33, "full": 31,
+    "attendee": 31, "burn": 19, "admin": 34, "full": 32,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203, #707, #244 and #874",
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203, #707, #244, #874 and #959",
           len(app_names(profile)) == n)
+for profile in all_profiles():
+    check(f"{profile} lists gateway-api exactly when it lists istio, so a waypoint can be applied wherever the mesh runs "
+          "(#959)", ("gateway-api" in app_names(profile)) == ("istio" in app_names(profile)))
+for profile in ("attendee", "admin", "full"):
+    check(f"{profile} lists gateway-api (#959)", "gateway-api" in app_names(profile))
 for profile in WANT:
     check(f"{profile} {'lists' if profile != 'burn' else 'does not list'} backstage (#244)",
           ("backstage" in app_names(profile)) == (profile != "burn"))

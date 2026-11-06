@@ -1,0 +1,29 @@
+# ABOUTME: ArgoCD Application for the Gateway API CRDs (standard channel v1.5.1), on every profile that installs Istio.
+# ABOUTME: An Istio ambient waypoint is a Gateway, so the C1 fix's egress waypoint needs them (#959).
+# Wave -7, before istio-base and istio-cni (-6) and istiod (-5), so a fresh cluster's istiod starts with the CRDs present
+# and creates its GatewayClasses at once. ServerSideApply: the HTTPRoute CRD alone is 248 KB as JSON, within a few
+# KB of the 256 KiB of annotations a client-side apply's last-applied copy has to fit in. gitops/gateway-api/kustomization.yaml says why it is vendored.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-api
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-7"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/gateway-api
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

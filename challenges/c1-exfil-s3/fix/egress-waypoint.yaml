@@ -18,16 +18,27 @@
 # allow (it is reached over PrivateLink inside 10.0.0.0/16, not the internet), so it does not pass through
 # the waypoint.
 #
-# BUILD-TIME CHECKS OWED TO THE LIVE VALIDATION (#728)
-#   - Istio version. The ambient egress-gateway pattern is documented against release-1.31 samples
-#     (istio.io/latest/docs/ambient/usage/egress-gateway/, read 2026-11-04); the fleet pins 1.30.4. Confirm
-#     the waypoint egress pattern on the pinned version, or carry the Istio upgrade that #860 left open for
-#     the attendee and admin clusters, before this is applied live.
-#   - Gateway API CRDs. The waypoint Gateway needs gateway.networking.k8s.io installed. Istio ships them or
-#     they are installed separately; confirm they are present on the cluster that carries the fix.
+# CHECKED ON THE PINNED ISTIO (#959, 2026-11-06, watch-it-burn-private, Istio 1.30.4, a scratch namespace)
+#   - Istio version. The ambient egress pattern works on 1.30.4, so no Istio upgrade is needed for it: with these
+#     three objects in an ambient-enrolled namespace, istiod programmed the waypoint, ztunnel steered each
+#     ServiceEntry host's connection to it over HBONE, and it reached api.open-meteo.com and
+#     geocoding-api.open-meteo.com (HTTP 200 each).
+#   - Gateway API CRDs. The gitops/bootstrap/apps/gateway-api.yaml Application installs the standard-channel
+#     v1.5.1 CRDs on every profile that installs Istio, and istiod creates the istio-waypoint GatewayClass from them
+#     with no restart.
+#   - The allowlist. Matching on `hosts` refused the Open-Meteo hosts too: `hosts` is an HTTP-only field, and this
+#     traffic is TLS the waypoint passes through without terminating it, so an ALLOW rule with it never matches.
+#     The rule below matches the TLS SNI (`connection.sni`) instead. With it, both Open-Meteo hosts answered 200
+#     and example.com, steered to the same waypoint by a second ServiceEntry, was refused.
+# STILL OWED TO THE LIVE VALIDATION (#728)
+#   - Enrolment. ztunnel steers only an ambient-enrolled pod's traffic to the waypoint. A pod labelled
+#     istio.io/dataplane-mode=none reached example.com directly, past the waypoint. In `agent` only console
+#     and guard-proxy are enrolled (#471), so the weather feed has to be enrolled before this fix is applied,
+#     or agent-egress-fqdn.yaml shuts its only path to Open-Meteo.
 #   - DNS for the ServiceEntry hosts. resolution: DNS leaves the client resolving the host; the locked
 #     resolver (resolver-lockdown.yaml) forwards open-meteo.com for exactly this, so the name resolves and
-#     ztunnel then steers the connection to the waypoint. Confirm the steering on the pinned version.
+#     ztunnel then steers the connection to the waypoint. The steering was checked with the default resolver,
+#     not the locked one.
 ---
 # The egress waypoint itself: a Gateway of the istio-waypoint class, used for service-addressed traffic.
 apiVersion: gateway.networking.k8s.io/v1
@@ -67,9 +78,11 @@ spec:
   resolution: DNS
   location: MESH_EXTERNAL
 ---
-# L7 allowlist on the waypoint: admit only TLS to the two Open-Meteo hosts on 443. Because an ALLOW policy
-# is attached to the waypoint, Istio refuses every request the policy does not match, so any other external
-# host steered here (a label-encoded name, an attacker webhook) is denied.
+# Allowlist on the waypoint: admit only TLS on 443 whose SNI is one of the two Open-Meteo hosts. Because an ALLOW
+# policy is attached to the waypoint, Istio refuses every connection the policy does not match, so any other
+# external host steered here (a label-encoded name, an attacker webhook) is denied. The match is the SNI, not
+# `operation.hosts`: the waypoint does not terminate this TLS, and `hosts` matches HTTP only, so a rule with it
+# never matched and refused the Open-Meteo hosts as well (checked on 1.30.4, #959).
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
@@ -86,8 +99,10 @@ spec:
   rules:
     - to:
         - operation:
-            hosts:
-              - api.open-meteo.com
-              - geocoding-api.open-meteo.com
             ports:
               - "443"
+      when:
+        - key: connection.sni
+          values:
+            - api.open-meteo.com
+            - geocoding-api.open-meteo.com

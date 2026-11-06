@@ -24653,3 +24653,80 @@ other. Live again at the rebase: `main` and `staging` both at `6601313a76c9`, `A
 **The suites (run 17850, at `c990271d`).** `bash verify/run-e2e-tools.sh` printed `293 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `69 checks ran (the offline suite and 68 tier tests) in 29m46s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. `test_chat_turn_cancel.py` passed in it.
+
+## 2026-11-06 · #959 · run 17846 · The Gateway API CRDs ship wherever Istio does, and the C1 egress waypoint works on Istio 1.30.4 once its allowlist matches the SNI
+
+**What this issue is.** A followup of #727. The C1 stage-2b fix builds its forced egress proxy as an Istio ambient
+egress waypoint, a Gateway of class `istio-waypoint` (`challenges/c1-exfil-s3/fix/egress-waypoint.yaml`), and run
+17752 found no `gateway.networking.k8s.io` CRD on `watch-it-burn-private`. The issue asked for an Argo CD app with
+the CRDs on the attendee, admin and full profiles, and for a check on the pinned Istio that the ambient egress
+pattern works, or else the Istio upgrade #860 left open. `prior-drafts.sh 959 origin/staging` printed NONE, so
+nothing was ported.
+
+**What was built.** `gitops/bootstrap/apps/gateway-api.yaml`, an Application named `gateway-api` at sync wave -7,
+before every Istio Application, with `ServerSideApply=true` (the HTTPRoute CRD is 248 KB as JSON). It syncs
+`gitops/gateway-api` at the root's revision. That directory holds the v1.5.1 standard-channel release asset
+`standard-install.yaml`, byte for byte, whose SHA-256 `751002b3…` is the digest GitHub publishes for it, and a
+`kustomization.yaml` that builds it. The bundle is eight CRDs and the release's `safe-upgrades` admission policy
+and binding, with no workload. It is listed on every profile that lists `istio`: attendee, admin and full, as the
+issue asked, and kubecon-private and local-inference, which carry the mesh too (kubecon-private is admin's list
+with the breakout's changes, local-inference is full's plus vLLM, and both tests that hold those pairs pass).
+
+**Why v1.5.1.** It is the `sigs.k8s.io/gateway-api` version in istio/istio's `go.mod` at the 1.30.4 tag. v1.7.0 is
+the newest release, but the pair that Istio tests is the one to ship; when Istio moves, the two move together, and
+`verify/test_gateway_api_crds.py` fails on an Istio pin it has no Gateway API version for.
+
+**Why vendored, not a git source on kubernetes-sigs/gateway-api.** No app here sources another git repo, the render
+gates (`verify/app_render.py`) read in-repo paths and would read nothing from an external one, and a vendored copy
+builds with no third host. No new dependency: the file is data, and its version is in VERSIONS.lock.
+
+**What changed with it.** `platform-baseline.yaml`'s `gateway-api` entry moves from proposed to adopted.
+`test_bootstrap_chart.py` now counts attendee 31, admin 34, full 32 and checks that gateway-api is listed exactly
+where istio is. The Application counts the docs state move by one: the run-of-show's 39 and 36, the platform
+page's 36 and 39, and the design glance's 36, held by `test_fleet_contract.py`. `test_mesh_enrollment.py`'s check
+that nothing installs the CRDs became a check that `gitops/gateway-api` alone defines them, and section 2.4 of the
+Istio evaluation marks that step done. Two new tests: `verify/test_gateway_api_crds.py` (offline: the digest, the
+CRD set, the channel and version, the Istio pair, the Application's source, wave and profiles) and
+`verify/test_gateway_api_crds_upstream.py` (tools tier: downloads the release asset and compares it, and reads
+istio/istio's go.mod at the pinned tag).
+
+**Live check (run 17846, 2026-11-06, `--context watch-it-burn-private` on every call).** Before: no
+`gateway.networking.k8s.io` CRD, no ValidatingAdmissionPolicy, istiod `1.30.4`. The vendored bundle was applied
+server-side; istiod logged its CRD watcher picking the CRDs up and created the `istio`, `istio-remote` and
+`istio-waypoint` GatewayClasses within 9 s, with no restart. In a scratch namespace `check-959-17846` labelled
+`istio.io/dataplane-mode=ambient`, the fix's three objects were applied unchanged except for the namespace, with a
+second ServiceEntry for `example.com` steered to the same waypoint. The Gateway went Programmed, its pod ran
+`registry.istio.io/release/proxyv2:1.30.4-distroless` with limits `cpu 2, memory 1Gi`, so the cluster's
+require-resource-limits admitted it, and it carried `gateway.networking.k8s.io/gateway-name=egress-waypoint` and no
+`istio.io/gateway-name`. A Python client in an enrolled pod opened TLS to each host and sent a GET:
+
+- With the fix's AuthorizationPolicy as written (`operation.hosts`), all three steered hosts failed with an EOF.
+  ztunnel's access log showed each connection sent to the waypoint over HBONE (`dst.service="api.open-meteo.com"`,
+  `dst.workload="egress-waypoint-…"`) and closed there.
+- With the policy deleted, `api.open-meteo.com` and `geocoding-api.open-meteo.com` answered `HTTP/1.1 200 OK`, and
+  so did `example.com`. So the egress pattern works on 1.30.4 and no Istio upgrade is needed; the policy was what
+  refused them. `operation.hosts` is an HTTP-only field and the waypoint passes this TLS through, so the ALLOW
+  rule never matched.
+- With the rule matching `connection.sni` on the two Open-Meteo hosts and port 443, both answered 200 and
+  `example.com` failed with an EOF. A host with no ServiceEntry (`www.wikipedia.org`) went direct, not through the
+  waypoint, in every case.
+- A second pod labelled `istio.io/dataplane-mode=none`, with the SNI rule in place, reached all three hosts
+  directly, `example.com` included. The waypoint holds only enrolled pods.
+
+Then the namespace was deleted and the bundle removed with `kubectl delete -f`. After: no Gateway API CRD, no
+ValidatingAdmissionPolicy or binding, no `check-959-17846`, and istiod, the CNI and ztunnel the same pods as before.
+`watch-it-burn-community` was not touched; it carries no Istio (#860).
+
+**What that changed in the fix.** `egress-waypoint.yaml`'s AuthorizationPolicy now admits port 443 when
+`connection.sni` is one of the two Open-Meteo hosts, the rule that worked live. `test_c1_dns_exfil_fix.py` holds
+that and refuses an HTTP-only operation field. The waypoint-label note in `agent-egress-fqdn.yaml` and the fix's
+README say what the live check read. Still owed to #728, and in the README: the weather feed has to be enrolled in
+the mesh before the fix is applied. In `agent` only the console and guard-proxy are enrolled (#471, question 947),
+and live `weather-feed-…` carried no `istio.io/dataplane-mode`. Without it, `agent-egress-fqdn.yaml` shuts the weather
+feed's only path to Open-Meteo. Enrolling a pod changes what the mesh carries, which `test_mesh_enrollment.py`
+holds to the two pods question 947 chose, so it is a followup and not done here.
+
+**Not yet run on a cluster.** The `gateway-api` Application itself syncing through Argo CD, which needs this change
+promoted: after promotion, `kubectl --context watch-it-burn-private -n argocd get application gateway-api` should read
+Synced and Healthy, and `kubectl --context watch-it-burn-private get gatewayclass istio-waypoint` should read
+Accepted. The next run on #728 reads both.
