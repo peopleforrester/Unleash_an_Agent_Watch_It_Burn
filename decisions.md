@@ -27875,7 +27875,11 @@ Thorn" link opens, which segment 1 now quotes. A share link's host is `p.datadog
 needs the host to start at `p.`, and a new check holds that it still finds a share link and passes the traces URL. The
 run-of-show keeps the URL. The second run failed `verify/test_two_domains.py`'s "kubecon.html shows no agenticburn":
 segment 1's story on the page cited the deck's issue by its repo name. The citation is in this entry, so the page drops
-it.
+it. The same run failed `verify/test_guardrails_switch.py` on a `TimeoutExpired`: its fake `guardrails-on 0` ran past
+the 60 seconds the test gave it. Alone the same call makes 16 fake kubectl calls and takes 1.6 seconds, and the whole
+test passes in 18 seconds, with the host's load average near 41 from other runs. A check that fails once and passes
+on a rerun is broken, so each command the test runs now gets 300 seconds, and one that runs past them exits naming
+the command where it raised a traceback.
 
 **Read live, read-only.** The pages the slides link, fetched at this run:
 

@@ -105,9 +105,22 @@ check("the workshop's admin profile still arms egress and KubeArmor from git",
 print("== fleet.sh picks the profiles from the event; the workshop keeps burn and admin ==")
 
 
+# A guardrails-on run here makes 16 fake kubectl calls, each a fresh python3, and takes under 2 seconds alone. On the
+# shared host under a load of about 40 one took over 60 seconds in a full tools-tier run (#984), so each command gets
+# STEP_SECONDS, and one that still runs past it fails naming the command, not as a traceback.
+STEP_SECONDS = 300
+
+
+def timed(argv: list[str], **kw) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=STEP_SECONDS, **kw)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"FAILED: {' '.join(argv)[:200]} ran past {STEP_SECONDS} seconds")
+
+
 def fleet(expr: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["bash", "-c", f"source '{FLEET}' >/dev/null 2>&1; {expr}"], cwd=FLEET.parent,
-                          capture_output=True, text=True, timeout=60, env={**os.environ, **(env or {})})
+    return timed(["bash", "-c", f"source '{FLEET}' >/dev/null 2>&1; {expr}"], cwd=FLEET.parent,
+                 env={**os.environ, **(env or {})})
 
 
 event = (REPO / "infra/terraform/fleet/event.sh").read_text(encoding="utf-8")
@@ -367,14 +380,14 @@ def run(cmd: str, mode: str = "linked", args: tuple[str, ...] = ()) -> tuple[sub
         state.write_text("{}")
         env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}", "CALLS": str(calls),
                "STATE": str(state), "MODE": mode}
-        r = subprocess.run(["bash", str(home / cmd), *args], env=env, capture_output=True, text=True, timeout=60)
+        r = timed(["bash", str(home / cmd), *args], env=env)
         ran = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
         shown = [line[2:] for line in (r.stdout + r.stderr).splitlines() if line.startswith("$ ")]
         replay = pathlib.Path(tmp, "replay")
         renv = {**env, "CALLS": str(replay), "STATE": str(pathlib.Path(tmp, "state2"))}
         pathlib.Path(tmp, "state2").write_text("{}")
         for line in shown:
-            subprocess.run(["bash", "-c", line], env=renv, capture_output=True, text=True, timeout=60)
+            timed(["bash", "-c", line], env=renv)
         replayed = [json.loads(line) for line in replay.read_text().splitlines()] if replay.exists() else []
         peer_cfg = (home / ".kube/peer")
         mode_bits = oct(peer_cfg.stat().st_mode & 0o777) if peer_cfg.exists() else ""
