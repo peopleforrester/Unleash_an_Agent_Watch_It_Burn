@@ -26157,3 +26157,7 @@ KubeArmorPolicy at this point, so the guardrails are off there now. The criterio
 was left as it was. Nothing was changed on either cluster.
 
 **Not yet run on a cluster.** Nothing: the test reads repo files, and the served page is the one it passes on.
+
+**Suite results (run 17924).** `bash verify/run-e2e-tools.sh` on f98d7276: the offline suite printed "304 tests ran",
+with `test_kubecon_c3_recipe_block.py` green, then "73 checks ran (the offline suite and 72 tier tests) in 47m34s",
+"ALL E2E TOOLS TIER CHECKS GREEN" and `exit=0`.
