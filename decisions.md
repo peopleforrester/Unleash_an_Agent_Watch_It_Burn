@@ -25710,3 +25710,8 @@ literal and the file. It also holds this entry's record: the command, each beat'
 `https://beacon.burritobot.co/beacon` on each landed C1 attempt, five in all. promo-mascot and maintenance-shell were created and deleted; the AI
 guards were put back off and the start state read again after each run, so the cluster was left as found. The
 Kubernetes guardrails were not switched. No dependency was added. The logs are in the run's directory, not the repo.
+
+**The suites (run 17880, at `d8ac35a2`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`301 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, `test_two_hour_flow_live_checks.py` among them) and then the tier: `72 checks ran (the
+offline suite and 71 tier tests) in 31m06s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose
+gate: pass`.
