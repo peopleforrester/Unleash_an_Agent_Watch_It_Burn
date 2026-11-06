@@ -24958,3 +24958,20 @@ dependency was added.
 **The suites (run 17864, at `3ccc65e5`).** `bash verify/run-e2e-tools.sh` printed `294 tests ran`, `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, `71 checks ran (the offline suite and 70 tier tests) in 30m03s`, `ALL E2E TOOLS TIER CHECKS
 GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #939 · run 17883 · Run 17864's draft ported onto staging, the cluster read again
+
+**Context.** Run 17864 ended claim-stale, so its two commits (`3ccc65e5`, `6b988706`) never reached staging.
+`bash verify/prior-drafts.sh 939 origin/staging` printed START from `origin/agent/939-17864`, with one drift line, an
+edit in place to `facilitation/kubecon-na-2026-run-of-show.md` by `7f3cdb4a` (#956). That commit adds refresh-only
+applies to the network and boundary steps, and the draft edits only open question 2, so both commits were
+cherry-picked onto `68f58776` with no conflict. Nothing in the draft differs in this port. The stop was the claim, not
+a gate, so the replays were not redone.
+
+**Live read (watch-it-burn-community, 2026-11-06).** The workshop-mcp pod's `/app/server.py` still had md5
+`1dbca7ae`, the same as `gitops/ai-layer/workshop-mcp-server.py` here. The agent namespace held the same 11
+Deployments run 17864 recorded and no `tron`, and its Deployments, StatefulSets and ReplicaSets numbered 108, as
+after that run's cleanup. `https://attackme.burritobot.co/controls` read every guard false. The PNG was read again
+before this commit and shows both prompts and the "successfully deployed ... public nginx image" reply, and
+`python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 14 files in place`. No code changed,
+and no dependency was added.
