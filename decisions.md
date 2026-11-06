@@ -35786,3 +35786,8 @@ not this one.
 **Left open.** A recon that reads the card back about 2 times in 100, on staging's wording and this one alike: the
 lost-card story in lab.html's recon ask draws case 3. The lost-card sentence did not move it measurably (v1 1 of 96,
 v2 2 of 104). It is filed as a followup through this run's report.
+
+**The suites (run 18035, at `86f16586`; this paragraph only adds to the entry).** `bash verify/run-e2e-tools.sh`
+printed `310 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`),
+then `74 checks ran (the offline suite and 73 tier tests) in 47m37s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+The prose gate printed `prose gate: pass`. No dependency was added to the repo.
