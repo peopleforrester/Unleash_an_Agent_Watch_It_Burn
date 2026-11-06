@@ -25,6 +25,7 @@ SCHED = REPO / "infra/terraform/drift/scheduled-drift.sh"
 REGISTER = REPO / "infra/terraform/drift/known-unmanaged.yaml"
 FLEET = REPO / "infra/terraform/fleet/fleet.sh"
 BACKUPS = REPO / "infra/terraform/fleet/backups.tsv"
+ROSTER = REPO / "infra/terraform/fleet/roster.tsv"
 failures: list[str] = []
 
 
@@ -223,6 +224,7 @@ class Env:
         shutil.copy(REGISTER, self.tf / "drift/known-unmanaged.yaml")
         shutil.copy(FLEET, self.tf / "fleet/fleet.sh")
         shutil.copy(BACKUPS, self.tf / "fleet/backups.tsv")
+        shutil.copy(ROSTER, self.tf / "fleet/roster.tsv")
         self.write("aws/network/terraform.tfstate", vpc_state("vpc-accen", event="devopsdays-portland-2026"))
         self.write("aws/network/states/aws1-student31.tfstate", vpc_state("vpc-s31"))
         # Outside the home region every account keeps one lab VPC state per region (fleet.sh lab_vpc_state_for).
@@ -419,6 +421,29 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
     check(f"a cluster whose tags do not say its hostname is exit 1, not a guessed -var (got {rc})",
           rc == 1 and "cluster watch-it-burn-attendee-004: its state's resources carry no `hostname` tag" in out)
     (env.tf / "fleet/states/watch-it-burn-attendee-004.tfstate").unlink()
+
+    # watch-it-burn-private was built on 2026-10-28, before #636 put role= on every cluster, so no resource it has
+    # carries the tag (#979). Its roster.tsv row is the data fleet.sh's role_for_cluster answers from.
+    if "watch-it-burn-private|admin|" not in ROSTER.read_text(encoding="utf-8"):
+        sys.exit(f"anchor missing: 'watch-it-burn-private|admin|' is not in {ROSTER}; the role case below reads it")
+    no_role = {"project": "watch-it-burn", "event": EVENT, "hostname": "burritobot-private.agenticburn.com"}
+    env.write("fleet/states/watch-it-burn-private.tfstate", cluster_state(
+        "watch-it-burn-private", "111111111111", "", tags=no_role))
+    rc, out = env.run()
+    pp = next((c for c in env.calls("terraform") if "plan" in c and any("watch-it-burn-private.tfstate" in x for x in c)), [])
+    check(f"a roster cluster with no role tag is planned with its roster.tsv role (got {rc})",
+          rc != 1 and "role=admin" in pp and "hostname=burritobot-private.agenticburn.com" in pp)
+    check("and the Notes say its role came from the roster, built before #636",
+          "cluster watch-it-burn-private: no `role` tag in its state (built before #636)" in section(out, "## Notes")
+          and "its roster.tsv role, admin" in section(out, "## Notes"))
+    (env.tf / "fleet/states/watch-it-burn-private.tfstate").unlink()
+    env.write("fleet/states/watch-it-burn-attendee-005.tfstate", cluster_state(
+        "watch-it-burn-attendee-005", "111111111111", "", tags=dict(no_role, hostname="x.agenticburn.com")))
+    rc, out = env.run()
+    check(f"a cluster with no role tag and no roster row is exit 1, not a guessed -var (got {rc})",
+          rc == 1 and "cluster watch-it-burn-attendee-005: its state's resources carry no `role` tag and it is not a "
+          "community or admin row of roster.tsv" in out)
+    (env.tf / "fleet/states/watch-it-burn-attendee-005.tfstate").unlink()
 
     rc, out = env.run(FAKE_TF_INIT_RC="1")
     check(f"a failed terraform init is exit 1 with no plans run (got {rc})",
