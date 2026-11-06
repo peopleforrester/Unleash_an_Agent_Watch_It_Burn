@@ -24632,3 +24632,8 @@ host misses the window. Run alone three times it passed. With `logging.StreamHan
 `task_cancel` record, the old test failed with that exact check and the fixed one passed. The check now waits up to
 5 s for `task_cancel`, as the line above it already waits for the cancel itself, and holds that `forward_error` came
 first, which its label always said.
+
+**The suites (run 17835, at `c903ae5b`).** `bash verify/run-e2e-tools.sh` printed `292 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `67 checks ran (the offline suite and 66 tier tests) in 34m30s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new live test is not in the tier, so it is not among the 66; it
+ran on its own as above.
