@@ -1,0 +1,13 @@
+# ABOUTME: decisions.md and PROGRESS.md merge with git's union driver, so two runs that each add an entry rebase cleanly (#958).
+# ABOUTME: Only these two: union keeps both sides of every conflicting hunk, which silently mixes edits that are not appends.
+#
+# Why. Every dispatched run adds to decisions.md, and most to PROGRESS.md, so two runs cut from the same staging
+# both change the end of the same file. With the normal merge that is a conflict, and since 2026-11-05 nineteen
+# runs ended `failed (rebase-conflict)` that way, each one's finished work redone by a new run (hecaton#532).
+# The union driver keeps both sides' lines instead: the upstream entry first, then the replayed one.
+#
+# Nothing else is listed here. verify/ tests, Terraform, charts and PROJECT_STATE.md are edited in place, and a union
+# of two edits to the same lines keeps both versions with no conflict to say so. verify/test_gitattributes_union.py
+# holds this file to these two lines.
+decisions.md merge=union
+PROGRESS.md merge=union
