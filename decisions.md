@@ -23477,3 +23477,13 @@ coordinator through the report, as does #916's closing comment, since a run writ
 **Not yet run on a cluster.** Nothing for #916's criteria. After the next routes publish,
 `curl -s -o /dev/null -w '%{http_code}\n' https://registry-attackme.burritobot.co/v2/` should print the router's 404,
 and `./fleet.sh router-check` should still end "the router serves exactly the roster".
+
+**The suites (run 17787, at `24836732`, no code changed).** `bash verify/run-e2e-tools.sh` printed `281 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `64 checks ran (the
+offline suite and 63 tier tests) in 49m11s` and `exit=1`, on one tier test: `test_datadog_log_services_render.py`
+failed its `kagent-crds` and `kagent` renders, because `helm template` could not reach ghcr.io (`dial tcp
+140.82.121.33:443: connect: no route to host`). That was the host's network, not this change, which touches only
+decisions.md and the run-of-show. At 03:01Z ghcr.io answered again (`/v2/` read its usual 401), and the same test,
+run alone with the runner's environment (pinned tools first on PATH, the aws and eksctl stubs, an empty Helm home),
+exited 0 with 116 PASS, the kagent chart's pods among them. The prose gate printed `prose gate: pass`. No dependency
+was added.
