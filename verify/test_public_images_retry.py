@@ -1,15 +1,19 @@
-# ABOUTME: Offline check of test_public_images_served.py's 429 handling: its opened() helper is lifted out of the file
-# ABOUTME: and run against a stubbed urlopen and sleep, so a rate-limited pull is retried and any other error is not.
+# ABOUTME: Offline check of test_public_images_served.py's retries: its opened() helper is lifted out of the file and
+# ABOUTME: run against a stubbed urlopen and sleep: a 429 or no answer is retried, boundedly, and other errors are not.
 """The tools-tier test reads public.ecr.aws anonymously, whose budget is about one request a second per source
 address. This host runs other runs' suites from the same address, so run 16863 met a 429 on busybox's first manifest
-and went green on a rerun. The fix retries a 429 only, a bounded number of times. This holds that without the network:
-the helper is taken from the file by name, so what runs here is the code the tier test runs.
+and went green on a rerun (#844). Run 17813 met one TLS handshake to the token endpoint that timed out, and went green
+on a rerun (#976). The fix retries a 429, and a timeout or dropped connection, each a bounded number of times; when no
+try gets an answer it raises Unreachable, naming the registry. This holds that without the network: the helpers are
+taken from the file by name, so what runs here is the code the tier test runs.
 """
 from __future__ import annotations
 
 import ast
 import email.message
+import http.client
 import pathlib
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -26,18 +30,24 @@ def check(name: str, ok: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-# The two names this lifts out of the file are checked first, so a rename reads as that and not as a broken check.
+# The names this lifts out of the file are checked first, so a rename reads as that and not as a broken check.
+LIFTED = ("REGISTRY", "RETRIES_ON_429", "RETRIES_ON_NO_ANSWER", "NO_ANSWER_WAIT", "Unreachable", "no_answer", "opened",
+          "token")
 tree = ast.parse(SRC)
-nodes = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+nodes = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
 nodes.update({t.id: n for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)})
-missing = [name for name in ("RETRIES_ON_429", "opened") if name not in nodes]
+missing = [name for name in (*LIFTED, "unreachable") if name not in nodes]
 if missing:
     print(f"FAILED: {SRC_PATH.relative_to(REPO)} has no top-level {', '.join(missing)} to lift out")
     sys.exit(1)
-check("the tier test's fetch and blob both read through opened()",
+check("the tier test's token, fetch and blob all read through opened(), its one urlopen",
       "raw = opened(req)" in SRC and "return json.loads(opened(req))" in SRC
+      and "opened(" in ast.get_source_segment(SRC, nodes["token"])
       and "urllib.request.urlopen(req" in ast.get_source_segment(SRC, nodes["opened"])
-      and SRC.count("urllib.request.urlopen(req") == 1)
+      and SRC.count("urlopen(") == 1)
+check("an Unreachable fails the tier test on its own, naming the registry, from the token and from the image loop",
+      SRC.count("except Unreachable as e:\n    unreachable(e)") == 2
+      and "is unreachable from this host" in ast.get_source_segment(SRC, nodes["unreachable"]))
 
 
 class _Resp:
@@ -61,8 +71,9 @@ def _err(code: int, retry_after: str | None = None) -> urllib.error.HTTPError:
     return urllib.error.HTTPError("https://public.ecr.aws/v2/x/manifests/y", code, "stub", h, None)
 
 
-def run(script: list) -> tuple[object, list[float], int]:
-    """Run opened() against a urlopen that answers each item of script in turn: bytes, or an HTTPError to raise."""
+def run(script: list, call: str = "opened") -> tuple[object, list[float], int]:
+    """Run opened(), or token(), against a urlopen that answers each item of script in turn: bytes, or an error to
+    raise. What it returns, or the exception it raises, comes back with the sleeps and the number of urlopen calls."""
     calls = {"n": 0}
     sleeps: list[float] = []
 
@@ -76,17 +87,26 @@ def run(script: list) -> tuple[object, list[float], int]:
     fake_urllib = type("U", (), {})()
     fake_urllib.request = type("R", (), {"urlopen": staticmethod(urlopen), "Request": urllib.request.Request})
     fake_urllib.error = urllib.error
-    ns = {"urllib": fake_urllib, "time": type("T", (), {"sleep": staticmethod(sleeps.append)})}
-    for name in ("RETRIES_ON_429", "opened"):
+    ns = {"urllib": fake_urllib, "json": __import__("json"),
+          "time": type("T", (), {"sleep": staticmethod(sleeps.append)})}
+    for name in LIFTED:
         exec(compile(ast.Module(body=[nodes[name]], type_ignores=[]), str(SRC_PATH), "exec"), ns)
     try:
-        out: object = ns["opened"](urllib.request.Request("https://public.ecr.aws/v2/x/manifests/y"))
-    except urllib.error.HTTPError as e:
+        if call == "token":
+            out: object = ns["token"]()
+        else:
+            out = ns["opened"](urllib.request.Request("https://public.ecr.aws/v2/x/manifests/y"))
+    except Exception as e:  # noqa: BLE001  every error comes back to be checked by type
         out = e
     return out, sleeps, calls["n"]
 
 
-print("== a rate-limited anonymous pull is retried; nothing else is (#844, run 16863) ==")
+def handshake_timeout() -> urllib.error.URLError:
+    """What run 17813 met: urlopen wraps the handshake's TimeoutError in a URLError."""
+    return urllib.error.URLError(TimeoutError("_ssl.c:1012: The handshake operation timed out"))
+
+
+print("== a rate-limited anonymous pull is retried; a 404 is not (#844, run 16863) ==")
 out, sleeps, n = run([_err(429), _err(429), b"manifest"])
 check("two 429s then an answer returns the answer", out == b"manifest" and n == 3, f"{out!r} after {n} calls")
 check("and waits 2 s then 4 s between them, with no Retry-After", sleeps == [2, 4], str(sleeps))
@@ -104,10 +124,47 @@ out, sleeps, n = run([_err(404), b"never read"])
 check("a 404 fails at once, with no retry and no wait",
       isinstance(out, urllib.error.HTTPError) and out.code == 404 and n == 1 and sleeps == [], f"{n} calls, {sleeps}")
 
+print("\n== no answer at all is retried, boundedly, and then fails naming the registry (#976, run 17813) ==")
+out, sleeps, n = run([handshake_timeout(), b'{"token": "t"}'], call="token")
+check("one handshake timeout on the token, then an answer, returns the token",
+      out == "t" and n == 2 and sleeps == [5], f"{out!r} after {n} calls, {sleeps}")
+out, sleeps, n = run([TimeoutError("The read operation timed out"), b"manifest"])
+check("a bare read timeout is retried", out == b"manifest" and n == 2 and sleeps == [5], f"{out!r}, {sleeps}")
+out, sleeps, n = run([ConnectionResetError(104, "reset"), http.client.RemoteDisconnected("closed"), b"manifest"])
+check("a reset and a dropped connection are retried", out == b"manifest" and n == 3 and sleeps == [5, 5],
+      f"{out!r}, {sleeps}")
+out, sleeps, n = run([urllib.error.URLError(ConnectionRefusedError(111, "refused")), b"manifest"])
+check("a refused connect is retried", out == b"manifest" and n == 2, f"{out!r}, {n} calls")
+
+out, sleeps, n = run([handshake_timeout()] * 3 + [b"never read"], call="token")
+check("three handshake timeouts in a row raise Unreachable, after two waits",
+      type(out).__name__ == "Unreachable" and n == 3 and sleeps == [5, 5], f"{out!r}, {n} calls, {sleeps}")
+check("and it names the registry, the URL, the tries and the last error",
+      all(w in str(out) for w in ("public.ecr.aws gave no answer to https://public.ecr.aws/token/", "on 3 tries",
+                                   "The handshake operation timed out")), str(out))
+check("Unreachable is no URLError, so the per-image checks do not catch it as an image that is not served",
+      not isinstance(out, OSError))
+
+out, sleeps, n = run([TimeoutError("t"), _err(429), TimeoutError("t"), _err(429), b"manifest"])
+check("timeouts and 429s each keep their own budget", out == b"manifest" and n == 5 and sleeps == [5, 2, 5, 4],
+      f"{out!r}, {n} calls, {sleeps}")
+
+print("\n== what the registry did answer, or the host refused, is not retried ==")
+bad_cert = urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate verify failed"))
+out, sleeps, n = run([bad_cert, b"never read"])
+check("a certificate the host cannot verify fails at once", out is bad_cert and n == 1 and sleeps == [],
+      f"{out!r}, {n} calls")
+no_name = urllib.error.URLError(OSError(-2, "Name or service not known"))
+out, sleeps, n = run([no_name, b"never read"])
+check("a name that does not resolve fails at once", out is no_name and n == 1 and sleeps == [], f"{out!r}, {n} calls")
+out, sleeps, n = run([_err(404), b"never read"], call="token")
+check("a 404 on the token fails at once", isinstance(out, urllib.error.HTTPError) and n == 1 and sleeps == [],
+      f"{out!r}, {n} calls")
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("A 429 from public.ecr.aws is retried, and only a 429.")
+print("A 429 or no answer from public.ecr.aws is retried, boundedly; an unreachable registry fails naming it.")

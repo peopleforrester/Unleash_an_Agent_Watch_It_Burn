@@ -26412,3 +26412,46 @@ changed.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
 59m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+## 2026-11-06 · #976 · run 17956 (from run 17928's draft) · The tools tier's public-image test retries no answer from public.ecr.aws, then fails naming it
+
+**This run.** Run 17928 wrote this change on `agent/976-17928` and ended claim-stale, so none of it reached staging.
+Run 17956 cherry-picked its first commit (`e956ce30`) onto staging at `629c53ea`. Two things differ from the draft.
+Staging's #992 (`858f1b0a`) had since replaced the five pinned images with the one landing-page pin and added a second
+loop over Docker's official images on public.ecr.aws; both loops now sit inside the one `try` whose
+`except Unreachable` reaches the failing exit, so an unreachable registry in either loop fails as that. The draft's
+second commit (`2c878d98`, a looser wall-clock bound in `verify/test_chat_turn_cancel.py`) is left out: staging's #974
+(`d34badc3`) already reads which limit ended the turn from guard-proxy's log, so the bound it loosened is gone.
+
+**What happened.** Run 17813's first `bash verify/run-e2e-tools.sh` (at `64f174b1`) had one red tier test,
+`verify/test_public_images_served.py`: "public.ecr.aws gave no anonymous token: URLError: <urlopen error _ssl.c:1012:
+The handshake operation timed out>". Run on its own a minute later it passed, and the next full run was green. The
+registry had said nothing about any image; one TLS handshake on the shared host had timed out.
+
+**The decision.** The test tells an unreachable registry apart from an image that is not served by what came back.
+An HTTP status is the registry's answer, and only a 429 is retried, as #844 settled. No answer at all (a timeout or a
+dropped connection, on the connect, the TLS handshake or the read: `TimeoutError` or `ConnectionError`, bare or as a
+`URLError`'s reason) is tried again 5 s later, three tries in all. When every try gets no answer, `opened()` raises
+`Unreachable`, an exception that is not a `URLError`, so no per-image check catches it as a pull that failed. The test
+then exits 1 with "FAILED: public.ecr.aws is unreachable from this host, and the images not yet read have no verdict",
+the URL, the tries and the last error, and lists any check that had already failed. A certificate the host cannot
+verify and a name that does not resolve are not retried: neither is a passing hiccup, and both fail at once as before.
+The token request now reads through `opened()` too, so it has both retries; before, it was the one request with
+neither. The 429 and no-answer budgets are counted apart. A registry that never answers costs at most 3 x 30 s plus
+two 5 s waits, about 100 s, on the request where it stopped. No dependency was added.
+
+**The offline half.** `verify/test_public_images_retry.py` lifts `REGISTRY`, both budgets, `NO_ANSWER_WAIT`,
+`Unreachable`, `no_answer()`, `opened()` and `token()` out of the file by name and runs them against a stubbed
+urlopen and sleep. It holds that one handshake timeout on the token and then an answer returns the token after one
+5 s wait; that a bare read timeout, a reset, a dropped connection and a refused connect are retried; that three
+handshake timeouts raise `Unreachable` naming public.ecr.aws, the URL and "on 3 tries", and that it is no `OSError`;
+that timeouts and 429s keep their own budgets; and that a certificate error, an unresolved name and a 404 on the
+token fail at once with no wait. It also holds that the file has one `urlopen(`, inside `opened()`, and that both the
+token and the image loop hand an `Unreachable` to the one failing exit.
+
+**Checked by hand.** In run 17956, `python3 verify/test_public_images_served.py` against public.ecr.aws: the
+landing pin and all seven official images served, on linux/amd64, exit 0. A copy with `REGISTRY` set to the unroutable `10.255.255.1` ran 100 s and printed
+"FAILED: 10.255.255.1 is unreachable from this host, and the images not yet read have no verdict: 10.255.255.1 gave
+no answer to https://10.255.255.1/token/ on 3 tries, 5 s apart; the last: URLError: <urlopen error timed out>",
+exit 1.
+
+**Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
