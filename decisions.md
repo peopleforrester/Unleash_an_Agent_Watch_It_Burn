@@ -26746,9 +26746,12 @@ checks) and `test_datadog_admin_key.sh` (the identity script's source checks). B
   kubectl, helm and aws fakes and a recording jq wrapper. It holds that no key is on any command line, no Secret
   reaches an apply, the six Secrets are replaced (or created when replace fails), and the env file holds the five
   admin values. On the old scripts 12 checks fail; on these, 17 passed.
-- New, tools tier: `test_datadog_secret_manifests_render.py` renders `datadog_secret_manifest` and both scripts'
-  Secrets with the pinned kubectl and `KUBECONFIG=/dev/null`, and holds that every value decodes exactly (each blob
-  equal to the JSON the Agent reads) and no manifest carries an annotation. 10 passed with the host's kubectl.
+- New, tools tier: `test_datadog_secret_manifests_render.py` renders fleet.sh's `datadog_secret_manifest` with the
+  pinned kubectl and `KUBECONFIG=/dev/null`. It holds that both keys decode exactly, that a JSON blob passed as a
+  value (the identity script's logs endpoint shape, with an `=` added) comes back byte for byte, and that the
+  manifest carries no annotation; 5 passed. Its first version also ran both infra scripts through a kubectl wrapper
+  that dropped `--context`, and `test_e2e_tools_tier.py` failed it: a tier test may not name `CONTEXT` or
+  `--context`, and both scripts require a context. The scripts' env-file lines are held offline by the test above.
 
 **Live (run 17929).** Read-only on both clusters: `datadog-secret` in datadog, monitoring and security carries the
 `kubectl.kubernetes.io/last-applied-configuration` annotation on all six. `datadog_secret_manifest`'s output (with

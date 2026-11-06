@@ -8,8 +8,9 @@ test_fleet_converge_repairs.sh; this runs the two scripts the build runs.
 kubectl, helm and aws are fakes on PATH that record every call, and jq is a wrapper that records its argv and runs the
 real jq. kubectl's fake logs what a --from-env-file holds apart from the argv, answers a client-side create of a Secret
 with a manifest carrying that content, and keeps what each of apply, replace and create read on stdin. Its replace
-fails while FAKE_NO_SECRET is set, as it does on a cluster without the Secret. The real kubectl's reading of the env
-file is checked in the tools tier, by test_datadog_secret_manifests_render.py.
+fails while FAKE_NO_SECRET is set, as it does on a cluster without the Secret. That the real kubectl reads an env-file
+line back as the exact value, a JSON blob included, is checked in the tools tier by
+test_datadog_secret_manifests_render.py; a tier test may not name a context, and both scripts require one.
 """
 from __future__ import annotations
 
