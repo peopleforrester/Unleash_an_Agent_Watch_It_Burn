@@ -25489,3 +25489,7 @@ tell, because it restarted the agent before the chat.
 changes left are the new workshop-agent pods, which the issue asked for. The guard toggles were not touched.
 
 No file outside decisions.md changed, and no dependency was added.
+
+**The suites (run 17876, at `ff381a19`).** `bash verify/run-e2e-tools.sh` printed `299 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `72 checks ran (the offline suite and 71 tier tests)
+in 29m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17876/e2e-tools.log`.
