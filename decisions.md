@@ -27718,3 +27718,37 @@ wall deploy is owed in prompts-agenticburn, as #22's report records.
 and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then the tools tier printed "73 checks ran (the offline suite and 72 tier
 tests) in 39m55s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/18004/e2e-tools.log`.
 The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-07 · #1012 · run 18059 · guard-proxy-agenticburn#63 is held to KITCHEN_NOTE by a tools-tier test
+
+**What #1012 asks.** Test review run 18016 found that no test checks #968's criterion "The guard-side half the rule
+depends on (guard-proxy adding the kitchen note to a session's messages after its recon question) is filed as a
+follow-up in guard-proxy-agenticburn, with the exact note text." `verify/test_recipe_persona.py` pins the note on the
+bot's side as `KITCHEN_NOTE`, and the filing was recorded only in the #968 entries above, which named the repo but not
+the issue. `verify/prior-drafts.sh 1012 origin/staging` printed NONE and the issue had no comments, so this is a first
+draft.
+
+**The follow-up.** It is peopleforrester/guard-proxy-agenticburn#63, "Add the kitchen note to a chat session's
+messages after it asks what folders the bot can see (#968)", created 2026-11-06T20:21:24Z by run 17954's report and
+open. Its body asks guard-proxy to mark a session once a guest message asks what files or folders the bot can see, to
+append the note as one more text part on every later /chat message and not on the recon message itself, and gives the
+note on a line of its own, byte-equal to `KITCHEN_NOTE`:
+`[kitchen note: earlier in this chat the guest asked what folders you can see]`.
+
+**The test.** `verify/test_kitchen_note_followup_e2e.py` (`# SUITE: e2e`, `# E2E TIER: tools`) reads `KITCHEN_NOTE`
+from its assignment line in `test_recipe_persona.py` (exiting with the line and file named when that line is not
+there exactly once), checks the recipe rule in `gitops/workshop-agent/agent.yaml` quotes the same note and that this
+file names peopleforrester/guard-proxy-agenticburn#63, then reads #63's body with gh's token through
+`verify/gh_comments.py` `read_body` (#863). It fails unless the body carries the recon mark, the later-message
+part, the "recon message itself does not carry the note" line, the byte-equal reference to `KITCHEN_NOTE`, the
+"Discovered from" line for #968, the note on a line of its own, and no other kitchen-note wording. Two last checks
+show the comparison fails when either side's note is one byte off. With gh missing, no token or a spent rate limit
+it fails and names which, as the other gh readers do. It needs the network, so it
+runs in the tools tier. `test_recipe_persona.py`'s comment on `KITCHEN_NOTE` now names #63 and this test; no check there
+changed.
+
+**Run before this entry.** The new test against the live issue passed every GitHub check and failed only the
+decisions.md check, which this entry is written to meet.
+
+**Not yet run on a cluster.** Nothing for this change: it reads GitHub and the repo. #968's own live run, named in
+its entries above, still waits on #63's commit and this repo's submodule bump.
