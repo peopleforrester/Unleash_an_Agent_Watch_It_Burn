@@ -23534,3 +23534,9 @@ on watch-it-burn-private read `Synced Healthy` at `b17fc38b`.
 Probe record: #775's run 17723 entry (2026-11-05, Challenge 3 with the guardrails on) landed in the same place as this
 issue's entry. Both sides only added text, so both are kept, in time order, #775's first. decisions.md merged under
 the union driver with no conflict.
+
+**The suites (run 17817, at `3d829412`, on staging `b17fc38b`).** `bash verify/run-e2e-tools.sh` printed `286 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `65 checks ran
+(the offline suite and 64 tier tests) in 50m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
+printed `prose gate: pass`. No dependency was added. An update comment on #916 (issuecomment-6678138965) names the
+502 and the reload still owed.
