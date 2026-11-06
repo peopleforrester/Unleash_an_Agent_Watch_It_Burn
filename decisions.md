@@ -21678,3 +21678,7 @@ run-of-show: while it ran, other runs (#919's run 17626 among them) added their 
 record, at the same place as this one. Both sides only added text, so both are kept: staging's entries first, then
 this issue's. decisions.md merged without a conflict. Nothing in the three asks' record changed, and the asks were
 not repeated: they ran after the routes publish on the netcup router that the #906 entry calls the new server.
+
+**The suites (run 17754, at `fedc85fc`, on staging `f144c2b6`).** `bash verify/run-e2e-tools.sh` printed `278 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `63 checks ran
+(the offline suite and 62 tier tests) in 39m09s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
