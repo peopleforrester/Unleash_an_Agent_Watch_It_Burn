@@ -26412,3 +26412,124 @@ changed.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
 59m08s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+## 2026-11-06 · #986 · run 17914 · Failover run as a KubeCon cluster from an attendee's browser: same witch name, same page, no refresh
+
+Michael's sign-off on the issue (2026-11-06, "just do your recommendations") leaves the testing strategy to the run.
+There was no earlier draft: `bash verify/prior-drafts.sh 986 origin/staging` printed NONE.
+
+**The test plan, for before the talk on 2026-11-12.**
+
+1. *What is tested.* The whole failover as the room meets it, the standby included: an attendee's page left open
+   on `attackme.burritobot.co`, the apex router's cluster leg, backups.py's Watcher deciding and promoting, the
+   router reload, and a KubeCon-profile cluster answering afterwards. The two questions are answered by checks on
+   the page itself: the witch name in its header, its `wib_witch` cookie and the witch name and session each `/chat`
+   carries, before and after; and the page's navigation count and a marker set on `window`, which a reload would
+   clear.
+2. *Which clusters, and no cluster lifecycle touched.* No cluster is created or torn down. Michael's ruling of
+   2026-11-02 (#809, hecaton#496) gives runs the two clusters that are up and no third, so no run builds a standby.
+   Both clusters are KubeCon builds: Argo CD's `guardrails-switch` Application runs on each, community bootstraps
+   `kubecon-community` and private `kubecon-private`. Each stands in as the other's standby, so the drill runs both
+   ways. In the private-to-community direction the cluster taking attackme is a `kubecon-community` cluster that has
+   never seen the browser, the profile `backups.py up` builds a community standby with (fleet.sh's
+   `bootstrap_profile_for_role` under event.sh's `WIB_ROSTER_PROFILES=kubecon`, which `verify/test_backups.py`
+   holds for every standby). Neither cluster is changed: the drill reads each console Service's load balancer and
+   sends five chats per direction, each carrying backups.py's probe marker so none reaches the prompt wall.
+3. *The live router is left alone.* It is what the room is on, and moving attackme on it is the 2026-10-31
+   rehearsal's job on a day with no session. The drill runs the router's cluster leg locally instead, on Caddy
+   v2.11.4, the version the router image runs.
+4. *The real standbys.* Their first build as KubeCon clusters is the night-before wave the KubeCon schedule starts
+   (run-of-show, bring-up step 4), or Michael's hand rehearsal (step 3) if he runs it first. Step 3 now also runs the
+   attendee's drill once against a real standby, `watch-it-burn-community-b03` in us-west-2, with the exact commands.
+   It belongs to his existing rehearsal, and this issue does not wait on it.
+5. *Not covered.* The router's own path through Railway in a region outage, the edge's TLS (a promotion does not
+   touch it), a phone's real network, the private bot's failover (the presenters', not the room's), and the
+   guardrails a promoted standby comes back with, which is #985.
+
+**The drill** (`verify/failover_drill.py`). A local Caddy runs the cluster leg of apex-agenticburn's Caddyfile (read
+at `a93679a5`): the support and deployments name maps, the routes.map import and the reverse_proxy options (Host and
+X-Forwarded-For set, `lb_try_duration 5s`, `lb_try_interval 250ms`, TLS with `tls_insecure_skip_verify`,
+`dial_timeout 2s`), plus one response header, X-Failover-Upstream, so the drill reads which console answered. Its
+table is attackme's 14 rows as `fleet.sh routes roster` writes them (fleet.sh's `emit_service_hosts`, burritobot.co
+twins first). backups.py's own Watcher and Router run with the scheduled watcher's settings (a check every 15 s, a
+chat check every fourth tick, promotion after 3 failures in a row); the Router's reload script runs `caddy reload` on
+the local router, as apex's reload-routes.sh does on Railway. At the fault the primary's LB is replaced, for the router
+and the self-check alike, by 192.0.2.1:443 (TEST-NET-1), where every dial times out as an unreachable LB's does. The
+attendee is a fresh headless Chromium 156 (playwright 1.64.1, already pinned for the E2E suite) at 390x844, with
+`*.burritobot.co` resolved to the local router.
+
+**Live, 2026-11-06, both ways.** Four drills on the served page and two on this checkout's page:
+
+| Run | Direction | Promoted (UTC) | Fault to composer back | Composer off from fault |
+|---|---|---|---|---|
+| drill, served page | community -> private | 13:56:18Z | 79.0 s | 20.7 s |
+| drill, served page | private -> community | 13:58:50Z | 81.2 s | 21.7 s |
+| `test_kubecon_failover_attendee_live.py` | community -> private | about 14:09Z | 86.4 s | 22.7 s |
+| `test_kubecon_failover_attendee_live.py` | private -> community | about 14:11Z | 86.1 s | 22.8 s |
+| drill, `--page-from-repo --judge` | community -> private | 14:19:08Z | 84.7 s | 22.8 s |
+| drill, `--page-from-repo --judge` | private -> community | 14:21:23Z | 83.1 s | 21.7 s |
+
+`COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_kubecon_failover_attendee_live.py` printed PASS on all 13 checks each way and ended `ALL KUBECON FAILOVER
+ATTENDEE CHECKS PASSED`, exit 0, at about 14:12Z. Each `--judge` drill printed 13 PASS and exited 0. In every drill
+the watcher logged three failed checks 25 s apart (`/healthz answered timed out`), the candidate's full self-check
+passing, `router: applied (attempt 1)` and `PROMOTED ... 14 host(s) now route to ...`. The first chat came back from
+the primary's console and the first chat after the switch from the standby's (X-Failover-Upstream). The witch name
+held in the header, the cookie and both chats' bodies, as did the session id. The standby greeted the person by it:
+"Hello Rowena the Wraith!" on watch-it-burn-private, "Hello Lucius the Werewolf!" on watch-it-burn-community. A
+refresh afterwards kept the name, the cookie, the session and the 3 saved prompts; the conversation on screen is
+cleared by a refresh, as on any day.
+
+**The answers.** Yes, an attendee keeps the same witch name: it lives in the page and in the `wib_witch` cookie on
+`.burritobot.co`, neither of which a promotion touches, and the standby reads it from each chat. Yes, they keep
+chatting on the same page without refreshing: the page's 12-second backend check turns the composer back on once
+the standby answers. The wait is about a minute and a half, and the no-burritos screen never shows, since the router
+stays up and answers 502.
+
+**What an attendee has to do, and what is lost.** One thing: a message sent during the outage gets "Hmm, the kitchen
+isn't answering right now (502). Give it a second and send that again.", and it is in "Your saved prompts" to resend
+with a tap. It is listed in the run-of-show's standby section rather than removed: resending it by itself would send a
+prompt the person may no longer want, into a conversation the new cluster does not have. Lost, with nothing to do:
+what the bot knew of the order in progress (the standby starts the order again under the same session id), the
+deployments link and any Joker on the old cluster, the deployments wall, the support desk's tickets and the cost
+counter.
+
+**Found and fixed: the composer greyed out again after it came back.** The first drill's state, read just after its
+post-switch chat answered, had the composer off again (`disabled: true`), with the standby healthy. The page starts
+a backend check every 12 s, and while the cluster is unreachable each takes about 11 to 13 s (the router's 5-second
+budget for `/controls`, then for `/guards`), so checks overlap and one that set out before the switch can land its
+failure after a newer one found the standby up. The composer stayed off until the next check. `checkBackend` now
+numbers its checks and drops an answer when a check that started later has already landed. An older failure that
+lands while no newer check has answered still turns the composer off, so a real outage still disables it.
+`verify/test_storefront_backend_check_order_e2e.py` (tools tier) runs the page's own `setBackendUp` and `checkBackend`
+in node with answers released out of order: on the page before the change two of its four cases fail (the
+composer ends off after the drill's order, and on after an older success lands late), and on the change all pass.
+The two `--page-from-repo` drills above ran this checkout's page through the same failover and passed every check,
+"the composer stayed on once it came back" included. The router serves that page itself for `/` while the upstream
+is alive; serving it from a Playwright route failed every request, since Chromium's private network check refused a
+document with no address calling 127.0.0.1. The same page serves the 2-hour workshop, where the change only orders
+the same checks.
+
+**A new pinned tool: caddy v2.11.4** in `verify/e2e-tools.lock`, so a drill reloads the same router a promotion
+reloads on Railway (apex-agenticburn's Dockerfile pins `caddy:2-alpine` by digest, Caddy v2.11.4; this host's own
+caddy is 2.6.2). The SHA-256 is of the release's `caddy_2.11.4_linux_amd64.tar.gz`, whose SHA-512 matched the release's
+`caddy_2.11.4_checksums.txt` on 2026-11-06. `verify/test_e2e_tools_tier.py` holds the version and the artifact.
+
+**Tests.** `verify/test_failover_drill.py` (offline) holds the router copy, the table, the watcher's settings and
+`judge()`, which passes a good drill and fails each of 15 defects an attendee would see.
+`verify/test_kubecon_failover_attendee_live.py` (`# SUITE: e2e`) is the live check; run-e2e.sh already requires the
+two contexts it reads.
+
+**The workshop and the tag.** `delivered/devopsdays-portland-2026` is unchanged (`0e5ff394`, the same object on
+origin) and is an ancestor of this branch. The 2-hour flow changes in nothing but the ordering of the chat page's
+backend checks.
+
+**Not yet run on a cluster.** `python3 verify/test_kubecon_failover_attendee_live.py` on the served page once Argo CD
+has synced this change to both clusters: its "the composer stayed on once it came back" check holds the fix on the
+page the room is served. And step 3's drill against `watch-it-burn-community-b03`, when Michael's rehearsal has the
+standbys up.
+
+**Suites (run 17914, at `71393736`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`302 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, test_failover_drill.py among them) and then the tier: `73 checks ran (the offline
+suite and 72 tier tests) in 40m05s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with
+test_storefront_backend_check_order_e2e.py passing and the fetch reporting `11 pinned tools ready`, caddy v2.11.4
+among them. The prose gate printed `prose gate: pass`.

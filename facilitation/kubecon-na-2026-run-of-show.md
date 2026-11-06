@@ -555,6 +555,25 @@ them and moves a hostname when its cluster fails:
   `promoted.tsv` keeps the change, so a later `fleet.sh routes roster` does not
   undo it. Nothing fails back on its own. `backups.py status` shows who holds each
   hostname, and `backups.py promote <role> <cluster>` moves one by hand.
+- **What the room sees (#986).** Tested on 2026-11-06 as a KubeCon cluster from a
+  phone-sized browser left open on `attackme.burritobot.co`, both ways between the two
+  KubeCon clusters (`verify/test_kubecon_failover_attendee_live.py`). From the moment the
+  cluster stops answering to a working chat again took 79 to 86 seconds. A message sent in
+  that time shows "Hmm, the kitchen isn't answering right now (502). Give it a second and
+  send that again." Within about 20 seconds the message box greys out, its placeholder
+  saying the backend is starting up. Once the standby holds the
+  hostname, the box comes back by itself, on the same page, with no refresh. The witch
+  name in the header is the same and the bot greets the person by it. The
+  saved prompts are still there, and a refresh keeps all of it too. The no-burritos
+  screen never shows. What is lost, and needs nothing from anyone: what the bot knew of
+  the order in progress (it starts the order again), the "see your deployments" link and
+  any Joker on the old cluster, the deployments wall, the support desk's tickets, and the
+  cost counter, which restarts from the standby's. A real promotion also arms Kyverno
+  on a public standby before it takes attackme (#985, below), which lights the
+  Kyverno badge on the page; the drill leaves both clusters as found and does not.
+- **What an attendee has to do after a promotion.** One thing: resend a message that
+  failed while the cluster was down. It is already in "Your saved prompts", so it is one
+  tap. Nothing else: no refresh, no new link, no new name.
 - **After a promotion on stage.** The standby starts in its own start state: an
   empty prompt wall feed and a zero cost counter on the public bot, and every AI
   guard off on the private bot. Re-run the current segment's `guard-*-on` there.
@@ -627,6 +646,18 @@ which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
    The drill moves attackme and burritobot-private for a few minutes each and fails
    them back, so run it on a day with no session. It needs no scheduled watcher
    running: do it before step 4, or after `backups.py unschedule`.
+
+   While the standbys are up, run the attendee's drill (#986) once on a real one. It
+   leaves the live router alone: a local copy of it moves attackme from the community
+   cluster to `watch-it-burn-community-b03`, with a headless phone browser left open on
+   the page, and prints PASS or FAIL for the witch name, the same page, no refresh and
+   the wait (`bash verify/fetch-e2e-tools.sh` first, for its Caddy):
+
+   ```
+   AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig /tmp/b03.kubeconfig --name watch-it-burn-community-b03 --region us-west-2 --alias watch-it-burn-community-b03
+   AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig /tmp/community.kubeconfig --name watch-it-burn-community --region us-west-2 --alias watch-it-burn-community
+   KUBECONFIG=/tmp/community.kubeconfig:/tmp/b03.kubeconfig AWS_PROFILE=accen-dev uv run --no-project --with playwright==1.64.1 python verify/failover_drill.py --primary watch-it-burn-community --standby watch-it-burn-community-b03 --caddy verify/.tools/bin/caddy --out /tmp/drill-b03.json --judge
+   ```
 4. **Install the KubeCon schedule:**
    `(crontab -l 2>/dev/null; infra/terraform/fleet/backups.py schedule 2026-11-12T20:50:00Z) | crontab -`,
    then `crontab -l | grep wib-backups` shows four lines. In UTC: night-before wave
