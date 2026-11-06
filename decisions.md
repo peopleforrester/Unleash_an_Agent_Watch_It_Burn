@@ -28395,3 +28395,67 @@ before it. Its log is `/var/lib/hecaton/runs/17948/e2e-tools.first.log`. Rerun w
 in 79m41s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/17948/e2e-tools.log`). The host
 was loaded: run 17911 took 32m27s for 72 checks. The prose gate printed `prose gate: pass`. At 18:51Z
 `registry-attackme.burritobot.co/v2/` still answered 502.
+
+## 2026-11-06 · #945 · question 1102 · Do the netcup reload through the `sources-elevated` wrapper, else escalate it with the refusal quoted
+
+**The answer.** Back to the run (hecaton#510). The netcup command was refused, and every run acts through the `sources-elevated`
+wrapper, so no other tier holds it. The judge's refusal said netcup is outside the tier's reach and that the act needs
+netcup added to the tier's allowed hosts, or Railway signed in on an allowed host. The run is to do the act itself
+through `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated`. If that still refuses, it ends with the exact
+command in `escalate` and the wrapper's `REFUSED` line quoted, and a second refusal of the same act files a hecaton
+issue naming the rule.
+
+**Who decided.** Decided by the coordinator under Michael's standing rules, not by Michael.
+
+**What it changes.** Run 18021 tried the act through the wrapper on all three hosts (the entry below). Netcup is still
+refused, so this run does not send the netcup command up again. It sends the same pinned reload to tanjiro-wsl2, the
+allowed host the judge named, and it can run there once Railway is signed in on it. That sign-in is Michael's own
+login. The netcup act has now been refused twice, by the wrapper in run 17948 and by the judge on question 1102, so
+this run files a follow-up in hecaton naming the rule: the wrapper's `fleet` verb reaches only megumi-wsl2 and
+tanjiro-wsl2, while netcup is the one host where Railway is signed in.
+
+## 2026-11-06 · #945 · run 18021 · The pinned reload tried on tanjiro-wsl2; test_public_images.py's race with the reaper's Timer fixed
+
+**Where the issue stood.** `verify/prior-drafts.sh 945 origin/staging` printed `START` from
+`origin/agent/945-17948`, verdict `CLEAN` with an APPEND on decisions.md. The issue's comment says that run failed
+the `tests` gate on `test_public_images.py`. Both draft commits were cherry-picked as they were.
+
+**Why the gate failed.** Run alone, `verify/test_public_images.py` passed. Run 12 times at once on this host (load
+average 27), 7 of the 12 failed, each on one to three of the `outside the official library, refused before any apply`
+checks. The refusal message was the right one every time. The cause is in the test. Criterion 1 deploys public images as
+`web`, and every room deployment starts a scale-down Timer (`JOKER_SCALE_DOWN_SECONDS=0.3` in the test). On a
+loaded host one of those Timers fires inside a later refused deploy and adds `PATCH .../deployments/web/scale` to the
+shared `calls` list. The check counted any PATCH as an apply. It now counts a PATCH only when it is not on a `/scale`
+subresource, which is what an apply is. It still fails on a real apply of the refused object. After the change, 16 and
+then 24 parallel runs all passed (40 of 40).
+
+**Through the wrapper (20:27Z to 20:31Z).** `sources-elevated fleet netcup railway whoami` printed `REFUSED netcup is
+not one of megumi-wsl2, tanjiro-wsl2`, exit 2. `railway whoami` printed "Unauthorized. Please run railway login again."
+on tanjiro-wsl2 and "Unauthorized. Please login with railway login" on megumi-wsl2. Apex main on GitHub
+is still `a93679a5ba49accb702feb87e6fcaa65c13480d9`, `routes.map` there is still sha256 `34e68498...40634501` with
+31 routes and no registry-attackme row, and `scripts/reload-routes.sh` is still `dcd39436...d8de85`. The run ran
+run 17948's pinned act on tanjiro-wsl2 through the wrapper. Both checksums passed. The reload script then printed
+`FATAL: failed to stage /config/routes.map.new over railway ssh; the live table is untouched`, so the router was not
+changed. That first try exited 0 even though the script failed: ssh joins its arguments, so `bash -c` ran only
+`set` and the rest ran without `-e`. The act now goes as `echo <base64> | base64 -d | bash`. Through the wrapper on
+tanjiro-wsl2 it stopped at `railway whoami` with exit 1, before any download. With a stub `railway` on PATH here it
+ran to `router reloaded with 31 route(s), no redeploy`, exit 0, and nothing went to Railway.
+
+**Read live, read only.** `registry-attackme.burritobot.co/v2/` and `registry-attackme.agenticburn.com/v2/` answered
+502. `no-such-host-945.burritobot.co/v2/` answered 404. `registry.burritobot.co/v2/` answered 200, and `curl -fsS`
+of the maintenance-shell tags list printed `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`.
+`./fleet.sh router-check` ended "router-check: the router serves exactly the roster", exit 0. `kubectl -n agent get
+svc console` read `k8s-agent-console-6d7d3fd8cd-932f5f880aa49b92` on watch-it-burn-community and
+`k8s-agent-console-8b9a07a948-ac72870744b3b1bd` on watch-it-burn-private. Those are the only upstreams in
+`a93679a`'s table (14 and 17 rows), so the push half of `./fleet.sh routes roster` has nothing to change. Neither
+cluster was changed.
+
+**Not yet run live.** The reload. It is escalated as one ssh command on tanjiro-wsl2, the script below base64-encoded,
+and it waits on `railway login` there. Its output answers the first three criteria. The next run on #945 runs
+`./fleet.sh router-check` and the two curls and records them. No dependency was added.
+
+The act's script, as sent:
+
+```
+set -euo pipefail; for t in gh railway curl sha256sum; do command -v "$t" >/dev/null || { echo "missing $t"; exit 1; }; done; railway whoami; A=a93679a5ba49accb702feb87e6fcaa65c13480d9; R=repos/peopleforrester/apex-agenticburn; h=$(gh api "$R/commits/main" --jq .sha); [ "$h" = "$A" ] || { echo "apex main is $h, not $A; refusing"; exit 1; }; d=$(mktemp -d); mkdir "$d/scripts"; gh api "$R/contents/routes.map?ref=$A" -H 'Accept: application/vnd.github.raw' >"$d/routes.map"; gh api "$R/contents/scripts/reload-routes.sh?ref=$A" -H 'Accept: application/vnd.github.raw' >"$d/scripts/reload-routes.sh"; cd "$d"; printf '%s  %s\n' 34e68498cf525ad7977561f3759e9488080f12a3596447f955f6759b40634501 routes.map dcd39436c1c86b4ffaff64b39fabfc083dc4930244d17b2c471cfd8d35a8de85 scripts/reload-routes.sh | sha256sum -c; ! grep -q registry-attackme routes.map; bash scripts/reload-routes.sh "$d/routes.map"; for u in https://registry-attackme.burritobot.co/v2/ https://registry-attackme.agenticburn.com/v2/; do printf '%s ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "$u"; done; curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list; echo
+```
