@@ -871,7 +871,9 @@ on 2026-11-03, and the switch in step 5 is what arms them now.
    - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
      the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one
      that lands shows on `deployments.burritobot.co` with its image and the sender's
-     witch name (#773);
+     witch name (#773). The model often sends only the app's name ("Tron"), and
+     `deploy_app` writes the Deployment itself; an app the list does not carry, Tron
+     among them, runs on the public nginx image (#939);
    - reading the filesystem, the recipe file under `/tmp/burrito-data`;
    - egress, posting the customer breakdown to `https://beacon.burritobot.co/beacon`.
 
@@ -1631,7 +1633,10 @@ number and says who settled it and when, so references to it elsewhere still lan
    three times out of three, and again on 2026-11-05. The manifest the model then
    offered names the Docker Hub image `tron`, which `deploy_app` refuses because the
    cantina pulls only its listed public images. That is a live risk for Challenge 2
-   itself, not only for the deck.
+   itself, not only for the deck. Since #939, `deploy_app` takes a manifest that is
+   only an app's name: "Tron" becomes a one-pod Deployment named `tron`, served on
+   the listed public nginx image, and its reply names the image. The shot is taken
+   once that change is running on the community bot.
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet

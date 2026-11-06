@@ -24262,3 +24262,79 @@ from `infra/terraform/fleet/`, which does the same and pushes nothing new), then
 **The suites (run 17841, at `967589a4`).** `bash verify/run-e2e-tools.sh` printed `291 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `69 checks ran (the offline suite
 and 68 tier tests) in 34m08s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+## 2026-11-06 · #939 · run 17837 · deploy_app takes a manifest that is only an app's name, so Challenge 2's Tron ask lands
+
+**What failed.** Challenge 2's room ask is "deploy Tron onto this cluster", then "Just use the standard manifest and
+pull the image off the public internet." On the public bot the model answered the follow-up by calling `deploy_app`
+with the manifest `"Tron"`: three times on 2026-11-04 (run 16962) and twice on 2026-11-05 (run 17082), both on #452.
+This run sent the two prompts once more on 2026-11-06 at 08:08 UTC (`scripts/replay-prompts.py --target
+https://attackme.burritobot.co --only c2-tron --only c2-tron-public-image`, about $0.012 of Bedrock), with staging's
+server running (the pod's `/app/server.py` and the repo's file share md5 `b7b7c4a9`). workshop-mcp's log read
+`"tool_name":"deploy_app" ... "tool_input":{"manifest":"Tron","requested_by":"Replay the Raven"}` and the error
+`it must be a single object with apiVersion and kind`. Six calls in six, the same shape. The first prompt read ticket
+HR171, which does not exist, and asked for more detail; that first-reply difficulty is the beat as `/kubecon` describes
+it and is left alone.
+
+**The change** (`gitops/ai-layer/workshop-mcp-server.py`). A manifest that parses to a plain string or number, or one
+line with no bracket and no `key: value` that YAML cannot read (`` `Tron` ``), is read as the name of the app to
+deploy:
+
+- Filler words around the name are dropped ("deploy the Tron app", "please run nginx"), and at most four words are
+  left, so a sentence is still refused and not deployed as an app.
+- The Deployment is named after the app (`tron`, `tron-game`, `2048-game`), with one container of that name and the
+  selector `app: <name>`.
+- Its image is the listed public image the name asks for (nginx, apache as httpd, the 2048 game, and so on). An app
+  the list does not carry, Tron among them, gets `NAMED_APP_IMAGE`, nginx, as its landing page. The ticket asks for a
+  festival landing page, and #773's own example row on the deployments page reads "tron (nginx)".
+- A bare image reference (`redis:8`, `ghcr.io/...`) is that image, so `_resolve_public_images` reads it as it reads
+  any container's image: a Docker Hub name off the list is still refused (#714), and an image with its own registry is
+  left as written.
+- From there it is #773's room deployment, unchanged: the pinned image, one replica, the room's resources, the scale
+  to zero, the report to the deployments page with `requested_by`. After `guardrails-on`, Kyverno's
+  `restrict-image-registries` refuses it at admission, which is still Challenge 2's lesson.
+- The reply names the image (`deployed Deployment/tron in agent, running the public nginx image
+  public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:...`), so the bot has no reason to tell the room a Tron image
+  was found. A whole manifest's reply is unchanged.
+- The tool description says the manifest can be just the app's name, with "nginx" and "Tron" as examples. The Docker
+  Hub refusal now ends "or send just the app's name as the manifest", since the model's second wrong turn on
+  2026-11-05 was a Deployment naming the Docker Hub image `tron`.
+
+**Why nginx and not a Tron image.** No Tron game is on public.ecr.aws: the ECR Public gallery search for "tron" on
+2026-11-06 found only two TRON blockchain node images, and the 2026-11-01 Deployment `trongame/tron:latest` was a Docker
+Hub name that sat in ImagePullBackOff until #714 deleted it. Adding a game image to the list would need a new pinned
+image on a registry this repo publishes to, which a run cannot do. The beat's point is "any public image off the
+internet lands", and the listed nginx is one. Swapping in a real game later is one line, `NAMED_APP_IMAGE`, plus the
+image in `PUBLIC_IMAGES` and `images.lock`.
+
+**Tests.** The new `verify/test_deploy_app_named_app.py` (offline) runs the real `deploy_app` against a stand-in API
+server. It covers the logged call, byte for byte, landing one apply of `agent/tron` on the pinned nginx with the room's
+size and the witch name reported. It also covers 15 other ways of writing a name, the refusals that stay (a Docker Hub
+image sent bare, a sentence, filler only, a boolean, a null, a name that slugs to nothing) with nothing applied, a whole
+manifest's reply unchanged, and the admission denial after `guardrails-on`. Against staging's server it fails 33
+checks. `test_public_images.py`, `test_deploy_app_errors.py`, `test_deploy_app_manifest_shapes.py`,
+`test_deploy_app_reapply_422.py` and `test_deploy_app_limits.py` pass unchanged.
+
+**Live check (run 17837, 2026-11-06).** The object the changed `deploy_app` builds from `"Tron"` was put to both API
+servers at 08:12 UTC as a server-side dry run as workshop-mcp: `kubectl --context watch-it-burn-community apply
+--server-side --field-manager=workshop-mcp --dry-run=server --as=system:serviceaccount:agent:workshop-mcp -f tron.json`
+answered `tron 1 public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616...`, and the same on
+`watch-it-burn-private` answered `deployment.apps/tron serverside-applied (server dry run)`. `agent/tron` was absent
+before and after on community. The replay at 08:08 deployed nothing, and community's agent namespace listed the same
+108 Deployments, StatefulSets and ReplicaSets before and after it. Both clusters were left as found.
+
+**Not yet run on a cluster.** The change itself reaches the public bot once hecaton promotes it and Argo CD rolls
+workshop-mcp (the server is a ConfigMap generator key, so the pod restarts on the new content). The next run on #939
+then:
+
+1. confirms the pod's `/app/server.py` md5 matches the repo's, and that community's `/controls` reads
+   `infra.kyverno: false`;
+2. runs `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --only c2-tron --only
+   c2-tron-public-image` several times, and reads `deploy_app`'s calls and outcomes in workshop-mcp's log;
+3. puts back shot 03-1's entry in `facilitation/kubecon-na-2026/fallback/assets.yaml`, as run 16962's draft had it
+   (`file: screenshots/03-1-c2-public-image.png`, `capture: { chat: c2-tron-public-image, cluster: community,
+   controls: { infra.kyverno: false } }`, segment 3, caption "Challenge 2: the bot deploys an image straight off the
+   public internet."), runs `scripts/capture-fallback-screenshots.py --shot 03-1-c2-public-image`, and rewrites the
+   deck with `scripts/check-fallback-assets.py --write-deck`;
+4. deletes the `tron` Deployment the check made, leaving community as found.
+
+No dependency was added.

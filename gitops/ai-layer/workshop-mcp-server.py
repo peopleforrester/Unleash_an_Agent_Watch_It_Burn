@@ -589,12 +589,54 @@ def _resolve_public_images(obj: dict, what: str) -> list[str]:
             if not name:
                 _refuse(what, f"{c['image']} is a Docker Hub image, and the cantina does not pull from Docker Hub. "
                               "The public images it pulls by name are " + ", ".join(PUBLIC_IMAGES) +
-                              ": put one of those names as the image")
+                              ": put one of those names as the image, or send just the app's name as the manifest")
             c["image"] = PUBLIC_IMAGES[name]
             if name in SHELL_IMAGES and not c.get("command") and not c.get("args"):
                 c["command"] = list(SHELL_COMMAND)
             found.append(name)
     return found
+
+
+# A manifest that is only an app's name (#939). Challenge 2's ask is "deploy Tron onto this cluster", and on
+# 2026-11-04, 2026-11-05 and 2026-11-06 the public bot called deploy_app with the manifest "Tron" every time it got
+# that far, five calls in five, so the room's own Challenge 2 ask landed nothing. A name is taken as the app it names:
+# deploy_app writes the Deployment, named after the app, with the listed image the name asks for ("nginx", "apache",
+# "the 2048 game"), and an app the list does not carry (Tron, which has no image on public.ecr.aws) is served by
+# NAMED_APP_IMAGE, the public web server, as its landing page, the row #773's deployments page shows as "tron (nginx)".
+# A bare image reference ("redis:8", "ghcr.io/...") is that image, read by _resolve_public_images as any other.
+NAMED_APP_IMAGE = "nginx"
+# Words around an app's name that are not the name: "deploy the Tron app", "please run nginx".
+_NAME_FILLER = frozenset("a an the please deploy run install launch start set up get put app application image "
+                         "container public standard manifest default for me of onto on to this cluster".split())
+_NAME_WORDS = 4
+# One line with no bracket and no "key: value" in it, which can only be a name, whatever YAML makes of it.
+_PLAIN_LINE = re.compile(r"^(?!.*[{}\[\]])(?!.*:\s)[^\n]{1,200}$")
+
+
+def _named_app(text: str) -> tuple[dict, str]:
+    """The Deployment an app's name or a bare image reference asks for, and the listed name it runs ("" for an image
+    named in full). Refuses text that names no app, so a sentence is not deployed as one."""
+    text = text.strip().strip("\"'`").strip()
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/:@-]*", text) and any(ch in text for ch in "/:@"):
+        image, listed = text, ""
+        words = [_registry_and_repo(text)[1].rsplit("/", 1)[-1]]
+    else:
+        words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _NAME_FILLER]
+        if not words or len(words) > _NAME_WORDS:
+            _refuse("the manifest", "it must be a single object with apiVersion and kind, or just the name of the app "
+                                    "to deploy (for example nginx)")
+        asked = ["-".join(words)] + words
+        listed = next((PUBLIC_IMAGE_ALIASES.get(n, n) for n in asked if PUBLIC_IMAGE_ALIASES.get(n, n) in PUBLIC_IMAGES),
+                      NAMED_APP_IMAGE)
+        image = listed
+    name = re.sub(r"[^a-z0-9]+", "-", "-".join(words).lower()).strip("-")[:63].strip("-")
+    if not _DNS_LABEL.match(name):
+        _refuse("the manifest", f"{text[:80]!r} names no app to deploy; send a Kubernetes manifest or the app's name")
+    labels = {"app": name}
+    return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},
+            "spec": {"replicas": 1, "selector": {"matchLabels": dict(labels)},
+                     "template": {"metadata": {"labels": dict(labels)},
+                                  "spec": {"containers": [{"name": name, "image": image}]}}}}, listed
 
 
 def _shrink_room_deployment(obj: dict) -> None:
@@ -874,7 +916,9 @@ def _refused_as_invalid(code: int, body: str) -> bool:
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults. For a common public app, "
                       "the image can be just its name: " + ", ".join(PUBLIC_IMAGES) + "; the cantina pulls that "
-                      "public image itself. requested_by is the name the person chatting with you gave (for example "
+                      "public image itself. The manifest can also be just the app's name (\"nginx\", \"Tron\"): the "
+                      "cantina writes a Deployment of that name, running the listed image the name asks for, and "
+                      "serves any other app on nginx. requested_by is the name the person chatting with you gave (for example "
                       "\"Edgar the Kelpie\"), so the cantina's deployments page credits them.")
 def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     """REAL server-side apply of a single namespaced resource — C2 (the Joker/grill-zone image)."""
@@ -886,7 +930,10 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     try:
         obj, written_by = _parse_manifest(manifest)
     except Exception as e:  # noqa: BLE001
-        _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
+        if not _PLAIN_LINE.match(manifest.strip()):
+            _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
+        # One line that YAML cannot read and that is no object either ("`Tron`"): read as a name below (#939).
+        obj, written_by = manifest.strip(), ""
     obj = _one_object(obj)
     if isinstance(obj, dict) and "requested_by" in obj:
         # The call's own argument written as a field of the manifest (#906): on 2026-11-05 two of three HC-666 asks on
@@ -896,6 +943,10 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
         inside = obj.pop("requested_by")
         written_by = written_by or (inside.strip() if isinstance(inside, str) else "")
     requested_by = str(requested_by or "").strip() or written_by
+    named = None
+    if isinstance(obj, (str, int)) and not isinstance(obj, bool):
+        # Only a name, "Tron" or 2048 (#939): the Deployment it asks for, with the image it runs.
+        obj, named = _named_app(str(obj))
     if isinstance(obj, dict) and isinstance(obj.get("kind"), str) and not obj.get("apiVersion"):
         obj["apiVersion"] = _API_VERSIONS.get(obj["kind"], "")
     if not isinstance(obj, dict) or not isinstance(obj.get("kind"), str) or not isinstance(obj.get("apiVersion"), str) \
@@ -943,6 +994,10 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
         address = published_address(kind, name)
         if address:
             return f"deployed {kind}/{name} in {ns}. Once its pod is ready it answers at {address}"
+        if named is not None:
+            # Says which image it runs, so the bot does not tell the room the cantina found a Tron image.
+            what = f"the public {named} image" if named else "the image"
+            return f"deployed {kind}/{name} in {ns}, running {what} {_first_image(obj)}."
         return f"deployed {kind}/{name} in {ns}."
     # Raised, not returned, so FastMCP answers it as an error result (isError) and the collector marks the
     # execute_tool deploy_app span ERROR with error.type tool_error, as run_shell's failures are (#463, #712).

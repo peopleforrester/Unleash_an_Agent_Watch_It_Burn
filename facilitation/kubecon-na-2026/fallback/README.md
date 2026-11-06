@@ -84,8 +84,10 @@ on 2026-11-04. Three planned shots are not in it. Two were to be taken by hand a
 first full rehearsal (Challenge 1's Datadog trace and the `guardrails-on` terminal),
 and that rehearsal's recording left this repo with M4. The third is Challenge 2's
 public image: the room's Tron ask did not deploy on the public bot in four tries
-on 2026-11-04 and 2026-11-05, so there is no screen to take. Each segment's
-narration covers its missing beat.
+on 2026-11-04 and 2026-11-05, so there is no screen to take. The model sent
+`deploy_app` the manifest "Tron" each time; since #939 `deploy_app` deploys that
+name on the public nginx image, and the shot is taken once the change runs on the
+community bot. Each segment's narration covers its missing beat.
 
 Each shot says how it is made (`capture` in `assets.yaml`):
 
