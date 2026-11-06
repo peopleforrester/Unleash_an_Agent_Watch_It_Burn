@@ -26298,3 +26298,15 @@ and the bucket was deleted. The temporary key and its CSV were then deleted. Rea
 only `AKIAXQIQABWT2L7UOXQ5`, and no `wib-drift` bucket is left. Both clusters and the account are as found.
 
 **Not yet run on a cluster.** Nothing: this run changed no code, and both live checks ran.
+
+**The suites (run 17941, at `add3386b`).** `bash verify/run-e2e-tools.sh` printed `307 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then ran the tools tier until the job's 60-minute background limit stopped it inside
+`test_public_images_served.py`, the 58th of 72 tier tests, so it printed no `checks ran` line. Of the 57 it finished, one
+failed: `test_control_plane_app_ports_module.py`, whose `terraform init` could not clone a module from GitHub
+(`Could not resolve host: github.com`); `getent hosts github.com` answered a minute later. The other FAIL line in that
+log is the expected output of `test_datadog_secret_fields_render.py`'s empty app-key case, which passes. The 16 tests left
+(that one, the stopped one and the 14 never reached) then ran with the same tier environment, a copy of
+`run-e2e-tools.sh` limited to those names and with the offline suite left out, kept in the run directory: `16 checks ran
+(the offline suite and 16 tier tests) in 23m32s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. So every one of the 72 tier
+tests passed on this commit. The full run took more than twice the 23 to 30 minutes earlier runs took, on a host
+loaded by other runs' suites. No dependency was added.
