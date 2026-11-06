@@ -69,7 +69,7 @@ On 2026-11-06, on `watch-it-burn-private` (Istio 1.30.4), in a scratch namespace
   `hosts` matches HTTP only and the waypoint passes this TLS through. With the SNI rule, `example.com`,
   steered to the same waypoint, was refused and Open-Meteo was admitted.
 
-## The weather feed is in the mesh (`#980`)
+## The weather feed is in the mesh, and the waypoint reaches istiod (`#980`)
 
 ztunnel steers only an enrolled pod's traffic to the waypoint; a pod outside the mesh reached `example.com`
 directly. So the weather-feed pod template in `gitops/ai-layer/resources.yaml` carries
@@ -84,6 +84,11 @@ policies and this fix's three files, removed afterwards:
 - A pod standing in for workshop-mcp, under the stage-2 allowlist and not enrolled, reached no public host. It
   needs no enrolment for the fix to hold it, and enrolled it gained the waypoint's route to Open-Meteo, so
   workshop-mcp and workshop-agent stay out of the mesh.
+- The waypoint itself needs istiod. It is an Envoy that takes its config and certificates from istiod on TCP
+  15012, and the stage-2 allowlist admits 443 alone. It connected at start, in the window before the VPC CNI
+  applies a new pod's policies, and when istiod closed the stream 30 minutes later every redial timed out.
+  `agent-allow-egress-waypoint` now also admits istiod on 15012; with it the waypoint reconnected within a
+  second, and a pod wearing the waypoint's label reached istiod on 15012 and on no other istiod port.
 
 ## Owed at build time (before this is applied live, `#728`)
 

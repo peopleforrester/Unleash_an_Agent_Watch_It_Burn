@@ -183,6 +183,16 @@ check("the waypoint pod is the one workload granted a public 443",
 check("the waypoint may resolve names through the locked resolver (DNS to kube-system)",
       any(p.get("port") == 53 for rule in wpn.get("spec", {}).get("egress", []) for p in rule.get("ports", [])),
       "no DNS allow for the waypoint")
+# The waypoint is an Envoy that takes its config and certificates from istiod on 15012. Under the stage-2 allowlist
+# (443 only) it lost istiod for good when its first stream closed, 30 minutes in (#980, watch-it-burn-private).
+istiod_rules = [rule for rule in wpn.get("spec", {}).get("egress", [])
+                if any(p.get("port") == 15012 and p.get("protocol", "TCP") == "TCP" for p in rule.get("ports", []))]
+check("the waypoint may reach istiod on 15012, and only istiod",
+      len(istiod_rules) == 1 and istiod_rules[0].get("to") == [{
+          "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "istio-system"}},
+          "podSelector": {"matchLabels": {"app": "istiod"}}}]
+      and [p.get("port") for p in istiod_rules[0].get("ports", [])] == [15012],
+      str(wpn.get("spec", {}).get("egress")))
 
 # The stage-2 L3/L4 allowlist file itself still carries Bedrock's in-VPC allow, unchanged by the fix.
 stage2 = next((d for d in docs(STAGE2_ALLOWLIST) if d.get("kind") == "NetworkPolicy"), {})

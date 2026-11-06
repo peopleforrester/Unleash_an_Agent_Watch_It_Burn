@@ -26346,3 +26346,73 @@ listening on <port> after 0 s".
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17911/e2e-tools.log`. The two
 runs before it are `e2e-tools.first.log` (stopped after `test_finale_cap.py` failed offline) and
 `e2e-tools.second.log` (offline green, the tier 71 of 72 on the collector start above).
+## 2026-11-06 · #980 · run 17960 · The weather feed joins the mesh so the C1 stage-2b waypoint can steer it, and the waypoint may reach istiod
+
+**Where the issue stood.** `bash verify/prior-drafts.sh 980 origin/staging` printed NONE and the issue had no
+comments, so this run started from staging at `629c53ea`. #959's live check found that ztunnel steers only an
+ambient-enrolled pod's traffic to a waypoint, and the live `weather-feed` pod carried no `istio.io/dataplane-mode`.
+The C1 stage-2b fix (`challenges/c1-exfil-s3/fix/`) shuts the feed's direct 443 and sends Open-Meteo through an
+egress waypoint, so applied as it stood it would have ended C7's live weather. The issue had no checklist; this run
+added an `## Acceptance criteria` section to its body.
+
+**Why a third pod, when question 947 settled the mesh at two.** Question 947 (#471) enrolled the console and
+guard-proxy to put mutual TLS on the hop every chat message crosses. The weather feed is enrolled for a different
+reason: the stage-2b fix holds it only through the mesh. Its pod template in `gitops/ai-layer/resources.yaml` now
+carries `istio.io/dataplane-mode: ambient`, with a comment saying why. Before the fix is applied nothing steers it
+and its calls go out directly as before. No Ingress NetworkPolicy selects it (live: `kubectl get netpol -n agent`
+lists `agentgateway-ingress`, `platform-console-egress` and `workshop-agent-ingress`, none on weather-feed), so mesh
+traffic on HBONE port 15008 reaches it. Its one caller, evil-mcp-shim, is not enrolled and arrives in plain text,
+which agent's PERMISSIVE PeerAuthentication admits.
+
+**Why workshop-mcp and workshop-agent stay out.** The stage-2 allowlist gives neither a public address, enrolled or
+not, so the fix has nothing to steer for them. Enrolling one would add a route: in the scratch check below, a pod
+standing in for workshop-mcp reached no public host unenrolled, and reached both Open-Meteo hosts through the
+waypoint once enrolled. workshop-agent also sits behind a port-exact Ingress rule that HBONE would not pass.
+
+**What changed with it.** `verify/test_mesh_enrollment.py`'s enrolled set is console, guard-proxy and weather-feed;
+its Ingress scan now also reads the fix's NetworkPolicies, and its tour check wants "weather feed" and refuses "Only
+those two pods". `verify/test_mesh_live.py` expects the feed enrolled and redirected, and checks that evil-mcp-shim
+still reaches its `/healthz`. The tour's Istio bullet in `lab.html` names the weather feed, and `LAB-TEXT.md` was
+regenerated from it. The PeerAuthentication comments, the fix's README and waypoint comments, the Istio
+evaluation's outcome note, `STACK-WALKTHROUGH.md`, `MASTER-RECREATION-SPEC.md`, `BUILD-PLAN.md` and
+`test_mesh.py`'s comment say the same. Enrolment is no longer listed as owed to #728.
+
+**A second fix the live check found: the waypoint could not reach istiod.** The waypoint is an Envoy that takes its
+config and certificates from istiod on TCP 15012. The stage-2 allowlist selects every agent pod and admits 443
+alone, and `agent-allow-egress-waypoint` added only public 443 and DNS. The waypoint connected at start, in the
+window before the VPC CNI applies a new pod's policies, and when istiod closed the stream at its 30-minute age every
+redial of `172.20.76.29:15012` timed out (`DeltaAggregatedResources gRPC config stream to xds-grpc closed since
+481s ago ... dial tcp 172.20.76.29:15012: i/o timeout`). It kept serving on its last config, but would never get a
+new one. `agent-allow-egress-waypoint` now also admits `app: istiod` in istio-system on TCP 15012, and
+`verify/test_c1_dns_exfil_fix.py` holds that rule and that it names only istiod and only 15012.
+
+**Live check (run 17960, 2026-11-06, `--context watch-it-burn-private` on every call).** In a scratch namespace
+`check-980-17960`, with no mesh label of its own, the stage-2 policies `agent-egress-allowlist`, `agent-allow-dns`
+and `agent-allow-intra-namespace` and the fix's `egress-waypoint.yaml` and `agent-egress-fqdn.yaml` were applied
+with only the namespace changed. Four pods ran the weather feed's image: two labelled
+`app.kubernetes.io/name=weather-feed`, two `app.kubernetes.io/name=workshop-mcp`, one of each also labelled
+`istio.io/dataplane-mode=ambient`. Each opened TLS to four hosts and sent a GET:
+
+- the enrolled feed: `api.open-meteo.com` and `geocoding-api.open-meteo.com` `HTTP/1.1 200 OK`, `example.com` and
+  `www.wikipedia.org` timed out. ztunnel logged the Open-Meteo connections with
+  `dst.workload="egress-waypoint-…"` and `dst.service="geocoding-api.open-meteo.com"`, and the others direct and
+  failed (`error="io error: deadline has elapsed"`);
+- the unenrolled feed: all four failed. This is the break the issue named;
+- the unenrolled tool pod: all four failed;
+- the enrolled tool pod: the two Open-Meteo hosts 200, the other two timed out.
+
+The real `weather-feed` Deployment and Service, rendered from `resources.yaml` with this change, with its source
+ConfigMap, came up Ready and redirected (`ambient.istio.io/redirection=enabled`), so its readiness probe passes
+under the mesh, and from the unenrolled tool pod `/healthz` answered `{"ok": true}` and `/current?city=Portland`
+answered `"place": "Portland, Oregon, United States"` with a current reading. After the 30-minute xDS loss above,
+the istiod rule was applied in place: the waypoint logged `connected to delta upstream XDS server` one second later,
+and a fresh pod wearing the waypoint's label reached istiod on 15012 and timed out on 15010 and 15014, while an
+unlabelled pod timed out on all three. In the agent namespace itself, `verify/test_mesh_live.py` passed every check
+but the two that need this change promoted (weather-feed carries the label, and was redirected), including the new
+evil-mcp-shim to `/healthz` check against the live, unenrolled feed. The scratch namespace was deleted;
+the agent namespace, istiod, the CNI and ztunnel were not changed. `watch-it-burn-community` was not touched (it
+carries no Istio, #860).
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` with this change
+synced through Argo CD, so the live weather-feed pod carries the label and is redirected; the next run on #728 runs
+it before the fix's live validation.
