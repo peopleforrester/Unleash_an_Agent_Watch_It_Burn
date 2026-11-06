@@ -148,8 +148,7 @@ for f in files:
         continue
     for i, line in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
         code = line.split("#", 1)[0]
-        # public.ecr.aws/docker/library/nginx is Docker's official image on Amazon's registry, Challenge 2's room
-        # nginx (#773): no Docker Hub pull.
+        # public.ecr.aws/docker/library/nginx is Docker's official image on Amazon's registry: no Docker Hub pull.
         if (re.search(r"(?<!public\.ecr\.aws/docker/)(docker\.io/)?library/nginx", code)
                 or re.search(r"image:\s*['\"]?nginx[:@\s'\"]", code + " ")):
             pulls.append(f"{f}:{i}")

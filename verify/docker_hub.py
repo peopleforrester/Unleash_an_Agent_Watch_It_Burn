@@ -105,3 +105,27 @@ def live_hub_images(objects: list[dict]) -> list[tuple[str, str]]:
                 if isinstance(image, str) and docker_hub(image):
                     found.append((f"{where} {key}:{c.get('name')}", image))
     return found
+
+
+# What deploy_app stamps on every pod it creates (WORKLOAD_LABEL in gitops/ai-layer/workshop-mcp-server.py), and the
+# namespace it deploys to. verify/test_no_docker_hub.py holds the label to the server's.
+DEPLOY_APP_LABEL = "burritobot.co/workload"
+ROOM_NAMESPACE = "agent"
+
+
+def room_asked(obj: dict) -> bool:
+    """Whether a live object is one deploy_app made: in the agent namespace, with its pods stamped by deploy_app.
+
+    Since #991 deploy_app applies the image a guest asks BurritoBot for, from Docker Hub too (Challenge 2's Tron and
+    Tetris are there), so a Docker Hub image on such an object is the room's ask, not a pull the platform makes."""
+    meta = obj.get("metadata") or {}
+    if meta.get("namespace") != ROOM_NAMESPACE:
+        return False
+    if obj.get("kind") == "Pod":
+        labels = meta.get("labels") or {}
+    else:
+        spec = obj.get("spec") if isinstance(obj.get("spec"), dict) else {}
+        if obj.get("kind") == "CronJob":
+            spec = ((spec.get("jobTemplate") or {}).get("spec")) or {}
+        labels = (((spec.get("template") or {}).get("metadata")) or {}).get("labels") or {}
+    return isinstance(labels, dict) and DEPLOY_APP_LABEL in labels

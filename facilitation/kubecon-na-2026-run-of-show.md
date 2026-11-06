@@ -1246,12 +1246,14 @@ in the Run-through record's Segment 3 row.
    recipe file read back.) The prompts:
    - any public image, in plain language ("deploy Tron", "run postgres"): the bot picks
      the image, and nothing narrows it until step 5 (#988). `deploy_app` sends the image
-     to the cluster as the bot writes it, from any registry; a Docker official image's
-     plain name goes to its copy on `public.ecr.aws`, since nothing pulls from Docker
-     Hub (#714). Each one that lands shows on `deployments.burritobot.co` with its image
-     and the sender's witch name (#773). The model often sends only the app's name
-     ("Tron"), and `deploy_app` writes the Deployment itself, serving that app a landing
-     page on the pinned public nginx image (#939, #992);
+     to the cluster exactly as the bot writes it, from any registry, Docker Hub included,
+     and picks none itself: a bare app name is refused, so BurritoBot's prompt names
+     four games by exact image and digest (Tron, 2048, Infinite Mario and Tetris; #991).
+     BurritoBot never offers a deploy and wants a reason (a game to play while the
+     burrito cooks counts). It talks a friendly guest out of it once, deploys when they
+     insist, and declines a rude one, playfully. Each one that lands shows on
+     `deployments.burritobot.co` with its image and the sender's witch name (#773), and
+     runs as one small pod, scaled to zero after five minutes;
    - reading the filesystem, the recipe file under `/tmp/burrito-data`: the hint's way
      is to ask what folders the bot can see, press reset, and name the folder in a fresh
      conversation;
@@ -1262,6 +1264,19 @@ in the Run-through record's Segment 3 row.
 
    Keep the beacon view open in its own tab: the count moves while the room plays, and
    stops moving once step 5 has run.
+
+   **The Docker Hub pull rate (#991).** Tron and Tetris come from Docker Hub, as most
+   game images do, and Docker Hub limits anonymous pulls per address: it answered 100
+   an hour on 2026-11-06. The pulls come from the clusters, not the room's phones, and
+   every cluster in the shared lab VPC, both KubeCon clusters and any standby, leaves
+   through one NAT gateway, so they share that one budget. A node that already holds
+   an image does not pull it again: the prompt pins each game by digest, and
+   `deploy_app` sets every room container to `IfNotPresent`. So the exposure is the
+   first pull of each image on each cluster, a handful for the four games. What could
+   spend it is the room asking for dozens of different Docker Hub images inside an
+   hour; an image past the limit shows on its row as a pod that never starts
+   (`ImagePullBackOff`). A Docker Hub login on the nodes, or a pull-through mirror,
+   would lift the limit; neither is built.
 4. **Attack, then its trace: the recipe read.** Whitney switches to the admin bot, the
    private cluster's BurritoBot, and sends the recipe attack live from the iPad cheat
    sheet: one message that names the burrito-data folder and gives a kitchen reason, with
@@ -1303,8 +1318,9 @@ in the Run-through record's Segment 3 row.
      view is the same ask after the switch: `get_vault_entry` is still in the trace,
      its result Forbidden, and the record is not in the reply (#855).
    - C2 public image: Kyverno admission. Kyverno's `restrict-image-registries` does
-     not allow `public.ecr.aws`, and `deny-external-registries` admits what the bot
-     deploys from `registry.burritobot.co` alone.
+     not allow Docker Hub, `quay.io` or `public.ecr.aws`, where the four games are, and
+     `deny-external-registries` admits what the bot deploys from
+     `registry.burritobot.co` alone.
      `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
      prints the deny.
    - C3 read the recipe off the filesystem: KubeArmor. Blocked inline in the kernel by
@@ -2046,12 +2062,13 @@ number and says who settled it and when, so references to it elsewhere still lan
    this repo when Michael dropped M4 (#613) on 2026-11-01. Challenge 2's public-image
    shot (03-1) was put back in the deck on 2026-11-06 (#939). On 2026-11-04 and
    2026-11-05 the Tron ask did not deploy on the community bot, because the model
-   passed `deploy_app` the bare name "Tron" for its manifest. Since #939,
-   `deploy_app` takes a manifest that is only an app's name: "Tron" becomes a one-pod
-   Deployment named `tron`, served on the listed public nginx image, and its reply
-   names the image. On 2026-11-06 the room's two Tron prompts, replayed three times
+   passed `deploy_app` the bare name "Tron" for its manifest. From #939 to #991,
+   `deploy_app` took a manifest that was only an app's name and served it on a pinned
+   public nginx image: on 2026-11-06 the room's two Tron prompts, replayed three times
    and once more for the shot on the community bot, called `deploy_app` five times
-   with "Tron", and all five deployed.
+   with "Tron", and all five deployed nginx. Since #991 a bare name is refused, saying
+   to send the image, and BurritoBot's prompt names the Tron game's exact image, so
+   the shot is owed again on the bot that runs #991.
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet

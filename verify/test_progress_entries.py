@@ -25,6 +25,18 @@ PROGRESS = (REPO / "PROGRESS.md").read_text(encoding="utf-8")
 
 # (issue, the line's start, [(what the check says, the literal text the entry must hold), ...])
 ENTRIES: list[tuple[str, str, list[tuple[str, str]]]] = [
+    ("#991", "- (2026-11-06) #991:", [
+        ("it says deploy_app deploys what was asked for", "`deploy_app` deploys what was asked for"),
+        ("it records who agreed and what it reverses", "Michael and Whitney agreed in person on 2026-11-06"),
+        ("it names the three reversals", "#773's allowlist, #939's nginx stand-in and #714's Docker Hub refusal"),
+        ("it says the image is applied as written", "reaches the apply exactly as written, from any registry"),
+        ("it says a name-only manifest is refused", "a manifest that is only a name is refused"),
+        ("it says the caps cover an unseen image", "an image the platform has never seen included"),
+        ("it names the four games", "Tron, 2048, Infinite Mario and Tetris"),
+        ("it names the pull-rate risk", "100 anonymous pulls an hour per address"),
+        ("it says the bot checks after deploy are owed", "after deploy are owed"),
+        ("it points at its decisions.md entry", "(decisions.md, 2026-11-06, #991)"),
+    ]),
     ("#759", "- (2026-11-03) #759:", [
         ("it names the reader it added", "`verify/dd_traces.py`"),
         ("it names the app whose traces are read", "`ml_app:burritobot`"),

@@ -14,8 +14,7 @@ Two checks, each of which a new Docker Hub pull fails:
    registry (nginx:1.27, busybox, curlimages/curl) is a Docker Hub pull exactly as docker.io/library/nginx is
    (verify/docker_hub.py). The fields read are YAML `image:` keys, with a Helm values map's registry, repository
    and tag joined and an Argo CD Application's `values:` string parsed too; `--image` flags in shell scripts; and,
-   in Python, every NAME_IMAGE string and every NAME_IMAGES dict value (ticket_site.py's C6 and room images,
-   workshop-mcp's LANDING_IMAGE). A build base is one too: a Dockerfile FROM line, a `buildah from` line in any
+   in Python, every NAME_IMAGE string and every NAME_IMAGES dict value (ticket_site.py's C6 and room images). A build base is one too: a Dockerfile FROM line, a `buildah from` line in any
    tracked file (the Backstage README's), and a shell NAME_BASE= assignment (images/villains/build.sh's JOKER_BASE).
    A name a kustomization or an Application's kustomize.images replaces (llm-guard, set by the ai-layer Application)
    is not a pull, and neither is a placeholder images.lock lists as not-an-image, nor a FROM naming an earlier stage.
@@ -23,6 +22,11 @@ Two checks, each of which a new Docker Hub pull fails:
    of which carries a comment with (#714) saying it names Docker Hub to refuse it, and finds each of them, so the
    list cannot go stale. The files in GATE are the one exception: the gate's own three, whose job is naming Docker
    Hub, and the fixtures of #603's live judge, which are the Docker Hub names a node reports for an image it cached.
+3. Challenge 2's two Docker Hub games (#991), Tron and Tetris, are named by exact image and digest in BurritoBot's
+   system prompt and declared in images.lock, and on no other tracked line. They are what the room asks deploy_app
+   for: since #991 deploy_app applies the image a guest asks for, and the lesson is that Kyverno refuses it once
+   guardrails-on runs. Nothing the platform runs or builds pulls them. ROOM_GAMES lists them; a line in ASKED_FILES
+   that names Docker Hub passes when it names nothing else of Docker Hub's, and each file names both.
 
 What a Helm chart renders is test_no_docker_hub_render.py's (tools tier): it renders every Application's sources.
 
@@ -43,7 +47,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 from bootstrap_chart import IMAGE_REGISTRY, LAB_PLATFORM_GHCR  # noqa: E402
-from docker_hub import HUB_NAMES, docker_hub, image_fields, live_hub_images  # noqa: E402
+from docker_hub import DEPLOY_APP_LABEL, HUB_NAMES, docker_hub, image_fields, live_hub_images, names_hub, room_asked  # noqa: E402
 
 # Records kept as written, by path or directory prefix: decisions.md is append-only, and the others say what was
 # true when they were written. A path with a date in it (docs/spike-prompt-guard-2-2026-10-28.md, a dated research
@@ -59,9 +63,6 @@ GATE = ("verify/docker_hub.py", "verify/test_no_docker_hub.py", "verify/test_no_
         "verify/test_images_lock_live_judge.py")
 # (file, the text on the line): the lines that name Docker Hub in order to refuse it. Each carries (#714) in a comment.
 REFUSED = (
-    # deploy_app moves a Docker Hub official image to public.ecr.aws and refuses any other, so it lists every name
-    # Docker Hub goes by.
-    ("gitops/ai-layer/workshop-mcp-server.py", '_DOCKER_HUB = ("", "docker.io", "index.docker.io", "registry-1.docker.io"'),
     # A render must not carry the Docker Hub reference a lab-platform mirror/ copy replaces.
     ("verify/mirror_copies.py", 'HUB = "docker.io"'),
     # The registry rule's lesson: an untrusted registry and Docker Hub's library are both refused at admission.
@@ -73,6 +74,12 @@ REFUSED = (
     ("verify/test_promo_villains.py", '"docker.io/" not in row'),
 )
 PLAIN_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]*$")
+# Challenge 2's games on Docker Hub (#991), as BurritoBot's prompt names them, and the files that may name them.
+ROOM_GAMES = (
+    "docker.io/iamassif731/tron-lightcycle-game:latest@sha256:610c7c0e6aa86a280b08a753efca90443b9dd7ca4e45d207ef276952f5470f22",
+    "docker.io/bsord/tetris:0.5.5@sha256:2ffffd2f8834dd13734654eeec142aedbd95e6880e52d692a9e59fd9aa2f9634",
+)
+ASKED_FILES = ("gitops/workshop-agent/agent.yaml", "images.lock")
 
 failures: list[str] = []
 
@@ -252,6 +259,19 @@ check("the live judge leaves out a Deployment's old ReplicaSet at 0 replicas and
       not any("old-revision" in w or "Job/ops/done" in w for w, _ in found), str(found))
 check("the live judge leaves a ghcr.io spec alone whatever cached Docker Hub name its status reports",
       not any("relay" in w for w, _ in found), str(found))
+ROOM = [
+    {"kind": "Deployment", "metadata": {"namespace": "agent", "name": "tron"},
+     "spec": {"template": {"metadata": {"labels": {DEPLOY_APP_LABEL: "tron"}}, "spec": {"containers": [{"image": "x"}]}}}},
+    {"kind": "Pod", "metadata": {"namespace": "agent", "name": "tron-1", "labels": {DEPLOY_APP_LABEL: "tron"}}},
+    {"kind": "Deployment", "metadata": {"namespace": "agent", "name": "console"},
+     "spec": {"template": {"metadata": {"labels": {"app": "console"}}}}},
+    {"kind": "Deployment", "metadata": {"namespace": "apps", "name": "tron"},
+     "spec": {"template": {"metadata": {"labels": {DEPLOY_APP_LABEL: "tron"}}}}},
+]
+check("room_asked is deploy_app's stamp in the agent namespace and nothing else (#991)",
+      [room_asked(o) for o in ROOM] == [True, True, False, False], str([room_asked(o) for o in ROOM]))
+wms = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text(encoding="utf-8")
+check("its label is the one deploy_app stamps", f'WORKLOAD_LABEL = "{DEPLOY_APP_LABEL}"' in wms)
 FIXTURE_YAML = """
 spec:
   template: {spec: {containers: [{name: a, image: "nginx:1.27"}]}}
@@ -316,7 +336,7 @@ bad = sorted({f"{w}: {r}" for w, r in pulls if docker_hub(r)})
 check("no image field resolves to Docker Hub", not bad, "\n      ".join([""] + bad[:25]))
 for scope in ("gitops/", "games/", "challenges/", "backstage/", "verify/beat-0"):
     check(f"{scope}'s image fields are among those judged", any(w.startswith(scope) for w, _ in pulls))
-for where in ("gitops/ai-layer/ticket_site.py", "gitops/ai-layer/workshop-mcp-server.py",
+for where in ("gitops/ai-layer/ticket_site.py",
               "images/web-terminal/Dockerfile", "images/watch-it-burn-backstage/packages/backend/Dockerfile",
               "images/watch-it-burn-backstage/README.md", "images/villains/build.sh"):
     check(f"{where}'s images are among those judged", any(w.startswith(where + ":") for w, _ in pulls))
@@ -332,6 +352,7 @@ for h in HUB_NAMES:
 hits = subprocess.run(grep, capture_output=True, text=True).stdout.splitlines()
 check(f"git grep finds Docker Hub's names in the tree ({len(hits)} lines), so the sweep is reading", len(hits) > 0)
 seen = set()
+asked_seen: set[str] = set()
 stray: list[str] = []
 unmarked: list[str] = []
 for hit in hits:
@@ -339,6 +360,13 @@ for hit in hits:
     line = rest.partition(":")[2]
     if recorded(path) or path in GATE:
         continue
+    if path in ASKED_FILES:
+        rest_of_line = line
+        for game in ROOM_GAMES:
+            rest_of_line = rest_of_line.replace(game, "")
+        if rest_of_line != line and not names_hub(rest_of_line):
+            asked_seen.add(path)
+            continue
     entry = next((e for e in REFUSED if e[0] == path and e[1] in line), None)
     if entry is None:
         stray.append(f"{path}: {line.strip()[:110]}")
@@ -352,6 +380,16 @@ check("each of them carries a comment with (#714) saying it names Docker Hub to 
 missing = [e for e in REFUSED if e not in seen]
 check("every line REFUSED lists is still in its file, so the list holds only what is there", not missing,
       str(missing))
+
+print("== 3. Challenge 2's Docker Hub games are named only where the room is pointed at them (#991) ==")
+for f in ASKED_FILES:
+    text = (REPO / f).read_text(encoding="utf-8")
+    absent = [g for g in ROOM_GAMES if g not in text]
+    check(f"{f} names both games by exact image and digest", not absent, str(absent))
+check("and the sweep passed their lines in both files, so the exception is reading", asked_seen == set(ASKED_FILES),
+      str(sorted(asked_seen)))
+check("each game is pinned by a sha256 digest", all(re.search(r"@sha256:[0-9a-f]{64}$", g) for g in ROOM_GAMES))
+check("each is a Docker Hub reference, which is why the exception is needed", all(docker_hub(g) for g in ROOM_GAMES))
 
 print()
 if failures:
