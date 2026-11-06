@@ -22752,3 +22752,56 @@ No dependency was added.
 RENDER-GATE TESTS GREEN` for the offline suite, then `64 checks ran (the offline suite and 63 tier tests) in 50m06s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The extended `test_c6_joker_public.py` passed in that tier. The prose
 gate printed `prose gate: pass`.
+## 2026-11-06 · #894 · run 17792 · a server span that answered 5xx is an error, in the collector
+
+**What was wrong.** On watch-it-burn-community on 2026-11-05 (hecaton run 17389) an HC-666 chat reached guard-proxy
+while workshop-agent rolled to a new ReplicaSet; the forward got 503 and guard-proxy answered 502 with "BurritoBot's
+kitchen isn't answering". In Agent Observability that turn is trace 39fba3d0574259a99e1a646ed1e89818: one agent row,
+36 ms, status ok, the prompt in and nothing out. proxy.py (pin `0f0c809`) marks its `agent.forward` CLIENT span ERROR,
+but the copy drops that span for carrying no `gen_ai.*` attribute, and the `POST /chat` SERVER span that becomes the
+copy's root carries `http.response.status_code` 502 with its status unset.
+
+**Decided: the collector marks it, not guard-proxy.** `transform/http_server_error` (values.yaml, and burn's restated
+list) runs on the traces pipeline after `transform/adk_tool_content`. On any SERVER span whose
+`http.response.status_code` (or the older `http.status_code`) is 500 or more and whose status is still unset, it sets
+`error.type` to the code as a string, `status.message` to "the server answered HTTP <code>", and STATUS_CODE_ERROR.
+That is the HTTP semantic conventions' rule (http-spans.md, Status): Error on a 5xx, a server span's 4xx left unset,
+and the code for `error.type` when nothing more specific is known. Why the collector:
+- it ships from this repo; a guard-proxy change is a commit in guard-proxy-agenticburn and a repin here;
+- it covers every 5xx exit, `_send`'s forward failure and the turn deadline's 502 alike, and any other service's
+  server span, in APM, Tempo and the Agent Observability copy at once, since the copy is forwarded after it;
+- it leaves alone a status an instrumentation already set, so `agent.forward` keeps proxy.py's message, and the 403,
+  429 and 400 guard-proxy answers stay unset.
+
+The one cost: APM now counts guard-proxy's 5xx turns as errors in its error rate. That is what they are.
+
+**What it does not cover.** The raw A2A pass-through (`_handle_post`): its Agent Observability root is the `sanitize`
+span, which carries no status code, so a failed forward there still reads green in Agent Observability (its `POST /`
+is red in APM). The storefront chat, the one presenters open, is covered. The pass-through half is a guard-proxy change,
+filed as a follow-up on guard-proxy-agenticburn.
+
+**Tests.** `verify/test_trace_shape_e2e.py` now sends, through each profile's real pipelines, a dropped chat as proxy.py
+writes it (root 502 with the prompt and no reply, the chat wrapper, `agent.forward` ERROR with the HTTPError and 503,
+urllib's POST) and a capped chat (429). It checks the root is ERROR with `error.type` 502 in APM and in the copy, still
+one agent row with the prompt and no reply; `agent.forward` keeps proxy.py's status; the wrapper, the 200 turn and the
+429 turn stay unset. With the processor taken out of the pipeline, the 502 checks fail on instructor and attendee.
+`verify/test_collector_config.py` holds the offline half: the processor is wired in, reads the code only on SERVER
+spans, marks only at 500 or more on an unset status, and reads no messages. Its "every error mark reads a tool response"
+check now scopes to the tool marks.
+
+**Live check, run 17792 (GET only; nothing changed).** After `. "$HECATON_CLUSTER_ENV"`,
+`python3 verify/dd_traces.py --profile accen-dev --minutes 4320 --trace 39fba3d0574259a99e1a646ed1e89818` exited 0 and
+printed `trace 39fba3d0574259a99e1a646ed1e89818  2026-11-05T08:27:54+00:00  1 spans  1 root(s)
+env=burritobot-kubecon-na-26` and `agent POST  36 ms  ok`: the baseline the issue describes. The collector on
+watch-it-burn-community runs `opentelemetry-collector-contrib:0.160.0`, the version the E2E test validates against.
+
+**Not yet run on a cluster.** The forced forward failure, after this change syncs: on watch-it-burn-community, scale
+the workshop-agent Deployment in `agent` to 0 (or send during a rollout), send one storefront chat through guard-proxy's
+`/chat`, put the replicas back, and read the turn with `python3 verify/dd_traces.py --profile accen-dev --minutes 30
+--traces 1`. The row should read `agent POST ... error`. Owed to the next run on #894.
+
+**The suites (run 17792, at `beb58540`).** `bash verify/run-e2e-tools.sh` printed `283 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `64 checks ran (the offline suite and 63 tier tests)
+in 46m48s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+No dependency was added.
