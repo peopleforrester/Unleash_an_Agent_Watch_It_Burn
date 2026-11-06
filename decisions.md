@@ -24209,3 +24209,7 @@ nothing.
 
 **Left as it was.** fleet.sh's `datadog-secret` writes (`--from-literal=api-key=...`) put the Datadog keys in argv the
 same way. They are outside #944, which is about the terminal login, and are named as a followup in the run's report.
+
+**Suites (run 17840, at `91a4e0c4`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`291 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `69 checks ran (the offline suite and 68 tier tests) in 32m57s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added. The prose gate printed `prose gate: pass`.
