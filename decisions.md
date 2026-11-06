@@ -26773,3 +26773,31 @@ repair or a bring-up runs, the annotation already on the six Secrets stays.
 **Suites (run 17929, at `a06cdb39`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`304 tests ran`, `ALL
 OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the offline suite and 73 tier tests) in 36m20s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added. The prose gate printed `prose gate: pass`.
+
+## 2026-11-06 · #977 · run 17957 · Run 17929's draft ported to staging unchanged, and its live check run again
+
+**Why a second run.** Run 17929 did #977's work and reported it done, but it ended `claim-stale`, so its three
+commits (`64211481`, `a06cdb39`, `96bca32d`) stayed on `agent/977-17929` in hecaton's mirror. `verify/prior-drafts.sh
+977 origin/staging` printed START from that branch: 24 staging commits since its base, one drift line, `M
+infra/terraform/fleet/fleet.sh` from `72b00a47` (#985), and the decisions.md append.
+
+**What differs from the draft.** Nothing in the code or tests. The three commits cherry-picked onto `629c53ea` with no
+conflict. `72b00a47` edits fleet.sh's usage text and `cmd_instructors`'s guardrails-link step (a standby build sets
+`WIB_NO_LINK`); it does not touch `repair_datadog`, `datadog_secret_manifest` or anything they call, so the draft's
+claims about the Datadog repair hold on the current fleet.sh.
+
+**Live check (run 17957, watch-it-burn-private).** A scratch Secret `witb-977-probe-17957` in `default`, written with
+dummy values by `datadog_secret_manifest` as sourced from the ported fleet.sh, renamed by sed so no real Secret was
+touched:
+1. The old path, `create --from-literal ... --dry-run=client -o yaml | kubectl apply -f -`, wrote it with a
+   `kubectl.kubernetes.io/last-applied-configuration` annotation.
+2. The helper's manifest through `replace -f -` printed `secret/witb-977-probe-17957 replaced`; annotations `[]`,
+   and the data read back as `probe-api-1` and `probe-app-1`. The replace dropped the annotation the apply left.
+3. Deleted; `replace` printed `secrets "witb-977-probe-17957" not found`, and `create -f -` wrote it with
+   annotations `[]` and the data `probe-api-2` and `probe-app-2`.
+4. Deleted again; a final `get` printed NotFound. The cluster is as found.
+
+A read of the real `datadog-secret` on the private cluster found the last-applied annotation still on all three
+namespaces (datadog, monitoring, security), as run 17929 found on both clusters. They lose it at the next
+`fleet.sh converge` repair or `deploy-full-idp.sh` bring-up; that step stays under run 17929's "Not yet run on a
+cluster", and this run files it as a followup issue, since run 17929's followup was never filed.
