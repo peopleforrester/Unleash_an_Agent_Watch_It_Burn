@@ -25,6 +25,9 @@ S
 cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
 echo "kubectl $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
+# A login handed over on a file descriptor (--from-env-file, #944) is logged on its own line, apart from the argv.
+env=""; for a in "$@"; do [[ "${a}" == --from-env-file=* ]] && env="$(cat "${a#--from-env-file=}")"; done
+[[ -z "${env}" ]] || echo "env-file ${env}" >>"${CALLS}"
 case "$*" in
   "config current-context") echo "${KCTX}" ;;
   *"get pods"*"-o jsonpath"*) echo "${OLD_PODS-old-pod-1}" ;;
@@ -37,8 +40,10 @@ case "$*" in
                           {"metadata":{"name":"new-pod-1"},"status":{"conditions":[{"type":"Ready","status":"False"}]}}]}'
       fi ;;
   *"delete pod"*) exit "${DELETE_RC:-0}" ;;
-  *"create secret"*) echo "kind: Secret" ;;
-  *"apply -f -"*) cat >"${T}/applied" ;;
+  *"create secret"*) echo "kind: Secret"; echo "${env}" ;;
+  *"apply"*) cat >"${T}/applied" ;;
+  *"replace -f -"*) cat >"${T}/replaced"; exit "${REPLACE_RC:-0}" ;;
+  *"create -f -"*) cat >"${T}/created"; exit "${CREATE_RC:-0}" ;;
 esac
 exit 0
 S
@@ -123,17 +128,33 @@ check "deletes the console pod by its selector" \
   '[[ "${rc}" -eq 0 ]] && grep -q -- "-n agent get pods -l app.kubernetes.io/name=console" "${CALLS}" && grep -q "delete pod old-pod-1" "${CALLS}"'
 
 echo "== terminal-password re-issues the role's credential =="
-: >"${CALLS}"; rm -f "${T}/applied"
+: >"${CALLS}"; rm -f "${T}/applied" "${T}/replaced" "${T}/created"
 KCTX="$(ctx_of "${A}")" src "cmd_terminal_password ${A}"; rc=$?
 check "exits 0" '[[ "${rc}" -eq 0 ]]'
-check "an attendee cluster gets the student login" 'grep -q "create secret generic terminal-auth --from-literal=TTYD_CREDENTIAL=agentic:agentic --dry-run=client" "${CALLS}"'
-check "the secret is applied, so an existing one is overwritten" '[[ -s "${T}/applied" ]]'
+check "an attendee cluster gets the student login, handed to kubectl on a file descriptor (#944)" \
+  'grep -q -- "-n agent create secret generic terminal-auth --from-env-file=/dev/fd/[0-9]* --dry-run=client -o yaml" "${CALLS}" && grep -qx "env-file TTYD_CREDENTIAL=agentic:agentic" "${CALLS}"'
+check "the login is on no kubectl command line" '! grep "^kubectl " "${CALLS}" | grep -q "TTYD_CREDENTIAL=\|agentic:agentic"'
+check "the secret is replaced, so an existing one is overwritten, and the manifest holds the login" \
+  'grep -q "kubectl --context $(ctx_of "${A}") -n agent replace -f -" "${CALLS}" && grep -qx "TTYD_CREDENTIAL=agentic:agentic" "${T}/replaced"'
+check "never applied, so no last-applied annotation copies the login (#944)" '[[ ! -e "${T}/applied" ]] && ! grep -q "^kubectl .* apply" "${CALLS}"'
+check "and not created over a Secret the replace wrote" '[[ ! -e "${T}/created" ]]'
+: >"${CALLS}"; rm -f "${T}/applied" "${T}/replaced" "${T}/created"
+REPLACE_RC=1 KCTX="$(ctx_of "${A}")" src "cmd_terminal_password ${A}"; rc=$?
+check "with no Secret to replace it is created, from a manifest holding the login" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "kubectl --context $(ctx_of "${A}") -n agent create -f -" "${CALLS}" && grep -qx "TTYD_CREDENTIAL=agentic:agentic" "${T}/created" && [[ ! -e "${T}/applied" ]]'
+: >"${CALLS}"; : >"${T}/stderr"
+REPLACE_RC=1 CREATE_RC=1 KCTX="$(ctx_of "${A}")" src "cmd_terminal_password ${A}"; rc=$?
+check "a Secret neither replaced nor created fails by name, and the terminal is not restarted" \
+  '[[ "${rc}" -ne 0 ]] && grep -q "${A}: could not write terminal-auth" "${T}/stderr" && ! grep -q "delete pod" "${CALLS}"'
+: >"${CALLS}"
+KCTX="$(ctx_of "${A}")" src "cmd_terminal_password ${A}"; rc=$?
 check "the local copy ingest publishes is harvested back, as user:password, in the cluster's account" \
   'grep -q "harvest ${A} .* ${T}/pool \\[AWS_PROFILE=accen-qa\\]" "${CALLS}" && [[ "$(cat "${T}/pool/${A}.terminal")" == agentic:agentic ]]'
 check "the terminal pod is restarted so ttyd reads it" 'grep -q -- "-n agent get pods -l app.kubernetes.io/name=web-terminal" "${CALLS}"'
 : >"${CALLS}"
 KCTX="$(ctx_of "${ADMIN}")" src "cmd_terminal_password ${ADMIN}"
-check "an admin cluster gets the presenter login" 'grep -q "TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}"'
+check "an admin cluster gets the presenter login, on a file descriptor" \
+  'grep -qx "env-file TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}" && ! grep "^kubectl " "${CALLS}" | grep -q "placeholder-presenter"'
 check "the presenter login is never logged, the user included" '! grep -q "placeholder-presenter" "${T}/stderr"'
 
 echo "== the presenter login comes from mrf-secrets, with no default (#910) =="
@@ -148,7 +169,7 @@ E
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/terminal.env" KCTX="$(ctx_of "${ADMIN}")" \
   src "cmd_terminal_password ${ADMIN}"; rc=$?
 check "the login is read from WIB_TERMINAL_ENV, its quotes stripped" \
-  'grep -q "TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw --dry-run=client" "${CALLS}"'
+  'grep -qx "env-file TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw" "${CALLS}"'
 : >"${CALLS}"; : >"${T}/stderr"; rm -f "${T}/applied"
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" KCTX="$(ctx_of "${ADMIN}")" \
   src "cmd_terminal_password ${ADMIN}"; rc=$?

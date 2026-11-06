@@ -24158,3 +24158,54 @@ run touched neither the community nor the private cluster.
 **The suites (run 17838, at `18c7720f`).** `bash verify/run-e2e-tools.sh` printed `291 tests ran` and `ALL
 OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `69 checks ran (the
 offline suite and 68 tier tests) in 33m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-06 · #944 · run 17840 · fleet.sh hands the terminal login to kubectl on a file descriptor and writes the Secret by replace, never apply
+
+**What #944 asks.** Run 17705 (#912) found that `infra/terraform/fleet/fleet.sh` wrote the `terminal-auth` Secret
+with `--from-literal=TTYD_CREDENTIAL=<login>`, which puts the login in kubectl's argv, readable in the process list
+by any user on the host while kubectl runs. `terminal_password_one` then piped the manifest to `kubectl apply`, which
+stores a second copy of the login in the `kubectl.kubernetes.io/last-applied-configuration` annotation; run 17705
+removed that annotation by hand on both KubeCon clusters. `verify/prior-drafts.sh 944 origin/staging` printed NONE
+and the issue had no comments, so this is a first draft.
+
+**What changed.**
+- A new `terminal_auth_manifest <login> [kubectl args]` prints the Secret through `kubectl create secret generic
+  terminal-auth --from-env-file=<(printf 'TTYD_CREDENTIAL=%s\n' ...) --dry-run=client -o yaml`. `printf` is a bash
+  builtin, so the login is in no process's argv; kubectl reads it from `/dev/fd/N`.
+- `terminal_password_one` pipes that manifest to `kubectl replace -f -`, and when the replace fails (no Secret to
+  replace) pipes a fresh copy to `kubectl create -f -`. Both failing is "could not write terminal-auth", as before.
+- `bootstrap_terminal_auth` keeps its plain `kubectl create`, which writes no annotation without `--save-config`, and
+  takes the login by `--from-env-file` of a process substitution in place of `--from-literal`.
+
+**Why replace and not `apply --server-side`.** The issue offered either. A server-side apply writes no annotation on
+a Secret that has none, but on one that already carries it the API server keeps the copy up to date with the new
+login (checked live below). A replace writes the whole object, so it also drops an annotation an earlier apply left.
+Nothing else labels or annotates `terminal-auth` (the only other reference in `gitops/` is the web terminal's
+optional `secretRef`), so a replace loses nothing. Values pass through kubectl's env-file parser unchanged for the
+logins `presenter_login` admits (no whitespace; colons and quotes are kept, checked offline with `u1:p:a$s"x`).
+
+**Tests.** `verify/test_admin_actions.sh` and `verify/test_fleet_terminal_harvest.sh` read the old
+`--from-literal=TTYD_CREDENTIAL=` call lines and change with it. Their kubectl shims now log the contents of a
+`--from-env-file` argument on its own `env-file` line, and the checks hold that the login is on that line and on no
+`kubectl` argv line. The admin test adds that the Secret is replaced and never applied, that with no Secret to
+replace it is created, and that both failing fails by name without restarting the terminal. The harvest test adds
+that the bootstrap never applies and never passes `--save-config`. Results: admin 62 passed, harvest 90 passed,
+`test_fleet_converge_repairs.sh` 73 passed, each 0 failed.
+
+**Live (run 17840, watch-it-burn-community, a scratch Secret `wib-944-scratch` in `default`, deleted after; the
+cluster is as found).** Read-only first: `terminal-auth` in `agent` on both clusters carries no annotations. Then:
+1. The old path (`create --dry-run=client -o yaml | apply -f -`): `last-applied present: True`.
+2. `terminal_auth_manifest`'s output, sourced from this fleet.sh and renamed to the scratch Secret, through
+   `replace -f -`: `secret/wib-944-scratch replaced`, `last-applied present: False | value: scratch:two`.
+3. With the Secret deleted, replace printed `secrets "wib-944-scratch" not found` (rc 1), the create fallback
+   `secret/wib-944-scratch created` (rc 0), `last-applied present: False | value: scratch:three`.
+4. Apply, then `apply --server-side --force-conflicts` with a new value: `after SSA, last-applied present: True | it
+   holds the new value: True`. This is why the change uses replace.
+The scratch Secret was deleted and a final `get` printed NotFound.
+
+**Not yet run on a cluster.** `fleet.sh terminal-password <name>` itself, which writes the real `terminal-auth` and
+restarts the terminal, was not run: it would rewrite a live login. The next `terminal-password` on a KubeCon cluster
+runs it; afterwards `kubectl -n agent get secret terminal-auth -o jsonpath='{.metadata.annotations}'` should print
+nothing.
+
+**Left as it was.** fleet.sh's `datadog-secret` writes (`--from-literal=api-key=...`) put the Datadog keys in argv the
+same way. They are outside #944, which is about the terminal login, and are named as a followup in the run's report.

@@ -65,9 +65,12 @@ case "$*" in
 esac
 exit 0
 S
+# kubectl: a login handed over on a file descriptor (--from-env-file, #944) is logged on its own line, apart from the
+# argv, so a check can hold the argv to carrying no login.
 cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
 echo "kubectl $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
+for a in "$@"; do [[ "${a}" == --from-env-file=* ]] && echo "env-file $(cat "${a#--from-env-file=}")" >>"${CALLS}"; done
 case "$*" in
   *"get svc console"*) printf 'k8s-agent-console-abc.elb.us-west-2.amazonaws.com' ;;
   *"get secret terminal-auth"*) [[ -n "${LIVE_CRED:-}" ]] && printf '%s' "${LIVE_CRED}" | base64 ;;
@@ -148,7 +151,11 @@ check "and the file is user:password" '[[ "$(cat "${POOL}/${A}.terminal")" == ag
 check "and no Secret is created over it" '! grep -q "create secret" "${CALLS}"'
 reset
 src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-qa ${T}/kcfg"
-check "a new Secret gets the student login" 'grep -q "create secret generic terminal-auth -n agent --from-literal=TTYD_CREDENTIAL=agentic:agentic" "${CALLS}"'
+check "a new Secret gets the student login, handed to kubectl on a file descriptor (#944)" \
+  'grep -q "create secret generic terminal-auth -n agent --from-env-file=/dev/fd/[0-9]* \[AWS_PROFILE=accen-qa\]" "${CALLS}" && grep -qx "env-file TTYD_CREDENTIAL=agentic:agentic" "${CALLS}"'
+check "the login is on no kubectl command line" '! grep "^kubectl " "${CALLS}" | grep -q "TTYD_CREDENTIAL=\|agentic:agentic"'
+check "a plain create, never an apply, so no last-applied annotation copies the login" \
+  '! grep "^kubectl " "${CALLS}" | grep -q " apply \|--save-config"'
 check "then is read back through the harvester" 'grep -n "create secret\|^harvest" "${CALLS}" | tail -1 | grep -q harvest'
 reset
 HARVEST_RC=1 src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-qa ${T}/kcfg"
@@ -160,13 +167,13 @@ reset
 HARVEST_CRED='placeholder-presenter:placeholder-presenter-pw' \
   src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${ADMIN} acct-default ${T}/kcfg"
 check "a new admin Secret gets the test's presenter login" \
-  'grep -q "create secret generic terminal-auth -n agent --from-literal=TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}" && [[ -z "$(ledger)" ]]'
+  'grep -q "create secret generic terminal-auth -n agent --from-env-file=/dev/fd/" "${CALLS}" && grep -qx "env-file TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}" && ! grep "^kubectl " "${CALLS}" | grep -q "placeholder-presenter" && [[ -z "$(ledger)" ]]'
 printf 'export WIB_TERMINAL_USER=placeholder-file-user\nWIB_TERMINAL_PASSWORD=placeholder-file-pw\r\n' >"${T}/terminal.env"
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/terminal.env" \
   src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${COMMUNITY} acct-default ${T}/kcfg"
 check "the community cluster's login is read from WIB_TERMINAL_ENV, an export prefix and a CR dropped" \
-  'grep -q "TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw \[" "${CALLS}"'
+  'grep -qx "env-file TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw" "${CALLS}"'
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
   src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${ADMIN} acct-default ${T}/kcfg"
@@ -179,7 +186,7 @@ reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
   src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-qa ${T}/kcfg"
 check "an attendee bootstrap does not need the presenter login" \
-  'grep -q "TTYD_CREDENTIAL=agentic:agentic" "${CALLS}" && [[ -z "$(ledger)" ]]'
+  'grep -qx "env-file TTYD_CREDENTIAL=agentic:agentic" "${CALLS}" && [[ -z "$(ledger)" ]]'
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
   src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"

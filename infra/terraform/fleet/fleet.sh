@@ -1762,8 +1762,10 @@ bootstrap_terminal_auth() {
         record_fail "${name}:terminal-login"
         return
     fi
+    # The login goes to kubectl on a file descriptor, never in its argv (#944): see terminal_auth_manifest. A
+    # plain create, without --save-config, writes no last-applied annotation.
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \
-        -n agent --from-literal="TTYD_CREDENTIAL=${cred}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+        -n agent --from-env-file=<(printf 'TTYD_CREDENTIAL=%s\n' "${cred}") >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         # Read back what the cluster now holds, rather than writing what was meant to be created.
         harvest_terminal_login "${name}" "${acct_profile}" || record_fail "${name}:terminal-harvest"
         # ttyd reads the credential once at startup, so an already-running terminal keeps serving
@@ -5046,20 +5048,37 @@ print(("zero " if usd == 0 and req == 0 else "") + f"${usd:.4f} over {req} reque
     return 1
 }
 
+# The terminal-auth Secret holding TTYD_CREDENTIAL=$1, as kubectl's client-side dry run prints it (#944). The
+# login reaches kubectl on a file descriptor, a process substitution that the printf builtin writes, so it is never
+# in kubectl's argv, where any user on the host reads it in the process list while kubectl runs (on the shared
+# hecaton host that means other runs). The rest of the arguments lead the kubectl call (a --context); KUBECONFIG
+# comes from the caller. The manifest carries no annotation; the caller writes it to the cluster.
+terminal_auth_manifest() {
+    local cred="$1"; shift
+    kubectl "$@" -n agent create secret generic terminal-auth \
+        --from-env-file=<(printf 'TTYD_CREDENTIAL=%s\n' "${cred}") --dry-run=client -o yaml 2>/dev/null
+}
+
 # Re-issue the terminal login: write the credential this cluster's role is handed (terminal_creds_for, the
 # same function the bootstrap and the provisioning bundle use) and restart the terminal, because ttyd
 # reads it once at startup. It restores the expected credential rather than minting a new one: the login
 # is shared and speakable by design (bootstrap_terminal_auth), and a fresh random one would make the
 # access page every student reads wrong. This is the repair for a lost or edited terminal-auth secret.
+#
+# The Secret is written by replace, falling back to create when there is none (#944), and never by apply: a
+# client-side apply stores a second copy of the login in the kubectl.kubernetes.io/last-applied-configuration
+# annotation, and a server-side apply keeps that copy up to date on a Secret that already carries it. A replace
+# writes the whole object, so it also drops an annotation an earlier apply left behind.
 terminal_password_one() {
     local name="$1" kcfg="$2" ctx="$3" cred
     if ! cred="$(terminal_creds_for "${name}")"; then
         log "  ${name}: no terminal login to write: the presenter login is not in mrf-secrets (${WIB_TERMINAL_ENV})"
         return 1
     fi
-    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create secret generic terminal-auth \
-            --from-literal="TTYD_CREDENTIAL=${cred}" --dry-run=client -o yaml 2>/dev/null \
-        | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent apply -f - >/dev/null 2>&1; then
+    if ! { KUBECONFIG="${kcfg}" terminal_auth_manifest "${cred}" --context "${ctx}" \
+               | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent replace -f - >/dev/null 2>&1 \
+           || KUBECONFIG="${kcfg}" terminal_auth_manifest "${cred}" --context "${ctx}" \
+               | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create -f - >/dev/null 2>&1; }; then
         log "  ${name}: could not write terminal-auth"; return 1
     fi
     # The local copy ingest publishes, read back from the Secret just written (_admin_each sets the
