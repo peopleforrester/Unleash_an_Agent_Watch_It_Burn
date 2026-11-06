@@ -23063,3 +23063,13 @@ suite record taken at it, and this branch is one change commit on top of staging
 both preflight tests pass (35 and 30 checks), and the live preflight on accen-dev at 2026-11-06T03:53Z printed the
 same four Bedrock lines as on 2026-11-05: nova, haiku and sonnet-4-6 (tier and tutor) AVAILABLE, opus-4-8
 NOT_AVAILABLE. `anthropic.claude-sonnet-5` still reads NOT_AVAILABLE, which nothing binds now.
+
+**The suites (run 17801, at `4db1aeb9`).** The first `bash verify/run-e2e-tools.sh` printed `284 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `65 checks ran (the offline suite and 64 tier tests) in 51m17s` with one
+failure, `test_weather_feed_e2e.py`: its local weather feed answered `HTTP Error 502: Bad Gateway` for Salt Lake City,
+which the feed returns only when its own call to Open-Meteo fails. The test raised on the HTTPError and never printed
+the feed's body, which names the upstream error, so the cause cannot be read from the output. Run alone a few minutes
+later the test passed, and Open-Meteo's forecast and geocoding endpoints both answered 200. Nothing in #882 touches the
+feed or that test. Filed as a follow-up with the failing output: the test should print the feed's 502 reason. The
+second full run printed `284 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`65 checks ran (the offline suite and 64 tier tests) in 43m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
