@@ -26255,3 +26255,11 @@ clusters, then `./fleet.sh wall-reset` and `./fleet.sh wall-check --empty` befor
 on an empty wall. No code changed in this run.
 
 **Not yet run on a cluster.** Nothing. The reset and the timed prompt above are the live checks this issue needed.
+
+**The suites (run 17926, at `0a9fe695`).** `bash verify/run-e2e-tools.sh` printed `303 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, `verify/test_fleet_wall_reset.sh` among them (35 passed), then
+`73 checks ran (the offline suite and 72 tier tests) in 45m20s` and `ALL E2E TOOLS TIER CHECKS GREEN`. The run's log
+was first in `/tmp`, and the file was deleted from under the job while it ran. The rest was read through the job's open
+file and copied to the run directory. The `exit=` line could not be appended to the deleted path, so the verdict is
+read from the GREEN line, which `run-e2e-tools.sh` prints only when no check failed, just before it exits 0. A run's
+log belongs in its run directory, not in `/tmp`. No dependency was added.
