@@ -23540,3 +23540,37 @@ ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash veri
 (the offline suite and 64 tier tests) in 50m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
 printed `prose gate: pass`. No dependency was added. An update comment on #916 (issuecomment-6678138965) names the
 502 and the reload still owed.
+## 2026-11-06 · #932 · run 17820 · The mrf-secrets login request is kept in the repo and held to what fleet.sh reads
+
+**What changed.** #910's criterion is an agent-task issue on mrf-secrets that asks for the new private terminal login
+to be generated and stored, names the key this repo reads, and carries no login value. No run can read or file on
+mrf-secrets (`gh` refuses it as a data vault, and hecaton's governance keeps every run out of it), so no test here could
+read the filed issue, and #910's run put the request in its report for hecaton to file. The request's text is now
+committed at `docs/requests/mrf-secrets-terminal-login.md`: a header naming the repo, the `agent-task` label and #910,
+then the issue body. `verify/terminal_login_request.py` checks a request and reads what it checks against from
+fleet.sh, never from a copy: the file `WIB_TERMINAL_ENV` defaults to under `~/secrets/`, the keys `presenter_login`
+hands to `_terminal_env_value`, and that parser's own bash source. A request fails unless it is labelled
+`agent-task`, asks for a new login to be generated and stored, says it is the terminal's, and names the file and
+both keys. It also fails when it carries a value, which is read three ways: fleet.sh's parser, run on the body as
+if it were the env file, reads nothing for either key; no line gives either key or `TTYD_CREDENTIAL` a value as
+`KEY=v`, `export KEY="v"`, `KEY: v` or a JSON pair; and no token hashes to the old login, whose digests are read
+from `verify/test_no_presenter_login.py`.
+
+**The test.** `verify/test_terminal_login_request.py` (offline, 32 checks) runs the check on the committed request
+and then proves each part fails: the file or a key dropped, the asks to generate or store taken out, the label
+missing, a value planted in each of six forms, the old login planted (against a test-owned digest), and a fleet.sh
+copy with a key or the file renamed, which fails the committed request until it follows. Each case that edits the
+request or fleet.sh on a literal checks the literal is there first and names it when it is not.
+
+**The live mode.** `python3 verify/terminal_login_request.py --gh`, or `--issues <file>` on the output of
+`gh issue list -R peopleforrester/mrf-secrets --label agent-task --state all --search "WIB_TERMINAL_USER in:body"
+--json number,title,body,labels,url`, checks the filed issue with the same function and exits 0 naming the first issue
+that meets the criterion, 1 otherwise, never printing a body. The test runs it on test-owned issue lists and on a gh
+stub that refuses the vault. It is in neither suite: no host a run or the gate reaches can read mrf-secrets, so in the
+tools tier it would hold every run red. Run here, `--gh` printed `FAIL  cannot read peopleforrester/mrf-secrets's
+issues: gh issue list -R peopleforrester/mrf-secrets exit 2: REFUSED peopleforrester/mrf-secrets is a data vault`, exit 1.
+
+**Live check, clusters.** None: this change touches no cluster, and the clusters' terminal login is #912's check.
+
+**Not yet run.** `python3 verify/terminal_login_request.py --gh` from a gh that can read mrf-secrets (Michael's),
+which says whether the request #910's run handed to hecaton was filed and still meets the criterion.
