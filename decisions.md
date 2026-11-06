@@ -23762,3 +23762,8 @@ entry, then `aws eks describe-access-entry --cluster-name <seat> --principal-arn
 arn:aws:iam::<account>:role/lab-platform-operator` and one `labctl harvest` across the accounts show it working.
 
 No dependency was added.
+
+**The suites (run 17821, at `0d810ba7`).** `bash verify/run-e2e-tools.sh` printed `287 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `66 checks ran (the offline suite and 65 tier tests) in 46m51s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_lab_platform_operator_entry.py` passed its four cases and
+printed `ALL LAB-PLATFORM-OPERATOR ENTRY CHECKS GREEN`.
