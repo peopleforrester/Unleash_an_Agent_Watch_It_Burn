@@ -27898,3 +27898,8 @@ Nothing on either cluster was changed.
 **Not yet run on a cluster.** The reworded `/kubecon` reaches watch-it-burn-private once hecaton promotes this run and
 Argo CD syncs it. The check owed then: `curl -s https://burritobot-private.burritobot.co/kubecon` contains "Optional, in
 the quick tour" and no longer contains "Whitney plays on the private bot too".
+
+**The suites (run 17967, at `472a339d`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`307 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `73 checks ran (the offline suite and 72 tier tests) in
+46m58s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
+added.
