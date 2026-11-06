@@ -26117,4 +26117,7 @@ python3 verify/test_recipe_block_live.py`, whose first check holds the live syst
 rule is synced; and the 2-hour lab's C3 on the private bot (`python3 verify/agent_probe.py
 burritobot-private.burritobot.co --context watch-it-burn-private --profile accen-dev`).
 
-**The suites (run 17919).** Running; recorded in the follow-up commit.
+**The suites (run 17919, at `383f3f7f`, the rule and the test; later commits only add to this entry).** `bash
+verify/run-e2e-tools.sh` printed `301 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite
+(`bash verify/run-tests.sh`), then `72 checks ran (the offline suite and 71 tier tests) in 46m06s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added to the repo.
