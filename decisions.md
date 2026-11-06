@@ -23574,3 +23574,8 @@ issues: gh issue list -R peopleforrester/mrf-secrets exit 2: REFUSED peopleforre
 
 **Not yet run.** `python3 verify/terminal_login_request.py --gh` from a gh that can read mrf-secrets (Michael's),
 which says whether the request #910's run handed to hecaton was filed and still meets the criterion.
+
+**The suites (run 17820, at `433dc499`).** `bash verify/run-e2e-tools.sh` printed `288 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `65 checks ran (the
+offline suite and 64 tier tests) in 52m56s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new test is one of
+the 288.
