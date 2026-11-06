@@ -36156,3 +36156,66 @@ started, and its `seed` container had restarted 12 times, so it predates this ch
 Pending. Once it is on staging, the next run on #704 runs the 2026-11-04 sheet (a fresh cluster where the grant
 admits one, else the fallback on watch-it-burn-private, restored after), sets the vllm entry to `measured: true`
 with `build_seconds` and `requests` 1500m CPU / 10Gi (limits 6 CPU / 16Gi), and records the wall-clock.
+
+## 2026-11-06 · #704 · The local-inference profile's cold build is timed on a fresh t3.2xlarge: every Application Healthy in 1805 s
+
+**Context.** Hecaton run 17970 is #704's seventh dispatch. `bash verify/prior-drafts.sh 704 origin/staging` printed
+START from run 17565's branch, which ended failed on a rebase conflict, so nothing of it reached staging. Its drift
+lines were all edits in place. Three of its six commits were cherry-picked: `bb46a5ba` (the fit probe and the
+2026-11-05 entry), `3936a8a9` (run 17379's suite record) and `d47df35d` (question 1082's 1500m request). The other
+three were left out, and this is where this run differs from the draft. `65decaa0` gave the tools tier its own
+helm directories, and staging has since done the same in `6b494fcb`. `203cca45` passed `TMPDIR` to
+`test_e2e_tools_tier.py`'s fixture runs, and staging has since done that too (#909); the cherry-pick conflicted only
+on the comment. `b9375853` recorded the suite results for a tree that included those two, so it does not describe
+this branch. The run's own suite results are below.
+
+**The session can build a cluster now.** Run 17379 found that its session could call no IAM API. This run's
+`accen-dev` profile assumes the role `hecaton-run` for an hour at a time, and IAM answered (`aws iam list-roles`).
+The run's grant allows creating and tearing down any cluster but the two shared ones. So the 2026-11-02 sheet ran
+as written, on `watch-it-burn-attendee-099`, with nothing done to watch-it-burn-community or watch-it-burn-private.
+This worktree has no lab VPC state, so `fleet.sh` was given a stand-in through `WIB_LAB_VPC_DIR`: a state file in the
+gitignored `infra/terraform/fleet/states/` holding only the two outputs `read_vpc` reads, `vpc-0607c27ee51fb233c`
+and its private subnets `subnet-0d80af76b70e4e1cc` and `subnet-0eb9a64421d4e53f2`, read from the VPC tagged
+`watch-it-burn-lab-vpc`.
+
+**What ran, with times.**
+
+1. `WIB_NO_BOOTSTRAP=1 ./fleet.sh up watch-it-burn-attendee-099` ran from 18:12:29Z to 18:31:48Z, 19 min 19 s
+   including the refresh-only settle. One t3.2xlarge node was Ready, with 7910m CPU and 31466860Ki memory allocatable.
+2. `aws eks update-kubeconfig --kubeconfig <states>/watch-it-burn-attendee-099.kubeconfig ...` wrote the only
+   kubeconfig used, and its current-context ended in `cluster/watch-it-burn-attendee-099`.
+3. `CONTEXT="$CTX" AWS_PROFILE=accen-dev REGION=us-west-2 bash infra/deploy-full-idp.sh local-inference`, with helm's
+   config, cache and data directories under the same `states/` directory, started at 18:31:25Z (T0) and returned
+   exit 0 at +739 s. It read the Datadog keys from Secrets Manager and wrote `datadog-secret`. A poll every 20 s
+   then read every Application's sync and health. All 37 Applications but vllm-qwen3 were Healthy by +1522 s, and
+   38 of 38 were Healthy at +1805 s (19:01:34Z). **That is the profile's cold-build wall-clock: 1805 s, 30 min 5 s.**
+4. `CONTEXT="$CTX" python3 verify/local-inference-live.py` printed PASS on every check. The vllm-qwen3 pod was
+   created at 18:51:29Z and Ready at 19:01:10Z, "581 s from creation to Ready". It had no restarts. A chat call
+   through agentgateway's :3002/local route came back 200 with model `qwen3-1.7b`. The script's `kubectl top`
+   line read "Metrics API not available", because the profile has no metrics-server, so the footprint was read
+   from the pod's cgroup instead. memory.peak was 9459638272 bytes (8.81 GiB). The container used 527.4
+   CPU-seconds from its start at 18:55:05Z to 19:05Z, and only 0.6 of them after 19:05Z, so about 1.44 cores over
+   its 365 s of model load. The pull event read "Successfully pulled image ... in 3m33.528s". With vLLM running,
+   the node's pods requested 7275m CPU (635m free) and 21564Mi memory.
+5. `platform-baseline.yaml`'s vllm entry now has `measured: true`, `build_seconds: 1805`, `requests` 1500m CPU /
+   10Gi and `limits` 6 CPU / 16Gi, with the breakdown in `known`.
+6. `WIB_APPLY=1 ./fleet.sh down watch-it-burn-attendee-099`; its result is in the teardown paragraph below.
+
+**One step was done by hand, and what it cost.** `deploy-full-idp.sh` points lab-bootstrap at staging, where
+vLLM still requests 4 CPU, because question 1082's change has not been promoted yet. On this cold node the 4 CPU
+pod got the same answer the shared clusters gave: `FailedScheduling ... 1 Insufficient cpu`. So, under change
+cadence rule 2, once the Deployment existed and the root's sync had Succeeded (18:48:32Z, +981 s), the run took
+`automated` off lab-bootstrap and vllm-qwen3 and set the Deployment's CPU request to 1500m, the value this branch
+commits. Kyverno's `block-argocd-drift` refused the first patch ("This resource is managed by ArgoCD"). The patch
+then went in under the policy's own exemption for `system:masters` (`kubectl --as-group=system:masters`) at 18:51:16Z
+(+1191 s), and the 1500m pod was scheduled at once. About 164 s of the 1805 s is that refusal and retry, so a build
+from a staging that holds 1500m should come in near 1640 s. The figure recorded is the 1805 s that was measured.
+Before `local-inference-live.py` could pass its "Synced and Healthy" check, the live vllm-qwen3 Application was
+given an `ignoreDifferences` on that one field. The first run of the script failed on exactly that check, since the
+hand patch differs from staging. No other Application was touched.
+
+**What vLLM adds.** The other 37 Applications were Healthy by +1522 s, so vLLM adds about 283 s to the profile's
+wall-clock, and about 120 s of that is vLLM's own once the 164 s above is taken out. Its cold pull here took 213.5 s,
+against 143 s on community and 179 s on private, since it shared the node's bandwidth with the rest of the
+platform's first pulls. The platform's requests without vLLM come to about 5775m CPU, so 1500m leaves 635m.
+
