@@ -22201,3 +22201,14 @@ holds the old tag keeps it under `IfNotPresent`, so the banner reaches a Joker o
 **The suites (run 17723, at `5b8e74ff`).** `bash verify/run-e2e-tools.sh` printed `274 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `61 checks ran (the offline suite
 and 60 tier tests) in 30m41s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+
+**Rebase (run 17770, resuming run 17723).** Run 17723 ended failed at the merge on a rebase conflict in PROGRESS.md:
+#891 and #905 had put their entries at the top of `### Added` where this run put its own, an insert-insert in one
+region. The branch was rebased onto staging `9de5bb7f`, keeping both sides. In PROGRESS.md, staging's two entries
+come first and #775's after them. In the run-of-show's Probe record, #920's three-asks entry comes first and #775's
+after it, the same insert-insert. decisions.md applied without conflict. Staging had not touched
+`gitops/internal-registry/` or `verify/test_guardrails_switch.py` since `04feba9d`, so the seed checksum stands as
+computed, and the test passes on the rebased tree. A live re-read at 01:09Z on 2026-11-06 found the same `registry`
+pod (7h14m old) still seeding `sha256:0dbe92d4...`, while `internal-registry` reads Synced and Healthy at
+`9de5bb7f`, whose ConfigMap pins `793db299...`. That is the gap the checksum closes. The hashes above (`5b8e74ff`
+and the rest) are the branch's from before the rebase; the commit subjects name them for good.
