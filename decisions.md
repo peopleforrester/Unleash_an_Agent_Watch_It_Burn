@@ -26148,3 +26148,6 @@ result. Nothing else in the draft changed.
 
 **Not yet run on a cluster.** `verify/test_datadog_sandbox_live.py` with WIB_DD_LOOKBACK_MIN=60, an hour after this
 branch is on staging and Argo CD has synced `backstage` on private. Check 2 passing then closes #629.
+
+**The suites (run 17932, at b47a1db0).** `bash verify/run-e2e-tools.sh` ran 73 checks (the offline suite and 72 tier
+tests) in 37m43s and printed `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
