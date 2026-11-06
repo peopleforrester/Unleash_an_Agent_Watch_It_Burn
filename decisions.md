@@ -28094,3 +28094,59 @@ exit code printed. The 27 from `test_kyverno_cel_policies.py` on: `27 tier tests
 `45 tier tests, 0 failed, in 16m58s`. Logs: `/tmp/r17958/e2e-tools-final.log`, `tier-rest.log`, `tier-first.log`. An
 earlier run of the command, before the `test_backups.py` fix, failed the offline suite on that one check, which is
 what led to the fix. The commits after `a6cca618` touch only this file.
+
+## 2026-11-07 · #979 · run 18049 · Run 17958's draft ported to staging ade8f80e, the five accen-dev states rebuilt again and the drift report exit 0
+
+**Context.** Run 17958 ended failed (claim-stale), so its seven commits did not reach staging.
+`bash verify/prior-drafts.sh 979 origin/staging` printed START from `origin/agent/979-17958`, 39 staging commits
+behind, with the verdict CLEAN (staging had only appended to decisions.md among its ten paths). The seven commits
+were cherry-picked onto ade8f80e with no conflict and no change. Nothing in the draft is redone in code; what this
+run redid is the live evidence, at the new base, since the states run 17958 built went with its worktree.
+
+**Live, in accen-dev, with this run's session (`hecaton-run-18049`), on 2026-11-06 UTC.** Both clusters still
+stand as the entry above says: `aws eks describe-cluster` shows each in `vpc-0607c27ee51fb233c` with
+`ManagedBy=terraform`, `Purpose=attendee-cluster` and its `attendee` tag, module-named cluster roles
+(`watch-it-burn-community-cluster-54c5a01d...`, `watch-it-burn-private-cluster-48f52af8...`), created
+2026-10-28 12:39 CET, and only watch-it-burn-community carries `role`. `list-clusters` shows those two and no
+other. In this worktree: `import-state.py boundary accen-dev` exit 0, `plan: no changes` (22:55Z to 22:56Z);
+`import-state.py network accen-dev` exit 0, `plan: no changes` (to 22:59Z); `--resolve-only` for each cluster
+exit 0; then `import-state.py cluster accen-dev <name>` for both in parallel, 23:05Z to 23:20Z, each exit 2:
+`64 to import, 3 not in AWS, 1 written after the imports, 1 not importable`, the time_sleep written from the
+imported cluster, and 33 changes still planned on community and 41 on private, the same counts run 17958 saw. The
+one delete/create in each is `aws_bedrock_inference_profile.tutor` (description, #882); none touches the cluster,
+the node group or an access entry. The audit state was rebuilt with `infra/terraform/aws/audit/import-state.sh
+accen-dev`, exit 0, `plan: no changes`. Then:
+
+```
+$ python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region us-west-2
+# Fleet drift report, 2026-11-06T23:26Z
+**0 finding(s)**: 0 drifted state(s), 0 unmanaged resource(s), 0 account(s) without a Config record.
+## Terraform drift
+No state has drifted.
+## Unmanaged: in the account, in no Terraform state, not in the register
+None.
+## AWS Config
+- accen-dev: ok: recorder watch-it-burn is recording
+## Clean states (5)
+lab VPC accen-dev, boundary accen-dev, audit accen-dev, cluster watch-it-burn-community, cluster watch-it-burn-private
+## Notes
+- cluster watch-it-burn-private: no `role` tag in its state (built before #636), so it is planned with its roster.tsv role, admin; its next apply adds the tag
+exit 0
+```
+
+CloudTrail's `lookup-events` for user `hecaton-run-18049` from 22:40Z returned 2,996 events, and none has
+`readOnly` false (events from the last minutes before the lookup may not have been delivered yet).
+
+**Not yet run on tanjiro-wsl2.** Read with the `sources-elevated fleet tanjiro-wsl2` wrapper, this repo's checkout
+there, under `~/repos/talks`, is at ec03eb5f (2026-11-06 04:34 +0100) with the guard-proxy
+submodule modified, it has no `infra/terraform/fleet/import-state.py`, and `infra/terraform/fleet/states/` is
+empty. The coordinator's answer to question 1103 sent the tanjiro rebuild back to the run, but the escalation's own
+guard stopped because that checkout does not hold this change, and moving the operator's checkout onto an unpromoted
+branch is not this run's to do. So the rebuild on tanjiro waits for hecaton to promote this branch and that checkout
+to take it; the commands are docs/floor.md's "Rebuilding a lost state", run there as `nwuser`, then
+`drift-report.py --accounts accen-dev --region us-west-2` without `--post`.
+
+**The suites (run 18049).** `bash verify/run-e2e-tools.sh` at 26c81d4f: `312 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `75 checks ran (the offline suite and 74 tier tests) in 38m17s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+Logs are under `/tmp/r18049/`.
