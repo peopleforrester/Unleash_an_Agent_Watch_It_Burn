@@ -23998,3 +23998,7 @@ burst check and names no burst test.
 cluster.
 
 No dependency was added to this repo; the sister test runs on prompts-agenticburn's own `uv.lock`.
+
+**The suites (run 17833, at `8e662d0f`).** `bash verify/run-e2e-tools.sh` printed `292 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, with `21/21 wall clock-burst analyser checks passed` among them, then
+`67 checks ran (the offline suite and 66 tier tests) in 40m09s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
