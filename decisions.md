@@ -21672,3 +21672,9 @@ offline suite and 58 tier tests) in 28m19s`, `ALL E2E TOOLS TIER CHECKS GREEN` a
 the suites was stopped for repeating one short poll of the log word for word. Its 110-second waits were cut off by
 the shell tool's 120-second default, so the same command ran again and again. Run 17696 gave each wait the full
 10-minute limit and numbered each poll, so no two commands matched.
+
+**Rebased by run 17754 onto staging `f144c2b6`.** Run 17696 ended failed at the merge on a rebase conflict in the
+run-of-show: while it ran, other runs (#919's run 17626 among them) added their own entries at the end of the Probe
+record, at the same place as this one. Both sides only added text, so both are kept: staging's entries first, then
+this issue's. decisions.md merged without a conflict. Nothing in the three asks' record changed, and the asks were
+not repeated: they ran after the routes publish on the netcup router that the #906 entry calls the new server.
