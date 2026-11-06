@@ -24736,3 +24736,50 @@ Accepted. The next run on #728 reads both.
 `test_gateway_api_crds.py` among them, then `70 checks ran (the offline suite and 69 tier tests) in 30m54s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_gateway_api_crds_upstream.py` and the render gates over
 the new `gateway-api` Application among the tier tests. The log is `/var/lib/hecaton/runs/17846/e2e-tools.log`.
+## 2026-11-06 · #966 · run 17876 · #902's owed live check: a chat naming an ingredient reaches check_inventory with it, on both clusters
+
+**What was owed.** #902 (run 17812, staging `e1f0972f`, the commit that ran as `778f2a8b` before promotion) gave
+`check_inventory` an `ingredient` argument and named the running change under "Not yet run on a cluster": a chat that
+names an ingredient, and workshop-mcp's audit line for it carrying `"ingredient"` with a short result, not the
+278-character whole inventory.
+
+**What the clusters ran.** At 10:50 UTC both clusters' Argo CD Applications (`ai-layer`, `workshop-agent`,
+`lab-bootstrap`) were Synced and Healthy at `623998a3`, which holds `e1f0972f`. The mounted ConfigMap,
+`workshop-mcp-src-gdtg56h2kf` on both, reads `def check_inventory(ingredient`. tools/list over `127.0.0.1:8000/mcp`
+inside each running workshop-mcp pod printed `SCHEMA {"properties": {"ingredient": {"default": "", "title":
+"Ingredient", "type": "string"}}, "title": "check_inventoryArguments", "type": "object"}`.
+
+**The restart, done by pod delete.** The issue's `kubectl rollout restart deployment/workshop-mcp` was refused by Kyverno:
+`Policy block-argocd-drift failed: This resource is managed by ArgoCD`. That policy matches UPDATE and DELETE on
+Argo-tracked Deployments, ConfigMaps and Services, and not Pods, so no guardrail was turned off. workshop-mcp needed no
+restart: its pods (`workshop-mcp-555f97c466-*`) had started at 10:03 UTC on the new ConfigMap and served the new schema.
+workshop-agent's pods had started before that (07:53 on private, 09:23 on community), so each was deleted and its
+ReplicaSet brought a new one up (`workshop-agent-7f874bf54b-p9tvv` on private, `workshop-agent-699f6bcb7c-fdkfx` on
+community), which lists the tools afresh.
+
+**The chat.** One A2A `message/send` per cluster through `http://guard-proxy.agent:8080/`, from a throwaway pod on the
+signed workshop-mcp image (beat-02.sh's route; `require-resource-limits` needs limits on it, given through
+`--overrides`), with the text "How many ghost peppers do we have?". Both answered `completed`, private with "We
+currently have 12 ghost peppers in stock." and community with the same sentence after a `<thinking>` block. Each run's
+`kubectl --context <ctx> -n agent logs deploy/workshop-mcp | grep check_inventory` printed exactly one pre and one post
+line:
+
+| cluster | pre `tool_input` | post |
+|---|---|---|
+| watch-it-burn-private (10:52:49Z, call 12) | `{"ingredient":"ghost pepper"}` | `"outcome":"ok","duration_ms":1,"result_chars":20` |
+| watch-it-burn-community (10:53:29Z, call 9) | `{"ingredient":"ghost pepper"}` | `"outcome":"ok","duration_ms":0,"result_chars":20` |
+
+20 characters is `{"ghost_pepper": 12}`. #902's owed check holds on both clusters.
+
+**Seen on the way, for #965.** #965 (open, worked by another run) says workshop-mcp does not restart when its server.py
+ConfigMap changes. The clusters show it does: `workshop-mcp-src` is a kustomize configMapGenerator name with the hash
+suffix on (`disableNameSuffixHash: false`), so a source change renames the ConfigMap and the pod template with it. Each
+cluster keeps eleven workshop-mcp ReplicaSets, one per ConfigMap name. `workshop-mcp-b444f5c8d` (06:41 UTC on private,
+06:43 on community) follows `e1f0972f` reaching staging at 06:19 UTC, and `workshop-mcp-555f97c466` (10:03) follows
+`9bfbd158` (#939) at 09:54. Whether workshop-agent needs its own restart to see a tool change this run could not
+tell, because it restarted the agent before the chat.
+
+**The clusters after.** Both throwaway curl pods were removed (`--rm`; no `run17876curl` pod listed after). The only
+changes left are the new workshop-agent pods, which the issue asked for. The guard toggles were not touched.
+
+No file outside decisions.md changed, and no dependency was added.
