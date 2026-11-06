@@ -124,7 +124,6 @@ EXPECTED = {
     'module.eks.aws_security_group_rule.cluster["ingress_nodes_443"]': "sg-cluster_ingress_tcp_443_443_sg-node",
     'module.eks.aws_security_group_rule.node["egress_all"]': "sg-node_egress_all_0_0_0.0.0.0/0",
     'module.eks.aws_security_group_rule.node["ingress_self_coredns_udp"]': "sg-node_ingress_udp_53_53_self",
-    "module.eks.time_sleep.this[0]": "30s,",
     "module.eks.module.kms.aws_kms_key.this[0]": "key-1",
     'module.eks.module.kms.aws_kms_alias.this["cluster"]': f"alias/eks/{NAME}",
     f"{NG}.aws_eks_node_group.this[0]": f"{NAME}:default-ng1",
@@ -239,6 +238,39 @@ def world(node_sgs: int = 1, ng_subnets=("subnet-a",)) -> dict:
     return w
 
 
+CLUSTER_ATTRS = {"id": NAME, "name": NAME, "endpoint": "https://t1.eks", "version": "1.36", "created_at": "2026-10-28T11:39:25Z",
+                 "certificate_authority": [{"data": "Q0E="}],
+                 "kubernetes_network_config": [{"ip_family": "ipv4", "service_ipv4_cidr": "172.20.0.0/16"}]}
+ADDR = re.compile(r'^(?P<mod>(?:module\.[A-Za-z0-9_-]+(?:\[[^\]]*\])?\.)*)(?P<type>[a-z0-9_]+)\.(?P<name>[A-Za-z0-9_-]+)'
+                  r'(?:\[(?P<key>[^\]]+)\])?$')
+
+
+def record_import(state: pathlib.Path, address: str) -> None:
+    """What `terraform import` leaves: the object in the state, the cluster with the attributes its triggers read."""
+    doc = json.loads(state.read_text()) if state.is_file() and state.read_text().strip() else {"version": 4, "resources": []}
+    m = ADDR.match(address)
+    key = m.group("key")
+    inst = {"index_key": json.loads(key) if key else None,
+            "attributes": CLUSTER_ATTRS if m.group("type") == "aws_eks_cluster" else {}}
+    res = {"mode": "managed", "type": m.group("type"), "name": m.group("name"), "instances": [inst]}
+    if m.group("mod"):
+        res["module"] = m.group("mod").rstrip(".")
+    doc["resources"].append(res)
+    state.write_text(json.dumps(doc))
+
+
+def state_list(state: pathlib.Path) -> str:
+    doc = json.loads(state.read_text())
+    out = []
+    for r in doc.get("resources", []):
+        for i in r.get("instances", []):
+            k = i.get("index_key")
+            idx = "" if k is None else f"[{json.dumps(k)}]"
+            pre = "data." if r["mode"] == "data" else ""
+            out.append(f"{r['module'] + '.' if r.get('module') else ''}{pre}{r['type']}.{r['name']}{idx}")
+    return "\n".join(out) + "\n"
+
+
 class Fake:
     """`run` for the script: aws answers from the world, terraform from the plans; every call is logged."""
 
@@ -262,10 +294,14 @@ class Fake:
         if args[0] == "show":
             first = pathlib.Path(args[-1]).name.startswith("empty")
             return ok(json.dumps({"resource_changes": PLANNED if first else self.after}))
+        state = next((pathlib.Path(a[7:]) for a in args if a.startswith("-state=")), None)
         if args[0] == "import":
             if self.import_fail and self.import_fail in args:
                 return subprocess.CompletedProcess(cmd, 1, "", "Error: Cannot import non-existent remote object")
+            record_import(state, args[-2])
             return ok()
+        if args[:2] == ["state", "list"]:
+            return ok(state_list(state))
         return ok()
 
 
@@ -292,6 +328,7 @@ def case(w: dict, after: list[dict], *, state: str | None = None, extra: tuple =
             code = mod.main(["cluster", "accen-dev", NAME, *extra])
         account = st.with_suffix(".account")
         written = account.read_text() if account.is_file() else None
+        case.state = json.loads(st.read_text()) if st.is_file() else None
     imports = {c[-2]: c[-1] for c in fake.calls if c[0] == "terraform" and c[2] == "import"}
     return code, fake, imports, written
 
@@ -311,6 +348,14 @@ check("every importable resource is imported with the id AWS gives it", imports 
       f"wrong: {sorted(set(imports.items()) ^ set(EXPECTED.items()))[:4]}")
 check("the two rules AWS lacks are not imported", not (ABSENT & set(imports)))
 check("the null_resource is not imported", not any("null_resource" in a for a in imports))
+check("nor the time_sleep, which Terraform imports with no triggers", "module.eks.time_sleep.this[0]" not in imports)
+sleeps = [r for r in case.state["resources"] if r["type"] == "time_sleep"]
+trig = sleeps[0]["instances"][0]["attributes"]["triggers"] if len(sleeps) == 1 else {}
+check("the time_sleep is written into the state with the imported cluster's triggers",
+      len(sleeps) == 1 and sleeps[0]["module"] == "module.eks" and sleeps[0]["instances"][0]["index_key"] == 0
+      and sleeps[0]["instances"][0]["attributes"]["create_duration"] == "30s"
+      and trig == {"name": NAME, "endpoint": "https://t1.eks", "kubernetes_version": "1.36",
+                   "service_cidr": "172.20.0.0/16", "certificate_authority_data": "Q0E="}, f"{sleeps}")
 check("the rebuild exits 2: the state is rebuilt and the plan still creates the missing rules", code == 2, f"exit {code}")
 check("the membership file names the profile, as fleet.sh's record_membership does", account == "accen-dev\n")
 plan = tf_verb(fake, "plan")[0]
@@ -326,6 +371,17 @@ check("the only apply is the refresh-only settle", len(applies) == 1 and "-refre
 order = [c[2] for c in fake.calls if c[0] == "terraform"]
 check("every import comes after both lookups and before the settle",
       order.index("import") > order.index("show") and order.index("apply") > max(i for i, v in enumerate(order) if v == "import"))
+
+mod = load()
+upd = {"address": "module.eks.aws_iam_role.this[0]", "change": {"actions": ["update"],
+       "before": {"name": "r", "force_detach_policies": False, "tags": {}, "tags_all": {"a": "1"}},
+       "after": {"name": "r", "force_detach_policies": True, "tags": {}, "tags_all": {"a": "1"}}, "after_unknown": {}}}
+rep = {"address": "aws_bedrock_inference_profile.tutor", "change": {"actions": ["delete", "create"],
+       "before": {"description": "old"}, "after": {"description": "new"}, "replace_paths": [["description"]]}}
+check("an update in the last plan names the attributes it changes",
+      mod.changed(upd) == "module.eks.aws_iam_role.this[0] (update: force_detach_policies)", mod.changed(upd))
+check("a replace names the attribute that forces it",
+      mod.changed(rep) == "aws_bedrock_inference_profile.tutor (delete/create: description)", mod.changed(rep))
 
 print("The same world, its plan clean but for the null_resource:")
 code, *_ = case(world(), NOOP + [r for r in PENDING if r["type"] == "null_resource"])
@@ -355,6 +411,16 @@ check("--resolve-only imports nothing, applies nothing and writes no membership 
       code == 0 and not imports and not tf_verb(fake, "apply") and account is None)
 code, fake, imports, _ = case(world(), NOOP, import_fail="aws_iam_user.attendee")
 check("a failed import stops the rebuild before the settle", code == 1 and not tf_verb(fake, "apply"))
+half = {"version": 4, "resources": [
+    {"module": "module.eks", "mode": "managed", "type": "aws_eks_cluster", "name": "this",
+     "instances": [{"index_key": 0, "attributes": CLUSTER_ATTRS}]},
+    {"mode": "managed", "type": "aws_iam_user", "name": "attendee", "instances": [{"attributes": {}}]}]}
+code, fake, imports, _ = case(world(), NOOP, state=json.dumps(half))
+check("a half-rebuilt state is refused without --resume", code == 1 and not imports)
+code, fake, imports, _ = case(world(), NOOP, state=json.dumps(half), extra=("--resume",))
+check("--resume imports only what the state does not hold", code == 0 and set(imports) ==
+      set(EXPECTED) - {"module.eks.aws_eks_cluster.this[0]", "aws_iam_user.attendee"}, f"exit {code}")
+check("and writes the time_sleep once", [r["type"] for r in case.state["resources"]].count("time_sleep") == 1)
 
 print("A cluster built before #636, with no role tag:")
 w = world()
@@ -432,12 +498,12 @@ for ln in TYPES.read_text().splitlines():
         planned_types.setdefault(root, set()).add(rtype)
 check("the fixture lists all three roots", set(planned_types) == set(rules), f"{sorted(planned_types)}")
 for root, types in sorted(planned_types.items()):
-    missing = sorted(t for t in types if t not in mod.NOT_IMPORTABLE and not hasattr(rules[root], f"r_{t}"))
+    missing = sorted(t for t in types if t not in mod.NOT_IMPORTABLE | mod.WRITTEN and not hasattr(rules[root], f"r_{t}"))
     check(f"{root}: a rule for each of its {len(types)} planned types", not missing, f"no rule for {missing}")
 for root, path in (("boundary", "infra/org/boundary/main.tf"), ("network", "infra/terraform/aws/network/main.tf"),
                    ("cluster", "infra/terraform/aws/cluster/main.tf")):
     declared = set(re.findall(r'^resource "([a-z0-9_]+)"', (REPO / path).read_text(), re.M))
-    missing = sorted(t for t in declared if t not in mod.NOT_IMPORTABLE and not hasattr(rules[root], f"r_{t}"))
+    missing = sorted(t for t in declared if t not in mod.NOT_IMPORTABLE | mod.WRITTEN and not hasattr(rules[root], f"r_{t}"))
     check(f"{path}: a rule for each resource type it declares", not missing, f"no rule for {missing}")
 
 print("The cluster root stays importable into an empty state:")
