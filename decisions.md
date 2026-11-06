@@ -23426,7 +23426,10 @@ clusters for about two minutes and `guardrails-off` put them back; the flow prob
 deleted the maintenance-shell Deployment, so both clusters were left as found. The probe scripts and their logs are in
 the run's directory, not the repo. No dependency was added.
 
-**The suites (run 17828).** Recorded in a follow-on commit once the offline suite and the tools tier finish.
+**The suites (run 17828, at `c4e997ea`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`289 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `66 checks ran (the offline suite and 65 tier tests) in
+36m12s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `test_recipe_block_coverage.py` and `test_recipe_persona.py`, the
+offline guards for this invariant, are among them. The prose gate printed `prose gate: pass`.
 
 ## 2026-11-06 · #952 · run 17805 · The /kubecon C3 recipe block carries the conversational recon and attack prompts
 
