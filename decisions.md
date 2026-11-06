@@ -28546,3 +28546,58 @@ was changed.
 **The suites (run 18100, at `264bb112`).** `bash verify/run-e2e-tools.sh` printed `315 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 49m58s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-06 · #1005 · run 17963 · The E2E command runs its checks four at a time, so it fits the gate's hour again
+
+**What failed.** The heavy gate ran `bash verify/run-e2e-tools.sh` on staging `629c53ea` and stopped it in
+`test_trace_shape_e2e.py`, the 67th of 72 tier tests. That test and its otelcol-contrib were "left running after the
+command". Hecaton's heavy gate gives the command 3600 s (`mainline.py`, `test_timeout`) and its issue shows only the
+last 3000 characters, so the "timed out" line was cut off. The test had printed only its heading: into the gate's pipe
+its output was block-buffered. Nothing failed. The command ran out of time.
+
+**Measured on this host, before the change.** `verify/prior-drafts.sh 1005 origin/staging` printed NONE, and the issue
+had no comments. With each test's seconds printed (commit `ad7c87fc`), the old runner hit the run's own 3600 s limit
+too, 53 tier tests in, at a load average of 28 to 35 on 16 cores. The offline suite took 1186 s. The slowest tier tests
+were `test_iam_policy_structural.py` (551 s: four terraform renders, one of which downloaded the newest aws provider,
+6.72.0, about 800 MB), `test_control_plane_app_ports_module.py` (245 s, its init downloading 6.70.0), and seven more
+between 87 s and 143 s. The tier's recorded times had grown from 22m58s (run 16533) to 47m44s (run 17924) on this host,
+and the gate runs niced beside the runs.
+
+**The change.**
+- `verify/run-e2e-tools.sh` runs `E2E_TOOLS_JOBS` checks at once, 4 by default, the offline suite as one of them. Each
+  check writes to a log of its own, printed whole under its `== name ==` heading when it ends, then its
+  `-- name took Ns` line. The ten slowest are listed before the `checks ran` line, which now also says how many ran at a
+  time. A value of E2E_TOOLS_JOBS that is not a whole number of 1 or more, or a bash older than 5.1 (`wait -n -p`),
+  fails with the other prerequisites, before any fetch.
+- Each check gets its own aws and eksctl stubs and call log (no-cloud.sh's log was one file, so a call would have been
+  named under whichever check read it first) and its own empty Helm home, so no two write one index cache.
+- The four tests that run terraform carry `# E2E SERIAL: terraform` and run one at a time, since Terraform does not
+  promise its plugin cache is safe for two writers: test_control_plane_app_ports_module.py,
+  test_iam_policy_structural.py, test_lab_platform_operator_entry.py and test_terraform_lock_init.py. They queue right
+  after the offline suite, and the rest of the tier runs beside them.
+- Tier tests run with `PYTHONUNBUFFERED=1`. On INT or TERM, the gate's timeout signals, the runner lists the slowest
+  checks that ended, then each check still running with its seconds and last five lines, stops it and everything it
+  started, and exits 1. A timed-out gate's tail now says where the hour went.
+- `verify/run-tests.sh` prints each offline test's seconds the same way.
+- AGENTS.md point 4 under Dispatched runs says the command runs four checks at a time and prints each whole.
+
+**Tests.** `verify/test_e2e_tools_tier.py` drives the runner on fixture tiers. Two tests that pass only if they run at
+the same time, each block printed whole. Two `# E2E SERIAL: terraform` tests that fail if either starts while the other
+runs, one of them meeting a plain test, so taking turns holds nothing else back. `E2E_TOOLS_JOBS=1`, under which the
+meeting pair fails. `0`, `two` and `-3`, each refused before any fetch. A TERM sent to the runner alone while a fixture
+sleeps: the sleeper is named with its last line, the check that had ended is printed, and the `sleep` it started is
+gone. The cloud-call checks now read each call in the block of the test that made it. Every tier test that names
+TERRAFORM or iam_plan_render must carry the serial line, and the four are the serial set. Two mutations were
+run by hand: the runner ignoring the serial line failed "took turns", and the stop killing only the check's shell
+failed "what the check started is stopped with it".
+
+**Not changed.** iam_plan_render.py still renders with no lockfile, so it still takes the newest aws provider. With
+each root's committed lock it would download 6.70.0 and 6.71.0 in place of 6.72.0, which saves no download on a fresh
+clone. No cluster check applies: the change is to the gate's own runner, which reaches no cluster. No dependency was
+added.
+
+**The suites (run 17963, at `57919a7b`).** `bash verify/run-e2e-tools.sh` printed `307 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` (the offline suite took 1183 s), then
+`73 checks ran (the offline suite and 72 tier tests, 4 at a time) in 20m41s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, at a load average of 41 to 55. `test_trace_shape_e2e.py` passed in 26 s, `test_iam_policy_structural.py` in
+143 s and `test_terraform_lock_init.py` in 209 s. The logs are `/var/lib/hecaton/runs/17963/e2e-tools.1.log` (the old
+runner, stopped at 3600 s) and `e2e-tools.2.log`.
