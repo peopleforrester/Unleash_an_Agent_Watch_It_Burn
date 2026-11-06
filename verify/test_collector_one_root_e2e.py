@@ -55,6 +55,7 @@ from collector_render import REPO, collector_config, feature_gate_args  # noqa: 
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
+START_BOUND = float(os.environ.get("COLLECTOR_START_BOUND", "120"))  # seconds the collector gets to take the spans
 
 failures: list[str] = []
 
@@ -269,15 +270,23 @@ def run_collector(profile: str) -> tuple[list[dict], list[dict], str]:
         got: list[dict] = []
         copy: list[dict] = []
         try:
-            sent, deadline = False, time.time() + 30
-            while not sent and time.time() < deadline and proc.poll() is None:
+            # A slow start on a loaded host gets START_BOUND, as in test_collector_pii_scrub_e2e.py, and spans go only
+            # once the collector says it is ready, since free_port's port is free for any process until then (#799).
+            sent, start = False, time.time()
+            while not sent and time.time() - start < START_BOUND and proc.poll() is None:
+                if "Everything is ready" not in (pathlib.Path(d) / "collector.log").read_text():
+                    time.sleep(0.3)
+                    continue
                 try:
                     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/traces", data=otlp_body(),
                                                  headers={"Content-Type": "application/json"})
                     sent = urllib.request.urlopen(req, timeout=5).status == 200
                 except OSError:
                     time.sleep(0.3)
-            check("the collector took the spans", sent)
+            waited = time.time() - start
+            check("the collector took the spans", sent,
+                  "" if sent else f"exited {proc.returncode} after {waited:.0f} s" if proc.poll() is not None
+                  else f"still not taking spans on {port} after {waited:.0f} s")
             # The batch processor holds spans up to its 5 s timeout. Read until the kept count arrives, then once
             # more after a further batch interval, so a span that should have been dropped has had time to show.
             deadline, settled = time.time() + 30, None
