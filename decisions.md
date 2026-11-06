@@ -23487,3 +23487,50 @@ decisions.md and the run-of-show. At 03:01Z ghcr.io answered again (`/v2/` read 
 run alone with the runner's environment (pinned tools first on PATH, the aws and eksctl stubs, an empty Helm home),
 exited 0 with 116 PASS, the kagent chart's pods among them. The prose gate printed `prose gate: pass`. No dependency
 was added.
+
+## 2026-11-06 · #916 · question 1092 · run 17817 · Do the escalated acts through the `sources-elevated` wrapper; the router reload stops on Railway's login
+
+**Question 1092.** Run 17787's report escalated two acts: the closing comment on #916, and one more routes publish
+from a placeholder directory on tanjiro-wsl2 to drop `registry-attackme`. The independent judge refused the pair
+because the second named no concrete working tree.
+
+**Answer.** Back to the run (hecaton#510): every run acts through the `sources-elevated` wrapper, so the run does the act itself,
+through `gh` on its PATH or `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet ...`, and, if that still
+refuses, ends with the exact command in `escalate` and the refusal quoted. Decided by the coordinator under Michael's
+standing rules, not by Michael.
+
+**What it changes.** Run 17817 used the wrapper. The closing comment was already on #916 (issuecomment-6676328615).
+For the publish, `sources-elevated fleet tanjiro-wsl2` found the two checkouts at
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` and `/home/michael/repos/agenticburn/apex-agenticburn`,
+the second being where `fleet.sh` looks for its apex sibling. apex main already carries the table without
+`registry-attackme`: `a93679a`, "regenerate agenticburn.com router map from live fleet (31 hosts)", committed at
+03:47Z on 2026-11-06, drops exactly `registry-attackme.burritobot.co` and `registry-attackme.agenticburn.com` from
+`1e602e1`'s 33. The live router was never reloaded with it: at 05:56Z both names still answered 502. So the run ran
+only the reload, with that table, through the wrapper:
+
+```
+$ sources-elevated fleet tanjiro-wsl2 'cd /home/michael/repos/agenticburn/apex-agenticburn && scripts/reload-routes.sh /home/michael/repos/agenticburn/apex-agenticburn/routes.map'
+05:57:49 table /home/michael/repos/agenticburn/apex-agenticburn/routes.map carries 31 route(s)
+05:57:49 staging the table on the watch-it-burn-apex /config volume
+Unauthorized. Please run `railway login` again.
+05:57:49 FATAL: failed to stage /config/routes.map.new over railway ssh; the live table is untouched
+reload exit=1
+```
+
+The wrapper did not refuse; Railway did. The router rides Railway SSH (`reload-routes.sh`), and no host this run
+reaches is logged in to Railway: tanjiro-wsl2's `~/.railway` holds no config since 00:56Z, megumi-wsl2's ssh timed
+out, and this host's `railway whoami` answers Unauthorized. A Railway login is Michael's own sign-in, so the reload
+goes to the report's `escalate` with that path. Nothing on the router or the volume changed. No criterion of #916
+names `registry-attackme`, and nothing uses it: both clusters pull from `registry.burritobot.co`.
+
+**Re-read live (run 17817), read only, 05:58Z, at staging `b17fc38b`.** `curl -fsS` of the tags list printed
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`, exit 0. 200 on `deployments.burritobot.co`, on
+`/`, `/prompts` and `/cost` of both bot hosts, and on `/ticket/HC-666` of `support.burritobot.co` and
+`support-burritobot-private.burritobot.co`, each naming HC-666. `./fleet.sh router-check` ended "the router serves
+exactly the roster" and `./fleet.sh wall-check` "the wall shows every roster cluster", both exit 0. internal-registry
+on watch-it-burn-private read `Synced Healthy` at `b17fc38b`.
+
+**Rebase onto staging (run 17817).** Run 17787 ended failed at the merge on a rebase conflict in the run-of-show's
+Probe record: #775's run 17723 entry (2026-11-05, Challenge 3 with the guardrails on) landed in the same place as this
+issue's entry. Both sides only added text, so both are kept, in time order, #775's first. decisions.md merged under
+the union driver with no conflict.
