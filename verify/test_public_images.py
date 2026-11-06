@@ -151,6 +151,9 @@ DOMAIN = "deployments-attackme.burritobot.co"
 
 OLD_SIX = ("busybox", "alpine", "nginx", "httpd", "redis", "2048")
 MIRROR = "public.ecr.aws/docker/library/"
+# Two of the old six written as a list ("nginx, busybox", "redis:8, httpd"), the shape the old wording took (#993).
+_SIX = "|".join(OLD_SIX)
+OLD_LIST = re.compile(rf"\b({_SIX})[^,\s]{{0,6}}, (the )?({_SIX})\b", re.I)
 print("== no fixed list: one pinned landing-page server, on public.ecr.aws, declared in images.lock ==")
 lock = {line.split()[0]: line.split()[1] for line in (REPO / "images.lock").read_text().splitlines()
         if line and not line.startswith("#")}
@@ -166,6 +169,8 @@ stale = [r for r in lock if r.startswith(MIRROR) and r != m.LANDING_IMAGE or r.s
 check("images.lock keeps no row for the five other old pins, which nothing hands a cluster now", not stale, str(stale))
 check("the tool names no list of images", ", ".join(OLD_SIX) not in m.deploy_app.description
       and "PUBLIC_IMAGES" not in m.deploy_app.description, m.deploy_app.description)
+check("nor two of the old six side by side as its examples (#993)", not OLD_LIST.search(m.deploy_app.description),
+      m.deploy_app.description)
 check("and that requested_by is the name the person chatting gave", "requested_by" in m.deploy_app.description
       and "the person chatting with you gave" in m.deploy_app.description)
 
@@ -378,6 +383,32 @@ check("both are .prompt blocks, which is what ?sheet=1 is built from",
       "document.querySelectorAll('main section.seg')" in KC and "sec.querySelectorAll('.prompt')" in KC)
 check("no registry path left to type", "promo/promo-mascot" not in beat)
 check("the success marker points at deployments.burritobot.co", "deployments.burritobot.co" in beat)
+marker = re.search(r'<div class="marker">(.*?)</div>', beat, re.S)
+marker = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", marker.group(1))) if marker else ""
+check("the marker reads open before the switch: any image the bot picks lands (#993)",
+      "Before the switch, on either bot, any image the bot picks lands" in marker, marker)
+check("and refused at admission by both registry policies after guardrails-on",
+      "After guardrails-on: refused at admission by Kyverno, restrict-image-registries and deny-external-registries"
+      in marker, marker)
+check("the beat lists none of the old six as the images deploy_app pulls by name", not OLD_LIST.search(beat)
+      and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES", beat))
+
+print("== the run-of-show's Segment 3 and the system prompt read Challenge 2 as open until guardrails-on (#993) ==")
+ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
+ROS = ROS_PATH.read_text()
+for anchor in ("### Segment 3: Challenge 2", "### Segment 4: "):
+    if anchor not in ROS:
+        sys.exit(f"ANCHOR MISSING: {anchor!r} is not in {ROS_PATH}; the Segment 3 checks below cut on it")
+seg3 = ROS[ROS.find("### Segment 3: Challenge 2"):ROS.find("### Segment 4: ")]
+flat = re.sub(r"\s+", " ", seg3)
+check("Segment 3 lists none of the old six and names no list", not OLD_LIST.search(seg3)
+      and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES|the list does not carry", seg3))
+check("Segment 3 says nothing narrows the image until the switch", "nothing narrows it until step 5" in flat)
+check("Segment 3 says any image is refused at admission after it",
+      "From here on any image the room asks for is refused at admission by Kyverno" in flat)
+AGENT = (REPO / "gitops/workshop-agent/agent.yaml").read_text()
+check("the system prompt names no list of images", not OLD_LIST.search(AGENT)
+      and not re.search(r"[Ss]ix[- ]image|[Cc]urated list|PUBLIC_IMAGES", AGENT))
 
 desk.shutdown()
 # deploy_app's _report senders and scale-down Timers are daemon threads; join them so the interpreter never

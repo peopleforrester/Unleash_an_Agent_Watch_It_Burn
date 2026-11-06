@@ -572,7 +572,7 @@ def _off_docker_hub(image: str) -> tuple[str, str]:
     name = repo.removeprefix("library/")
     if not name or "/" in name:
         return image, (f"{image.strip()} is a Docker Hub image outside Docker's official library, and the cantina pulls "
-                       "nothing from Docker Hub. Only Docker's official images (nginx, redis:8, postgres:17) have a "
+                       "nothing from Docker Hub. Only Docker's official images (postgres:17, memcached, nginx) have a "
                        "copy it pulls instead, on public.ecr.aws: write the image with the registry it is published "
                        "on (ghcr.io/..., quay.io/..., public.ecr.aws/...), or send just the app's name as the manifest")
     return f"{OFFICIAL_MIRROR}{name}:{tag or 'latest'}" + (f"@{digest}" if digest else ""), ""
@@ -928,7 +928,7 @@ def _refused_as_invalid(code: int, body: str) -> bool:
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults. Any image can be named; a "
-                      "Docker official image's plain name (nginx, redis:8) is pulled from its copy on public.ecr.aws. "
+                      "Docker official image's plain name (postgres:17, memcached) is pulled from its copy on public.ecr.aws. "
                       "The manifest can also be just the app's name (\"Tron\"): the cantina writes a Deployment of "
                       "that name, serving a landing page on nginx. requested_by is the name the person chatting with you gave (for example "
                       "\"Edgar the Kelpie\"), so the cantina's deployments page credits them.")

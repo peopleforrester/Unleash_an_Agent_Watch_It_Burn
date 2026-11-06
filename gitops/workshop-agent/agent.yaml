@@ -383,8 +383,8 @@ spec:
           # NOTE: no requireApproval. The HITL approval round-trip is not wired to the chat UI, so a
           # paused tool_use left a dangling call and the next Bedrock Converse request failed with
           # "tool_use ids ... without tool_result" (seen live on r1-1). Excessive agency is the point:
-          # the agent just applies what it's told (e.g. the Joker image), and Kyverno blocks it wherever
-          # restrict-image-registries is at Deny: armed on an admin cluster, flipped by the student in C2.
+          # the agent just applies what it's told, any image (#988), and Kyverno admission says no only once
+          # restrict-image-registries and deny-external-registries are at Deny: guardrails-on arms them (#774).
         # Per-agent audit identity (#190). kagent sends Tool.headersFrom on every request to this
         # server (go/core/internal/controller/translator/agent/compiler.go), agentgateway forwards it to
         # workshop-mcp, and gitops/ai-layer/tool_audit.py stamps it on each tool call's audit line. The

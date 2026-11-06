@@ -26346,3 +26346,59 @@ listening on <port> after 0 s".
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17911/e2e-tools.log`. The two
 runs before it are `e2e-tools.first.log` (stopped after `test_finale_cap.py` failed offline) and
 `e2e-tools.second.log` (offline green, the tier 71 of 72 on the collector start above).
+## 2026-11-06 · #993 · run 17938 · Challenge 2 reads as open until guardrails-on on the prompt sheet, the run-of-show and the tool text
+
+**Where #992 left it.** #992 (run 17917, merged to staging as `858f1b0a`) took the six-image list out of
+`deploy_app` and rewrote the tool description, so the description named no list when this run started. It still gave
+`nginx, redis:8` as its examples of a Docker official image, and the refusal for a namespaced Docker Hub image gave
+`nginx, redis:8, postgres:17`. The system prompt in `gitops/workshop-agent/agent.yaml` named no image list and did not
+steer the model to one; only a comment beside its tool list was out of date ("flipped by the student in C2", from
+before #774's switch). `facilitation/kubecon-na-2026/fallback/prompts.yaml` carries no list: its `c2-tron-public-image`
+expect line already reads "After guardrails-on, Kyverno denies it at admission", so it is unchanged. `prior-drafts.sh
+993 origin/staging` printed NONE, so there was no earlier draft to port.
+
+**What changed.**
+- `/kubecon` (`gitops/ai-layer/web/kubecon.html`), the Challenge 2 beat: the comment that listed "nginx, busybox, redis,
+  httpd, alpine, the 2048 game" as what deploy_app turns a plain name into now says nothing narrows the image before
+  `guardrails-on`, a Docker official image goes to its public.ecr.aws copy (#714), a bare name lands on the pinned nginx
+  (#939), and Kyverno admission refuses it after the switch. The visible success marker reads "Before the switch, on
+  either bot, any image the bot picks lands" and "After `guardrails-on`: refused at admission by Kyverno,
+  `restrict-image-registries` and `deny-external-registries`". The beat's title and its two prompts are unchanged.
+- Segment 3 of `facilitation/kubecon-na-2026-run-of-show.md`: step 3's image bullet drops "run busybox" and "an app
+  the list does not carry", and says nothing narrows the image until step 5, that `deploy_app` sends it as the bot
+  writes it from any registry, and that a Docker official image's plain name goes to public.ecr.aws. Step 5 says any
+  image the room asks for is refused at admission from there on, and names which policy does what:
+  `deny-external-registries` admits only `registry.burritobot.co` for the bot, and `restrict-image-registries` refuses
+  public.ecr.aws and every registry off its list. Both read against `policies/kyverno/restrict-image-registries.yaml`
+  and `policies/kyverno-breakout/deny-external-registries.yaml` at this base.
+- `deploy_app`'s description gives `postgres:17, memcached` as its Docker official examples, and the refusal gives
+  `postgres:17, memcached, nginx`. Both are official images that `verify/test_public_images_served.py` reads from
+  public.ecr.aws. nginx stays named in the description as the landing page's server, which it is.
+- The agent.yaml comment says the agent applies any image (#988) and Kyverno says no only once `guardrails-on` arms
+  both registry policies (#774). The system prompt text itself is unchanged.
+
+**Tests that read the words.** `git grep -nF` under `verify`, `scripts` and `challenges` for each phrase changed ("nginx,
+busybox", "turns a plain name", "run busybox", "an app the list does not carry", "the bot picks", "puts in the public
+one", "Before the switch, on either bot: listed on", "nginx, redis:8", "Any image can be named", "flipped by the student
+in C2", "runs on the public nginx image") found nothing. The one sheet check that reads this beat's text, "the beat is
+'Deploy any public image'" in `verify/test_public_images.py`, reads the title, which is kept. This run adds checks to
+`verify/test_public_images.py` in the same commit: the description and the system prompt list no two of the old six;
+the sheet's marker reads open before the switch and refused at admission after it; Segment 3 lists none and says both
+things. The Segment 3 cut checks its two heading anchors first and exits naming the one missing. Run against the old
+text, seven of the new checks fail; against the new text, all pass.
+
+**The old-wording grep.** On the five files, case-sensitive for `PUBLIC_IMAGES` so that the comment's
+`verify/test_public_images.py` path is not counted:
+
+```
+git grep -nE '[Ss]ix-image|[Ss]ix image|[Cc]urated list|PUBLIC_IMAGES|(nginx|busybox|alpine|httpd|redis|2048)[^,]{0,6}, (the )?(nginx|busybox|alpine|httpd|redis|2048)|run busybox|the list does not carry' -- gitops/ai-layer/workshop-mcp-server.py gitops/workshop-agent/agent.yaml gitops/ai-layer/web/kubecon.html facilitation/kubecon-na-2026/fallback/prompts.yaml facilitation/kubecon-na-2026-run-of-show.md
+```
+
+At this base it matched five lines (two in the run-of-show, one in kubecon.html, two in workshop-mcp-server.py). After
+the change it prints nothing and exits 1. The names still in these files stand alone and are not that list:
+`SHELL_IMAGES = ("busybox", "alpine")` gives a shell image a sleep; `busybox-1.38.0` is the HC-666 Joker's tag on
+`registry.burritobot.co`; the #992 comment above `OFFICIAL_MIRROR` says how deploy_app used to work.
+
+**Not yet run on a cluster.** The reworded sheet and tool description reach the clusters once hecaton promotes this
+run. The live check that a plain-language ask for an image outside the old six lands with the guardrails off and is
+refused after `guardrails-on` is #994's.

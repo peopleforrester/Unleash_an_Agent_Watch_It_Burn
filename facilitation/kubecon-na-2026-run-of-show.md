@@ -919,12 +919,14 @@ above).
    attackme: the beacon answered from `workshop-mcp`, a server-side dry run of the
    villain image as `workshop-mcp` was admitted, and the recipe file read back.) The
    prompts:
-   - any public image, in plain language ("deploy Tron", "run busybox"): the bot picks
-     the image, `deploy_app` puts in the public one on `public.ecr.aws`, and each one
-     that lands shows on `deployments.burritobot.co` with its image and the sender's
-     witch name (#773). The model often sends only the app's name ("Tron"), and
-     `deploy_app` writes the Deployment itself; an app the list does not carry, Tron
-     among them, runs on the public nginx image (#939);
+   - any public image, in plain language ("deploy Tron", "run postgres"): the bot picks
+     the image, and nothing narrows it until step 5 (#988). `deploy_app` sends the image
+     to the cluster as the bot writes it, from any registry; a Docker official image's
+     plain name goes to its copy on `public.ecr.aws`, since nothing pulls from Docker
+     Hub (#714). Each one that lands shows on `deployments.burritobot.co` with its image
+     and the sender's witch name (#773). The model often sends only the app's name
+     ("Tron"), and `deploy_app` writes the Deployment itself, serving that app a landing
+     page on the pinned public nginx image (#939, #992);
    - reading the filesystem, the recipe file under `/tmp/burrito-data`;
    - egress, posting the customer breakdown to `https://beacon.burritobot.co/beacon`.
 
@@ -951,8 +953,10 @@ above).
    poll (see "The Kubernetes guardrails switch (#774)" above). The room is invited to
    try their Challenge 1 and Challenge 2 attacks again: the CEO's Secret read now comes
    back Forbidden, and a public image, the recipe read and the beacon post are each
-   stopped. From here on a public image the room asks for is refused by
-   `deny-external-registries`. Segment 4's Jokers still land: HC-666 asks for
+   stopped. From here on any image the room asks for is refused at admission by
+   Kyverno: `deny-external-registries` admits only `registry.burritobot.co` for the
+   bot, and `restrict-image-registries` refuses `public.ecr.aws` and every other
+   registry off its list. Segment 4's Jokers still land: HC-666 asks for
    `registry.burritobot.co`'s image, which both registry policies trust (#775).
 6. **One slide per guardrail,** each named, not deep. If one is asked about, its
    fallback proves it without the model:
