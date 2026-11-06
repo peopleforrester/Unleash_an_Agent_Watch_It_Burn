@@ -22839,3 +22839,7 @@ verify/test_images_lock_live.py` printed "Every image both clusters run has an i
 pods on watch-it-burn-community and 75 on watch-it-burn-private. It only read; nothing on either cluster changed.
 
 **Not yet run on a cluster.** Nothing for #897; the save is not a cluster change.
+
+**The suites (run 17795, at `c3c7fc7e`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`283 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `64 checks ran (the offline suite and 63 tier tests) in
+53m11s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No code changed and no dependency was added.
