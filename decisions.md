@@ -25805,3 +25805,8 @@ read.
 **Checked.** Both tests passed against this clone and against GitHub on 2026-11-06. A clone made with `--no-tags` and a
 copy with one hex digit of the Portland pin changed each failed the offline test, naming the missing tag and the
 differing object. No tag was created, moved or deleted. No dependency was added.
+
+**Ported in run 17903.** Run 17885 ended claim-stale, not on a failed check, so its commits never reached staging.
+This run cherry-picked its test commit onto staging at `96918d69` with no conflict; `verify/draft-drift.sh` read
+the draft as clean, with staging only appending to decisions.md. The code is unchanged from the draft. Both tests
+passed again here: the clone's two delivered tags and GitHub's are the pinned objects on the pinned commits.
