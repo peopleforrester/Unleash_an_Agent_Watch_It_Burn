@@ -23816,3 +23816,39 @@ this run touched neither cluster.
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `67 checks ran (the offline suite
 and 66 tier tests) in 38m55s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; `test_wall_throttle_e2e.py` ended
 "PASS: the wall adds at most one card per 1.5 s window under every flood". The prose gate printed `prose gate: pass`.
+## 2026-11-06 · #934 · run 17824 · The wall's newest-card test is prompts-agenticburn's, and it fails when the card is not the newest or the rest are queued
+
+**What #934 asks.** Test review run 17682 found no test for #927's criterion that the card added at each tick is
+the newest prompt since the previous card, and that the older ones are dropped and never drawn at a later tick, on
+prompts-agenticburn's `templates/wall.html`. Only this repo's `/display` had one
+(`verify/test_display_throttle_e2e.py`). The review ran before prompts-agenticburn#18 landed. That repo's main and
+staging now both stand at `6601313a` ("Draw one card per 1.5 s on the wall, the newest, with a "+N more" count"),
+which adds the throttle and its tests to `test_wall_page.py`.
+
+**Why the test is there and not here.** #927 moved the wall's half to prompts-agenticburn#18, and that repo's own gate
+(`uv run ruff check . && uv run pytest`) runs on every change to `wall.html`, so a change that breaks the criterion
+fails before it lands. A test in this repo would have to fetch another repo's page over the network and would only
+fail after the change had merged there. This run adds no test here. `verify/prior-drafts.sh 934 origin/staging`
+printed NONE and the issue had no comments.
+
+**What the tests check.** Three tests in `test_wall_page.py` at `6601313a` hold the criterion:
+- `test_throttle_shows_only_the_newest_of_each_window_and_counts_the_rest` drives `makeThrottle` on a fake clock. Of
+  a burst of 10 it shows 10, then four more windows add no card and leave no timer pending. Over a 60-prompt flood it
+  asserts, from an ordered log of offers and shows, that every card is the last prompt offered before it.
+- `test_a_burst_on_the_stream_adds_one_card_the_newest_with_a_live_count` drives the page through the real `/events`
+  route. The cards are "burst 10" of 10 and "second 5" of 5, and four more windows leave the card count at 4.
+- `test_a_burst_on_the_polling_fallback_is_sampled_the_same_way` does the same on the polling path: "polled 7" of 7,
+  and three more windows add nothing.
+
+**Mutation check (run 17824).** On a copy of prompts-agenticburn at `6601313a` (a `gh api` tarball, outside this
+clone), `uv run ruff check .` printed `All checks passed!` and `uv run pytest` printed `90 passed`. Two edits to
+`makeThrottle` in `templates/wall.html`, each run against the unchanged tests:
+- *Oldest, not newest:* `held = e` became `if (held === null) held = e`. `3 failed, 87 passed`, the three tests above.
+- *Queued, not dropped:* each offer pushed onto a queue and each tick showed `queue.shift()` and re-armed while the
+  queue held more. `3 failed, 87 passed`, the same three.
+
+So the criterion has a test that fails when it stops holding, in the repo that owns the page.
+
+**Live.** No cluster is involved: the wall runs on Railway, and this run touched neither cluster.
+
+**Not yet run on a cluster.** Nothing from this issue.
