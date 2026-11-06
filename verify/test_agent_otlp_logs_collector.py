@@ -30,7 +30,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import PROFILE_APP, REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import COLLECTOR_START_S, PROFILE_APP, REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -116,7 +116,7 @@ def run(profile: str, secret: bool, tmp: pathlib.Path) -> None:
     proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV,
                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     try:
-        deadline = time.time() + 30
+        deadline = time.time() + COLLECTOR_START_S
         while True:
             try:
                 socket.create_connection(("127.0.0.1", port), timeout=1).close()

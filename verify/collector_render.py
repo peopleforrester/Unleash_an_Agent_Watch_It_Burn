@@ -33,6 +33,9 @@ PROFILE_APP = {"instructor": APPS / "otel-collector.yaml", "attendee": APPS / "o
 # OTTL statements when 30 s ran out, so the turn was never posted and the checks after it failed; three reruns alone
 # passed. Start time is the host's, not the config's, so the wait is long and a collector that exits ends it at once.
 COLLECTOR_START_S = 180
+# The sleep between start polls. test_trace_shape_e2e.py and test_collector_llmobs_model_e2e.py count polls in place of
+# wall seconds (#799), 100 of them before #900, so their budget is COLLECTOR_START_S / COLLECTOR_POLL_S polls.
+COLLECTOR_POLL_S = 0.3
 
 
 def deep_merge(base, over):

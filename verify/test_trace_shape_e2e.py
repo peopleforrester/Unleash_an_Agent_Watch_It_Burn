@@ -64,7 +64,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+from collector_render import COLLECTOR_POLL_S, COLLECTOR_START_S, REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -356,7 +356,7 @@ def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str, 
             # old wall-clock deadline ran out before the woken collector's file exporter flushed, and all 26 spans
             # read as lost (#799).
             sent, polls = False, 0
-            while not sent and polls < 100 and proc.poll() is None:
+            while not sent and polls < COLLECTOR_START_S / COLLECTOR_POLL_S and proc.poll() is None:
                 polls += 1
                 if "Everything is ready" not in log_file.read_text():
                     time.sleep(0.3)

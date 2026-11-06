@@ -454,6 +454,13 @@ blocked` and `input guard restored to: off`, exit 0. The script takes the bots' 
 it, it added `.agenticburn.com` to every host, so this command failed until it was run as `burritobot-private`.
 Each probe ended with guards-off and guardrails-off on both clusters, and /controls read all five AI guards off.
 
+Rerun the same day by hecaton run 17863, at staging `bfa53288`, after #899 added bearer auth to the scanner list
+(`checksum/scanners-yml` `61a7adb9a48a`, the live file's hash, llm-guard 1/1 on `46b3d202`). Admin, ending 10:31Z: 32
+PASS, 1 FAIL, `KUBECON PROBE RED`, $0.6973 to $0.7564 over 14 calls, the one FAIL again HC-666 read at 10:27:32Z with
+no deploy_app after it (#856). Admin, ending 10:38Z: 33 PASS, 0 FAIL, `KUBECON PROBE GREEN`, $0.7564 to $0.8167 over 14
+calls. topic-paraphrase passed in both, so the paraphrase is redirected through the guard with its token checked. At
+10:38Z input-guard.sh, run as the issue gives it, passed the benign prompt and blocked the injection, exit 0.
+
 **2026-11-06, the routes republish for #945, not yet live.** Hecaton run 17841, 08:37Z to 08:39Z, at staging
 `9530f450`. apex-agenticburn's main on GitHub is `a93679a` (03:47Z, 31 hosts), which already leaves out both
 `registry-attackme` rows, so the push half of `./fleet.sh routes roster` has nothing left to change. The router reload
