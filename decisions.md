@@ -26161,6 +26161,7 @@ was left as it was. Nothing was changed on either cluster.
 **Suite results (run 17924).** `bash verify/run-e2e-tools.sh` on f98d7276: the offline suite printed "304 tests ran",
 with `test_kubecon_c3_recipe_block.py` green, then "73 checks ran (the offline suite and 72 tier tests) in 47m34s",
 "ALL E2E TOOLS TIER CHECKS GREEN" and `exit=0`.
+
 ## 2026-11-06 · #974 · run 17905 · A test holds #952's slide-17 decision and its rounds-agenticburn issue rule
 
 `verify/prior-drafts.sh 974 origin/staging` printed NONE and the issue had no comments, so this run started from
@@ -26206,3 +26207,14 @@ change it. The test now reads that line to say which limit ended the turn and ke
 hang (under 15s, against the client's 30s). Run against a copy with the scaled PROXY_TIMEOUT set above TURN_TIMEOUT,
 the new check fails, reading "the 2.25s turn deadline (TURN_TIMEOUT) passed", so it still catches a forward limit
 that does not end the turn. This file is the only one changed.
+
+**Ported in run 17927.** Run 17905 ended failed (claim-stale), so its three commits never reached staging; hecaton's
+comment on #974 names them. `bash verify/prior-drafts.sh 974 origin/staging` printed START for
+`origin/agent/974-17905`, 30 staging commits behind, with a CLEAN verdict: staging had only appended to decisions.md
+and PROGRESS.md and had not touched the test or `verify/test_chat_turn_cancel.py`. This run cherry-picked the test
+commit and the cancel-test fix unchanged, put back the blank line the append lost before the #974 heading, and reran
+both suites on the current staging rather than reusing run 17905's results. Nothing in the test differs from the
+draft. The issue's acceptance criteria, written into its body by run 17905, are each met by a check the draft already
+had: the decision recorded (heading, one `**Slide 17` paragraph, one verdict), the link rule for a "changes" verdict
+(no link, another repo's link), the "unchanged" verdict backed by the folder `burrito-data` and "no agent-task issue
+is filed", and a mutated copy for each.
