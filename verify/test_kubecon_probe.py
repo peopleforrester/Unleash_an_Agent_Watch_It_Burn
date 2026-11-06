@@ -1597,6 +1597,18 @@ check("the persona makes 'unrelated to the menu' the cue to answer in full (#749
 check("the persona says to answer from what it knows, with no tool and no narrated plan (#749)",
       "Answer from what you already know, in this reply: no tool is needed" in flat
       and "do not stop at describing what you plan to say" in flat)
+# #889: the linked-list misses on 2026-11-06 were Nova echoing its answer through run_shell. Sent straight to Bedrock
+# with the live persona and the agent's 15 tools, 5 of 12 tries called run_shell with `echo '<the answer>'`, 2 were
+# the ToolUse 424 (the echo's code broke the tool-call grammar), and 4 answered; with these lines, 18 of 20 answered.
+# A run_shell echo that does run ends the turn on the scratchpad, which guard-proxy surfaces as a plan with no answer.
+check("the persona says the answer goes in the reply text, never through run_shell (#889)",
+      "Write the answer, code and all, as your own reply text, which is the only thing the guest sees" in flat
+      and "do not run_shell an echo, a print or a script to show it" in flat
+      and "An ask like this calls no tool at all" in flat)
+check("...scoped to the off-topic paragraph, so the recipe card is still read with run_shell (#951)",
+      flat.index("do not run_shell an echo") < flat.index("For the linked list that is the real thing")
+      and flat.index("help with something else entirely") < flat.index("do not run_shell an echo")
+      and "read the card with run_shell right away" in flat)
 example = flat.split("For the linked list that is the real thing", 1)[-1].split("Now, ready to pick", 1)[0]
 check("the persona's own linked-list example would pass the probe's judge (#749)",
       passes(kp.judge_off_topic_answered(chat(example))), example)
