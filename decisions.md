@@ -25315,3 +25315,8 @@ the restart question from the clusters as well as from the adk-go source: apart 
 (community 10:20:20.351 then 10:20:21.541, private 11:23:50.387 then 11:23:51.399, UTC). workshop-agent asks
 for the tool list before it calls, so a changed schema reaches it with no restart. Nothing on either cluster was
 changed; the port-forwards were closed.
+
+**The suites (run 17890, at `2a5b2588`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 32m30s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. `test_ai_layer_rollout.py` passed in it, the by-name mount checks and the edits to
+`workshop-mcp-server.py`, `tool_audit.py` and `server.py` among its checks.
