@@ -22708,3 +22708,42 @@ answers the room only once its tasks/cancel call returns, and on the loaded shar
 The check passed in the first run and alone afterwards. The cause is in guard-proxy-agenticburn, which no run can
 push, so it is filed as a followup with this output. `bash verify/run-tests.sh` run again printed `280 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-06 · #829 · run 17791 · test_c6_joker_public.py holds the published breakout Joker as well as the workshop one
+
+**Why.** #775 added a second Joker tag, `festival-ops/maintenance-shell:busybox-1.38.0-internal`, which the internal
+registry seeds into registry.burritobot.co for HC-666. `verify/test_joker_build_digest.py` rebuilds it at images.lock's
+pin, but nothing read what ghcr.io serves for the tag. Run 16806 found the tag unpushed (a 404) and changed nothing.
+The tag is pushed now: at 2026-11-06T03:22Z ghcr.io's anonymous tags list read `busybox-1.38.0` and
+`busybox-1.38.0-internal`, and `verify/ghcr_pull.served_digest` returned `sha256:0765b359552b...` for the first and
+`sha256:793db2995eee...` for the second, which are the two digests images.lock pins. The issue names
+`sha256:0dbe92d4...`, the pin from before #714 added the shell banner and re-pinned both Jokers. The test holds
+images.lock's current pin, not the issue's old one. `verify/prior-drafts.sh 829 origin/staging` printed NONE (run
+16806's branch is in staging).
+
+**The change.** `verify/test_c6_joker_public.py` (tools tier) now runs the same checks on two Jokers: the ticket's image
+(`ticket_site.C6_IMAGE`, checked to be build.sh's `JOKER_REF`) and the tag `JOKER_INTERNAL_REF` names beside it. For each
+one it checks:
+- images.lock pins the tag.
+- ghcr.io serves the tag anonymously at that pin. This check is new for the workshop Joker as well.
+- The manifest, config and top layer each match their digest.
+- The image is linux/amd64, with start.sh as the entrypoint and PORT and ENV as build.sh sets them.
+- Every lower layer is the pinned busybox's.
+- The top layer holds `villain/www/index.html` byte for byte from the Joker's own page directory (`joker-web/` or
+  `joker-web-internal/`), joker-web's `villain/start.sh` (executable), and `etc/villain-banner.sh`.
+
+The banner and ENV checks are the follow-up that #714's 2026-11-05 entry asked for once the push was done. The test
+now needs both tags to pass, so it reads them together. When a pin is not what ghcr.io serves, the failure names the
+`build.sh` command that pushes it.
+
+**It fails when it should.** With images.lock's -internal pin set back to `0dbe92d4...`, the test failed one check,
+"ghcr.io serves ...-internal at images.lock's sha256:0dbe92d402b5...", and exited 1. With the breakout Joker's page
+directory set to `joker-web`, it failed one check, on `villain/www/index.html`, and exited 1. Both edits were reverted.
+
+**Live check, run 17791 (reads only; nothing changed).** `python3 verify/test_c6_joker_public.py` exited 0 with every
+check passing for both Jokers. On `watch-it-burn-private`, ConfigMap `registry/registry-seed` key `images.txt` seeds
+`busybox-1.38.0-internal@sha256:793db2995eee...`, the digest this test holds. `watch-it-burn-community` has no
+`registry` namespace, because the internal registry is only in `values-kubecon-private.yaml`.
+
+**Not yet run on a cluster.** Nothing is owed. The test reads ghcr.io, not a cluster.
+
+No dependency was added.
