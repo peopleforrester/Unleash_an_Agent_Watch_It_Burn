@@ -1629,19 +1629,18 @@ number and says who settled it and when, so references to it elsewhere still lan
 2. **The recorded fallback is built (#452).** The replayable prompt set, its
    replay script, the screenshots deck and its capture script are in
    `facilitation/kubecon-na-2026/fallback/` and `scripts/`, and the Night Before and
-   rollback steps name them. The deck holds 12 shots, every segment from 1 to 6,
-   captured on the live clusters on 2026-11-04. The segment videos, and the two
-   shots that were to be taken by hand at the first full rehearsal, left this repo
-   when Michael dropped M4 (#613) on 2026-11-01. Challenge 2's public-image shot is
-   not in the deck: on 2026-11-04 the Tron ask did not deploy on the community bot,
-   because the model passed `deploy_app` the bare name "Tron" for its manifest,
-   three times out of three, and again on 2026-11-05. The manifest the model then
-   offered names the Docker Hub image `tron`, which `deploy_app` refuses because the
-   cantina pulls only its listed public images. That is a live risk for Challenge 2
-   itself, not only for the deck. Since #939, `deploy_app` takes a manifest that is
-   only an app's name: "Tron" becomes a one-pod Deployment named `tron`, served on
-   the listed public nginx image, and its reply names the image. The shot is taken
-   once that change is running on the community bot.
+   rollback steps name them. The deck holds 13 shots, every segment from 1 to 6,
+   captured on the live clusters on 2026-11-04 and 2026-11-06. The segment videos,
+   and the two shots that were to be taken by hand at the first full rehearsal, left
+   this repo when Michael dropped M4 (#613) on 2026-11-01. Challenge 2's public-image
+   shot (03-1) was put back in the deck on 2026-11-06 (#939). On 2026-11-04 and
+   2026-11-05 the Tron ask did not deploy on the community bot, because the model
+   passed `deploy_app` the bare name "Tron" for its manifest. Since #939,
+   `deploy_app` takes a manifest that is only an app's name: "Tron" becomes a one-pod
+   Deployment named `tron`, served on the listed public nginx image, and its reply
+   names the image. On 2026-11-06 the room's two Tron prompts, replayed three times
+   and once more for the shot on the community bot, called `deploy_app` five times
+   with "Tron", and all five deployed.
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet

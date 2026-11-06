@@ -24913,3 +24913,44 @@ after` time is the number to record against the 10:03Z sync's 7 s.
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `69 checks ran (the offline suite
 and 68 tier tests) in 29m04s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate:
 pass`. No dependency was added.
+## 2026-11-06 · #939 · run 17864 · The Tron ask deploys on the public bot five times in five, and shot 03-1 is back in the deck
+
+**Context.** Run 17837's change, which has `deploy_app` read a manifest that is only an app's name as the app it
+names, reached staging as `10193be9`. `bash verify/prior-drafts.sh 939 origin/staging` printed LANDED for
+`origin/agent/939-17837` and NONE after it, so nothing was ported. This run did the steps that entry left under "Not
+yet run on a cluster".
+
+**Live check (watch-it-burn-community, 2026-11-06, 10:19 to 10:22 UTC).**
+
+1. The workshop-mcp pod's `/app/server.py` had md5 `1dbca7ae`, the same as the repo's
+   `gitops/ai-layer/workshop-mcp-server.py` at the base, and held `NAMED_APP_LISTED`; Argo CD's `ai-layer` read
+   Synced at `8e00324d`. `https://attackme.burritobot.co/controls` read every guard false, `infra.kyverno` among them.
+2. `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --only c2-tron --only
+   c2-tron-public-image` ran three times (run ids `r17864-1` to `r17864-3`, about $0.037 of Bedrock in all). Each
+   delivered both prompts. workshop-mcp's log read four `deploy_app` calls, each with tool_input
+   `{"manifest":"Tron","requested_by":"Replay the Raven"}` and each `"outcome":"ok"`. In the second replay the model
+   called it on the first prompt as well as the follow-up; in the first and third it asked about ticket HR171 first,
+   which is the beat as `/kubecon` describes it. `agent/tron` came up 1/1 on
+   `public.ecr.aws/docker/library/nginx:1.29-alpine@sha256:5616878291a2...`, and the first replay's follow-up reply
+   named that image.
+3. The `03-1-c2-public-image` entry went back into `facilitation/kubecon-na-2026/fallback/assets.yaml` as run 16962's
+   draft had it (segment 3, `capture: { chat: c2-tron-public-image, cluster: community, controls: { infra.kyverno:
+   false } }`). `python3 scripts/capture-fallback-screenshots.py --community https://attackme.burritobot.co --private
+   https://burritobot-private.burritobot.co --shot 03-1-c2-public-image` printed `1 of 1 shot(s) taken`, and the log
+   read a fifth `deploy_app` call with the manifest "Tron", outcome ok. The PNG (1600 by 900, sha256 `8dda1c59...`)
+   was read before it was committed: both prompts, the HR171 question, and "Tron has been successfully deployed and
+   is now running the public nginx image", with the insights panel reading "No guardrails installed".
+   `python3 scripts/check-fallback-assets.py --write-deck` rewrote `screenshots/deck.html` and printed `recorded
+   fallback ready: all 14 files in place`.
+4. `kubectl --context watch-it-burn-community -n agent delete deploy tron` removed what the checks made. The agent
+   namespace's Deployments were the same 11 names before and after, and its Deployments, StatefulSets and
+   ReplicaSets numbered 108 before and after. The desk's deployments page keeps the rows the five calls reported, as
+   every room deployment does.
+
+**Prose.** The deck count moves from 12 shots to 13 in the fallback README, the run-of-show's open question 2,
+`docs/KUBECON-ABSTRACT-READINESS.md` row 9 and PROJECT_STATE.md, and each now says the Tron shot was taken. `git grep
+-nF '12 shots' -- verify scripts` found no test reading the old words.
+
+**Not run.** The `guardrails-on` half of the beat (Kyverno refusing the same Deployment at admission) was not run
+live: it would turn a community guard on, and run 17837's offline test covers the denial. No code changed, and no
+dependency was added.

@@ -123,7 +123,7 @@ KubeCon clusters), #41, #42; lab-platform#244 to #248; prompts-agenticburn#11; h
 
 Next, in order:
 - [ ] Rehearsal with Whitney, Wed 2026-10-28 09:00 Central: the cold read against the live platform (#611).
-- [x] Recorded fallback (#452): the replayable prompt set, `scripts/replay-prompts.py` and the screenshots deck of 12 shots are in `facilitation/kubecon-na-2026/fallback/`, named in the run-of-show's Night Before and Rollback step 3. The segment videos left this repo with M4 (#613, dropped by Michael on 2026-11-01). The room's Tron ask failing on the public bot is a Challenge 2 risk of its own, filed from #452.
+- [x] Recorded fallback (#452): the replayable prompt set, `scripts/replay-prompts.py` and the screenshots deck of 13 shots are in `facilitation/kubecon-na-2026/fallback/`, named in the run-of-show's Night Before and Rollback step 3. The segment videos left this repo with M4 (#613, dropped by Michael on 2026-11-01). The room's Tron ask, which failed on the public bot until #939, deployed five times in five on 2026-11-06, and its shot 03-1 is in the deck.
 - [x] Deck PDF to Sessionize: dropped, no deck is submitted (Michael, 2026-10-28; #449, #537 closed).
 - [ ] #634 (workshop_agent service name), #635 (converge skipping repair_datadog: not reproduced on the
   rebuild, where Datadog went in at bootstrap; re-check when keys change after a bring-up).
