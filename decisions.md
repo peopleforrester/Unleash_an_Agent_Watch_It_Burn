@@ -24776,3 +24776,59 @@ waited on it with `timeout 560` under a 600 s tool limit. `bash verify/run-e2e-t
 `69 checks ran (the offline suite and 68 tier tests) in 31m35s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The
 one `FAIL` line in the log is `test_datadog_secret_fields_render.py`'s own empty-app-key case, which that test
 expects to fail and holds as a PASS.
+## 2026-11-06 · #894 · #961 · run 17854 · Live: a dropped storefront chat now reads as an error row in Agent Observability
+
+This is the live check the #894 entry of run 17792 names under "Not yet run on a cluster", asked for by #961.
+
+**The rule is running.** On watch-it-burn-community, Argo CD's `otel-collector` Application read Synced Healthy at
+targetRevision staging, last synced 2026-11-06T05:21:18Z. The ConfigMap
+`monitoring/otel-collector-opentelemetry-collector-agent` defines `transform/http_server_error` with the five statements
+of `gitops/otel-collector/values.yaml` and lists it in the `traces` pipeline after `transform/adk_tool_content`. The
+collector pod `otel-collector-opentelemetry-collector-agent-r9z7h` started at 05:21:19Z, one second after that sync, on
+`opentelemetry-collector-contrib:0.160.0`. The Datadog overlay (`otel-collector-datadog`) restates only the pipelines'
+exporters, so the processor list stands.
+
+**The forced failure.** Through `kubectl port-forward svc/guard-proxy` in namespace `agent`, at 09:23:13Z the run scaled
+`deployment/workshop-agent` from 1 to 0, waited until its Endpoints listed no address (09:23:27Z), and POSTed one chat
+to guard-proxy's `/chat` (`{"prompt": "Hi BurritoBot! What is on the menu today?", "session": "issue-961-dropped"}`)
+under the traceparent `00-cf68e0fbeb9242aab3dbc73bcba4d8fe-d0c06aaf35694ab7-01`. guard-proxy answered `http=502` in 0.33 s
+with `{"reply": "BurritoBot's kitchen isn't answering. Try again in a moment.", "guarded": false, "input_tokens": 0,
+"output_tokens": 0}`. The run then scaled the Deployment back to 1, and `rollout status` read `successfully rolled out`,
+1/1 Available: the cluster as it was found.
+
+**What Datadog shows.** After `. "$HECATON_CLUSTER_ENV"`, `python3 verify/dd_traces.py --profile accen-dev --minutes 30
+--traces 1 --apm` printed "no ml_app:burritobot span in Datadog in the last 30 minutes" (exit 1) for the first three
+minutes after the chat, then exited 0 and printed:
+
+```
+== Datadog: ml_app:burritobot, last 30 minutes ==
+trace 742dd6df68c054378f41277323af471b  2026-11-06T09:23:27+00:00  1 spans  1 root(s)  env=burritobot-kubecon-na-26
+  agent POST  14 ms  error
+APM: the newest 6 spans for env:burritobot-kubecon-na-26 service:burritobot*
+  2026-11-06T09:23:27.723Z  burritobot  POST  trace cf68e0fbeb9242aab3dbc73bcba4d8fe
+  2026-11-06T09:23:27.723Z  burritobot  POST  trace cf68e0fbeb9242aab3dbc73bcba4d8fe
+  2026-11-06T09:23:27.724Z  burritobot  POST  trace cf68e0fbeb9242aab3dbc73bcba4d8fe
+  2026-11-06T09:23:27.723Z  burritobot  POST  trace a9276ab4f754fa9e4a5a5e7967896648
+  2026-11-06T09:23:27.728Z  burritobot-gateway  POST  trace cf68e0fbeb9242aab3dbc73bcba4d8fe
+  2026-11-06T09:23:27.728Z  burritobot-gateway  POST  trace cf68e0fbeb9242aab3dbc73bcba4d8fe
+```
+
+The root row reads `agent POST 14 ms error`, where the baseline before #894, trace 39fba3d0574259a99e1a646ed1e89818,
+reads `agent POST 36 ms ok`. The same command with `--json` gives the attributes behind those rows:
+
+- Agent Observability's row (trace 742dd6df...) is one `agent` span with the prompt as its input and no output,
+  tags `error.type:502`, `http.response.status_code:502`, `otel.status_description:the_server_answered_http_502`,
+  `url.path:/chat`, `session_id:issue-961-dropped`, and `otel.trace_id:a9276ab4f754fa9e4a5a5e7967896648`, which is the
+  first 32 hex of SHA256 of the traceparent's trace id: `transform/llmobs_one_root`'s copy of this turn.
+- APM's `POST` server span in trace cf68e0fb... (the traceparent's id), `url.path` `/chat`, `http.status_code` 502,
+  has status error, `error.type` 502 and `error.message` "the server answered HTTP 502". Its children carry their
+  own status as before: guard-proxy's `agent.forward` CLIENT span reads "HTTP Error 503: Service Unavailable" (proxy.py's
+  message, left alone by the rule), urllib's POST reads "HTTPError: HTTP Error 503: Service Unavailable", and the
+  gateway's spans read "upstream call failed: Connect: Connection refused (os error 111)".
+- The APM row in trace a9276ab4... is the copy itself, which the intake also writes into APM, as the 2026-11-02 #783 entry's
+  "What it costs" foresaw. It carries the same `error.type` 502.
+
+Both of #961's expectations hold: the root row reads `agent POST ... error`, and APM's POST /chat carries
+`error.type` 502. The raw A2A pass-through, which the #894 entry names as not covered, was not exercised.
+
+No file but this one changed, so no test changed. No dependency was added.
