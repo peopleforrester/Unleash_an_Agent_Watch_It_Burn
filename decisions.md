@@ -25039,3 +25039,7 @@ nothing there. What differs from the draft is only this entry.
   accen-dev`, and as its only findings the two KubeCon clusters, which are #979. It exited 2 for those.
 
 **Not yet run on a cluster.** Nothing. The cron line first fires at 11:17Z today.
+
+**The suites (run 17884, at `32f9bf8d`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 30m08s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`. No dependency was added.
