@@ -25898,3 +25898,13 @@ no answer to https://10.255.255.1/token/ on 3 tries, 5 s apart; the last: URLErr
 exit 1.
 
 **Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
+
+**A second red test seen in this run, fixed here.** This run's first `bash verify/run-e2e-tools.sh` (at `e956ce30`)
+ran 303 offline tests with one failure, `verify/test_chat_turn_cancel.py`: "the turn ends at PROXY_TIMEOUT, not later
+(2.63s)". Its bound was 1.5 s over the scaled PROXY_TIMEOUT of 1 s. Run alone three times right after, it measured
+1.15, 1.29 and 1.07 s, so the cause is the shared host's load against a 1.5 s slack, not the proxy. That bound,
+2.5 s, already sat above the scaled TURN_TIMEOUT of 2.25 s, so it never told the two limits apart; the static check
+above it, that PROXY_TIMEOUT is under TURN_TIMEOUT in the Deployment, is what holds which limit ends the turn. What
+the timing can hold is that a limit ends the turn at all: the fake agent never finishes, so a turn no limit ended runs
+to the client's 30 s. The check now reads "the turn ends at its limit, not when the agent finishes, which it never
+does", with a bound of the scaled TURN_TIMEOUT plus 5 s (7.25 s). Run alone after the change it read 1.05 s.

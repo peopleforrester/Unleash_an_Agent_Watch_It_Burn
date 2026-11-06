@@ -150,8 +150,13 @@ except ValueError:
 check("the room gets a 502", status == 502, f"got {status} {raw[:200]!r}")
 check("the 502 carries a sentence a phone can read, in the /chat shape",
       reply == {"reply": KITCHEN_DOWN, "guarded": False, "input_tokens": 0, "output_tokens": 0}, f"got {reply}")
-check(f"the turn ends at PROXY_TIMEOUT, not later ({took:.2f}s)",
-      took < proxy_timeout * SCALE + 1.5)
+# The fake agent never finishes, so a turn no limit ended would run to this client's 30 s. The bound sits far below
+# that and far above host lag: run 17928's tier measured 2.63 s on the shared host against the old 1.5 s slack over
+# PROXY_TIMEOUT (2.5 s, already above TURN_TIMEOUT's 2.25 s), and 1.07 to 1.29 s when run alone. That PROXY_TIMEOUT
+# is the limit that ends it is held above, from the Deployment's values.
+LIMIT_BOUND = turn_timeout * SCALE + 5
+check(f"the turn ends at its limit, not when the agent finishes, which it never does ({took:.2f}s, "
+      f"under {LIMIT_BOUND:g}s)", took < LIMIT_BOUND)
 
 deadline = time.monotonic() + 5
 while time.monotonic() < deadline and not any(c.get("method") == "tasks/cancel" for c in RunawayAgent.calls):
