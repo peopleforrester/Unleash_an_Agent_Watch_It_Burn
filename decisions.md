@@ -26462,3 +26462,47 @@ tests) in 75m27s", `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with `verify/tes
 against public.ecr.aws. The log is `/var/lib/hecaton/runs/17956/e2e-tools.log`. The attempt before it,
 `e2e-tools.first.log`, reached the hour limit on its background job while still in the offline suite, with nothing
 red, on a host at a load average of about 35 on 16 cores; the rerun was detached from that limit and polled.
+
+## 2026-11-06 · #975 · run 17955 · A test holds #952's suite record: both suites green, the prompt-sheet test passing
+
+`verify/prior-drafts.sh 975 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging at `629c53ea`. The attempt before it ended with an API error and was stopped as looping; it left no branch
+and no commits, so nothing was ported. Test review run 17827 (#975) found that no test checked one criterion of #952:
+`bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` finish green (the prompt-sheet test passing), with the
+result recorded in decisions.md. #952's entry records it in its "**The suites (run 17818, at `b3d7dad6`).**"
+paragraph.
+
+**The test.** `verify/test_952_suite_record.py` (offline, no `# SUITE: e2e` line, so both suites run it) reads the
+"## 2026-11-06 · #952 · run 17805" entry. That entry needs exactly one paragraph opening `**The suites`. With line
+wraps read as spaces, that paragraph has to name `bash verify/run-e2e-tools.sh` and record a `N tests ran` count above
+zero followed by `ALL OFFLINE RENDER-GATE TESTS GREEN`. It also has to record a
+`N checks ran (the offline suite and M tier tests) in XmYYs` line with M above zero and N = M + 1 (run-e2e-tools.sh
+counts the offline suite as one check), then `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, and
+`verify/test_kubecon_prompt_sheet_e2e.py` passed with the line that test prints on a pass quoted. A failure line from
+either script, a `FAILED:` or any non-zero `exit=` in the paragraph is refused.
+
+**Why it also reads the scripts.** The record means what it says only while the scripts print those words. So the
+test checks that run-tests.sh still prints its `tests ran` count and its green line, that run-e2e-tools.sh runs
+run-tests.sh first and prints its `checks ran` line with the duration and its green line, that the prompt-sheet test
+carries `# E2E TIER: tools` (so a green tier ran it), and that it still prints the pass line the record quotes.
+
+**It can fail.** Each literal it cuts on is checked first, and the test exits naming the literal and the file when
+one is gone. The verdict is then run on 18 cut copies of the real record, and each is refused: the #952 heading struck,
+the suites paragraph removed or doubled, the command unnamed, the `tests ran` count struck or zero, the offline green
+line struck, replaced by the failure line or left unquoted, the `checks ran` line struck, its duration struck, a checks
+count that is not the tier count plus one, the tier green line struck or replaced by the failure line, `exit=0`
+struck or replaced by `exit=1`, the prompt-sheet test unnamed or recorded as failed, and its pass line struck.
+
+**Live.** No cluster is involved: the test reads four repo files, and this run touched neither cluster. No
+dependency was added.
+
+**Not yet run on a cluster.** Nothing from this issue.
+
+**The suites (run 17955, at `0a27e130`).** The first `bash verify/run-e2e-tools.sh` here ran the offline suite green
+(`308 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and was then stopped by the shell's one-hour background limit
+partway through the tier, at `test_injection_classifier.py`, with no failure by then; the host's load average was
+about 35. The rerun, given two hours, ran the offline suite (`308 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`)
+and then the tier: `73 checks ran (the offline suite and 72 tier tests) in 74m26s`, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`. `test_952_suite_record.py` printed "#952's suite record holds: both suites green, the prompt-sheet test
+passing." and `verify/test_kubecon_prompt_sheet_e2e.py` printed "The iPad prompt sheet carries every /kubecon prompt,
+in order." The log is `/var/lib/hecaton/runs/17955/e2e-tools.log`, the cut-off run `e2e-tools.attempt1.log`.
