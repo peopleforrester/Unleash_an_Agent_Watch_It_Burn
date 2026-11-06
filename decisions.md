@@ -22216,3 +22216,7 @@ and the rest) are the branch's from before the rebase; the commit subjects name 
 **The suites (run 17770, at `85a1ed2b`, on staging `9de5bb7f`).** `bash verify/run-e2e-tools.sh` printed `280 tests
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `64 checks
 ran (the offline suite and 63 tier tests) in 35m32s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+While the suites ran, staging moved to `d91e8bf8` (#958: `.gitattributes` gives decisions.md and PROGRESS.md git's union
+merge, and `verify/test_gitattributes_union.py` holds it). The branch rebased onto it with no conflict. The change since
+`9de5bb7f` is those two files and the two records, none of them a path this branch touches but the records. On the
+new base, `bash verify/run-tests.sh` printed `281 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`.
