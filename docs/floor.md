@@ -236,17 +236,39 @@ from AWS (the tags, the node group and its launch template; a roster cluster bui
 role from `roster.tsv`). Every planned resource is one to import. It finds each one's import id in AWS
 before it imports any, and stops at the first it cannot find, so it never writes half a state. Then it
 imports them one at a time, settles the state with the refresh-only apply below, and plans again. It
-refuses a state that already manages a resource. Imports, the settle and the plan only read AWS, so it
-changes nothing there. `--resolve-only` prints the import ids and stops. Exit 0 means the last plan has
-no changes, 2 that the state is rebuilt and the plan still has some, which it lists, and 1 an error.
+refuses a state that already manages a resource; `--resume` carries on a rebuild that stopped part way (a
+credential timeout stopped one on 2026-11-06), importing only what the state does not hold. Imports, the
+settle and the plan only read AWS, so it changes nothing there: CloudTrail holds 3,230 events from the
+run that rebuilt the five accen-dev states, and none of them is a write. `--resolve-only` prints the
+import ids and stops. Exit 0 means the last plan has no changes, 2 that the state is rebuilt and the plan
+still has some, which it lists with the attributes each one changes, and 1 an error.
 
-Exit 2 is what the KubeCon clusters give. Three security group rules the cluster root has committed since
-2026-10-28 are on neither cluster: #869's node rules for 8080 and 3000, and #906's lab VPC rule to the API on
-443 (#906's fix was made by hand as a rule from the other cluster's nodes). AWS does not hold them, so they
-are not imported, and the plan creates them. The next `fleet.sh` apply of each cluster makes them; until
-then the drift report, which plans refresh-only, reads both states as clean. Each rebuild of a cluster
-takes about half an hour: a cluster root plans about 70 resources, and each import refreshes the root's
-data sources. `verify/test_fleet_import_state.py` holds the import ids to an AWS world of the clusters'
+Two things in the cluster root needed care. The EKS module passes the cluster's name, endpoint, version and
+CA to the node group and the access entries through a `time_sleep`'s triggers. Terraform imports a
+`time_sleep` with no triggers, after which nothing that reads them evaluates. So the script writes it into
+the state itself, its triggers read from the imported cluster, and the last plan shows it unchanged. And
+the node group states `kubernetes_version = var.kubernetes_version`: left to the module, the version came
+through that `time_sleep`, which is unknown in an empty state, and a `count` that hangs on it failed every
+import.
+
+Rebuild a cluster's state as the machine's own operator, the identity that built it: the module's
+`cluster_creator` access entry and the KMS key policy name whoever runs the plan. A state rebuilt by another
+identity, a hecaton run's role for one, plans both as changed, and a copy of that state must not be taken
+to the operator machine.
+
+Exit 2 is what the KubeCon clusters give, and none of their changes replaces the cluster, its node group or
+an access entry. Three security group rules the cluster root has committed since 2026-10-28 are on neither
+cluster: #869's node rules for 8080 and 3000, and #906's lab VPC rule to the API on 443 (#906's fix was made
+by hand as a rule from the other cluster's nodes). AWS does not hold them, so they are not imported, and the
+plan creates them. The rest is configuration committed after the build: the launch template's user data
+(#714 removed the containerd registry part, so the next apply rolls the node), the agent and tutor
+policies (#203 dropped the `bedrock:Converse` actions), the tutor's inference profile, replaced for #882's
+model, and on watch-it-burn-private the `role` tag on every resource. Then there are settings Terraform keeps
+and AWS has no copy of (`force_destroy`, `force_detach_policies`, `force_update_version`, the addons'
+conflict settings), as after any import. The next `fleet.sh` apply of each cluster makes all of it; until
+then the drift report, which plans refresh-only, reads both states as clean. A cluster's rebuild takes
+about 35 minutes (65 imports, each one refreshing the root's data sources), the lab VPC's 9 and the
+boundary's 1. `verify/test_fleet_import_state.py` holds the import ids to an AWS world of the clusters'
 shape, and holds the script to a rule for each resource type the three roots plan
 (`verify/fixtures/import-state/planned-types.txt`, from the plans of 2026-11-06).
 
