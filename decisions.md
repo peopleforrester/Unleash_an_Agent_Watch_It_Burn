@@ -27713,3 +27713,8 @@ that calls `togglePause()`, `throttle.resume()`, and the `#pinslot` above the st
 
 **Not yet run on a cluster.** Nothing: the wall runs on Railway, outside both clusters. Its live look after the next
 wall deploy is owed in prompts-agenticburn, as #22's report records.
+
+**Suite results, run 18004.** `bash verify/run-e2e-tools.sh` on `b84b0745`: the offline suite printed `307 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then the tools tier printed "73 checks ran (the offline suite and 72 tier
+tests) in 39m55s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/18004/e2e-tools.log`.
+The prose gate printed `prose gate: pass`. No dependency was added.
