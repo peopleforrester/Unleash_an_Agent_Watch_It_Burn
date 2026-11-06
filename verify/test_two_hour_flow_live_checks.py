@@ -265,7 +265,11 @@ for key in ("c5-on", "c6-on"):
     check(f"{key} leaking: left as found", left_as_found(fake), f"{fake.guards} {fake.deploys}")
 
 print("== the prompt under test is not git's ==")
-fake = Fake(prompt=GIT_PROMPT.replace("Three cases, in this order", "Two cases"))
+# The live prompt differs from git's by a line appended to it, not by rewording a line of the rule: #968 reworded the
+# recipe rule's "Three cases, in this order" away, and a replace on that literal then left git's prompt unchanged.
+NOT_GIT = GIT_PROMPT + "\nA line the live Agent has and git's systemMessage does not.\n"
+check("the prompt under test differs from git's", NOT_GIT != GIT_PROMPT)
+fake = Fake(prompt=NOT_GIT)
 failed, results, shown = run(fake)
 check("a live systemMessage that is not git's fails", any("systemMessage is git's" in f for f in failed), str(failed))
 check("and nothing is asked or switched", fake.calls == 0 and not fake.toggles and not results)
