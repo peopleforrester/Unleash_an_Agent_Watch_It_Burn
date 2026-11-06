@@ -22590,3 +22590,7 @@ images without a row on either cluster (75 pods on watch-it-burn-private). It on
 changed.
 
 **Not yet run on a cluster.** Nothing: the save runs on netcup, not on a cluster.
+
+**The suites (run 17790, at `01ec6114`).** `bash verify/run-e2e-tools.sh` printed "64 checks ran (the offline suite and
+63 tier tests) in 53m15s", `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Its offline suite printed "282 tests
+ran" and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
