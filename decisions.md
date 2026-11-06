@@ -28150,3 +28150,45 @@ to take it; the commands are docs/floor.md's "Rebuilding a lost state", run ther
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `75 checks ran (the offline suite and 74 tier tests) in 38m17s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
 Logs are under `/tmp/r18049/`.
+
+## 2026-11-06 · #945 · run 17948 · The router reload goes to netcup again, pinned to a93679a by checksum
+
+**Where the issue stood.** `verify/prior-drafts.sh 945 origin/staging` printed `LANDED origin/agent/945-17841` and
+`NONE`: run 17841's records merged to staging as `69b85238`, so there was nothing earlier to port. Question 1097 sent the netcup act back. The judge
+refused it because it checked out whatever `origin/main` was when it ran, without pinning `a93679a`, and left
+Michael's apex checkout on a detached HEAD. The coordinator's answer was to do the act through the `sources-elevated`
+wrapper, and, if that still refuses, to escalate the exact command with the wrapper's refusal quoted.
+
+**Through the wrapper (about 16:21Z).** `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet netcup railway
+whoami` printed `REFUSED netcup is not one of megumi-wsl2, tanjiro-wsl2`, exit 2. On the two hosts it does reach,
+`railway whoami` printed `Unauthorized. Please run railway login again.` (tanjiro-wsl2, whose apex checkout is on
+`main` at `a93679a`, level with `origin/main`) and `Unauthorized. Please login with railway login` (megumi-wsl2).
+`reload-routes.sh` stages the table over `railway ssh`, so neither host can reload the router. Nothing was changed.
+
+**The act, written again.** It runs as Michael on netcup and does not touch any checkout of his. It checks that gh,
+railway, curl and sha256sum are on its PATH and that `railway whoami` answers. It then refuses unless apex main on
+GitHub is still `a93679a5ba49accb702feb87e6fcaa65c13480d9`, so it never reloads an older table over a newer one.
+Next it fetches `routes.map` and `scripts/reload-routes.sh` at that commit through `gh api` into a new temp directory
+and checks both by sha256: `34e68498...4634501` for the table and `dcd39436...d8de85` for the script, the values read
+from GitHub by this run. It checks that the table has no `registry-attackme` line, runs the script on the table, and
+then reads both registry-attackme URLs and the tags list. This run ran the same script here with a stub `railway` on
+PATH. The apex main check, both downloads and both checksums passed, the reload script issued its four `railway ssh`
+steps against project `b4a35c4e`, service `watch-it-burn-apex`, and the act exited 0. Nothing went to Railway.
+
+**Why the reload alone covers `./fleet.sh routes roster`.** The push half of `routes roster` writes the table
+generated from the live console load balancers. At 16:23Z `kubectl -n agent get svc console` read
+`k8s-agent-console-6d7d3fd8cd-932f5f880aa49b92` on watch-it-burn-community and
+`k8s-agent-console-8b9a07a948-ac72870744b3b1bd` on watch-it-burn-private. Those are the only two upstreams in
+`a93679a`'s 31 rows, so a regeneration would write the same table and push nothing. What the command still owes is
+the reload, which is the act.
+
+**Read live, read only (16:22Z to 16:26Z).** `registry-attackme.burritobot.co/v2/` and
+`registry-attackme.agenticburn.com/v2/` answered 502. `no-such-host-945.burritobot.co/v2/` and
+`provisioning.agenticburn.com/` answered 404, which is the answer the router gives a host it does not carry.
+`registry.burritobot.co/v2/` answered 200, and `curl -fsS` of its maintenance-shell tags list printed
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended "the router
+serves exactly the roster", exit 0. Neither cluster was changed.
+
+**Not yet run live.** The act above. Its output answers the first three criteria: `router reloaded with 31 route(s),
+no redeploy`, then 404 for both registry-attackme URLs and the tags list with `busybox-1.38.0`. Once it has run, the
+next run on #945 runs `./fleet.sh router-check` and records the result. No code changed and no dependency was added.
