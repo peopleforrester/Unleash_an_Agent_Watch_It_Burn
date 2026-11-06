@@ -31,6 +31,11 @@
 # BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
 # it, then guardrails-off. The switch reaches the community cluster as well, for the minute or two it runs.
 #
+# #954's 2-hour flow (test_two_hour_flow_live.py, #970) runs on PRIVATE_CONTEXT as well: lab.html's own chat asks for
+# Challenges 1, 2, 3, 5, 6 and 7, each in a fresh marked conversation, judged on what the lab tells the student to look
+# for, with the deployed systemMessage held equal to git's. 35 model calls; it puts the AI guards back off and
+# deletes promo-mascot and maintenance-shell. Its guardrails stay off, so run it apart from the recipe block above.
+#
 # The prompt wall's "+N more" count (test_wall_more_count_live.py, #935) needs no context: it downloads the wall the
 # room reads, WALL_URL (default https://prompts.agenticburn.com/), and runs the page's own script on a fake clock in
 # node, with verify/wall_more_count.py's checks, which the tools tier runs on the pinned copy. It sends nothing to the
