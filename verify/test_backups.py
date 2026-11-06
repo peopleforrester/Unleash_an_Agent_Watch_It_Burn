@@ -98,8 +98,12 @@ _sh.rmtree(T0, ignore_errors=True)
 tf = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
 check("the cluster module takes node_subnet_ids, null by default (every private subnet)",
       'variable "node_subnet_ids"' in tf and "default     = null" in tf.split('variable "node_subnet_ids"')[1][:200])
+if "eks_managed_node_groups = {" not in tf:
+    sys.exit("anchor missing: 'eks_managed_node_groups = {' is not in infra/terraform/aws/cluster/main.tf")
+# The whole node group block, to the end of module "eks", not a fixed window: a comment added above the line moved it
+# past the 800 characters this used to read (#979).
 check("and the node group places its node in them",
-      "subnet_ids = var.node_subnet_ids" in " ".join(tf.split("eks_managed_node_groups = {")[1][:800].split()))
+      "subnet_ids = var.node_subnet_ids" in " ".join(tf.split("eks_managed_node_groups = {")[1].split("\n}\n")[0].split()))
 check("fleet.sh reads a standby's zone from backups.tsv", fleet("standby_zone", pub[3].name) == pub[3].zone == "b")
 check("a roster cluster has no zone", fleet("standby_zone", "watch-it-burn-community") == "")
 SUBS = '\'["subnet-a1","subnet-b2"]\''
