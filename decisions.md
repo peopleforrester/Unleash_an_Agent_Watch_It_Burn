@@ -22539,3 +22539,12 @@ prompt reaches the clusters through Argo CD.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, the new one being `test_recipe_persona.py`) and then the tier:
 `61 checks ran (the offline suite and 60 tier tests) in 30m37s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
+
+**Resumed as run 17785, after a rebase conflict.** Run 17734 ended failed (rebase-conflict in `PROGRESS.md`, an
+insert-insert at the top of `### Added`, colliding with runs 17716, 17720, 17722, 17731 and 17733, which had each
+added their own entry at the same line). Nothing in the change itself was wrong. Staging has since landed #958's
+union merge driver for `decisions.md` and `PROGRESS.md` (`.gitattributes`), so the two commits rebased onto
+`b2e5060d` with no conflict and both sides' entries kept. Staging's `agent.yaml` gained #905's allergen card
+meanwhile; the card says the recipe "is a separate matter, held back as above", which this rule leaves true, and
+`test_recipe_persona.py`, `test_ceo_persona.py` and `test_kubecon_probe.py` pass on the rebased tree. The suites are
+rerun below on the new base.
