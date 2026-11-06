@@ -22295,3 +22295,14 @@ literal it replaces is in the record, and exits naming it and decisions.md when 
 `verify/test_dd_traces_live.py`, run green by run 17742 on 2026-11-05T23:04Z.
 
 No dependency was added.
+
+**Live check, run 17780 (GETs only; nothing changed).** At 2026-11-06T01:42Z, after `. "$HECATON_CLUSTER_ENV"`,
+`python3 verify/dd_traces.py --profile accen-dev --minutes 1440 --traces 1` exited 0 and printed trace
+56b27441c9d85948a1f3c11aeb1568ee (2026-11-06T01:38:25Z, 6 spans, 1 root, env=burritobot-kubecon-na-26), with two
+`generate_content` spans on `us.amazon.nova-pro-v1:0` and a `lookup_customer_records` tool span. So the recorded
+command still reads a recent trace through the run's access.
+
+**The suites (run 17780, at `7ac3a480`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`282 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_dd_traces_record.py` among them) and then the tier: `64 checks ran (the
+offline suite and 63 tier tests) in 40m07s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed
+`prose gate: pass`.
