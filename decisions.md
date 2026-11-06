@@ -24497,3 +24497,7 @@ checkout, expected `plan: no changes`, then `drift-report.py --accounts accen-de
 `--post` reading `audit accen-dev` as clean. Then the cron line from docs/floor.md, and `crontab -l` showing one
 `# wib-drift` line. The two KubeCon clusters stay unmanaged in every report until each one is brought into a state or
 registered in `infra/terraform/drift/known-unmanaged.yaml`; that is a follow-up.
+
+**The suites (run 17843, at `b2414963`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`292 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_audit_import_state.py` among them) and then the tier: `69 checks ran
+(the offline suite and 68 tier tests) in 31m05s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
