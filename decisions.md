@@ -24388,3 +24388,50 @@ and `fake-ticket` in `agent` at 1/1, the desk behind `support-<cluster>` (`conso
 RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `test_support_desk_named.py` and
 `test_gh_comments.py` among them, then `70 checks ran (the offline suite and 69 tier tests) in 33m22s`, `ALL E2E TOOLS
 TIER CHECKS GREEN` and `exit=0`, with `test_support_desk_live.py` passing in the tier.
+## 2026-11-06 · #935 · run 17826 · A live test of the wall's "+N more" count, which the deployed wall does not have yet
+
+**The spec.** #935 (filed by test review run 17682) asks for a test that fails when #927's third criterion stops
+holding: a visible "+N more" counter on the prompt wall equals the prompts that arrived and were not shown since the
+last card, and resets to 0 when a card appears. The review found that only `/display`'s `display.js` was checked
+(`verify/test_display_throttle_e2e.py`), never the wall itself. `verify/prior-drafts.sh 935 origin/staging` printed
+NONE and the issue had no comments, so nothing earlier was reused.
+
+**Where the wall lives.** The wall is `templates/wall.html` in peopleforrester/prompts-agenticburn, which a run here
+may not change. Its throttle and count landed there as commit `6601313` (prompts-agenticburn#18, run 17757), with
+fake-clock tests in its `test_wall_page.py` that run the template. What nothing checked is the wall the room reads at
+prompts.agenticburn.com, and that is the gap this test closes: it fails when the served wall lacks the count, hides it,
+or counts wrong.
+
+**The test.** `verify/test_wall_more_count_live.py` (`# SUITE: e2e`, so `run-e2e.sh` runs it and the offline suite
+leaves it out) downloads the served page (`WALL_URL`, default `https://prompts.agenticburn.com/`) and runs its inline
+script in node through the new `verify/wall-clock-harness.js`: a fake clock, a stub DOM built from the page's own
+markup, a fake `/api/prompts` and a fake `/events` stream that model app.py's `snapshot()` and stream cursor. Nothing
+reaches the live wall but the one GET of the page. The scenario is a burst of 10, one prompt every 100 ms for 6 s from
+two clusters, a dropped stream whose 7 prompts the polling fallback picks up, 3 more on the reopened stream, and a
+replay of 8 the page already holds. After every step (459 frames) it reads the #more line and compares it with the
+count the test reads off the ordered log `wall-clock-harness.js` prints: prompts with a new seq delivered since the
+last card the page put up.
+It also checks the element is in the header, ships without the hidden attribute, and that no inline style or CSS rule
+for its classes hides it, that the burst reads `+10 more`, that the count reaches 10 or more, that each card resets it
+to `+0 more` (at least 6 cards), and that the replay adds no card and no count. `--page <wall.html>` runs it on a local
+copy instead; a template from a prompts-agenticburn checkout is rendered first, so a change there can be checked before
+it is deployed. Not in the tools tier: it needs the live wall, and the gate has no business holding staging red on
+Railway's deploy. `verify/run-e2e.sh`'s header names it.
+
+**It fails when the criterion stops holding.** On prompts-agenticburn's `templates/wall.html` at `6601313` (fetched
+with `gh api` into the run's directory) every check passed, exit 0. Eight mutants of that file each exited 1: the tick
+not calling `setCount(0)`, the count leaving out the held prompt (`setCount(count - 1)`), the tick not zeroing `count`,
+the #more div shipped `hidden`, `.more.zero{display:none}`, the script hiding #more at 0, the #14 replay guard removed,
+and offer() not updating the count.
+
+**The live run (2026-11-06).** `python3 verify/test_wall_more_count_live.py` on prompts.agenticburn.com, and with
+`WALL_URL=https://prompts.burritobot.co/`, both exited 1 on the first check: the served markup has no `id="more"`. A
+diff of the served page against prompts-agenticburn's history shows it is the template of `85bddcc4` (2026-10-29), with
+only the rendered `PINNED` and interval differing, so none of that repo's 2026-11-05 and 2026-11-06 wall work (#13 to
+#18) is deployed. prompts-agenticburn#20 already asks for the `railway up` from main (the service has no git source, so
+promotion does not ship it). The wall fails this criterion today, and the test says so; the follow-up asks that it be
+run after that deploy.
+
+**Not yet run on a cluster.** Nothing here runs on a cluster. Owed after prompts-agenticburn#20's deploy:
+`python3 verify/test_wall_more_count_live.py` and the same with `WALL_URL=https://prompts.burritobot.co/`, both
+expected to print `ALL 459 FRAMES CHECKED` and exit 0.

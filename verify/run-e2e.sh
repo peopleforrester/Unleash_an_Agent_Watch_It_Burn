@@ -31,6 +31,10 @@
 # BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
 # it, then guardrails-off. The switch reaches the community cluster as well, for the minute or two it runs.
 #
+# The prompt wall's "+N more" count (test_wall_more_count_live.py, #935) needs no context: it downloads the wall the
+# room reads, WALL_URL (default https://prompts.agenticburn.com/), and runs the page's own script on a fake clock in
+# node. It sends nothing to the wall. The wall is prompts-agenticburn's, deployed to Railway with `railway up`.
+#
 # The AWS-plane drift check (test_drift_aws_live.py, #205) needs DRIFT_PROFILE, an operator profile in
 # WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied, and ATTENDEE_CLUSTER, a cluster in that
 # account whose attendee key is in infra/terraform/fleet/aws-pool/. They are prerequisites like the rest.
