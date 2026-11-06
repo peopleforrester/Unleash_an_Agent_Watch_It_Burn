@@ -21906,3 +21906,42 @@ numbers from prompts-agenticburn's decisions.md and records here where they are.
 **The suites (run 17767, at `f06557ac`).** Only this entry changed. `bash verify/run-tests.sh` printed `279 tests ran`
 and `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The prose gate printed `prose gate: pass`. The tools tier
 (`bash verify/run-e2e-tools.sh`) was not run, since no code, test or tool pin changed. No dependency was added.
+
+## 2026-11-06: decisions.md and PROGRESS.md merge with git's union driver (#958, run 17764)
+
+**What changed.** A root `.gitattributes` now holds `decisions.md merge=union` and `PROGRESS.md merge=union`, under an
+ABOUTME comment saying why, and nothing else. From 2026-11-05, nineteen runs ended `failed (rebase-conflict)` against
+86 merges (hecaton#532), most on two runs each adding an entry to the end of decisions.md. The union driver keeps both
+sides of a conflicting hunk, the upstream entry first and then the replayed one, so that rebase is now clean.
+
+**Why only these two.** Union never reports a conflict: two edits to the same lines of a verify/ test, a Terraform root or
+PROJECT_STATE.md would both be kept, silently. The two files listed only ever take new entries: decisions.md at the
+end, PROGRESS.md at the top of `### Added`. The patterns carry no slash, so a decisions.md added in a subdirectory would
+match too; the test lists every tracked path git reads as union, so such a file fails it and gets a decision of its own.
+
+**What hecaton already did.** Its promoter writes `decisions.md merge=union` into the promotion checkout's own
+`.git/info/attributes` before replaying a run (`union_append_only`, hecaton#137), which covers that one checkout and
+not PROGRESS.md. The tracked file applies in every clone, the run's own rebase included.
+
+**One property of union, seen on a scratch repo.** A line both sides add at the same place is kept once. Two entries
+that each open with a blank line merge with no blank line between them, so the second heading follows the first
+entry's last line directly. It still starts its own line and still renders as a heading; a reader tidying the file may
+add the blank line back.
+
+**The test.** `verify/test_gitattributes_union.py` (offline, stdlib only, runnable under pytest or as `python3 <file>`,
+as run-tests.sh does) builds each scratch repo in `tmp_path` with hooks off and no user or system git config. It checks
+that `git check-attr merge decisions.md` (and PROGRESS.md) prints `union` in this repo and in a fresh repo holding only a
+copy of the file, so no `info/attributes` can be what answers; that `git check-attr` over every tracked file finds
+union on those two alone; that two branches each appending an entry to decisions.md rebase with exit 0, no conflict
+markers and both entries in order; that two entries added under PROGRESS.md's `### Added` rebase with both; and, as
+controls, that the same decisions.md rebase without the attribute conflicts and that a verify/ test edited on both
+sides still conflicts with the real file. Run against a `.gitattributes` with an extra `*.tf merge=union` line, two
+checks fail; against one with no rules, four fail.
+
+**Not yet run on a cluster.** Nothing is owed: the change is to how git merges two files and touches no cluster.
+
+**The suites (run 17764, at `cfff4535`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`280 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `6/6 gitattributes union checks passed` among them) and then the tier: `63 checks
+ran (the offline suite and 62 tier tests) in 36m40s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+No dependency was added.
