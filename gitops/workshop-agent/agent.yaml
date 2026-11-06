@@ -323,6 +323,15 @@ spec:
         # straight off the server span, and there is nothing for the collector to drop on the path.
         - name: OTEL_INSTRUMENTATION_A2A_SDK_ENABLED
           value: "false"
+        # The log exporter's own URL, path included (#903). kagent 0.10.1's Go ADK (go/adk/pkg/telemetry/tracing.go)
+        # hands the endpoint to otlploghttp.WithEndpointURL, which takes the URL's path as given. The base endpoint the
+        # Operator injects has no path, so without this line every batch went to "/", and the collector answered
+        # "404 page not found" about once a second while the agent worked. Its trace exporter appends /v1/traces when
+        # the path is empty; the log exporter does not. kagent reads this variable before the base endpoint. The
+        # records land in the collector's logs pipeline, which drops them (gitops/otel-collector/values.yaml says
+        # why). Same host as gitops/ai-layer-otel/instrumentation.yaml; verify/test_agent_otlp_logs.py holds the two.
+        - name: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+          value: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318/v1/logs
     # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
     # with the input/output guards which also boot OFF. C7 (beat-3) has one control per cluster (#496). On a
     # workshop cluster it is kagent's toolNames allowlist below. On an admin cluster (the KubeCon breakout) it

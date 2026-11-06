@@ -23579,3 +23579,52 @@ which says whether the request #910's run handed to hecaton was filed and still 
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `65 checks ran (the
 offline suite and 64 tier tests) in 52m56s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new test is one of
 the 288.
+## 2026-11-06 · #903 · The workshop-agent's log exporter names /v1/logs, and the collector states its logs pipeline
+
+**What the 404 was.** `verify/prior-drafts.sh 903 origin/staging` printed NONE. The issue reads the 404 as a missing
+logs pipeline and offers two fixes: add one, or set `OTEL_LOGS_EXPORTER=none`. Neither stops it, and the first is
+already in place. The live collector on watch-it-burn-private has a `logs` pipeline (otlp, then memory_limiter and
+batch, to debug) from the chart's default config, which values.yaml merges into. Through a port-forward to its
+Service, a POST of `{}` to `/v1/logs` answered 200, to `/v1/traces` 200, and to `/` 404. The pod's line names the URL
+it sent to, `http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, with no path. The
+agent runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10.1`. Its `go/adk/pkg/telemetry/tracing.go` at v0.10.1 builds the
+log exporter with `otlploghttp.WithEndpointURL(endpoint)`, where the endpoint is `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`,
+then `OTEL_LOGS_EXPORTER_OTLP_ENDPOINT`, then the base `OTEL_EXPORTER_OTLP_ENDPOINT` the Operator injects. otlploghttp
+v0.20.0 keeps that URL's path as given, an empty one included, so every batch went to `/`. The trace exporter
+(otlptracehttp v1.44.0) puts `/v1/traces` in when the path is empty, which is why traces arrived and logs did not.
+Nothing in kagent or ADK reads `OTEL_LOGS_EXPORTER`, so `none` would change nothing. Turning kagent's
+`otel.logging.enabled` off does not stop the export either: adk-go v2.1.0's `telemetry/setup_otel.go` then builds its
+own log exporter from the base endpoint, which posts to `/v1/logs` correctly, so with the pipeline in place it would
+be quiet, but it would rest on ADK's fallback and drop kagent's own exporter.
+
+**The change.** The Agent (`gitops/workshop-agent/agent.yaml`) sets `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` to the
+Instrumentation CR's endpoint plus `/v1/logs`, which kagent reads first. `gitops/otel-collector/values.yaml` states the
+logs pipeline the chart had been supplying, the same receivers, processors and exporter, so a chart bump cannot drop
+the path the agent now depends on and the offline render sees it. The records stay at debug on every profile, with
+or without Datadog: they are ADK's gen_ai events (`gen_ai.choice`, `gen_ai.user.message`, `gen_ai.system.message`),
+which carry the prompt and the reply, and the traces pipeline's redaction and burn's `transform/scrub_pii` never see
+a logs pipeline. The Datadog Agent already ships the pod's own log lines. Sending the events to Datadog would be a
+choice of its own, with its own scrub.
+
+**Tests.** `verify/test_agent_otlp_logs.py` (offline) holds the env: it is set, its path is `/v1/logs`, it is the
+Instrumentation CR's host and port, and the protocol is http/protobuf. It also holds that every profile, with and
+without datadog-secret, has a logs pipeline on the otlp receiver at that port, exporting to debug alone. Without the
+change it fails on the env and on the pipeline. `verify/test_agent_otlp_logs_collector.py` (tools tier) resolves the
+URL the way kagent does and sends a `gen_ai.choice` record through each profile's shipped logs pipeline on the pinned
+otelcol-contrib 0.160.0. It was accepted (200) and came out the other end on all six. The same record sent to `/`
+answered 404, the pod's line.
+
+**Live check, run 17813 (reads and a port-forward; nothing changed).** On watch-it-burn-private the workshop-agent
+pod (`workshop-agent-8bd97f75c-rdc4s`, 45 minutes old) had 139 `failed to send logs ... 404 Not Found` lines among 286,
+in bursts while it ran tools. Its env has `OTEL_LOGGING_ENABLED=true`, `OTEL_LOGS_EXPORTER=otlp` and the base
+endpoint without a path, and no logs endpoint. On watch-it-burn-community the pod had the same env and no such line
+in 20, as it had done little. The collector probe is in the first paragraph.
+
+**Not yet run on a cluster.** After this change syncs, on watch-it-burn-private:
+`kubectl --context watch-it-burn-private -n agent get pod -l app.kubernetes.io/name=workshop-agent -o yaml` should
+show `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` ending in `/v1/logs`, and after a few chats through the storefront,
+`kubectl --context watch-it-burn-private -n agent logs deploy/workshop-agent --since=10m | grep -c 'failed to send logs'`
+should print 0 while the `Tool execution` lines still appear. kagent rolls the pod when the Agent's env changes; if it
+does not, the Agent CR bounce in docs/DECISION-LOG.md applies. Owed to the next run on #903.
+
+No dependency was added.

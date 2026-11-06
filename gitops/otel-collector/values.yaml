@@ -642,6 +642,20 @@ config:
         exporters:
           - prometheusremotewrite # the fallback, and the only metrics sink without Datadog
           - debug
+      # OTLP logs, accepted and dropped (#903). The chart's default config has had this pipeline all along; it is
+      # stated here because the workshop-agent's log exporter depends on it (gitops/workshop-agent/agent.yaml), and
+      # a chart bump that dropped it would bring back a 404 on /v1/logs. Without a logs pipeline the receiver does
+      # not serve the path. Its records go to debug and no further, on every profile, with or without Datadog. The
+      # Datadog Agent already ships every pod's own log lines. The agent's records are ADK's gen_ai events and
+      # carry the prompt and reply, which the traces pipeline's redaction and burn's transform/scrub_pii never see.
+      logs:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - debug
       traces:
         receivers:
           - otlp
