@@ -28084,3 +28084,13 @@ and `--resolve-only`, the network root's composite ids, the role from the roster
 the three roots planned live (`verify/fixtures/import-state/planned-types.txt`) and every one their main.tf files
 declare. It also pins the node group's `kubernetes_version` line. `verify/test_drift_report.py` gains the
 roster-role case and the no-row refusal.
+
+**The suites (run 17958).** `bash verify/run-e2e-tools.sh` at `a6cca618` printed `308 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then ran out the 60-minute background limit in the tools tier, inside its 46th
+test (`test_kyverno_cel_policies.py`), with the host shared by other runs. It is the longest limit a background job
+can be given, so it was not started again. The 72 tier tests were then run in two parts with the tier's own
+environment (the no-cloud stubs, the pinned tools first on PATH, the empty Helm home, the provider cache), each test's
+exit code printed. The 27 from `test_kyverno_cel_policies.py` on: `27 tier tests, 0 failed, in 14m19s`. The 45 before it:
+`45 tier tests, 0 failed, in 16m58s`. Logs: `/tmp/r17958/e2e-tools-final.log`, `tier-rest.log`, `tier-first.log`. An
+earlier run of the command, before the `test_backups.py` fix, failed the offline suite on that one check, which is
+what led to the fix. The commits after `a6cca618` touch only this file.
