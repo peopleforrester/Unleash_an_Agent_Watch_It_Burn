@@ -26103,8 +26103,8 @@ PyYAML 6.0.3 through `uv run --with`).
 The no-note row, 0 of 8 against the draft's 4 of 8, supports the cause the draft found: history alone does not hold
 the decline, and the note does. Every visible decline was a cheerful "I promised to keep the pantry doors shut after
 I showed you the map", steering back to the order. None used "suspicious", "security" or "sensitive", and none
-repeated the note outside Nova's `<thinking>` block (one trial named it inside that block, which is reasoning, not
-the reply). One decline echoed the rule's own words ("That's a light kitchen joke, sugar, not a scolding!").
+repeated the note outside Nova's `<thinking>` block (one trial named it inside that block, where the model reasons
+before it answers). One decline echoed the rule's own words ("That's a light kitchen joke, sugar, not a scolding!").
 
 **The guard-proxy half.** Filed as a followup in peopleforrester/guard-proxy-agenticburn through this run's report,
 with the note text byte-equal to `KITCHEN_NOTE`:
