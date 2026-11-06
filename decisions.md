@@ -26402,5 +26402,9 @@ failed: `verify/test_collector_pii_scrub_e2e.py`, all 12 checks, from "the colle
 in the collector's own OTTL rewrite notices, so it was still starting when the test's 30 seconds to send ran out, and
 alone the test passed in 10 seconds. This is the slow start #889 fixed in `test_agent_otlp_logs_collector.py`. The
 send loop now gets `START_BOUND`, 120 seconds, and a collector that never takes the spans is named with whether it
-exited or was still not taking them and after how long. With `PII_SCRUB_START_BOUND=0` the check fails with "still
+exited or was still not taking them and after how long. With `COLLECTOR_START_BOUND=0` the check fails with "still
 not taking spans on <port> after 0 s".
+Spans go only once the collector logs "Everything is ready", as `test_trace_shape_e2e.py` has since #799, because
+free_port's port is free for any process until the collector binds it. `test_collector_one_root_e2e.py` and
+`test_tool_failure_status_e2e.py` had the same 30-second send loop and get the same bound, wait and message; each
+passes as is and fails naming the port with the bound at 0.
