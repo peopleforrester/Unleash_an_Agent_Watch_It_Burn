@@ -24154,3 +24154,7 @@ printed `prose gate: pass`.
 
 **Not yet run on a cluster.** Nothing: the change is one documentation file, and no dependency was added. This
 run touched neither the community nor the private cluster.
+
+**The suites (run 17838, at `18c7720f`).** `bash verify/run-e2e-tools.sh` printed `291 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `69 checks ran (the
+offline suite and 68 tier tests) in 33m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
