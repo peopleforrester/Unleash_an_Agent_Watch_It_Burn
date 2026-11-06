@@ -26425,7 +26425,8 @@ states**, Clean states (5) `lab VPC accen-dev, boundary accen-dev, audit accen-d
 cluster watch-it-burn-private`, the recorder recording, and the one Note on private's role. The Unmanaged table holds
 neither KubeCon cluster. Its one row is `watch-it-burn-attendee-099`, which run 17970's session
 (`hecaton-run-17970`) created at 18:14:49Z, during this run, and whose state is in that run's worktree. It is not one
-of the two this issue is about. CloudTrail holds 3,230 events from this run's session between 16:52Z and 18:24Z, and
+of the two this issue is about. By 19:35Z run 17970 had removed it, and the same command run again then exited
+**0**: `0 finding(s)`, Unmanaged `None.`, the same five clean states and the same Note. CloudTrail holds 3,230 events from this run's session between 16:52Z and 18:24Z, and
 every one is `readOnly`, so the rebuild changed nothing in AWS.
 
 **Not yet run where it counts.** These five states, and the audit one, are in this worktree, and they go when it is
