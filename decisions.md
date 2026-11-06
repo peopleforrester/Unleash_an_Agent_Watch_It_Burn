@@ -25926,3 +25926,7 @@ watch-it-burn-private, a scratch Secret `witb-977-probe` in `default`:
 bring-up. Neither cluster has drift, and writing the real Secrets would restart the Datadog consumers. Afterwards
 `kubectl -n datadog get secret datadog-secret -o jsonpath='{.metadata.annotations}'` should print nothing. Until a
 repair or a bring-up runs, the annotation already on the six Secrets stays.
+
+**Suites (run 17929, at `a06cdb39`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`304 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the offline suite and 73 tier tests) in 36m20s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added. The prose gate printed `prose gate: pass`.
