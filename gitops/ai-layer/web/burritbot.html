@@ -613,7 +613,19 @@
     .map(function(w){return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/[a-z]/g,cocLetter);})
     .join('|')+')'+cocLetter('s')+'?(?![\\p{L}\\p{N}_])','u');
   function cocViolation(t){return COC_RE.test(String(t==null?'':t));}
-  function save(t){const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
+  // A prompt cocViolation flags is not saved (#948, the second half of #922): it is still sent and still shows as
+  // the person's bubble, since guard-proxy and the bot handle it as before, but it never reaches the rail or
+  // wib-saved. loadSaved does the same at page load for entries saved before this check, and writes the pruned
+  // list back, so an old violation does not return on a reload. Entries are {t,ts}, or a bare string from an
+  // older page. verify/test_chat_saved_coc_e2e.py runs this script in node and holds both paths.
+  function loadSaved(){
+    var a; try{ a=JSON.parse(localStorage.getItem('wib-saved')||'[]'); }catch(e){ return; }
+    if(!Array.isArray(a)) return;
+    var kept=a.filter(function(x){return !cocViolation((x&&typeof x==='object')?x.t:x);});
+    if(kept.length!==a.length){ try{ localStorage.setItem('wib-saved',JSON.stringify(kept)); }catch(e){} }
+    try{ kept.forEach(renderSaved); }catch(e){}
+  }
+  function save(t){if(cocViolation(t))return;const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   // Reset clears the CONVERSATION and the saved-prompt rail, and says so. Previously it cleared only the
   // stream while the rail kept every prompt from every prior session in localStorage, so a student who
@@ -788,7 +800,7 @@
     if(_pretty){var txt='Cluster '+_pretty+(user?(' \u00b7 '+user):'');
       var ci=document.getElementById('clusterid'); if(ci){ci.textContent=txt; ci.title=cluster||'';}
       var cf=document.getElementById('clusterfoot'); if(cf){cf.textContent=txt; cf.title=cluster||'';}}
-    try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
+    loadSaved();
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
   })();
   // The visitor's witchy name (#685, #762/#763). The name shows as PLAIN TEXT with no link (#763): linking the

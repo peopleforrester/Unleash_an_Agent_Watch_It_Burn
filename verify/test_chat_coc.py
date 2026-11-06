@@ -77,6 +77,18 @@ check("COC_RE is built from COC_TERMS without the i flag (letters are folded by 
 check("COC_RE's word edges are Unicode letters, digits and underscore, not \\b",
       re_line.count("[\\\\p{L}\\\\p{N}_]") == 2 and "\\\\b" not in re_line, re_line)
 
+# #948 wires the check into the saved list; verify/test_chat_saved_coc_e2e.py runs it, these hold its shape offline.
+check("save() returns before it renders or stores a prompt cocViolation flags",
+      page.count("function save(t){if(cocViolation(t))return;") == 1)
+check("burritbot.html defines loadSaved once", len(re.findall(r"function loadSaved\(", page)) == 1)
+ld = page[page.find("function loadSaved("):page.find("function save(")]
+check("loadSaved drops entries cocViolation flags and writes the pruned list back to wib-saved",
+      "cocViolation(" in ld and "localStorage.setItem('wib-saved'" in ld and "forEach(renderSaved)" in ld, ld[:200])
+init = page[page.find("(function init(){"):]
+init = init[:init.find("})();")]
+check("init builds the rail through loadSaved, not straight from wib-saved",
+      "loadSaved();" in init and "forEach(renderSaved)" not in init and "wib-saved" not in init)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

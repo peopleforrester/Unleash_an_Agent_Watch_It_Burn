@@ -22415,3 +22415,48 @@ OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `64 checks ran (the offline
 `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. In the tier, Kyverno's offline key check passed lab-platform's llm-guard at
 46b3d202 against the workshop key and failed it under a wrong one, and the chart render put the llm-guard Deployment on
 the rebuild at ghcr.io and at the cache path. No dependency was added.
+## 2026-11-06 · #948 · run 17755 · "Your saved prompts" leaves off prompts that break the code of conduct
+
+**Where the issue stood.** `verify/prior-drafts.sh 948 origin/staging` printed NONE and the issue had no comments, so
+this run started from staging at `f144c2b6`, which holds #947's `cocViolation` (the first half of #922).
+
+**What changed.** In `gitops/ai-layer/web/burritbot.html`, `save(t)` now returns first when `cocViolation(t)` flags
+the prompt, so a prompt with a guard-proxy `PROFANITY` term is neither rendered in "Your saved prompts" nor written
+to `localStorage` `wib-saved`. `send()` is unchanged: it still shows the person's bubble and still POSTs the prompt to
+`/chat`, where guard-proxy and the bot handle it as before. The init block's load of the rail, which was
+`JSON.parse(localStorage.getItem('wib-saved')...).forEach(renderSaved)`, is now `loadSaved()`. It drops each entry
+the check flags (a `{t,ts}` entry by its `t`, a bare string from an older page as is), writes the pruned list back
+to `wib-saved` only when something was dropped, and renders the rest, so an old violation does not come back on a
+reload. A clean or unreadable `wib-saved` is left as it was, as before. Clean prompts still save newest first with
+the 10-item cap, the Reuse button and the text's click still copy one back into the composer, Reset (`resetChat()`)
+still keeps the list, and the list's clear button (`clearSaved()`) still empties it. The issue says Reset clears the
+list; on this page that is the clear button, and #311's Reset keeps the list on purpose
+(`verify/test_fresh_context.py` holds that), so neither changed. The hint "Every prompt you send is saved here" was
+left as it reads.
+
+**Tests.** `verify/test_chat_saved_coc_e2e.py` (E2E, tools tier) drives `verify/chat-saved-harness.js`, which runs
+the page's whole inline script in a node vm with a stub DOM built from the page's own ids and saved-list markup, a
+stub `localStorage` that survives a reload and a stub fetch that records each `/chat` prompt. It sends one prompt per
+`COC_TERMS` term (40, in lower, title and upper case, some plural) between six clean ones (menu words, a
+`BLOCK_LIST` attack prompt and an e-mail, which #947 ruled are not code-of-conduct masks): all 46 reach `/chat` and
+the bubbles, and only the six clean ones are in the rail and `wib-saved`, also after a reload. It checks the cap with
+three flagged prompts after ten clean ones and with twelve clean ones, the Reuse button and the text's click, a
+resend, Reset and clear. It loads a `wib-saved` that mixes clean and flagged `{t,ts}` entries and bare strings: the
+flagged ones are gone from storage and the rail, the clean ones keep their order, and a second load is the same.
+Two mutants built from the page on checked literals (save() without its guard, and init's old load line) must fail
+those checks, and do. Run against the base page (`git show f144c2b6:gitops/ai-layer/web/burritbot.html`), the test
+failed 15 checks and exited 1, the first being "no flagged prompt is in the rail (40 terms tried)". The offline
+`verify/test_chat_coc.py` gains four checks on the shape: the guard at the top of `save()`, one `loadSaved`, which
+filters with `cocViolation` and writes `wib-saved` back, and an init that loads through it. In
+`verify/test_audience_page_e2e.py`, the stub the init check runs with, `renderSaved()` is now `loadSaved()`, since init now
+calls that.
+
+**Checked live, read only (00:09Z on 2026-11-06).** `https://attackme.burritobot.co/` (watch-it-burn-community) and
+`https://burritobot-private.burritobot.co/` (watch-it-burn-private), and `/burritbot.html` on each, answered 200 with
+a page whose sha256 begins `34800632523a6cad`, the same as `f144c2b6`'s `burritbot.html`: #947's `cocViolation` is
+there, `loadSaved` and the guard in `save()` are not, so both still serve the old page. Nothing was changed.
+
+**Not yet run on a cluster.** After hecaton promotes this run and Argo CD syncs the console's ConfigMap: on
+`https://attackme.burritobot.co` (watch-it-burn-community) and on `https://burritobot-private.burritobot.co`
+(watch-it-burn-private), send a prompt with a cuss word and then a clean one. The bot answers both, only the clean
+one is in "Your saved prompts" and in `localStorage` `wib-saved`, and it is still the only one after a reload.

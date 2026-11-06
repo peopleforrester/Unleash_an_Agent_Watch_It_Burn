@@ -64,7 +64,7 @@ const ctx = {
   location: { search, hostname: host },
   document: { getElementById: (id) => els[id] || null },
   localStorage: { getItem: () => null },
-  renderSaved() {}, setBackendUp() {}, checkBackend() {}, setInterval() {},
+  loadSaved() {}, setBackendUp() {}, checkBackend() {}, setInterval() {},
 };
 vm.createContext(ctx);
 if (eventSrc) vm.runInContext(eventSrc, ctx);
