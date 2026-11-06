@@ -25862,3 +25862,39 @@ guardrails-off, and the 13:33Z read above shows both clusters as this run found 
 **The suites (run 17910, at `a8a14773`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 37m18s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #976 · run 17928 · The tools tier's public-image test retries no answer from public.ecr.aws, then fails naming it
+
+**What happened.** Run 17813's first `bash verify/run-e2e-tools.sh` (at `64f174b1`) had one red tier test,
+`verify/test_public_images_served.py`: "public.ecr.aws gave no anonymous token: URLError: <urlopen error _ssl.c:1012:
+The handshake operation timed out>". Run on its own a minute later it passed, and the next full run was green. The
+registry had said nothing about any image; one TLS handshake on the shared host had timed out.
+
+**The decision.** The test tells an unreachable registry apart from an image that is not served by what came back.
+An HTTP status is the registry's answer, and only a 429 is retried, as #844 settled. No answer at all (a timeout or a
+dropped connection, on the connect, the TLS handshake or the read: `TimeoutError` or `ConnectionError`, bare or as a
+`URLError`'s reason) is tried again 5 s later, three tries in all. When every try gets no answer, `opened()` raises
+`Unreachable`, an exception that is not a `URLError`, so no per-image check catches it as a pull that failed. The test
+then exits 1 with "FAILED: public.ecr.aws is unreachable from this host, and the images not yet read have no verdict",
+the URL, the tries and the last error, and lists any check that had already failed. A certificate the host cannot
+verify and a name that does not resolve are not retried: neither is a passing hiccup, and both fail at once as before.
+The token request now reads through `opened()` too, so it has both retries; before, it was the one request with
+neither. The 429 and no-answer budgets are counted apart. A registry that never answers costs at most 3 x 30 s plus
+two 5 s waits, about 100 s, on the request where it stopped. No dependency was added.
+
+**The offline half.** `verify/test_public_images_retry.py` lifts `REGISTRY`, both budgets, `NO_ANSWER_WAIT`,
+`Unreachable`, `no_answer()`, `opened()` and `token()` out of the file by name and runs them against a stubbed
+urlopen and sleep. It holds that one handshake timeout on the token and then an answer returns the token after one
+5 s wait; that a bare read timeout, a reset, a dropped connection and a refused connect are retried; that three
+handshake timeouts raise `Unreachable` naming public.ecr.aws, the URL and "on 3 tries", and that it is no `OSError`;
+that timeouts and 429s keep their own budgets; and that a certificate error, an unresolved name and a 404 on the
+token fail at once with no wait. It also holds that the file has one `urlopen(`, inside `opened()`, and that both the
+token and the image loop hand an `Unreachable` to the one failing exit.
+
+**Checked by hand.** `python3 verify/test_public_images_served.py` against public.ecr.aws: every pin served, on
+linux/amd64, exit 0. A copy with `REGISTRY` set to the unroutable `10.255.255.1` ran 1m40s and printed
+"FAILED: 10.255.255.1 is unreachable from this host, and the images not yet read have no verdict: 10.255.255.1 gave
+no answer to https://10.255.255.1/token/ on 3 tries, 5 s apart; the last: URLError: <urlopen error timed out>",
+exit 1.
+
+**Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.

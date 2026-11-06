@@ -48,8 +48,7 @@ spec.loader.exec_module(m)
 
 
 def token() -> str:
-    with urllib.request.urlopen("https://public.ecr.aws/token/", timeout=30) as r:
-        return json.load(r)["token"]
+    return json.loads(opened(urllib.request.Request(f"https://{REGISTRY}/token/")))["token"]
 
 
 def paced() -> None:
@@ -61,21 +60,52 @@ def paced() -> None:
 # request paced here can still meet a 429 spent by someone else (run 16863: busybox's first manifest, then green on a
 # rerun). A 429 says wait, not no: it is retried after Retry-After (at most 30 s), or 2, 4, 8 and 16 seconds,
 # five tries in all.
-# Any other error, or a sixth 429, still fails the check.
+#
+# No answer at all is not a no either (#976). Run 17813's tier went red on one TLS handshake to the token endpoint that
+# timed out, and passed on its own a minute later: the registry had said nothing about any image. A timeout or a
+# dropped connection, on the connect, the handshake or the read, is tried again 5 s later, three tries in all. When
+# every try gets no answer, opened() raises Unreachable, which names the registry, and the test fails on that alone,
+# so an unreachable registry never reads as an image that is not served.
+# Any other error (an HTTP status that is not 429, a certificate the host cannot verify, a name that does not
+# resolve), or a fifth 429, still fails at once.
+REGISTRY = "public.ecr.aws"
 RETRIES_ON_429 = 4
+RETRIES_ON_NO_ANSWER = 2
+NO_ANSWER_WAIT = 5
+
+
+class Unreachable(Exception):
+    """Every try at one request got no answer: a verdict on this host's path to the registry, not on an image."""
+
+
+def no_answer(e: BaseException) -> bool:
+    """A timeout or a dropped connection: raised bare from the read, or as a URLError's reason from the open."""
+    if isinstance(e, urllib.error.HTTPError):
+        return False
+    reason = e.reason if isinstance(e, urllib.error.URLError) else e
+    return isinstance(reason, (TimeoutError, ConnectionError))
 
 
 def opened(req: urllib.request.Request) -> bytes:
-    for attempt in range(RETRIES_ON_429 + 1):
+    limited = silent = 0
+    while True:
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
-            if e.code != 429 or attempt == RETRIES_ON_429:
+            if e.code != 429 or limited == RETRIES_ON_429:
                 raise
+            limited += 1
             wait = e.headers.get("Retry-After", "") if e.headers else ""
-            time.sleep(min(int(wait), 30) if wait.isdigit() else 2 ** (attempt + 1))
-    raise AssertionError("unreachable")
+            time.sleep(min(int(wait), 30) if wait.isdigit() else 2 ** limited)
+        except OSError as e:
+            if not no_answer(e):
+                raise
+            silent += 1
+            if silent > RETRIES_ON_NO_ANSWER:
+                raise Unreachable(f"{REGISTRY} gave no answer to {req.full_url} on {silent} tries, {NO_ANSWER_WAIT} s "
+                                  f"apart; the last: {type(e).__name__}: {e}") from e
+            time.sleep(NO_ANSWER_WAIT)
 
 
 def fetch(tok: str, repo: str, ref: str, accept: str = ACCEPT) -> tuple[str, dict]:
@@ -94,35 +124,49 @@ def blob(tok: str, repo: str, digest: str) -> dict:
     return json.loads(opened(req))
 
 
-try:
-    TOKEN = token()
-except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
-    print(f"FAILED: public.ecr.aws gave no anonymous token: {type(e).__name__}: {e}")
+def unreachable(e: Unreachable) -> None:
+    """The registry gave no answer: this says nothing of the pins still unread, so it fails as that, by name."""
+    print(f"\nFAILED: {REGISTRY} is unreachable from this host, and the images not yet read have no verdict: {e}")
+    for f in failures:
+        print(f"  - failed before it stopped answering: {f}")
     sys.exit(1)
 
-print("== every public image deploy_app pins is served by public.ecr.aws, with no credential ==")
-for name, ref in m.PUBLIC_IMAGES.items():
-    path, _, digest = ref.partition("@")
-    repo, _, tag = path.removeprefix("public.ecr.aws/").rpartition(":")
-    try:
-        served, doc = fetch(TOKEN, repo, digest)
-    except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        check(f"{name}: {digest[:19]}... answers an anonymous pull", False, f"{type(e).__name__}: {e}")
-        continue
-    check(f"{name}: {digest[:19]}... answers an anonymous pull", served == digest, served)
-    if "manifests" in doc:
-        amd64 = [x for x in doc["manifests"] if x.get("platform", {}).get("os") == "linux"
-                 and x.get("platform", {}).get("architecture") == "amd64"]
-        check(f"{name}: the index has a linux/amd64 image", bool(amd64))
-    else:
-        cfg = blob(TOKEN, repo, doc["config"]["digest"])
-        check(f"{name}: the image is linux/amd64", (cfg.get("os"), cfg.get("architecture")) == ("linux", "amd64"),
-              f"{cfg.get('os')}/{cfg.get('architecture')}")
-    try:
-        now, _ = fetch(TOKEN, repo, tag)
-    except (urllib.error.URLError, TimeoutError, ValueError) as e:
-        now = f"{type(e).__name__}: {e}"
-    print(f"  INFO  {name}: :{tag} now serves {now[:19]}..." + ("" if now == digest else " (moved on from the pin)"))
+
+try:
+    TOKEN = token()
+except Unreachable as e:
+    unreachable(e)
+except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+    print(f"FAILED: {REGISTRY} gave no anonymous token: {type(e).__name__}: {e}")
+    sys.exit(1)
+
+print(f"== every public image deploy_app pins is served by {REGISTRY}, with no credential ==")
+try:
+    for name, ref in m.PUBLIC_IMAGES.items():
+        path, _, digest = ref.partition("@")
+        repo, _, tag = path.removeprefix(f"{REGISTRY}/").rpartition(":")
+        try:
+            served, doc = fetch(TOKEN, repo, digest)
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            check(f"{name}: {digest[:19]}... answers an anonymous pull", False, f"{type(e).__name__}: {e}")
+            continue
+        check(f"{name}: {digest[:19]}... answers an anonymous pull", served == digest, served)
+        if "manifests" in doc:
+            amd64 = [x for x in doc["manifests"] if x.get("platform", {}).get("os") == "linux"
+                     and x.get("platform", {}).get("architecture") == "amd64"]
+            check(f"{name}: the index has a linux/amd64 image", bool(amd64))
+        else:
+            cfg = blob(TOKEN, repo, doc["config"]["digest"])
+            check(f"{name}: the image is linux/amd64", (cfg.get("os"), cfg.get("architecture")) == ("linux", "amd64"),
+                  f"{cfg.get('os')}/{cfg.get('architecture')}")
+        try:
+            now, _ = fetch(TOKEN, repo, tag)
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            now = f"{type(e).__name__}: {e}"
+        moved = "" if now == digest else " (moved on from the pin)"
+        print(f"  INFO  {name}: :{tag} now serves {now[:19]}...{moved}")
+except Unreachable as e:
+    unreachable(e)
 
 print()
 if failures:
