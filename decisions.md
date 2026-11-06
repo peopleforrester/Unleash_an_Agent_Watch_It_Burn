@@ -24954,3 +24954,7 @@ yet run on a cluster".
 **Not run.** The `guardrails-on` half of the beat (Kyverno refusing the same Deployment at admission) was not run
 live: it would turn a community guard on, and run 17837's offline test covers the denial. No code changed, and no
 dependency was added.
+
+**The suites (run 17864, at `3ccc65e5`).** `bash verify/run-e2e-tools.sh` printed `294 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `71 checks ran (the offline suite and 70 tier tests) in 30m03s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
