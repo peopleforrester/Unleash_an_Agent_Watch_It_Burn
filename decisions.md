@@ -25551,3 +25551,7 @@ test_collector_llmobs_model_e2e.py wait for the ready line but do not retry a ta
 
 No cluster check applies: the change is to the tools tier's own test code, which runs no cluster. No dependency was
 added.
+
+**Suites (run 17879, at `7446279f`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`301 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, test_otelcol_local.py among them) and then the tier: `72 checks ran (the offline
+suite and 71 tier tests) in 30m35s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The prose gate printed `prose gate: pass`.
