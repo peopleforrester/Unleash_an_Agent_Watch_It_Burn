@@ -21,8 +21,8 @@ check("no istio chart has drifted from the others", len(_revs) == 1)
 check("cni + istiod use ambient profile",
       byname["istio-cni"]["spec"]["source"]["helm"]["valuesObject"].get("profile") == "ambient"
       and byname["istiod"]["spec"]["source"]["helm"]["valuesObject"].get("profile") == "ambient")
-# PERMISSIVE in agent, where the console and guard-proxy are enrolled (#471): mutual TLS between them, and the
-# NLB and unenrolled callers still get in. No policy for a namespace with nothing enrolled (verify/test_mesh_enrollment.py).
+# PERMISSIVE in agent, where the console, guard-proxy (#471) and the weather feed (#980) are enrolled: mutual TLS
+# between the first two, and the NLB and unenrolled callers still get in. No policy for a namespace with nothing enrolled (verify/test_mesh_enrollment.py).
 modes = {d["metadata"]["namespace"]: d.get("spec", {}).get("mtls", {}).get("mode")
          for d in pa if d.get("kind") == "PeerAuthentication"}
 check("PERMISSIVE mTLS in agent, and no policy elsewhere", modes == {"agent": "PERMISSIVE"})

@@ -1,16 +1,18 @@
-# ABOUTME: Live half of #471: on a cluster with Istio, the console and guard-proxy are captured by ambient, their
-# ABOUTME: hop still answers, and ztunnel logs it as mutual TLS between the two SPIFFE identities.
+# ABOUTME: Live half of #471 and #980: on a cluster with Istio, the console, guard-proxy and the weather feed are captured
+# ABOUTME: by ambient, the console-to-guard-proxy hop is logged by ztunnel as mutual TLS, and the feed still answers.
 # SUITE: e2e
 """Needs kubectl and CONTEXT naming an attendee, admin or full cluster (the burn profile has no Istio). Every
 missing prerequisite is a failure, never a skip.
 
 Why (#471). The mesh used to enrol nothing while the pages said it encrypted traffic. Now the console and
-guard-proxy pod templates carry istio.io/dataplane-mode=ambient (verify/test_mesh_enrollment.py holds the
-manifests). This proves a cluster agrees: istio-cni redirected exactly those pods, they are still Ready
-(their probes pass under the mesh), the console still reaches guard-proxy, and ztunnel recorded that
-connection with both workload identities, the line the tour tells students to look for.
+guard-proxy pod templates carry istio.io/dataplane-mode=ambient, and since #980 the weather feed's does too, so the
+C1 stage-2b egress waypoint can hold it (verify/test_mesh_enrollment.py holds the manifests). This proves a cluster
+agrees: istio-cni redirected those pods, they are still Ready (their probes pass under the mesh), the console
+still reaches guard-proxy, ztunnel recorded that connection with both workload identities, the line the tour
+tells students to look for, and the weather feed still answers evil-mcp-shim, its caller from outside the mesh.
 
-Read-only. The request it drives is GET /guards, which reads the guard state and changes nothing.
+Read-only. The requests it drives are GET /guards, which reads the guard state, and the weather feed's GET
+/healthz, which calls nothing; neither changes anything.
 
 Usage: CONTEXT=<kube-context> python3 verify/test_mesh_live.py
 """
@@ -26,7 +28,7 @@ CONTEXT = os.environ.get("CONTEXT", "")
 NS = "agent"
 LABEL = "istio.io/dataplane-mode"
 REDIRECTED = "ambient.istio.io/redirection"
-ENROLLED = ("console", "guard-proxy")
+ENROLLED = ("console", "guard-proxy", "weather-feed")
 NOT_ENROLLED = ("agentgateway", "workshop-agent")  # behind port-exact Ingress rules (chat-path-ingress.yaml)
 SRC_ID = 'src.identity="spiffe://cluster.local/ns/agent/sa/default"'  # the console runs as default
 DST_ID = 'dst.identity="spiffe://cluster.local/ns/agent/sa/guard-proxy-reader"'
@@ -111,6 +113,11 @@ hop = kubectl("-n", NS, "exec", "deploy/console", "-c", "nginx", "--",
               "wget", "-qO-", "-T", "10", "http://guard-proxy:8080/guards")
 check("the console reaches guard-proxy through the mesh", hop.returncode == 0 and hop.stdout.strip().startswith("{"),
       (hop.stderr or hop.stdout).strip()[:300])
+# The weather feed's one caller, evil-mcp-shim, is not enrolled; PERMISSIVE admits its plain text (#980).
+feed = kubectl("-n", NS, "exec", "deploy/evil-mcp-shim", "-c", "shim", "--", "python", "-c",
+               "import urllib.request; print(urllib.request.urlopen('http://weather-feed:8080/healthz', timeout=10).read().decode())")
+check("evil-mcp-shim, outside the mesh, still reaches the enrolled weather feed",
+      feed.returncode == 0 and '"ok": true' in feed.stdout, (feed.stderr or feed.stdout).strip()[:300])
 logs = kubectl("-n", "istio-system", "logs", "-l", "app=ztunnel", "--tail=5000", "--max-log-requests=20")
 check("ztunnel logs are readable", logs.returncode == 0, logs.stderr.strip())
 lines = [ln for ln in logs.stdout.splitlines() if "connection complete" in ln and SRC_ID in ln and DST_ID in ln]

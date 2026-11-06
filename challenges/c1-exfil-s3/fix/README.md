@@ -69,11 +69,24 @@ On 2026-11-06, on `watch-it-burn-private` (Istio 1.30.4), in a scratch namespace
   `hosts` matches HTTP only and the waypoint passes this TLS through. With the SNI rule, `example.com`,
   steered to the same waypoint, was refused and Open-Meteo was admitted.
 
+## The weather feed is in the mesh (`#980`)
+
+ztunnel steers only an enrolled pod's traffic to the waypoint; a pod outside the mesh reached `example.com`
+directly. So the weather-feed pod template in `gitops/ai-layer/resources.yaml` carries
+`istio.io/dataplane-mode: ambient`, beside the console and guard-proxy (`#471`). On 2026-11-06, on
+`watch-it-burn-private`, in a scratch namespace with no mesh label of its own, under the stage-2 egress
+policies and this fix's three files, removed afterwards:
+
+- A weather-feed pod enrolled by its own label reached both Open-Meteo hosts (200 each), through the waypoint by
+  ztunnel's log, and reached neither `example.com` nor `www.wikipedia.org`.
+- The same pod without the label reached neither Open-Meteo host. Without the enrolment, this fix would end C7's
+  live weather.
+- A pod standing in for workshop-mcp, under the stage-2 allowlist and not enrolled, reached no public host. It
+  needs no enrolment for the fix to hold it, and enrolled it gained the waypoint's route to Open-Meteo, so
+  workshop-mcp and workshop-agent stay out of the mesh.
+
 ## Owed at build time (before this is applied live, `#728`)
 
-- Enrol the weather feed in the mesh. ztunnel steers only an enrolled pod's traffic to the waypoint; a pod
-  outside the mesh reached `example.com` directly. In `agent` only the console and guard-proxy are enrolled
-  (`#471`), so without this `agent-egress-fqdn.yaml` shuts the weather feed's only path to Open-Meteo.
 - Pin the resolver lock through the `coredns` addon's `configuration_values`
   (`infra/terraform/aws/cluster/main.tf:324`), so the managed addon keeps it rather than reverting a
   ConfigMap edit.
