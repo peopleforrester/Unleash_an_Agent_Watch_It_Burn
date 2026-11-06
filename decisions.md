@@ -32998,4 +32998,4 @@ a Bedrock 424 once (#889); a second miss fails naming both, and any other failur
 different error runs once. `verify/test_ttyd_ws_auth.py` died on a `TimeoutError` in `ttyd_ws.connect`, whose socket
 waits 10 seconds for the upgrade's answer. `ttyd_ws.first_message` now takes a `timeout` and passes it on, and the
 loopback test gives ttyd 60 seconds; a bound that runs out still raises, so it never reads as a refusal. The live
-check-tls path keeps the 10-second default.
+terminal check, `verify/test_terminal_ws_auth_live.py`, keeps the 10-second default.
