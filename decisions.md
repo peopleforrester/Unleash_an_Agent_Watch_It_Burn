@@ -26449,3 +26449,12 @@ last three checks fail; after it all 19 pass.
 own with the host's helm v4.2.1, `test_enforce_floor.py` rendered every Helm chart application and passed them; its one
 red, `ai-layer.yaml: renders`, was the guard-proxy submodule not yet checked out in this worktree, which
 `ensure-submodules.sh` fetches at the start of the suite.
+
+**A second fix, seen in this run's suite.** The first `bash verify/run-e2e-tools.sh` of run 17968 went red in the
+offline suite on `test_c7_gateway_toggle.py`: `subprocess.TimeoutExpired` on `guards-off` after 60 seconds. It passed
+on a rerun in 3m07s of wall time for about 3 seconds of CPU. Timing each toggle with `bash -x` showed why: every
+fake `kubectl` call starts python3, each start took 1 to 3 seconds on the host at a load of 36 to 41 on 16 cores, and
+`guards-off` makes 19 of them, so it took 15 seconds on its own and over 60 inside the suite. The test's runner now
+gives each toggle 300 seconds (`TOGGLE_LIMIT_SECONDS`), and one that reaches it exits naming the toggle and the limit
+in place of a traceback; with the limit set to 1 by hand it printed `FAIL: the toggle guard-mcp-on did not finish in
+1 seconds` and exited 1, and at 300 it passed. The toggles and their checks are unchanged.
