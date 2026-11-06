@@ -25275,3 +25275,7 @@ both, the `c3-recipe-grep` entry put back) and checks each is caught. Run agains
 they stood before #952, every copy's check fails.
 
 **Not yet run on a cluster.** Nothing here reads a cluster, so there is no live check.
+
+**The suites (run 17906, at `2de9126b`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, with `ALL C3 PROMPT COPY CHECKS GREEN` among them, then `72 checks
+ran (the offline suite and 71 tier tests) in 42m07s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
