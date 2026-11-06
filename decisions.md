@@ -22100,3 +22100,30 @@ verify/run-e2e-tools.sh` printed `278 tests ran` and `ALL OFFLINE RENDER-GATE TE
 then `63 checks ran (the offline suite and 62 tier tests) in 36m24s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
 After a last rebase onto staging `9de5bb7f` (13 more commits, none touching this branch's files or calling helm),
 `bash verify/run-tests.sh` printed `280 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`.
+
+## 2026-11-06 · #928 · run 17766 · The wall's pause and pin go to prompts-agenticburn, filed through the report
+
+**Why nothing is built here.** #928 asks for a pause button, a spacebar toggle and click-to-pin on the prompt wall,
+and its own text puts the change in peopleforrester/prompts-agenticburn (`templates/wall.html`), a repo this run
+cannot change. It is the same split as #927, whose wall throttle moved to prompts-agenticburn#18. All five criteria
+name that repo's page or its test command, so none can be met from this repo, and this run changes no code.
+
+**What this run found.** `bash verify/prior-drafts.sh 928 origin/staging` printed NONE, and the issue has no
+comments, so there was no draft to port. prompts-agenticburn has no issue for pause or pin (its issues #1 to #20,
+read 2026-11-06). The throttle #928 builds on is in. prompts-agenticburn#18 is closed, and its staging head is
+`6601313a` ("Draw one card per 1.5 s on the wall, the newest, with a "+N more" count"). That commit's
+`templates/wall.html` has `makeThrottle({intervalMs, now, schedule, show, setCount})` with one holding slot and an
+`offer(e)` method, `addCard()` trims the stream to 300 cards, and `test_wall_page.py` drives the page and the
+throttle under `py_mini_racer` on a fake clock.
+
+**The follow-up.** This run's report files an issue in prompts-agenticburn carrying #928's five criteria, with a
+build note on that layout. Pause lives in the throttle: while paused, `offer()` still replaces the held prompt and
+counts it in "+N more" but arms no card; resume draws the held prompt at once, which resets the window. Pin exempts
+one card from the trim and from being pushed down by new cards. The spacebar is ignored while the cluster search box
+has focus. The issue asks for the agent-task label so hecaton can dispatch it there, and for a comment on #928 when it
+lands.
+
+**What closes #928.** That issue landing in prompts-agenticburn, with its fake-clock test and
+`uv run ruff check . && uv run pytest` green there.
+
+**Live.** No cluster is involved: the wall runs on Railway, outside both clusters, and this run touched neither.
