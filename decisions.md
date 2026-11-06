@@ -27795,3 +27795,45 @@ GREEN`) and then the tier: `75 checks ran (the offline suite and 74 tier tests) 
 CHECKS GREEN`, exit 0. The new `verify/test_deployments_witch_line_e2e.py` is one of the 74. No dependency was added:
 the new test fetches mcp 1.29.1 and pyyaml 6.0.2 through uv, the versions images/workshop-mcp already pins. The prose
 gate printed `prose gate: pass`.
+
+## 2026-11-07 · #998 · run 18066 · The live deployments test reads /deployments.json over a port-forward, not the Service proxy
+
+**What drops the connection.** The API server's Service proxy opens its connection to the pod from the control-plane
+ENIs, which carry the module's cluster security group (`sg-04130d5989d5c1ab1` on watch-it-burn-community,
+`sg-0ca9886f5a9d4f6d3` on watch-it-burn-private). Read this run with `aws ec2 describe-security-groups`, the node
+groups (`sg-0b7d2a0cfaed6fecd`, `sg-011fc555e507cfb40`) admit that group only on 443, 4443, 6443, 8443, 9443, 10250
+and 10251. Nothing admits it on 8080, so the dial to fake-ticket's pod times out. No NetworkPolicy selects
+fake-ticket in the agent namespace on either cluster (`kubectl get networkpolicy -n agent` lists only
+agentgateway-ingress, platform-console-egress and workshop-agent-ingress). This is the same gap #869 found for
+argocd-server; #869's 8080 and 3000 node rules are in `infra/terraform/aws/cluster/main.tf` but have not been
+applied to either KubeCon cluster, and a run applies no Terraform. Reproduced this run: `kubectl get --raw
+/api/v1/namespaces/agent/services/fake-ticket:8080/proxy/deployments.json` (and `/healthz`) gave no answer within a
+70 s client timeout on both clusters.
+
+**What changed.** Step 1 of `verify/test_deployments_page_live.py` now reads /deployments.json with
+`port_forward.get` over `kubectl port-forward svc/fake-ticket :8080`. A port-forward goes from the API server to the
+kubelet on 10250, which the node group admits, and the kubelet dials the pod on its own node, so the read works on a
+cluster with or without #869's rules. The port-forward plumbing that `verify/gateway_forward.py` had inline moved to
+`verify/port_forward.py` (`forwarded()` and `get()`), and `gateway_forward.chat` now uses `forwarded()`; its own
+offline test, `verify/test_gateway_forward.py`, still passes unchanged. The new offline `verify/test_port_forward.py`
+runs `get()` against a stub kubectl (the loopback port-forward it asks for, a 200 and a 404 passed through whole,
+kubectl's reason when the forward never comes up, a refused context, no port-forward left running) and holds that
+the live test reads step 1 this way and carries no `/proxy/` read.
+
+**Not the Terraform route.** Applying #869's rules to the two clusters would also fix the hang, but that is a deploy,
+which a run does not do, and it would leave the test hanging on any cluster built before #869. The port-forward
+removes the dependency instead.
+
+**Live, this run (read-only; the step 3 dry run creates nothing).** `CONTEXT=<cluster> python3
+verify/test_deployments_page_live.py`, exit 0 on both, about 29 s each:
+- watch-it-burn-community: step 1 `PASS it answers a JSON list over a port-forward to svc/fake-ticket:8080`,
+  `INFO 2 deployment(s) listed`; step 2 and 2b all PASS on `deployments-attackme.agenticburn.com`; step 3
+  `restrict-image-registries validationActions here: ["Audit"]` and `PASS with no Deny, the room's image is admitted`.
+- watch-it-burn-private: step 1 PASS, `INFO 0 deployment(s) listed`; step 2 and 2b all PASS on
+  `deployments-burritobot-private.agenticburn.com`; step 3 also read `["Audit"]` and admitted the image.
+
+**Not yet run on a cluster.** The Deny branch of step 3 (#992): watch-it-burn-private read Audit this run, so the
+refusal check runs after guardrails-on there, with `CONTEXT=watch-it-burn-private python3
+verify/test_deployments_page_live.py`. This run did not switch guardrails on to try it.
+
+**Suites.** Recorded in the next entry once `bash verify/run-e2e-tools.sh` ends.

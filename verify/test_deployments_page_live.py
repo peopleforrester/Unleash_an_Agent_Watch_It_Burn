@@ -3,7 +3,9 @@
 # SUITE: e2e (needs kubectl, CONTEXT naming a cluster that runs the ai-layer, and the network to reach its public host)
 """Usage: CONTEXT=<kube-context> python3 verify/test_deployments_page_live.py
 
-1. The fake-ticket site answers /deployments.json in the agent namespace (read through the API server's service proxy).
+1. The fake-ticket site answers /deployments.json in the agent namespace, read over a kubectl port-forward to
+   svc/fake-ticket:8080 (verify/port_forward.py), not the API server's Service proxy, which the control plane
+   cannot dial on 8080 on a cluster without #869's node rule (#998).
 2. The cluster's public host, from the cluster-identity ConfigMap, has a deployments-<label> twin that serves the
    page through the console (fleet.sh routes publishes it from WIB_VILLAIN_HOSTS), and a desk page under that name is
    a 404.
@@ -33,6 +35,9 @@ import urllib.error
 import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+import port_forward  # noqa: E402
+
 CONTEXT = os.environ.get("CONTEXT", "")
 failures: list[str] = []
 
@@ -85,12 +90,16 @@ if failures:
     finish()
 
 print("== 1. the fake-ticket site answers /deployments.json ==")
-r = kubectl("get", "--raw", "/api/v1/namespaces/agent/services/fake-ticket:8080/proxy/deployments.json")
+status, body, err = port_forward.get(["kubectl", "--context", CONTEXT], "agent", "svc/fake-ticket", 8080,
+                                     "/deployments.json")
 try:
-    listed = json.loads(r.stdout) if r.returncode == 0 else None
+    listed = json.loads(body) if status == "200" else None
 except ValueError:
     listed = None
-check("it answers a JSON list", isinstance(listed, list), r.stderr.strip()[:200])
+check("it answers a JSON list over a port-forward to svc/fake-ticket:8080", isinstance(listed, list),
+      err or f"HTTP {status}: {body.strip()[:200]}")
+if isinstance(listed, list):
+    print(f"  INFO  {len(listed)} deployment(s) listed")
 
 print("== 2. deployments-<cluster> serves the page through the console ==")
 r = kubectl("-n", "agent", "get", "configmap", "cluster-identity", "-o", "jsonpath={.data.public-host}")
