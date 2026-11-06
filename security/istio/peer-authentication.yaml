@@ -1,12 +1,15 @@
-# ABOUTME: Istio mTLS mode for the agent namespace, where the console and guard-proxy are enrolled in ambient (#471).
+# ABOUTME: Istio mTLS mode for agent, where the console, guard-proxy and weather feed are enrolled in ambient (#471, #980).
 # ABOUTME: The workload certs Istio issues ARE SPIFFE identities (spiffe://cluster.local/ns/<ns>/sa/<sa>).
 #
-# Enrolment is per pod: the console and guard-proxy pod templates in gitops/ai-layer/resources.yaml carry
-# `istio.io/dataplane-mode=ambient`, and no namespace does. Between those two pods traffic is mutual TLS.
+# Enrolment is per pod: the console, guard-proxy and weather-feed pod templates in gitops/ai-layer/resources.yaml
+# carry `istio.io/dataplane-mode=ambient`, and no namespace does. Between the console and guard-proxy traffic is
+# mutual TLS. The weather feed is enrolled so the C1 stage-2b egress waypoint can hold it (#980); its one caller,
+# evil-mcp-shim, is not enrolled.
 #
 # PERMISSIVE, not STRICT. The console is an ip-target NLB, so the room's traffic reaches it from outside the
 # mesh, and guard-proxy is also called from pods that are not enrolled (the guard toggles in verify/beat-*.sh,
-# the agent's tool pod workshop-mcp). STRICT would refuse all of them. PERMISSIVE still sends mutual TLS whenever both ends are
+# the agent's tool pod workshop-mcp), and the weather feed is called by evil-mcp-shim, which is not enrolled.
+# STRICT would refuse all of them. PERMISSIVE still sends mutual TLS whenever both ends are
 # in the mesh, which is the console-to-guard-proxy hop. The apps namespace used to carry a STRICT policy too;
 # nothing in apps is enrolled, so it applied to no traffic and was removed (#471).
 ---
