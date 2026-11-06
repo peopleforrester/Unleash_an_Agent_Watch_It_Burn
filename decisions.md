@@ -22805,3 +22805,37 @@ the workshop-agent Deployment in `agent` to 0 (or send during a rollout), send o
 in 46m48s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
 
 No dependency was added.
+
+## 2026-11-06 · #897 · Eight images.lock rows are unsaved, the four #719 and #895 left among them; the netcup save is escalated
+
+**What the archive holds.** `verify/prior-drafts.sh 897 origin/staging` printed NONE. Read through sources on
+2026-11-06, `~/repos/private/image-archive/manifest.tsv` still has the 75 lines of the two saves (66 dated 2026-11-04,
+9 dated 2026-11-05) and no later save log. Judged with `verify/images_saved.py` against that manifest, staging at
+`ff7ba5e7` has 83 rows, 79 owe a save, and 71 of those are dated and have a line at their current digest.
+
+**The eight unsaved rows.** The issue's four have moved by one: #895 put the deployed `llm-guard` row back on
+lab-platform's llm-guard:v1 at lab-platform#341's rebuild (sha256:46b3d202...), so the deployed row now names that
+rebuild, not cpu.5, and cpu.5 is a declared row next to cpu.4 and the zero-shot weights image
+(llm-guard-model-zeroshot-8e7e5af5). The other four are the two node and debian rows #714 moved to lab-platform#353's
+ghcr.io copies, and both Jokers, which #714 rebuilt with the shell banner. The breakout Joker
+(`busybox-1.38.0-internal`) no longer waits: #775 is closed, and its tag now answers. Each of the eight manifests was
+fetched anonymously from ghcr.io on 2026-11-06 with a pull token from `ghcr.io/token`, answered 200, and hashed to
+its locked digest, so a save needs no login.
+
+**Why this run did not save them.** The archive is under michael's home on netcup and `mirror-images.sh save` needs
+his Docker daemon; this run's user can do neither. The save, as michael on netcup from a fresh clone of staging, is
+in this run's escalation as an ssh act for the custodian. It clones staging, runs
+`~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .` with an empty Docker config (as run 17350's
+did), then `python3 verify/test_images_saved.py`, and appends both outputs and `git diff images.lock` to
+`~/repos/private/image-archive/save-<repo>-2026-11-06.log`. It should print SAVED for the eight rows above and HAVE
+for the rest, and the test should exit 0.
+
+**What is left.** The next run on #897 reads that log and the manifest through sources, copies the date onto each
+staging row whose ref and current digest match a new manifest line, as runs 17350 and 17393 did, updates the
+images.lock header's "Still -" sentence, and records the test's exit.
+
+**Live check (run 17795).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_images_lock_live.py` printed "Every image both clusters run has an images.lock row.", exit 0, with 58
+pods on watch-it-burn-community and 75 on watch-it-burn-private. It only read; nothing on either cluster changed.
+
+**Not yet run on a cluster.** Nothing for #897; the save is not a cluster change.
