@@ -22917,3 +22917,9 @@ every object at wave -1, the hashed name, no TTL, the label, the script exiting 
 hook. `verify/test_ai_layer_rollout.py` checks the render the same way. `verify/test_drift_selfheal_ops.py` now
 fails if ai-layer has a hook Job and requires docs/floor.md to name both gates and #898. The drill's docstring says a
 full sync now names no PreSync Job.
+
+**Suites (run 17796, at `3a7baaf7`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`284 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, the new `test_ai_layer_gates.py` among them) and then the tier: `64 checks ran (the
+offline suite and 63 tier tests) in 52m45s`, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0; in the tier
+`test_ai_layer_rollout.py` and `test_guard_proxy_go_otel.py` read the `kubectl kustomize` render with both gates at
+wave -1. No dependency was added.
