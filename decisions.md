@@ -27075,3 +27075,12 @@ before it was defined no longer turns into a `NameError` in the feed-down check.
 `GEOCODE` pointed at `https://127.0.0.1:9/` printed `HTTP 502 (expected 200) after 0.03 s; error: weather service
 unavailable: <urlopen error [Errno 111] Connection refused>`, the same for the unknown city against 404, then the
 feed's log with its three `upstream lookup ... failed` lines, and exited 1 on 3 failed checks.
+
+**The suites (run 17965, at `dfee722d`).** `bash verify/run-e2e-tools.sh` printed `307 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `73 checks ran (the offline suite and 72 tier tests) in 56m14s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_weather_feed_e2e.py` passing all its checks. The log is
+`/var/lib/hecaton/runs/17965/e2e-tools.log`. The attempt before it, `e2e-tools.first.log`, was green offline (307)
+and on every tier test it reached, and was stopped at the shell tool's 1-hour background limit inside the tier on a
+host at load average 37; the second attempt was given the 2-hour limit.
+
+**Not yet run on a cluster.** Nothing: the test runs a local feed against Open-Meteo and needs no cluster.
