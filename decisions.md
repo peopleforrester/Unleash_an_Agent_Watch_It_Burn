@@ -23811,3 +23811,8 @@ this run touched neither cluster.
 **Not yet run on a cluster.** Nothing: the change is tests only, and the live suite's new check
 (`python3 verify/test_wall_throttle_upstream_e2e.py`) was run by this run against the wall repo's `main` at
 `6601313a`, all checks PASS. No dependency was added.
+
+**The suites (run 17822, at `72cef214`).** `bash verify/run-e2e-tools.sh` printed `288 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `67 checks ran (the offline suite
+and 66 tier tests) in 38m55s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; `test_wall_throttle_e2e.py` ended
+"PASS: the wall adds at most one card per 1.5 s window under every flood". The prose gate printed `prose gate: pass`.
