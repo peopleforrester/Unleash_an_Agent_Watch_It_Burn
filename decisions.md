@@ -25568,3 +25568,39 @@ test_collector_act2_redaction_e2e.py's "the collector took the turn" checks pass
 `otelcol_local.start` with the pinned otelcol-contrib, a listener held on the first port it was given, came up on the
 second port after two starts in 0.60 s, the first start's log carrying `address already in use`, as in run 17879.
 The prose gate printed `prose gate: pass`. No cluster check applies, and no dependency was added.
+
+## 2026-11-06 · #926 · run 17898 · The live wall reset goes to netcup as one command naming both clusters
+
+**Why this run did not reset the wall itself.** Escalation 858 says Railway is signed in on netcup and that Michael
+approved the reset on 2026-11-06. Question 1095 sent the act back: the earlier `ssh netcup bash` act passed the
+placeholder `<every roster cluster>` to `reset-bot`, and the judge refused it for not naming its targets. This run
+looked for a Railway login it could use and found none. On this host, as the run's user, `railway whoami` printed
+`Unauthorized. Please login with railway login`. The `sources-elevated` wrapper has no route to netcup:
+`sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet netcup railway whoami` printed `REFUSED netcup is not
+one of megumi-wsl2, tanjiro-wsl2`. Through the same wrapper, tanjiro-wsl2 still printed `Unauthorized. Please run
+railway login again.` Michael's `~/.railway` on netcup cannot be read by a run. So the act goes up as an `ssh` act on
+netcup, which hecaton's authority rules class as a netcup command run as Michael. It is one script, so the restart
+comes right after `reset-bot` and the guard in `wall-reset` still runs in the same process as the restart.
+
+**What the act runs.** Michael's account on netcup holds the `accen-dev` profile (the wrapper's `aws-env accen-dev`
+answered with keys), which `reset-bot` needs. The script checks that git, curl, python3, aws, kubectl and railway are
+on its PATH and that `railway whoami` answers. It then makes a shallow clone of `staging` from GitHub into a new temp
+directory, so it reads the `wall-reset` that staging holds and not whatever a checkout on netcup is at. From
+`infra/terraform/fleet` it runs `./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private`,
+`./fleet.sh wall-reset` and `./fleet.sh wall-check --empty`, stopping at the first that fails, and prints
+`/api/prompts`. For the second criterion it then sends one prompt without the probe marker to attackme's `/chat`,
+with a time stamp in its text, and polls the wall each second for up to 60 s until that text is there. It prints the
+seconds it took. That prompt stays on the wall, so the Night Before reset in the run-of-show still runs before the
+room.
+
+**Checked from this run, read only, at 12:05Z.** `./fleet.sh wall-check --empty` printed `PASS` for the health URL and
+both clusters, then `FAIL  the wall still holds 89 prompt(s) from before the room: 62 from attackme, 27 from
+burritobot-private; received 2026-11-05 18:06Z to 2026-11-06 11:17Z; seq at 89`, and exited 1. attackme's
+`/prompts` held 12 prompts and burritobot-private's held 23. guard-proxy in namespace `agent` read 1/1 on both
+clusters. From a fresh shallow clone of staging at `4234a8a8`, `./fleet.sh wall-reset` printed both feeds' counts
+with the `reset-bot` to run for each, then `wall-reset: refused; the wall was not restarted`, and exited 1 before it
+called railway. That is the clone path the act takes. Nothing on either cluster or on Railway was changed.
+
+**Not yet run live.** The act above. Its output answers the first two criteria: `wall-check: the wall shows every
+roster cluster and holds no prompts`, `"prompts": []`, and `PASS the prompt sent after the reset reached the wall in
+<n>s`. No code changed in this run.
