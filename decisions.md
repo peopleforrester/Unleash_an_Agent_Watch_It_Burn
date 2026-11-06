@@ -26948,3 +26948,91 @@ beat-01 and the KubeCon probe's badges, ran above on their own. The kyverno CLI 
 **The suites (run 17286, at `6fc3e26`).** `bash verify/run-e2e-tools.sh` ran 55 checks (the offline suite and 54 tier
 tests) in 27m35s and printed `256 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `ALL E2E TOOLS TIER CHECKS
 GREEN`, exit 0. `verify/test_kyverno_profile_policies.py` is among the 256.
+
+## 2026-11-06 · #467 · run 17944 · The CEL migration holds on both KubeCon clusters; the live check now names another run's guardrails switch
+
+**What this run did.** Run 17944 started from staging `629c53e`. `verify/prior-drafts.sh 467 origin/staging` printed
+START from `origin/agent/467-17286`, whose drift was three edits in place (this file, `verify/bootstrap_chart.py` and
+`verify/test_kyverno_cel_live.py`). Run 17286 did not land because it ended failed on stale authorization, not on its
+work; this run's first attempt ended on a podman socket missing in another pool, and in this pool `podman ps` answers.
+Its four commits are cherry-picked with no conflict. The staging commits the drift names were reread: `2a22457` (#909)
+adds a component to the bootstrap chart and does not touch `kyverno_policies`; `ef72e93` (#608) only rewords the
+150s comment in the live check, after the hourly scan and the 1 CPU reports-controller limit. Both are kept.
+
+What differs from run 17286: since 2026-11-05 the two clusters run the KubeCon profiles. `lab-bootstrap` on
+watch-it-burn-private carries `lab-platform/profile=kubecon-private`, and on watch-it-burn-community
+`kubecon-community`, which is what run 16704's draft first expected. The live check already holds each to its own
+profile's set, so its policy part needed no change.
+
+**Both clusters, the commands and what they printed (2026-11-06, 16:19 to 17:35 UTC).**
+
+    kubectl --context watch-it-burn-private get clusterpolicy
+      No resources found   (and the API server's deprecation warning for kyverno.io/v1 ClusterPolicy)
+    kubectl --context watch-it-burn-private get validatingpolicy,imagevalidatingpolicy
+      eleven ValidatingPolicies (block-argocd-drift, deny-external-registries, deny-llm-endpoint-bypass,
+      disallow-privileged, minimal-floor, require-labels, require-networkpolicy, require-probes,
+      require-resource-limits, restrict-agent-spawned-workloads, restrict-image-registries) and one
+      ImageValidatingPolicy (verify-image-signatures), every one READY true
+    kubectl --context watch-it-burn-community get clusterpolicy
+      No resources found
+    kubectl --context watch-it-burn-community get validatingpolicy,imagevalidatingpolicy
+      deny-external-registries and restrict-image-registries, both READY true; no ImageValidatingPolicy
+
+That is twelve on kubecon-private: the issue's ten, restrict-agent-spawned-workloads (#606), and
+deny-external-registries from kyverno-breakout. Two on kubecon-community, which syncs restrict-image-registries alone
+and kyverno-breakout. `CONTEXT=<context> python3 -u verify/test_kyverno_cel_live.py` passed its prerequisites and
+steps 1 to 3 on both, three times on private and once on community: no ClusterPolicy, the names equal to
+`bootstrap_chart.kyverno_policies` for the profile, each READY, and kyverno-policies, minimal-floor and
+kyverno-breakout (private) and kyverno-registry-policy and kyverno-breakout (community) Synced and Healthy.
+
+Steps 5 to 7 passed on community (run `d5762f`): restrict-image-registries patched to [Deny] and held [Deny] for 90s
+after a hard refresh of kyverno-registry-policy, which stayed Synced; the C2 villain was refused with 'Policy
+restrict-image-registries failed: Images must come from allowed registries'; the signed busybox image was admitted
+and ran behind the Challenge 1 NetworkPolicies. On private (run `fa77b1`) step 5 passed with `toggle-kyverno-enforce.sh`,
+both policies [Deny] for 90s through a hard refresh of kyverno-policies, and step 7 passed behind the seal.
+
+**What went red, and why: other runs switch the guardrails on the same clusters.** On private, RBAC answered step 4's
+villain and step 6's refusal before Kyverno saw them: 'User "system:serviceaccount:agent:agent-sa" cannot create
+resource "deployments"'. The EKS audit log (`/aws/eks/watch-it-burn-private/cluster`, `kube-apiserver-audit`) shows
+why. Run 17950's kubecon probe execs `/home/student/guardrails-on` and `guardrails-off` in the private terminal pod
+(16:24, 16:34, 16:38, 16:48, 16:52, 17:18, 17:31, 17:35), and each switch rewrites restrict-image-registries,
+deny-external-registries, the workshop-agent Role, block-recipe-snoop and the six C1 NetworkPolicies on both clusters,
+the community side through the guardrails-switch ServiceAccount. guardrails-on's scoped Role takes create on
+Deployments from agent-sa and workshop-mcp, so C2's deploy_app is refused before admission. Runs 17946, 17957 and 17960
+were on private at the same time. Nothing assigns the two clusters to one run at a time; that is filed as a follow-up.
+
+The same race broke this run's restore twice. The first live run was cut off by an outer `timeout 580` before its
+`finally` ran. This run then deleted the six C1 NetworkPolicies, believing them its own; the audit log shows guardrails-on
+created them at 16:24:47. The second run's restore at 16:40:23 put restrict-image-registries back to [Audit] and
+removed the NetworkPolicies that run 17950's 16:38:45 guardrails-on had set. In that same second run 17950 curled the
+beacon to test egress, so that run's egress beat may have read this run's cleanup. At 16:47 this run put back what that
+guardrails-on had set: restrict-image-registries [Deny] and the six NetworkPolicies, from the terminal's own
+`c1-network-policy.yaml`, which is the same as `gitops/ai-layer/resources.yaml`'s copy.
+
+**The fix in the live check.** On a profile with the switch (deny-external-registries is its mark, and only the two
+KubeCon profiles have it), `switch_mark()` reads deny-external-registries' generation, the workshop-agent Role's
+resourceVersion and block-recipe-snoop's resourceVersion before step 4 and in the restore. When they moved, the check
+fails naming them, and the restore follows the switch's last state rather than its own snapshot:
+restrict-image-registries takes deny-external-registries' action (the switch sets both together and the check never
+touches the second), and the C1 NetworkPolicies are applied or removed as block-recipe-snoop is there or not. Before
+step 4 it also asks `kubectl auth can-i create deployments` as agent-sa and workshop-mcp, so guardrails-on's Role reads
+as that and not as a policy failure. Both live runs after the change caught a switch and restored to it: community at
+17:07 after the 17:04 guardrails-off, private at 17:33 after the 17:31 one. Each cluster was left in that off state,
+both registry policies [Audit], require-resource-limits [Deny], no C1 NetworkPolicies and no block-recipe-snoop, the
+state the other run's switch set. `verify/test_kyverno_profile_policies.py` holds the guard's anchors in the live check
+and in the terminal's switch (`entrypoint.sh` sets both registry policies in one loop, and arms KubeArmor with egress).
+
+**The lab's PolicyReport line: the reports controller has stopped writing again.** Step 4's jq printed nothing in 150s
+on community, where the villain was admitted. Run 17286 found the controller stopped on private on 2026-11-05. On
+community the newest of 87 PolicyReports in `agent` is from 2026-11-05T15:27:30Z, the hour its
+kyverno-reports-controller pod started, and none came since, though the pod runs with the #608 settings
+(`--backgroundScanInterval=1h`, cpu limit 1) and the kyverno Application is Synced. On private the newest of 114 is
+from 10:47 today. Run 17286 restarted the pod; this run did not, so the clusters stay as found, and files the stall
+as a follow-up. The lab line's text was proven word for word by run 17286 and is unchanged.
+
+**Not run.** `bash verify/run-e2e.sh` as a whole: it needs DRIFT_PROFILE and ATTENDEE_CLUSTER naming an attendee
+cluster in the fleet account, and neither cluster is one. `bash verify/beat-01.sh` and the C2 badge were not run again:
+both read the guardrail state run 17950 was switching, and run 17286 passed both on 2026-11-05. A run with the
+clusters to itself runs `CONTEXT=watch-it-burn-private python3 -u verify/test_kyverno_cel_live.py` with guardrails off
+and expects every check but the PolicyReport line green until the controller stall is fixed. The kyverno CLI on this
+host is v1.19.1.
