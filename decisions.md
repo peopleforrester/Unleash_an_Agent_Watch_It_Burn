@@ -21903,4 +21903,6 @@ numbers from prompts-agenticburn's decisions.md and records here where they are.
 
 **Not yet run on a cluster.** Nothing is owed: the load test is offline by design, and this run changed no code.
 
-**The suites (run 17767).** Only this entry changed. `bash verify/run-tests.sh` and the prose gate results are below.
+**The suites (run 17767, at `f06557ac`).** Only this entry changed. `bash verify/run-tests.sh` printed `279 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0. The prose gate printed `prose gate: pass`. The tools tier
+(`bash verify/run-e2e-tools.sh`) was not run, since no code, test or tool pin changed. No dependency was added.
