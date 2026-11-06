@@ -24383,3 +24383,8 @@ router does not carry and #916's body swapped for its first, `/support` form, th
 `attackme.burritobot.co` and `burritobot-private.agenticburn.com`; and #916's body names both desks and no `/support`.
 `kubectl --context watch-it-burn-community get deploy -A` and the same on watch-it-burn-private each list `console`
 and `fake-ticket` in `agent` at 1/1, the desk behind `support-<cluster>` (`console.conf`). Nothing was changed.
+
+**The suites (run 17842, at `84d65f35`).** `bash verify/run-e2e-tools.sh` printed `292 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), `test_support_desk_named.py` and
+`test_gh_comments.py` among them, then `70 checks ran (the offline suite and 69 tier tests) in 33m22s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`, with `test_support_desk_live.py` passing in the tier.
