@@ -60,7 +60,9 @@ same marketing data. The room sees an enforced, green policy and the data leavin
 A sibling of the beacon collector, owned by us and pointed at by our own disposable clusters.
 
 - **Zone.** A subdomain of `agenticburn.com` delegated to the collector. The delegation is a registrar change on
-  Michael's side, the same kind of hand-off as the beacon's apex repoint.
+  Michael's side, the same kind of hand-off as the beacon's apex repoint. The build spec `docs/dns-collector-spec.md`
+  describes it in its "The one zone hand-off" section; it is recorded as owed, and as the gate on the live path, in
+  "The owed zone delegation" section below.
 - **Ingest.** An authoritative nameserver for that zone. It answers each query so the caller sees success, and
   appends a record per query to the provisioning app's `/data` volume: timestamp, source address, query name.
 - **View.** `GET /dns/view` on the provisioning service, beside `/beacon/view`: a total count, the last ~50 records,
@@ -68,6 +70,28 @@ A sibling of the beacon collector, owned by us and pointed at by our own disposa
 - **Reset.** A clear action between rehearsal runs, as the beacon has.
 - **Hosting.** UDP and TCP 53 must reach it from the internet. Where it runs (the provisioning host or a small
   dedicated one) is settled at build time.
+
+## The owed zone delegation (Michael-side hand-off, gating the live path)
+
+This beat has one hand-off that is Michael's, not a dispatched run's or the provisioning app's, and it is owed.
+It is the same shape as the beacon's one apex hand-off in `docs/beacon-collector-spec.md`: that one asks Michael to
+repoint apex once `/beacon` is live; this one asks Michael to delegate the exfil subdomain at the registrar once the
+DNS collector is live. The build spec `docs/dns-collector-spec.md` describes the hand-off in its "The one zone
+hand-off" section; this section records it as owed and as the gate on the live path, so the live-validation runner
+sees the dependency.
+
+- **What is owed.** The exfil subdomain (the collector's zone under `agenticburn.com`) must be delegated by the
+  registrar to the collector's authoritative nameserver, by adding the NS records that point the subdomain at it.
+  That is a registrar change on Michael's side. It is not a provisioning-app change and a dispatched run cannot do
+  it.
+- **Why it is a prerequisite.** Until the delegation is in place, a live lookup under the exfil subdomain finds no
+  authoritative server for the zone, so stage 2b's name queries do not reach the collector and it records nothing.
+  The live path of this beat is gated on the delegation.
+- **What the live-validation runner should see.** The live validation is owed on a cluster (the "Validation owed on
+  a cluster" section below, built by `#728`, with its MCP-side twin `verify/test_c1_dns_exfil.py` named in
+  `decisions.md` 2026-11-01 · #725). Before a runner reads the DNS collector as empty for a well-formed stage-2b
+  query, it confirms this delegation is in place, the same way the beacon beat depends on the apex repoint being
+  live. When it is not, the live path is blocked on this hand-off, not on the config.
 
 ## The fix: FQDN-aware egress over a locked resolver
 
@@ -116,9 +140,11 @@ pod label, and pinning the resolver lock through the `coredns` addon so it is no
 
 ## Validation owed on a cluster
 
-Nothing here has run on a cluster. When the build is scheduled it gets a live check in the `verify/run-e2e.sh` tier,
-taking `<host> <kube-context>` the way `verify/c1-exfil-block.sh` does, with the cluster named explicitly on every
-call. It asserts three things:
+Nothing here has run on a cluster. The live path is also gated on the owed registrar delegation of the exfil
+subdomain (see "The owed zone delegation" above): until Michael performs it, a stage-2b lookup does not reach the
+collector, so a runner confirms the delegation is in place before reading the assertions below. When the build is
+scheduled it gets a live check in the `verify/run-e2e.sh` tier, taking `<host> <kube-context>` the way
+`verify/c1-exfil-block.sh` does, with the cluster named explicitly on every call. It asserts three things:
 
 1. With the stage 2 policy applied, the beacon count holds and the DNS collector records the stage 2b request.
 2. With the chosen FQDN control applied, the DNS collector records nothing new for the same request.

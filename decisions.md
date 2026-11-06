@@ -25043,3 +25043,56 @@ nothing there. What differs from the draft is only this entry.
 **The suites (run 17884, at `32f9bf8d`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE RENDER-GATE
 TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 30m08s`, `ALL E2E TOOLS TIER CHECKS
 GREEN` and `exit=0`. No dependency was added.
+## 2026-11-06 · #941 · run 17882 · the owed registrar delegation of the exfil subdomain is recorded as a Michael-side hand-off
+
+**What #941 asked.** Split from #726 by planning run 17700. For Challenge 1's stage-2b DNS-exfil live path to resolve,
+the exfil subdomain (the DNS collector's zone under `agenticburn.com`) must be delegated by the registrar to the
+collector's authoritative nameserver. That is a registrar change on Michael's side, the same shape of hand-off as the
+beacon's apex repoint. It is not a provisioning-app change and a dispatched run cannot do it. The child records the
+prerequisite as owed so the live-validation runner sees the live path is gated on Michael performing the delegation.
+Benign tracking task, independent of the spec.
+
+**Where it was recorded, and why there.** The beacon's one apex hand-off is tracked in its own spec, the dedicated
+"The one apex hand-off (Michael's side, not provisioning's)" section of `docs/beacon-collector-spec.md`. The DNS
+collector's design note is `docs/research/2026-10-31-c1-dns-exfil-beat.md`, written at the altitude of the beacon
+spec. This run added to that note a dedicated "The owed zone delegation (Michael-side hand-off, gating the live
+path)" section: it names what is owed (the NS records that delegate the exfil subdomain to the collector's
+nameserver), why it is a prerequisite (until it is in place a stage-2b lookup finds no authoritative server and the
+collector records nothing), and what the live-validation runner should see (the live path is gated on the delegation,
+built by `#728`, with the MCP-side twin `verify/test_c1_dns_exfil.py` named in `decisions.md` 2026-11-01 · #725). The
+note's "DNS collector (build spec)" zone bullet now cross-references that section, and its "Validation owed on a
+cluster" section records the delegation as a gate ahead of its three live assertions. No lab text, slide, run of show
+or deploy config changed.
+
+**Reconciled with #940, which landed in staging between this run's base and now.** The draft began in run 17839 (its
+commit never reached staging; the run was stopped as stalled while waiting on the E2E command). Between that base and
+run 17882, staging took #940 (`578c2ecb`), which wrote the formal build spec `docs/dns-collector-spec.md` as the
+sibling of `docs/beacon-collector-spec.md`, with its own "The one zone hand-off" section describing the delegation's
+shape. `verify/draft-drift.sh HEAD origin/staging` reports CLEAN: staging only appended to this draft's two paths
+(the design note and this append-only decisions.md), so the draft cherry-picks. To stay coherent with the new build
+spec rather than duplicate its section title, this run's design-note section was named "The owed zone delegation" and
+points at `docs/dns-collector-spec.md`'s "The one zone hand-off" section for the shape, while itself carrying what
+#940 does not: the owed status and the live-path gate the live-validation runner reads. Both decisions.md entries
+(#940's and this one) are kept, as decisions.md is append-only.
+
+**Not provisioning, not this run.** The delegation is Michael's, at the registrar, the one exception to the
+provisioning agent's "does NOT need to touch apex" rule, the DNS analogue of the beacon's apex repoint. This run
+records the owed hand-off and does not perform it.
+
+**Live.** No cluster is involved: this is a documentation record and this run touched neither cluster.
+
+**Suites (run 17882, at `a89cd848`).** `bash verify/run-tests.sh` (the Test command, the offline suite) ran
+`291 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0`, with `PASS the repo's tmp/ is left as it was
+found` from `test_challenge_fallbacks.py`. `bash verify/run-e2e-tools.sh` then ran `69 checks ran (the offline suite
+and 68 tier tests) in 30m03s`: all 68 tier tests green. Its first copy of the offline suite reported `exit 1` on one
+check, `test_challenge_fallbacks.py`'s "the repo's tmp/ is left as it was found", reading
+`(['hecaton', 'test-challenge-fallbacks-4180475'], ['hecaton'])`: a second copy of the offline suite had been started
+by mistake in this same worktree at the same time (a botched background launch), so its scratch directory
+`test-challenge-fallbacks-<pid>` was present in `tmp/` when this copy took its before-snapshot and gone by its
+after-snapshot. With no concurrent launch, a clean rerun of `bash verify/run-tests.sh` passed that check and the whole
+suite (`291 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0`). The test holds when one suite runs at a
+time; the collision came from the mistaken second launch rather than from any regression, and this change is two
+Markdown files the test does not read. No dependency was added.
+
+**Not yet run on a cluster.** Nothing from this issue. The live DNS-exfil validation that reads the delegation stays
+owed under `#728`, as the note's "Validation owed on a cluster" section already tracks.
