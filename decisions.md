@@ -27645,3 +27645,22 @@ OFFLINE RENDER-GATE TESTS GREEN`, test_failover_drill.py among them) and then th
 suite and 72 tier tests) in 40m05s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with
 test_storefront_backend_check_order_e2e.py passing and the fetch reporting `11 pinned tools ready`, caddy v2.11.4
 among them. The prose gate printed `prose gate: pass`.
+
+**Ported by run 17937.** Run 17914 ended `failed (rebase-conflict)`: its run-of-show bullets went in right after "so
+reopen it from the hostname.", the line after which #985's `72b00a47` had added its guardrails sub-bullets on
+staging, an insert-insert conflict. decisions.md and PROGRESS.md merge as union and did not conflict. Run 17937 made
+run 17914's two commits again on the same base with the bullets moved above "After a promotion on stage", where
+`git rebase origin/staging` (`24670870`) applies them cleanly. #985 also gave backups.py's Watcher an `arm` (Kyverno
+at Deny on a public standby before it takes attackme) and a `link`, both off unless passed. The drill passes neither,
+so it still leaves both live clusters as found; its docstring says so, `verify/test_failover_drill.py` checks it, and
+the run-of-show bullet says a real promotion also lights the Kyverno badge, which the drill does not exercise. On the
+rebased tree, `python3 verify/test_kubecon_failover_attendee_live.py` with both contexts passed 13 of 13 checks each
+way against staging's backups.py: community to private, composer back 86.1 s after the fault; private to community,
+84.4 s; `ALL KUBECON FAILOVER ATTENDEE CHECKS PASSED`, exit 0. The suites line above, at `71393736`, is run 17914's,
+on its own base.
+
+**A tier test that failed once (run 17937).** The first `bash verify/run-e2e-tools.sh` on the rebased tree (`308 tests
+ran`, offline green; `74 checks ran (the offline suite and 73 tier tests) in 53m50s`, exit 1) failed only
+test_public_images_served.py, #992's: `public.ecr.aws/docker/library/httpd:2.4-alpine answers an anonymous pull
+(URLError: <urlopen error [Errno -3] Temporary failure in name resolution>)`. Run alone twice it passed 23 of 23,
+exit 0. It reads nothing this change touches; its handling of a transient resolver failure is filed as a followup.
