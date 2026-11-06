@@ -24435,3 +24435,7 @@ run after that deploy.
 **Not yet run on a cluster.** Nothing here runs on a cluster. Owed after prompts-agenticburn#20's deploy:
 `python3 verify/test_wall_more_count_live.py` and the same with `WALL_URL=https://prompts.burritobot.co/`, both
 expected to print `ALL 459 FRAMES CHECKED` and exit 0.
+
+**The suites (run 17826, at `8daedbc8`).** `bash verify/run-e2e-tools.sh` printed `289 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `66 checks ran (the offline suite and 65 tier tests) in 33m55s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
