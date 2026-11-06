@@ -22466,3 +22466,15 @@ which printed `278 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then th
 suite and 63 tier tests) in 38m21s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_chat_coc.py` and
 `test_fresh_context.py` passed in the offline suite, and `test_chat_saved_coc_e2e.py`, `test_chat_coc_e2e.py`,
 `test_audience_page_e2e.py` and the other storefront page tests passed in the tier.
+
+**Run 17784: the rebase onto staging.** Run 17755 ended `failed (rebase-conflict)`: its PROGRESS.md entry went right
+under `### Added`, where runs 17741, 17742, 17743, 17751, 17752 and 17754 had put theirs, so hecaton's rebase onto
+`9de5bb7f` met an insert-insert conflict. Nothing in the change itself was wrong. Run 17784 took over the workspace
+and rebased both commits onto staging `b2e5060d`, which now merges PROGRESS.md and decisions.md with git's union
+driver (#958). The rebase applied with no conflict, and both entries keep staging's lines first, then this run's.
+`verify/draft-drift.sh` named only PROGRESS.md (#921's entry, `4aba39c8`) as edited on staging, and none of the
+29 staging commits touches `burritbot.html` or the three tests this change edits. At 01:57Z both bots still served
+the base page, sha256 `34800632523a6cad`, with no `loadSaved` and no guard in `save()`. On the rebased tree
+`bash verify/run-e2e-tools.sh` printed `281 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `65 checks ran
+(the offline suite and 64 tier tests) in 47m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`;
+`test_chat_saved_coc_e2e.py` passed in the tier. The live check after deploy stays owed, as written above.
