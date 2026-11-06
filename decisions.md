@@ -26051,3 +26051,7 @@ filed as a follow-up and does not depend on this change.
 through the bot for a quay.io image and for `Tron`, which `python3 verify/kubecon_probe.py` covers for Tron, and
 `CONTEXT=watch-it-burn-private python3 verify/test_deployments_page_live.py` after `guardrails-on`, for the refusal
 at Deny, once its service-proxy step answers.
+
+**The suites (run 17917, at `2bfd9271`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `72 checks ran (the offline suite and 71 tier tests) in 47m44s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
