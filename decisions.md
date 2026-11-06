@@ -25973,3 +25973,7 @@ watch-it-burn-community-b01: all four Kubernetes guardrails are on.` The live gu
 not run either: it would rewrite both clusters' `guardrails-peer` Secrets.
 
 No dependency was added.
+
+**The suites (run 17912, at `2704b870`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `72 checks ran (the offline suite and 71 tier tests)
+in 44m29s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17912/e2e-tools.log`.
