@@ -228,9 +228,21 @@ check("the plain Joker's container has only its name, image and the room Joker's
       set(final["spec"]["template"]["spec"]["containers"][0]) == {"name", "image", "resources"},
       json.dumps(final["spec"]["template"]["spec"]["containers"][0]))
 
-print("== 5. what is not one of these is still refused ==")
+print("== 5. a wrapped name is that name; what is not one of these is still refused ==")
+# Since #939 a manifest that is only an app's name ("Tron") is the Deployment it asks for, so a call wrapping one
+# lands what the bare name lands, credited to the witch the wrapper names.
+api_bare, reply_bare, exc_bare = deploy("Tron", "Quentin the Mummy")
+bare_rows = list(reports)
 api, reply, exc = deploy(json.dumps({"manifest": "Tron", "requested_by": "Quentin the Mummy"}))
-check("a call wrapping a manifest that is not one is refused before any apply",
+check("a call wrapping only an app's name lands what the bare name lands",
+      exc is None and exc_bare is None and reply == reply_bare and applies(api) == applies(api_bare),
+      f"{reply!r} {exc} / {reply_bare!r} {exc_bare}")
+check("and credits the witch the wrapper names",
+      len(reports) == 1 and reports[0]["requested_by"] == "Quentin the Mummy" and reports == bare_rows, f"{reports}")
+
+api, reply, exc = deploy(json.dumps({"manifest": [{"kind": "Deployment"}, {"kind": "Service"}],
+                                     "requested_by": "Quentin the Mummy"}))
+check("a call wrapping two objects is refused before any apply",
       reply is None and "single object with apiVersion and kind" in str(exc) and not applies(api), f"{reply!r} {exc}")
 
 other = json.loads(ISOLDE.replace("joker-isolde-the-troll", "maintenance-shell"))

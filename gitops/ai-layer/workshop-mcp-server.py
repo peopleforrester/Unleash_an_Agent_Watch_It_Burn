@@ -459,6 +459,8 @@ def published_address(kind: str, name: str) -> str:
 # node holds 110 pods (about 55 free), so a room Joker runs one tiny replica and is scaled to zero after
 # JOKER_SCALE_DOWN_SECONDS; the Deployment stays as the proof. Raising the pod cap is #686.
 JOKER_PREFIX = "joker-"
+# The image HC-666 asks for (ticket_site.ROOM_IMAGE; verify/test_deploy_app_room_joker_name.py holds the two equal).
+ROOM_JOKER_IMAGE = "registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0"
 JOKER_RESOURCES = {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "20m", "memory": "32Mi"}}
 JOKER_SCALE_DOWN_SECONDS = float(os.environ.get("JOKER_SCALE_DOWN_SECONDS", "300"))
 
@@ -618,7 +620,16 @@ def _room_workload(obj: dict) -> bool:
 # image, read by _move_off_docker_hub as any other.
 # Words around an app's name that are not the name: "deploy the Tron app", "please run nginx".
 _NAME_FILLER = frozenset("a an the please deploy run install launch start set up get put app application image "
-                         "container public standard manifest default for me of onto on to this cluster".split())
+                         "container public standard manifest default for me of onto on to this cluster "
+                         "deployment deployments pod pods kubernetes k8s yaml json".split())
+# A room Joker's name in the text, which is the room Joker HC-666 asks for, under that exact name (#856, run 17936). On
+# 2026-11-06 the public bot sent deploy_app's manifest as only "joker-agatha-the-banshee", which the name path read
+# as the words agatha and banshee (the dropped as filler) and deployed as joker-agatha-banshee on the landing-page
+# nginx, and as "Deployment named joker-barnaby-the-basilisk with one replica running registry.burritobot.co/...",
+# which it refused as a sentence. A kind word alone ("Deployment") names no app and is refused, so the model sends
+# the manifest again, rather than a Deployment named deployment being made.
+_ROOM_JOKER_IN_TEXT = re.compile(r"(?<![a-z0-9-])joker-[a-z0-9]+(?:-[a-z0-9]+)*")
+_IMAGE_IN_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)+(?::[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})")
 _NAME_WORDS = 4
 # One line with no bracket and no "key: value" in it, which can only be a name, whatever YAML makes of it.
 _PLAIN_LINE = re.compile(r"^(?!.*[{}\[\]])(?!.*:\s)[^\n]{1,200}$")
@@ -628,6 +639,16 @@ def _named_app(text: str) -> tuple[dict, bool]:
     """The Deployment an app's name or a bare image reference asks for, and whether it serves the landing page (False
     for an image named in full). Refuses text that names no app, so a sentence is not deployed as one."""
     text = text.strip().strip("\"'`").strip()
+    joker = _ROOM_JOKER_IN_TEXT.search(text.lower())
+    if joker and room_joker_page(joker.group(0)):
+        name = joker.group(0)
+        image = _IMAGE_IN_TEXT.search(text)
+        labels = {"app": name}
+        return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},
+                "spec": {"replicas": 1, "selector": {"matchLabels": dict(labels)},
+                         "template": {"metadata": {"labels": dict(labels)},
+                                      "spec": {"containers": [{"name": name, "image": image.group(0) if image
+                                                               else ROOM_JOKER_IMAGE}]}}}}, False
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/:@-]*", text) and any(ch in text for ch in "/:@"):
         image, landing = text, False
         words = [_registry_and_repo(text)[1].rsplit("/", 1)[-1]]
