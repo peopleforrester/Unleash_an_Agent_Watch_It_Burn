@@ -25908,3 +25908,8 @@ above it, that PROXY_TIMEOUT is under TURN_TIMEOUT in the Deployment, is what ho
 the timing can hold is that a limit ends the turn at all: the fake agent never finishes, so a turn no limit ended runs
 to the client's 30 s. The check now reads "the turn ends at its limit, not when the agent finishes, which it never
 does", with a bound of the scaled TURN_TIMEOUT plus 5 s (7.25 s). Run alone after the change it read 1.05 s.
+
+**The suites (run 17928, at `2c878d98`).** `bash verify/run-e2e-tools.sh` printed `303 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, the extended retry test and the changed cancel test (1.08 s, under 7.25 s) among them, then
+`73 checks ran (the offline suite and 72 tier tests) in 35m47s`, with `test_public_images_served.py` printing "Every
+public image deploy_app pins is served, on linux/amd64.", then `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
