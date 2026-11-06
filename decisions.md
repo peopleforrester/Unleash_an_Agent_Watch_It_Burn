@@ -22989,3 +22989,8 @@ and watch-it-burn-private, the live `llm-guard-scanners` hashes to `61a7adb9a48a
 the guard-proxy pod a `/analyze/prompt` with no token gets 403. Then `python3 verify/kubecon_probe.py admin
 burritobot-private.burritobot.co --context watch-it-burn-private` and its community run stay green with the guards on,
 which shows guard-proxy's and read_support_ticket's calls still get through.
+
+**The suites (run 17802, at `4ed0a7f2`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`bash verify/run-tests.sh`),
+which printed `284 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `test_llm_guard_auth.py` and
+`test_input_pii_guard.py` among them. Then the tier: `65 checks ran (the offline suite and 64 tier tests) in 54m46s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
