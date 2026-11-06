@@ -26801,3 +26801,9 @@ A read of the real `datadog-secret` on the private cluster found the last-applie
 namespaces (datadog, monitoring, security), as run 17929 found on both clusters. They lose it at the next
 `fleet.sh converge` repair or `deploy-full-idp.sh` bring-up; that step stays under run 17929's "Not yet run on a
 cluster", and this run files it as a followup issue, since run 17929's followup was never filed.
+
+**Suites (run 17957, at `852d9fda`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`308 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `74 checks ran (the offline suite and 73 tier tests) in 72m16s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. A first attempt under the 3600000 ms background limit that CLAUDE.md names
+was cut off at the limit inside the tier, at `test_injection_classifier.py`, with no check failed; the second ran
+under a 7200000 ms limit. The prose gate printed `prose gate: pass`.
