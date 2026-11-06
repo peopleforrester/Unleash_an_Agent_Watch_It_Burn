@@ -26085,3 +26085,10 @@ they stood before #952, every copy's check fails.
 **The suites (run 17906, at `2de9126b`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite, with `ALL C3 PROMPT COPY CHECKS GREEN` among them, then `72 checks
 ran (the offline suite and 71 tier tests) in 42m07s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+**Run 17925 ports run 17906's draft.** Run 17906 ended claim-stale, not on a gate, so its two commits (`2de9126b`,
+`a4c6010c`) never reached staging. `verify/prior-drafts.sh 973 origin/staging` printed START on
+`origin/agent/973-17906` with only a decisions.md append on staging's side, so run 17925 cherry-picked both commits
+unchanged. It reran the test against the copies as they stood before #952 (`d6de37e1^`) with the current `/kubecon`:
+the catalog, `lab.html`, `LAB-TEXT.md` and `prompts.yaml` checks each printed FAIL and the test exited 1; with the
+whole pre-#952 tree it exited 1 on `/kubecon` holding one C3 prompt. Nothing in the test differs from the draft.
