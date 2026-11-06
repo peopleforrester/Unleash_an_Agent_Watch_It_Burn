@@ -23944,3 +23944,57 @@ browser): send a prompt with a cuss word and then a clean one; the bot answers b
 saved prompts" and in `localStorage` `wib-saved`, and it is still the only one after a reload. Do it on
 `https://attackme.burritobot.co` and on `https://burritobot-private.burritobot.co`, in a private window so the prompt
 wall check of #915 can be read at the same time.
+## 2026-11-06 · #936 · run 17833 · A test here holds prompts-agenticburn's fake-clock burst test to #927's criterion
+
+**What was missing.** Test review run 17682 found no test for #927's criterion "An offline test in prompts-agenticburn
+with a controlled clock (no real timers, no network) feeds a burst of prompts and checks the card count, which prompt
+was shown, and the counter value after each tick." #927's own fake-clock test, `verify/test_display_throttle_e2e.py`,
+drives this repo's `display.js`, not the wall. The wall's throttle has since landed in prompts-agenticburn as
+prompts-agenticburn#18 (`6601313a`, the tip of that repo's `main` and `staging`), with the test the criterion names in
+its `test_wall_page.py`: the page runs in MiniRacer on a fake browser whose timers, `performance.now()`, fetch and
+EventSource are all on one virtual clock, and two tests (`test_a_burst_on_the_stream_adds_one_card_the_newest_with_a_live_count`
+and `test_a_burst_on_the_polling_fallback_is_sampled_the_same_way`) feed a burst through `wall.ingest()` and assert the
+card count, the shown card's text and `+N more` between ticks. So the criterion holds; what was missing is a check
+that fails when it stops holding. `verify/prior-drafts.sh 936 origin/staging` printed NONE, and the issue has no
+comments, so there was no draft to port.
+
+**What was added.** A run cannot change prompts-agenticburn, so the test reads it.
+
+- `verify/wall_clock_burst.py` reads `test_wall_page.py` and `conftest.py` with `ast` and makes ten named checks:
+  MiniRacer imported; one module constant defining `setTimeout` passed to `.eval()`; its `setTimeout` and
+  `setInterval` scheduling on the variable `performance.now()` returns; an `advance(ms)`; a fake `fetch` and
+  `EventSource`; the page's script taken from `client.get("/")`, which serves `wall.html`; no network client imported;
+  `WALL_POLLER` set to `off` in conftest.py; and at least one `page` test that hands `wall.ingest()` two or more
+  prompts, calls `page.advance()` at least twice, has an assert on `page.cards()` or `browser.more()` after every
+  advance before the next one, and between those asserts reads `len(page.cards())`, a card's `"text"` and
+  `browser.more()`. "After each tick" is read as that: every tick is followed by an assert on the page, and the three
+  values are each asserted after a tick. The two tests prompts-agenticburn#18 landed read the count or the counter
+  after every tick but not all three after each, so a reading that asked for all three after every tick would fail the
+  test the criterion describes.
+- `verify/test_wall_clock_burst_sister_e2e.py` (`# SUITE: e2e`) reads prompts-agenticburn's `main` head and tarball
+  through `gh api`, runs those checks, runs the repo's `test_wall_page.py` under its own lock
+  (`uv run --frozen pytest`) and checks each burst test passed, then sets the page's `CARD_INTERVAL_MS` to 1 ms (the
+  anchor `const CARD_INTERVAL_MS = 1500;` is checked first) and checks a burst test fails on an assert.
+- `verify/test_wall_clock_burst.py` (offline suite) runs the analyser on a made-up page test written to the criterion,
+  which passes every check, and on 17 edits of it, each checked to fail exactly the check it breaks: a real
+  `setTimeout`, `setInterval`, `performance.now()`, `fetch` or `EventSource`, no `advance`, no MiniRacer, no fake
+  evaluated, another route, `urllib.request` imported, one prompt in place of a burst (as a list and as a range), one
+  tick, a tick with no assert after it, and no card count, shown text or counter. A conftest with the poller on fails
+  only that check. Each edit's anchor is checked to be in the made-up source first.
+
+**Why the live suite, not the tools tier.** prompts-agenticburn is private, so there is no anonymous read, and the
+promotion gate's gh refuses `gh api` (verify/gh_comments.py, #863). In the tools tier the check would hold the gate red
+for want of access, not for the criterion. `run-e2e.sh` runs it by hand with gh signed in, and a dispatched run, whose
+gh allows `gh api`, runs it as `python3 verify/test_wall_clock_burst_sister_e2e.py`. A missing gh or uv, or a failed
+read, is a failure with gh's reason, never a skip.
+
+**Run by this run (17833), at prompts-agenticburn `6601313a`.** `python3 verify/test_wall_clock_burst_sister_e2e.py`
+printed all 18 checks PASS, both burst tests passed under that repo's lock, the 1 ms page failed
+`test_a_burst_on_the_stream_adds_one_card_the_newest_with_a_live_count`, and the run ended `18/18 checks passed`, in
+14 s with uv's cache warm. By hand, the real `test_wall_page.py` with its `browser.more()` asserts deleted fails the
+burst check and names no burst test.
+
+**Not yet run on a cluster.** Nothing is owed: the check reads GitHub and runs a page in V8, and touches neither
+cluster.
+
+No dependency was added to this repo; the sister test runs on prompts-agenticburn's own `uv.lock`.
