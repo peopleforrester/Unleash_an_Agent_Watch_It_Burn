@@ -444,6 +444,17 @@ exactly the roster", exit 0, since it reads the bot hosts in the router's `roste
 not among them. The reload waits on a Railway
 login on tanjiro-wsl2.
 
+**2026-11-06, #945 again, still not live.** Hecaton run 17948, 16:22Z to 16:26Z, at staging `629c53ea`. Railway is
+still signed out on both fleet hosts: `railway whoami` printed "Unauthorized. Please run `railway login` again." on
+tanjiro-wsl2 and "Unauthorized. Please login with `railway login`" on megumi-wsl2. The run's wrapper has no route to
+netcup, the host where Railway is signed in. So the reload goes up once more as one command on netcup, pinned this
+time to `a93679a`'s table and reload script by their sha256. Read live: `registry-attackme.burritobot.co/v2/` and
+`registry-attackme.agenticburn.com/v2/` still answer 502. A host the router does not carry
+(`no-such-host-945.burritobot.co`) answers 404, which is what registry-attackme will answer once the reload runs.
+`registry.burritobot.co/v2/` answers 200, and its tags list prints
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended "the router
+serves exactly the roster", exit 0. Both clusters' console load balancers are the two that `a93679a`'s 31 rows name.
+
 **2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
 watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
 (`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.
