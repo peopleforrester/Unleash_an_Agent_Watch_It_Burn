@@ -24440,3 +24440,7 @@ Railway service has no git source, so promotion does not ship it; prompts-agenti
 **Not yet run on a cluster.** Nothing here runs on a cluster. Owed after prompts-agenticburn#20's deploy:
 `python3 verify/test_wall_more_count_live.py` and the same with `WALL_URL=https://prompts.burritobot.co/`, both expected
 to print `PASS` and exit 0.
+
+**The suites (run 17844, at `3bcd7bf7`).** `bash verify/run-e2e-tools.sh` printed `291 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `70 checks ran (the offline suite and 69 tier tests) in 32m28s`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`; `test_wall_more_count_e2e.py` ran in the tier. The prose gate printed `prose gate: pass`.
