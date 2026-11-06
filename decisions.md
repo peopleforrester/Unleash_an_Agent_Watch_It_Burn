@@ -22127,3 +22127,8 @@ lands.
 `uv run ruff check . && uv run pytest` green there.
 
 **Live.** No cluster is involved: the wall runs on Railway, outside both clusters, and this run touched neither.
+
+**The suites (run 17766, at `a53e252e`).** `bash verify/run-e2e-tools.sh` printed `279 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `64 checks ran (the offline suite
+and 63 tier tests) in 36m39s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added.
