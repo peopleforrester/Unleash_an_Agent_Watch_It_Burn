@@ -26589,3 +26589,10 @@ run's background job, after its offline suite had printed `309 tests ran` and `A
 and was stopped inside the tools tier. Run again, detached so the cap did not apply, it printed `73 checks ran (the
 offline suite and 72 tier tests) in 67m23s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; its offline suite ran
 309 tests, the two new `test_deploy_app_*` among them, and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+
+**A check that failed once and passed on a rerun.** After the rebase onto `13fc72b8` (#993), `test_public_images.py`
+failed three of its "outside the official library, refused before any apply" checks once, then passed three runs in a
+row; a run on staging alone passed. The test sets `JOKER_SCALE_DOWN_SECONDS` to 0.3, so a scale-to-zero Timer from an
+earlier case can fire during a later one, and the check counted any PATCH as an apply, the Timer's PATCH to
+`/deployments/<name>/scale` included. It now counts only the applies. With a stray `/scale` PATCH put into `calls`
+before that check (a copy of the test, run once), the old check fails on it and the new one passes.

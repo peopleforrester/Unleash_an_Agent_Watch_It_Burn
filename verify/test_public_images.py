@@ -222,7 +222,10 @@ for reg in m._DOCKER_HUB:
     for asked in (f"{at}bitnami/redis:7", f"{at}trongame/tron:latest", f"{at}library/someone/tron"):
         reply, out, err = deploy(workload("tron", asked))
         check(f"{asked!r}: outside the official library, refused before any apply",
-              bool(err) and not out and not [c for c in calls if c[0] == "PATCH"], reply or err)
+              # An apply, not a scale-down: an earlier case's 0.3 s scale-to-zero Timer can fire during this one,
+              # and its PATCH to /scale failed this check on a loaded host (#856, run 17936).
+              bool(err) and not out and not [c for c in calls if c[0] == "PATCH" and not c[1].endswith("/scale")],
+              reply or err)
         check(f"{asked!r}: the refusal names why (outside Docker's official library, no Docker Hub pulls) and how",
               err.startswith("deploy failed for Deployment/tron: ") and "outside Docker's official library" in err
               and "pulls nothing from Docker Hub" in err and "registry it is published on" in err
