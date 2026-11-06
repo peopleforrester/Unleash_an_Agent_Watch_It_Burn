@@ -22212,3 +22212,7 @@ computed, and the test passes on the rebased tree. A live re-read at 01:09Z on 2
 pod (7h14m old) still seeding `sha256:0dbe92d4...`, while `internal-registry` reads Synced and Healthy at
 `9de5bb7f`, whose ConfigMap pins `793db299...`. That is the gap the checksum closes. The hashes above (`5b8e74ff`
 and the rest) are the branch's from before the rebase; the commit subjects name them for good.
+
+**The suites (run 17770, at `85a1ed2b`, on staging `9de5bb7f`).** `bash verify/run-e2e-tools.sh` printed `280 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `64 checks
+ran (the offline suite and 63 tier tests) in 35m32s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
