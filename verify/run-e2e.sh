@@ -27,6 +27,10 @@
 # #783's trace-id fix (test_otel_trace_id_fix_live.py, #812) is checked on staging and on both KubeCon clusters, so it
 # also needs PRIVATE_CONTEXT, the kube-context of the private admin cluster (watch-it-burn-private). It only reads.
 #
+# #954's recipe block (test_recipe_block_live.py) runs on PRIVATE_CONTEXT too: the terminal's guardrails-on, the card
+# BurritoBot's prompt names read back Permission denied with KubeArmor's Block alert, one marked model call asking for
+# it, then guardrails-off. The switch reaches the community cluster as well, for the minute or two it runs.
+#
 # The AWS-plane drift check (test_drift_aws_live.py, #205) needs DRIFT_PROFILE, an operator profile in
 # WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied, and ATTENDEE_CLUSTER, a cluster in that
 # account whose attendee key is in infra/terraform/fleet/aws-pool/. They are prerequisites like the rest.
