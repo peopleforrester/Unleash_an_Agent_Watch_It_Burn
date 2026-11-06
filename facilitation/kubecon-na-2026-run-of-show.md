@@ -444,6 +444,26 @@ exactly the roster", exit 0, since it reads the bot hosts in the router's `roste
 not among them. The reload waits on a Railway
 login on tanjiro-wsl2.
 
+**2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
+watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
+(`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.
+
+Community, 13:37Z: 11 PASS, 1 FAIL, `KUBECON PROBE RED`, $0.4179 to $0.4879 over 8 model calls. The linked-list ask
+was answered 2 of 3. One try came back as the Bedrock 424 and was answered on the probe's one re-send. The miss was a
+plan with no answer ("I will provide the user with the actual steps to reverse a linked list, followed by a playful
+nudge back to the order."), which guard-proxy surfaced after its own scratchpad retry. Every other beat passed, and
+the probe removed the Joker it made.
+
+The same ask, 12 more times in fresh conversations on `/chat`: 4 answered, 7 a plan alone, 1 the 424.
+
+Then straight to Bedrock with the live persona and the agent's 15 tool names, which changes nothing on a cluster,
+12 times: 4 answered, 5 called `run_shell` with `echo '<the answer>'`, 2 the 424 and 1 the scratchpad alone. Nova was
+showing its answer through `run_shell`. When the code inside the echo breaks the tool-call grammar, Bedrock answers
+424; when the echo runs, the turn ends on the scratchpad. With the persona lines `ab2cf746` adds, 18 of 20 answered
+and 2 still called `run_shell`. The two recipe asks called `run_shell` 5 of 5 each, with those lines and without.
+
+Not yet run: three community probe runs in a row once watch-it-burn-community has synced the new persona.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
@@ -1307,8 +1327,9 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 20): a community run makes 7 model calls, an admin run 14. Pull each
-  cluster's credentials into its own kubeconfig first; the probe passes it per
+  (default 20): a community run makes 7 model calls, an admin run 14, plus one for
+  each reply that is Bedrock's ToolUse 424, which the probe sends again once as the
+  failure playbook says (#889). Pull each cluster's credentials into its own kubeconfig first; the probe passes it per
   command and never touches `~/.kube/config`. Both runs need the kube-context: C6 is
   judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the reply.
 

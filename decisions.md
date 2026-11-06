@@ -26263,3 +26263,66 @@ was first in `/tmp`, and the file was deleted from under the job while it ran. T
 file and copied to the run directory. The `exit=` line could not be appended to the deleted path, so the verdict is
 read from the GREEN line, which `run-e2e-tools.sh` prints only when no check failed, just before it exits 0. A run's
 log belongs in its run directory, not in `/tmp`. No dependency was added.
+
+## 2026-11-06 · #889 · run 17911 · The linked-list ask's 424 and its plan-only misses have one cause; the probe re-sends a 424 once and the persona keeps the answer out of run_shell
+
+The community probe's off-topic beat asks "how do I reverse a linked list" three times and passes only on 3 of 3
+(#535). Run 17370 saw it at 1 of 3 on 2026-11-05, the first miss a Bedrock 424 `ModelErrorException: Model produced
+invalid sequence as part of ToolUse`. No earlier draft of this issue exists (`verify/prior-drafts.sh 889` printed
+NONE).
+
+**What was measured on watch-it-burn-community, 2026-11-06.** The cluster ran staging's persona (workshop-agent
+synced `52a2ed1a` at 12:49Z, and its live systemMessage equals the committed one).
+
+- The probe, 13:37Z, with the re-send below: 11 PASS, 1 FAIL, `KUBECON PROBE RED`, $0.4179 to $0.4879 over 8 model
+  calls. The off-topic note read `answered 2 of 3; first miss: did not answer the linked-list ask: "The user has
+  asked for help with reversing a linked list, which is a task unrelated to the cantina's menu. I will provide the
+  user with the actual steps to reverse a linked list, followed by a playful nudge back to the order." (1 of 3
+  re-sent once after a Bedrock ToolUse 424)`. guard-proxy's log had four `thinking_only_retry` lines in those 35
+  seconds.
+- The same ask 12 more times on `/chat`, fresh conversations: 4 answered, 7 a plan alone, 1 the 424.
+- Straight to Bedrock Converse (`aws bedrock-runtime converse`, the cluster's application inference profile), with
+  the live systemMessage and the agent's 15 tool names under one-string schemas: 4 of 12 answered, 5 called
+  `run_shell` with `echo '<the answer, code and all>'`, 2 were the 424, 1 was the scratchpad alone. This touched no
+  cluster.
+
+So both misses are one cause: Nova shows its answer by echoing it through `run_shell`. Code inside the echo can break
+the tool-call grammar, and Bedrock answers 424. When the echo does run, Nova ends the turn on its scratchpad, which
+guard-proxy retries once and then surfaces as a plan with no answer. The persona grew by the allergen card (#905)
+and the recipe rules (#951, #953) since the 3 of 3 runs of 2026-11-05, and its recipe case tells the bot to use
+`run_shell` on a kitchen chore; that may be why the echo became the common shape, but this run did not test it.
+
+**The persona (`gitops/workshop-agent/agent.yaml`).** The off-topic paragraph now says to write the answer, code and
+all, as the reply text, never to `run_shell` an echo, a print or a script to show it, and that an ask like this calls
+no tool at all: when the scratchpad says it will give the steps and the code, those come next. Sent straight to
+Bedrock as above, those lines gave 18 of 20 answered (two batches of 10, 9 each), both misses still a `run_shell`
+echo. Three wordings were tried first: the first half of these lines alone gave 10 of 12, the same with a general
+line in the persona's opening paragraph 10 of 12, and all of these lines with that general line 18 of 20. The
+committed lines leave the general line out and stay inside the off-topic paragraph, so no other beat reads them as
+about itself.
+The recipe asks (#925's line-cook ask and `challenges/c3-secret-grep/agent-prompt.txt`) called `run_shell` 5 of 5
+each with the new lines and without them. The lines only widen what the bot answers, and the persona still never
+restricts topics.
+
+**The beat changes: a 424 is sent again once.** `Probe.ask` in `verify/kubecon_probe.py` sends a reply that is
+Bedrock's ToolUse 424 (`BEDROCK_TOOLUSE_RE`: `ModelErrorException` and `invalid sequence as part of ToolUse`) once
+more, on every chat beat. The reason: it is Bedrock's error, not a reply, and the failure playbook's fix for that
+exact error is "Re-send once" (`docs/RUN-OF-SHOW-2026-08.md`), which is what a presenter does on stage. The gate
+stays 3 of 3 asks as #535 set it. A second 424 is the reply and a miss, any other miss shape is never re-sent, the
+re-send stays under `--max-calls` (the beat's reserved calls count against it), and the off-topic note says how many
+of the three were re-sent, so a re-sent pass shows in the record. The room's chat page does not re-send. guard-proxy
+is where the room's turn could be retried, the way it already retries a scratchpad-only reply, and that is
+guard-proxy-agenticburn's change (filed from this run's report). This run checked the submodule out to read
+`proxy.py` and did not change it.
+
+**Tests.** `verify/test_kubecon_probe.py`: the recorded 424 (`nova_replies.BEDROCK_TOOLUSE_424`) is matched and five
+other replies are not; a 424 on the first try is re-sent and the beat passes 3 of 3 naming the re-send in 8 calls; a
+424 on the re-send too is a miss with no third send; a deflection is never re-sent; a ceiling with no room stops the
+re-send; with one call to spare the re-send is made and the next beat is stopped by the ceiling. Two checks hold the
+persona lines and that they sit inside the off-topic paragraph while the recipe case still says `run_shell`.
+
+**Not yet run on a cluster.** The criterion's three community probe runs in a row at 3 of 3, which need the new
+persona on watch-it-burn-community through Argo CD after promotion: `python3 verify/kubecon_probe.py community
+attackme.burritobot.co --context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`, three times,
+each off-topic note reading `answered 3 of 3`. The next run on #889 runs them and records them here and in the
+run-of-show's Probe record.
