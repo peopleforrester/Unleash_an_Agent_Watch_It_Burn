@@ -24578,3 +24578,46 @@ with the refresh-only apply's output at the end of `fleet/logs/<name>.apply.log`
 **The suites (run 17845, at `eabe6c8e`).** `bash verify/run-e2e-tools.sh` printed `294 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite, then `69 checks ran (the offline suite and 68 tier tests) in 30m34s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-06 · #937 · run 17835 · A live test runs prompts-agenticburn's `uv run ruff check . && uv run pytest`
+
+**What was missing.** #927's fifth criterion is "`uv run ruff check . && uv run pytest` passes in
+prompts-agenticburn". The throttle #927 asked for landed in that repo as prompts-agenticburn#18 (`6601313a`), but no
+test here ran the command, so nothing failed when it stopped holding (#937, from test review run 17682).
+`bash verify/prior-drafts.sh 937 origin/staging` printed NONE and #937 has no comments, so there was no draft to port.
+
+**The change.** `verify/prompts_wall_suite.py` (new) resolves the tip of prompts-agenticburn's `main` and `staging`
+with `gh api repos/peopleforrester/prompts-agenticburn/commits/<ref>`, fetches that commit's tarball with
+`gh api .../tarball/<sha>`, unpacks it with tarfile's data filter into a new temporary directory, refuses a tarball
+that is not one top directory holding a `pyproject.toml`, and runs `uv run ruff check .` and then `uv run pytest` in
+it, stopping at the first failure as `&&` does. The suite gets PATH, HOME, the locale, TMPDIR and UV_* only: the
+wall's app reads FEED_URL, ROSTER_URL, MAX_ENTRIES and more from its environment, and run-e2e.sh's environment carries
+CONTEXT and AWS settings, so without that the result would hang on the caller. `verify/test_prompts_wall_suite_e2e.py`
+(new, `# SUITE: e2e`) runs it on both branches, runs a commit once when both branches point at it, and exits 1
+naming the branch and the step that failed.
+
+**Why the live suite and not the tools tier.** prompts-agenticburn is private (an anonymous read of its API answers
+404, and `git ls-remote` asks for credentials), so the only read is through gh's token. Dispatched runs get `gh api`
+GETs; the promotion gate's read-only gh refuses `gh api` (the #863 entry above), and refuses `gh repo clone` too. In
+the tools tier the test would turn every promotion red, so it sits in `bash verify/run-e2e.sh`, the same call
+`verify/test_images_saved.py` makes for the image archive. Dispatched runs can run it directly:
+`python3 verify/test_prompts_wall_suite_e2e.py`.
+
+**Offline test.** `verify/test_prompts_wall_suite.py` (new) puts a stub gh and a stub uv alone on PATH. The uv stub
+fails the step that the fetched tree's `fail_step` file names, so the tree decides the outcome. It checks the command
+is the criterion's word for word; the sha and tarball reads; that both steps run in the unpacked tree; that the
+caller's CONTEXT and FEED_URL do not reach the suite; that a failing ruff stops before pytest and a failing pytest
+fails; that no uv, no gh, the gate's `REFUSED gh api` answer, a 404 and an answer that is not a sha each fail by
+name; that a tarball with two top directories, a path out of the destination, no `pyproject.toml` or bytes that are
+not gzip is refused; and, end to end on the stubs, that the live test exits 0 on two green branches and 1 naming
+staging's pytest or main's ruff. It also holds that the live test has no `# E2E TIER: tools` line.
+
+**Live check, run 17835.** `python3 verify/test_prompts_wall_suite_e2e.py` read `main` and `staging` both at
+`6601313a76c9`, and on it `uv run ruff check .` printed `All checks passed!` and `uv run pytest` printed
+`90 passed`, exit 0, in about 6 s. On copies of that tree, the helper failed each mutation: an unused import in
+`app.py` failed ruff (exit 1) and pytest did not run; an added `assert False` test failed pytest with `1 failed,
+90 passed`; and the wall's `1500` ms card interval changed to `500` failed pytest with `3 failed, 87 passed`. No
+cluster was touched.
+
+**Not yet run on a cluster.** Nothing is owed: the test reads GitHub and runs that repo's suite locally.
+
+No dependency was added.
