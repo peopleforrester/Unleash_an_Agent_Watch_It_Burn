@@ -21533,3 +21533,9 @@ issuecomment-6605670550.
 
 **Live.** No cluster is involved: the test reads GitHub only, and it passed on this run's host against the live
 issue.
+
+**The suites (run 17751, at `2eb79073`).** `bash verify/run-e2e-tools.sh` printed `276 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `63 checks ran (the offline suite
+and 62 tier tests) in 36m21s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
+`verify/test_dd_credential_comment.py` among the tier tests and passing. The prose gate printed `prose gate: pass`.
+No dependency was added.
