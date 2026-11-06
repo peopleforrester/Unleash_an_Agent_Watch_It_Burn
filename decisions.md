@@ -23105,3 +23105,7 @@ verify/test_images_lock_live.py` printed "Every image both clusters run has an i
 nothing on either cluster changed.
 
 **Not yet run on a cluster.** Nothing: the save runs on netcup, not on a cluster.
+
+**The suites (run 17809, at `1c2f6c71`).** `bash verify/run-e2e-tools.sh` printed `284 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `65 checks ran (the offline suite and 64 tier tests) in 38m02s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
