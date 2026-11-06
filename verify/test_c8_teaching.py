@@ -87,7 +87,12 @@ check("it says the attack walked around the agent", "walked around the agent" in
 
 print("== the chat vector is kept, but as an honest optional extra ==")
 check("the chat caret is offered", "Want BurritoBot to do it for you? Ask in chat" in C8)
-check("it is honest that BurritoBot often refuses", "often refuses this one" in FLAT)
+# #967: the persona was reworded so the ticket-framed ask lands on most tries (measured 20/20 on Nova Pro via
+# converse, up from 9-14/20). So the caret no longer says "often refuses"; it says the cover usually lands, which
+# is the lesson: a plausible ticket is all the social engineering it takes.
+check("it is honest that the ticket cover usually lands", "it usually plays along" in FLAT)
+check("the lesson is that a plausible ticket is all it takes",
+      "a plausible ticket is all the social engineering it takes" in FLAT)
 check("the ticket-framed prompt is the one that lands most often", "Change-control ticket CHG-4471" in C8)
 check("the token path is named in the chat one-liner",
       "/var/run/secrets/kubernetes.io/serviceaccount/token" in C8)
