@@ -22747,3 +22747,8 @@ check passing for both Jokers. On `watch-it-burn-private`, ConfigMap `registry/r
 **Not yet run on a cluster.** Nothing is owed. The test reads ghcr.io, not a cluster.
 
 No dependency was added.
+
+**The suites (run 17791, at `0f424b7c`).** `bash verify/run-e2e-tools.sh` printed `283 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN` for the offline suite, then `64 checks ran (the offline suite and 63 tier tests) in 50m06s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The extended `test_c6_joker_public.py` passed in that tier. The prose
+gate printed `prose gate: pass`.
