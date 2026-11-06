@@ -26326,3 +26326,10 @@ persona on watch-it-burn-community through Argo CD after promotion: `python3 ver
 attackme.burritobot.co --context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev`, three times,
 each off-topic note reading `answered 3 of 3`. The next run on #889 runs them and records them here and in the
 run-of-show's Probe record.
+
+**A test that failed once and passed on its rerun.** `verify/test_finale_cap.py` failed in this run's offline
+suite on its two cost-watch checks and passed when run again. cost-watch loops until Ctrl-C, and the test read what
+it printed in a fixed 5 seconds; its first frame starts three Pythons (the fake kubectl, the `/cost` read, the
+readout) before it prints, so on the loaded host nothing had printed yet. The test now reads until the first whole
+frame, the line `(Ctrl-C to stop)`, with a 90-second bound and a check that names a frame never drawn. With the fake
+kubectl made to sleep 7 seconds first, it still passes.

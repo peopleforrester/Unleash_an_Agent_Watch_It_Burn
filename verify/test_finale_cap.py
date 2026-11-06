@@ -123,11 +123,27 @@ with tempfile.TemporaryDirectory() as tmp:
           and "Reset" not in capped_reply)
 
     print("== cost-watch shows spend against the cap ==")
-    try:
-        w = run("cost-watch", timeout=5)
-        shown = w.stdout
-    except subprocess.TimeoutExpired as e:
-        shown = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
+    # cost-watch loops until Ctrl-C, so it is read until its first whole frame (the "(Ctrl-C to stop)" line ends one)
+    # and then stopped. A fixed 5-second read came back empty on a loaded host (run 17911, #889's suite): the first
+    # frame starts three Pythons before it prints. The bound only stops a script that never draws a frame.
+    w = subprocess.Popen(["bash", str(home / "cost-watch")], env=env, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, text=True)
+    lines: list[str] = []
+    framed = threading.Event()
+
+    def read_first_frame() -> None:
+        for ln in iter(w.stdout.readline, ""):
+            lines.append(ln)
+            if "(Ctrl-C to stop)" in ln:
+                framed.set()
+                return
+
+    threading.Thread(target=read_first_frame, daemon=True).start()
+    framed.wait(90)
+    w.kill()
+    w.wait()
+    shown = "".join(lines)
+    check("cost-watch draws a whole frame within 90 seconds", "(Ctrl-C to stop)" in shown, shown[-400:])
     check("it shows SPENT, CAP and that the cap is hit", "SPENT" in shown and "CAP " in shown
           and "CAP HIT" in shown, shown[-400:])
     check("it shows the command it runs", "$ kubectl -n agent exec deploy/guard-proxy -- python3 -c" in shown)
