@@ -26224,3 +26224,34 @@ is filed", and a mutated copy for each.
 47m32s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `test_952_slide17_decision.py` printed "All #952 slide-17
 decision checks passed." and `test_chat_turn_cancel.py` printed "All /chat turn cancel checks passed." The prose gate
 printed `prose gate: pass`. This run touched neither cluster.
+
+## 2026-11-06 · #926 · run 17926 · The wall reset ran live: the wall reopened empty, and a new prompt reached it in 3.4 s
+
+**What happened since run 17898.** Run 17898 escalated the reset as one netcup command: `reset-bot` on
+watch-it-burn-community and watch-it-burn-private, then `wall-reset`, then `wall-check --empty`, then one prompt sent to
+attackme with a time stamp in its text. This run cannot read that act's output, since the escalation records and other
+runs' directories are closed to a run's user. The live state shows the act ran at about 14:29Z on 2026-11-06. It was
+read at 14:33Z, before this run sent anything.
+
+**Read live, at 14:33Z.** `/api/prompts` on prompts.burritobot.co answered `seq` 1, both clusters (attackme and
+burritobot-private) `ok`, and one prompt: `Which salsa goes best with carnitas? (wall check 142905)`, from attackme,
+seq 1, received 14:29:07Z. At 12:05Z the same wall had held 89 prompts with seq at 89. The wall keeps its prompts and
+its seq counter in process memory only, so seq 1 means the wall restarted and that this prompt is the first one it
+took in after the restart. Between the restart and that prompt, the wall held none. attackme's `/prompts` feed held
+only that prompt, where it had held 12 at 12:05Z. burritobot-private's feed was empty, where it had held 23. So
+`reset-bot` ran on both clusters before the restart. `./fleet.sh wall-check --empty` failed on that one prompt, as it
+is meant to, and exited 1:
+`FAIL  the wall still holds 1 prompt(s) from before the room: 1 from attackme; received 2026-11-06 14:29Z to
+2026-11-06 14:29Z; seq at 1`.
+
+**The prompt after the reset, timed by this run.** At 14:34:38Z this run sent `Which salsa goes best with barbacoa?
+(wall check 143438)` to attackme's `/chat` and polled the feed and the wall each second. The chat answered in 6.0 s.
+The prompt was in attackme's `/prompts` feed after 1.9 s and on the wall after 3.4 s, as seq 2, which is within the
+wall's 3 s poll of each cluster plus one read.
+
+**What this leaves on the wall.** Two test prompts from attackme, seq 1 and 2. This run cannot clear them, because the
+wall restart needs a Railway login no run has. The run-of-show's Night Before already runs `reset-bot` on both
+clusters, then `./fleet.sh wall-reset` and `./fleet.sh wall-check --empty` before the room, so the room still opens
+on an empty wall. No code changed in this run.
+
+**Not yet run on a cluster.** Nothing. The reset and the timed prompt above are the live checks this issue needed.
