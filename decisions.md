@@ -23204,3 +23204,7 @@ and Healthy at staging 60de9d9a on both clusters.
 - *Left as found.* The port-forward was stopped and the token copy unset; nothing was created on either cluster.
 
 **Not yet run on a cluster.** Nothing from this issue.
+
+**Suites (run 17816, at `a67a2fd8`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`285 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `65 checks ran (the offline suite and 64 tier tests) in 44m56s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. No dependency was added.
