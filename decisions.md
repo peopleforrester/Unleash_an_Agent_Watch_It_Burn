@@ -23859,3 +23859,10 @@ collector, Grafana, Tempo, Falco, falcoctl twice and falcosidekick twice).
 should print 0 cached status names for that cluster too. A run cannot bring a nodegroup up.
 
 No dependency was added.
+
+**The suites (run 17875, at `c07d2462`).** Run 17836 committed the change above and was stopped while the tools tier
+ran, after it had polled the log with the same command several times in a row. Run 17875 ran the tier again:
+`bash verify/run-e2e-tools.sh` printed `291 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `68 checks ran
+(the offline suite and 67 tier tests) in 29m26s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+`test_c6_joker_public.py` passed in the tier with the new ENV check. The issue's body now carries an `## Acceptance
+criteria` list written from its request.
