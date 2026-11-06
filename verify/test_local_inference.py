@@ -7,8 +7,8 @@ did not exist yet, so the toggle was half-built. This profile adds the server. T
 a host, a port and a model name, in three files, and a mismatch would show up as a 404 or a connection
 refused from the gateway on a cluster built for exactly one demo. So they are checked against each other.
 
-The second concern is containment. A 4-CPU, 10Gi model server is fine on one instructor cluster and a
-disaster on fifty student nodes. Since #609 a profile is an explicit list, so containment is that no list but
+The second concern is containment. A model server that asks 1500m CPU and 10Gi, and may burst to 6 CPU and 16Gi,
+is fine on one instructor cluster and a disaster on fifty student nodes. Since #609 a profile is an explicit list, so containment is that no list but
 values-local-inference.yaml names vllm-qwen3, and that list is otherwise full's.
 """
 from __future__ import annotations
