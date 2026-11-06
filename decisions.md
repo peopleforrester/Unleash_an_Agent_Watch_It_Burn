@@ -27482,3 +27482,41 @@ a copy with the bound at 0.001 s printed. The test passes, still with 720 distin
 the deployed change. input-guard.sh is a verify script run from this checkout, not from a cluster.
 
 No dependency was added.
+## 2026-11-06 · #929 · run 18008 · The wall's load test landed in prompts-agenticburn; its numbers and commands are there
+
+**What this run found.** Run 17767's entry above asked for the load test on the wall's own repo, and said the next
+run on #929 records here where its numbers are. That issue, prompts-agenticburn#21, is closed. Its commit `098d3c9f`
+("Load-test the wall's throttle at 500 people, 17 prompts a second for 5 minutes (#21)") is the tip of that repo's
+`staging`, one commit ahead of its `main` (`a07dcad1`), which follows once its gate passes. Read through the GitHub
+API at `098d3c9f`: `test_wall_load.py` and `e2e_wall_load.py` are there, `pyproject.toml`'s `testpaths` lists
+`test_wall_load.py`, and that repo's decisions.md holds the entry "2026-11-06T20:05:00Z · 3.3 · #21 load test of the
+throttled wall". `bash verify/prior-drafts.sh 929 origin/staging` printed NONE: the drafts of runs 17767, 17777 and
+17778 are all in staging.
+
+**Where each criterion is met, all in prompts-agenticburn at `098d3c9f`.**
+
+- *The stream.* 500 prompts are held before the page opens, then 5,100 arrive, 17 a second for 300 s from 500
+  synthetic witches, fed at `ingest()` with `WALL_POLLER=off`, and the page reads them only through its own
+  `/api/prompts` fetch and `/events` stream. `test_wall_load.py` runs the 5 minutes on a controlled clock (the page's
+  script in V8 through `mini-racer`); `e2e_wall_load.py` serves `app.py` on a local port and drives headless Chromium
+  for 5 real minutes.
+- *The throttle.* Both tests assert each gap between cards is at least 1500 ms (the Chromium test allows 1 ms for
+  `setTimeout`'s whole-millisecond delay) and that "+N more" equals the number held back at every card. On the
+  controlled clock, 200 cards drew with every gap 1500 ms; in Chromium, 200 cards with gaps from 1499.2 ms.
+- *Frame time and heap.* In Chromium (156.0.8078.4, Playwright 1.64.1), frames p50 16.7 ms and p95 16.8 ms in every
+  run; the longest frame was 150 ms, 1100 ms and 2300 ms over three runs on a host with a load average of about 27,
+  so the test asserts p95 of 34 ms or less and prints the longest frame. JS heap after GC went from 1.40 MB to 1.57 MB,
+  DOM nodes stayed at 3,165, and the DOM held at most 300 cards. On the controlled clock the V8 heap went from 1.14 MB
+  to 1.26 MB. Both tests fail when the heap grows by 128 bytes or more a prompt, or the DOM goes past 300 cards; a page
+  mutated to keep every prompt failed both.
+- *The record.* That repo's decisions.md holds these numbers with the commands `uv run pytest -s test_wall_load.py`
+  and `uv run pytest -s e2e_wall_load.py`.
+- *The test command.* `uv run ruff check . && uv run pytest` passed there with 106 tests, `test_wall_load.py` among
+  them. The Chromium half needs a browser, so it runs under that repo's new E2E command, declared in its AGENTS.md.
+
+**What this means here.** #929 is met by prompts-agenticburn#21; this repo ships no copy of the wall and changes no
+code for it. The one slow growth the test found, #14's `shown` set at about 24 to 33 bytes a prompt (about 4 MB over a
+2-hour session), was judged too small to change the page.
+
+**Not yet run on a cluster.** Nothing is owed: the load test is offline by design, and this run changed no code.
+
