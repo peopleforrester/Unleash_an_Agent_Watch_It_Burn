@@ -25239,4 +25239,13 @@ least five times, and `c3-attack` after Reset at least five times. It also rerun
 python3 verify/test_recipe_block_live.py`, whose first check holds the live systemMessage equal to git's. Run 17832's
 Playwright driver is in that run's directory, not the repo.
 
-**The suites (run 17862).** Running; recorded in the follow-up commit.
+**What was live at the end (run 17886).** watch-it-burn-community's `workshop-agent` Application read Synced at
+staging, and its live systemMessage was 19746 bytes, staging's wording, not this change's 20521. So the reword is
+still owed to the cluster, as above.
+
+**Why run 17862 stopped, and the suites (run 17886, at `fc060185`).** Run 17862 committed this change and started
+`bash verify/run-e2e-tools.sh`. It then polled the log with the same two-minute command over and over, and hecaton
+stopped it for repeating itself (stop reason `loop`) before the tier finished. The code was not the cause. Run 17886
+reran the suite as one background job and waited on it in four bounded waits of under ten minutes each. It printed
+`292 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `69 checks ran (the offline suite and 68 tier tests) in
+30m52s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
