@@ -22548,3 +22548,7 @@ union merge driver for `decisions.md` and `PROGRESS.md` (`.gitattributes`), so t
 meanwhile; the card says the recipe "is a separate matter, held back as above", which this rule leaves true, and
 `test_recipe_persona.py`, `test_ceo_persona.py` and `test_kubecon_probe.py` pass on the rebased tree. The suites are
 rerun below on the new base.
+
+**The suites (run 17785, at `578884a0`, on staging `b2e5060d`).** `bash verify/run-e2e-tools.sh` ran the offline
+suite (`282 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `64 checks ran (the offline suite
+and 63 tier tests) in 48m12s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
