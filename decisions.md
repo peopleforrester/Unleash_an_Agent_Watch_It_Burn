@@ -25502,3 +25502,7 @@ read-only look at 11:47 UTC found both clusters' `ai-layer` and `workshop-agent`
 `workshop-agent-7f874bf54b-p9tvv` on private, `workshop-mcp-555f97c466-pkr6t` and `workshop-agent-699f6bcb7c-fdkfx` on
 community). workshop-mcp's log still holds the two pre lines with `"tool_input":{"ingredient":"ghost pepper"}` and the
 two post lines with `"result_chars":20` quoted above. Run 17891 changed nothing on either cluster.
+
+**The suites (run 17891, at `5563100c`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 32m58s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17891/e2e-tools.log`.
