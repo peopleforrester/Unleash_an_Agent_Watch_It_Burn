@@ -26394,3 +26394,13 @@ Joker was never created and the villain image was refused.
 **Not yet run on a cluster.** Both probes on a wide-open start, once the guardrails are off again:
 `python3 verify/kubecon_probe.py community attackme.burritobot.co ...` and
 `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co ...`, each to end `KUBECON PROBE GREEN`.
+
+**A tier test that failed under load (run 17949).** `bash verify/run-e2e-tools.sh` ran the offline suite green
+(`307 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then went past the hour this run gave the background job, on a
+host at load average 34 to 40, and was stopped in `test_terraform_lock_init.py`. Of the tier tests before it, one
+failed: `verify/test_collector_pii_scrub_e2e.py`, all 12 checks, from "the collector took the spans". Its log ended
+in the collector's own OTTL rewrite notices, so it was still starting when the test's 30 seconds to send ran out, and
+alone the test passed in 10 seconds. This is the slow start #889 fixed in `test_agent_otlp_logs_collector.py`. The
+send loop now gets `START_BOUND`, 120 seconds, and a collector that never takes the spans is named with whether it
+exited or was still not taking them and after how long. With `PII_SCRUB_START_BOUND=0` the check fails with "still
+not taking spans on <port> after 0 s".
