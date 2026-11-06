@@ -25249,3 +25249,29 @@ stopped it for repeating itself (stop reason `loop`) before the tier finished. T
 reran the suite as one background job and waited on it in four bounded waits of under ten minutes each. It printed
 `292 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `69 checks ran (the offline suite and 68 tier tests) in
 30m52s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+## 2026-11-06 · #973 · run 17906 · A test holds every C3 prompt copy to /kubecon's recon and attack
+
+**The gap.** Test review run 17827 found that no test checked one criterion of #952: that every other copy that held
+the Challenge 3 recipe prompt carries the same recon and attack prompts. `verify/test_replay_prompts.py` holds the
+fallback `prompts.yaml` equal to the whole `/kubecon` page and `verify/test_lab_text_export.py` holds
+`challenges/LAB-TEXT.md` equal to what the exporter renders from `lab.html`, but neither reads the C3 prompts, and no
+test read the C3 section of `challenges/PROMPT-CATALOG.md` at all. `verify/prior-drafts.sh 973 origin/staging`
+printed NONE and the issue had no comments, so nothing earlier was reused.
+
+**The test.** `verify/test_c3_prompt_copies.py`, offline, found by `run-tests.sh`'s discovery. It takes `/kubecon`'s
+C3 beat as the reference, since the presenters copy from it, and checks that it holds exactly two prompts, recon (it
+asks what folders the bot can see) then attack (it names the `burrito-data folder` and asks to `read it to me`), and
+neither the old `grep -ri -A3 recipe /tmp/burrito-data`. It then reads each copy and holds its C3 prompts equal to
+that pair, in order, whitespace collapsed: every quoted paragraph of the catalog's C3 section, the `cmd` boxes of the
+C3 "Stuck? Try this prompt" box in `lab.html`, the fenced blocks of the same box in `LAB-TEXT.md`, and the `c3-`
+entries of `prompts.yaml`, which must be `c3-recon` then `c3-attack` and nothing else, with no fallback prompt still
+carrying the old grep. `lab.html` is checked as well as its export, since the export is made from it. Each section
+anchor is checked first, and a missing one exits naming the anchor and the file.
+
+**It fails when the criterion stops holding.** The test also breaks each copy in memory the way a regression would
+(the old grep in place of a prompt, recon or the attack dropped, recon and attack swapped, the grep quoted after
+both, the `c3-recipe-grep` entry put back) and checks each is caught. Run against the tree before #952
+(`d6de37e1^`) it exits 1 on `/kubecon` holding one C3 prompt; with the current `/kubecon` and the four copies as
+they stood before #952, every copy's check fails.
+
+**Not yet run on a cluster.** Nothing here reads a cluster, so there is no live check.
