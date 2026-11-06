@@ -25493,3 +25493,12 @@ No file outside decisions.md changed, and no dependency was added.
 **The suites (run 17876, at `ff381a19`).** `bash verify/run-e2e-tools.sh` printed `299 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `72 checks ran (the offline suite and 71 tier tests)
 in 29m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17876/e2e-tools.log`.
+
+**Ported by run 17891.** Run 17876 ended `claim-stale`, a lapsed claim rather than a failed gate, so its two commits
+(`ff381a19`, `892e4aff`) never reached staging. Run 17891 cherry-picked them unchanged onto staging `68f58776`, as
+`verify/prior-drafts.sh 966 origin/staging` advised (CLEAN, and a decisions.md APPEND). It did not repeat the chat. A
+read-only look at 11:47 UTC found both clusters' `ai-layer` and `workshop-agent` Applications Synced and Healthy at
+`68f58776`, which holds `e1f0972f`, with the same pods running (`workshop-mcp-555f97c466-dndnb` and
+`workshop-agent-7f874bf54b-p9tvv` on private, `workshop-mcp-555f97c466-pkr6t` and `workshop-agent-699f6bcb7c-fdkfx` on
+community). workshop-mcp's log still holds the two pre lines with `"tool_input":{"ingredient":"ghost pepper"}` and the
+two post lines with `"result_chars":20` quoted above. Run 17891 changed nothing on either cluster.
