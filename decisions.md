@@ -25433,3 +25433,12 @@ community (node `ip-10-0-31-163`, nodegroup `default-6eefb129f568d91814a3ca6ecf`
 and 16 on private (node `ip-10-0-90-162`, nodegroup `default-aedde2b7df72fcb8a654102c71`, created
 2026-10-28T11:51:23Z, before the ghcr.io copies). The private nodegroup is still the one item under "Not yet run on
 a cluster" above.
+
+**The suites (run 17888, at `5bcefd4b`).** `bash verify/run-e2e-tools.sh` printed `300 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 33m47s`, with one red:
+`test_enforce_floor.py (exit 1)` and `exit=1`. Its one FAIL was `external-secrets.yaml: renders (Error: looks like
+"https://charts.external-secrets.io" is not a valid chart repository or cannot be reached: Get
+"https://charts.external-secrets.io/index.yaml")`, a fetch of the chart repo's index that the run's change does not
+touch. Right after, `curl -L https://charts.external-secrets.io/index.yaml` answered 200 three times in under a
+second, and `PATH=verify/.tools/bin:$PATH python3 verify/test_enforce_floor.py` passed its 72 checks, ended `All
+enforce-floor checks passed.` and exited 0. `test_c6_joker_public.py` passed in the tier with the ENV check.
