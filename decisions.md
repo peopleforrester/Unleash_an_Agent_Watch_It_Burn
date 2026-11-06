@@ -24637,3 +24637,15 @@ first, which its label always said.
 RENDER-GATE TESTS GREEN` for the offline suite, then `67 checks ran (the offline suite and 66 tier tests) in 34m30s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new live test is not in the tier, so it is not among the 66; it
 ran on its own as above.
+
+**Why run 17835's first report did not land, and what changed (run 17850).** Hecaton's skip-markers gate failed the
+branch on "adds exit 2 in verify/test_prompts_wall_suite.py". The gate counts `exit(2)` on any line that is not a
+comment, and the stub gh in that test exited 2 when it was called with something other than `api`. That was a stub's
+usage error, not a skip, but the gate reads the pattern and not the intent. The stub now exits 1, which fails the
+same way for the test. Counted with the gate's own `skipmarks.count` against `origin/staging`, none of the five files
+this branch changes adds a marker. The draft was otherwise reused as it was: `bash verify/prior-drafts.sh 937
+origin/staging` printed CLEAN for `origin/agent/937-17835`, rebased onto `a1ac06c8`. Staging has since gained #936's
+`verify/test_wall_clock_burst_sister_e2e.py` (`97c2ee4e`), which reads the same repo through `gh api` and runs one of
+its burst tests with `uv run --frozen pytest`. That test holds #927's fake-clock criterion, and this one holds the
+whole `uv run ruff check . && uv run pytest`. Both sit in the live suite for the same reason, so neither replaces the
+other. Live again at the rebase: `main` and `staging` both at `6601313a76c9`, `All checks passed!` and `90 passed`.

@@ -77,7 +77,7 @@ if "exit" in cfg:
     sys.exit(cfg["exit"])
 if sys.argv[1:2] != ["api"]:
     sys.stderr.write("stub gh: only api\\n")
-    sys.exit(2)
+    sys.exit(1)
 ans = pathlib.Path({str(self.answers)!r}) / sys.argv[2].replace("/", "_")
 if not ans.exists():
     sys.stderr.write("gh: Not Found (HTTP 404)\\n")
