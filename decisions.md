@@ -24832,3 +24832,7 @@ Both of #961's expectations hold: the root row reads `agent POST ... error`, and
 `error.type` 502. The raw A2A pass-through, which the #894 entry names as not covered, was not exercised.
 
 No file but this one changed, so no test changed. No dependency was added.
+
+**Suites (run 17854, at `200d790a`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`292 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `69 checks ran (the offline suite and 68 tier tests) in 30m11s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, exit 0. The prose gate printed `prose gate: pass`.
