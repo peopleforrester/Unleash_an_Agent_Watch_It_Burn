@@ -24736,3 +24736,34 @@ Accepted. The next run on #728 reads both.
 `test_gateway_api_crds.py` among them, then `70 checks ran (the offline suite and 69 tier tests) in 30m54s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_gateway_api_crds_upstream.py` and the render gates over
 the new `gateway-api` Application among the tier tests. The log is `/var/lib/hecaton/runs/17846/e2e-tools.log`.
+## 2026-11-06 · #960 · run 17847 · A test holds #948's owed-live-check record and its #922 PROGRESS bullet
+
+**Where the issue stood.** `bash verify/prior-drafts.sh 960 origin/staging` printed NONE and the issue had no
+comments, so this run started from staging at `a1eed35f`. Test review run 17797 (#960) found that no test checked
+one criterion of #948: that decisions.md's entry for the change names the owed live check on the public
+(watch-it-burn-community) and private (watch-it-burn-private) bots under "Not yet run on a cluster", and that
+PROGRESS.md is updated for #922. The docs both hold the record already (decisions.md
+`## 2026-11-06 · #948 · run 17755` and the PROGRESS.md bullet `#948, completing #922 in the repo`), and the #948
+change removed, loosened or replaced no test, so the gap was simply an unchecked record (verdict incomplete,
+hecaton#150).
+
+**What changed.** `verify/test_948_live_check_owed.py` (offline, auto-discovered by `run-tests.sh`) reads
+decisions.md and PROGRESS.md as text and holds both halves of the criterion. It scopes the #948 decisions.md entry
+by its `## 2026-11-06 · #948 · run 17755` heading to the next level-2 heading, pulls the "Not yet run on a cluster"
+paragraph out of that entry alone, and checks it names all four bot literals: `watch-it-burn-community`,
+`https://attackme.burritobot.co`, `watch-it-burn-private` and `https://burritobot-private.burritobot.co`. For
+PROGRESS.md it reuses #892's `[Unreleased]`/entry finders to hold that the `- (2026-11-06) #948, completing #922 in
+the repo:` bullet is present once, under a `### heading`, dated, says it completes #922 and points at its
+decisions.md entry. Per "Tests own their inputs", every cut the test makes first checks the literal is there and
+exits naming the literal and the file when it is gone, and every criterion check is re-run against a mutated copy
+that strikes what it reads (the #948 heading struck, the owed label struck, each of the four bot literals struck,
+and the PROGRESS bullet removed, moved out of `[Unreleased]`, undated, doubled and with no `### heading` above it),
+so a check that could never fail would show up in the suite. No existing test was removed or loosened.
+
+**Tests.** `python3 -I verify/test_948_live_check_owed.py` prints 24 PASS lines and the green summary. It fails as
+intended when the record stops holding: each mutated-copy check reads empty or false exactly when its anchor is
+gone. `git grep -nF` for the decisions heading and the PROGRESS bullet found no other test or script reading those
+words, so the reword guard from "Tests own their inputs" is not owed elsewhere.
+
+**Not yet run on a cluster.** Nothing here touches a cluster: the change is one offline test that reads two
+tracked Markdown files. Nothing is owed on a cluster for this entry.
