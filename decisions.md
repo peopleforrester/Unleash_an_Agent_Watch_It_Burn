@@ -26455,3 +26455,10 @@ no answer to https://10.255.255.1/token/ on 3 tries, 5 s apart; the last: URLErr
 exit 1.
 
 **Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
+
+**Suite results, run 17956.** `bash verify/run-e2e-tools.sh` on `c40cd576`: the offline suite (307 tests ran, among
+them `verify/test_public_images_retry.py`) green, then the tools tier, "73 checks ran (the offline suite and 72 tier
+tests) in 75m27s", `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`, with `verify/test_public_images_served.py` passing
+against public.ecr.aws. The log is `/var/lib/hecaton/runs/17956/e2e-tools.log`. The attempt before it,
+`e2e-tools.first.log`, reached the hour limit on its background job while still in the offline suite, with nothing
+red, on a host at a load average of about 35 on 16 cores; the rerun was detached from that limit and polled.
