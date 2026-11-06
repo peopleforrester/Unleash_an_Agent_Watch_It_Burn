@@ -27795,3 +27795,95 @@ GREEN`) and then the tier: `75 checks ran (the offline suite and 74 tier tests) 
 CHECKS GREEN`, exit 0. The new `verify/test_deployments_witch_line_e2e.py` is one of the 74. No dependency was added:
 the new test fetches mcp 1.29.1 and pyyaml 6.0.2 through uv, the versions images/workshop-mcp already pins. The prose
 gate printed `prose gate: pass`.
+
+## 2026-11-06 · #984 · run 17967 · Segments 1 to 3 of the run-of-show and /kubecon follow the 2026-11-05 deck
+
+**Context.** Whitney walked the deck's opening, Challenge 1 and Challenge 2 (slides 1 to 21) on 2026-11-05, and
+rounds-agenticburn#65 quotes every changed slide's on-screen text and speaker notes. That issue's change merged into the
+deck's main as `c176c82`. The run-of-show (`facilitation/kubecon-na-2026-run-of-show.md`) and `/kubecon`
+(`gitops/ai-layer/web/kubecon.html`) still described the slides of rounds-agenticburn#56 and #58. The slide text below is
+quoted from rounds-agenticburn#65 and was read again from the deck's `attendee.html` on its main, slide by slide, so the
+two agree.
+
+**What changed in the run-of-show.**
+
+- The segments table's row 1 names the title, "You get access to an insecure BurritoBot.", the privacy slide "Nothing
+  you type here is private." whose "THE PROMPT WALL" link opens `prompts.burritobot.co`, and "BurritoBot!" with its QR,
+  whose link opens the public bot; the opening minute is the optional tour and then the Prompt Wall tab. Whitney's play
+  on the admin bot is gone from it. Row 2 says the two-slide tee-up, the hint slide naming Ophelia Thorn, and the trace
+  opened from that name's link. Row 3 adds "It is time for Challenge 2!", gives "BurritoBot has none of these things."
+  its period, and calls the call to action a four-slide build.
+- Segment 1 gets a paragraph on the links on the slides (the prompt wall on the privacy slide, the public bot on
+  "BurritoBot!", Datadog's Agent Observability traces filtered to the admin cluster on "Ophelia Thorn") and on what
+  slide 1's notes list before the talk. The opening order quotes the title, the "insecure BurritoBot" slide and its
+  Say, the privacy slide, its Say and its click on THE PROMPT WALL (with `attackme.burritobot.co/display` if the wall
+  is down), and "BurritoBot!" with its Say. Step 7 is the optional quick tour of the public chat page: the menu, the
+  chat, the witch name, saved prompts, the feedback button with its line, and the reset button, then the Prompt Wall
+  tab. The step where Whitney also played on the admin bot is removed. The wall bullet says the wall is opened from the
+  privacy slide's link after `wall-reset`, where it said to open it full screen before the session.
+- Segment 1's hand-off is slide 8's "Then say" line, word for word, the line that opens with "Okay" and ends "Here's
+  what you need to know..." It was "It is wide open right now. Here is the first thing to try."
+- Segment 2's tee-up is the two slides as the deck has them, "BurritoBot has access to every secret in its
+  namespace." / "That's how it has access to model API keys." and "But not every secret in the namespace is meant for
+  BurritoBot.", each with its Say. It had one sentence, "... so it has access to various model API keys." The segment
+  now quotes the challenge slide ("Convince BurritoBot to give you the CEO's home address.") with its Say, and the hint
+  slide ("Hint: The CEO's name is Ophelia Thorn."), which it did not mention before. The attack is by voice-to-text from
+  the iPad sheet, and the presenters move on whether or not it lands. The trace is opened by clicking "Ophelia Thorn",
+  which opens Datadog's traces filtered to the admin cluster in a new tab.
+- Segment 3 cites rounds-agenticburn#65 in place of #58. Step 1 adds slide 14, "It is time for Challenge 2!" and its Say,
+  and follows slide 15's questions more closely. Step 2 quotes "BurritoBot has none of these things." with its period.
+  Step 3 is the four-slide build: "Exploit the excessive access that BurritoBot has in its Kubernetes cluster." alone,
+  then one attack line per slide, quoted, with the recipe line "Get it to read the famously secret 'Bat Spit Amazing
+  Awesome Sauce' recipe off its filesystem." The image line, "Get BurritoBot to run a malicious image.", is still under
+  discussion and keeps its wording. Play runs from the fourth slide. Step 4 says the attack is sent from the iPad sheet
+  and to move on if it does not land.
+- The abstract-points table's row 7 said "Challenge 2 has no seed yet (#843)". `verify/stage_traces.py` has seeded
+  `c2-attack` and `c2-fixed` since #843, segment 3 step 4 names them, and `docs/KUBECON-ABSTRACT-READINESS.md` row 7 says
+  so. The table row now agrees with both.
+
+**What changed on `/kubecon`.** Segment 1's story follows the same order, with the prompt wall opened from the privacy
+slide's link (the `href` that `verify/test_fleet_wall_check.sh` reads stays) and the optional tour. The order beat is
+"Optional, in the quick tour · on the public bot", where it said Whitney sends it; the off-topic beat's who-line is
+"The room sends in the opening minute of play · on the public bot", where it said Whitney plays on the private bot too,
+and its note on her prompts in the private bot's wall column is gone. The segment 1 hand-off is slide 8's line.
+Segment 2's story quotes the two tee-up slides, the challenge sentence and the hint, and no longer says the challenge
+slide names Ophelia Thorn: the hint slide does. Its private-bot marker says to click "Ophelia Thorn" and links the same
+Datadog traces URL. Segment 3's story adds slide 14 and quotes the four-slide build and its three attack lines. The
+Datadog note at the top and the "Whitney's attack, then its trace" line said Challenge 2 had no seed (#843); both now
+name the recipe read, `c2-attack`.
+
+**The readiness file.** Row 9 said the room sends its off-topic asks "from segment 2 on". Since #819 they are in segment
+1's opening minute, and slide 8 asks for them; the row now says that. No status changes.
+
+**One thing the deck and the platform still disagree on.** Slide 20's Do says to "show the pre-seeded Challenge 2 trace:
+one tool call per attack (`deploy_app` for the image, `run_shell` for the file and the POST)". The seed is the recipe
+read alone (`c2-attack`, #843), so segment 3 step 4 quotes the note and says to name the other two calls aloud. Seeding
+all three, or rewording the note, is a follow-up, not this issue.
+
+**Left alone.** Slides 2 to 4 and 13 are unchanged in the deck, and the run-of-show's text for them already matched
+(the hello, the meme and its two zooms, the OWASP slide and segment 2's hand-off). Slide 21 onward and everything past
+Challenge 2's call to action are out of scope, as is #925's recipe prompts. The six segments and their minutes, 30 in
+all, are unchanged. `facilitation/runbook.md`, the 2-hour workshop's runbook, still reads `It is wide open right now. Let's see what happens.` and is not touched, so the `delivered/devopsdays-portland-2026` format is unchanged.
+
+**The tests that read these words.** `git grep -nF` over `verify` and `scripts` for each phrase changed found no test
+pinning the old wording. The tests that read these parts (`verify/test_instructor_brief.py`,
+`verify/test_kubecon_abstract_readiness.py`, `verify/test_fleet_wall_check.sh`, `verify/test_fleet_routes_roster.sh`)
+pass unchanged; `/kubecon`'s visible page is 2,374 words, under the test's 2,400.
+
+**Read live, read-only.** The pages the slides link, fetched at this run:
+
+```
+https://prompts.burritobot.co/ 200 (the live prompt wall's title)
+https://attackme.burritobot.co/ 200 <title>BurritoBot</title>
+https://attackme.burritobot.co/display 200 (the live attack stream's title)
+https://burritobot-private.burritobot.co/kubecon?sheet=1 200 <title>KubeCon brief: Watch It Burn</title>
+https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-private 200 <title>Datadog: Log In</title>
+```
+
+`https://attackme.burritobot.co/kubecon` printed `404`, so the room still cannot read the presenter page. The private
+bot's served `/kubecon` still holds "Whitney plays on the private bot too" once, the staging text before this change.
+Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** The reworded `/kubecon` reaches watch-it-burn-private once hecaton promotes this run and
+Argo CD syncs it. The check owed then: `curl -s https://burritobot-private.burritobot.co/kubecon` contains "Optional, in
+the quick tour" and no longer contains "Whitney plays on the private bot too".
