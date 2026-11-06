@@ -23073,3 +23073,35 @@ later the test passed, and Open-Meteo's forecast and geocoding endpoints both an
 feed or that test. Filed as a follow-up with the failing output: the test should print the feed's 502 reason. The
 second full run printed `284 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `65 checks ran (the offline suite and 64 tier tests) in 43m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #603 · run 17809 · The third netcup save holds the last eight rows; every images.lock row that owes a copy is saved
+
+**What the save did.** The third save that run 17790 escalated ran as michael on netcup on 2026-11-06, from a clone of
+staging (`/tmp/wib-603-save.4cNjXQ/repo`), and logged to
+`~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-2026-11-06.log`, which this run read through
+sources. The log ends "83 images, 0 failed; 0 rows ... still need a source". It SAVED the eight rows staging changed
+after the second save: the node and debian bases at lab-platform#353's ghcr.io copies (`e053394f`, `a3bba7dc`), C6's
+Joker (`0765b359`) and the breakout Joker (`793db299`), llm-guard at lab-platform#341's rebuild (`46b3d202`), and
+llm-guard-cpu-offline's cpu.4 (`3322db6a`), cpu.5 (`4c66fd0f`) and zero-shot model image (`c01ca964`). It found every
+other row already saved (HAVE) and skipped the three not-an-image: rows and the digest-less tool-pin build: row.
+
+**The archive.** `manifest.tsv` now has 84 lines: 66 dated 2026-11-04, 9 dated 2026-11-05 and 9 dated 2026-11-06. The
+ninth 2026-11-06 line is lab-platform's old llm-guard:v1 (`6cdbf3a2`), which the log reports as HAVE: its tarball was
+written on 2026-11-04 under the kustomize name `llm-guard`, and this save added a line under the row's own ref for
+the same file. That row keeps its 2026-11-04 date. `repo-ls` shows every tarball the nine new lines name in the
+archive.
+
+**The dates.** As runs 17350 and 17393 did, this run copied the date onto each images.lock row whose ref and current
+digest match a manifest line and whose saved column was `-`: the eight rows above, each now 2026-11-06. The
+images.lock header and VERSIONS.lock's llm-guard-api note say so. Judged with `verify/images_saved.py`'s
+`lock_rows`, `owes_save` and `manifest_lines` against the real manifest, all 79 rows that owe a copy are dated and
+have a manifest line at their current digest. `mirror-images.sh check .` (the script read through sources from
+llm-coding-workflow, run on this checkout with an empty MIRROR_IMAGES_DEST) printed "26 references, 57 declared, 0
+problems", exit 0. This run cannot hash the tarballs, since sources returns a file as text; `python3
+verify/test_images_saved.py`, run as michael on netcup, does that hashing.
+
+**Live check (run 17809).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_images_lock_live.py` printed "Every image both clusters run has an images.lock row.", exit 0. It only read;
+nothing on either cluster changed.
+
+**Not yet run on a cluster.** Nothing: the save runs on netcup, not on a cluster.

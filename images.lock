@@ -28,25 +28,26 @@
 # on 2026-11-04, saved 65 of the 70 rows that owe a copy into ~/repos/private/image-archive; run 17350 copied those dates
 # here from its manifest.tsv. The second save, on 2026-11-05 with Docker Hub pulled anonymously, saved the nine that
 # one left: the three Docker Hub rows (laiyer/llm-guard-api, node, debian), Argo CD v3.5.7 and the five run-time rows
-# at the end; run 17393 copied those dates the same way. Still -: both Jokers, re-pinned after both saves (#714), and
-# the three llm-guard-cpu-offline rows (#719), the node and debian rows, which #714 moved to lab-platform#353's
-# ghcr.io copies, and llm-guard at lab-platform#341's rebuild (#895), all written after both saves.
+# at the end; run 17393 copied those dates the same way. The third save, on 2026-11-06, saved the eight rows written
+# after both: both Jokers, re-pinned (#714), the three llm-guard-cpu-offline rows (#719), the node and debian rows,
+# which #714 moved to lab-platform#353's ghcr.io copies, and llm-guard at lab-platform#341's rebuild (#895); run 17809
+# copied those dates the same way. Every row that owes a copy is saved at its current digest.
 # verify/test_images_lock.py holds every reference to a row here.
-ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node -
-ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts -
+ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node 2026-11-06
+ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts 2026-11-06
 ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
 ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app 2026-11-04
 ${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -
 ghcr.io/peopleforrester/lab-platform/promo/joker@sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 repo:peopleforrester/lab-platform/deploy/images 2026-11-04
 REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-the-facilitator-fills-in-at-build -
 ghcr.io/peopleforrester/watch-it-burn:tool-pin-grpcio-1.84.1 - build:images/tool-pin -
-ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52 sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
-ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains -
+ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52 sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains 2026-11-06
+ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains 2026-11-06
 ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator 2026-11-04
 cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python 2026-11-04
-llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a repo:peopleforrester/lab-platform/deploy/images -
+llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f3881a repo:peopleforrester/lab-platform/deploy/images 2026-11-06
 ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal 2026-11-04
 ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx 2026-11-04
@@ -70,9 +71,9 @@ laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a
 # llm-guard-cpu-offline's Dockerfile at 31962f2 builds cpu.5 from. lab-platform's llm-guard:v1 as it was before
 # lab-platform#341's rebuild moved the tag, deployed until question 1041, is kept by the digest the llm-guard row
 # carried then (#730), the one saved on netcup on 2026-11-04.
-ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c2fc935f2208d0c4a84198b29e93307ab2e88debdd045a919ae9f repo:peopleforrester/llm-guard-cpu-offline -
-ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline -
-ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot -
+ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c2fc935f2208d0c4a84198b29e93307ab2e88debdd045a919ae9f repo:peopleforrester/llm-guard-cpu-offline 2026-11-06
+ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline 2026-11-06
+ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot 2026-11-06
 ghcr.io/peopleforrester/lab-platform/llm-guard:v1 sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad repo:peopleforrester/lab-platform/deploy/images 2026-11-04
 # Challenge 2's public images (#773): deploy_app's PUBLIC_IMAGES in gitops/ai-layer/workshop-mcp-server.py, the images
 # the room asks for by plain name. Each is the index digest public.ecr.aws served on 2026-11-02, read anonymously;

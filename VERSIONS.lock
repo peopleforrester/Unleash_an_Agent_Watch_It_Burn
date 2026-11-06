@@ -49,8 +49,8 @@ llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `
                        GHSA-xcq7-p3pf-p88h (digest sha256:46b3d202..., signed 2026-11-05, set by kustomize.images in
                        gitops/bootstrap/apps/ai-layer.yaml, #895); it replaced llm-guard-cpu-offline's llm-guard-0.3.16-cpu.5
                        (sha256:4c66fd0f..., #719 question 1041), which had replaced v1 before the rebuild (sha256:6cdbf3a2..., #652, #730);
-                       all have images.lock rows by digest (#603); netcup's image archive holds the old v1 (2026-11-04) and
-                       laiyer/llm-guard-api (2026-11-05), and the rebuild's and cpu.5's tarballs wait on mirror-images.sh save on netcup
+                       all have images.lock rows by digest (#603); netcup's image archive holds the old v1 (2026-11-04),
+                       laiyer/llm-guard-api (2026-11-05), and the rebuild and cpu.5 (2026-11-06)
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.
