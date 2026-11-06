@@ -26333,3 +26333,10 @@ it printed in a fixed 5 seconds; its first frame starts three Pythons (the fake 
 readout) before it prints, so on the loaded host nothing had printed yet. The test now reads until the first whole
 frame, the line `(Ctrl-C to stop)`, with a 90-second bound and a check that names a frame never drawn. With the fake
 kubectl made to sleep 7 seconds first, it still passes.
+
+**A second one, in the tools tier.** `verify/test_agent_otlp_logs_collector.py` failed one of its six collector starts
+(attendee, no datadog-secret) in the tier run that took 45m11s, and passed alone. Its detail was empty, so the
+collector was still running and not yet listening when the test's 30 seconds ran out; a port clash would have exited
+it with an error. A start now gets `START_BOUND`, 120 seconds, and one still not listening then is stopped and named
+with how long it waited and what it printed on stderr. With the bound set to 0 the check fails with "still not
+listening on <port> after 0 s".

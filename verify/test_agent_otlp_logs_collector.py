@@ -65,6 +65,7 @@ print(f"the agent's log exporter posts to {resolved} (path {AGENT_PATH}); the ba
 ENV = {"PATH": "/usr/bin:/bin", "WIB_CLUSTER_NAME": "burritobot-public"}
 KAGENT = {"service.name": "workshop_agent", "service.namespace": "agent", "service.version": "v0.10.1"}
 MARK = "tool-execution-404-check-903"
+START_BOUND = 120  # seconds a collector gets to listen; see the start loop below
 
 
 def attrs(d: dict) -> list:
@@ -116,15 +117,28 @@ def run(profile: str, secret: bool, tmp: pathlib.Path) -> None:
     proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV,
                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     try:
-        deadline = time.time() + 30
+        # The bound only stops a collector that never listens. 30 seconds ran out on a loaded host with the
+        # collector still running and its stderr empty (run 17911, #889's suite, one of six starts), so a slow start
+        # gets 120, and a collector still not listening then is stopped and named with what it printed.
+        start = time.time()
         while True:
             try:
                 socket.create_connection(("127.0.0.1", port), timeout=1).close()
                 break
             except OSError:
-                if time.time() > deadline or proc.poll() is not None:
-                    err = proc.stderr.read() if proc.poll() is not None else ""
-                    check(f"{label}: the collector starts on the shipped logs pipeline", False, err[-600:])
+                waited = time.time() - start
+                if waited > START_BOUND or proc.poll() is not None:
+                    alive = proc.poll() is None
+                    if alive:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                    err = proc.stderr.read() or ""
+                    why = (f"still not listening on {port} after {waited:.0f} s" if alive
+                           else f"exited {proc.returncode} after {waited:.0f} s")
+                    check(f"{label}: the collector starts on the shipped logs pipeline", False, f"{why}: {err[-600:]}")
                     return
                 time.sleep(0.3)
         code = post(port, AGENT_PATH, RECORD)
