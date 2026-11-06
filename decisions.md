@@ -25131,3 +25131,14 @@ link passes in both link forms.
 was added (the test uses PyYAML, which the offline suite already needs).
 
 **Not yet run on a cluster.** Nothing from this issue.
+
+**A load-sensitive check fixed on the way (run 17905).** The first run of `bash verify/run-e2e-tools.sh` here went
+red in the offline suite on one check, `test_chat_turn_cancel.py`'s "the turn ends at PROXY_TIMEOUT, not later
+(3.12s)", whose bound was PROXY_TIMEOUT (scaled to 1s) plus 1.5s. The host's load average was about 18 on 16 cores,
+and the proxy's own log lines from that run sat 2.1s apart for a call that takes milliseconds. Three reruns of the test
+alone passed at 1.01s. The rules call a test that passes on a rerun broken, so this run fixed it. The proxy's
+`forward_error` line names the limit that ended the forward, "(PROXY_TIMEOUT)" or "(TURN_TIMEOUT)", and load cannot
+change it. The test now reads that line to say which limit ended the turn and keeps the wall clock only as a bound on a
+hang (under 15s, against the client's 30s). Run against a copy with the scaled PROXY_TIMEOUT set above TURN_TIMEOUT,
+the new check fails, reading "the 2.25s turn deadline (TURN_TIMEOUT) passed", so it still catches a forward limit
+that does not end the turn. This file is the only one changed.
