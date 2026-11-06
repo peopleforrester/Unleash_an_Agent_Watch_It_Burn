@@ -27285,3 +27285,88 @@ bot at $0.7649 of the $25 cap at the end, and about 100 Converse calls for the t
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, which answers `bash verify/run-tests.sh`) and then the tier: `73 checks ran (the
 offline suite and 72 tier tests) in 58m28s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The log is
 `/var/lib/hecaton/runs/17966/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-06 · #990 · run 17969 · When guardrails-on arms Kyverno, a DeletingPolicy takes the room's untrusted workloads off within a minute
+
+`verify/prior-drafts.sh 990 origin/staging` printed NONE, and the issue's one comment (Whitney's, pointing at #991) names
+no commits, so this run started from staging `13fc72b8` with no draft to port. The issue asks Michael for the mechanism
+and leaves it open ("I'm leaving the mechanism to you"). This repo is rank 1 on hecaton's priority list, where a
+go-ahead proceeds, so the run picked the design itself, as #985's run did.
+
+**The problem.** `deny-external-registries` judges requests. After `guardrails-on` it refuses a new public image from
+BurritoBot, but an UPDATE that keeps an object's images passes, so whatever the room deployed while the guardrails were
+off keeps running. Since #992 deploy_app passes any image, so that can be anything.
+
+**The design.** `policies/kyverno-breakout/remove-untrusted-room-workloads.yaml`, a Kyverno `DeletingPolicy` (Kyverno
+1.19.1, `policies.kyverno.io/v1`), runs every minute. It deletes, with background propagation, a Deployment,
+StatefulSet, DaemonSet, ReplicaSet, Job, CronJob or Pod in the agent namespace when all of these hold:
+
+1. deploy_app made it for the room: its pods carry `burritobot.co/workload`, which `_stamp_workload` puts on every
+   workload deploy_app applies. No platform workload in git carries it, and none of the 13 live in agent on either
+   cluster did (read at 18:05Z: agentgateway, guard-proxy, workshop-agent and the rest, several from
+   `cr.agentgateway.dev` and `ghcr.io/kagent-dev`).
+2. It owns itself (no ownerReferences). A Deployment's ReplicaSets and Pods go with it, and deleting them alone would
+   only make the owner recreate them.
+3. It runs a container or init container from outside `registry.burritobot.co`.
+4. `deny-external-registries` reads Deny: the policy reads it on every pass with `resource.Get`, after the cheaper
+   conditions.
+
+So the cluster ends holding what `deny-external-registries` would now admit from BurritoBot. Challenge 3's
+maintenance-shell and the room's Jokers come from `registry.burritobot.co` and stay.
+`remove-untrusted-room-workloads-rbac.yaml` is a ClusterRole aggregated into `kyverno:cleanup-controller`
+(`rbac.kyverno.io/aggregate-to-cleanup-controller`): get on `deny-external-registries` by name, and
+get/list/watch/delete on the seven kinds. The chart's cleanup controller holds no workload verbs of its own.
+
+**Why "trusted" means `registry.burritobot.co` alone.** The issue says a registry "the platform doesn't trust".
+`restrict-image-registries` trusts a longer list, which takes in `ghcr.io/peopleforrester`, where the 2-hour
+workshop's Challenge 2 villains live. But in the breakout the line for what BurritoBot runs is `deny-external-registries`,
+whose own description reads "No external registry is trusted for the agent's requests". With `ghcr.io` kept, a room
+deploy of a villain image would survive a switch that refuses the same deploy a second later. The issue's own
+example, maintenance-shell from `registry.burritobot.co` staying, holds either way.
+
+**Why a DeletingPolicy, not a delete inside `guardrails-on`.** The switch reaches the other KubeCon cluster as the
+guardrails-switch ServiceAccount, whose grant is the four guardrails' objects (`gitops/guardrails-switch/`,
+`verify/test_guardrails_switch.py` holds it exactly). A delete from the switch would widen that peer token to delete
+workloads in agent, where the platform runs. With the policy, each cluster's own Kyverno deletes on its own reading of
+its own policy, and the grant stays as it was. A cluster armed some other way is swept too: #985's promotion arm, or a
+hand patch. The cost is timing. A workload goes at the next minute's pass, not at the moment the switch prints its
+Kyverno line. That line now says "within a minute Kyverno deletes what it already deployed from anywhere else", and
+the run-of-show says so in "The Kubernetes guardrails switch (#774)" and in Segment 3's step 5.
+
+**Why the label and not the field manager.** deploy_app applies with `fieldManager=workshop-mcp`, but a
+managedFields entry is not something a DeletingPolicy condition can read well, and the label is the one deploy_app
+already puts on the pods for the console and the maintenance-shell Service.
+
+**The 2-hour workshop.** Only `kubecon-community` and `kubecon-private` list `kyverno-breakout`. The workshop
+profiles never install the policy or its grant, so the `delivered/devopsdays-portland-2026` flow is unchanged.
+
+**What the run did not change.** The deployments page (#773) lists what landed from the desk's own record, so a
+removed app still shows there. The run-of-show says so; whether the page should mark removed rows is filed as a
+follow-up.
+
+**Live check, run 17969, on watch-it-burn-community (a throwaway namespace, removed after).** In namespace
+`wib-990-probe`, with a temporary aggregated ClusterRole, three Deployments of zero replicas and a DeletingPolicy
+matching that namespace with the same `resource.Get` gate:
+
+- Gated on `Audit`, the 18:12:00Z pass deleted `room-public` (labelled, public.ecr.aws). It kept `room-internal`
+  (labelled, `registry.burritobot.co`) and `platform-public` (unlabelled, `cr.agentgateway.dev`).
+- Another session's `kubectl-patch` set `deny-external-registries` to Deny at 18:12:00Z and back to Audit at
+  18:15:27Z (managedFields), most likely `verify/test_recipe_block_live.py`, whose `guardrails-on` on the private
+  cluster switches this one too. The run used that:
+  - gated on `Deny`, the 18:13:00Z pass (policy at Deny) deleted a new `room-public`;
+  - gated on `Audit`, the 18:15:00Z pass (policy at Deny) kept one;
+  - the 18:16:00Z pass (policy at Audit) deleted it.
+- Then the repo's own policy text, narrowed to the namespace with its gate held true, ran from 18:17:53Z. It deleted
+  the room's public-image Deployment, StatefulSet and suspended CronJob, with the Deployment's ReplicaSet going with
+  it. It kept the room's `registry.burritobot.co` Deployment and CronJob and the unlabelled Deployment, and its status
+  carried no error.
+- The DeletingPolicies, both ClusterRoles and the namespace were deleted at 18:19Z. `kubectl get dpol` read
+  `No resources found`, and the run did not touch the switch's own flips.
+
+Both clusters run `kyverno-cleanup-controller` v1.19.1 (1 ready), and both `kyverno:cleanup-controller` roles
+aggregate on `rbac.kyverno.io/aggregate-to-cleanup-controller`.
+
+**Not yet run on a cluster.** The committed policy, synced by Argo CD from staging, on both KubeCon clusters:
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_room_cleanup_live.py`, which needs `kyverno-breakout`
+synced past this change, once with the switch on and once off. The stage beat itself is owed too: a room deploy of a
+public image, `guardrails-on`, and the Deployment gone within a minute on the public bot.

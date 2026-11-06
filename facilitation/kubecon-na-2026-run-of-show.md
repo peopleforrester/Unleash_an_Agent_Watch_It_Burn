@@ -496,6 +496,13 @@ rehearsals and resets. The two clusters are linked by `./fleet.sh guardrails-lin
 which `instructors up` runs once it has built both. The internal registry is
 Distribution on the private cluster, seeded at start with the images the agent may
 run; both clusters' nodes pull it through `registry.burritobot.co`.
+Kyverno also clears what the room left behind (#990): once `deny-external-registries`
+reads Deny, `remove-untrusted-room-workloads` deletes, within a minute, every workload
+BurritoBot deployed for the room that runs an image from any other registry. Tron's
+landing page and any public image the room asked for go; Challenge 3's
+maintenance-shell and the room's Jokers, from `registry.burritobot.co`, stay, as does
+everything the platform runs. The deployments page still lists what landed, since it
+is a record of the room's asks. `guardrails-off` stops the sweep.
 
 Both hostnames and their service hosts are served through the apex router, whose
 table carries the roster only (`./fleet.sh routes roster`, Night Before). No
@@ -957,7 +964,10 @@ above).
    Kyverno: `deny-external-registries` admits only `registry.burritobot.co` for the
    bot, and `restrict-image-registries` refuses `public.ecr.aws` and every other
    registry off its list. Segment 4's Jokers still land: HC-666 asks for
-   `registry.burritobot.co`'s image, which both registry policies trust (#775).
+   `registry.burritobot.co`'s image, which both registry policies trust (#775). Within a
+   minute of the switch, what the room deployed before it from any other registry is
+   deleted from both clusters (#990), so a heavy deploy from Challenge 2 does not
+   outlive the guardrails.
 6. **One slide per guardrail,** each named, not deep. If one is asked about, its
    fallback proves it without the model:
    - RBAC: agent-sa's Role reads one Secret by name, the agent's own `workshop-agent`

@@ -1,0 +1,91 @@
+# ABOUTME: The KubeCon breakout's sweep (#990): once guardrails-on arms deny-external-registries, Kyverno deletes, within
+# ABOUTME: a minute, every workload BurritoBot deployed for the room that runs an image outside registry.burritobot.co.
+#
+# Why. deny-external-registries judges requests, so it refuses a new public image after guardrails-on but lets every
+# workload the room deployed before the flip keep running (an UPDATE that keeps its images passes, by design, so the
+# flip never wedges one). Once deploy_app passes any image (#988, #991, #992), what the room started while the
+# guardrails were off can be heavy or unwanted, and it would outlive the switch. This policy closes that: with
+# deny-external-registries at Deny, the cluster holds only what that policy would now admit from BurritoBot.
+#
+# What it deletes. A Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob or Pod in the agent namespace that
+#   1. BurritoBot made for the room: its pods carry burritobot.co/workload, which deploy_app stamps on every workload
+#      it applies (gitops/ai-layer/workshop-mcp-server.py, _stamp_workload). The platform's own workloads in agent
+#      (agentgateway, guard-proxy, workshop-agent and the rest, several from external registries) never carry it;
+#   2. owns itself: nothing in ownerReferences. A ReplicaSet of a Deployment, or a Pod of either, goes when its owner
+#      does, so deleting it alone would only make its owner recreate it;
+#   3. runs any container or init container from outside registry.burritobot.co, the one registry
+#      deny-external-registries trusts for the agent's requests. Challenge 3's maintenance-shell and the room's
+#      Jokers (#775) come from registry.burritobot.co, so they stay;
+#   4. and only while deny-external-registries reads Deny. The policy reads it on every pass (resource.Get), so
+#      guardrails-on (images/web-terminal/entrypoint.sh, _kg on kyverno), #985's promotion arm and a hand patch all
+#      start it, and guardrails-off stops it. Nothing is deleted at Audit, the breakout's start state. A missing
+#      deny-external-registries fails the condition, and nothing is deleted then either.
+#
+# Why a DeletingPolicy, and not a delete in guardrails-on itself. The switch reaches the other KubeCon cluster as the
+# guardrails-switch ServiceAccount, whose grant is the four guardrails' objects (gitops/guardrails-switch/). Deleting
+# workloads from the switch would widen that peer token to delete in agent, where the platform runs. Here Kyverno's
+# cleanup controller deletes, in each cluster, on each cluster's own reading of its own policy, and a cluster that
+# is armed some other way than the switch is swept too. The cost is the schedule: a pass each minute, so a workload
+# goes up to a minute after the flip, not at the moment guardrails-on prints its Kyverno line.
+#
+# The cleanup controller's grant for this is remove-untrusted-room-workloads-rbac.yaml, beside it.
+# Only the two KubeCon profiles install it (gitops/bootstrap/apps/kyverno-breakout.yaml); the 2-hour workshop never
+# sees it. Fixture cases run through the Kyverno CLI in verify/test_breakout_room_cleanup.py; the switch's offline
+# checks are in verify/test_guardrails_switch.py.
+apiVersion: policies.kyverno.io/v1
+kind: DeletingPolicy
+metadata:
+  name: remove-untrusted-room-workloads
+  annotations:
+    policies.kyverno.io/title: Remove Untrusted Room Workloads
+    policies.kyverno.io/category: Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      While deny-external-registries is at Deny, deletes each workload BurritoBot deployed for the room in the agent
+      namespace that runs an image outside registry.burritobot.co.
+spec:
+  schedule: "* * * * *"
+  # A Deployment's ReplicaSets and Pods go with it, without the pass waiting on them.
+  deletionPropagationPolicy: Background
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        resources: ["jobs", "cronjobs"]
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - agent
+  variables:
+    - name: internalRegistry
+      expression: "'registry.burritobot.co/'"
+    # The pod a workload makes: a Pod itself, a CronJob's job template's pod, or any other kind's pod template.
+    - name: pod
+      expression: >-
+        object.kind == 'Pod' ? object :
+        (object.kind == 'CronJob' ? object.spec.?jobTemplate.?spec.?template.orValue({}) :
+        object.spec.?template.orValue({}))
+    - name: containers
+      expression: >-
+        variables.pod.?spec.?containers.orValue([]) + variables.pod.?spec.?initContainers.orValue([])
+  # In this order, so the policy is read only for a room workload that runs an untrusted image.
+  conditions:
+    - name: deployed-for-the-room
+      expression: >-
+        'burritobot.co/workload' in variables.pod.?metadata.?labels.orValue({}) &&
+        object.metadata.?ownerReferences.orValue([]).size() == 0
+    - name: runs-an-untrusted-image
+      expression: >-
+        variables.containers.exists(c, !c.image.startsWith(variables.internalRegistry))
+    - name: guardrails-on
+      expression: >-
+        resource.Get("policies.kyverno.io/v1", "validatingpolicies", "", "deny-external-registries")
+        .spec.validationActions.exists(a, a == 'Deny')

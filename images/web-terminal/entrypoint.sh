@@ -191,7 +191,7 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
     fi
     case "$st:$g" in
       on:rbac)       line="🛡️  RBAC ON: agent-sa reads one Secret by name, its own config. The CEO's record is Forbidden." ;;
-      on:kyverno)    line="🛡️  Kyverno ON: admission denies every image outside registry.burritobot.co for what BurritoBot deploys." ;;
+      on:kyverno)    line="🛡️  Kyverno ON: admission denies every image outside registry.burritobot.co for what BurritoBot deploys, and within a minute Kyverno deletes what it already deployed from anywhere else." ;;
       on:kubearmor)  line="🛡️  KubeArmor ON: the kernel blocks reads of the recipe files in the agent's tool pod." ;;
       on:egress)     line="🛡️  Egress ON: the agent namespace reaches its model, DNS, telemetry and the cluster; the internet is cut off." ;;
       off:rbac)      line="🔓 RBAC OFF: agent-sa reads every Secret in its namespace again." ;;

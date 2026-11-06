@@ -1,0 +1,28 @@
+# ABOUTME: Kyverno's cleanup controller's grant for remove-untrusted-room-workloads (#990): read deny-external-registries,
+# ABOUTME: and list and delete the workload kinds the sweep removes. Aggregated into kyverno:cleanup-controller.
+#
+# The Kyverno chart's cleanup controller ClusterRole aggregates every ClusterRole labelled
+# rbac.kyverno.io/aggregate-to-cleanup-controller, and holds no workload verbs of its own. A ClusterRole is the only
+# shape aggregation takes, so the list and delete verbs here are cluster-wide; remove-untrusted-room-workloads is what
+# narrows them to the agent namespace and the room's workloads, and only a cluster admin can write a DeletingPolicy.
+# The policy is read by name and nothing else: get on deny-external-registries alone.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:cleanup-controller:remove-untrusted-room-workloads
+  labels:
+    rbac.kyverno.io/aggregate-to-cleanup-controller: "true"
+rules:
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["validatingpolicies"]
+    resourceNames: ["deny-external-registries"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]

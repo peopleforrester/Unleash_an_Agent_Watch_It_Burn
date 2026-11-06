@@ -156,8 +156,80 @@ check("the one registry it trusts is registry.burritobot.co", var.get("internalR
 check("it reads init containers as well as containers",
       "initContainers" in var.get("containers", "") and "containers" in var.get("containers", ""))
 check("it names the internal registry in its message", "registry.burritobot.co" in spec["validations"][0]["message"])
-check("policies/kyverno-breakout holds that one policy and no kustomization, so Argo CD reads it as a directory",
-      sorted(p.name for p in BREAKOUT.parent.iterdir()) == ["deny-external-registries.yaml"])
+check("policies/kyverno-breakout holds that policy, the room sweep and its grant, and no kustomization, so Argo CD "
+      "reads it as a directory",
+      sorted(p.name for p in BREAKOUT.parent.iterdir()) == ["deny-external-registries.yaml",
+                                                             "remove-untrusted-room-workloads-rbac.yaml",
+                                                             "remove-untrusted-room-workloads.yaml"])
+
+print("== the room sweep (#990): guardrails-on takes the room's untrusted workloads off the cluster ==")
+SWEEP = BREAKOUT.parent / "remove-untrusted-room-workloads.yaml"
+dpol = docs(SWEEP)[0]
+dspec = dpol["spec"]
+dvar = {v["name"]: v["expression"] for v in dspec["variables"]}
+dcond = {c["name"]: " ".join(c["expression"].split()) for c in dspec["conditions"]}
+check("remove-untrusted-room-workloads is a DeletingPolicy that runs every minute and deletes in the background",
+      dpol["kind"] == "DeletingPolicy" and dpol["apiVersion"] == "policies.kyverno.io/v1"
+      and dspec["schedule"] == "* * * * *" and dspec["deletionPropagationPolicy"] == "Background")
+check("it matches the workload kinds in the agent namespace alone, as deny-external-registries does",
+      dspec["matchConstraints"]["namespaceSelector"] == spec["matchConstraints"]["namespaceSelector"]
+      and sorted(r for rule in dspec["matchConstraints"]["resourceRules"] for r in rule["resources"])
+      == ["cronjobs", "daemonsets", "deployments", "jobs", "pods", "replicasets", "statefulsets"])
+check("it deletes only while deny-external-registries reads Deny, so nothing goes at the Audit start state",
+      dcond.get("guardrails-on") == 'resource.Get("policies.kyverno.io/v1", "validatingpolicies", "", '
+      "\"deny-external-registries\") .spec.validationActions.exists(a, a == 'Deny')", str(dcond.get("guardrails-on")))
+check("and reads that policy last, after the cheap conditions",
+      list(dcond) == ["deployed-for-the-room", "runs-an-untrusted-image", "guardrails-on"], str(list(dcond)))
+mcp_src = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text(encoding="utf-8")
+check("the room's workloads are known by the label deploy_app stamps on every one, burritobot.co/workload",
+      'WORKLOAD_LABEL = "burritobot.co/workload"' in mcp_src
+      and "'burritobot.co/workload' in variables.pod" in dcond.get("deployed-for-the-room", ""))
+check("an owned object (a Deployment's ReplicaSet, its Pods) is left to go with its owner",
+      "ownerReferences.orValue([]).size() == 0" in dcond.get("deployed-for-the-room", ""))
+check("the one registry it keeps is the one deny-external-registries trusts",
+      dvar.get("internalRegistry") == var.get("internalRegistry") == "'registry.burritobot.co/'")
+check("it reads init containers as well as containers",
+      "initContainers" in dvar.get("containers", "") and "containers" in dvar.get("containers", ""))
+
+
+def pod_labels(d: dict) -> dict:
+    """The labels on the pods a workload in git makes."""
+    if d.get("kind") == "Pod":
+        return (d.get("metadata") or {}).get("labels") or {}
+    s = d.get("spec") or {}
+    if d.get("kind") == "CronJob":
+        s = ((s.get("jobTemplate") or {}).get("spec")) or {}
+    return (((s.get("template") or {}).get("metadata")) or {}).get("labels") or {}
+
+
+WORKLOAD_KINDS = {"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job", "CronJob", "Pod"}
+platform_workloads, labelled = 0, []
+for f in sorted((REPO / "gitops").rglob("*.yaml")):
+    try:
+        found = [d for d in yaml.safe_load_all(f.read_text(encoding="utf-8")) if isinstance(d, dict)]
+    except yaml.YAMLError:
+        continue  # a Helm template; the chart's own tests render it
+    for d in found:
+        if d.get("kind") in WORKLOAD_KINDS:
+            platform_workloads += 1
+            if "burritobot.co/workload" in pod_labels(d):
+                labelled.append(f"{f.relative_to(REPO)}: {d['kind']}/{d['metadata']['name']}")
+check("no platform workload in git carries the room label, so none can match",
+      platform_workloads > 10 and not labelled, f"{platform_workloads} workloads; labelled: {labelled}")
+grant = docs(BREAKOUT.parent / "remove-untrusted-room-workloads-rbac.yaml")
+check("its grant is one ClusterRole, aggregated into Kyverno's cleanup controller",
+      len(grant) == 1 and grant[0]["kind"] == "ClusterRole"
+      and grant[0]["metadata"]["labels"] == {"rbac.kyverno.io/aggregate-to-cleanup-controller": "true"})
+DGRANT = {(r["apiGroups"][0], res, n): set(r["verbs"]) for r in grant[0]["rules"] for res in r["resources"]
+          for n in (r.get("resourceNames") or ["*"])}
+check("which reads deny-external-registries by name and deletes only the kinds the policy matches",
+      DGRANT == {("policies.kyverno.io", "validatingpolicies", "deny-external-registries"): {"get"},
+                 **{("apps", k, "*"): {"get", "list", "watch", "delete"}
+                    for k in ("deployments", "statefulsets", "daemonsets", "replicasets")},
+                 **{("batch", k, "*"): {"get", "list", "watch", "delete"} for k in ("jobs", "cronjobs")},
+                 ("", "pods", "*"): {"get", "list", "watch", "delete"}}, str(DGRANT))
+check("deny-external-registries' own comment points at the sweep for what was running before the flip",
+      "remove-untrusted-room-workloads" in BREAKOUT.read_text(encoding="utf-8"))
 check("restrict-image-registries trusts the internal registry too (#775's image passes it at Deny)",
       "registry.burritobot.co/" in registry_allowlist.prefixes()
       and registry_allowlist.allowed("registry.burritobot.co/burritobot/maintenance-shell:busybox-1.38.0"))

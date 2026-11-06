@@ -22,7 +22,9 @@
 #
 # An UPDATE that keeps every image the object already ran is let through, so turning this to Deny never wedges a
 # workload the agent made before the flip, and the agent can still scale or label one. Background evaluation is off:
-# the rule reads request.userInfo, which exists only at admission.
+# the rule reads request.userInfo, which exists only at admission. What the room deployed before the flip from outside
+# registry.burritobot.co does not stay, though: remove-untrusted-room-workloads, beside this policy, deletes it within
+# a minute of this policy reading Deny (#990).
 #
 # Fixture cases run through the Kyverno CLI in verify/test_breakout_registry_policy.py.
 apiVersion: policies.kyverno.io/v1
