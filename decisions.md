@@ -25069,3 +25069,7 @@ had synced staging `68f58776` (ai-layer Synced and Healthy):
   before the first probe.
 
 The run-of-show's #900 Probe record entry and readiness row 8's Live cell gain this rerun, with a history line.
+
+**The suites (run 17887, at `5aa776fa` on staging `68f58776`).** `bash verify/run-e2e-tools.sh` printed `301 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `72 checks ran (the offline suite and 71 tier tests) in 32m33s`, `ALL
+E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
