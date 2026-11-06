@@ -25014,3 +25014,28 @@ list the two clusters until #979 is done.
 **The suites (run 17868, at `fd72fbb5`).** `bash verify/run-e2e-tools.sh` printed `297 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `71 checks ran (the offline suite and 70 tier tests) in 30m05s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #955 · run 17884 · Run 17868's draft ported to staging, tanjiro-wsl2 read again
+
+**Context.** Run 17868 found the work done on tanjiro-wsl2 and committed fd72fbb5 and 9cd05704, but it ended failed
+(claim-stale), so neither reached staging. `verify/prior-drafts.sh 955 origin/staging` named its branch START with one
+in-place drift, docs/floor.md, from 980983a6 (#962's heal-path paragraphs, far above 'The schedule'). This run
+cherry-picked both commits unchanged and read tanjiro again through `sources-elevated fleet tanjiro-wsl2`, changing
+nothing there. What differs from the draft is only this entry.
+
+**What tanjiro showed, 2026-11-06 at 11:11Z to 11:13Z.**
+- `crontab -l` has one `# wib-drift` line, `17 6 * * *
+  /home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/terraform/drift/scheduled-drift.sh # wib-drift`,
+  beside the two netsense lines.
+- `infra/terraform/aws/audit/states/accen-dev.tfstate` is unchanged since 10:24Z: sha256 `4a8d304d0ea6...`, serial
+  44, 13 managed resources.
+- `drift-report.py`, `scheduled-drift.sh`, `known-unmanaged.yaml` and `audit/main.tf` there have the same sha256 as
+  this branch (`c4d78fe4...`, `69c80719...`, `4e7fbfac...`, `1c9a7ed8...`).
+- Under `env -i` with PATH `/usr/bin:/bin` plus what `scheduled-drift.sh` appends, `terraform plan -lock=false
+  -detailed-exitcode` of that state with profile accen-dev, the fleet event and us-west-2 printed `No changes. Your
+  infrastructure matches the configuration.`, exit 0. With the same environment, terraform, aws and gh resolved from
+  `~/.local/bin`, PyYAML read 6.0.2, and `drift-report.py --accounts accen-dev --region us-west-2` (no `--post`, no
+  `--out`) printed `0 drifted state(s)`, `recorder watch-it-burn is recording`, `Clean states (1)` with `audit
+  accen-dev`, and as its only findings the two KubeCon clusters, which are #979. It exited 2 for those.
+
+**Not yet run on a cluster.** Nothing. The cron line first fires at 11:17Z today.
