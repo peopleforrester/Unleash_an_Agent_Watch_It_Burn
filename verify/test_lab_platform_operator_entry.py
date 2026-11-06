@@ -2,6 +2,7 @@
 # ABOUTME: access entry to #873: on attendee seats only, in accounts that hold the role, group learner-apps, no policy.
 # SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
+# E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 #
 # lab-platform's harvest probes each seat's workshop apps as lab-platform-operator in every account but its own
 # (lab-platform#370), and a seat that admits only its creator answers it with a 401. The cases are in

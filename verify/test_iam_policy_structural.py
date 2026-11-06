@@ -2,6 +2,7 @@
 # ABOUTME: cluster and boundary plans pass, and a plan with an unconditioned Allow fails naming its statement.
 # SUITE: e2e (needs conftest v0.71.1 and terraform on PATH, and network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
+# E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 #
 # The plans are rendered from today's main.tf by verify/iam_plan_render.py (no AWS account needed), so this
 # is the structural check judging the documents the repo would apply, module-generated ones included. The
