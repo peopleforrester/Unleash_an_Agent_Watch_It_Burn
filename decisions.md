@@ -26426,3 +26426,11 @@ carries no Istio, #860).
 **Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` with this change
 synced through Argo CD, so the live weather-feed pod carries the label and is redirected; the next run on #728 runs
 it before the fix's live validation.
+
+**The suites (run 17960, at `3227d371`).** `bash verify/run-e2e-tools.sh` printed `307 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `73 checks ran (the
+offline suite and 72 tier tests) in 50m50s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is
+`/var/lib/hecaton/runs/17960/e2e-tools.log`. The run before it, `e2e-tools.first.log`, was stopped at its
+60-minute background limit 49 tier tests in, after the same offline result, with no tier failure printed. A
+NetworkPolicy file added to the fix directory with an Ingress rule on port 8080 for weather-feed failed
+`test_mesh_enrollment.py`'s HBONE check by name, and was removed.
