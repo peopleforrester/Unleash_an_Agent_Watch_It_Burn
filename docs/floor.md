@@ -184,7 +184,8 @@ it has not shown that thing is free of drift.
 
 The machine is tanjiro-wsl2, with `<repo>` as `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` (#955,
 2026-11-06). It is the operator machine runs reach: it has terraform, aws with every fleet profile, gh signed in,
-PyYAML and a running cron. megumi-wsl2 does not answer ssh. The states the report plans go there.
+PyYAML and a running cron. megumi-wsl2 does not answer ssh. The states the report plans go there. The line is
+installed there, and the accen-dev audit state was rebuilt there with `import-state.sh` (both 2026-11-06, #955).
 
 `scheduled-drift.sh` supplies the PATH that cron does not have, keeps a dated copy of each report, and
 posts the result to a single open GitHub issue titled "Fleet drift report". It comments if that issue

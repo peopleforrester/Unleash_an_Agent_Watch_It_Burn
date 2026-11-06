@@ -24578,3 +24578,34 @@ with the refresh-only apply's output at the end of `fleet/logs/<name>.apply.log`
 **The suites (run 17845, at `eabe6c8e`).** `bash verify/run-e2e-tools.sh` printed `294 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN` for the offline suite, then `69 checks ran (the offline suite and 68 tier tests) in 30m34s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-06 · #955 · run 17868 · The audit state and the drift cron are on tanjiro-wsl2, checked there
+
+**Context.** Run 17843 left two commands for tanjiro-wsl2: rebuild the accen-dev audit state there with
+`import-state.sh` once it reached staging, and install the 06:17 cron line. Its entry named the checks for them under
+"Not yet run on a cluster". This run read tanjiro through `sources-elevated fleet tanjiro-wsl2`, changed no file
+there, and found both done.
+
+**What tanjiro showed, 2026-11-06 at 10:31Z.**
+- `crontab -l` has exactly one `# wib-drift` line, `17 6 * * *
+  /home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/terraform/drift/scheduled-drift.sh # wib-drift`,
+  beside the two netsense lines. The host is on EST, so it first fires at 11:17Z today.
+- `infra/terraform/aws/audit/states/accen-dev.tfstate`, written 05:24 EST (10:24Z), is serial 44 and manages all 13
+  audit resources (`aws_cloudtrail.fleet`, the recorder, its status, the delivery channel, the role, its policy and
+  attachment, the bucket and its five settings and policy), sha256 `4a8d304d0ea6...`. The serial-28 empty state run
+  17843 found is gone.
+- `terraform plan -lock=false -detailed-exitcode` on it with `-var profile=accen-dev`, the event from `fleet/event.sh`
+  and `-var region=us-west-2` printed `No changes. Your infrastructure matches the configuration.`, exit 0.
+- `drift-report.py`, `scheduled-drift.sh`, `known-unmanaged.yaml` and `audit/main.tf` in that checkout have the same
+  sha256 as staging. The checkout is detached at `ec03eb5f`, which predates `import-state.sh`; the rebuild ran the
+  script from `origin/staging` as run 17843's command said, so the checkout lacks the file and needs no change.
+- With cron's environment (`env -i`, PATH `/usr/bin:/bin` plus what `scheduled-drift.sh` appends), terraform, aws and
+  gh resolved from `~/.local/bin`, PyYAML read 6.0.2, and `drift-report.py --accounts accen-dev --region us-west-2`
+  (no `--post`) listed `audit accen-dev` under Clean states, 0 drifted states, the recorder recording, and only the
+  two KubeCon clusters unmanaged, exit 2. Those two are #979, filed by run 17843.
+
+**What this run changed.** docs/floor.md's schedule now says the line is installed and the state rebuilt on tanjiro.
+#955's body gained an Acceptance criteria section. No AWS write: the plan and the report are read-only.
+
+**Not yet run on a cluster.** Nothing. The first cron post to the "Fleet drift report" issue lands at 11:17Z and will
+list the two clusters until #979 is done.
