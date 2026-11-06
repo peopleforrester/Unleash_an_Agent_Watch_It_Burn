@@ -27139,3 +27139,23 @@ added.
 `exit=0`, at a load average of 41 to 55. `test_trace_shape_e2e.py` passed in 26 s, `test_iam_policy_structural.py` in
 143 s and `test_terraform_lock_init.py` in 209 s. The logs are `/var/lib/hecaton/runs/17963/e2e-tools.1.log` (the old
 runner, stopped at 3600 s) and `e2e-tools.2.log`.
+
+## 2026-11-06 · #1005 · run 18039 · Run 17963's runner lands, with the two offline reds its gate found fixed
+
+**What stopped run 17963.** Its `tests` gate ran `bash verify/run-tests.sh` and two tests failed:
+`test_952_suite_record.py` and `test_public_images.py`. `verify/prior-drafts.sh 1005 origin/staging` printed START for
+`origin/agent/1005-17963` with CLEAN and an APPEND on decisions.md, so its three commits were cherry-picked as they
+were, and both reds were found in them or under the gate's load.
+
+- `test_952_suite_record.py` failed every time, not from load. It reads that run-e2e-tools.sh still prints the
+  `N checks ran (the offline suite and M tier tests) in XmYYs` line #952's record quotes, and the draft had put
+  `, 4 at a time` inside the parentheses. The line now keeps that shape and ends `, 4 at a time`, so the records
+  already in this file still match it, and `test_e2e_tools_tier.py` reads the new line with a pattern for the time.
+- `test_public_images.py` passed here alone and failed three runs of three pinned to one core beside twelve busy
+  loops. Its check that a refused Docker Hub image is "refused before any apply" read every PATCH since the deploy
+  started. The test sets `JOKER_SCALE_DOWN_SECONDS` to 0.3, so each earlier `web` deploy leaves a Timer that PATCHes
+  `/deployments/web/scale`, and on a slow host one fires during the refused `tron` deploy. deploy_app was right; the
+  test counted another deploy's reaper. The check now leaves out a PATCH on another Deployment's `/scale` and prints
+  the PATCHes it did count. Six runs under the same load passed.
+
+**Not changed from the draft.** Everything else in run 17963's three commits, and its entry above, stands.
