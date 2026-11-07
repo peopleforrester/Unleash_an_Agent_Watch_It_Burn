@@ -31099,3 +31099,9 @@ trusts that path, which would defeat Challenge 2's lesson.
 **Asked.** The run's report puts one question to Michael: accept the risk for the KubeCon breakout (recommended), or
 provide a fresh read-only Docker Hub token for way 2. The answer goes in this file, and the chosen way, if it is not
 the first, is its own issue.
+
+**Suite results, run 18295, on `b0f5d47d`.** `HECATON_BASE_SHA=0bea0367 bash verify/run-e2e-tools.sh` (log
+`/var/lib/hecaton/runs/18295/e2e-tools.log`) printed `84 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`14 checks ran (the offline suite and 13 tier tests) in 4m31s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The
+change is this entry alone, so the selector ran what reads decisions.md. The prose gate printed `prose gate: pass`.
+The live reads above changed nothing on either cluster.
