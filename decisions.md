@@ -29546,3 +29546,46 @@ URLError: <urlopen error [Errno -2] Name or service not known>", exit 1, in 0.3 
 and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `verify/test_public_images_retry.py` among them, then `81 checks ran
 (the offline suite and 80 tier tests) in 8m48s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
 `verify/test_public_images_served.py` passing against public.ecr.aws in 14 s.
+## 2026-11-07 · #1030 · run 18158 · test_986_failover_plan_record.py holds #986's KubeCon failover test plan record
+
+Test review run 18050 found that no test read #986's decisions.md entry ("## 2026-11-06 · #986 · run 17914") for its
+criterion: the record of the test plan for failing over a KubeCon cluster before 2026-11-12, including how a
+KubeCon-profile standby is built and promoted without touching the two live clusters' own lifecycle (no creating or
+tearing down clusters unless the plan says which standby and Michael's ruling covers it). The nearest check,
+test_failover_drill.py's "no arm and no link" on the drill's Watcher, reads the drill's code, not the record. There
+was no earlier draft: `bash verify/prior-drafts.sh 1030 origin/staging` printed NONE.
+
+**The test** (`verify/test_986_failover_plan_record.py`, offline). It finds the #986 entry and its one
+"**The test plan, for before the talk on <date>.**" block, splits the block into its numbered items, and holds:
+
+1. *The date.* The plan's date is the KubeCon start the run-of-show gives (2026-11-12), and the entry, dated
+   2026-11-06, comes before it.
+2. *The items.* Numbered 1, 2, 3, ... in order, with one each of "What is tested", "Which clusters", "The real
+   standbys" and "Not covered".
+3. *What is tested.* The failover on `attackme.burritobot.co`, backups.py's Watcher promoting, and a KubeCon-profile
+   cluster answering afterwards.
+4. *How a standby is built, and no lifecycle touched.* "Which clusters" names the build (a `kubecon-community`
+   cluster, the profile `backups.py up` builds a community standby with, fleet.sh's `bootstrap_profile_for_role`
+   under `WIB_ROSTER_PROFILES=kubecon`, which `verify/test_backups.py` holds for every standby) and says no cluster
+   is created or torn down, no run builds a standby and neither cluster is changed, citing Michael's ruling of
+   2026-11-02 (#809, hecaton#496).
+5. *Which standby, and whose.* "The real standbys" names each standby that is really built, and no standby is named
+   anywhere else in the plan. Each is a backups.tsv row, given in that row's region, in "Michael's hand rehearsal",
+   which "this issue does not wait on". The plan carries no command that creates or deletes a cluster (`eksctl
+   create`, `backups.py down`, `terraform destroy` and the like).
+
+The record only means what it says while the repo agrees, so the names are read against their sources: fleet.sh maps
+kubecon:community to `kubecon-community`, event.sh defaults `WIB_ROSTER_PROFILES` to kubecon, backups.py has its
+`up` verb, `cmd_up`, its Watcher and the `PROMOTED` log line, test_backups.py checks the KubeCon profile for every
+standby, CLAUDE.md records the ruling with the same date and issues and says a run never creates or tears down a
+cluster, and the run-of-show's step 3 ("Rehearsal, once") builds the standby's wave (`backups.py up night-before`)
+and runs the drill with `--standby watch-it-burn-community-b03`. On the record as it stands the one real standby is
+`watch-it-burn-community-b03` (community, us-west-2, the night-before wave).
+
+Each anchor the test cuts on is checked first and exits naming the literal and the file. Every check is run again on
+a copy of the record, or of a source it reads, with the thing it reads struck or flipped: 44 copies, each refused.
+Two needles were tightened while writing it, since the first copy read was not refused: `kubecon-community` appears
+twice in "Which clusters", so the test reads the build phrase itself; and the run-of-show names b03 in its prose as
+well as in the drill's command, so the test reads `--standby <name>`.
+
+**Not yet run on a cluster.** Nothing is owed: the test reads repo text only, and no cluster was touched.
