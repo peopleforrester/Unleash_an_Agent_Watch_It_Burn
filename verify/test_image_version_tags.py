@@ -38,7 +38,7 @@ import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
-from ghcr_pull import ACCEPT, served_digest  # noqa: E402
+from ghcr_pull import ACCEPT, open_url, read_url, served_digest  # noqa: E402
 
 WIB = "peopleforrester/watch-it-burn"
 RESOURCES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
@@ -59,14 +59,13 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def token(package: str) -> str:
-    with urllib.request.urlopen(f"https://ghcr.io/token?scope=repository:{package}:pull", timeout=30) as r:
-        return json.load(r)["token"]
+    return json.loads(read_url(f"https://ghcr.io/token?scope=repository:{package}:pull"))["token"]
 
 
 def get(package: str, tok: str, path: str):
     req = urllib.request.Request(f"https://ghcr.io/v2/{package}/{path}",
                                  headers={"Authorization": f"Bearer {tok}", "Accept": ACCEPT})
-    return urllib.request.urlopen(req, timeout=120)
+    return open_url(req, timeout=120)
 
 
 def amd64_manifest(package: str, tok: str, digest: str) -> dict:

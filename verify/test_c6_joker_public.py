@@ -31,7 +31,7 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from ghcr_pull import ACCEPT, served_digest  # noqa: E402
+from ghcr_pull import ACCEPT, read_url, served_digest  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
@@ -70,13 +70,11 @@ def get(url: str, token: str, digest: str | None = None) -> bytes:
     without the token, which the storage host does not take."""
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}", "Accept": ACCEPT})
     try:
-        with _opener.open(req, timeout=60) as r:
-            body = r.read()
+        body = read_url(req, timeout=60, opener=_opener)
     except urllib.error.HTTPError as e:
         if e.code not in (301, 302, 307, 308):
             raise
-        with urllib.request.urlopen(e.headers["Location"], timeout=120) as r:
-            body = r.read()
+        body = read_url(e.headers["Location"], timeout=120)
     if digest is not None:
         got = "sha256:" + hashlib.sha256(body).hexdigest()
         if got != digest:
@@ -85,8 +83,7 @@ def get(url: str, token: str, digest: str | None = None) -> bytes:
 
 
 def token(url: str) -> str:
-    with urllib.request.urlopen(url, timeout=30) as r:
-        return json.load(r)["token"]
+    return json.loads(read_url(url))["token"]
 
 
 def pinned(ref: str) -> str | None:

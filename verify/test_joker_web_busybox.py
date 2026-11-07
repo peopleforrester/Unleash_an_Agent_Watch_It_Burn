@@ -22,6 +22,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -29,6 +30,9 @@ import urllib.error
 import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+from ghcr_pull import ACCEPT, read_url  # noqa: E402
+
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
 JOKER = REPO / "images/villains/joker-web"
 PAGE = (JOKER / "www/index.html").read_bytes()
@@ -36,9 +40,6 @@ BANNER = REPO / "images/villains/villain-banner.sh"
 LINE = "ACCESS GRANTED... just kidding, you deployed me. Why so trusting about admission control?"
 LAUGH = "HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control?"
 REGISTRY = "https://ghcr.io"
-ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
-                    "application/vnd.docker.distribution.manifest.list.v2+json",
-                    "application/vnd.docker.distribution.manifest.v2+json"))
 
 failures: list[str] = []
 
@@ -72,13 +73,11 @@ def get(repo: str, token: str, path: str, digest: str) -> bytes:
     req = urllib.request.Request(f"{REGISTRY}/v2/{repo}/{path}/{digest}",
                                  headers={"Authorization": f"Bearer {token}", "Accept": ACCEPT})
     try:
-        with _opener.open(req, timeout=60) as r:
-            body = r.read()
+        body = read_url(req, timeout=60, opener=_opener)
     except urllib.error.HTTPError as e:
         if e.code not in (301, 302, 307, 308):
             raise
-        with urllib.request.urlopen(e.headers["Location"], timeout=120) as r:
-            body = r.read()
+        body = read_url(e.headers["Location"], timeout=120)
     got = "sha256:" + hashlib.sha256(body).hexdigest()
     if got != digest:
         raise ValueError(f"{path}/{digest} came back as {got}")
@@ -146,8 +145,7 @@ if not m:
 repo, base_digest = m.group(1), m.group(2)
 try:
     # Anonymously, as a node with no pull secret would: the copy is public (lab-platform#353).
-    with urllib.request.urlopen(f"https://ghcr.io/token?scope=repository:{repo}:pull", timeout=30) as r:
-        token = json.load(r)["token"]
+    token = json.loads(read_url(f"https://ghcr.io/token?scope=repository:{repo}:pull"))["token"]
     manifest = json.loads(get(repo, token, "manifests", base_digest))
     if "manifests" in manifest:  # an index: build.sh's crane append takes its linux/amd64 image
         amd64 = next(d["digest"] for d in manifest["manifests"]

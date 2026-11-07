@@ -14,18 +14,21 @@ ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.
 
 # A dropped connection is asked again, up to TRIES times in all, BACKOFF seconds times the try between: on 2026-11-07
 # ghcr.io closed one manifest HEAD with no response (http.client.RemoteDisconnected) and the tools tier went red on it
-# (#1047). An HTTP answer, a 401 or a 404, is ghcr.io's reply and is never asked again.
+# (#1047). An HTTP answer, a 401 or a 404, is ghcr.io's reply and is never asked again. Later the same day (CI run
+# 42405149040) two TLS handshakes to ghcr.io timed out in test_joker_web_busybox.py and test_image_version_tags.py,
+# which opened it with urlopen of their own; they and test_c6_joker_public.py now read it through open_url or read_url.
 TRIES = 3
 BACKOFF = 2.0
 _sleep = time.sleep
 DROPPED = (http.client.HTTPException, ConnectionError, TimeoutError)
 
 
-def _open(req):
-    """urlopen(req), asked again while the connection drops before an answer; the last drop is raised."""
+def _retried(call):
+    """call(), asked again while the connection drops before an answer; the last drop is raised, an HTTP answer at
+    once."""
     for attempt in range(1, TRIES + 1):
         try:
-            return urllib.request.urlopen(req, timeout=30)
+            return call()
         except urllib.error.HTTPError:
             raise
         except (urllib.error.URLError, *DROPPED) as e:
@@ -36,6 +39,26 @@ def _open(req):
     raise AssertionError("unreachable")
 
 
+def _opener_of(opener):
+    # urllib.request.urlopen is looked up at each call, so a test's stub of it is the one asked.
+    return opener.open if opener is not None else urllib.request.urlopen
+
+
+def open_url(req, timeout: float = 30, opener=None):
+    """The response to req, from opener (urlopen by default), asked again while the connection drops before an
+    answer. Only the open is retried: a caller that streams the body owns a drop part way through it."""
+    return _retried(lambda: _opener_of(opener)(req, timeout=timeout))
+
+
+def read_url(req, timeout: float = 30, opener=None) -> bytes:
+    """The whole body of the response to req, asked again from the start while the connection drops before the last
+    byte."""
+    def once() -> bytes:
+        with _opener_of(opener)(req, timeout=timeout) as r:
+            return r.read()
+    return _retried(once)
+
+
 def served_digest(reference: str) -> tuple[str | None, str]:
     """The digest ghcr.io serves for <host>/<repo>:<tag> to a client with no credential, or None and why not."""
     host, _, rest = reference.partition("/")
@@ -44,12 +67,12 @@ def served_digest(reference: str) -> tuple[str | None, str]:
     # or missing package, while a public one gets a token and only then can 404 on a tag it does not have.
     step = "token"
     try:
-        with _open(f"https://{host}/token?scope=repository:{repo}:pull") as r:
+        with open_url(f"https://{host}/token?scope=repository:{repo}:pull") as r:
             token = json.load(r)["token"]
         step = "manifest"
         req = urllib.request.Request(f"https://{host}/v2/{repo}/manifests/{tag}", method="HEAD",
                                      headers={"Authorization": f"Bearer {token}", "Accept": ACCEPT})
-        with _open(req) as r:
+        with open_url(req) as r:
             return r.headers.get("Docker-Content-Digest"), ""
     except urllib.error.HTTPError as e:
         if step == "token" and e.code == 401:

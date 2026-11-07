@@ -32111,3 +32111,41 @@ gate sets it) and its output in `/var/lib/hecaton/runs/18327/e2e-tools-2.log` pr
 RENDER-GATE TESTS GREEN`, then `26 checks ran (the offline suite and 25 tier tests) in 8m20s, 4 at a time`, `ALL E2E
 TOOLS TIER CHECKS GREEN` and `exit=0`. On `bf5f2e5b`, the persona change and its test alone, it had printed `216 tests
 ran` and `24 checks ran ... in 8m13s` with `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1047 · run 18340 · Every tools-tier test that pulls blobs from ghcr.io asks a timed-out handshake again, through ghcr_pull
+
+**What was red.** After run 18228's change merged, staging's verify-suites workflow passed on Tanjiro six times in a
+row (Actions runs 42394553608 to 42403448289). The next one, run 42405149040 at the #1064 record commit, failed in
+the e2e tools job alone; the offline job passed. Its job log (job 128501122998) names two tier tests and one cause:
+`test_joker_web_busybox.py` failed `ghcr.io serves .../mirror/library/busybox@sha256:f97baa53... anonymously` with
+`URLError: <urlopen error _ssl.c:1012: The handshake operation timed out>`, and `test_image_version_tags.py` died on
+a traceback ending in the same `TimeoutError` from the TLS handshake, while it streamed the sample-app nginx layer.
+The datadog-secret `app-key(empty)` FAIL line in the same log is again the negative control inside
+`test_datadog_secret_fields_render.py`, which passed, as run 18228 found.
+
+**Why they had no second try.** Run 18115 gave `verify/ghcr_pull.py` a retry for a dropped connection (#1047's first
+red of this kind), but only its own `served_digest` used it. These two tests, and `test_c6_joker_public.py`, open
+ghcr.io with `urlopen` or a no-redirect opener of their own, so one slow handshake on the runner fails the job.
+
+**The change.** `ghcr_pull.py` now exports `open_url(req, timeout, opener)` and `read_url(req, timeout, opener)`, on
+the same rule as before: a connection that drops or times out before an answer is asked again, up to three tries with
+a 2s and 4s pause, and an HTTP answer (a 401, a 404, a blob's 307) reaches the caller at once. `read_url` reads the
+whole body inside the try, so a body cut part way is read again from the start. `open_url` retries only the open,
+since `test_image_version_tags.py` streams a layer through `tarfile`. The opener is looked up at each call, so the
+offline test's stub of `urlopen` is the one asked. The three tests read their tokens, manifests and blobs through
+these, and `test_joker_web_busybox.py` takes `ACCEPT` from `ghcr_pull` in place of its own copy. Nothing they check
+changed.
+
+**How it is held.** `verify/test_ghcr_pull.py` adds offline checks: a `URLError` wrapping the handshake
+`TimeoutError` is asked again and the body read, with the caller's timeout on each try; a body that raises
+`IncompleteRead` once is read again; a handshake that times out every try is raised with `after 3 tries` in its
+notes; `open_url` hands back the open response after one timeout; and a no-redirect opener's 307 reaches the caller
+on the first ask with no pause. It also reads the three tests' source: each imports `read_url` or `open_url` from
+`ghcr_pull` and opens no ghcr.io URL with `urlopen` of its own (against staging's copies that check finds 3, 2 and 3
+such lines). `verify/scope-map.yaml` gains those three files under `test_ghcr_pull.py` and `verify/ghcr_pull.py`
+under `test_joker_web_busybox.py`; `scope_tests.py write` also wanted unrelated entries other changes left behind,
+which this change does not take.
+
+**Live.** No cluster is involved: the three tests read ghcr.io with no credential. Run here, each exited 0
+(`The Joker's entrypoint serves its page on the pinned busybox.`, `Both Jokers are public, at images.lock's pins,
+and are this checkout's page Jokers.`, `Every watch-it-burn tag names the version inside its image.`).
