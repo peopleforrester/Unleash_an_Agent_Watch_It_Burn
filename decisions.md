@@ -32373,3 +32373,9 @@ and the other armed policies gone again, and the guard lock released on both. No
 
 **Not yet run on a cluster.** Nothing for this issue. All three checks ran here on watch-it-burn-community (criterion
 3 on both clusters), and both clusters are back as found.
+
+**Suite results, run 18345.** On `b05a4fab`, `bash verify/run-e2e-tools.sh` with
+`HECATON_BASE_SHA=a09063ac` (as the gate sets it), its output in `/var/lib/hecaton/runs/18345/scratch/e2e-tools.log`,
+printed `84 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks ran (the offline suite and 13 tier
+tests) in 5m02s, 4 at a time`, scoped to the one path this run touches (`decisions.md`), with `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
