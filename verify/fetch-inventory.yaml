@@ -1,0 +1,1167 @@
+# ABOUTME: Every fetch call site under verify/, .github/workflows/ and scripts/ (#1116, the first child of #1115),
+# ABOUTME: classified: a pinned artifact (kind, pin file), an unpinned one, a live check (what it reaches), or no fetch.
+#
+# verify/fetch_inventory.py finds the sites: a line of a tracked file under those three directories that one of its
+# PATTERNS matches (curl, wget, urlopen and http.client, the helm verbs that reach a repository and chart_fetch.pull,
+# terraform init, pip and uv installs, npm and npx, playwright install, docker and podman pull, crane, git clone and
+# submodule update, a workflow's `uses:`), comment lines left out. Each file below lists entries; `match` is a regular
+# expression searched in the line, and a site takes the class of the first entry of its file that matches it.
+# verify/test_fetch_inventory.py fails, naming file:line, on a site no entry covers, an entry with no class or a
+# missing field, a pin that is no file, and an entry that matches no site. `python3 verify/fetch_inventory.py counts`
+# prints the table decisions.md's #1115 entry gives.
+#
+#   pinned    kind (KINDS in fetch_inventory.py) and pin, the tracked file holding the version, digest or checksum
+#   unpinned  kind and why: an artifact at a moving reference (a major tag, a `~>` range with no lock, no version)
+#   live      service: our own service, a cluster, or an account's API, reached on purpose
+#   none      why: the line names a fetch tool and fetches nothing (a stub, an assertion, a docstring, loopback)
+#
+# A new fetch needs an entry here in the same commit. #1115's later children move each pinned kind to the per-host
+# cache, and its last child turns this inventory into the guard that a pinned fetch goes through that cache.
+files:
+  .github/workflows/build-web-terminal.yml:
+  - match: '@v\d'
+    class: unpinned
+    kind: github-action
+    why: checkout, setup-buildx, login and build-push actions taken at a major tag (@v3, @v4, @v6), not a commit SHA
+  .github/workflows/iam-policy.yml:
+  - match: '@[0-9a-f]{40}'
+    class: pinned
+    kind: github-action
+    pin: .github/workflows/iam-policy.yml
+    note: checkout and setup-python at a full commit SHA on the line
+  - match: PyYAML==6\.0\.3
+    class: pinned
+    kind: python-package
+    pin: .github/workflows/iam-policy.yml
+  .github/workflows/keep-sample-app-tag.yml:
+  - match: actions/checkout@v4
+    class: unpinned
+    kind: github-action
+    why: actions/checkout at the major tag @v4, not a commit SHA
+  .github/workflows/plan-policy.yml:
+  - match: '@[0-9a-f]{40}'
+    class: pinned
+    kind: github-action
+    pin: .github/workflows/plan-policy.yml
+    note: checkout and setup-python at a full commit SHA on the line
+  - match: PyYAML==6\.0\.3
+    class: pinned
+    kind: python-package
+    pin: .github/workflows/plan-policy.yml
+  .github/workflows/push-jokers.yml:
+  - match: actions/checkout@v4
+    class: unpinned
+    kind: github-action
+    why: actions/checkout at the major tag @v4, not a commit SHA
+  - match: curl -fsSL --retry 3
+    class: pinned
+    kind: tool-binary
+    pin: verify/e2e-tools.lock
+    note: the crane release URL and SHA-256 come from the lock's crane row and are checked with sha256sum before use
+  - match: ghcr_version_tag\.py
+    class: live
+    service: GHCR's registry API for our own festival-ops/maintenance-shell image (keeps each tag on its images.lock digest),
+      reading the build from the runner's loopback registry
+  - match: 127\.0\.0\.1:5000/v2/
+    class: none
+    why: a readiness poll of crane's own registry served on the runner's loopback; reaches no remote host
+  - match: 'name: '
+    class: none
+    why: a workflow step name
+  - match: grep -E|"\$\{name\}" = crane
+    class: none
+    why: reads and checks the crane row of verify/e2e-tools.lock, a local file
+  - match: sha256sum -c|tar -xzf|echo "CRANE=|bin/crane" version
+    class: none
+    why: verifies, unpacks, exports or runs the crane binary already downloaded by the curl line; no network
+  .github/workflows/verify-suites.yml:
+  - match: '@[0-9a-f]{40}'
+    class: pinned
+    kind: github-action
+    pin: .github/workflows/verify-suites.yml
+    note: checkout, setup-uv and setup-node at a full commit SHA on the line
+  - match: PyYAML==6\.0\.3
+    class: pinned
+    kind: python-package
+    pin: .github/workflows/verify-suites.yml
+  .github/workflows/weaver-registry-check.yml:
+  - match: actions/checkout@v4
+    class: unpinned
+    kind: github-action
+    why: actions/checkout at the major tag @v4, not a commit SHA
+  - match: curl -sSfL
+    class: pinned
+    kind: tool-binary
+    pin: .github/workflows/weaver-registry-check.yml
+    note: WEAVER_VERSION v0.24.2 and WEAVER_SHA256 are in the job env of the same file, checked with sha256sum -c
+  scripts/audience-qr.py:
+  - match: segno==1\.6\.6
+    class: none
+    why: the docstring's usage line telling an operator how to set up the venv (segno is pinned there at ==1.6.6); the script
+      fetches nothing
+  scripts/capture-fallback-screenshots.py:
+  - match: urlopen\(req, timeout=30\)
+    class: live
+    service: the /controls endpoint of the community and private clusters' public storefront sites
+  scripts/ghcr_version_tag.py:
+  - match: urlopen\(req, timeout=30\)
+    class: live
+    service: GHCR's token endpoint, for a pull and push token on our own repository
+  - match: return urllib\.request\.urlopen
+    class: live
+    service: GHCR's registry API (manifests and blobs of our own images)
+  - match: print\(keep\(
+    class: live
+    service: GHCR's registry API for our own image, with the build's digest read by crane from the workflow's loopback registry
+  - match: GHCR_USER=\.\.\.
+    class: none
+    why: the docstring's usage line
+  - match: A local image of|loopback one|crane copies the|the build is crane:|digest \(crane:<ref>\)
+    class: none
+    why: docstring prose describing the crane:<ref> mode
+  - match: os\.environ\.get\("CRANE"\)
+    class: none
+    why: returns the crane binary's path; fetches nothing
+  - match: '"""The digest of a build'
+    class: none
+    why: a function docstring
+  - match: raise Refused
+    class: none
+    why: an error message naming crane
+  - match: startswith\("crane:"\)
+    class: none
+    why: a string prefix test on the argument
+  scripts/harvest/01-clusters.py:
+  - match: urlopen\(url, timeout=timeout\)
+    class: live
+    service: each fleet cluster's /cost and /controls at <host>.agenticburn.com
+  - match: urlopen\(req, timeout=60\)
+    class: live
+    service: Datadog's spans events search API
+  scripts/harvest/04-argo-datadog.py:
+  - match: urlopen
+    class: live
+    service: Datadog's metrics list and metrics query APIs, per org
+  scripts/harvest/05-analyze.py:
+  - match: 'curl '
+    class: none
+    why: a regex alternative that classifies prompts asking the agent to run a shell command
+  scripts/harvest/06-lab-progress.py:
+  - match: urlopen
+    class: live
+    service: Datadog's metrics query API
+  scripts/replay-prompts.py:
+  - match: urlopen\(req, timeout=timeout\)
+    class: live
+    service: the storefront's /chat on the target cluster's public host
+  verify/agent_obs_flow.py:
+  - match: urlopen
+    class: live
+    service: the KubeCon storefront's /chat on its public host
+  verify/agent_probe.py:
+  - match: uv run --with nothing
+    class: none
+    why: the docstring's usage line
+  - match: urlopen\(req, timeout=self\.timeout\)
+    class: live
+    service: the storefront's /chat on the attendee's public host
+  - match: /cost", timeout=20
+    class: live
+    service: the storefront's /cost on the attendee's public host
+  - match: localhost:8080
+    class: live
+    service: the guard proxy's /toggle and /guards, from inside the guard-proxy container via kubectl exec
+  - match: print\(urllib\.request\.urlopen\(r,timeout=10\)
+    class: live
+    service: the guard proxy's /toggle, from inside the guard-proxy container via kubectl exec
+  verify/app_render.py:
+  - match: chart_fetch\.pull\(
+    class: pinned
+    kind: helm-chart
+    pin: verify/app_render.py
+    note: the version is each Application's targetRevision under gitops/bootstrap/apps/, which app_render.py reads and passes
+  - match: 'helm\.sh/hook: test'
+    class: none
+    why: docstring prose on Helm test hooks
+  verify/backstage-footprint.sh:
+  - match: for tool in kubectl python3 curl
+    class: none
+    why: a PATH check of the tools the script needs
+  - match: curl -fsS
+    class: live
+    service: the cluster's Backstage Service (readiness, guest auth, catalog and Kubernetes tab APIs) through a kubectl
+      port-forward on 127.0.0.1
+  verify/beat-02.sh:
+  - match: in-cluster curl pods
+    class: none
+    why: usage text in the script's help
+  - match: in_cluster_curl curl
+    class: live
+    service: the attendee cluster's guard-proxy Service (/toggle and /), from an in-cluster curl pod
+  verify/beat-03.sh:
+  - match: .
+    class: none
+    why: names the challenge's fallback.curl.sh file (a path variable, the usage text and a failure message); the line fetches
+      nothing itself
+  verify/beat-cost.sh:
+  - match: in_cluster_curl curl
+    class: live
+    service: the attendee cluster's guard-proxy Service (/cost, /toggle and /), from an in-cluster curl pod
+  verify/bedrock_profile_check.py:
+  - match: urlopen\(req, timeout=150\)
+    class: live
+    service: the guard proxy's /chat on localhost, run with python3 -c inside the guard-proxy container via kubectl exec
+  verify/browser-smoke.py:
+  - match: curl is not enough|curl sends no Origin
+    class: none
+    why: docstring prose on why curl probes missed the bug
+  - match: uv run --with playwright
+    class: none
+    why: the docstring's usage lines and the ImportError help message; the script fetches nothing itself
+    note: the command they tell an operator to run takes playwright at no version
+  - match: playwright install chromium
+    class: none
+    why: the ImportError help message's text
+    note: it tells the operator to install the browser of an unpinned playwright
+  verify/c1-exfil-block.sh:
+  - match: curl -s --max-time 150
+    class: live
+    service: the storefront's /chat at <host>.agenticburn.com
+  verify/c1-winrate.py:
+  - match: shell command\|tool execution
+    class: none
+    why: a regex alternative matching replies that describe a send's outcome
+  - match: urlopen
+    class: live
+    service: the guard proxy's /chat on localhost, from inside the guard-proxy container via kubectl exec
+  verify/chart_fetch.py:
+  - match: subprocess\.run\(\[helm, "pull"
+    class: pinned
+    kind: helm-chart
+    pin: verify/app_render.py
+    note: the version is the caller's, each Application's targetRevision as app_render.py (and the render tests) read it
+  - match: helm pull` read the repository|where = f"helm pull
+    class: none
+    why: docstring prose and the error label string
+  verify/ci_chromium_libs.py:
+  - match: playwright", "install", "--dry-run"
+    class: pinned
+    kind: python-package
+    pin: verify/playwright_browsers.py
+    note: uv run --with playwright==1.64.1 (UV from playwright_browsers.py); --dry-run lists the browser and fetches none
+  verify/datadog-orgs.sh:
+  - match: api\.datadoghq\.com
+    class: live
+    service: Datadog's current_user and org APIs
+  verify/datadog-pool-check.sh:
+  - match: curl -s -o /dev/null
+    class: live
+    service: Datadog's key validate and users APIs on each cluster's site
+  verify/docker_hub.py:
+  - match: curlimages/curl
+    class: none
+    why: docstring prose naming an image reference as an example
+  verify/e2e-tools.lock:
+  - match: ^crane\s
+    class: none
+    why: the lock's own crane row, the pin itself; fetch-e2e-tools.sh and push-jokers.yml read it and fetch
+  verify/ensure-submodules.sh:
+  - match: submodule update --init
+    class: pinned
+    kind: git-commit
+    pin: .gitmodules
+  verify/failover_drill.py:
+  - match: playwright==1\.64\.1
+    class: none
+    why: the docstring's usage line (playwright pinned there at ==1.64.1); the script fetches nothing itself
+  verify/fetch-e2e-tools.sh:
+  - match: curl -fsSL --retry 3
+    class: pinned
+    kind: tool-binary
+    pin: verify/e2e-tools.lock
+  verify/fetch_inventory.py:
+  - match: .
+    class: none
+    why: the scan's own patterns, docstring and KINDS comments, which name each fetch tool to find it
+  verify/fetch_meter.py:
+  - match: .
+    class: none
+    why: the metering proxy's docstring and its CONNECT handling, which relay a command's fetches and start none
+  verify/fleet-drift-audit.sh:
+  - match: localhost:8080
+    class: live
+    service: the guard proxy's /guards and /cost, from inside the guard-proxy container via kubectl exec
+  verify/fleet-hygiene.sh:
+  - match: eks-claim
+    class: live
+    service: the provisioning Railway app's /eks-claim
+  verify/fleet-walkthrough.sh:
+  - match: curl -s
+    class: live
+    service: each fleet cluster's public host (console, lab page, terminal and /chat)
+  verify/gateway_forward.py:
+  - match: no shell, curl or wget
+    class: none
+    why: docstring prose on what the gateway image lacks
+  - match: urlopen
+    class: live
+    service: the cluster's agentgateway chat completions route, through a kubectl port-forward
+  verify/ghcr_pull.py:
+  - match: else urllib\.request\.urlopen
+    class: live
+    service: ghcr.io's registry API, anonymously, for the digests our own image references serve
+  - match: urlopen by default
+    class: none
+    why: a function docstring
+  verify/guard-proxy-pin-on-main.sh:
+  - match: 'die '
+    class: none
+    why: an error message telling the reader to initialise the submodule
+  verify/guard_lease.py:
+  - match: --with-peer
+    class: none
+    why: the script's own --with-peer flag (docstring usage, prose and argparse), which the --with pattern matches; no package
+      fetch
+  verify/iam_plan_render.py:
+  - match: run\("init"
+    class: unpinned
+    kind: terraform-provider
+    why: terraform init of a copy of each root (cluster, boundary, audit) with no .terraform.lock.hcl copied in, so the
+      providers resolve to the newest matching the module's ~> 6.0 constraint
+  - match: network to registry\.terraform\.io|terraform init of \{root\} failed
+    class: none
+    why: docstring prose and the failure message
+  verify/injection_config_matrix.py:
+  - match: torch==2\.14\.0\+cpu
+    class: pinned
+    kind: python-package
+    pin: verify/injection_config_matrix.py
+    note: torch and llm-guard at == versions on the line; their transitive deps are resolved by uv at run time
+  verify/input-guard.sh:
+  - match: localhost:8080/toggle
+    class: live
+    service: the guard proxy's /toggle, from inside the guard-proxy container via kubectl exec
+  - match: curl -s --max-time
+    class: live
+    service: the storefront's /chat and /controls at <host>.agenticburn.com
+  verify/kube_forward.py:
+  - match: urlopen
+    class: live
+    service: a cluster Service's HTTP endpoint, through a kubectl port-forward on 127.0.0.1
+  verify/kubecon_probe.py:
+  - match: '"curl", "-s", "-m", "6"'
+    class: live
+    service: the C1 beacon at beacon.burritobot.co, curled from the workshop-mcp tool pod via kubectl exec (an egress check)
+  - match: urlopen\(req, timeout=self\.timeout\)
+    class: live
+    service: the KubeCon storefront's /chat on its public host
+  - match: urlopen\(f"https://\{self\.host\}\{path\}"
+    class: live
+    service: the KubeCon storefront's JSON endpoints on its public host
+  - match: print\(urllib\.request\.urlopen\(r,timeout=10\)
+    class: live
+    service: the guard proxy's /toggle, from inside the guard-proxy container via kubectl exec
+  - match: the lab's own curl|curl -w|curl 000
+    class: none
+    why: docstring prose and a verdict message about the curl check
+  verify/lab-render.py:
+  - match: look fine to curl
+    class: none
+    why: docstring prose
+  - match: uv run --with playwright
+    class: none
+    why: the docstring's usage lines; the script fetches nothing itself
+    note: the command they tell an operator to run takes playwright at no version
+  verify/load_replay.py:
+  - match: urlopen
+    class: live
+    service: the target storefront's /chat and /cost (its public host, or the URL given)
+  verify/one_root_probe.py:
+  - match: curl -s -m 120
+    class: live
+    service: the cluster's guard-proxy Service /chat, curled from a probe pod
+  - match: api/v2/traces
+    class: live
+    service: the cluster's Tempo trace API, through a kubectl port-forward
+  verify/pii_scrub_live.py:
+  - match: urlopen
+    class: live
+    service: the cluster's OTel collector OTLP/HTTP /v1/traces, through a kubectl port-forward
+  verify/playwright_browsers.py:
+  - match: '"install", \*BROWSERS\]'
+    class: pinned
+    kind: browser
+    pin: verify/playwright_browsers.py
+    note: the Chromium of playwright==1.64.1, installed only when the dry run finds it missing
+  - match: UV = \[|"install", "--dry-run"
+    class: pinned
+    kind: python-package
+    pin: verify/playwright_browsers.py
+    note: uv run --with playwright==1.64.1; the dry run lists the browser and fetches none
+  - match: .
+    class: none
+    why: docstring prose and error messages naming playwright install
+  verify/probe_pod.py:
+  - match: .
+    class: none
+    why: docstring prose on why the curlimages/curl pod was replaced
+  verify/run-e2e-tools.sh:
+  - match: tools\+=\(curl
+    class: none
+    why: a PATH check of the tools the tier needs
+  - match: CRANE=
+    class: none
+    why: an environment variable pointing at the already-fetched crane
+  verify/run-e2e.sh:
+  - match: yarn playwright install chromium
+    class: pinned
+    kind: browser
+    pin: images/watch-it-burn-backstage/yarn.lock
+    note: the Chromium of the Backstage package's playwright 1.61.0, installed after yarn install --immutable from that
+      lock
+  - match: for tool in|command -v curl
+    class: none
+    why: a PATH check of the tools the suite needs
+  - match: missing\+=|CRANE=
+    class: none
+    why: a failure message or an environment variable naming the already-fetched tools
+  verify/schemas/README.md:
+  - match: curl -sSL https://raw\.githubusercontent\.com/agentgateway
+    class: none
+    why: a README's by-hand re-verify command in a fenced block; no script runs it
+    note: it would fetch agentgateway's schema at the v1.7.0 tag, the same file committed beside it
+  verify/scope-map.yaml:
+  - match: fallback\.curl\.sh|verify/\.tools/bin/crane
+    class: none
+    why: a path a scope entry reads, listed in the map; nothing is fetched
+  verify/scope_audit.py:
+  - match: '"CRANE": str\(tools / "crane"\)'
+    class: none
+    why: an environment variable naming the pinned crane binary's path for a tier test; no call
+  verify/sign-images.sh:
+  - match: https://ghcr\.io/token\?scope=
+    class: live
+    service: GHCR's token endpoint, for a pull token on our own peopleforrester/watch-it-burn images
+  - match: 'curl -sS -D- -o /dev/null -H "Authorization: Bearer'
+    class: live
+    service: GHCR's registry API, reading the digest of each of our own watch-it-burn image tags to sign
+  verify/sister_tree.py:
+  - match: '"clone", "--quiet", "--depth", "1"'
+    class: live
+    service: the sister repo on GitHub over git's smart HTTP, its current tree at the ref the caller names
+    note: a read of the sister's current layout (blob-free, no checkout), not an artifact the build consumes
+  - match: git clone did not finish within|where = f"git clone
+    class: none
+    why: an error message naming the clone
+  verify/submodule-pins-pushed.sh:
+  - match: run git submodule update --init
+    class: none
+    why: a FAIL message telling the reader what to run
+  verify/terminal-login-live.sh:
+  - match: curl -ks -o /dev/null -w '%\{http_code\}'
+    class: live
+    service: the presenter terminal, IDE and Jupyter routes at the cluster's public host, for each login's HTTP status
+  verify/test_adk_model_content_e2e.py:
+  - match: urlopen\(req, timeout=5\)
+    class: none
+    why: a POST to the collector the test starts on 127.0.0.1; no network
+  verify/test_admin_actions.sh:
+  - match: .
+    class: none
+    why: the test's curl shim, which answers the provisioning app's admin routes from files, and assertions on its call
+      log
+  verify/test_agent_cloud_credential_live.py:
+  - match: curl would exit 0
+    class: none
+    why: docstring prose
+  - match: row\("curl -m 2 http://169\.254\.169\.254/"\)
+    class: none
+    why: a row label looked up in the probe Job's log; the probe pod makes the call, not this line
+  verify/test_agent_otlp_logs_collector.py:
+  - match: urlopen\(req, timeout=5\)
+    class: none
+    why: a POST to the collector the test starts on 127.0.0.1; no network
+  verify/test_agentgateway_tracing_e2e.py:
+  - match: after which urlopen raised
+    class: none
+    why: docstring prose
+  - match: urllib\.request\.urlopen\(urllib\.request\.Request\(url
+    class: none
+    why: a GET to the agentgateway binary the test runs on 127.0.0.1; no network
+  verify/test_always_redact_marketing.py:
+  - match: urlopen\(req, timeout=30\)
+    class: none
+    why: a POST to guard-proxy's handler the test serves on 127.0.0.1 in front of a stub agent; no network
+  verify/test_audience_page_e2e.py:
+  - match: '"--with", "segno==1\.6\.6"'
+    class: pinned
+    kind: python-package
+    pin: verify/test_audience_page_e2e.py
+  verify/test_audience_path.py:
+  - match: calls_in\(funcs\[
+    class: none
+    why: an AST count of urlopen calls in guard-proxy's source, asserted on
+  verify/test_audience_path_live.py:
+  - match: urlopen\(req, timeout=timeout\)
+    class: live
+    service: BurritoBot's /chat at the cluster's public host (from cluster-identity), through guard-proxy
+  verify/test_backups.py:
+  - match: '"curl": "/usr/bin/curl"'
+    class: none
+    why: a fake shutil.which table for cron_path; nothing runs
+  verify/test_backups_promotion_live.py:
+  - match: urlopen\(f"https://\{host\}/healthz"
+    class: live
+    service: the community or admin public host's /healthz through the live router, after the watcher promotes its standby
+  verify/test_beat03_c7.py:
+  - match: .
+    class: none
+    why: every site names the fallback.curl.sh file, in docstrings, messages, a read_text of its source and the stub written
+      in its place
+  verify/test_c1_dns_exfil.py:
+  - match: .
+    class: none
+    why: docstring prose and assertions that the hop's code names no curl and the Dockerfile installs curl and ca-certificates
+      only
+  verify/test_c1_exfil_block_restore.py:
+  - match: .
+    class: none
+    why: docstring prose and the fake curl the test puts first on PATH
+  verify/test_c6_joker_public.py:
+  - match: .
+    class: none
+    why: a docstring and failure messages naming build.sh's crane; the digest reads are not on these lines
+  verify/test_c6_villain_endpoint.py:
+  - match: .
+    class: none
+    why: an assertion on build.sh's text, the stand-in crane that logs each call, and a check label
+  verify/test_c7_badge_grants.py:
+  - match: 'run: git submodule update --init'
+    class: none
+    why: a failure hint telling the reader what to run
+  verify/test_c7_teaching.py:
+  - match: fallback\.curl\.sh"\)\.read_text
+    class: none
+    why: reads the fallback.curl.sh source from the repo
+  verify/test_c8_teaching.py:
+  - match: curl the secrets API
+    class: none
+    why: docstring prose quoting a prompt
+  verify/test_challenge_fallbacks.py:
+  - match: .
+    class: none
+    why: docstring prose, the fallback script paths, a regex over the lab text, the stub curl and stub kubectl, and checks
+      on their call log
+  verify/test_chart_fetch.py:
+  - match: .
+    class: none
+    why: docstring prose, chart_fetch.pull against the test's stub helm, expected messages, and an assertion on other tests'
+      source
+  verify/test_chat_path_ingress.py:
+  - match: fallback\.curl\.sh"\)\.read_text
+    class: none
+    why: reads the fallback.curl.sh source from the repo
+  verify/test_chat_span_token_counts.py:
+  - match: urlopen\(req, timeout=30\)
+    class: none
+    why: a POST to guard-proxy's handler the test serves on 127.0.0.1 in front of a stub agent; no network
+  verify/test_chat_turn_cancel.py:
+  - match: urlopen\(req, timeout=30\)
+    class: none
+    why: a POST to guard-proxy's handler the test serves on 127.0.0.1 in front of a stub agent; no network
+  verify/test_chat_witch_name.py:
+  - match: urlopen
+    class: none
+    why: calls to guard-proxy's handler the test serves on 127.0.0.1 (BASE) in front of a stub agent; no network
+  verify/test_check_inventory_schema_e2e.py:
+  - match: '"--with", "mcp==1\.29\.1"'
+    class: pinned
+    kind: python-package
+    pin: verify/test_check_inventory_schema_e2e.py
+  verify/test_check_tls_shell_probe.sh:
+  - match: .
+    class: none
+    why: the stub curl first on PATH, its log, and greps of that log; no network
+  verify/test_collector_act2_redaction_e2e.py:
+  - match: curl https://beacon\.example
+    class: none
+    why: a tool-call argument string in a synthetic span
+  - match: urlopen\(req, timeout=5\)
+    class: none
+    why: a POST to the otelcol-contrib the test runs on 127.0.0.1; no network
+  verify/test_collector_llmobs_model_e2e.py:
+  - match: urlopen\(req, timeout=5\)
+    class: none
+    why: a POST to the otelcol-contrib the test runs on 127.0.0.1; no network
+  verify/test_collector_one_root_e2e.py:
+  - match: 'command FAILED: curl blocked'
+    class: none
+    why: a tool message string in a synthetic span
+  - match: urlopen\(req, timeout=5\)
+    class: none
+    why: a POST to the otelcol-contrib the test runs on 127.0.0.1; no network
+  verify/test_collector_pii_scrub_e2e.py:
+  - match: urlopen\(req, timeout=5\)
+    class: none
+    why: a POST to the otelcol-contrib the test runs on 127.0.0.1; no network
+  verify/test_console_no_toggle_live.py:
+  - match: urlopen\('http://localhost:8080/guards'
+    class: live
+    service: guard-proxy's /guards on the cluster, read from inside its pod via kubectl exec
+  - match: urlopen\(req, timeout=TIMEOUT_S\)
+    class: live
+    service: the console's /guards and refused paths at the cluster's public host
+  verify/test_control_plane_app_ports_module.py:
+  - match: \[exe, "init", "-lockfile=readonly"
+    class: pinned
+    kind: terraform-provider
+    pin: infra/terraform/aws/cluster/.terraform.lock.hcl
+    note: the same init also fetches terraform-aws-eks at main.tf's `~> 21.29.0` (a patch range the lock does not hold)
+  - match: terraform init
+    class: none
+    why: docstring prose, a timeout message and a check label
+  verify/test_datadog_admin_key.sh:
+  - match: '>"\$\{SHIM\}/curl"'
+    class: none
+    why: the test's curl shim, which prints a canned orgs answer
+  verify/test_datadog_log_services_render.py:
+  - match: chart_fetch\.pull\("helm", repo, chart, version\)
+    class: pinned
+    kind: helm-chart
+    pin: verify/test_datadog_log_services_render.py
+    note: versions read by this module from each Application's targetRevision and from infra/deploy-full-idp.sh's --version
+  verify/test_datadog_service_map.py:
+  - match: urlopen\(req, timeout=30\)
+    class: live
+    service: Datadog's API (service dependencies, metrics, query, logs search and trace)
+  verify/test_delivered_tags.py:
+  - match: which a `git clone` fetches
+    class: none
+    why: docstring prose
+  verify/test_deployments_page_live.py:
+  - match: urlopen\(f"https://\{host\}/
+    class: live
+    service: the deployments-<public host> page served through the cluster's console
+  verify/test_deployments_witch_line_e2e.py:
+  - match: '"--with", "mcp==1\.29\.1", "--with", "pyyaml==6\.0\.2"'
+    class: pinned
+    kind: python-package
+    pin: verify/test_deployments_witch_line_e2e.py
+  - match: urlopen
+    class: none
+    why: reads from the fake-ticket desk the test serves on 127.0.0.1 (DESK); no network
+  verify/test_dns.py:
+  - match: urlopen
+    class: none
+    why: swaps the module's urlopen for a fake that records the request, then restores it
+  verify/test_doc_links.py:
+  - match: urlopen\(req, timeout=20\)
+    class: live
+    service: each technology's upstream documentation root the lab page links to, only with WIB_CHECK_LINKS=1
+    note: a third-party link check, not our own service and not an artifact; off in every suite
+  verify/test_drift_report.py:
+  - match: .
+    class: none
+    why: check labels over the fake terraform's recorded calls
+  verify/test_drift_settle.py:
+  - match: .
+    class: none
+    why: script lines held as test cases for the settle scanner; nothing runs them
+  verify/test_e2e_toolchain.py:
+  - match: .
+    class: none
+    why: docstring prose and the expected missing-tool messages run-e2e.sh prints, asserted on
+  verify/test_e2e_tools_tier.py:
+  - match: .
+    class: none
+    why: docstring prose, the test's curl and uv stubs (which serve fixture archives from FIXTURES and log each call), env
+      names for the stub's log, and assertions on the lock's tool names and the runners' text; nothing is fetched
+  verify/test_enforce_floor.py:
+  - match: chart_fetch\.pull\(
+    class: pinned
+    kind: helm-chart
+    pin: verify/test_enforce_floor.py
+    note: the test reads each Application under gitops/bootstrap/apps itself and pulls each chart at that Application's
+      targetRevision
+  verify/test_ensure_submodules.sh:
+  - match: git clone -q
+    class: none
+    why: clones the test's own fixture superproject from a local scratch directory; no network
+  verify/test_fake_ticket.py:
+  - match: '"urlopen" not in SITE_SRC'
+    class: none
+    why: an assertion that ticket_site.py's source makes no outbound call
+  - match: urlopen\(url, timeout=5\)
+    class: none
+    why: reads the fake ticket site the test serves on 127.0.0.1
+  verify/test_fetch_inventory.py:
+  - match: .
+    class: none
+    why: the fixture repository's curl and uses lines the test writes and scans in a temporary directory; no network
+  verify/test_finale_cap.py:
+  - match: .
+    class: none
+    why: calls the pinned proxy.py the test serves on 127.0.0.1 (/cost and /chat); no network
+  verify/test_fleet_pool_reconcile.sh:
+  - match: .
+    class: none
+    why: the test's curl shim, which logs the call and fetches nothing, and an assertion on that log
+  verify/test_fleet_routes_publish.sh:
+  - match: .
+    class: none
+    why: clones the test's own bare fixture repo in a scratch directory (and the fixture's comment); no network
+  verify/test_fleet_teardown_hooks.sh:
+  - match: .
+    class: none
+    why: the test's curl shim, which logs the call and prints a status code; nothing is fetched
+  verify/test_fleet_terminal_harvest.sh:
+  - match: .
+    class: none
+    why: the test's curl shim, which logs the call and fetches nothing
+  verify/test_fleet_wall_check.sh:
+  - match: .
+    class: none
+    why: the test's curl function stub, which serves a fixture body and status code
+  verify/test_fleet_wall_reset.sh:
+  - match: .
+    class: none
+    why: the test's curl function stub, which logs each URL to curl.log and serves fixtures, and assertions on that log
+  verify/test_gateway_api_crds_upstream.py:
+  - match: urlopen\(url, timeout=60\)
+    class: pinned
+    kind: release-asset
+    pin: verify/test_gateway_api_crds_upstream.py
+    note: downloads the Gateway API v1.5.1 release asset (VERSION in this file; its SHA-256 is compared to the vendored
+      gitops/gateway-api/standard-install.yaml) and istio/istio's go.mod at the tag gitops/bootstrap/apps/istio.yaml pins;
+      both are fixed release tags on github.com
+  verify/test_gh_comments.py:
+  - match: '"urlopen" not in src'
+    class: none
+    why: an assertion that the cause-comment tests' source has no urllib read of its own
+  verify/test_ghcr_pull.py:
+  - match: .
+    class: none
+    why: the test's urlopen stubs (stub, dropping, failing) swapped in for urllib.request.urlopen and restored, and assertions
+      on other tests' source text; nothing is fetched
+  verify/test_ghcr_version_tag.py:
+  - match: .
+    class: none
+    why: a docstring, a call to gvt.main with keep, ship and Registry stubbed, and assertions on the keeper's and push-jokers.yml's
+      text; nothing is fetched
+  verify/test_gotchas_router_probe.py:
+  - match: .
+    class: none
+    why: docstring prose and a parser that checks the doc's probe line starts with curl; nothing is fetched
+  verify/test_guard_lease.py:
+  - match: bin/curl
+    class: none
+    why: the test's curl stub, which echoes a fixed /controls reply
+  - match: --with-peer
+    class: none
+    why: guard_lease.py's own --with-peer flag, not a uv --with install
+  verify/test_harvest_console_host.sh:
+  - match: .
+    class: none
+    why: a curl function stub that only records that it was called
+  verify/test_iam_policy_ci.py:
+  - match: pip install
+    class: none
+    why: a regex asserting the workflow installs PyYAML at a pinned version
+  verify/test_image_registry_render.py:
+  - match: chart_fetch\.pull\(
+    class: pinned
+    kind: helm-chart
+    pin: verify/mirror_copies.py
+    note: pulls each chart at the targetRevision of the Application the root renders, for every app mirror_copies.apps()
+      names
+  verify/test_injection_classifier.py:
+  - match: torch==2\.14\.0\+cpu
+    class: pinned
+    kind: python-package
+    pin: verify/test_injection_classifier.py
+    note: torch==2.14.0+cpu on the line, llm-guard at LLM_GUARD = "0.3.16" in the same file
+  verify/test_input_guard_host.sh:
+  - match: .
+    class: none
+    why: the test's curl stub, which logs the URL and answers fixed /controls and /chat replies
+  verify/test_input_pii_guard.py:
+  - match: urlopen\(req, timeout=30\)
+    class: none
+    why: posts to the pinned proxy.py the test serves on 127.0.0.1, with a fake llm-guard behind it
+  verify/test_input_pii_guard_llm_guard.py:
+  - match: torch==2\.14\.0\+cpu
+    class: pinned
+    kind: python-package
+    pin: verify/test_input_pii_guard_llm_guard.py
+    note: torch==2.14.0+cpu on the line, llm-guard at LLM_GUARD = "0.3.16" in the same file
+  verify/test_joker_build_digest.py:
+  - match: timeout=600\)
+    class: pinned
+    kind: container-image
+    pin: images/villains/build.sh
+    note: build-loopback.sh runs build.sh, whose crane pulls the busybox base JOKER_BASE by digest from ghcr.io before pushing
+      to the loopback registry
+  - match: .
+    class: none
+    why: docstring prose, the CRANE env check, and crane serving, reading, exporting and digesting images on the test's
+      own 127.0.0.1 registry (and a refused non-loopback build that exits before building)
+  verify/test_joker_web_busybox.py:
+  - match: urlopen\(url, timeout=5\)
+    class: none
+    why: the fetch helper, called only on the busybox httpd the test runs on 127.0.0.1
+  - match: crane append
+    class: none
+    why: crane named in a code comment; the manifest read on this line goes through ghcr_pull's helpers
+  verify/test_kagent_service_name_collector.py:
+  - match: urlopen
+    class: none
+    why: posts OTLP to the pinned otelcol the test runs on 127.0.0.1
+  verify/test_kube_safety.py:
+  - match: fallback\.curl\.sh
+    class: none
+    why: an assertion naming the C7 fallback script's file name
+  verify/test_kubearmor_config_render.py:
+  - match: chart_fetch\.pull\(
+    class: pinned
+    kind: helm-chart
+    pin: gitops/bootstrap/apps/kubearmor.yaml
+    note: kubearmor-operator at the Application's targetRevision 1.7.4
+  verify/test_kubecon_probe.py:
+  - match: .
+    class: none
+    why: docstring prose, assertions on judges and lab text, the fake cluster's curl branches, and a fake urlopen swapped
+      in for the probe's; nothing is fetched
+  verify/test_lab_pipeline_collector.py:
+  - match: urlopen
+    class: none
+    why: posts OTLP to the pinned otelcol the test runs on 127.0.0.1
+  verify/test_lab_pipeline_live.py:
+  - match: urlopen\(req, timeout=60\)
+    class: live
+    service: Datadog's API in the instructor org (api.<site>, metrics and dashboards)
+  - match: context=TLS
+    class: live
+    service: the attendee cluster console's public /lab-events at its cluster-identity public-host
+  verify/test_lab_platform_operator_entry.py:
+  - match: tf\("init"
+    class: pinned
+    kind: terraform-provider
+    pin: infra/terraform/aws/cluster/.terraform.lock.hcl
+  verify/test_llm_bypass_live.py:
+  - match: urlopen\(sys\.argv\[1\]
+    class: live
+    service: the agent namespace's in-cluster Services (agentgateway), probed from the guard-proxy pod via kubectl exec
+  - match: '"wget", "-T"'
+    class: live
+    service: the agent namespace's in-cluster Services, probed from the test's bypass-shape pods via kubectl exec
+  verify/test_marketing_output_scrub.py:
+  - match: .
+    class: none
+    why: docstring prose about the send's run_shell curl
+  verify/test_marketing_send_persona.py:
+  - match: .
+    class: none
+    why: docstring prose and assertions on the prompt's curl text
+  verify/test_marketing_send_route.py:
+  - match: .
+    class: none
+    why: docstring prose, prints, assertions on the prompt's and tool's curl text, a PATH check, and a curl run against
+      a local file:// URL; no network
+  verify/test_mesh_live.py:
+  - match: http://guard-proxy:8080/guards
+    class: live
+    service: the attendee cluster's guard-proxy Service, from inside the console pod through the ambient mesh (kubectl exec
+      wget)
+  verify/test_mobile_titles_e2e.py:
+  - match: playwright install chromium
+    class: none
+    why: the module docstring's prose on how the browser comes in; the install itself is verify/playwright_browsers.py's
+  verify/test_no_docker_hub.py:
+  - match: .
+    class: none
+    why: docstring prose and fixture image strings fed to the Docker Hub judgement and shell_refs(); nothing is pulled
+  verify/test_no_docker_hub_render.py:
+  - match: 'name: wget'
+    class: none
+    why: a container name in a rendered-manifest fixture string; nothing runs or is pulled
+  verify/test_otelcol_local.py:
+  - match: urlopen\(req
+    class: none
+    why: a POST to the test's own collector stand-in on 127.0.0.1; no network
+  verify/test_pantry_header_pin.py:
+  - match: urlopen\(req
+    class: none
+    why: a /chat POST to guard-proxy's Handler served by the test on 127.0.0.1; no network
+  verify/test_plan_policy_e2e.py:
+  - match: '"init", "-input=false"'
+    class: unpinned
+    kind: terraform-provider
+    why: terraform and tofu init the plan fixtures (infra/policy/plan/fixtures/*), which commit no .terraform.lock.hcl and
+      constrain hashicorp/aws only to "~> 6.0", so init resolves the newest 6.x on each run
+  verify/test_playwright_browsers.py:
+  - match: .
+    class: none
+    why: docstring prose, the test's uv stub that logs and answers "playwright install", and assertions on the logged calls
+      and on other tests' text; nothing is installed
+  verify/test_preflight_boundary.sh:
+  - match: for t in kubectl jq curl helm
+    class: none
+    why: writes exit-0 shims for curl and helm onto the test's PATH
+  - match: BAPPLY_DEV=
+    class: none
+    why: the expected apply line preflight.sh prints, a string the test greps its output for; the terraform on PATH is a
+      shim
+  verify/test_preflight_model_agreements.sh:
+  - match: for t in kubectl jq curl helm
+    class: none
+    why: writes exit-0 shims for curl and helm onto the test's PATH
+  verify/test_probe_pod_admission.py:
+  - match: .
+    class: none
+    why: a check on the Dockerfile's text, the probe script and an old curlimages/curl pod built as fixtures for the offline
+      kyverno CLI, and a check message; nothing is run or pulled
+  verify/test_prompt_wall_redaction.py:
+  - match: urlopen
+    class: none
+    why: calls to guard-proxy's Handler served by the test on 127.0.0.1 (serve()); no network
+  verify/test_public_images.py:
+  - match: urlopen
+    class: none
+    why: GETs and a POST to the ticket site the test serves on 127.0.0.1 (DESK); no network
+  verify/test_public_images_retry.py:
+  - match: .
+    class: none
+    why: assertions on test_public_images_served.py's source, docstrings, and the stubbed urlopen the lifted helpers run
+      against; no network
+  verify/test_public_images_served.py:
+  - match: What went wrong under urlopen
+    class: none
+    why: a docstring
+  - match: urlopen\(req, timeout=30\)
+    class: live
+    service: the public registries that serve the game images BurritoBot's prompt names, each read at the digest gitops/workshop-agent/agent.yaml
+      pins
+    note: opened(), the one read of the file; reads each game's manifest and config blob at the digest BurritoBot's systemMessage
+      names (held equal to images.lock's rows by test_public_images.py), plus an anonymous pull token from each registry's
+      token service; the job is to check the pinned digests are still served
+  verify/test_recipe_pantry_gate_e2e.py:
+  - match: '"mcp==1.29.1"'
+    class: pinned
+    kind: python-package
+    pin: verify/test_recipe_pantry_gate_e2e.py
+    note: mcp==1.29.1 and pyyaml==6.0.2 on the line
+  verify/test_reset_bot.sh:
+  - match: .
+    class: none
+    why: the test's curl shim, which records the URL and answers from cost.replies, and greps of the recorded calls; nothing
+      is fetched
+  verify/test_room_jokers.py:
+  - match: DESK\}/wall.json
+    class: none
+    why: a GET to the ticket site the test serves on 127.0.0.1 (DESK); no network
+  verify/test_run_shell_failure.py:
+  - match: .
+    class: none
+    why: docstring prose, a TimeoutExpired raised by a stubbed subprocess.run, and a run_shell call made while subprocess.run
+      is that stub; no curl runs
+  verify/test_scope_tests.py:
+  - match: for name in \("curl"
+    class: none
+    why: writes stub executables named curl, uv and others onto the fixture's PATH
+  verify/test_service_hosts_live.py:
+  - match: urlopen\(req
+    class: live
+    service: every <service>-<cluster>.agenticburn.com host through the apex router and the console, Grafana's data sources
+      and Argo CD's session API behind them
+  verify/test_sister_tree.py:
+  - match: .
+    class: none
+    why: docstring prose, git error strings fed to a failing stub runner and is_network_error(), and an assertion that other
+      files have no urlopen; the clones are over file:// of a repo the test builds
+  verify/test_storefront_witch_name_e2e.py:
+  - match: urlopen\(req
+    class: none
+    why: a GET to the ticket site the test serves on 127.0.0.1; no network
+  verify/test_submodule_pins_pushed.sh:
+  - match: submodule update --init
+    class: none
+    why: updates a fixture superproject's submodule from a local bare repo the test made under its temp dir (file://); no
+      network
+  verify/test_support_desk.py:
+  - match: urlopen\(req
+    class: none
+    why: a POST to the ticket site the test serves on 127.0.0.1 (BASE); no network
+  verify/test_support_desk_live.py:
+  - match: urlopen\(req, timeout=TIMEOUT\)
+    class: live
+    service: the support desk hosts (support.burritobot.co, support-<cluster>.burritobot.co) and the bot hosts of watch-it-burn-community
+      and watch-it-burn-private, over HTTPS
+  verify/test_terminal_login_live.sh:
+  - match: .
+    class: none
+    why: the test's curl shim, which logs its argv and answers as a terminal would, and greps of the logged calls; nothing
+      is fetched
+  verify/test_terraform_lock_init.py:
+  - match: One `terraform init`
+    class: none
+    why: a docstring
+  - match: \[exe, "init", "-lockfile=readonly"
+    class: pinned
+    kind: terraform-provider
+    pin: infra/terraform/aws/cluster/.terraform.lock.hcl
+    note: inits each of the five ROOTS against its own committed lock (-lockfile=readonly), infra/terraform/aws/{cluster,network,audit},
+      infra/org/boundary and infra/terraform/dashboards; registry modules those roots use are not in a lock and resolve
+      within their "~> X.Y.Z" constraint (test_terraform_module_pins.py)
+  verify/test_terraform_lock_init_retry.py:
+  - match: .
+    class: none
+    why: an expected-output string and a closing print; the terraform the test runs is a stub
+  verify/test_terraform_module_pins.py:
+  - match: terraform init -upgrade
+    class: none
+    why: advice text in a check's failure detail; nothing is run
+  verify/test_tier_swap_live.py:
+  - match: context=ctx
+    class: live
+    service: the cluster's Kubernetes API (the workshop-agent Agent), from the poller run inside the guard-proxy pod by
+      kubectl exec
+  - match: 127\.0\.0\.1:8080/cost|urlopen\(req, timeout=170\)
+    class: live
+    service: guard-proxy's /cost and /chat on its own pod's loopback, from scripts run inside the guard-proxy pod by kubectl
+      exec
+  - match: run git submodule update
+    class: none
+    why: advice text in a failure message
+  verify/test_tool_audit.py:
+  - match: .
+    class: none
+    why: a stub server's raised error, run_shell inputs passed to a stub, and checks on test_tool_audit_live.py's source
+      text; nothing is fetched or installed
+  verify/test_tool_audit_live.py:
+  - match: os\.execvpe\("uv"
+    class: pinned
+    kind: python-package
+    pin: images/workshop-mcp/Dockerfile
+    note: mcp=={want}, read from the Dockerfile's 'mcp==X' pin
+  - match: the mcp library is importable
+    class: none
+    why: a check's label
+  - match: curl -s
+    class: live
+    service: agentgateway's MCP endpoint (the RemoteMCPServer URL) on the cluster, from a probe pod running workshop-mcp's
+      shim image
+  - match: urlopen\(req, timeout=30\)
+    class: live
+    service: Datadog's logs search API (api.<site>/api/v2/logs/events/search)
+  verify/test_tool_failure_status_e2e.py:
+  - match: urlopen\(req
+    class: none
+    why: POSTs spans to the collector the test starts on 127.0.0.1; no network
+  - match: curl
+    class: none
+    why: JSON fixture strings for a tool's input and failure text
+  verify/test_tool_pin_live_check.py:
+  - match: for name in \("kubectl", "curl"\)
+    class: none
+    why: installs tool_pin_kubectl_shim.py as the test's curl and kubectl
+  verify/test_topic_classifier.py:
+  - match: torch==2.14.0\+cpu
+    class: pinned
+    kind: python-package
+    pin: verify/topic_cases.py
+    note: llm-guard's version is topic_cases.CLASSIFIER['llm_guard'] (0.3.16); torch==2.14.0+cpu is on the line
+  verify/test_topic_guard_proxy.py:
+  - match: urlopen
+    class: none
+    why: calls to guard-proxy's Handler served by the test on 127.0.0.1; no network
+  verify/test_trace_shape_e2e.py:
+  - match: urlopen\(req
+    class: none
+    why: POSTs spans to the collector the test starts on 127.0.0.1; no network
+  - match: curl
+    class: none
+    why: docstring prose and JSON fixture strings for a tool's input and failure text
+  verify/test_ttyd_ws_auth.py:
+  - match: urlopen\(req
+    class: none
+    why: a GET to the ttyd the test starts on 127.0.0.1; no network
+  - match: curl probe
+    class: none
+    why: docstring prose
+  verify/test_turn_guard.py:
+  - match: .
+    class: none
+    why: a run_shell input given to TurnGuard.admit and an expected message substring; nothing runs
+  verify/test_turn_guard_e2e.py:
+  - match: os\.execvpe\("uv"
+    class: unpinned
+    kind: python-package
+    why: mcp=={want} is pinned by images/workshop-mcp/Dockerfile, but "--with", "pyyaml" on the same line names no version
+  - match: the mcp library is importable
+    class: none
+    why: a check's label
+  verify/test_two_hour_flow_live.py:
+  - match: .
+    class: none
+    why: docstring prose, a substring test on a recorded tool input, and a failure message; nothing is fetched
+  verify/test_two_hour_flow_live_checks.py:
+  - match: .
+    class: none
+    why: docstring prose and fake tool-input strings for the offline fake cluster, and a check label
+  verify/test_verify_harness.py:
+  - match: playwright install chromium
+    class: none
+    why: an assertion on run-e2e.sh's text
+  verify/test_walkthrough_no_state.sh:
+  - match: SHIM\}/curl
+    class: none
+    why: writes the test's curl shim, which answers by URL and fetches nothing
+  verify/test_walkthrough_report.sh:
+  - match: SHIM\}/curl
+    class: none
+    why: writes the test's curl shim, which answers by URL and fetches nothing
+  verify/test_wall_more_count_live.py:
+  - match: urlopen\(req
+    class: live
+    service: the prompt wall at prompts.agenticburn.com (WALL_URL), prompts-agenticburn on Railway
+  verify/test_weather_feed_e2e.py:
+  - match: '"mcp==1.29.1"'
+    class: pinned
+    kind: python-package
+    pin: verify/test_weather_feed_e2e.py
+    note: mcp==1.29.1 on the line
+  verify/test_weather_feed_upstream_failure.py:
+  - match: its real urlopen
+    class: none
+    why: docstring prose
+  verify/test_workflow_registry_writes.py:
+  - match: .
+    class: none
+    why: a regex for crane writes and workflow fixture strings it is tested on; nothing runs
+  verify/tool_pin_kubectl_shim.py:
+  - match: .
+    class: none
+    why: the test's curl and kubectl stand-in, its docstring and dispatch; it prints a canned answer and fetches nothing
+  verify/version-drift.py:
+  - match: PyYAML is required
+    class: none
+    why: a usage hint in an exit message
+  - match: /index\.yaml|urlopen\(req, timeout=TIMEOUT\)\.read
+    class: live
+    service: each Helm repository's index.yaml the Applications name, read for the latest chart version
+  - match: 'headers=\{"User-Agent": "curl/8"\}\)$|json\.load\(urllib\.request\.urlopen'
+    class: live
+    service: GitHub's releases API (api.github.com/repos/<repo>/releases)
+  - match: pypi\.org/pypi
+    class: live
+    service: PyPI's JSON API, read for a package's latest version
+  verify/weather_feed_probe.py:
+  - match: urlopen raises
+    class: none
+    why: docstring prose
+  - match: urlopen\(url, timeout=timeout\)
+    class: live
+    service: the weather feed (gitops/ai-layer/weather_feed.py) that test_weather_feed_e2e.py runs on loopback, which asks
+      Open-Meteo's live API
+    note: the offline test_weather_feed_upstream_failure.py calls the same line against a loopback feed whose upstream is
+      also loopback
