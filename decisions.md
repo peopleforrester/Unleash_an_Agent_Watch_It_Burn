@@ -28205,3 +28205,13 @@ the runner and switches this repo to the CI path once this is on main; the first
 
 **Not yet run on a cluster or a runner.** No cluster is involved. The workflow itself first runs when hecaton has
 registered the `tanjiro` runner for this repo and a push reaches an `agent/**` branch or staging.
+
+**A red tier test found on staging, fixed here.** The first `bash verify/run-e2e-tools.sh` at eb95617f printed
+`314 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests)
+in 46m32s` with one failure, `test_breakout_room_cleanup.py (exit 1)`: `AttributeError: '_StandInMCP' object has no
+attribute 'get_context'`. #995 (582d10ec, 2026-11-07 00:09) made `deploy_app` read the request's witch name through
+`mcp.get_context()` and gave every test's FastMCP stand-in a `get_context` that raises LookupError, as the real one
+does outside its transport. #990's test (98734ebd, an hour earlier) has its own stand-in and was missed, so staging's
+tools tier has been red on it since. Its stand-in now carries the same method, and the test passes with the pinned
+kyverno. The three other tests that load workshop-mcp-server.py without `get_context` never call `deploy_app` and
+passed in the same run.
