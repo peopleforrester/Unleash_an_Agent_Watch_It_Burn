@@ -26,8 +26,35 @@ NO_CLOUD_DIR="$(mktemp -d)"
 trap 'rm -rf "${NO_CLOUD_DIR}"' EXIT
 no_cloud_setup "${NO_CLOUD_DIR}"
 
+# Scoped to the change (#1018). With HECATON_BASE_SHA set, as hecaton's gate and CI set it, scope_tests.py reads
+# the change against that base and verify/scope-map.yaml, the committed map of each test to the repo paths it reads,
+# and names the tests the change can affect, each with why, or says to run them all: a change to a runner, the map
+# or a shared helper, or to a path no entry covers. Without it, a person running this by hand, every test runs.
+scoped=0
+declare -A selected=()
+if [[ -n "${HECATON_BASE_SHA:-}" ]]; then
+    plan="$(python3 "${SCRIPT_DIR}/scope_tests.py" select offline)" \
+        || { printf 'SCOPE FAILED: scope_tests.py could not read the change against HECATON_BASE_SHA=%s\n' \
+                 "${HECATON_BASE_SHA}" >&2; exit 1; }
+    mapfile -t plan_lines <<<"${plan}"
+    case "${plan_lines[0]}" in
+        FULL) ;;
+        SCOPED)
+            scoped=1
+            for t in "${plan_lines[@]:1}"; do
+                [[ -n "${t}" ]] && selected["${t}"]=1
+            done
+            ;;
+        *) printf 'SCOPE FAILED: scope_tests.py printed %q, neither FULL nor SCOPED\n' "${plan_lines[0]}" >&2; exit 1 ;;
+    esac
+fi
+# The tests get no HECATON_BASE_SHA: one that drives a runner in a fixture means that runner to run whole.
+scope_base="${HECATON_BASE_SHA:-}"
+unset HECATON_BASE_SHA
+
 fail=0
 ran=0
+found=0
 failed_names=()
 e2e_names=()
 
@@ -54,16 +81,22 @@ for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
         e2e_names+=("$(basename "${t}")")
         continue
     fi
+    found=$((found + 1))
+    [[ "${scoped}" -eq 0 || -n "${selected[$(basename "${t}")]:-}" ]] || continue
     run_one "${t}"
 done
 
 printf '\n%d tests ran\n' "${ran}"
+if [[ "${scoped}" -eq 1 ]]; then
+    printf '  scoped to the change since HECATON_BASE_SHA=%s: %d of the %d offline tests; the other %d read nothing it touched\n' \
+        "${scope_base}" "${ran}" "${found}" "$((found - ran))"
+fi
 if [[ "${#e2e_names[@]}" -gt 0 ]]; then
     printf '  in the E2E suite instead (bash verify/run-e2e.sh): %s\n' "${e2e_names[*]}"
 fi
 # A glob that matches nothing is the failure mode this replaces: a runner that exits 0 having done nothing
 # looks exactly like a passing build.
-if [[ "${ran}" -eq 0 ]]; then
+if [[ "${found}" -eq 0 ]]; then
     printf 'NO TESTS FOUND in %s — the suite is not running\n' "${SCRIPT_DIR}" >&2
     exit 1
 fi

@@ -1,0 +1,2918 @@
+# ABOUTME: The map verify/scope_tests.py scopes both runners by (#1018): each test the runners run, with the repo paths
+# ABOUTME: it reads. `python3 verify/scope_tests.py write` adds what it finds; test_scope_tests.py holds it current.
+# What each part means, and what a change to this file runs, is in verify/scope_tests.py's docstring.
+full:
+  - verify/run-tests.sh
+  - verify/run-e2e-tools.sh
+  - verify/scope_tests.py
+  - verify/no-cloud.sh
+  - verify/no_cloud.py
+  - verify/ensure-submodules.sh
+  - verify/fetch-e2e-tools.sh
+  - verify/e2e-tools.lock
+  - verify/playwright_browsers.py
+  - verify/bootstrap_chart.py
+  - .gitmodules
+unread:
+  - .railwayignore
+  - ATTRIBUTION.md
+  - LICENSE
+  - access
+  - assets
+  - docs
+  - facilitation
+  - mockups
+  - prds
+  - specs
+bounds:
+  verify/bootstrap_chart.py:
+    why: source_files() reads each Application source of this repo, REPO / source["path"]
+    paths:
+      - gitops
+      - policies
+      - backstage
+      - observability-idp
+      - security
+  verify/collector_render.py:
+    why: value_files() reads each $values/ file the collector Applications name
+    paths:
+      - gitops/otel-collector
+always:
+  test_american_english_gate.py: line 37 builds a path under the repo root from a value it finds at run time; line 38 builds a path under the repo root from a value it finds at run time
+  test_backstage_catalog.py: line 106 builds a path under the repo root from a value it finds at run time
+  test_c6_villain_endpoint.py: it runs git ls-files, which reads the tree or history as a whole
+  test_challenge_fallbacks.py: line 189 builds a path under the repo root from a value it finds at run time
+  test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole
+  test_chat_turn_cancel.py: it runs git ls-tree, which reads the tree or history as a whole
+  test_chat_witch_name.py: it runs git ls-tree, which reads the tree or history as a whole
+  test_compile_design_doc.py: line 44 builds a path under the repo root from a value it finds at run time
+  test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
+  test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole
+  test_dispatched_runs.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
+  test_drift_settle.py: it runs git ls-files, which reads the tree or history as a whole; line 139 builds a path under the repo root from a value it finds at run time
+  test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole
+  test_e2e_tools_tier.py: it runs git ls-files, which reads the tree or history as a whole
+  test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; line 148 builds a path under the repo root from a value it finds at run time; line 47 builds a path under the repo root from a value it finds at run time
+  test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole
+  test_evil_tools_by_name.py: line 33 builds a path under the repo root from a value it finds at run time; line 122 builds a path under the repo root from a value it finds at run time; line 119 builds a path under the repo root from a value it finds at run time
+  test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole
+  test_gateway_notes_files.py: line 33 builds a path under the repo root from a value it finds at run time
+  test_gitattributes_union.py: it runs git log, ls-files, which reads the tree or history as a whole
+  test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
+  test_guard_proxy_pin_on_main.sh: 'verify/guard-proxy-pin-on-main.sh: it runs git on the tree or history as a whole; verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
+  test_harvest_tracked.sh: it runs git on the tree or history as a whole
+  test_iam_policy_coverage.py: it runs git ls-files, which reads the tree or history as a whole; line 124 builds a path under the repo root from a value it finds at run time; line 162 builds a path under the repo root from a value it finds at run time
+  test_image_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 46 builds a path under the repo root from a value it finds at run time
+  test_image_signing.py: 'verify/sign-images.sh: it runs grep -r'
+  test_images_lock.py: it runs git ls-files, which reads the tree or history as a whole; line 96 builds a path under the repo root from a value it finds at run time; line 136 builds a path under the repo root from a value it finds at run time; line 109 builds a path under the repo root from a value it finds at run time
+  test_imds_credential_theft.py: it runs git ls-files, which reads the tree or history as a whole; line 125 builds a path under the repo root from a value it finds at run time
+  test_istiod_no_hpa.py: it runs git grep, which reads the tree or history as a whole
+  test_kube_safety.py: line 41 builds a path under the repo root from a value it finds at run time
+  test_kubecon_abstract_readiness.py: line 122 builds a path under the repo root from a value it finds at run time
+  test_lab_text_export.py: 'it runs git log, which reads the tree or history as a whole; verify/export-lab-text.sh: it runs git on the tree or history as a whole'
+  test_lint.py: it runs git ls-files, which reads the tree or history as a whole; line 23 builds a path under the repo root from a value it finds at run time
+  test_load_replay.py: 'verify/load_replay.py: line 111 globs a pattern built at run time'
+  test_mesh_enrollment.py: line 46 builds a path under the repo root from a value it finds at run time
+  test_no_docker_hub.py: it runs git grep, ls-files, which reads the tree or history as a whole; line 299 builds a path under the repo root from a value it finds at run time; line 92 builds a path under the repo root from a value it finds at run time
+  test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole
+  test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
+  test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
+  test_platform_version_pins.py: line 165 builds a path under the repo root from a value it finds at run time
+  test_prose_gate.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
+  test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
+  test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; line 85 builds a path under the repo root from a value it finds at run time
+  test_scope_tests.py: it holds this map current with every test and what each reads, so every change runs it
+  test_spec_copies.py: line 67 builds a path under the repo root from a value it finds at run time
+  test_submodule_pins_pushed.sh: 'verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
+  test_terminal_login_live.sh: 'verify/terminal-login-live.sh: it runs git on the tree or history as a whole'
+  test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 70 builds a path under the repo root from a value it finds at run time
+  test_tests_own_inputs.py: it runs git grep, which reads the tree or history as a whole
+reads:
+  test_948_live_check_owed.py:
+    - PROGRESS.md
+    - decisions.md
+  test_952_slide17_decision.py:
+    - decisions.md
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+  test_952_suite_record.py:
+    - decisions.md
+    - verify/run-e2e-tools.sh
+    - verify/run-tests.sh
+    - verify/test_kubecon_prompt_sheet_e2e.py
+  test_a2a_usage_key.py:
+    - VERSIONS.lock
+    - cost/README.md
+    - docs/TECH-STATUS.md
+    - gitops/ai-layer/guard-proxy
+    - gitops/workshop-agent/agent.yaml
+  test_activate_cost_tags.sh:
+    - teardown/delivery-cost.py
+  test_adk_model_content_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_admin_actions.sh:
+    - docs/admin-console.md
+    - verify/no-cloud.sh
+  test_agent_bypass_shapes.py:
+    - '*'
+    - agent
+    - backstage
+    - gitops
+    - gitops/**.y*ml
+    - gitops/ai-layer
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - infra/terraform/aws/cluster/main.tf
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/**.y*ml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - security
+    - verify/*
+    - verify/bootstrap_chart.py
+  test_agent_cloud_credential.py:
+    - gitops/ai-layer
+    - gitops/ai-layer/*.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/cluster-network-policies.yaml
+    - gitops/bootstrap/values-admin.yaml
+    - gitops/bootstrap/values-attendee.yaml
+    - gitops/bootstrap/values-burn.yaml
+    - gitops/bootstrap/values-full.yaml
+    - gitops/workshop-agent
+    - gitops/workshop-agent/*.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/aws/cluster/main.tf
+    - policies/cluster-network-policies
+    - policies/cluster-network-policies/*.yaml
+    - policies/network-policies/per-namespace
+    - policies/network-policies/per-namespace/agent-*.yaml
+  test_agent_hitl.py:
+    - gitops/workshop-agent/agent.yaml
+  test_agent_obs_cause_comment.py:
+    - decisions.md
+    - gitops/otel-collector/values.yaml
+    - verify/gh_comments.py
+  test_agent_obs_flow.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_obs_flow.py
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_agent_otlp_logs.py:
+    - gitops/ai-layer-otel/instrumentation.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/workshop-agent/agent.yaml
+    - verify/collector_render.py
+  test_agent_otlp_logs_collector.py:
+    - gitops/ai-layer-otel/instrumentation.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/workshop-agent/agent.yaml
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_agent_probe_scoring.py:
+    - agent
+    - gitops/ai-layer/ticket_site.py
+    - verify/agent_probe.py
+  test_agent_tools_exist.py:
+    - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - docs/MASTER-RECREATION-SPEC.md
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/workshop-agent.yaml
+    - gitops/workshop-agent/agent.yaml
+  test_agent_tools_sync.py:
+    - README.md
+    - VERSIONS.lock
+    - backstage
+    - docs/research/2026-10-30-argo-sync-replay
+    - gitops
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/workshop-agent
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/test_fleet_converge_repairs.sh
+  test_agent_witch_name.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/bootstrap/apps/workshop-agent.yaml
+    - gitops/workshop-agent
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/ensure-submodules.sh
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_agentgateway_config.py:
+    - VERSIONS.lock
+    - agent/GATEWAY-NOTES.md
+    - docs/BUILD-SPEC.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - docs/STACK-WALKTHROUGH.md
+    - docs/TECH-STATUS.md
+    - docs/UPGRADE-INVENTORY.md
+    - gitops/ai-layer/agentgateway.yaml
+    - infra/terraform/aws/cluster/main.tf
+    - verify/agentgateway_schema.py
+    - verify/schemas/agentgateway-v1.7.0-config.json
+  test_agentgateway_path.py:
+    - agent/GATEWAY-NOTES.md
+    - challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md
+    - docs/KUBECON-ABSTRACT-READINESS.md
+    - docs/READINESS-CHECKLIST.md
+    - docs/STACK-WALKTHROUGH.md
+    - docs/research/2026-10-24-agentgateway-evaluation.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - verify/test_beat3_mcp.py
+  test_agentgateway_tracing_e2e.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - verify/.tools/bin/agentgateway
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
+  test_ai_layer_gates.py:
+    - gitops/ai-layer
+    - gitops/ai-layer/kubearmor-ordering-gate.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/otel-ordering-gate.yaml
+  test_ai_layer_rollout.py:
+    - gitops/ai-layer
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+  test_allergen_card.py:
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+  test_attendee_iam_user.sh:
+    - verify/no-cloud.sh
+  test_audience_event.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - facilitation/kubecon-na-2026-phone-check.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - infra/terraform/fleet/fleet.sh
+    - scripts/audience-qr.py
+  test_audience_page_e2e.py:
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - scripts/audience-qr.py
+  test_audience_path.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/burritbot.html
+    - verify/ensure-submodules.sh
+  test_audit_import_state.py:
+    - docs/floor.md
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/audit/import-state.sh
+    - infra/terraform/aws/audit/main.tf
+    - infra/terraform/fleet
+    - infra/terraform/fleet/event.sh
+  test_backstage_footprint.py:
+    - backstage
+    - backstage/health/v1/readiness
+    - verify/backstage-footprint.sh
+    - verify/backstage_footprint.py
+  test_backups.py:
+    - infra/datadog-cluster-identity.sh
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/terraform.tfstate
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/roster.tsv
+    - scripts/reload-routes.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+  test_backups_floor.py:
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/roster.tsv
+    - scripts/reload-routes.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+  test_beat03_c7.py:
+    - agent
+    - challenges/03-.../BUILD-SPIKE.md
+    - challenges/03-bad-mcp-excessive-agency
+    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
+    - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
+    - verify/beat-03.sh
+  test_beat3_mcp.py:
+    - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
+    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
+    - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+  test_bedrock_profile_check.py:
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/fleet/event.sh
+    - verify/bedrock_profile_check.py
+  test_bootstrap_chart.py:
+    - agent/console
+    - agent/guard-proxy
+    - agent/workshop-agent
+    - backstage
+    - docs/talk-config.md
+    - gitops
+    - gitops/ai-layer-otel/instrumentation.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/apps
+    - gitops/bootstrap
+    - gitops/bootstrap/Chart.yaml
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/otel-collector/otel-collector-act2-overlay.yaml
+    - gitops/workshop-agent/agent.yaml
+    - gitops/workshop-agent/kustomization.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_bootstrap_chart_render.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests
+    - images
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify/bootstrap_chart.py
+    - verify/registry_allowlist.py
+    - verify/run-e2e-tools.sh
+  test_brand_skin.py:
+    - gitops/ai-layer/web
+    - gitops/ai-layer/web/*.html
+  test_breakout_registry_policy.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - policies/kyverno-breakout/deny-external-registries.yaml
+    - policies/kyverno/restrict-image-registries.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_breakout_room_cleanup.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - policies/kyverno-breakout/remove-untrusted-room-workloads.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_c1_dns_exfil.py:
+    - challenges/c1-exfil-s3/dns-exfil.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - images/workshop-mcp/Dockerfile
+  test_c1_dns_exfil_fix.py:
+    - challenges/c1-exfil-s3/fix/agent-egress-fqdn.yaml
+    - challenges/c1-exfil-s3/fix/egress-waypoint.yaml
+    - challenges/c1-exfil-s3/fix/resolver-lockdown.yaml
+    - gitops/ai-layer/weather_feed.py
+    - policies/network-policies/per-namespace/agent-egress-allowlist.yaml
+  test_c1_exfil_block_restore.py:
+    - gitops/ai-layer/resources.yaml
+    - verify/c1-exfil-block.sh
+  test_c3_bait_baked.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+    - images/workshop-mcp/Dockerfile
+  test_c3_fallback.py:
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/kubearmor-config
+    - gitops/kubearmor-config/values.yaml
+  test_c3_prompt_copies.py:
+    - '**'
+    - challenges/LAB-TEXT.md
+    - challenges/PROMPT-CATALOG.md
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab.html
+    - verify/**
+  test_c3_talon_claim.py:
+    - challenges/c3-secret-grep/README.md
+    - gitops/ai-layer/web/lab.html
+  test_c5_secret.py:
+    - agent
+    - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+  test_c6_joker_public.py:
+    - gitops/ai-layer/ticket_site.py
+    - images.lock
+    - images/villains/build.sh
+    - images/villains/joker-web-internal/www/index.html
+    - images/villains/joker-web/start.sh
+    - images/villains/joker-web/www/index.html
+    - images/villains/villain-banner.sh
+    - verify/ghcr_pull.py
+  test_c6_observable.py:
+    - agent
+    - gitops/ai-layer/ticket_site.py
+    - verify/agent_probe.py
+  test_c7_badge_grants.py:
+    - agent
+    - agent/guard-proxy-reader
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+  test_c7_control_comments.py:
+    - agent
+    - challenges/03-bad-mcp-excessive-agency/FACILITATOR.md
+    - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - docs/research/2026-10-24-agentgateway-evaluation.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/entrypoint.sh
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/test_c7_gateway_toggle.py
+    - verify/test_kubecon_probe.py
+    - verify/topic_cases.py
+  test_c7_gateway_reader.py:
+    - '*'
+    - agent/guard-proxy-reader
+    - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - decisions.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - docs/research/2026-10-24-agentgateway-evaluation.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - verify/*
+    - verify/test_agentgateway_config.py
+    - verify/test_agentgateway_path.py
+  test_c7_gateway_toggle.py:
+    - agent/web-terminal
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - images/web-terminal/entrypoint.sh
+    - policies/kyverno/block-argocd-drift.yaml
+  test_c7_output_guard.py:
+    - gitops/ai-layer/resources.yaml
+  test_c7_teaching.py:
+    - agent
+    - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab.html
+    - verify/agent_probe.py
+  test_c8_pod_secret_mount.py:
+    - gitops/ai-layer/resources.yaml
+    - policies/floor/minimal-floor.yaml
+    - policies/kyverno
+    - policies/kyverno/*.yaml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+  test_c8_teaching.py:
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/lab.html
+  test_ceo_persona.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_challenge_assets.py:
+    - docs/CHALLENGE-ASSETS.md
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/lab.html
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - policies/kubearmor/block-recipe-snoop.yaml
+  test_challenge_colours.py:
+    - gitops/ai-layer/web/lab.html
+  test_challenge_controls_unarmed.sh:
+    - agent
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/bootstrap/values-
+    - infra/datadog-cluster-identity.sh
+    - infra/terraform/fleet/fleet.sh
+    - policies/kubearmor/block-recipe-snoop.yaml
+    - policies/network-policies/per-namespace/agent-egress-allowlist.yaml
+    - verify/agent_probe.py
+    - verify/datadog-orgs.sh
+    - verify/fleet-walkthrough.sh
+    - verify/last_trace.py
+  test_chat_coc.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/burritbot.html
+    - verify/ensure-submodules.sh
+  test_chat_coc_e2e.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/web/burritbot.html
+    - verify/ensure-submodules.sh
+    - verify/run-e2e-tools.sh
+  test_chat_no_desk_link.py:
+    - gitops/ai-layer/web/burritbot.html
+  test_chat_path_ingress.py:
+    - agent
+    - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/chat-path-ingress.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - infra/terraform/fleet/fleet.sh
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+  test_chat_saved_coc_e2e.py:
+    - gitops/ai-layer/web/burritbot.html
+    - verify/chat-saved-harness.js
+    - verify/run-e2e-tools.sh
+  test_chat_ui.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/app.js
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/console.html
+    - gitops/ai-layer/web/index.html
+  test_check_inventory_ingredient.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_check_inventory_schema_e2e.py:
+    - gitops/ai-layer
+  test_check_tls_shell_probe.sh: []
+  test_cloud_credential_probe_admission.py:
+    - gitops/ai-layer/resources.yaml
+    - policies/floor/minimal-floor.yaml
+    - policies/kyverno
+    - policies/kyverno/*.yaml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+  test_cluster_roles.sh:
+    - verify/no-cloud.sh
+  test_collector_act2_redaction.py:
+    - gitops
+    - gitops/**.y*ml
+    - gitops/**.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/otel-collector/otel-collector-act2-overlay.yaml
+    - gitops/otel-collector/values-burn.yaml
+    - gitops/otel-collector/values.yaml
+  test_collector_act2_redaction_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/otel-collector-act2-overlay.yaml
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/otelcol_local.py
+    - verify/test_trace_shape_e2e.py
+  test_collector_backends.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values-burn.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/collector_render.py
+  test_collector_config.py:
+    - gitops/ai-layer/web/lab.html
+    - gitops/bootstrap/apps/kyverno.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values.yaml
+    - verify/collector_render.py
+  test_collector_llmobs_model.py:
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - infra/terraform/fleet/fleet.sh
+    - verify/collector_render.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+  test_collector_llmobs_model_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_collector_no_datadog.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/falcosidekick.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/otel-collector
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/collector_render.py
+  test_collector_one_root.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+  test_collector_one_root_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_collector_pii_scrub.py:
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values-burn.yaml
+    - gitops/otel-collector/values.yaml
+    - verify/collector_render.py
+    - verify/pii_scrub_cases.py
+  test_collector_pii_scrub_e2e.py:
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values-burn.yaml
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/pii_scrub_cases.py
+  test_community_banner.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/burritbot.html
+  test_concept_before_tool.py:
+    - gitops/ai-layer/web/lab.html
+  test_console_no_toggle.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/lab.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_console_service_vhosts.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_control_plane_app_ports.py:
+    - infra/terraform/aws/cluster/main.tf
+    - verify/node_sg_rules.py
+  test_control_plane_app_ports_module.py:
+    - VERSIONS.lock
+    - infra/terraform/aws/cluster/main.tf
+    - verify/node_sg_rules.py
+  test_cost_counter.py:
+    - gitops/ai-layer/guard-proxy
+  test_cost_tier_matches_model.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+  test_datadog_admin_key.sh:
+    - verify/no-cloud.sh
+  test_datadog_log_services_render.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - infra/deploy-full-idp.sh
+    - infra/terraform/aws/cluster/main.tf
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_datadog_login_visible.py:
+    - gitops/ai-layer/web/lab.html
+    - infra/terraform/fleet/fleet.sh
+  test_datadog_pool_row.sh:
+    - verify/no-cloud.sh
+  test_datadog_sandbox_live_logic.py:
+    - verify/test_datadog_sandbox_live.py
+  test_datadog_sandbox_names.py:
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/argocd-managed-app.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - gitops/otel-collector
+    - gitops/workshop-agent/agent.yaml
+    - infra
+    - infra/*values*.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet/monitors.yaml
+    - verify/collector_render.py
+    - verify/datadog-orgs.sh
+    - verify/last_trace.py
+  test_datadog_secret_fields.py:
+    - gitops
+    - gitops/**.yaml
+    - gitops/bootstrap/apps/falcosidekick.yaml
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - gitops/otel-collector/values.yaml
+    - security
+    - verify/datadog-secret-fields.sh
+  test_datadog_secret_fields_render.py:
+    - security
+    - verify/datadog-secret-fields.sh
+    - verify/run-e2e-tools.sh
+  test_datadog_secret_manifests_render.py:
+    - verify/run-e2e-tools.sh
+  test_datadog_secrets_off_argv.py:
+    - agent
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - security
+  test_dd_credential_comment.py:
+    - AGENTS.md
+    - verify/dd_traces.py
+    - verify/gh_comments.py
+  test_dd_traces.py:
+    - agent
+    - verify/dd_traces.py
+  test_dd_traces_record.py:
+    - AGENTS.md
+    - agent
+    - decisions.md
+    - verify/dd_traces.py
+  test_delivered_tags.py:
+    - verify/delivered_tags.py
+  test_delivered_tags_github_e2e.py:
+    - verify/delivered_tags.py
+  test_delivery_cost.py:
+    - cost/measured/ai-engineer-worldsfair-2026.txt
+    - cost/measured/devopsdays-portland-2026.txt
+    - cost/measured/recorded
+    - infra/terraform/fleet/fleet.sh
+    - teardown/delivery-cost.py
+  test_delivery_cost_estimate.py:
+    - infra/terraform/aws/cluster/main.tf
+    - teardown/delivery-cost-estimate.py
+    - verify/fixtures/delivery-cost
+    - verify/fixtures/delivery-cost/common/pricing/AmazonEC2.json
+  test_deploy_app_errors.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/otel-collector/values.yaml
+  test_deploy_app_limits.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - policies/kyverno/require-resource-limits.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/resource_limits.py
+    - verify/topic_cases.py
+  test_deploy_app_manifest_shapes.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_deploy_app_named_app.py:
+    - agent/tron
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_deploy_app_reapply_422.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_deploy_full_idp_context.py:
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/setup-instructor-cluster.sh
+    - infra/terraform/fleet/fleet.sh
+  test_deployments_witch_line_e2e.py:
+    - gitops/ai-layer
+    - gitops/ai-layer/ticket_site.py
+  test_diagram_chip_apps.py:
+    - gitops/ai-layer/web/diagram.html
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+  test_dispatched_runs_cause_comment.py:
+    - AGENTS.md
+    - gitops/apps
+    - verify/gh_comments.py
+  test_display_masked_prompts_e2e.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/web/display.js
+    - verify/display-feed-harness.js
+    - verify/ensure-submodules.sh
+    - verify/run-e2e-tools.sh
+  test_display_throttle_e2e.py:
+    - gitops/ai-layer/web/display.js
+    - verify/display-clock-harness.js
+    - verify/run-e2e-tools.sh
+  test_dns.py:
+    - infra/dns/README.md
+    - infra/dns/set-demo-dns.py
+  test_doc_links.py:
+    - gitops/ai-layer/web/lab.html
+  test_docs_current.py:
+    - '**.md'
+    - ACTION_ITEMS.md
+    - PROJECT_STATE.md
+    - README.md
+    - decisions.md
+    - docs/ABSTRACT.md
+    - docs/DECISION-LOG.md
+    - docs/RUN-OF-SHOW-2026-08.md
+    - notes/DEBRIEF-worlds-fair-2026.md
+    - transcripts
+    - verify/round_shapes.py
+  test_down_infra.sh: []
+  test_draft_drift.sh:
+    - README.md
+    - agent/474-1
+    - decisions.md
+    - docs/glance.md
+    - gitops/apps
+    - gitops/apps/loki.yaml
+    - gitops/apps/prometheus.yaml
+    - gitops/apps/tempo.yaml
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/loki.yaml
+    - gitops/bootstrap/apps/prometheus.yaml
+    - verify/draft-drift.sh
+  test_drift_floor.py:
+    - '*'
+    - backstage
+    - docs/floor.md
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/argocd-values.yaml
+    - infra/deploy-full-idp.sh
+    - infra/org
+    - infra/terraform
+    - infra/terraform/aws/audit/main.tf
+    - infra/terraform/drift/drift-report.py
+    - infra/terraform/drift/known-unmanaged.yaml
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/*
+    - verify/bootstrap_chart.py
+    - verify/test_drift_selfheal_live.py
+  test_drift_report.py:
+    - infra/org
+    - infra/org/boundary
+    - infra/terraform
+    - infra/terraform/aws/audit
+    - infra/terraform/drift/drift-report.py
+    - infra/terraform/drift/known-unmanaged.yaml
+    - infra/terraform/drift/scheduled-drift.sh
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/roster.tsv
+  test_drift_selfheal_ops.py:
+    - docs/floor.md
+    - gitops/ai-layer
+    - gitops/ai-layer/kustomization.yaml
+    - verify/test_drift_selfheal_live.py
+  test_egress.py:
+    - infra/terraform/aws/cluster/main.tf
+    - policies/network-policies
+    - policies/network-policies/**.yaml
+    - policies/network-policies/per-namespace/apps-egress-allowlist.yaml
+  test_eks_version_pins.py:
+    - VERSIONS.lock
+    - docs/BUILD-SPEC.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - docs/TECH-STATUS.md
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/fleet/fleet.sh
+  test_enforcement_points.py:
+    - docs/CHALLENGE-ASSETS.md
+    - gitops/ai-layer/web/lab.html
+  test_ensure_submodules.sh:
+    - verify/ensure-submodules.sh
+  test_every_prompt_view.py: []
+  test_exfil_game.py:
+    - games/eso-s3-exfil/README.md
+    - games/eso-s3-exfil/eso-store.yaml
+    - games/eso-s3-exfil/eso-trophy-sync.yaml
+    - games/eso-s3-exfil/plant-trophy.sh
+    - games/eso-s3-exfil/s3-hoop-setup.sh
+    - games/eso-s3-exfil/score.sh
+    - games/eso-s3-exfil/teardown.sh
+  test_failover_drill.py:
+    - agent
+    - decisions.md
+    - gitops/ai-layer/web/burritbot.html
+    - verify/.tools/bin/caddy
+    - verify/failover_drill.py
+    - verify/test_failover_drill.py
+  test_fake_ticket.py:
+    - gitops/ai-layer/chat-path-ingress.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/fleet/fleet.sh
+    - policies/network-policies/per-namespace/agent-allow-intra-namespace.yaml
+    - verify/test_support_desk.py
+  test_falco_badge_measured.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/bootstrap/apps/falco.yaml
+    - infra
+    - security
+    - verify/browser-smoke.py
+  test_fallback_deck_e2e.py:
+    - facilitation/kubecon-na-2026/fallback
+    - facilitation/kubecon-na-2026/fallback/assets.yaml
+    - facilitation/kubecon-na-2026/fallback/screenshots/deck.html
+    - scripts/check-fallback-assets.py
+    - verify/playwright_browsers.py
+  test_feedback_links.py:
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/platform.html
+  test_finale_cap.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/kubecon.html
+  test_fleet_apply_failure_exit.sh:
+    - verify/no-cloud.sh
+  test_fleet_audit_zero.sh:
+    - verify/no-cloud.sh
+  test_fleet_contract.py:
+    - agent
+    - backstage
+    - docs/DESIGN-GLANCE.md
+    - docs/RUN-OF-SHOW-2026-08.md
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/platform.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/Dockerfile
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/main.tf
+    - infra/terraform/aws/teardown/sweep-account.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/roster.tsv
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - teardown/teardown.sh
+    - verify/bootstrap_chart.py
+    - verify/model_pin_check.py
+  test_fleet_exit_codes.sh:
+    - verify/no-cloud.sh
+  test_fleet_import_state.py:
+    - agent
+    - infra/org/boundary/main.tf
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/main.tf
+    - infra/terraform/fleet/import-state.py
+    - infra/terraform/fleet/roster.tsv
+    - verify/fixtures/import-state/planned-types.txt
+  test_fleet_monitors.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/fleet/fleet.sh
+    - verify/agent_obs_flow.py
+    - verify/agent_probe.py
+    - verify/collector_render.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_fleet_pool_reconcile.sh:
+    - gitops/bootstrap/apps
+    - infra/terraform/fleet/fleet.sh
+    - verify/fleet-hygiene.sh
+    - verify/no-cloud.sh
+  test_fleet_routes_publish.sh:
+    - verify/no-cloud.sh
+  test_fleet_routes_roster.sh:
+    - verify/no-cloud.sh
+  test_fleet_settle_after_apply.sh:
+    - verify/no-cloud.sh
+  test_fleet_standbys.sh:
+    - verify/no-cloud.sh
+  test_fleet_teardown_hooks.sh:
+    - verify/no-cloud.sh
+  test_fleet_terminal_harvest.sh:
+    - docs/provisioning.md
+    - scripts
+    - scripts/harvest_terminal_credential.sh
+    - verify/no-cloud.sh
+  test_fleet_wall_check.sh:
+    - verify/no-cloud.sh
+  test_fleet_wall_reset.sh:
+    - verify/no-cloud.sh
+  test_forkbomb_defense.py:
+    - gitops/bootstrap/apps/falco-talon.yaml
+    - gitops/bootstrap/apps/falco.yaml
+    - gitops/bootstrap/apps/falcosidekick.yaml
+    - infra/terraform/aws/cluster/main.tf
+  test_fresh_context.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab.html
+  test_friendly_hostnames.py:
+    - docs/BUILD-SPEC.md
+    - infra/terraform/fleet/fleet.sh
+  test_front_door_cert.sh:
+    - infra/dns/set-demo-dns.py
+    - infra/front-door-cert.sh
+  test_front_door_tls_live_logic.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/ensure-submodules.sh
+    - verify/front_door_tls_live.py
+    - verify/run-e2e-tools.sh
+  test_gate_commands.py:
+    - AGENTS.md
+    - verify/run-e2e-tools.sh
+    - verify/run-e2e.sh
+    - verify/run-tests.sh
+  test_gated_page_names.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+  test_gateway_api_crds.py:
+    - backstage
+    - challenges/c1-exfil-s3/fix/egress-waypoint.yaml
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/gateway-api
+    - gitops/gateway-api/kustomization.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_gateway_api_crds_upstream.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/gateway-api/standard-install.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_gateway_forward.py:
+    - agent
+    - verify/gateway_forward.py
+    - verify/local-inference-live.py
+    - verify/test_gateway_bedrock_tagged_live.py
+  test_genai_semconv_pin.py:
+    - docs/weaver-live-check.md
+    - gitops/ai-layer/guard-proxy
+    - gitops/otel-collector
+    - gitops/otel-collector/*.yaml
+    - gitops/otel-collector/values.yaml
+    - verify/test_chat_span_token_counts.py
+    - weaver/registry
+    - weaver/registry/*.yaml
+    - weaver/registry/guard-proxy-spans.yaml
+    - weaver/registry/manifest.yaml
+  test_gh_comments.py:
+    - verify/gh_comments.py
+    - verify/test_agent_obs_cause_comment.py
+    - verify/test_dispatched_runs_cause_comment.py
+    - verify/test_prose_gate_e2e_wait_cause_comment.py
+  test_ghcr_pull.py:
+    - verify/ghcr_pull.py
+  test_ghcr_version_tag.py:
+    - backstage/k8s
+    - backstage/k8s/templated-test-svc.yaml
+    - gitops/ai-layer/resources.yaml
+    - images.lock
+    - images/villains/**
+    - images/villains/build-loopback.sh
+    - images/villains/build.sh
+    - images/web-terminal
+    - scripts/ghcr_version_tag.py
+    - verify/e2e-tools.lock
+  test_gotchas_router_probe.py:
+    - docs/GOTCHAS-FLEET-AND-DELIVERY.md
+    - infra/terraform/fleet/fleet.sh
+  test_grafana_host.py:
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/bootstrap/apps/prometheus.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+  test_guard_commands_echo.py:
+    - '*'
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - images/web-terminal/entrypoint.sh
+    - verify/*
+  test_guard_proxy_go_otel.py:
+    - gitops/ai-layer
+    - gitops/ai-layer-otel
+    - gitops/ai-layer-otel/instrumentation.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/otel-ordering-gate.yaml
+  test_guard_proxy_spend_store.py:
+    - gitops/ai-layer
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+  test_guardrails_arm.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno
+    - security
+    - verify/bootstrap_chart.py
+  test_guardrails_heading.py:
+    - gitops/ai-layer/web/burritbot.html
+  test_guardrails_heading_e2e.py:
+    - gitops/ai-layer/web/burritbot.html
+    - infra
+    - verify/playwright_browsers.py
+  test_guardrails_switch.py:
+    - '*'
+    - agent
+    - backstage
+    - gitops
+    - gitops/**/*.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/guardrails-switch
+    - gitops/guardrails-switch/guardrails-switch.yaml
+    - gitops/internal-registry
+    - gitops/internal-registry/internal-registry.yaml
+    - images.lock
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno
+    - policies/kyverno-breakout
+    - policies/kyverno-breakout/deny-external-registries.yaml
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify/*
+    - verify/bootstrap_chart.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/registry_allowlist.py
+  test_harvest_console_host.sh:
+    - verify/no-cloud.sh
+  test_hostname_tag.py:
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/roster.tsv
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+  test_iam_plan_render_cache.py:
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/permissions-boundary.json.tftpl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/cluster
+    - verify/iam_plan_render.py
+  test_iam_policy_ci.py:
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/effect-tests.yaml
+    - infra/org/exceptions.md
+    - infra/org/permissions-boundary.json.tftpl
+    - infra/org/pipeline.py
+    - infra/org/policy/iam.rego
+    - infra/terraform/**
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/cluster
+    - verify
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/iam_plan_render.py
+    - verify/test_iam_policy_*.py
+    - verify/test_iam_policy_aws.py
+    - verify/test_iam_policy_coverage.py
+    - verify/test_iam_policy_pipeline.py
+    - verify/test_iam_policy_structural.py
+  test_iam_policy_pipeline.py:
+    - infra
+    - infra/**.tf
+    - infra/org/.exceptions-test.md
+    - infra/org/boundary/main.tf
+    - infra/org/effect-tests.yaml
+    - infra/policy/plan/fixtures
+    - infra/terraform/aws/cluster/main.tf
+  test_iam_policy_structural.py:
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/permissions-boundary.json.tftpl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/cluster
+    - verify
+    - verify/iam_plan_render.py
+  test_iam_user_sweep.sh:
+    - verify/no-cloud.sh
+  test_image_registry.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer/web/lab.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno
+    - policies/kyverno/verify-image-signatures.yaml
+    - security
+    - verify/bootstrap_chart.py
+    - verify/mirror_copies.py
+  test_image_registry_render.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/mirror_copies.py
+    - verify/run-e2e-tools.sh
+  test_image_version_tags.py:
+    - '**'
+    - backstage/k8s/templated-test-svc.yaml
+    - decisions.md
+    - gitops/ai-layer/resources.yaml
+    - images.lock
+    - images/sample-app/Dockerfile
+    - images/tool-pin
+    - images/tool-pin/Dockerfile
+    - images/villains/build.sh
+    - images/workshop-mcp/Dockerfile
+    - verify/ghcr_pull.py
+  test_images_lock_live_judge.py:
+    - agent
+    - agent/tron-1-abc
+    - agent/web-1-abc
+    - images.lock
+    - verify/docker_hub.py
+    - verify/images_live.py
+    - verify/images_saved.py
+  test_images_lock_render.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - images.lock
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/app_render.py
+    - verify/bootstrap_chart.py
+    - verify/docker_hub.py
+    - verify/run-e2e-tools.sh
+  test_images_saved_judge.py:
+    - images.lock
+    - verify/images_saved.py
+    - verify/run-e2e.sh
+    - verify/run-tests.sh
+    - verify/test_images_saved.py
+  test_injection_classifier.py:
+    - agent
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - verify/agent_probe.py
+    - verify/input-guard.sh
+    - verify/topic_cases.py
+  test_input_guard_host.sh:
+    - verify/input-guard.sh
+  test_input_pii_guard.py:
+    - agent
+    - challenges/LAB-TEXT.md
+    - challenges/PROMPT-CATALOG.md
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web
+    - gitops/ai-layer/web/*.html
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/otel-collector/values-burn.yaml
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/pii_scrub_cases.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
+  test_input_pii_guard_llm_guard.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
+  test_instructor_brief.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/otel-collector/values-burn.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
+  test_joker_build_digest.py:
+    - gitops/internal-registry/internal-registry.yaml
+    - images.lock
+    - images/villains
+    - images/villains/build-loopback.sh
+    - images/villains/build.sh
+    - images/villains/joker-web-internal/www/index.html
+    - images/villains/joker-web/start.sh
+    - images/villains/joker-web/www/index.html
+    - images/villains/villain-banner.sh
+    - scripts/ghcr_version_tag.py
+    - verify/.tools/bin/crane
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_joker_web_busybox.py:
+    - images/villains/build.sh
+    - images/villains/joker-web
+    - images/villains/joker-web/www/index.html
+    - images/villains/villain-banner.sh
+  test_kagent_service_name_collector.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_kagent_version_pins.py:
+    - VERSIONS.lock
+    - docs/BUILD-SPEC.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - docs/STACK-WALKTHROUGH.md
+    - docs/TECH-STATUS.md
+    - docs/UPGRADE-INVENTORY.md
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/kagent-crds.yaml
+    - gitops/bootstrap/apps/kagent.yaml
+    - gitops/workshop-agent/agent.yaml
+    - prds/13-mvp-walking-skeleton.md
+  test_kubearmor_config_render.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/kubearmor-config
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/run-e2e-tools.sh
+  test_kubearmor_config_tracked.py:
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/kubearmor-config
+    - gitops/kubearmor-config/Chart.yaml
+    - gitops/kubearmor-config/templates
+    - gitops/kubearmor-config/templates/kubearmorconfig.yaml
+    - gitops/kubearmor-config/values.yaml
+  test_kubecon_c3_live_checks.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/run-e2e.sh
+    - verify/run-tests.sh
+    - verify/test_kubecon_c3_live.py
+    - verify/test_proxy_checksum.py
+    - verify/topic_cases.py
+  test_kubecon_c3_recipe_block.py:
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - policies/kubearmor/block-recipe-snoop.yaml
+  test_kubecon_cluster_chip_e2e.py:
+    - gitops/ai-layer/web/kubecon.html
+  test_kubecon_community_gate.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_kubecon_cost_measured.py:
+    - CLAUDE.md
+    - cost/measured
+    - cost/measured/*.txt
+    - cost/measured/README.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - infra/terraform/fleet/fleet.sh
+    - teardown/cost-report.sh
+    - teardown/delivery-cost.py
+  test_kubecon_dates.py:
+    - facilitation/WHITNEY-START-HERE.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/fleet/event.sh
+    - verify/model_pin_check.py
+  test_kubecon_probe.py:
+    - agent
+    - challenges/02-sanitization/agent-prompt-injection.txt
+    - challenges/02-sanitization/fallback.curl.sh
+    - challenges/LAB-TEXT.md
+    - challenges/PROMPT-CATALOG.md
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - cost
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - infra
+    - policies/kyverno/require-resource-limits.yaml
+    - policies/kyverno/restrict-image-registries.yaml
+    - verify/agent_probe.py
+    - verify/injection_config_matrix.py
+    - verify/kubecon_probe.py
+    - verify/nova_replies.py
+    - verify/registry_allowlist.py
+    - verify/resource_limits.py
+    - verify/topic_cases.py
+  test_kubecon_prompt_sheet_e2e.py:
+    - gitops/ai-layer/web/kubecon.html
+    - verify/playwright_browsers.py
+  test_kyverno_cel_policies.py:
+    - agent
+    - backstage
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/cosign/watch-it-burn.pub
+    - policies/floor/minimal-floor.yaml
+    - policies/kyverno/block-argocd-drift.yaml
+    - policies/kyverno/deny-llm-endpoint-bypass.yaml
+    - policies/kyverno/disallow-privileged.yaml
+    - policies/kyverno/require-labels.yaml
+    - policies/kyverno/require-networkpolicy.yaml
+    - policies/kyverno/require-probes.yaml
+    - policies/kyverno/require-resource-limits.yaml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - policies/kyverno/restrict-image-registries.yaml
+    - policies/kyverno/verify-image-signatures.yaml
+    - security
+    - verify/agent_probe.py
+    - verify/bootstrap_chart.py
+    - verify/kubecon_probe.py
+    - verify/mirror_copies.py
+    - verify/topic_cases.py
+  test_kyverno_profile_policies.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/floor
+    - policies/kyverno
+    - policies/kyverno-breakout
+    - policies/kyverno/Kustomization
+    - security
+    - verify/bootstrap_chart.py
+    - verify/test_kyverno_cel_live.py
+  test_kyverno_version_pins.py:
+    - VERSIONS.lock
+    - docs/BUILD-SPEC.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - docs/STACK-WALKTHROUGH.md
+    - gitops/bootstrap/apps/kyverno.yaml
+    - policies/README.md
+    - verify/e2e-tools.lock
+    - verify/run-e2e.sh
+    - verify/test_kyverno_cel_policies.py
+  test_lab_community_profile.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_lab_events.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/ai-layer/web/lab.html
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - infra/terraform/dashboards/fleet-analytics.json
+    - infra/terraform/dashboards/main.tf
+    - verify/collector_render.py
+  test_lab_pipeline_collector.py:
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/collector_render.py
+    - verify/lab-events-harness.js
+  test_lab_platform_operator_entry.py:
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/*.tf
+    - infra/terraform/aws/cluster/.terraform.lock.hcl
+    - infra/terraform/aws/cluster/main.tf
+    - verify/e2e-tools.lock
+    - verify/fixtures/lab_platform_operator_entry.tftest.hcl
+  test_lab_progress_harvest.py:
+    - scripts/harvest/06-lab-progress.py
+  test_last_trace.py:
+    - verify/last_trace.py
+  test_leaderboard.py:
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/falco.yaml
+    - images/villains/README.md
+    - infra/datadog-room/room_view.yaml
+  test_learner_apps_access.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/learner-apps-access
+    - gitops/learner-apps-access/learner-apps-access.yaml
+    - gitops/manifests/argocd-server/service.yaml
+    - gitops/manifests/demo-app-hedgehog/service.yaml
+    - gitops/manifests/demo-app-mantis-shrimp/service.yaml
+    - gitops/manifests/demo-app-spider/service.yaml
+    - gitops/manifests/demo-app-unicorn/service.yaml
+    - gitops/manifests/demo-app-wombat/service.yaml
+    - gitops/manifests/kagent-ui/service.yaml
+    - gitops/manifests/prometheus-grafana/service.yaml
+    - gitops/namespaces
+    - gitops/namespaces/namespaces.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_llm_guard_auth.py:
+    - agent
+    - agent/gateway/guard-proxy/guard-proxy.yaml
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
+  test_llm_guard_bantopics_image.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - images.lock
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_llm_guard_image.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - images.lock
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_llmobs_chat_judge.py:
+    - verify/dd_traces.py
+    - verify/fixtures/llmobs-chat-judge/chat-098fcb00.json
+    - verify/llmobs_chat_judge.py
+    - verify/test_llmobs_chat_judge_live.py
+  test_local_inference.py:
+    - backstage
+    - gitops
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/vllm-qwen3.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values-local-inference.yaml
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests/vllm-qwen3
+    - gitops/manifests/vllm-qwen3/vllm-qwen3.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_manifest_contract.py:
+    - backstage
+    - challenges
+    - challenges/**.yaml
+    - games
+    - games/**.yaml
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer-otel/instrumentation.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/lab.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - images
+    - images/*Dockerfile
+    - images/web-terminal/Dockerfile
+    - images/web-terminal/entrypoint.sh
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - observability-idp/**.yaml
+    - policies
+    - policies/**.yaml
+    - security
+    - security/**.yaml
+    - verify/bootstrap_chart.py
+  test_mcp_vetting_handout.py:
+    - docs/mcp-server-vetting-checklist.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/web/kubecon.html
+  test_mesh.py:
+    - agent
+    - gitops/bootstrap/apps/istio.yaml
+    - security/istio/peer-authentication.yaml
+  test_minimal_floor_namespaces.py:
+    - agent
+    - backstage
+    - challenges/LAB-TEXT.md
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/datadog-agent-cr.yaml
+    - gitops/bootstrap/apps/datadog-operator.yaml
+    - gitops/bootstrap/apps/falco-talon.yaml
+    - gitops/bootstrap/apps/falco.yaml
+    - gitops/bootstrap/apps/falcosidekick.yaml
+    - gitops/bootstrap/apps/kagent.yaml
+    - gitops/bootstrap/apps/kyverno.yaml
+    - gitops/bootstrap/apps/prometheus.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/floor/minimal-floor.yaml
+    - policies/kyverno/block-argocd-drift.yaml
+    - security
+    - verify/bootstrap_chart.py
+  test_mirror_copies_public.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+    - verify/ghcr_pull.py
+    - verify/mirror_copies.py
+  test_mobile_layout.py:
+    - gitops/ai-layer/web/burritbot.html
+  test_mobile_titles.py:
+    - gitops/ai-layer/web/burritbot.html
+  test_mobile_titles_e2e.py:
+    - gitops/ai-layer/web/burritbot.html
+    - verify/playwright_browsers.py
+  test_model_pin_check.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/fleet/event.sh
+    - verify/model_pin_check.py
+  test_network_budget_once.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - infra/terraform/aws/network/main.tf
+  test_night_before_preflight.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/roster.tsv
+  test_no_cloud_by_hand.sh:
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/test_offline_suite_no_cloud.sh
+    - verify/test_presenter_student_retired.sh
+    - verify/test_round_names_retired.py
+  test_no_docker_hub_render.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/app_render.py
+    - verify/bootstrap_chart.py
+    - verify/docker_hub.py
+    - verify/run-e2e-tools.sh
+  test_no_internal_abstractions.py:
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab.html
+  test_no_permanent_drift.py:
+    - backstage
+    - gitops
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/kyverno.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests
+    - gitops/manifests/**.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/floor
+    - policies/floor/*.yaml
+    - policies/kyverno
+    - policies/kyverno/*.yaml
+    - policies/kyverno/require-labels.yaml
+    - policies/network-policies/per-namespace/apps-allow-ingress.yaml
+    - security
+    - verify/bootstrap_chart.py
+  test_offline_suite_no_cloud.sh:
+    - verify/no-cloud.sh
+    - verify/run-tests.sh
+  test_ops_view.py:
+    - AGENTS.md
+    - infra/ops-view/ops_view.py
+    - infra/terraform/fleet/fleet.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+  test_otel_collector_version_pins.py:
+    - VERSIONS.lock
+    - docs/BUILD-SPEC.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/otel-collector*.yaml
+    - verify/test_lab_pipeline_collector.py
+  test_otelcol_local.py:
+    - verify/otelcol_local.py
+    - verify/test_collector_act2_redaction_e2e.py
+    - verify/test_trace_shape_e2e.py
+  test_party_app_hosts.py:
+    - backstage
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/links.html
+    - gitops/ai-layer/web/platform.html
+    - gitops/argocd/values.yaml
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/manifests/demo-app-hedgehog
+    - gitops/manifests/demo-app-hedgehog/*.yaml
+    - gitops/manifests/demo-app-mantis-shrimp
+    - gitops/manifests/demo-app-mantis-shrimp/*.yaml
+    - gitops/manifests/demo-app-spider
+    - gitops/manifests/demo-app-spider/*.yaml
+    - gitops/manifests/demo-app-unicorn
+    - gitops/manifests/demo-app-unicorn/*.yaml
+    - gitops/manifests/demo-app-wombat
+    - gitops/manifests/demo-app-wombat/*.yaml
+    - infra/argocd-values.yaml
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_party_apps.py:
+    - gitops/manifests/demo-app-hedgehog/configmap.yaml
+    - gitops/manifests/demo-app-mantis-shrimp/configmap.yaml
+    - gitops/manifests/demo-app-spider/configmap.yaml
+    - gitops/manifests/demo-app-unicorn/configmap.yaml
+    - gitops/manifests/demo-app-wombat/configmap.yaml
+  test_party_refresh_rate.py:
+    - gitops/manifests/demo-app-hedgehog/configmap.yaml
+    - gitops/manifests/demo-app-mantis-shrimp/configmap.yaml
+    - gitops/manifests/demo-app-spider/configmap.yaml
+    - gitops/manifests/demo-app-unicorn/configmap.yaml
+    - gitops/manifests/demo-app-wombat/configmap.yaml
+    - verify/party-refresh-rate.js
+  test_peer_api_rule.py:
+    - infra/terraform/aws/cluster/main.tf
+    - verify/node_sg_rules.py
+  test_pii_scrub_live_logic.py:
+    - agent
+    - gitops/ai-layer/resources.yaml
+    - gitops/otel-collector/values-burn.yaml
+    - verify/pii_scrub_cases.py
+    - verify/pii_scrub_live.py
+  test_pin_bedrock_profiles.sh:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/providers
+    - verify/no-cloud.sh
+  test_plan_policy.py:
+    - '**'
+    - infra/policy/plan/check-plan.py
+    - infra/policy/plan/gates.yaml
+    - infra/policy/plan/plan-fleet.py
+    - infra/policy/plan/policies
+    - infra/policy/plan/policies/*.yaml
+    - infra/policy/plan/tools.yaml
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/main.tf
+  test_platform_baseline.py:
+    - backstage
+    - decisions.md
+    - gitops
+    - gitops/apps-disabled
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - infra/deploy-full-idp.sh
+    - lab-platform.yaml
+    - observability-idp
+    - platform-baseline.yaml
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_platform_baseline_sister.py:
+    - platform-baseline.yaml
+    - verify/test_platform_baseline.py
+  test_platform_floor.sh:
+    - verify/no-cloud.sh
+  test_playwright_browsers.py:
+    - verify
+    - verify/playwright_browsers.py
+    - verify/test_*.py
+    - verify/test_mobile_titles_e2e.py
+  test_policy_spec.py:
+    - policies/kyverno/deny-llm-endpoint-bypass.yaml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - verify/policy_spec.py
+    - verify/test_llm_bypass_live.py
+  test_policy_spec_kustomize.py:
+    - policies/kyverno
+    - policies/kyverno/*.yaml
+    - verify/policy_spec.py
+  test_prd13_ust.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - prds/13-mvp-walking-skeleton.md
+  test_preflight_boundary.sh:
+    - infra/org/boundary
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+  test_preflight_model_agreements.sh:
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+  test_presenter_student_retired.sh:
+    - infra/datadog-cluster-identity.sh
+    - verify/datadog-orgs.sh
+    - verify/no-cloud.sh
+  test_prior_drafts.sh:
+    - README.md
+    - agent/60
+    - agent/60-1
+    - agent/604-
+    - agent/604-2
+    - agent/605-1
+    - decisions.md
+    - docs/glance.md
+    - docs/sixty.md
+    - verify/draft-drift.sh
+    - verify/prior-drafts.sh
+    - verify/test_measure.py
+  test_probe_pod_admission.py:
+    - gitops/ai-layer/resources.yaml
+    - images/workshop-mcp/Dockerfile
+    - policies/floor/minimal-floor.yaml
+    - policies/kyverno
+    - policies/kyverno/*.yaml
+    - verify/probe_pod.py
+  test_progress_764.py:
+    - PROGRESS.md
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
+  test_progress_entries.py:
+    - PROGRESS.md
+    - decisions.md
+    - gitops/ai-layer/web/display.js
+    - gitops/workshop-agent/agent.yaml
+    - verify/dd_traces.py
+    - verify/test_allergen_card.py
+    - verify/test_dd_traces.py
+    - verify/test_dd_traces_live.py
+    - verify/test_display_masked_prompts_e2e.py
+    - verify/test_stream.py
+    - verify/topic_cases.py
+  test_promo_villains.py:
+    - agent
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/PROMPT-CATALOG.md
+    - challenges/c2-villain-image/README.md
+    - challenges/c2-villain-image/fallback.kubectl.sh
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/workshop-agent/agent.yaml
+    - images/villains/README.md
+    - policies/kyverno/restrict-image-registries.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/promo_villains.py
+    - verify/registry_allowlist.py
+    - verify/topic_cases.py
+  test_promo_villains_public.py:
+    - verify/ghcr_pull.py
+    - verify/promo_villains.py
+  test_prompt_wall_redaction.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+  test_prompts_wall_suite.py:
+    - verify/prompts_wall_suite.py
+    - verify/test_prompts_wall_suite_e2e.py
+  test_prose_gate_e2e_wait_cause_comment.py:
+    - AGENTS.md
+    - PROGRESS.md
+    - PROJECT_STATE.md
+    - decisions.md
+    - verify/gh_comments.py
+    - verify/run-e2e-tools.sh
+  test_proxy_checksum.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+  test_proxy_guards.py:
+    - gitops/ai-layer/guard-proxy
+  test_public_images.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - images.lock
+    - infra/terraform/fleet/fleet.sh
+    - policies/kyverno/restrict-image-registries.yaml
+  test_public_images_retry.py:
+    - verify/test_public_images_served.py
+  test_public_images_served.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_public_pod_cap.py:
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/fleet/fleet.sh
+  test_readme_current.py:
+    - README.md
+  test_recipe_block_coverage.py:
+    - agent
+    - agent/cluster-identity
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - policies/kubearmor/block-recipe-snoop.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/test_recipe_block_live.py
+    - verify/topic_cases.py
+  test_recipe_persona.py:
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - policies/kubearmor/block-recipe-snoop.yaml
+  test_recreation_spec_default_model.py:
+    - docs/MASTER-RECREATION-SPEC.md
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+  test_recreation_spec_tier_swap.py:
+    - decisions.md
+    - docs/MASTER-RECREATION-SPEC.md
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/workshop-agent.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/terraform/fleet/event.sh
+    - verify/model_pin_check.py
+  test_repair_agent_tools.sh: []
+  test_repo_identity.py:
+    - AGENTS.md
+    - CLAUDE.md
+    - PROJECT_STATE.md
+    - README.md
+    - decisions.md
+  test_reset_bot.sh:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/no-cloud.sh
+    - verify/topic_cases.py
+  test_room_jokers.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - images/villains/build.sh
+  test_room_view.py:
+    - cost
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - infra/datadog-cluster-identity.sh
+    - verify/collector_render.py
+    - verify/test_trace_walkthrough_view.py
+  test_run_shell_failure.py:
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/otel-collector/values.yaml
+  test_scheduled_up.sh:
+    - railway
+  test_section0_wording.py:
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_service_links.py:
+    - backstage
+    - challenges/LAB-TEXT.md
+    - gitops
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/web
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/*.html
+    - gitops/ai-layer/web/*.js
+    - gitops/ai-layer/web/links.html
+    - gitops/ai-layer/web/platform.html
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/prometheus.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/tempo
+    - gitops/tempo/*.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_service_naming.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - gitops/otel-collector/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - verify/collector_render.py
+    - verify/test_datadog_service_map.py
+  test_service_naming_render.py:
+    - gitops/ai-layer
+  test_sg_rule_descriptions.py:
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/main.tf
+    - verify/node_sg_rules.py
+  test_sg_sweep.sh:
+    - verify/no-cloud.sh
+  test_sizing_measure.py:
+    - backstage
+    - backstage/health/v1/readiness
+    - gitops
+    - gitops/**
+    - infra/SIZING.md
+    - infra/terraform/aws/cluster/main.tf
+    - verify/backstage-footprint.sh
+    - verify/backstage_footprint.py
+  test_stage_traces.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/workshop-agent/agent.yaml
+    - infra
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/test_kubecon_probe.py
+    - verify/topic_cases.py
+  test_storefront_backend_check_order_e2e.py:
+    - gitops/ai-layer/web/burritbot.html
+  test_storefront_counters_e2e.py:
+    - cost
+    - gitops/ai-layer/web/burritbot.html
+  test_storefront_thinking_e2e.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/nova_replies.py
+    - verify/topic_cases.py
+  test_storefront_witch_name_e2e.py:
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+  test_stream.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/web/display.html
+    - gitops/ai-layer/web/display.js
+  test_student_aws_creds_namespace.py:
+    - '*'
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer
+    - gitops/ai-layer/*.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/lab.html
+    - gitops/namespaces
+    - gitops/namespaces/namespaces.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/terraform/fleet/fleet.sh
+    - policies
+    - policies/**.yaml
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - verify/*
+  test_student_aws_push.sh:
+    - verify/no-cloud.sh
+  test_support_desk.py:
+    - gitops/ai-layer/ticket_site.py
+  test_support_desk_link.py:
+    - gitops/bootstrap/apps/workshop-agent.yaml
+    - gitops/workshop-agent
+    - gitops/workshop-agent/agent.yaml
+  test_support_desk_live.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/ticket_site.py
+    - verify/gh_comments.py
+    - verify/support_desk_hosts.py
+  test_support_desk_named.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/web/kubecon.html
+    - verify/support_desk_hosts.py
+  test_tagging.py:
+    - games/eso-s3-exfil/plant-trophy.sh
+    - games/eso-s3-exfil/s3-hoop-setup.sh
+    - infra/TAGGING.md
+    - infra/shared-vpc/README.md
+    - infra/terraform/README.md
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/main.tf
+    - infra/terraform/fleet/fleet.sh
+    - teardown/teardown.sh
+  test_takeaways.py:
+    - facilitation/governance-map.md
+    - facilitation/self-assessment.md
+  test_terminal_kubeconfig.py:
+    - images/web-terminal/entrypoint.sh
+  test_terminal_login_request.py:
+    - docs/requests/mrf-secrets-terminal-login.md
+    - infra/terraform/fleet/fleet.sh
+    - verify/terminal_login_request.py
+    - verify/test_no_presenter_login.py
+  test_terminal_quiet.py:
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - images/web-terminal/Dockerfile
+    - images/web-terminal/entrypoint.sh
+  test_terraform_lock_init.py:
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/boundary/*.tf
+    - infra/org/boundary/.terraform.lock.hcl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/audit/*.tf
+    - infra/terraform/aws/audit/.terraform.lock.hcl
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/*.tf
+    - infra/terraform/aws/cluster/.terraform.lock.hcl
+    - infra/terraform/aws/network
+    - infra/terraform/aws/network/*.tf
+    - infra/terraform/aws/network/.terraform.lock.hcl
+    - infra/terraform/dashboards
+    - infra/terraform/dashboards/*.tf
+    - infra/terraform/dashboards/.terraform.lock.hcl
+  test_tier_swap_live_judges.py:
+    - gitops/ai-layer/guard-proxy
+    - verify/ensure-submodules.sh
+    - verify/test_tier_swap_live.py
+  test_tool_audit.py:
+    - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/alloy.yaml
+    - gitops/bootstrap/apps/loki.yaml
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/probe_pod.py
+    - verify/test_probe_pod_admission.py
+    - verify/test_tool_audit_live.py
+  test_tool_failure_status_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_tool_pin.py:
+    - docs/research/2026-10-24-tool-pin-spike
+    - docs/research/2026-10-24-tool-pin-spike/README.md
+    - docs/research/2026-10-24-tool-pin-spike/baseline.json
+    - docs/research/2026-10-24-tool-pin-spike/live-check.sh
+    - docs/research/2026-10-24-tool-pin-spike/local-bed.sh
+    - docs/research/2026-10-24-tool-pin-spike/requirements.txt
+    - docs/research/2026-10-24-tool-pin-spike/tool-pin.yaml
+    - gitops
+    - gitops/**.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - images/tool-pin/Dockerfile
+    - images/tool-pin/tool_pin.py
+    - infra/deploy-full-idp.sh
+    - verify/agentgateway_schema.py
+    - verify/schemas/agentgateway-v1.7.0-config.json
+  test_tool_pin_live_check.py:
+    - agent
+    - agent/Application/agentgateway
+    - agent/Application/agentgateway-config
+    - agent/Application/agentgateway-ingress
+    - agent/Application/ai-layer
+    - agent/Application/cluster-identity
+    - agent/Application/evil-mcp
+    - agent/Application/evil-mcp-shim
+    - agent/Application/evil-mcp-src
+    - agent/Application/lab-bootstrap
+    - agent/Application/workshop-agent
+    - agent/ConfigMap/agentgateway
+    - agent/ConfigMap/agentgateway-config
+    - agent/ConfigMap/agentgateway-ingress
+    - agent/ConfigMap/ai-layer
+    - agent/ConfigMap/cluster-identity
+    - agent/ConfigMap/evil-mcp
+    - agent/ConfigMap/evil-mcp-shim
+    - agent/ConfigMap/evil-mcp-src
+    - agent/ConfigMap/lab-bootstrap
+    - agent/ConfigMap/workshop-agent
+    - agent/Deployment/agentgateway
+    - agent/Deployment/agentgateway-config
+    - agent/Deployment/agentgateway-ingress
+    - agent/Deployment/ai-layer
+    - agent/Deployment/cluster-identity
+    - agent/Deployment/evil-mcp
+    - agent/Deployment/evil-mcp-shim
+    - agent/Deployment/evil-mcp-src
+    - agent/Deployment/lab-bootstrap
+    - agent/Deployment/tool-pin
+    - agent/Deployment/workshop-agent
+    - agent/NetworkPolicy/agentgateway
+    - agent/NetworkPolicy/agentgateway-config
+    - agent/NetworkPolicy/agentgateway-ingress
+    - agent/NetworkPolicy/ai-layer
+    - agent/NetworkPolicy/cluster-identity
+    - agent/NetworkPolicy/evil-mcp
+    - agent/NetworkPolicy/evil-mcp-shim
+    - agent/NetworkPolicy/evil-mcp-src
+    - agent/NetworkPolicy/lab-bootstrap
+    - agent/NetworkPolicy/workshop-agent
+    - agent/Pod/evil-mcp-shim-0
+    - agent/Pod/kagent-controller-0
+    - agent/Pod/workshop-agent-0
+    - agent/RemoteMCPServer/agentgateway
+    - agent/RemoteMCPServer/agentgateway-config
+    - agent/RemoteMCPServer/agentgateway-ingress
+    - agent/RemoteMCPServer/ai-layer
+    - agent/RemoteMCPServer/cluster-identity
+    - agent/RemoteMCPServer/evil-mcp
+    - agent/RemoteMCPServer/evil-mcp-shim
+    - agent/RemoteMCPServer/evil-mcp-src
+    - agent/RemoteMCPServer/lab-bootstrap
+    - agent/RemoteMCPServer/workshop-agent
+    - agent/Service/agentgateway
+    - agent/Service/agentgateway-config
+    - agent/Service/agentgateway-ingress
+    - agent/Service/ai-layer
+    - agent/Service/cluster-identity
+    - agent/Service/evil-mcp
+    - agent/Service/evil-mcp-shim
+    - agent/Service/evil-mcp-src
+    - agent/Service/lab-bootstrap
+    - agent/Service/workshop-agent
+    - docs/research/2026-10-24-tool-pin-spike/live-check.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/chat-path-ingress.yaml
+    - gitops/ai-layer/server.py
+    - verify/tool_pin_kubectl_shim.py
+  test_topic_classifier.py:
+    - gitops/ai-layer/resources.yaml
+    - verify/topic_cases.py
+  test_topic_guard.py:
+    - agent
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
+  test_topic_guard_proxy.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - verify/topic_cases.py
+  test_trace_shape_e2e.py:
+    - gitops/bootstrap/apps/otel-collector-attendee.yaml
+    - gitops/bootstrap/apps/otel-collector-burn.yaml
+    - gitops/bootstrap/apps/otel-collector.yaml
+    - gitops/otel-collector
+    - verify/.tools/bin/otelcol-contrib
+    - verify/collector_render.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+  test_trace_walkthrough_view.py:
+    - backstage
+    - challenges/03-bad-mcp-excessive-agency/agent-prompt.txt
+    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
+    - docs/KUBECON-ABSTRACT-READINESS.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/grafana-dashboards.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/otel-collector/values.yaml
+    - infra/deploy-full-idp.sh
+    - infra/terraform/fleet/fleet.sh
+    - lab-platform.yaml
+    - observability-idp
+    - observability-idp/grafana/dashboards
+    - observability-idp/grafana/dashboards/agent-observability.yaml
+    - policies
+    - security
+    - verify/bootstrap_chart.py
+  test_ttyd_ws_auth.py:
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - verify/.tools/bin/ttyd
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
+    - verify/ttyd_ws.py
+  test_two_domains.py:
+    - backstage/catalog
+    - backstage/catalog/*.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/links.html
+    - gitops/ai-layer/web/platform.html
+    - images/web-terminal/entrypoint.sh
+  test_two_hour_flow_live_checks.py:
+    - agent
+    - agent/cluster-identity
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/lab.html
+    - gitops/workshop-agent/agent.yaml
+    - verify/agent_probe.py
+    - verify/kubecon_probe.py
+    - verify/run-e2e.sh
+    - verify/test_two_hour_flow_live.py
+    - verify/topic_cases.py
+  test_verify_harness.py:
+    - backstage
+    - backstage/health/v1/readiness
+    - cost
+    - gitops/bootstrap/values-attendee.yaml
+    - images/watch-it-burn-backstage/playwright.config.ts
+    - verify
+    - verify/*.sh
+    - verify/backstage-footprint.sh
+    - verify/backstage_footprint.py
+    - verify/beat-cost.sh
+    - verify/run-all.sh
+    - verify/run-e2e.sh
+    - verify/run-tests.sh
+    - verify/test_*
+    - verify/test_*.py
+    - verify/test_ai_layer_rollout.py
+    - verify/test_datadog_service_map.py
+    - verify/test_enforce_floor.py
+    - verify/test_fleet_contract.py
+    - verify/test_party_refresh_rate.py
+    - verify/test_service_naming_render.py
+  test_verify_suites_workflow.py:
+    - agent/**
+    - agent/1020-1
+    - agent/unrelated
+    - verify/**
+    - verify/ci-base-sha.sh
+    - verify/run-e2e-tools.sh
+    - verify/run-tests.sh
+  test_villain_app.py:
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - games/villain-apps/deploy-villain.yaml
+    - images/villains/build.sh
+    - policies/kyverno/restrict-image-registries.yaml
+    - verify/registry_allowlist.py
+  test_walkthrough_no_state.sh:
+    - infra/datadog-cluster-identity.sh
+    - infra/terraform
+    - infra/terraform/fleet
+    - infra/terraform/fleet/fleet.sh
+    - verify
+    - verify/datadog-orgs.sh
+    - verify/fleet-walkthrough.sh
+    - verify/last_trace.py
+  test_walkthrough_report.sh:
+    - infra/datadog-cluster-identity.sh
+    - infra/terraform/fleet/fleet.sh
+    - verify/datadog-orgs.sh
+    - verify/fleet-walkthrough.sh
+    - verify/last_trace.py
+  test_wall_clock_burst.py:
+    - verify/wall_clock_burst.py
+  test_wall_more_count_e2e.py:
+    - verify/fixtures/prompts-agenticburn/wall.html.fixture
+    - verify/test_wall_throttle_e2e.py
+    - verify/wall-clock-harness.js
+    - verify/wall-more-harness.js
+    - verify/wall_more_count.py
+    - verify/wall_throttle.py
+  test_wall_throttle_e2e.py:
+    - verify/fixtures/prompts-agenticburn/wall.html.fixture
+    - verify/wall-clock-harness.js
+    - verify/wall_throttle.py
+  test_weather_feed.py:
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/weather_feed.py
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - policies/network-policies/per-namespace/agent-allow-weather-feed-egress.yaml
+  test_weather_feed_e2e.py:
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/weather_feed.py
+    - verify/weather_feed_probe.py
+  test_weaver_guard_proxy_spans.py:
+    - gitops/ai-layer/guard-proxy
+    - weaver/registry
+    - weaver/registry/*.yaml
+  test_weaver_guard_proxy_stamps.py:
+    - gitops/ai-layer/guard-proxy
+    - weaver/registry
+    - weaver/registry/*.yaml
+  test_weaver_registry_check.py:
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/run-e2e-tools.sh
+    - verify/run-e2e.sh
+    - weaver/registry
+  test_witch_name_vocab.py:
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+  test_workflow_registry_writes.py:
+    - .github/workflows/*.yaml
+    - .github/workflows/*.yml
+    - images/web-terminal
+    - scripts/ghcr_version_tag.py
