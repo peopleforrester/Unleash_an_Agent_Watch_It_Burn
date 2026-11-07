@@ -535,10 +535,11 @@ def cmd_seed(args) -> int:
     stamp = args.stamp or started.strftime("%Y%m%d%H%M")
     cluster = StageCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)
     # The cluster's guard lock (#1024), from the start-state read to guards-off, so another run's toggles cannot land
-    # between the seeds, exactly as for the KubeCon probe.
+    # between the seeds, exactly as for the KubeCon probe. The seeds' guardrails-on and guardrails-off switch the
+    # other KubeCon cluster too, so the lock is held there as well (#1016).
     try:
-        with guard_lease.hold(args.context, args.kubeconfig, args.profile, what=f"stage_traces.py seed {args.host}",
-                              wait=args.lock_wait) as lease:
+        with guard_lease.hold_switch(args.context, args.kubeconfig, args.profile,
+                                     what=f"stage_traces.py seed {args.host}", wait=args.lock_wait) as lease:
             # The stage's start state first, read only: a cluster that is not there (another profile, or guardrails
             # left on) would fail the seeds, and the closing guards-off would then change a cluster this run never
             # armed. So nothing is sent and nothing is flipped.

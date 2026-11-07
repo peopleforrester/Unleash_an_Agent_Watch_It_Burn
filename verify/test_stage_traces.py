@@ -248,7 +248,7 @@ def fake_hold(context, kubeconfig=None, profile=None, what="", wait=0.0, **kw):
         LOCK["inside"] = False
 
 
-st.guard_lease.hold = fake_hold
+st.guard_lease.hold_switch = fake_hold
 _real_probe_run = st.StageProbe.run
 
 

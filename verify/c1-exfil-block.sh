@@ -10,6 +10,13 @@ HOST="${1:?usage: $0 <host> <kube-context> [aws-profile]}"; CTX="${2:?}"; PROFIL
 URL="https://${HOST}.agenticburn.com"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 kc() { AWS_PROFILE="$PROFILE" kubectl --context "$CTX" "$@"; }
+# Take the cluster's guard lock before the policies change (#1016): re-run this script under verify/guard_lease.py's
+# hold, which waits while another run holds the Lease agent/wib-guard-lock on this context, gives up after 30 minutes
+# naming the holder (exit 3, nothing run), and releases it once this script, its restore included, has exited.
+if ! python3 "$HERE/guard_lease.py" held --context "$CTX"; then
+    exec python3 "$HERE/guard_lease.py" hold --context "$CTX" --profile "$PROFILE" --what "verify/c1-exfil-block.sh" \
+        -- bash "${BASH_SOURCE[0]}" "$@"
+fi
 # The cluster is left as it was found (#265). An armed admin cluster already runs these six policies under Argo CD
 # (policies/network-policies), and deleting all of them on exit, as this did until 2026-11-05, left the agent's egress
 # open on watch-it-burn-private for the five minutes until Argo CD's next reconcile. So the ones that were there before

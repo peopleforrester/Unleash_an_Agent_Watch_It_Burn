@@ -20,6 +20,11 @@ In order, this:
    says nothing;
 7. always deletes what it created, so the cluster is left as it was found.
 
+Steps 3 to 7 run holding the cluster's guard lock (verify/guard_lease.py, #1016), which every check that switches
+guardrails takes, the private probe's guardrails-on included, so the switch cannot move under the wait. When another
+run keeps it for 30 minutes (WIB_GUARD_LEASE_WAIT sets the wait), this fails naming the holder, having created nothing.
+Step 6 stays, for a switch by something that takes no lock.
+
 It takes about 10 minutes from a busy host, where each kubectl call took about 15 seconds (run 17969).
 
 Usage: COMMUNITY_CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] python3 verify/test_room_cleanup_live.py
@@ -34,8 +39,12 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import ExitStack
 
 import yaml
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import guard_lease  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 POLICY = REPO / "policies/kyverno-breakout/remove-untrusted-room-workloads.yaml"
@@ -100,6 +109,14 @@ check("and may read deny-external-registries",
       any("validatingpolicies" in r.get("resources", []) and "get" in r.get("verbs", [])
           and "deny-external-registries" in (r.get("resourceNames") or ["deny-external-registries"]) for r in rules))
 
+locks = ExitStack()
+try:
+    lease = locks.enter_context(guard_lease.hold(context, what="verify/test_room_cleanup_live.py",
+                                                 wait=guard_lease.default_wait()))
+except guard_lease.LeaseBusy as e:
+    print(f"  FAIL  the cluster's guard lock is free within the wait (no other run is switching guardrails here)\n"
+          f"        {e}; nothing was created")
+    sys.exit(guard_lease.BUSY_EXIT)
 before = actions()
 check("deny-external-registries reads Deny or Audit", before in (["Deny"], ["Audit"]), str(before))
 armed = before == ["Deny"]
@@ -126,6 +143,9 @@ finally:
     kubectl("delete", "deployment", "-n", "agent", GONE, KEPT, "--ignore-not-found", "--wait=true")
     left = {d["metadata"]["name"] for d in get_json("deployment", "-n", "agent").get("items", [])} & {GONE, KEPT}
     check("the probe Deployments are gone again, the cluster as it was found", not left, str(left))
+    locks.close()
+    check("the guard lock was held for the whole check (no other run switched guards or guardrails meanwhile)",
+          lease.lost is None, lease.lost or "")
 
 print()
 if failures:

@@ -46,8 +46,10 @@ waits up to --lock-wait seconds (30 minutes by default), then exits 3 with KUBEC
 Its /toggle requests carry the holder as X-WIB-Caller, for guard-proxy's toggle log.
 
 guardrails-on and guardrails-off are the terminal's own commands, run in the private cluster's terminal pod, and
-each switches the community cluster too (#774): run the community probe before the private one, or after it, never
-during it.
+each switches the community cluster too (#774). So an admin probe holds the lock on both clusters (#1016,
+guard_lease.hold_switch): on its --context and on the cluster that one's guardrails-switch/guardrails-peer Secret
+names, whose kube-context must be in the kubeconfig under that name. A community probe, or any live check holding
+the community cluster's lock, then waits for it rather than reading a switch mid-run.
 
 C1, C2 and C3 are judged on the control, not on the model's mood: the lab's own curl from the agent's tool pod,
 a server-side dry run as workshop-mcp (deploy_app's identity), and the C3 fallback script. They spend no model calls.
@@ -1433,10 +1435,12 @@ def main(argv: list[str] | None = None) -> int:
     log.info("KubeCon probe: %s %s, max %d model calls", args.role, args.host, args.max_calls)
     # The cluster's guard lock (#1024), held from before the start state is read until after guards-off, so another
     # run's toggles cannot land between the probe's beats: in run 17950 (#900) three of five admin runs read an output
-    # guard the probe never turned on. A community run holds it too, since its beats read the wide-open start.
+    # guard the probe never turned on. A community run holds it too, since its beats read the wide-open start. An
+    # admin run's guardrails-on and guardrails-off switch the community cluster as well, so it holds both (#1016).
+    held = guard_lease.hold if args.role == "community" else guard_lease.hold_switch
     try:
-        with guard_lease.hold(args.context, args.kubeconfig, args.profile,
-                              what=f"kubecon_probe.py {args.role} {args.host}", wait=args.lock_wait) as lease:
+        with held(args.context, args.kubeconfig, args.profile,
+                  what=f"kubecon_probe.py {args.role} {args.host}", wait=args.lock_wait) as lease:
             if args.role == "community":
                 # No final beat: nothing on the community cluster is toggled. C6's Deployment is removed by its own
                 # beat.
@@ -1445,7 +1449,8 @@ def main(argv: list[str] | None = None) -> int:
                 results = probe.run(ADMIN, final=GUARDS_OFF_BEAT)
     except guard_lease.LeaseBusy as e:
         log.error("the guard lock on %s stayed busy: %s", args.context, e)
-        print("\nKUBECON PROBE NOT RUN: another holder kept the cluster's guard lock (no beat ran, nothing was flipped)")
+        print(f"\nKUBECON PROBE NOT RUN: another holder kept the cluster's guard lock: {e} "
+              "(no beat ran, nothing was flipped)")
         return guard_lease.BUSY_EXIT
     if lease.lost:
         results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",

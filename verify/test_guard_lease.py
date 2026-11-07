@@ -1,6 +1,6 @@
-# ABOUTME: Offline checks for the cluster guard lock (#1024): the Lease is taken, waited on, taken over when expired,
-# ABOUTME: renewed and released; and the probes and every verify script that flips guards hold it while they do.
-"""Holds verify/guard_lease.py and its callers to #1024 without a cluster.
+# ABOUTME: Offline checks for the cluster guard lock (#1024, #1016): the Lease is taken, waited on, taken over, renewed
+# ABOUTME: and released; every check that flips guards or switches guardrails holds it, on both clusters for a switch.
+"""Holds verify/guard_lease.py and its callers to #1024 and #1016 without a cluster.
 
 The Lease API is verify/fake_lease_kubectl.py: in process as a runner, and as a program behind a fake kubectl first
 on PATH for the CLI and the shell scripts. The clock is a counter the fake sleep moves, so no wait here is real.
@@ -368,10 +368,11 @@ class FakeLease:
         self.lost, self.holder = lost, "fake"
 
 
-def fake_hold(lost=None, busy=False):
+def fake_hold(lost=None, busy=False, kind="hold"):
     @contextlib.contextmanager
     def hold(context, kubeconfig=None, profile=None, what="", wait=gl.WAIT_S, **kw):
-        seen.update(context=context, kubeconfig=kubeconfig, profile=profile, what=what, wait=wait, inside=False)
+        seen.update(context=context, kubeconfig=kubeconfig, profile=profile, what=what, wait=wait, inside=False,
+                    kind=kind)
         if busy:
             raise gl.LeaseBusy("held by 'another run'")
         seen["inside"] = True
@@ -388,16 +389,20 @@ def fake_run(self, beats, final=None):
     return []
 
 
-real = (kp.guard_lease.hold, kp.Probe.run, kp.KubeconCluster.get_json)
+real = (kp.guard_lease.hold, kp.guard_lease.hold_switch, kp.Probe.run, kp.KubeconCluster.get_json)
 kp.Probe.run, kp.KubeconCluster.get_json = fake_run, lambda self, path: None
 try:
-    kp.guard_lease.hold = fake_hold()
+    # An admin probe runs guardrails-on and guardrails-off, which switch both KubeCon clusters, so it holds the lock
+    # through hold_switch (#1016); a community probe switches nothing beyond its guards-free start and holds one.
+    kp.guard_lease.hold, kp.guard_lease.hold_switch = fake_hold(), fake_hold(kind="hold_switch")
     with contextlib.redirect_stdout(io.StringIO()) as out:
         rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "watch-it-burn-private",
                       "--kubeconfig", "/tmp/k", "--profile", "accen-dev"])
     check("kubecon_probe admin runs its beats inside the lock, guards-off included",
           rc == 0 and seen.get("ran_inside") is True and seen["final"] is kp.GUARDS_OFF_BEAT and not seen["inside"],
           str(seen))
+    check("kubecon_probe admin holds it on both KubeCon clusters (hold_switch), since its guardrails-on switches both",
+          seen.get("kind") == "hold_switch", str(seen))
     check("it takes the lock on --context with the probe's kubeconfig and profile",
           (seen["context"], seen["kubeconfig"], seen["profile"]) == ("watch-it-burn-private", "/tmp/k", "accen-dev")
           and seen["what"] == "kubecon_probe.py admin burritobot-private.burritobot.co"
@@ -406,22 +411,23 @@ try:
     with contextlib.redirect_stdout(io.StringIO()):
         kp.main(["community", "attackme.burritobot.co", "--context", "watch-it-burn-community", "--lock-wait", "5"])
     check("kubecon_probe community holds it too, with --lock-wait", seen.get("ran_inside") is True
-          and seen["context"] == "watch-it-burn-community" and seen["wait"] == 5.0, str(seen))
+          and seen["context"] == "watch-it-burn-community" and seen["wait"] == 5.0 and seen["kind"] == "hold",
+          str(seen))
     seen.clear()
-    kp.guard_lease.hold = fake_hold(busy=True)
+    kp.guard_lease.hold_switch = fake_hold(busy=True)
     with contextlib.redirect_stdout(io.StringIO()) as out:
         rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "watch-it-burn-private"])
     check("a busy lock: the probe exits BUSY_EXIT, runs no beat, and says KUBECON PROBE NOT RUN",
           rc == gl.BUSY_EXIT and "ran_inside" not in seen and "KUBECON PROBE NOT RUN" in out.getvalue(),
           f"{rc} {seen} {out.getvalue()}")
     seen.clear()
-    kp.guard_lease.hold = fake_hold(lost="the lock was lost: held by 'someone'")
+    kp.guard_lease.hold_switch = fake_hold(lost="the lock was lost: held by 'someone'")
     with contextlib.redirect_stdout(io.StringIO()) as out:
         rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "watch-it-burn-private"])
     check("a lock lost mid-run turns the probe RED on a guard-lock beat",
           rc == 1 and "The guard lock was held for the whole run" in out.getvalue() and "KUBECON PROBE RED" in out.getvalue(), out.getvalue())
 finally:
-    kp.guard_lease.hold, kp.Probe.run, kp.KubeconCluster.get_json = real
+    kp.guard_lease.hold, kp.guard_lease.hold_switch, kp.Probe.run, kp.KubeconCluster.get_json = real
 
 real_ap = (ap.guard_lease.hold, ap.run, ap.Cluster.cost, sys.argv)
 
@@ -460,6 +466,283 @@ try:
           rc == gl.BUSY_EXIT and "ran_inside" not in seen, str(seen))
 finally:
     ap.guard_lease.hold, ap.run, ap.Cluster.cost, sys.argv = real_ap
+
+# --- #1016: a guardrails switch holds the lock on both clusters it reaches --------------------------------------------
+print("== hold_switch: the lock on this cluster and on its guardrails peer, in sorted order ==")
+
+
+class Fleet:
+    """One fake API server per kube-context; a context the kubeconfig does not have answers as kubectl does."""
+
+    def __init__(self, **apis: fk.FakeLeaseApi) -> None:
+        self.apis = {k.replace("_", "-"): v for k, v in apis.items()}
+        self.order: list[str] = []
+
+    def run(self, argv, input=None, **kw):
+        ctx = argv[2]
+        if ctx not in self.apis:
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr=f'error: context "{ctx}" does not exist\n')
+        self.order.append(f"{ctx} {' '.join(argv[3:6])}")
+        return self.apis[ctx].run(argv, input=input, **kw)
+
+
+def creates(fleet: Fleet) -> list[str]:
+    return [o.split()[0] for o in fleet.order if o.split()[1:3] == ["create", "-f"]]
+
+
+fleet = Fleet(wib_private=fk.FakeLeaseApi(peer="wib-community"), wib_community=fk.FakeLeaseApi(peer="wib-private"))
+check("peer_context reads the cluster the guardrails-peer Secret names",
+      gl.peer_context("wib-private", runner=fleet.run) == "wib-community", str(fleet.order))
+check("peer_context is '' on a cluster with no guardrails-peer Secret",
+      gl.peer_context("ctx-alone", runner=Fleet(ctx_alone=fk.FakeLeaseApi()).run) == "")
+inside_both = None
+with gl.hold_switch("wib-private", what="kubecon_probe.py admin", runner=fleet.run, log=lambda m: None) as sw:
+    inside_both = {c: (fleet.apis[c].lease or {}).get("spec", {}).get("holderIdentity") for c in fleet.apis}
+    env_both = gl.held_map()
+check("held from the private side, it takes community first, then private (sorted, so either side takes the same "
+      "order and two switches cannot deadlock)", creates(fleet) == ["wib-community", "wib-private"], str(fleet.order))
+check("both Leases name the same holder while it is held, and WIB_GUARD_LEASE names both contexts",
+      len(set(inside_both.values())) == 1 and None not in inside_both.values() and set(env_both) == set(fleet.apis)
+      and sw.contexts == ["wib-community", "wib-private"], f"{inside_both} {env_both}")
+check("both are released after", all(a.lease is None for a in fleet.apis.values()) and gl.ENV not in os.environ,
+      str({c: a.lease for c, a in fleet.apis.items()}))
+fleet.order.clear()
+with gl.hold_switch("wib-community", what="t", runner=fleet.run, log=lambda m: None):
+    pass
+check("held from the community side, the order is the same", creates(fleet) == ["wib-community", "wib-private"],
+      str(fleet.order))
+alone = Fleet(ctx_alone=fk.FakeLeaseApi())
+with gl.hold_switch("ctx-alone", what="t", runner=alone.run, log=lambda m: None) as sw:
+    pass
+check("a cluster with no peer holds only its own lock", creates(alone) == ["ctx-alone"] and sw.contexts == ["ctx-alone"],
+      str(alone.order))
+
+busy = Fleet(wib_private=fk.FakeLeaseApi(peer="wib-community"), wib_community=fk.FakeLeaseApi(peer="wib-private"))
+other_lease(busy.apis["wib-private"], "test_kyverno_cel_live.py pid 4 in 1-467-17944", renewed=time.time())
+clock = Clock(time.time())
+try:
+    with gl.hold_switch("wib-private", what="t", wait=30, runner=busy.run, clock=clock, sleep=clock.sleep,
+                        log=lambda m: None):
+        check("hold_switch gives up when the peer's lock is held", False, "it ran")
+except gl.LeaseBusy as e:
+    check("hold_switch on a held cluster raises LeaseBusy naming the holder and the cluster",
+          "1-467-17944" in str(e) and "wib-private" in str(e), str(e))
+check("and the lock it took on the other cluster first is released, so a switch that gives up holds nothing",
+      busy.apis["wib-community"].lease is None and creates(busy)[0] == "wib-community", str(busy.order))
+check("the holder's Lease is untouched",
+      (busy.apis["wib-private"].lease or {}).get("spec", {}).get("holderIdentity", "").endswith("1-467-17944"))
+
+missing = Fleet(wib_private=fk.FakeLeaseApi(peer="wib-community"))
+try:
+    with gl.hold_switch("wib-private", what="t", runner=missing.run, log=lambda m: None):
+        check("a peer the kubeconfig lacks is an error", False, "it ran")
+except RuntimeError as e:
+    check("a peer the kubeconfig has no context for raises, naming the peer and asking for a kubeconfig with it",
+          "also switches wib-community" in str(e) and "context named wib-community" in str(e), str(e))
+check("and leaves no Lease behind", missing.apis["wib-private"].lease is None, str(missing.apis["wib-private"].lease))
+lost_one = gl.SwitchHold([gl.GuardLease("wib-community", runner=fleet.run), gl.GuardLease("wib-private", runner=fleet.run)])
+lost_one.leases[1].lost = "the lock was lost: held by 'x'"
+check("a SwitchHold reports a loss on either cluster, naming it",
+      lost_one.lost == "wib-private: the lock was lost: held by 'x'", str(lost_one.lost))
+
+print("== run_held: a live check's body runs only inside the lock ==")
+api = fk.FakeLeaseApi()
+ran, notes, said = [], [], []
+real_hold = gl.hold
+
+
+@contextlib.contextmanager
+def hold_on_api(context, kubeconfig=None, profile=None, what="", wait=gl.WAIT_S, **kw):
+    with real_hold(context, kubeconfig, profile, what=what, wait=wait, runner=api.run, log=lambda m: None) as h:
+        yield h
+
+
+gl.hold = hold_on_api
+try:
+    ok = gl.run_held("ctx-private", lambda: ran.append((api.lease or {}).get("spec", {}).get("holderIdentity")),
+                     lambda n, c, d: notes.append((n, c)), "verify/test_x_live.py", wait=0)
+    check("run_held runs the body holding the Lease, then checks the lock held throughout",
+          ok and ran and ran[0] and api.lease is None and notes == [(notes[0][0], True)], f"{ran} {notes}")
+    other_lease(api, "kubecon_probe.py admin pid 7 in 1-900-17950", renewed=time.time())
+    ran.clear()
+    ok = gl.run_held("ctx-private", lambda: ran.append(1), lambda n, c, d: notes.append((n, c)), "t", wait=0,
+                     out=said.append)
+    check("on a busy lock run_held returns False, runs nothing and prints FAILED naming the holder",
+          ok is False and not ran and said and said[0].startswith("FAILED") and "1-900-17950" in said[0], str(said))
+finally:
+    gl.hold = real_hold
+check("WIB_GUARD_LEASE_WAIT sets the default wait", gl.default_wait({gl.WAIT_ENV: "12"}) == 12.0
+      and gl.default_wait({}) == gl.WAIT_S)
+try:
+    gl.default_wait({gl.WAIT_ENV: "soon"})
+    check("a WIB_GUARD_LEASE_WAIT that is not a number is an error", False, "accepted")
+except ValueError as e:
+    check("a WIB_GUARD_LEASE_WAIT that is not a number is an error", gl.WAIT_ENV in str(e), str(e))
+
+print("== the CLI: hold --with-peer, and WIB_GUARD_LEASE_WAIT ==")
+(work / "bin/kubectl").write_text(f'#!/usr/bin/env bash\nFAKE_LEASE_STATE="{work}/lease-$2.json" '
+                                  f'exec {sys.executable} {VERIFY / "fake_lease_kubectl.py"} "$@"\n')
+PEER_ENV = {**ENV, "FAKE_LEASE_PEERS": json.dumps({"wib-private": "wib-community", "wib-community": "wib-private"})}
+
+
+def ctx_lease(ctx: str) -> dict | None:
+    f = work / f"lease-{ctx}.json"
+    return json.loads(f.read_text())["lease"] if f.exists() else None
+
+
+r = subprocess.run([sys.executable, str(VERIFY / "guard_lease.py"), "hold", "--with-peer", "--context", "wib-private",
+                    "--what", "guardrails-on by hand", "--", "bash", "-c", f'echo "$WIB_GUARD_LEASE" > {work / "env2"}'],
+                   env=PEER_ENV, capture_output=True, text=True, timeout=60)
+held_env = json.loads((work / "env2").read_text() or "{}") if (work / "env2").exists() else {}
+check("hold --with-peer runs the command holding the lock on both clusters",
+      r.returncode == 0 and set(held_env) == {"wib-private", "wib-community"}, r.stderr + str(held_env))
+check("and releases both", ctx_lease("wib-private") is None and ctx_lease("wib-community") is None)
+api = fk.FakeLeaseApi()
+other_lease(api, "beat-01.sh pid 3 in 1-1016-18150", renewed=time.time())
+(work / "lease-wib-community.json").write_text(json.dumps({"lease": api.lease, "rv": api.rv}))
+t0 = time.monotonic()
+r = subprocess.run([sys.executable, str(VERIFY / "guard_lease.py"), "hold", "--with-peer", "--context", "wib-private",
+                    "--", "touch", str(work / "ran2")], env={**PEER_ENV, gl.WAIT_ENV: "0"}, capture_output=True,
+                   text=True, timeout=60)
+check("with WIB_GUARD_LEASE_WAIT=0 and the peer held, it exits BUSY_EXIT at once, names the holder, runs nothing, and "
+      "leaves no Lease of its own", r.returncode == gl.BUSY_EXIT and "1-1016-18150" in r.stderr
+      and not (work / "ran2").exists() and ctx_lease("wib-private") is None and time.monotonic() - t0 < 30,
+      f"rc {r.returncode}: {r.stderr}")
+(work / "lease-wib-community.json").unlink()
+
+# --- #1016: every live check that switches guardrails or policies takes the lock --------------------------------------
+print("== every live check that switches guardrails or policies takes the lock ==")
+# What a check changes when it switches the Kubernetes guardrails or the policies in `agent`: the terminal's
+# guardrails-on and guardrails-off (GUARDRAILS_ON, or the probe's beats, which end on GUARDS_OFF_BEAT), a
+# ValidatingPolicy's action (a /spec/validationActions patch, or toggle-kyverno-enforce.sh), the Challenge 1
+# NetworkPolicies, or another NetworkPolicy deleted. The readers are the live checks whose verdict needs the
+# guardrails to stay put while they run, and which said "never during" a probe before #1016.
+SWITCH_MARKS = ("GUARDRAILS_ON", "GUARDS_OFF_BEAT", "/spec/validationActions", "toggle-kyverno-enforce",
+                "c1-network-policy", '"delete", "networkpolicy"')
+# bootstrap_chart.py renders the chart: its /spec/validationActions is Argo CD's ignoreDifferences, and it runs no kubectl.
+NOT_LIVE = {"verify/bootstrap_chart.py"}
+SWITCHERS = {"verify/kubecon_probe.py": "hold_switch", "verify/stage_traces.py": "hold_switch",
+             "verify/test_recipe_block_live.py": "with_peer=True", "verify/test_kyverno_cel_live.py": "guard_lease.hold(",
+             "verify/beat-01.sh": "guard_lease.py\" hold", "verify/c1-exfil-block.sh": "guard_lease.py\" hold",
+             "verify/test_drift_selfheal_live.py": "guard_lease.run_held("}
+READERS = {"verify/test_kubecon_c3_live.py": "guard_lease.run_held(", "verify/test_two_hour_flow_live.py":
+           "guard_lease.run_held(", "verify/test_room_cleanup_live.py": "guard_lease.hold("}
+live_files = [f for f in list(VERIFY.glob("*.py")) + list(VERIFY.glob("*.sh"))
+              if (not f.name.startswith("test_") or "_live" in f.name)
+              and f.name not in ("guard_lease.py", "fake_lease_kubectl.py")]
+switchers = sorted(str(f.relative_to(REPO)) for f in live_files
+                   if any(m in f.read_text(encoding="utf-8") for m in SWITCH_MARKS))
+check("the live checks that switch guardrails or policies are exactly the ones this test names",
+      sorted(set(switchers) - NOT_LIVE) == sorted(SWITCHERS),
+      f"found {sorted(set(switchers) - NOT_LIVE)}: a new one takes the lock and joins SWITCHERS here")
+for f, how in {**SWITCHERS, **READERS}.items():
+    text = (REPO / f).read_text(encoding="utf-8")
+    check(f"{f} takes the guard lock ({how})", how in text.replace("${GUARD_LEASE}\"", "guard_lease.py\"")
+          .replace('$HERE/guard_lease.py"', 'guard_lease.py"'), how)
+for f in sorted(SWITCHERS):
+    text = (REPO / f).read_text(encoding="utf-8")
+    if "GUARDRAILS_ON" in text or "GUARDS_OFF_BEAT" in text:
+        check(f"{f} runs the terminal's guardrails switch, so it holds the lock on both clusters",
+              "hold_switch" in text or "with_peer=True" in text)
+
+print("== beat-01.sh holds the lock from before its first flip until after its cleanup ==")
+(work / "bin/kubectl").write_text(f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >>"{work}/sh-calls"
+case "$*" in
+    *" lease "*|*"/leases/"*|*" create -f - -o json"*|*" replace -f - -o json"*)
+        exec {sys.executable} {VERIFY / "fake_lease_kubectl.py"} "$@" ;;
+esac
+echo '{{}}'
+""")
+for name, extra, want_busy in (("free", {}, False), ("busy", {gl.WAIT_ENV: "0"}, True)):
+    (work / "sh-calls").write_text("")
+    if STATE.exists():
+        STATE.unlink()
+    if want_busy:
+        api = fk.FakeLeaseApi()
+        other_lease(api, "kubecon_probe.py admin pid 7 in 1-900-17950", renewed=time.time())
+        STATE.write_text(json.dumps({"lease": api.lease, "rv": api.rv}))
+    r = subprocess.run(["bash", str(REPO / "verify/beat-01.sh"), "ctx-sh", "agent"], env={**SH_ENV, **extra},
+                       capture_output=True, text=True, timeout=120, cwd=REPO)
+    calls = (work / "sh-calls").read_text().splitlines()
+    flips = [i for i, c in enumerate(calls) if "patch validatingpolicy" in c]
+    if want_busy:
+        check("beat-01.sh on a held lock exits 3 naming the holder and flips nothing",
+              r.returncode == gl.BUSY_EXIT and "1-900-17950" in r.stderr and not flips,
+              f"rc {r.returncode}: {r.stderr[-400:]}\n" + "\n".join(calls))
+    else:
+        check("beat-01.sh: every kubectl call names --context ctx-sh",
+              bool(calls) and all(c.startswith(("--context ctx-sh ", "--context=ctx-sh ")) for c in calls),
+              "\n".join(calls[:5]))
+        check("beat-01.sh creates the Lease before its first policy flip and deletes it after its cleanup's last",
+              bool(flips) and "create -f -" in calls[0] and "delete --raw" in calls[-1]
+              and 0 < flips[0] and flips[-1] < len(calls) - 1, "\n".join(calls))
+        check("beat-01.sh: the Lease is gone when it exits", saved() is None, str(saved()))
+if STATE.exists():
+    STATE.unlink()
+
+# --- #1016: no agent identity can write the Lease --------------------------------------------------------------------
+print("== no agent identity holds a grant that writes the Lease ==")
+import yaml  # noqa: E402
+
+WRITE = {"create", "update", "patch", "delete", "deletecollection", "*"}
+roles: dict[tuple[str, str], list[dict]] = {}
+bindings: list[tuple[str, dict]] = []
+
+
+def rbac_docs():
+    for f in sorted((REPO / "gitops").rglob("*.y*ml")):
+        if "templates" in f.parts:
+            continue  # Helm templates; the chart renders Applications, not RBAC
+        for d in yaml.safe_load_all(f.read_text(encoding="utf-8")):
+            if not isinstance(d, dict):
+                continue
+            yield f, d
+            # The Role variants the terminal applies (c5-scoped-role.yaml, c8-broad-role.yaml) live in ConfigMaps.
+            if d.get("kind") == "ConfigMap":
+                for v in (d.get("data") or {}).values():
+                    if "kind: Role" in v or "kind: ClusterRole" in v:
+                        for inner in yaml.safe_load_all(v):
+                            if isinstance(inner, dict):
+                                yield f, inner
+
+
+for f, d in rbac_docs():
+    if d.get("kind") in ("Role", "ClusterRole"):
+        roles.setdefault((d["kind"], d["metadata"]["name"]), []).extend(d.get("rules") or [])
+    elif d.get("kind") in ("RoleBinding", "ClusterRoleBinding"):
+        bindings.append((str(f.relative_to(REPO)), d))
+
+
+def writes_leases(rule: dict) -> bool:
+    return (bool({"coordination.k8s.io", "*"} & set(rule.get("apiGroups") or []))
+            and bool({"leases", "*"} & set(rule.get("resources") or []))
+            and bool(WRITE & set(rule.get("verbs") or [])))
+
+
+check("the grant reader sees a wildcard rule and a lease rule as writes, and a read-only lease rule as none",
+      writes_leases({"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]})
+      and writes_leases({"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["update"]})
+      and not writes_leases({"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["get", "list"]}))
+
+
+agent_bound = []
+for f, b in bindings:
+    for sub in b.get("subjects") or []:
+        if sub.get("kind") != "ServiceAccount" or (sub.get("namespace") or b["metadata"].get("namespace")
+                                                    or "agent") != "agent":
+            continue
+        ref = (b["roleRef"]["kind"], b["roleRef"]["name"])
+        agent_bound.append((f, sub["name"], ref))
+        check(f"{sub['name']}'s {ref[0]} {ref[1]} ({f}) is defined in the repo, so its grant can be read",
+              ref in roles, f"no {ref[0]} {ref[1]} in gitops/")
+        bad = [r for r in roles.get(ref, []) if writes_leases(r)]
+        check(f"{sub['name']}'s {ref[0]} {ref[1]} writes no Lease", not bad, json.dumps(bad))
+check("the scan found the agent's own bindings (agent-sa and workshop-mcp to the workshop-agent Role)",
+      {("agent-sa", ("Role", "workshop-agent")), ("workshop-mcp", ("Role", "workshop-agent"))}
+      <= {(s, ref) for _, s, ref in agent_bound}, str(agent_bound))
+check("the workshop-agent Role's variants the terminal applies were read with it",
+      len(roles.get(("Role", "workshop-agent"), [])) > 4, str(roles.get(("Role", "workshop-agent"))))
 
 print()
 if failures:

@@ -12,6 +12,10 @@ self-heals that often is drift worth knowing about. Then it deletes the policy a
 Every kubectl call carries --context "$CONTEXT" (CLAUDE.md, Kube-context safety). The current-context is never
 read. If the policy does not come back, the drill asks Argo CD for a refresh before it exits, so a failed run
 does not leave the console without egress.
+
+Deleting a NetworkPolicy in `agent` changes the namespace's policy state, which other runs' live checks read, so the
+drill runs holding the cluster's guard lock (verify/guard_lease.py, #1016). When another run keeps it for 30 minutes
+the drill fails naming the holder, having deleted nothing.
 """
 from __future__ import annotations
 
@@ -22,6 +26,9 @@ import shutil
 import subprocess
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guard_lease  # noqa: E402  verify/, next to this file
 
 TARGET = ("agent", "platform-console-egress", "ai-layer")  # namespace, NetworkPolicy, owning Application
 WINDOW_S = 30          # docs/floor.md: back within this, given QUIET_S without a self-heal on the owning app
@@ -121,27 +128,28 @@ def finish() -> int:
     return 0
 
 
-def main() -> int:
+def drill() -> None:
+    """The drill itself. Its checks go to `failures`; main prints the verdict."""
     ns, name, app_name = TARGET
     print("== prerequisites ==")
     check("kubectl is on PATH", shutil.which("kubectl") is not None)
     check("CONTEXT names the cluster to drill", bool(CONTEXT))
     if failures:
-        return finish()
+        return
     app = get_json("-n", "argocd", "application", app_name)
     check(f"Application {app_name} exists on {CONTEXT}", app is not None)
     if app is None:
-        return finish()
+        return
     auto = (app["spec"].get("syncPolicy") or {}).get("automated") or {}
     check(f"{app_name} self-heals and prunes", auto.get("selfHeal") is True and auto.get("prune") is True)
     before = get_json("-n", ns, "networkpolicy", name)
     check(f"{ns}/{name} exists before the drill", before is not None)
     if before is None:
-        return finish()
+        return
     check(f"{ns}/{name} carries Argo CD's tracking annotation (it is managed)",
           TRACKING in (before["metadata"].get("annotations") or {}))
     if failures:
-        return finish()
+        return
 
     print(f"== waiting for {QUIET_S}s without a sync on {app_name} (the self-heal backoff cap) ==")
     waited = 0.0
@@ -161,7 +169,7 @@ def main() -> int:
           "(if not, it is healing something all the time: that is the finding)",
           quiet is None or quiet >= QUIET_S)
     if failures:
-        return finish()
+        return
 
     print(f"== delete {ns}/{name} and time its return ==")
     old_uid = before["metadata"]["uid"]
@@ -169,7 +177,7 @@ def main() -> int:
     p = kubectl("-n", ns, "delete", "networkpolicy", name, "--wait=false")
     check(f"the delete is admitted ({p.stderr.strip() or 'ok'})", p.returncode == 0)
     if p.returncode != 0:
-        return finish()
+        return
     t0 = time.monotonic()
     back, after = None, None
     while time.monotonic() - t0 < GIVE_UP_S:
@@ -182,7 +190,7 @@ def main() -> int:
         print(f"  not back after {GIVE_UP_S}s; requesting a refresh so the console keeps its egress")
         kubectl("-n", "argocd", "annotate", "application", app_name, "argocd.argoproj.io/refresh=normal", "--overwrite")
         check(f"{ns}/{name} came back at all within {GIVE_UP_S}s", False)
-        return finish()
+        return
     print(f"  back after {back:.1f}s")
     healing = ((get_json("-n", "argocd", "application", app_name) or {}).get("status") or {}).get(
         "operationState") or {}
@@ -209,6 +217,15 @@ def main() -> int:
           new_operation(op, prior_start) and op.get("phase") != "Running")
     check(f"the sync that did it was automated and succeeded (phase {op.get('phase')})",
           op.get("phase") == "Succeeded" and (op.get("operation", {}).get("initiatedBy") or {}).get("automated") is True)
+
+
+def main() -> int:
+    if not CONTEXT or shutil.which("kubectl") is None:
+        drill()  # its prerequisites fail it, naming what is missing
+        return finish()
+    if not guard_lease.run_held(CONTEXT, drill, lambda name, ok, detail="": check(
+            name + (f": {detail}" if detail and not ok else ""), ok), "verify/test_drift_selfheal_live.py"):
+        return guard_lease.BUSY_EXIT
     return finish()
 
 

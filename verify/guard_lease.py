@@ -1,5 +1,5 @@
-# ABOUTME: The cluster's guard lock (#1024): a Lease in the agent namespace that a run holds while it flips guards, so
-# ABOUTME: two runs sharing a cluster take turns. `hold` wraps a command in it; the probes take it from Python.
+# ABOUTME: The cluster's guard lock (#1024, #1016): a Lease in the agent namespace a run holds while it flips guards or
+# ABOUTME: switches guardrails and policies, so runs sharing a cluster take turns. `hold` wraps a command in it.
 """One run at a time flips the guards on a cluster.
 
 On 2026-11-06 run 17950 (#900) ran the admin KubeCon probe five times on watch-it-burn-private, and three of those runs
@@ -19,12 +19,31 @@ free or expired Lease cannot both win.
     # wrap a command: it runs only once the lock is held, and the lock is released when it exits
     python3 verify/guard_lease.py hold --context watch-it-burn-private --profile accen-dev -- bash verify/beat-02.sh ...
 
+    # run the terminal's guardrails-on by hand: it switches both KubeCon clusters, so hold the lock on both
+    python3 verify/guard_lease.py hold --with-peer --context watch-it-burn-private --profile accen-dev -- \
+        kubectl --context watch-it-burn-private -n agent exec deploy/web-terminal -- /home/student/guardrails-on
+
     # who holds it now
     python3 verify/guard_lease.py show --context watch-it-burn-private --profile accen-dev
 
 A command run under `hold` finds the context in WIB_GUARD_LEASE (a JSON map of context to holder), so a script that
 `hold` already wraps, or that the probe runs, does not try to take the lock a second time. The shell scripts check it
 with `held`, which reads only that variable and runs no kubectl.
+
+The same lock covers the Kubernetes guardrails and policies (#1016). On 2026-11-06 run 17950's probe ran the
+terminal's guardrails-on and guardrails-off eight times on watch-it-burn-private while four other runs ran live checks
+there, and run 17944's Kyverno CEL check read that run's state and, restoring, overwrote one of its switches. So every
+live check that changes a guardrail or a policy (a ValidatingPolicy's action, the workshop-agent Role, a KubeArmor
+policy, a NetworkPolicy in `agent`), or whose verdict hangs on their state, holds it on its cluster too. The
+terminal's guardrails-on and guardrails-off switch BOTH KubeCon clusters, the one they run on and the one its
+guardrails-switch/guardrails-peer Secret names (#774), so a check that runs them holds the lock on both: `hold_switch`,
+or `hold --with-peer`. The peer's kube-context is the cluster name that Secret holds, which is how a hecaton run's
+kubeconfig and fleet.sh name the pair; a kubeconfig without it is an error naming it, never a lock on one cluster
+only. Contexts are taken in sorted order, so two runs that each need both cannot each hold one and wait on the other.
+
+No agent identity can write the Lease: none of the ServiceAccounts in `agent` holds create, update, patch or delete
+on leases.coordination.k8s.io there (the #1016 entry in decisions.md has the live `kubectl auth can-i` run), and
+test_guard_lease.py holds the repo's Roles and ClusterRoles to that.
 
 The lock is advisory, as any lock is: it holds back only the scripts that take it. The presenters' terminal helpers
 (guard-input-on and the rest) do not take it; they are the stage, and no run flips guards on a cluster during a
@@ -33,6 +52,7 @@ live session.
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import getpass
 import json
@@ -44,7 +64,7 @@ import subprocess
 import sys
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from typing import Callable, Iterator
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -59,9 +79,14 @@ POLL_S = 15
 # How often a waiting holder says whom it waits on, so a long wait is never a silent one.
 WAIT_NOTE_S = 60
 ENV = "WIB_GUARD_LEASE"
+# Sets `hold`'s and run_held's default wait in seconds, for a shell script or a live check run from an environment.
+WAIT_ENV = "WIB_GUARD_LEASE_WAIT"
 # `hold`'s exit code when the lock stayed busy for the whole wait.
 BUSY_EXIT = 3
 API_PATH = f"/apis/coordination.k8s.io/v1/namespaces/{NAMESPACE}/leases/{NAME}"
+# Where the terminal's guardrails switch finds the other KubeCon cluster (gitops/guardrails-switch, fleet.sh
+# guardrails-link): the Secret's `name` is that cluster's name.
+PEER_NAMESPACE, PEER_SECRET = "guardrails-switch", "guardrails-peer"
 
 
 class LeaseBusy(RuntimeError):
@@ -321,6 +346,100 @@ def hold(context: str, kubeconfig: str | None = None, profile: str | None = None
         lease.release()
 
 
+def peer_context(context: str, kubeconfig: str | None = None, profile: str | None = None,
+                 runner: Callable = subprocess.run) -> str:
+    """The other cluster the terminal's guardrails switch on `context` reaches, as a kube-context: the name in its
+    guardrails-switch/guardrails-peer Secret. "" when the cluster is not linked (no such Secret), so its switch
+    reaches only itself. Only the Secret's `name` field is read, never its kubeconfig."""
+    rc, out, err = GuardLease(context, kubeconfig, profile, runner=runner)._kubectl(
+        "-n", PEER_NAMESPACE, "get", "secret", PEER_SECRET, "--ignore-not-found", "-o", "jsonpath={.data.name}")
+    if rc != 0:
+        raise RuntimeError(f"could not read {PEER_NAMESPACE}/{PEER_SECRET} on {context}, so the cluster its "
+                           f"guardrails switch also reaches is unknown: {(err or out).strip()[:200]}")
+    if not out.strip():
+        return ""
+    try:
+        return base64.b64decode(out.strip()).decode("utf-8").strip()
+    except (ValueError, UnicodeDecodeError) as e:
+        raise RuntimeError(f"{PEER_NAMESPACE}/{PEER_SECRET} on {context} holds no readable name: {e}") from e
+
+
+class SwitchHold:
+    """The locks a guardrails switch holds, one per cluster it reaches, in the order taken."""
+
+    def __init__(self, leases: list[GuardLease]) -> None:
+        self.leases = leases
+
+    @property
+    def contexts(self) -> list[str]:
+        return [lease.context for lease in self.leases]
+
+    @property
+    def holder(self) -> str:
+        return self.leases[0].holder if self.leases else ""
+
+    @property
+    def lost(self) -> str | None:
+        """The first loss among them, naming its cluster: one lost lock is enough to doubt the run."""
+        for lease in self.leases:
+            if lease.lost:
+                return f"{lease.context}: {lease.lost}" if len(self.leases) > 1 else lease.lost
+        return None
+
+
+@contextmanager
+def hold_switch(context: str, kubeconfig: str | None = None, profile: str | None = None, what: str = "",
+                wait: float = WAIT_S, runner: Callable = subprocess.run, **kw) -> Iterator[SwitchHold]:
+    """Hold the lock on `context` and on the cluster its guardrails switch also reaches (peer_context), for a check
+    that runs guardrails-on or guardrails-off (#1016). Both are taken in sorted order, so two runs that each need the
+    pair cannot deadlock; each waits up to `wait`. A peer the kubeconfig has no context for raises, naming it."""
+    peer = peer_context(context, kubeconfig, profile, runner=runner)
+    with ExitStack() as stack:
+        leases = []
+        for c in sorted({context, peer} - {""}):
+            try:
+                leases.append(stack.enter_context(hold(c, kubeconfig, profile, what=what, wait=wait, runner=runner,
+                                                       **kw)))
+            except LeaseBusy:
+                raise
+            except RuntimeError as e:
+                if c != peer:
+                    raise
+                raise RuntimeError(f"{context}'s guardrails switch also switches {peer} ({PEER_NAMESPACE}/"
+                                   f"{PEER_SECRET}), so the lock is needed there too, and taking it failed: {e}. "
+                                   f"Run with a kubeconfig that has a context named {peer}") from e
+        yield SwitchHold(leases)
+
+
+def default_wait(environ: dict | None = None) -> float:
+    """WIB_GUARD_LEASE_WAIT when set, else WAIT_S. A value that is not a number of seconds is an error, not ignored."""
+    raw = (os.environ if environ is None else environ).get(WAIT_ENV, "")
+    if not raw:
+        return float(WAIT_S)
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f"{WAIT_ENV}={raw!r} is not a number of seconds") from None
+
+
+def run_held(context: str, body: Callable[[], object], check: Callable[[str, bool, str], None], what: str, *,
+             with_peer: bool = False, kubeconfig: str | None = None, profile: str | None = None,
+             wait: float | None = None, out: Callable[[str], None] = print) -> bool:
+    """For a live check: run body() holding the lock on `context` (and its guardrails peer, with_peer), then check
+    that the lock held throughout. False, having run nothing and printed FAILED naming the holder, when the lock
+    stayed busy for the whole wait; the caller then exits non-zero."""
+    held = hold_switch if with_peer else hold
+    try:
+        with held(context, kubeconfig, profile, what=what, wait=default_wait() if wait is None else wait) as lease:
+            body()
+    except LeaseBusy as e:
+        out(f"FAILED: the guard lock stayed busy, so no check ran and nothing was changed: {e}")
+        return False
+    check("the guard lock was held for the whole check (no other run switched guards or guardrails meanwhile)",
+          lease.lost is None, lease.lost or "")
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -334,8 +453,11 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--profile", help="AWS_PROFILE for kubectl, passed per command")
         if name == "hold":
             p.add_argument("--what", default="", help="what is flipping guards, for the holder name")
-            p.add_argument("--wait", type=float, default=WAIT_S,
-                           help=f"seconds to wait for another holder before giving up (default {WAIT_S})")
+            p.add_argument("--wait", type=float, default=None,
+                           help=f"seconds to wait for another holder before giving up (default ${WAIT_ENV}, "
+                                f"else {WAIT_S})")
+            p.add_argument("--with-peer", action="store_true",
+                           help="also hold it on the cluster this one's guardrails switch reaches (guardrails-on)")
             p.add_argument("command", nargs=argparse.REMAINDER, help="-- then the command to run")
     args = ap.parse_args(argv)
 
@@ -356,7 +478,9 @@ def main(argv: list[str] | None = None) -> int:
     # the lock is released when the command exits.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))
     try:
-        with hold(args.context, args.kubeconfig, args.profile, what=what, wait=args.wait) as lease:
+        held = hold_switch if args.with_peer else hold
+        wait = default_wait() if args.wait is None else args.wait
+        with held(args.context, args.kubeconfig, args.profile, what=what, wait=wait) as lease:
             child = subprocess.Popen(command)
             signal.signal(signal.SIGTERM, lambda *_: child.send_signal(signal.SIGTERM))
             rc = child.wait()

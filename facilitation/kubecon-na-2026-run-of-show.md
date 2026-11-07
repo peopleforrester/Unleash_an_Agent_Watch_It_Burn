@@ -1678,6 +1678,19 @@ is merely slow rather than rebuilding:
     the probe prints `KUBECON PROBE NOT RUN`. `python3 verify/guard_lease.py show
     --context <context>` prints who holds it. On 2026-11-06 three of five admin runs
     went red on an output guard another run turned on (#900).
+  - The same lock covers the Kubernetes guardrails (#1016). An admin probe holds it
+    on both clusters, since its `guardrails-on` reaches attackme, and so do
+    `verify/stage_traces.py seed` and `verify/test_recipe_block_live.py`. Every live
+    check that switches a policy holds it on its own cluster: `verify/beat-01.sh`,
+    `verify/c1-exfil-block.sh`, `verify/test_kyverno_cel_live.py` and
+    `verify/test_drift_selfheal_live.py`, and so do the checks that read the
+    guardrails off, `verify/test_kubecon_c3_live.py`,
+    `verify/test_two_hour_flow_live.py` and `verify/test_room_cleanup_live.py`. So
+    the community probe and the admin one take turns on their own.
+    `WIB_GUARD_LEASE_WAIT` sets the wait for the scripts that have no `--lock-wait`.
+    To run `guardrails-on` by hand, wrap it: `python3 verify/guard_lease.py hold
+    --with-peer --context <context> -- <the kubectl exec>`. On 2026-11-06 run
+    17944's Kyverno check read run 17950's switches, eight in an hour.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
     fallback for before the day, not something to find out on stage. The two beats
     that failed on 2026-10-24 for want of a fix, the Kyverno badge (#487) and the
