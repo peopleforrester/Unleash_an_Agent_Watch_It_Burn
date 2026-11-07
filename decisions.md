@@ -30580,3 +30580,8 @@ alone, which run 18077 already did.
    run and the `logs deploy/guard-proxy -c proxy` read #1052 names.
 
 No dependency was added.
+
+**The suites (run 18195, at `a7451a5d`, pin 0f0c809; this paragraph only adds to the entry).** `bash
+verify/run-e2e-tools.sh` printed `331 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the
+offline suite and 81 tier tests) in 11m12s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`
+(`/var/lib/hecaton/runs/18195/e2e-tools.log`). The prose gate printed `prose gate: pass`.
