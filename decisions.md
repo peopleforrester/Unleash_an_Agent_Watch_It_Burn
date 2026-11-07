@@ -28308,3 +28308,11 @@ from the apex checkout `scripts/reload-routes.sh routes.map`, then `./fleet.sh r
 recorded here and in the run-of-show's Probe record.
 
 **Not yet run on a cluster.** Nothing: the change is records only. No dependency was added.
+
+**The tools tier's one red check, fixed in this run.** The first `bash verify/run-e2e-tools.sh` here printed `313 tests
+ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 40m57s` and
+`SOME E2E TOOLS TIER CHECKS FAILED: test_breakout_room_cleanup.py (exit 1)`, `exit=1`. The traceback ended in
+`_request_witch`: `AttributeError: '_StandInMCP' object has no attribute 'get_context'`. Staging's `582d10ec` (#995)
+made `deploy_app` read the request's X-Witch-Name through `mcp.get_context()` and gave every test's stand-in FastMCP a
+`get_context` that raises LookupError. `test_breakout_room_cleanup.py` came in with #990 (`e0770036`) beside it and was
+not given one. It now has the same five lines. Run alone it ends "All breakout room cleanup checks passed.", exit 0.
