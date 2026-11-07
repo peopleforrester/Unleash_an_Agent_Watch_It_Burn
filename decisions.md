@@ -32747,3 +32747,11 @@ ran, and its output in `/var/lib/hecaton/runs/18369/e2e-tools.log`, printed `338
 RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 10m40s, 4 at a time`, `ALL E2E
 TOOLS TIER CHECKS GREEN`, `exit=0`. `test_llm_guard_bantopics_image.py` printed `All BanTopics image checks passed.`
 there. The hecaton release on the host when the suite ended, `4eed4f827120`, holds hecaton#521's gate.
+
+**Why run 18369 did not land, and run 18385.** Hecaton refused run 18369's branch at 21:18:20Z with `forbidden`
+failed: "adds submodule images/llm-guard". The branch was not at fault. The gate ran inside `hecaton-dispatch.service`,
+which had been running since before hecaton#521's release (`4eed4f827120`, on disk at 21:13Z) and so still had the old
+`gate_forbidden` loaded. The service restarted at 21:25:27Z, after the refusal. Run 18385 replayed the deployed
+`gate_forbidden` (release `466bdb0ffe56`) against base `470c95ef` and this branch, on the changed paths `decisions.md`,
+`images/llm-guard` and `verify/test_llm_guard_bantopics_image.py`, and it returned `pass`, because `images/llm-guard`
+is already a gitlink at the base and `.gitmodules` is unchanged. The commits stay as run 18369 made them.
