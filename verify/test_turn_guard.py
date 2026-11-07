@@ -30,6 +30,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 import types
 from contextlib import redirect_stdout
 
@@ -287,9 +288,12 @@ msg = shell("ls")
 check("an ordinary failure with status 2 carries no parse hint", "exit code 2" in msg and "here-document" not in msg, msg)
 msg = shell("mention")
 check("output that only mentions a syntax error is not read as one", "here-document" not in msg, msg)
-body = "/tmp/turn-guard-885-body.json"
+# The test's own scratch directory, not /tmp: a sandboxed host may have no writable /tmp (#1023, run 18134).
+_scratch = tempfile.TemporaryDirectory(prefix="turn-guard-885-")
+body = f"{_scratch.name}/body.json"
 msg = asyncio.run(server.run_shell(f"cat > {body} <<'EOF'\n{{\"classification\": \"Hex & Cauldron's\"}}\nEOF\ncat {body}; rm -f {body}"))
 check("the here-document the hint describes does carry an apostrophe through", "Cauldron's" in msg, msg)
+_scratch.cleanup()
 
 print("== #644's 504 recorded turns, through the guard ==")
 data = json.loads(FIXTURE.read_text(encoding="utf-8"))
