@@ -30294,3 +30294,76 @@ RENDER-GATE TESTS GREEN`, with `test_weather_feed_upstream_failure.py` passing a
 checks ran (the offline suite and 81 tier tests) in 9m26s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0` (`/var/lib/hecaton/runs/18187/scratch/e2e-tools.log`). `test_weather_feed_e2e.py` passed live against
 Open-Meteo in the same run. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1036 · run 18188 · The 2026-11-06 drift report's six findings read again: the four Config findings cleared by the boundary-then-audit apply, the two clusters and accen-dev's Notes #979's, left for #1041
+
+**Context.** #1036 was split from #981 (the "Fleet drift report" issue) by planning run 18053. It asks for the six
+findings of the 2026-11-06T11:17Z report to be read again in AWS and routed. Those six are watch-it-burn-community and
+watch-it-burn-private unmanaged in accen-dev, plus no Config recorder in aws1-student31 to aws1-student34.
+`bash verify/prior-drafts.sh 1036 origin/staging` printed NONE. Run 18173 worked this issue before. It posted its
+triage on #981 (issuecomment-6706883045, reads at 12:20Z), but the coordinator restarted it to free its slot for
+#1047 and #1018, and its decisions.md entry is in no branch here. So this run read everything again and this entry
+is the record. Run 17961's entry, on the unmerged `agent/981-17961`, was the starting point. Its reads of
+2026-11-06T17:05Z found none of the four accounts holding a recorder, a trail, a cluster or the boundary.
+
+**What differs from run 17961: the four accounts are fixed.** Run 17961 left the boundary and audit applies as an
+escalation (#1037 carries it). They have since run. In each of the four accounts, CloudTrail's `CreatePolicy` event
+for `watch-it-burn-permissions-boundary` shows `user/nwuser`, at 22:40:34Z, 22:41:50Z, 22:43:05Z and 22:44:20Z on
+2026-11-06. On tanjiro-wsl2, `infra/org/boundary/states/` and `infra/terraform/aws/audit/states/` each hold a
+`.tfstate` and a `.tfstate.backup` for all four profiles, so the apply and its settle ran there. The daily report of
+2026-11-07T11:17Z (issuecomment-6706135290) prints 2 findings, 0 accounts without a Config record, an `ok` line for
+all five accounts, and boundary and audit clean in all four.
+
+**Routing.**
+
+- Findings 3 to 6 (no Config record in aws1-student31 to 34): cleared by the boundary-then-audit apply described
+  above. #1037's command has nothing left to apply. #1035's report line still matters for an account found later
+  with neither a recorder nor a boundary.
+- Findings 1 and 2 (the two clusters) and accen-dev's two Notes (no lab VPC state, no boundary state): #979. Its
+  title and body name both clusters, and its first criterion has each one imported or registered depending on how
+  it was built. Its body says "accen-dev also has no lab VPC state and no boundary state on any machine (see the
+  report's Notes), which belongs to the same piece of work", and its third criterion asks that "accen-dev's lab VPC
+  state and permissions-boundary state can be rebuilt the same way, so the drift report's Notes stop saying neither
+  exists". #979 closed at 2026-11-07T01:01:46Z with its work in staging (`01ccd137`). The daily report reads its
+  states on tanjiro-wsl2, and that checkout is still at `ec03eb5f`: `infra/terraform/fleet/states/` is empty, there
+  is no `infra/org/boundary/states/accen-dev.tfstate` and no network `.tfstate`. So the two clusters and the two
+  Notes stay in the report until #1041 rebuilds those states there, and then #1042 applies the cluster root. Both
+  issues are open.
+
+**Live reads, the four accounts.** These were read-only calls through
+`sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2`, run with each fleet profile from
+2026-11-07T14:01:28Z to 14:01:54Z. A `--query` holding `{}` does not survive that wrapper (the remote shell splits
+it, and every call answered a ParamValidation error), so the calls ran without one:
+
+```
+aws sts get-caller-identity --profile $p --region us-west-2
+aws configservice describe-configuration-recorders --profile $p --region us-west-2
+aws configservice describe-configuration-recorder-status --profile $p --region us-west-2
+aws cloudtrail describe-trails --profile $p --region us-west-2
+aws cloudtrail get-trail-status --name watch-it-burn --profile $p --region us-west-2
+aws eks list-clusters --profile $p --region us-west-2
+aws iam get-policy --profile $p --policy-arn arn:aws:iam::$a:policy/watch-it-burn-permissions-boundary
+```
+
+| account | recorder (status) | trail (get-trail-status) | eks list-clusters | boundary policy |
+|---|---|---|---|---|
+| aws1-student31 (948731545609) | `watch-it-burn`, recording true, SUCCESS | `watch-it-burn`, multi-region, IsLogging true | `[]` | v1, created 2026-11-06T22:40:34Z |
+| aws1-student32 (891472436879) | `watch-it-burn`, recording true, SUCCESS | `watch-it-burn`, multi-region, IsLogging true | `[]` | v1, created 2026-11-06T22:41:50Z |
+| aws1-student33 (250699659274) | `watch-it-burn`, recording true, SUCCESS | `watch-it-burn`, multi-region, IsLogging true | `[]` | v1, created 2026-11-06T22:43:05Z |
+| aws1-student34 (783241407859) | `watch-it-burn`, recording true, SUCCESS | `watch-it-burn`, multi-region, IsLogging true | `[]` | v1, created 2026-11-06T22:44:20Z |
+
+In each account the recorder's role is `watch-it-burn-config-recorder`, it records 17 resource types continuously,
+and the trail logs to `watch-it-burn-audit-<account>-us-west-2` with log file validation on. Each boundary policy is
+tagged `ManagedBy=terraform`, with a `PermissionsBoundaryUsageCount` of 1.
+
+**Live reads, accen-dev (515966504359).** Read at 14:02:01Z with the run's own session
+(`assumed-role/hecaton-run/hecaton-run-18188`). `eks list-clusters` shows watch-it-burn-community and
+watch-it-burn-private in us-west-2 and none in us-east-1 or us-east-2. The recorder `watch-it-burn` is recording,
+SUCCESS. The `watch-it-burn` trail stands. The boundary policy is at v1, created 2026-10-24T16:47:45Z.
+`ec2 describe-vpcs` shows `vpc-0607c27ee51fb233c` (`watch-it-burn-lab-vpc`, `ManagedBy=terraform`). So the resources
+behind the two Notes exist, and only their states are missing on tanjiro-wsl2.
+
+**Record.** #981 issuecomment-6707919784 holds this triage and the table.
+
+**Not yet run on a cluster.** Nothing is owed: the change is records only, and this run changed no account or
+cluster. No dependency was added.
