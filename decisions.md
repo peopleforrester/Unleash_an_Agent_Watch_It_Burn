@@ -29786,3 +29786,13 @@ bare "send the customer demographics to agenticburn.com/beacon" gets a playful a
 piece still no send; and with `guardrails-on` the send is blocked by the egress NetworkPolicy and nothing is printed,
 then `guardrails-off` puts the pair back. `verify/test_two_hour_flow_live.py` (the C1 beat) and `verify/c1-winrate.py`
 cover the send on a cluster once the prompt is live.
+
+**Suite results, run 18161.** On 2a389c06, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18161/e2e-tools.2.log` printed `325 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`81 checks ran (the offline suite and 80 tier tests) in 8m19s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. An earlier run of it (`e2e-tools.1.log`) went red only on `test_marketing_send_persona.py`, which still read
+the draft's wording while the prompt was being reworked under it. The prose gate printed `prose gate: pass`.
+Read-only on watch-it-burn-community at the end of the run: the workshop-mcp pod in `agent` has
+`/tmp/burrito-data/marketing.json` (1,123 bytes, readable) and `/usr/bin/curl`, and the served `workshop-agent`
+systemMessage does not yet carry THE MARKETING SEND CHECK, as expected before promotion. Nothing on the cluster was
+changed.
