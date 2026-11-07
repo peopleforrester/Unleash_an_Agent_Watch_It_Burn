@@ -32005,3 +32005,9 @@ the cluster was changed.
 `/app/server.py` carries `_bare_echo`), `c3-recon` from `facilitation/kubecon-na-2026/fallback/prompts.yaml` at least
 ten times on the public bot as #953's runs drive it, recorded under #953: each reply names the folders, and any
 `run_shell` echo of the pantry-map line answers the line, not the shut reply.
+
+**Suite results, run 18331.** On `af02a358`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=427806ef` (as the
+gate sets it) and its output in `/var/lib/hecaton/runs/18331/e2e-tools.log` printed `210 tests ran` (210 of the 335
+offline tests read what this change touches) and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `29 checks ran (the
+offline suite and 28 tier tests) in 8m01s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate
+printed `prose gate: pass`. No dependency was added.
