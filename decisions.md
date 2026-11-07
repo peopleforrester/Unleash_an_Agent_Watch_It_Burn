@@ -28648,3 +28648,12 @@ fixture repo, a test added without an entry runs in the change that adds it and 
 
 **The map.** `write` added the two #984 tests; `check` prints `0 problems`. `scope_audit.py offline
 test_recipe_pantry_gate.py` and `scope_audit.py tools test_recipe_pantry_gate_e2e.py` each print 0 misses.
+
+**The suites (run 18196).** `bash verify/run-e2e-tools.sh` at 1eb91ca0, with no `HECATON_BASE_SHA`: `316 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 35m21s` with one
+failure, `test_promo_villains_public.py (exit 1)`: every one of the ten `ghcr.io/peopleforrester/lab-platform/promo/*:v1`
+tags serves a digest other than the one `verify/promo_villains.py` pins. That is #1070, filed earlier on 2026-11-07:
+lab-platform's tags moved on ghcr.io, outside this repo, and the test fails the same way without this change; it
+passed in run 18091's tier the same morning. The host's /tmp was removed while the first try of this run's E2E command
+ran (its link count read 0, as #909 saw), taking its log, so the run above had its log and `TMPDIR` under the
+gitignored `verify/.tools/`. The prose gate printed `prose gate: pass`.
