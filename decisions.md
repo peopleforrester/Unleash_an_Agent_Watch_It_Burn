@@ -29288,3 +29288,8 @@ profile, outside guard-proxy's cost cap. No Deployment was created: the measurem
 was applied to the cluster, and no guard was touched. Two `agentgateway` port-forwards read workshop-mcp's and
 evil-mcp's tool lists and one `read_support_ticket("HC-666")`. No dependency was added to the repo; the measurements
 ran boto3 through `uv run --with boto3`, and the scripts and their logs are in the run's directory, not the repo.
+
+**The suites (run 18140, at `ccfb0233`).** `bash verify/run-e2e-tools.sh` printed `321 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, with `test_ticket_persona.py` among them, then `80 checks ran (the offline suite and 79 tier
+tests) in 9m36s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate:
+pass`.
