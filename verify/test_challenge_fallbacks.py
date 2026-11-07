@@ -568,7 +568,6 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, out
     return p.returncode, p.stdout + p.stderr, log, state, list((work / "tmpdir").iterdir())
 
 
-tmp_before = sorted(p.name for p in (REPO / "tmp").iterdir()) if (REPO / "tmp").exists() else []
 try:
     for beat, script, argv in BEATS:
         print(f"\n== {beat}: {script} {' '.join(argv)} ==")
@@ -746,8 +745,11 @@ finally:
     FAKE.shutdown()
     FAKE_AGENT.shutdown()
     shutil.rmtree(SCRATCH, ignore_errors=True)
-tmp_after = sorted(p.name for p in (REPO / "tmp").iterdir()) if (REPO / "tmp").exists() else []
-check("the repo's tmp/ is left as it was found", tmp_before == tmp_after, (tmp_before, tmp_after))
+# Only this test's own scratch is checked. The E2E command runs tier checks beside the offline suite, and some of them
+# (test_bootstrap_chart_render.py, test_image_pins.py) make and remove temp directories under the same tmp/, so a
+# before-and-after listing of all of tmp/ failed on one of theirs in run 18117 (#885). The fallbacks write nothing
+# there: each run's TMPDIR is its own work/tmpdir, checked per beat above.
+check("the test's scratch under the repo's tmp/ is removed", not SCRATCH.exists(), str(SCRATCH))
 
 print("\n== the run-of-show names each script per beat ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text()

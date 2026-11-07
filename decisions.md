@@ -28815,3 +28815,11 @@ exited 0 on watch-it-burn-community and watch-it-burn-private and returned `work
 `workshop-mcp=["X-Witch-Name","X-Pantry-Shut"]` after it. The two checks under "Not yet run on a cluster" above are
 still owed, and they wait on this change reaching watch-it-burn-community through Argo CD: the `turn` on workshop-mcp's
 audit lines, and the 150-user `verify/load_replay.py` replay ending with 0 PROXY_TIMEOUT 502s.
+
+**A test that hung on another's files (run 18117).** The first `bash verify/run-e2e-tools.sh` of this run, at
+`676d4d78`, failed one offline check: test_challenge_fallbacks.py's "the repo's tmp/ is left as it was found" read
+`(['hecaton', 'tmpq84tzrah'], ['hecaton'])`. That test listed all of tmp/ before and after, and the E2E command runs
+tier checks beside the offline suite, two of which (test_bootstrap_chart_render.py, test_image_pins.py) make and
+remove their own temp directories there; one appeared between the two listings. The check now asks only that the
+test's own scratch directory is gone. The fallback scripts write nothing under tmp/, and each run's TMPDIR is checked
+per beat already.
