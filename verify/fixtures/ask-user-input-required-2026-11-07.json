@@ -1,0 +1,353 @@
+{
+ "_about": "Two workshop-agent tasks read live on watch-it-burn-community on 2026-11-07 (#1094, run 18386) by docs/research/2026-11-07-ask-user/a2a_raw.py: a fresh chat's memory question that Nova answered with kagent's ask_user, as kagent v0.10.1's Go runtime hands it back (state input-required). Copied as tasks/get returned them.",
+ "tasks": [
+  {
+   "jsonrpc": "2.0",
+   "id": "chat",
+   "result": {
+    "kind": "task",
+    "id": "01a1b7f1-c02a-7a66-9cef-e156c58bb428",
+    "contextId": "r1094-kvs4uwssvq8c",
+    "history": [
+     {
+      "kind": "message",
+      "messageId": "r1094-r1094-kvs4uwssvq8c",
+      "contextId": "r1094-kvs4uwssvq8c",
+      "parts": [
+       {
+        "kind": "text",
+        "text": "What was the last thing I asked you, word for word as best you remember?"
+       },
+       {
+        "kind": "text",
+        "text": "The person chatting with you gave their name as Quentin the Ghoul."
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "kind": "message",
+      "messageId": "r1094-r1094-kvs4uwssvq8c",
+      "contextId": "r1094-kvs4uwssvq8c",
+      "parts": [
+       {
+        "kind": "text",
+        "text": "What was the last thing I asked you, word for word as best you remember?"
+       },
+       {
+        "kind": "text",
+        "text": "The person chatting with you gave their name as Quentin the Ghoul."
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "kind": "message",
+      "messageId": "01a1b7f1-c4ee-76d5-b2a0-0e4b9156fcc5",
+      "contextId": "r1094-kvs4uwssvq8c",
+      "metadata": {
+       "adk_app_name": "agent__NS__workshop_agent",
+       "adk_author": "workshop_agent",
+       "adk_invocation_id": "e-90db3a99-1490-4563-b938-25a87d940e58",
+       "adk_session_id": "r1094-kvs4uwssvq8c",
+       "adk_usage_metadata": {
+        "candidatesTokenCount": 109,
+        "promptTokenCount": 10378,
+        "totalTokenCount": 10487
+       },
+       "adk_user_id": "A2A_USER_r1094-kvs4uwssvq8c"
+      },
+      "parts": [
+       {
+        "kind": "text",
+        "text": "<thinking> Quentin the Ghoul has asked me again about the last thing they asked me, word for word. I need to recall from our conversation history and provide the exact wording of their last question. </thinking> "
+       },
+       {
+        "kind": "data",
+        "data": {
+         "args": {
+          "questions": [
+           {
+            "question": "Let me think back... Ah, I remember! The last thing you asked me was: 'What was the last thing I asked you, word for word as best you remember?' Keep the chat flowing, Quentin the Ghoul!"
+           }
+          ]
+         },
+         "id": "tooluse_CQfHEyYXYSbzE7zJtO6KIW",
+         "name": "ask_user"
+        },
+        "metadata": {
+         "adk_is_long_running": false,
+         "adk_type": "function_call"
+        }
+       }
+      ],
+      "role": "agent",
+      "taskId": "01a1b7f1-c02a-7a66-9cef-e156c58bb428"
+     },
+     {
+      "kind": "message",
+      "messageId": "01a1b7f1-c4f1-7b2f-a43a-4a7b932e78ed",
+      "contextId": "r1094-kvs4uwssvq8c",
+      "metadata": {
+       "adk_app_name": "agent__NS__workshop_agent",
+       "adk_author": "workshop_agent",
+       "adk_invocation_id": "e-90db3a99-1490-4563-b938-25a87d940e58",
+       "adk_session_id": "r1094-kvs4uwssvq8c",
+       "adk_user_id": "A2A_USER_r1094-kvs4uwssvq8c"
+      },
+      "parts": [
+       {
+        "kind": "data",
+        "data": {
+         "id": "tooluse_CQfHEyYXYSbzE7zJtO6KIW",
+         "name": "ask_user",
+         "response": {
+          "questions": [
+           {
+            "question": "Let me think back... Ah, I remember! The last thing you asked me was: 'What was the last thing I asked you, word for word as best you remember?' Keep the chat flowing, Quentin the Ghoul!"
+           }
+          ],
+          "status": "pending"
+         }
+        },
+        "metadata": {
+         "adk_type": "function_response"
+        }
+       }
+      ],
+      "role": "agent",
+      "taskId": "01a1b7f1-c02a-7a66-9cef-e156c58bb428"
+     }
+    ],
+    "metadata": {
+     "adk_app_name": "agent__NS__workshop_agent",
+     "adk_author": "workshop_agent",
+     "adk_invocation_id": "e-90db3a99-1490-4563-b938-25a87d940e58",
+     "adk_session_id": "r1094-kvs4uwssvq8c",
+     "adk_usage_metadata": {
+      "candidatesTokenCount": 109,
+      "promptTokenCount": 10378,
+      "totalTokenCount": 10487
+     },
+     "adk_user_id": "A2A_USER_r1094-kvs4uwssvq8c"
+    },
+    "status": {
+     "message": {
+      "kind": "message",
+      "messageId": "01a1b7f1-c4f4-7ba3-b1c4-1256f23dbb17",
+      "contextId": "r1094-kvs4uwssvq8c",
+      "parts": [
+       {
+        "kind": "data",
+        "data": {
+         "args": {
+          "originalFunctionCall": {
+           "args": {
+            "questions": [
+             {
+              "question": "Let me think back... Ah, I remember! The last thing you asked me was: 'What was the last thing I asked you, word for word as best you remember?' Keep the chat flowing, Quentin the Ghoul!"
+             }
+            ]
+           },
+           "id": "tooluse_CQfHEyYXYSbzE7zJtO6KIW",
+           "name": "ask_user"
+          },
+          "toolConfirmation": {
+           "confirmed": false,
+           "hint": "Let me think back... Ah, I remember! The last thing you asked me was: 'What was the last thing I asked you, word for word as best you remember?' Keep the chat flowing, Quentin the Ghoul!",
+           "payload": null
+          }
+         },
+         "id": "adk-ce0bb708-11da-459d-9856-a6284f365927",
+         "name": "adk_request_confirmation"
+        },
+        "metadata": {
+         "adk_is_long_running": true,
+         "adk_type": "function_call"
+        }
+       }
+      ],
+      "role": "agent",
+      "taskId": "01a1b7f1-c02a-7a66-9cef-e156c58bb428"
+     },
+     "state": "input-required",
+     "timestamp": "2026-11-07T21:37:17.55676433Z"
+    }
+   }
+  },
+  {
+   "jsonrpc": "2.0",
+   "id": "chat",
+   "result": {
+    "kind": "task",
+    "id": "01a1b7f1-e422-70af-bc5e-87fee7255d8a",
+    "contextId": "r1094-330iaqlhiqq3",
+    "history": [
+     {
+      "kind": "message",
+      "messageId": "r1094-r1094-330iaqlhiqq3",
+      "contextId": "r1094-330iaqlhiqq3",
+      "parts": [
+       {
+        "kind": "text",
+        "text": "What was the last thing I asked you, word for word as best you remember?"
+       },
+       {
+        "kind": "text",
+        "text": "The person chatting with you gave their name as Silas the Warlock."
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "kind": "message",
+      "messageId": "r1094-r1094-330iaqlhiqq3",
+      "contextId": "r1094-330iaqlhiqq3",
+      "parts": [
+       {
+        "kind": "text",
+        "text": "What was the last thing I asked you, word for word as best you remember?"
+       },
+       {
+        "kind": "text",
+        "text": "The person chatting with you gave their name as Silas the Warlock."
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "kind": "message",
+      "messageId": "01a1b7f1-e898-7d79-95e8-ee4a61e78f5b",
+      "contextId": "r1094-330iaqlhiqq3",
+      "metadata": {
+       "adk_app_name": "agent__NS__workshop_agent",
+       "adk_author": "workshop_agent",
+       "adk_invocation_id": "e-ac32dbb1-8cf0-41fd-b552-e206173d20dd",
+       "adk_session_id": "r1094-330iaqlhiqq3",
+       "adk_usage_metadata": {
+        "candidatesTokenCount": 97,
+        "promptTokenCount": 10284,
+        "totalTokenCount": 10381
+       },
+       "adk_user_id": "A2A_USER_r1094-330iaqlhiqq3"
+      },
+      "parts": [
+       {
+        "kind": "text",
+        "text": "<thinking> The guest has not provided a response to my question, so I cannot determine the last thing they asked me. I will inform the guest that I need their response to proceed. </thinking> "
+       },
+       {
+        "kind": "data",
+        "data": {
+         "args": {
+          "questions": [
+           {
+            "question": "I'm sorry, sugar, but I can't recall the last thing you asked me without your response. Please tell me what it was so I can assist you."
+           }
+          ]
+         },
+         "id": "tooluse_3kubLT3gzMXLuEi1DJUJDf",
+         "name": "ask_user"
+        },
+        "metadata": {
+         "adk_is_long_running": false,
+         "adk_type": "function_call"
+        }
+       }
+      ],
+      "role": "agent",
+      "taskId": "01a1b7f1-e422-70af-bc5e-87fee7255d8a"
+     },
+     {
+      "kind": "message",
+      "messageId": "01a1b7f1-e89c-7121-a883-94c7d40b90dc",
+      "contextId": "r1094-330iaqlhiqq3",
+      "metadata": {
+       "adk_app_name": "agent__NS__workshop_agent",
+       "adk_author": "workshop_agent",
+       "adk_invocation_id": "e-ac32dbb1-8cf0-41fd-b552-e206173d20dd",
+       "adk_session_id": "r1094-330iaqlhiqq3",
+       "adk_user_id": "A2A_USER_r1094-330iaqlhiqq3"
+      },
+      "parts": [
+       {
+        "kind": "data",
+        "data": {
+         "id": "tooluse_3kubLT3gzMXLuEi1DJUJDf",
+         "name": "ask_user",
+         "response": {
+          "questions": [
+           {
+            "question": "I'm sorry, sugar, but I can't recall the last thing you asked me without your response. Please tell me what it was so I can assist you."
+           }
+          ],
+          "status": "pending"
+         }
+        },
+        "metadata": {
+         "adk_type": "function_response"
+        }
+       }
+      ],
+      "role": "agent",
+      "taskId": "01a1b7f1-e422-70af-bc5e-87fee7255d8a"
+     }
+    ],
+    "metadata": {
+     "adk_app_name": "agent__NS__workshop_agent",
+     "adk_author": "workshop_agent",
+     "adk_invocation_id": "e-ac32dbb1-8cf0-41fd-b552-e206173d20dd",
+     "adk_session_id": "r1094-330iaqlhiqq3",
+     "adk_usage_metadata": {
+      "candidatesTokenCount": 97,
+      "promptTokenCount": 10284,
+      "totalTokenCount": 10381
+     },
+     "adk_user_id": "A2A_USER_r1094-330iaqlhiqq3"
+    },
+    "status": {
+     "message": {
+      "kind": "message",
+      "messageId": "01a1b7f1-e8a7-7b44-bd91-2da30a0aecbe",
+      "contextId": "r1094-330iaqlhiqq3",
+      "parts": [
+       {
+        "kind": "data",
+        "data": {
+         "args": {
+          "originalFunctionCall": {
+           "args": {
+            "questions": [
+             {
+              "question": "I'm sorry, sugar, but I can't recall the last thing you asked me without your response. Please tell me what it was so I can assist you."
+             }
+            ]
+           },
+           "id": "tooluse_3kubLT3gzMXLuEi1DJUJDf",
+           "name": "ask_user"
+          },
+          "toolConfirmation": {
+           "confirmed": false,
+           "hint": "I'm sorry, sugar, but I can't recall the last thing you asked me without your response. Please tell me what it was so I can assist you.",
+           "payload": null
+          }
+         },
+         "id": "adk-e502ee75-9883-4fa9-b022-150b85534919",
+         "name": "adk_request_confirmation"
+        },
+        "metadata": {
+         "adk_is_long_running": true,
+         "adk_type": "function_call"
+        }
+       }
+      ],
+      "role": "agent",
+      "taskId": "01a1b7f1-e422-70af-bc5e-87fee7255d8a"
+     },
+     "state": "input-required",
+     "timestamp": "2026-11-07T21:37:26.695740034Z"
+    }
+   }
+  }
+ ]
+}
