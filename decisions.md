@@ -32514,3 +32514,44 @@ run-through record. Those are live rehearsal steps; none has happened yet.
 `exit=0`; `test_challenge_traces.py` is in the offline suite and `test_challenge_traces_live.py` in the E2E list. The
 live test, run on its own after the session was sourced, ended `CHALLENGE TRACES RED`, exit 1, on Challenge 2 alone,
 with Challenge 4 now at the newer trace `4ef8fe4d95405cf39d4eb12db59fa787`. No dependency was added.
+## 2026-11-07 · #978 · run 18374 · The prompt wall's +N more live test passes on both hosts now prompts-agenticburn#20's deploy is live
+
+**Context.** #935 added `verify/test_wall_more_count_live.py` and owed its live run after prompts-agenticburn#20 shipped
+main to Railway; on 2026-11-06 at 08:54Z it exited 1 on both hosts because the served page had no `id="more"` (the
+#935 entry above). `bash verify/prior-drafts.sh 978 origin/staging` printed NONE. prompts-agenticburn#20 closed at
+2026-11-07T20:57:54Z; its record dates the deploy to 2026-11-06 between 19:41Z and 19:56Z and finds the live page equal
+to that repo's `templates/wall.html` at `2c3b848`, which carries #14, #15, #17 and #18.
+
+**The live run (2026-11-07, 21:17Z).** Both hosts answer `/api/prompts` with the keys `boot`, `clusters`, `prompts`,
+`seq` and the same boot id `26b63be0270c40b899c7e5294e6bc287` (seq 258), and both pages now carry one `id="more"`.
+`python3 verify/test_wall_more_count_live.py` and `WALL_URL=https://prompts.burritobot.co/ python3
+verify/test_wall_more_count_live.py` each printed all 15 checks PASS and exited 0:
+
+```
+== the wall page, from https://prompts.agenticburn.com/ ==
+  PASS  the page has a "+N more" element, id="more"
+  PASS  it sits in the wall's header, which is always on screen
+  PASS  it does not ship with the hidden attribute
+  PASS  it carries no inline style that hides it
+  PASS  no CSS rule for its classes or id hides it (display:none, visibility:hidden, opacity:0)
+  PASS  the count always reads "+N more"
+  PASS  the count is never hidden (hidden attribute or display:none) in any frame
+  PASS  no reload happened (one boot id throughout)
+  PASS  in every frame the count equals the prompts that arrived and were not shown since the last card
+  PASS  the burst of 10 reads +10 more before its card goes up
+  PASS  the counter climbs to 10 or more, so it is not a constant
+  PASS  it resets to +0 more every time a card appears
+  PASS  the scenario put up enough cards to exercise the reset (at least 6)
+  PASS  it reads +0 more once the wall has gone quiet
+  PASS  the replay added no card and no count
+
+PASS: the +N more count on https://prompts.agenticburn.com/ holds in every frame (#935)
+exit=0
+```
+
+The run against `https://prompts.burritobot.co/` printed the same 15 lines under `== the wall page, from
+https://prompts.burritobot.co/ ==`, then `PASS: the +N more count on https://prompts.burritobot.co/ holds in every
+frame (#935)` and `exit=0`. So the deploy shipped #18, and #935's owed live check is done.
+
+**Not yet run on a cluster.** Nothing here runs on a cluster, and nothing is owed. No code changed, so no test was
+added; no dependency was added.
