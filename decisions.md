@@ -31963,3 +31963,8 @@ Nothing was applied to the cluster, the terminal login was not read or touched, 
 touched. No dependency was added.
 
 **Not yet run on a cluster.** Nothing: the check this issue asks for ran here and exited 0.
+
+**The suites (run 18326, at `12ea9f40`).** `bash verify/run-e2e-tools.sh`, with no `HECATON_BASE_SHA`, so every test
+ran: the offline suite printed `335 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the
+offline suite and 81 tier tests) in 9m35s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline
+suite is the Test command's own run (`bash verify/run-tests.sh`). The prose gate printed `prose gate: pass`.
