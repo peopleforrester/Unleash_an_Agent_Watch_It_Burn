@@ -29170,3 +29170,10 @@ create /tmp/turn-guard-885-body.json: Directory nonexistent`: this host gives a 
 test had the path hardcoded. The check is about the apostrophe getting through the quoted here-document, not about
 the path, so the body file now goes in a `tempfile.TemporaryDirectory` the test makes and removes. On a host with
 `/tmp` the check runs as before.
+
+**The suites (run 18134, at `6c1425ad`).** The first `bash verify/run-e2e-tools.sh`, at `2dba24c4`, logged as
+`/var/lib/hecaton/runs/18134/e2e-tools.log`, ran 80 checks in 10m28s and failed on the offline suite alone, on the
+`/tmp` check above (`exit=1`). After that fix the second run, logged as `/var/lib/hecaton/runs/18134/e2e-tools-2.log`,
+printed `320 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `80 checks ran (the offline suite and 79 tier tests)
+in 9m56s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_progress_entries.py` and
+`test_turn_guard.py` among the offline tests. The prose gate printed `prose gate: pass`. No dependency was added.
