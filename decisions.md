@@ -31033,3 +31033,13 @@ not recorded (#1069 keeps the value out of every repo), so that wording is a fol
 changed here.
 
 **No live check.** The issue asks for none, and this run touched neither cluster's Secret, nor read it.
+
+**Suite results, run 18234.** The first `bash verify/run-e2e-tools.sh` (log `/var/lib/hecaton/runs/18234/e2e-tools.1.log`,
+on `70d28f91`) failed `verify/test_no_cloud_by_hand.sh`: the new test sources fleet.sh and had not set up the no-cloud
+stubs. `d22d7bc9` adds `no_cloud.setup()` and the closing offline check, and maps the two guard files. The rerun on
+it (`/var/lib/hecaton/runs/18234/e2e-tools.2.log`) printed `334 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+with `test_terminal_login_hand_set.py`, `test_fleet_terminal_harvest.sh`, `test_admin_actions.sh` and
+`test_no_cloud_by_hand.sh` among them, then `82 checks ran (the offline suite and 81 tier tests) in 9m59s, 4 at a
+time`, `SOME E2E TOOLS TIER CHECKS FAILED: test_promo_villains_public.py (exit 1)` and `exit=1`. That one check is the
+moved lab-platform promo `:v1` tags runs 18206, 18213 and 18215 recorded (#1070), all ten digests differing again. This
+change touches no image pin. The prose gate printed `prose gate: pass`.
