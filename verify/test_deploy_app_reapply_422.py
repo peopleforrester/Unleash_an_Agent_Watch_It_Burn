@@ -103,8 +103,8 @@ class StandInAPIServer:
 
 
 reports: list[dict] = []
-server._report = lambda name, ok, detail, image="", requested_by="": reports.append(  # noqa: E731
-    {"name": name, "ok": ok, "detail": detail, "image": image, "requested_by": requested_by})
+server._report = lambda name, ok, detail, image="", requested_by="", kind="": reports.append(  # noqa: E731
+    {"name": name, "ok": ok, "detail": detail, "image": image, "requested_by": requested_by, "kind": kind})
 server.JOKER_SCALE_DOWN_SECONDS = 3600.0
 server._ns = lambda: "agent"  # noqa: E731
 server.PUBLIC_HOST = "attackme.agenticburn.com"

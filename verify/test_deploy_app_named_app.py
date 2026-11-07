@@ -85,8 +85,8 @@ def fake_req(method: str, path: str, body=None, content_type: str = "application
 
 
 m._req = fake_req
-m._report = lambda name, ok, detail, image="", requested_by="": reports.append(  # noqa: E731
-    {"name": name, "ok": ok, "detail": detail, "image": image, "requested_by": requested_by})
+m._report = lambda name, ok, detail, image="", requested_by="", kind="": reports.append(  # noqa: E731
+    {"name": name, "ok": ok, "detail": detail, "image": image, "requested_by": requested_by, "kind": kind})
 
 
 def deploy(manifest: str, requested_by: str = "") -> tuple[str, dict, str]:
@@ -135,8 +135,9 @@ check("its selector matches its pod labels, which carry the workload label (#664
 check("the reply says it was deployed, that it serves a landing page, and names the image it runs",
       reply.startswith("deployed Deployment/tron in agent") and NGINX in reply and "landing page" in reply
       and "not an image of its own" in reply, reply)
-check("the deployments page is told it landed, with the image and the witch name",
-      reports == [{"name": "tron", "ok": True, "detail": "", "image": NGINX, "requested_by": "Replay the Raven"}],
+check("the deployments page is told it landed, with the image, the witch name and the kind (#1022)",
+      reports == [{"name": "tron", "ok": True, "detail": "", "image": NGINX, "requested_by": "Replay the Raven",
+                   "kind": "Deployment"}],
       str(reports))
 check("the tool's description says the manifest can be just the app's name, Tron for one",
       "just the app's name" in m.deploy_app.description and "Tron" in m.deploy_app.description)

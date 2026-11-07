@@ -27841,7 +27841,11 @@ that does not answer), list on both kinds under all five Role texts, the desk st
 script, and the run-of-show line. `verify/test_deployments_removed_e2e.py` (tools tier) runs the real desk and
 workshop-mcp's real report over HTTP, then the page's own script in node, which reads "Tabitha the Troll deployed nginx
 at <time>, removed at <time>" with the `removed` class, and the Joker still there with none. `verify/test_public_images.py`
-matched the script's old literal `createTextNode(' at '+x.at)` and now matches its prefix, in the same commit.
+matched the script's old literal `createTextNode(' at '+x.at)` and now matches its prefix, in the same commit. The
+first suite run failed 48 checks in `test_deploy_app_manifest_shapes.py` and `test_deploy_app_reapply_422.py`, whose
+stand-ins for `_report` copied its old signature and refused the new `kind` argument; those two stand-ins and
+`test_deploy_app_named_app.py`'s now take and record it, and the named-app check expects `"kind": "Deployment"`. The
+run was stopped and started again on the fix.
 `verify/test_deployments_removed_live.py` is the live half.
 
 **Live check, run 18072, both clusters, read-only.** Both read `deny-external-registries` at `["Audit"]`, with no
