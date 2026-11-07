@@ -4900,6 +4900,16 @@ reads:
     - verify/kubecon_probe.py
     - verify/test_recipe_block_live.py
     - verify/topic_cases.py
+  test_recipe_pantry_gate.py:
+    - challenges/02-sanitization/plant-fake-recipe.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - security
+  test_recipe_pantry_gate_e2e.py:
+    - gitops/ai-layer
+    - images/workshop-mcp/Dockerfile
   test_recipe_persona.py:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile

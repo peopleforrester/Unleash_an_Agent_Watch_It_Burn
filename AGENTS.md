@@ -98,9 +98,9 @@ Both runners scope themselves to the change when `HECATON_BASE_SHA` is set, as h
 it (#1018): `verify/scope_tests.py` runs only the tests whose entry in `verify/scope-map.yaml` reads a path the change
 touches, and prints which it ran and why. A change to a runner, a shared helper, the map's rules or a path no entry
 covers runs everything, and without the variable everything runs. A new test needs an entry: run
-`python3 verify/scope_tests.py write`, read what it added, and commit it with the test. `verify/test_scope_tests.py`,
-which every change runs, fails until then. `python3 verify/scope_audit.py offline` (or `tools`) holds the map against
-what each test opens as it runs.
+`python3 verify/scope_tests.py write`, read what it added, and commit it with the test. Until then the selector reads
+the test's source itself, so the test still runs when it should, and the log and `verify/test_scope_tests.py` name it
+as drift. `python3 verify/scope_audit.py offline` (or `tools`) holds the map against what each test opens as it runs.
 
 The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluster build, with CONTEXT,
 IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster, and DRIFT_PROFILE and

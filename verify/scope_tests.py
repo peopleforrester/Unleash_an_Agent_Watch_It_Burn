@@ -25,8 +25,11 @@ whose own entry it edits: a test cannot drop a path from its entry in the same c
 leave itself out, since the edit to its entry runs it.
 
 `check` holds the map to what extract() reads in each test's source: every path literal, every path built from
-literals, every helper it imports or names, and every glob or directory walk. A test that starts to read a path its
-entry does not cover fails the offline suite through test_test_scope.py, which runs on every scoped run.
+literals, every helper it imports or names, and every glob or directory walk. `select` does not trust the map to be
+current: it reads every test's source the same way and runs from the committed entry and that reading together, so
+a test added or edited without its entry (a run cut before the test landed on staging, then rebased) still runs when
+it should, and the log names each test the map was behind. test_scope_tests.py, which every change runs, fails on
+the map's rules (structural()) and shows its drift (drift()) without failing on it.
 """
 from __future__ import annotations
 
@@ -936,19 +939,14 @@ def load_map(path: pathlib.Path = MAP) -> dict:
     return doc
 
 
-def problems(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
-    """Every way the map is out of date with the tests, the tree and what extract() reads."""
+def structural(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
+    """What is wrong with the map's own rules: what a change to the map itself can get wrong. The suite fails on these."""
     bad = []
     tests = discover(verify)
     always, reads = doc["always"], doc["reads"]
     for name in tests:
         if name in always and name in reads:
             bad.append(f"{name} is in both always and reads; it belongs in one")
-        elif name not in always and name not in reads:
-            bad.append(f"{name} has no entry; run `python3 verify/scope_tests.py write` and review what it adds")
-    for name in list(always) + list(reads):
-        if name not in tests:
-            bad.append(f"{name} is in the map but is not a test either runner runs; remove its entry")
     for name, why in always.items():
         if not isinstance(why, str) or not why.strip():
             bad.append(f"always: {name} says no reason")
@@ -965,6 +963,34 @@ def problems(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
         for e in b["paths"]:
             if not tree.known(e) and not tree.matches(e):
                 bad.append(f"bounds: {f} lists {e}, which names nothing in the repo")
+    return bad
+
+
+def _shared(doc: dict, tree: Tree, tests: dict[str, str]) -> dict[str, int]:
+    """Each verify/ helper more than SHARED_HELPER tests import or name themselves, with how many."""
+    counts: dict[str, int] = {}
+    for name in tests:
+        for h in direct(f"verify/{name}", tree, doc["bounds"]):
+            if h.startswith("verify/") and not os.path.basename(h).startswith("test_"):
+                counts[h] = counts.get(h, 0) + 1
+    return {h: n for h, n in sorted(counts.items()) if n > SHARED_HELPER}
+
+
+def drift(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
+    """Where the committed map is behind the tests' sources: a test with no entry, an entry missing a path its source
+    reads, a shared helper not in full. The selector reads every test's source itself and runs from the union, so drift
+    costs time and skips nothing; `write` brings the map up to date. A run cut from a staging without some test, rebased
+    onto one with it, sees that test's entry missing through no edit of its own (#1018's run 18091), so the suite does
+    not fail on drift."""
+    bad = []
+    tests = discover(verify)
+    always, reads = doc["always"], doc["reads"]
+    for name in tests:
+        if name not in always and name not in reads:
+            bad.append(f"{name} has no entry; run `python3 verify/scope_tests.py write` and review what it adds")
+    for name in list(always) + list(reads):
+        if name not in tests:
+            bad.append(f"{name} is in the map but is not a test either runner runs; remove its entry")
     for name in tests:
         if name not in reads:
             continue
@@ -975,15 +1001,47 @@ def problems(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
         for p in sorted(x.paths):
             if not any(covers(e, p) for e in reads[name]):
                 bad.append(f"{name} reads {p}, which its entry does not cover")
-    counts: dict[str, int] = {}
-    for name in tests:
-        for h in direct(f"verify/{name}", tree, doc["bounds"]):
-            if h.startswith("verify/") and not os.path.basename(h).startswith("test_"):
-                counts[h] = counts.get(h, 0) + 1
-    for helper, n in sorted(counts.items()):
-        if n > SHARED_HELPER and not any(covers(f, helper) for f in doc["full"]):
+    for helper, n in _shared(doc, tree, tests).items():
+        if not any(covers(f, helper) for f in doc["full"]):
             bad.append(f"{helper} is named by {n} tests, more than {SHARED_HELPER}, so it is shared: list it in full")
     return bad
+
+
+def problems(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
+    """Every way the map is wrong or out of date: its rules, then its drift from the tests' sources."""
+    return structural(doc, tree, verify) + drift(doc, tree, verify)
+
+
+def effective(doc: dict, tree: Tree, tests: dict[str, str]) -> tuple[dict, list[str]]:
+    """The map the selector runs from: the committed one, with what each test's source reads now added to its entry.
+
+    A test with no entry gets the one its source shows; a test whose source now reads more than an entry can name runs
+    always; a shared helper that full does not list yet runs everything. Returns that map and a note for each place
+    the committed map was behind."""
+    live = {"full": list(doc["full"]), "unread": list(doc["unread"]), "bounds": doc["bounds"],
+            "always": dict(doc["always"]), "reads": {}}
+    notes = []
+    for name in tests:
+        if name in doc["always"]:
+            continue
+        x = extract(f"verify/{name}", tree, doc["bounds"])
+        have = doc["reads"].get(name)
+        if x.unbounded():
+            live["always"][name] = "its source reads more than an entry can name: " + "; ".join(x.unbounded())
+            notes.append(f"{name}: runs always, as its source now reads more than its entry can name")
+            continue
+        missing = [p for p in sorted(x.paths) if not any(covers(e, p) for e in have or [])]
+        if have is None:
+            notes.append(f"{name}: no entry in the map; read from its source")
+        elif missing:
+            notes.append(f"{name}: its entry misses {', '.join(missing[:3])}" +
+                         (f" and {len(missing) - 3} more" if len(missing) > 3 else "") + "; read from its source")
+        live["reads"][name] = sorted(set(have or []) | x.paths)
+    for helper, n in _shared(doc, tree, tests).items():
+        if not any(covers(f, helper) for f in live["full"]):
+            live["full"].append(helper)
+            notes.append(f"{helper}: named by {n} tests, so shared; a change to it runs everything")
+    return live, notes
 
 
 def write(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> dict:
@@ -1075,13 +1133,15 @@ def entry(doc: dict, name: str):
 
 
 def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str], before: dict | None = None,
-           submodules: frozenset[str] | set[str] = frozenset()) -> tuple[str, dict[str, list[str]]]:
+           submodules: frozenset[str] | set[str] = frozenset(),
+           live: dict | None = None) -> tuple[str, dict[str, list[str]]]:
     """("full", {path: [why]}) or ("scoped", {test: [why]}) for the suite's tests.
 
     before is the map at the base, read when the change edits the map. A change to its rules (full, unread, bounds), or
     a map the base did not have, runs everything. A change to a test's own entry runs that test: an entry that stops
     covering a path the change also edits cannot leave its test out, since the test runs for the entry's change.
-    A changed submodule (its pin moved) counts as read by every glob over the whole tree, which reads its files too."""
+    A changed submodule (its pin moved) counts as read by every glob over the whole tree, which reads its files too.
+    live is effective()'s map, which selection runs from; doc and before are the committed maps, compared for edits."""
     full_why: dict[str, list[str]] = {}
     entry_changed: set[str] = set()
     if not changed:
@@ -1096,18 +1156,19 @@ def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str], bef
                     full_why.setdefault(MAP_REL, []).append(f"its {part} section changed")
             entry_changed = {n for n in set(doc["always"]) | set(doc["reads"]) | set(before["always"]) |
                              set(before["reads"]) if entry(doc, n) != entry(before, n)}
+    use = live if live is not None else doc
     for p in changed:
         if p == MAP_REL:
             continue
-        hit = next((e for e in doc["full"] if covers(e, p)), None)
+        hit = next((e for e in use["full"] if covers(e, p)), None)
         if hit is not None:
             full_why.setdefault(p, []).append(f"it is in the map's full list ({hit})")
             continue
         if re.fullmatch(r"verify/test_[^/]*\.(py|sh)", p):
             continue  # a test: it runs itself below, and whoever reads it is in reads
-        if any(names(e) and covers(e, p) for v in doc["reads"].values() for e in v):
+        if any(names(e) and covers(e, p) for v in use["reads"].values() for e in v):
             continue
-        if any(covers(e, p) for e in doc["unread"]):
+        if any(covers(e, p) for e in use["unread"]):
             continue
         full_why.setdefault(p, []).append("no entry in the map covers it")
     if full_why:
@@ -1121,11 +1182,11 @@ def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str], bef
             why.append("the change edits it")
         if name in entry_changed:
             why.append("the change edits its entry in the map")
-        if name in doc["always"]:
-            why.append(f"always: {doc['always'][name]}")
+        if name in use["always"]:
+            why.append(f"always: {use['always'][name]}")
         else:
             hits = [p for p in changed if any(covers(e, p) or (p in submodules and not names(e))
-                                              for e in doc["reads"].get(name, []))]
+                                              for e in use["reads"].get(name, []))]
             if hits:
                 why.append("reads " + ", ".join(hits[:5]) + (f" and {len(hits) - 5} more" if len(hits) > 5 else ""))
         if why:
@@ -1141,9 +1202,16 @@ def main(argv: list[str]) -> int:
             return 2
         doc, changed, tests = load_map(), changed_paths(base), discover()
         before = base_map(base) if MAP_REL in changed else None
-        mode, why = select(doc, argv[1], changed, tests, before, Tree().submodules)
+        tree = Tree()
+        live, notes = effective(doc, tree, tests)
+        mode, why = select(doc, argv[1], changed, tests, before, tree.submodules, live)
         err = sys.stderr
         print(f"scope: HECATON_BASE_SHA={base}; the change touches {len(changed)} paths", file=err)
+        if notes:
+            print(f"scope: the map is behind {len(notes)} tests' sources, so each is read from its source; "
+                  "`python3 verify/scope_tests.py write` brings it up to date:", file=err)
+            for n in notes:
+                print(f"  {n}", file=err)
         if mode == "full":
             print("scope: running every test, because of:", file=err)
             for p, ws in why.items():

@@ -1,9 +1,11 @@
-# ABOUTME: Holds #1018's scoping: verify/scope-map.yaml is current with what each test reads, its bounds hold for the repo
-# ABOUTME: data they stand for, and both runners, driven in a fixture repo, run only what a change touches, or everything.
+# ABOUTME: Holds #1018's scoping: verify/scope-map.yaml's rules and bounds hold, a test it lacks still runs when it should,
+# ABOUTME: and both runners, driven in a fixture repo, run only what a change touches, or everything.
 """Offline. scope_tests.py and the map it reads decide which tests a hecaton validation runs (#1018).
 
-1. The map is current: every test the two runners run has one entry, and each entry covers every path that
-   scope_tests.extract() finds the test reading, helpers included (scope_tests.problems()).
+1. The map's rules hold (scope_tests.structural()). Its drift from the tests' sources (a test with no entry, an entry
+   missing a path scope_tests.extract() finds) is printed, not failed on: select() reads every test's source and runs
+   from the union, and a test without an entry, or with an empty one, still runs when what it reads changes. A run cut
+   before a test landed on staging and rebased after sees that test without an entry through no edit of its own.
 2. The two bounds hold: every file bootstrap_chart.source_files() reads for an Application source in
    gitops/bootstrap/apps, and every values file collector_render.value_files() names, is inside the paths the map
    bounds that helper by.
@@ -14,7 +16,8 @@
    two reading beta/): with HECATON_BASE_SHA on a base where only alpha/ changed, only alpha's tests run, and the tier's
    tools are fetched; where only an unread path changed, no tier test runs and nothing is fetched; where run-tests.sh
    or a path the map does not cover changed, everything runs; an edit to one test's map entry runs that test and one to
-   the map's rules runs everything; without HECATON_BASE_SHA everything runs; a base git does not have fails loudly.
+   the map's rules runs everything; a test added without an entry runs when its area changes; without
+   HECATON_BASE_SHA everything runs; a base git does not have fails loudly.
 """
 from __future__ import annotations
 
@@ -39,15 +42,19 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-print("== the map is current with what each test reads ==")
+print("== the map's rules hold, and its drift from the tests' sources is shown, not failed on ==")
 tree = st.Tree()
 doc = st.load_map()
-bad = st.problems(doc, tree)
-check("scope_tests.py check finds nothing out of date in verify/scope-map.yaml", not bad, "\n".join(bad))
+bad = st.structural(doc, tree)
+check("the map's rules (full, unread, bounds, always) name what the repo has, and no test is in two lists", not bad,
+      "\n".join(bad))
+behind = st.drift(doc, tree)
+print(f"  NOTE  the map is behind the tests' sources in {len(behind)} places; select reads those from source"
+      + "".join(f"\n        {b}" for b in behind[:20]))
 tests = st.discover()
-check("the map has an entry for every offline and tier test",
-      all(t in doc["always"] or t in doc["reads"] for t in tests) and len(tests) > 300, str(len(tests)))
-check("test_scope_tests.py is in always, so a new test without an entry fails whatever the change touched",
+check("the map has an entry for nearly every offline and tier test", len(tests) > 300
+      and sum(1 for t in tests if t in doc["always"] or t in doc["reads"]) > len(tests) * 0.9, str(len(tests)))
+check("test_scope_tests.py is in always, so every change runs it",
       "test_scope_tests.py" in doc["always"])
 for f in ("verify/run-tests.sh", "verify/run-e2e-tools.sh", "verify/scope_tests.py", "verify/no-cloud.sh", "verify/no_cloud.py", "verify/ensure-submodules.sh", "verify/bootstrap_chart.py"):
     check(f"{f} is in full, so a change to it runs everything", any(st.covers(e, f) for e in doc["full"]))
@@ -127,6 +134,24 @@ check("a change to one test's entry, even one dropping the very path the change 
       mode == "scoped" and "the change edits its entry in the map" in why.get("test_stream.py", []), str(why)[:400])
 check("and no test whose entry it left alone, beyond those the change selects anyway",
       not [t for t, ws in why.items() if "the change edits its entry in the map" in ws and t != "test_stream.py"])
+
+print("== select() runs from the map and each test's source together ==")
+stale = copy.deepcopy(doc)
+del stale["reads"]["test_stream.py"]
+stale["reads"]["test_two_domains.py"] = []
+live, notes = st.effective(stale, tree, tests)
+check("a test with no entry, and one whose entry misses its reads, are each noted",
+      any(n.startswith("test_stream.py: no entry in the map") for n in notes)
+      and any(n.startswith("test_two_domains.py: its entry misses") for n in notes), "\n".join(notes[:10]))
+mode, why = st.select(stale, "offline", ["gitops/ai-layer/web/display.js"], tests, None, frozenset(), live)
+check("a change to display.js still runs test_stream.py, though the map has no entry for it",
+      mode == "scoped" and why.get("test_stream.py") == ["reads gitops/ai-layer/web/display.js"], str(why.get("test_stream.py")))
+mode, why = st.select(stale, "offline", ["gitops/ai-layer/web-terminal/entrypoint.sh"], tests, None, frozenset(), live)
+check("and a change to a path test_two_domains.py reads runs it, though its entry is empty",
+      mode == "scoped" and "test_two_domains.py" in why, str(sorted(why))[:300])
+live, notes = st.effective(doc, tree, tests)
+check("on the committed map, the live map only adds to each entry",
+      all(set(doc["reads"][t]) <= set(live["reads"].get(t, [])) or t in live["always"] for t in doc["reads"] if t in tests))
 
 mode, why = st.select(doc, "tools", ["decisions.md"], tests)
 check("the tier is scoped by the same map: a decisions.md change runs a few tier tests, not all of them",
@@ -281,6 +306,20 @@ with tempfile.TemporaryDirectory() as t:
     rc, out = run(root, tmp, "run-tests.sh", git(root, "rev-parse", "HEAD~1"))
     check(f"a changed test runs itself (exit {rc})",
           rc == 0 and ran(out) == {"test_beta.py"} and "  test_beta.py: the change edits it" in out, out)
+
+    gamma_base = git(root, "rev-parse", "HEAD")
+    commit(root, "verify/test_gamma.py", FIXTURE_TEST.format(area="alpha"))
+    new_test_base = git(root, "rev-parse", "HEAD")
+    commit(root, "alpha/data.txt", "alpha 3\n")
+    rc, out = run(root, tmp, "run-tests.sh", new_test_base)
+    check(f"a test added without a map entry still runs when what it reads changes (exit {rc})",
+          rc == 0 and ran(out) == {"test_alpha.py", "test_gamma.py"}
+          and "  test_gamma.py: no entry in the map; read from its source" in out
+          and "  test_gamma.py: reads alpha/data.txt" in out, out)
+    rc, out = run(root, tmp, "run-tests.sh", gamma_base)
+    check(f"and runs itself in the change that adds it (exit {rc})",
+          rc == 0 and "test_gamma.py" in ran(out) and "  test_gamma.py: the change edits it; reads alpha/data.txt" in out,
+          out)
 
     fixture_map = root / "verify" / "scope-map.yaml"
     entry_base = git(root, "rev-parse", "HEAD")
