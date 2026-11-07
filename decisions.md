@@ -30891,3 +30891,44 @@ one failing check is the same one run 18206 recorded: it reads lab-platform's pr
 no image pin, so the move is lab-platform's and not this change's; it is the open follow-up run 18206 filed. The prose
 gate printed `prose gate: pass`. The two submodules (`gitops/ai-layer/guard-proxy`, `images/llm-guard`) were checked
 out at their pinned commits for the suite to read; their pointers are unchanged.
+
+## 2026-11-07 · #1047 · run 18228 · Staging's CI was red on two tier tests: the 360px header buttons now fit any font, and the promo villains are repinned to lab-platform's signed banner rebuild (#1070)
+
+**What CI read.** Actions run 42387390556 (staging at 04173be8, 15:55Z, job 128447568582) passed the offline job and
+failed the e2e tools job on two tier tests: `test_mobile_titles_e2e.py` and `test_promo_villains_public.py`. The
+coordinator's 14:47Z comment also named `FAIL  security    datadog-secret fields: api-key; missing: app-key(empty)`.
+That line is printed by `test_datadog_secret_fields_render.py`'s negative control: it renders a Secret whose app-key
+is empty in `security` and checks that `verify/datadog-secret-fields.sh` reports it, and the test then printed
+`datadog-secret-fields.sh render: all checks passed`. So it was never a failure, and no cluster secret was touched for
+it.
+
+**The 360px header (test_mobile_titles_e2e.py).** Below 680px the four header buttons share one row, four even columns,
+and at 360px that leaves each label 72px inside its padding. Measured on this host, the BurritoBot label in bold 11px is
+72.0px in Liberation Sans (no room at all) and 76.2px in DejaVu Sans. Tanjiro's runner cut off Terminal and BurritoBot
+(`clipped ['vttbtn', 'bbbtn']`), so its fonts run wider still. Tightening the CSS by a pixel or two would only move the
+edge to the next font, so `burritbot.html` gains a small script of its own after `</header>`, `<script id="hbfit">`.
+Where any header button's label overflows its box, it steps all four down together by half a pixel until each fits,
+never below 8px, and again on a resize. It sits in its own block because `verify/chat-saved-harness.js` runs the
+page's main script in a stub DOM with no layout, and `test_audience_event.py` wants that main script to be the first
+`<script>` after the event.js loader. lab.html carries the same four
+buttons but is not a phone surface (#387), so it is unchanged.
+
+The rendered test no longer rests on the host's fonts. It renders the page twice: as shipped, and as a scratch copy
+(with its own copy of event.js) whose header buttons carry 1px of letter-spacing, about 12px wider per label. Every
+check holds on both. It also checks that the four buttons share one font size, and that between 360px and 430px the wide
+copy's buttons were stepped below 11px, so the fit is seen to run. A clipped button now names its scrollWidth,
+clientWidth and font size. Controls on this host: without the fit script, the test failed on the wide copy (3 checks)
+with this host's fonts, and with a DejaVu-only fontconfig it failed on the page as shipped too (`bbbtn 84>80`, the
+Tanjiro failure reproduced). With the fit script it passed in both. `test_mobile_titles.py` (offline) pins the script's
+place and its rules.
+
+**The promo villains (test_promo_villains_public.py, #1070).** The ten `:v1` tags moved because lab-platform#372 rebuilt
+and signed every villain with its interactive shell banner. lab-platform's decisions.md entry 2026-11-07T15:50:00Z
+(staging commit 1c44d6fe) lists the ten new digests, read back from ghcr.io with no credential and verified against the
+workshop key. This run read each tag anonymously through `verify/ghcr_pull.py` at 16:17Z, and all ten served exactly the
+digest that entry lists. That entry is the new hand-over, so `verify/promo_villains.py` is repinned to it, as #467 and
+#718 repinned earlier hand-overs. lab-platform's `deploy/watch-it-burn/images.tsv` still names the 2026-10-30 digests on
+both its main and staging; repinning it is lab-platform#375 (open, an agent on it). The lab hands out the `:v1` tag, not
+the digest, so nothing a student pastes changes, and no other file in this repo names the old digests.
+
+No dependency was added.

@@ -6,8 +6,11 @@ lab-platform builds the ten villains `images/villains/build.sh` used to push to 
 the same catchphrase loop on lab-platform's shell base with the lines read from build.sh at 45e62f0, and publishes
 them as ghcr.io/peopleforrester/lab-platform/promo/<name>:v1 (lab-platform#92). Watch_It_Burn#653 (comment
 6477523413) handed over the rebuild whose entrypoint ends on SIGTERM, so a deleted villain pod stops at once. The
-digests are lab-platform#55's republish of every v1 image under umask 022 on 2026-10-30 (its decisions.md entry
-2026-10-30T18:04:37Z), as its deploy/watch-it-burn/images.tsv pins them and ghcr.io served them on 2026-10-31. The
+digests are lab-platform#372's signed rebuild of every v1 image with its interactive shell banner
+(ENV=/etc/villain-banner.sh), as lab-platform's decisions.md entry 2026-11-07T15:50:00Z (commit 1c44d6fe) lists them
+after reading each back from ghcr.io with no credential and verifying it against the workshop key. ghcr.io served all
+ten at 16:17Z that day (Watch_It_Burn#1070, #1047), when lab-platform's deploy/watch-it-burn/images.tsv still named the
+2026-10-30 digests; its repin is lab-platform#375. The
 lab names a villain by its `:v1` tag, not its digest: a digest in a copy-paste box would undo the
 "unverified image" story, and the lesson is the path, which restrict-image-registries refuses.
 """
@@ -20,16 +23,16 @@ TAG = "v1"
 COVERS = ("promo-mascot", "festival-promo", "loyalty-rewards")
 
 DIGESTS = {
-    "promo-mascot": "sha256:68618daa2a2f24ac5200f565f9952e22f093484940434155d3a9766a4b97eefa",
-    "festival-promo": "sha256:8e6664b6d5eaf20e4a88a620235e606a635fb982bfb73d5df57a642fcca1916f",
-    "loyalty-rewards": "sha256:771409bb3c5c9cc1cb77b1eaa9ba545da35e65b319c71913abdcdec02dfbda8b",
-    "joker": "sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763",
-    "gargamel": "sha256:30ac651d19e9b8e5d9bad3f4471bed4bd38bfce88c2b47a23d3b339c14bbdc97",
-    "skeletor": "sha256:7b973b14d4d5478dac29fb610ab143bd9dd86afda54a0b06f544a7aac77b14b3",
-    "mumm-ra": "sha256:fa04589a143d5211a5e6de33697274c684a72ac39ccf2a2759aa4047dd25f28e",
-    "shredder": "sha256:7924c59ffada76cf04a36b34d3c614e2539f5650e77f85a4560558f127d799d4",
-    "cobra-commander": "sha256:159184b4597fb16f6eed3a74a818bece58f877909e9dedd37ecdc805f1a18178",
-    "megatron": "sha256:0a2db8d4b1674e42e6e66969991a5d02b027d1c1a863b69db0b6daefbbafe37e",
+    "promo-mascot": "sha256:1df5e2eaf9b4a4a97d5e76da5e1a11b69070e18ab1b32bf0b31ad26f20398a8a",
+    "festival-promo": "sha256:ab939401423fbd0867c89f7baf2ebf1a5fb56b57227283477e8aeabdd7d884ed",
+    "loyalty-rewards": "sha256:eff3e1c69c877342dbf184e04cd612f955de2d1dae3735b5436307df5e211419",
+    "joker": "sha256:e89333b47392cbf5e9ff78994515771c0d80400c0dda70b40d4fafa0bd119dd8",
+    "gargamel": "sha256:07ff44b8c5fa640d35e9366ebc6a8c2f7228289c5627cc83a4ef2dfc13947f1f",
+    "skeletor": "sha256:df82eb5399016d409aa0c755b1d7b8aadb67dd7a6d2ef3f43dccb0a3876a019a",
+    "mumm-ra": "sha256:229d305f985f6de4d273f2445c7fcd64b783eb6ff348e21c3fb334d82b1e473f",
+    "shredder": "sha256:64b56a04d191104b772a93ce434abf42d8e43bcea7994e6b9580ec0e5f03e998",
+    "cobra-commander": "sha256:9278f02f07c9cf2c192b5587fb4653e407c180ee1f12a7036242800538067e78",
+    "megatron": "sha256:74e54fa48ff89bc225fec962fc38469c98b913af434654bed7496c7642055dae",
 }
 
 

@@ -315,6 +315,28 @@
          event.js (#451); do not edit an event's URL in here. -->
     <a class="hb" id="fbbtn" href="https://feedback.burritobot.co/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener">&#128172; Feedback</a>
   </header>
+  <!-- HEADER BUTTONS THAT FIT ANY FONT (#1047). Four across at 360px leave each label about 72px. The
+       BurritoBot label in bold 11px fills that exactly in Liberation Sans and runs 4px past it in DejaVu
+       Sans, so a phone with wider fonts showed it cut off. The CSS size stays the first choice. Where a
+       label still overflows its button, all four step down together, half a pixel at a time, until every
+       one fits, never below 8px. It runs again on a resize, since the grid's columns follow the viewport.
+       This is its own script, not part of the page's main one below: verify/chat-saved-harness.js runs
+       that one in a stub DOM with no layout. -->
+  <script id="hbfit">
+    (function fitHeaderButtons(){
+      var hb=[].slice.call(document.querySelectorAll('body>header a.hb'));
+      function over(){ return hb.some(function(a){ return a.scrollWidth>a.clientWidth; }); }
+      function fit(){
+        hb.forEach(function(a){ a.style.fontSize=''; });
+        if(!hb.length || !over()) return;
+        var px=parseFloat(getComputedStyle(hb[0]).fontSize);
+        while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }
+      }
+      fit();
+      window.addEventListener('resize', fit);
+      if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    })();
+  </script>
 
   <div class="wrap">
     <div class="store"><!-- left: the storefront product (menu + chat) -->

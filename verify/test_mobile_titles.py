@@ -75,6 +75,22 @@ check("avatar, title and Reset share row 1",
 check("the tagline spans the full width in row 2", ".chathead .sub{grid-column:1/-1;grid-row:2}" in card)
 check("Reset never breaks onto two lines", "cursor:pointer;white-space:nowrap}" in PAGE)
 
+print("== the header buttons fit whatever fonts the phone has (#1047) ==")
+fit_at = PAGE.find('<script id="hbfit">')
+fit = PAGE[fit_at:PAGE.find("</script>", fit_at)] if fit_at >= 0 else ""
+check("the page carries its own fit script for the header buttons", bool(fit))
+check("it sits right after the header, before event.js and the page's main script",
+      0 <= PAGE.find("</header>") < fit_at < PAGE.find('<script src="event.js"></script>'))
+check("it measures the four header buttons", "document.querySelectorAll('body>header a.hb')" in fit)
+check("a button counts as overflowing when its label is wider than its box",
+      "a.scrollWidth>a.clientWidth" in fit)
+check("all four step down together, half a pixel at a time, never below 8px",
+      "while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }" in fit)
+check("each fit starts again from the CSS size", "hb.forEach(function(a){ a.style.fontSize=''; });" in fit)
+check("it fits again on a resize", "window.addEventListener('resize', fit);" in fit)
+check("the clipped label still ellipsizes rather than spilling, if it ever cannot fit",
+      "overflow:hidden;text-overflow:ellipsis}" in bar)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
