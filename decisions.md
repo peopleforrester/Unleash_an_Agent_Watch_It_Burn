@@ -32559,3 +32559,32 @@ added; no dependency was added.
 **Suite results, run 18374.** On `9a647d73`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=470c95ef`, so
 scoped to this decisions.md change, printed `85 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks
 ran (the offline suite and 13 tier tests) in 3m52s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+## 2026-11-07 · #1108 · run 18376 · `wall-clock-harness.js` stubs #22's pause and pin elements, and the pinned wall.html moves to prompts-agenticburn's main at 8e32eda
+
+`verify/test_wall_throttle_upstream_e2e.py` (#933) ended FAIL against prompts-agenticburn's main. prompts-agenticburn#22
+(`a07dcad`) gave `templates/wall.html` three new element ids, `hdr`, `pausebtn` and `pinslot`, and
+`verify/wall-clock-harness.js` stubs only the ids in its `IDS` list, so the page's script stopped at
+`pausebtn.onclick = togglePause;` with `TypeError: Cannot set properties of null (setting 'onclick')` before any
+card-rate check ran. The old `wall-clock-harness.js` printed that same error on main's page in this run.
+
+**The change.** `IDS` gains `hdr`, `pausebtn` and `pinslot`. The pinned copy,
+`verify/fixtures/prompts-agenticburn/wall.html.fixture`, is now a byte copy of `templates/wall.html` at main's
+`8e32eda46d0744d8f94a987fc52b46aa92aae534` (read through `gh api` in this run), sha256
+`7eab1e2b2bfb225b31aa758d50f11dd043d8b3e8ae98e6edebff59cc2ca60366`. The page last changed at `a07dcad` (#22); the
+commits after it on main do not touch the page. `WALL_COMMIT` names `8e32eda`, the main the copy was read from, as the
+issue asks. The throttle's "drop the 1.5 s floor" mutation now replaces #22's
+`schedule(() => tick(armedAs), Math.max(intervalMs / 2, last + intervalMs - now()));` with
+`schedule(() => tick(armedAs), intervalMs / 2);`. The other two literals still occur once each.
+
+**Beyond the issue.** `verify/test_wall_more_count_e2e.py` (#935) runs the same copy and has its own mutations. One
+of them, "the card does not zero the running count", replaced `held = null; count = 0; armed = false;`, which #22
+split: the draw is now `held = null; count = 0; last = now();` and `armed = false` moved to `tick()`. That mutation
+now drops `count = 0;` from the new line, and it still fails one check of the count. Both tests' ABOUTME lines and
+docstrings name the new pin.
+
+**Run here.** `python3 verify/test_wall_throttle_e2e.py` ended PASS: the copy's SHA-256 matches, all 20 card-rate
+checks pass, and each of the three mutations fails them (8, 7 and 7 checks). `python3 verify/test_wall_more_count_e2e.py`
+ended PASS with all eight mutations failing. `python3 verify/test_wall_throttle_upstream_e2e.py`, with gh signed in,
+read main at `8e32eda4`, printed `PASS  main's page is the pinned copy` and the same 20 checks, and ended PASS. No
+cluster is involved, so there is no live check and nothing waits under "Not yet run on a cluster". No dependency was
+added.

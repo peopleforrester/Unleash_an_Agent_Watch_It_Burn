@@ -1,11 +1,11 @@
-# ABOUTME: Runs prompts-agenticburn's templates/wall.html, pinned at its #18 commit, in node on a fake clock and holds that
+# ABOUTME: Runs prompts-agenticburn's templates/wall.html, pinned at its main of #22, in node on a fake clock and holds that
 # ABOUTME: its "+N more" count equals the prompts that arrived since the last card and resets to 0 on each (#935).
 # SUITE: e2e (needs node: the page's script runs in verify/wall-more-harness.js)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """Why (#935). Test review run 17682 found that nothing checked #927's third criterion on the wall itself: a visible
 "+N more" counter equals the number of prompts that arrived and were not shown since the last card, and resets to 0
 when a card appears. Only /display's display.js was checked (test_display_throttle_e2e.py). The wall is
-prompts-agenticburn's templates/wall.html, private, so this runs #933's byte copy of it at 6601313a,
+prompts-agenticburn's templates/wall.html, private, so this runs #933's byte copy of it (8e32eda since #1108),
 verify/fixtures/prompts-agenticburn/wall.html.fixture, held to the SHA-256 test_wall_throttle_e2e.py pins. When that
 copy is refreshed the pin moves there and this runs on the new page. test_wall_more_count_live.py runs the same checks
 on the wall the room reads.
@@ -29,7 +29,7 @@ REPO = wall_more_count.REPO
 MUTATIONS = [
     ("the card does not reset the count", "    show(e);\n    setCount(0);", "    show(e);"),
     ("the count leaves out the prompt about to be drawn", "      setCount(count);", "      setCount(count - 1);"),
-    ("the card does not zero the running count", "held = null; count = 0; armed = false;", "held = null; armed = false;"),
+    ("the card does not zero the running count", "held = null; count = 0; last = now();", "held = null; last = now();"),
     ("the count ships hidden", '<div class="more zero" id="more" aria-live="off">',
      '<div class="more zero" id="more" aria-live="off" hidden>'),
     ("the CSS hides the count at 0", ".more.zero{opacity:.55}", ".more.zero{display:none}"),

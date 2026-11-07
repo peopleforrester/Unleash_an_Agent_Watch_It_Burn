@@ -69,7 +69,7 @@ function textOf(card) {
 }
 
 const IDS = ["stream", "empty", "total", "more", "panel", "pickbtn", "picklabel", "pickdot", "search", "list",
-  "filterbar", "filtername", "clearfilter"];
+  "filterbar", "filtername", "clearfilter", "hdr", "pausebtn", "pinslot"];
 const els = {};
 for (const id of IDS) els[id] = element(id);
 stream = els.stream;

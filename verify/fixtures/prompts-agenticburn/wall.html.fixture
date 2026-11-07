@@ -1,5 +1,5 @@
 <!-- ABOUTME: The fleet-wide prompt wall at prompts.agenticburn.com, in BurritoBot chrome. -->
-<!-- ABOUTME: Streams merged prompts over SSE (polling /api/prompts as a fallback), one card per 1.5 s. -->
+<!-- ABOUTME: Streams merged prompts over SSE (polling /api/prompts as a fallback), one card per 1.5 s; per-viewer pause and pin. -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -40,6 +40,21 @@
     color:#fff; background:rgba(0,0,0,.22); border-radius:999px; padding:3px 12px;
   }
   .more.zero{opacity:.55}
+
+  /* Pause (#22): this viewer's screen only. The header itself changes, so a
+     paused projector is obvious from the back of the room, not just the button. */
+  .pausebtn{
+    cursor:pointer; color:#fff; font:inherit; font-weight:800; font-size:clamp(12px,1.2vw,18px);
+    background:rgba(0,0,0,.22); border:1px solid rgba(255,255,255,.28); border-radius:999px;
+    padding:6px 15px; min-width:6.5em;
+  }
+  .pausebtn:hover{background:rgba(0,0,0,.34)}
+  .pausebtn:focus-visible{outline:2px solid var(--cream); outline-offset:2px}
+  .pausebtn[aria-pressed="true"]{background:var(--cream); color:var(--dd); border-color:var(--cream)}
+  header.paused{
+    background:repeating-linear-gradient(135deg,#3a2456 0 22px,#2e1c46 22px 44px);
+    border-bottom-color:var(--cream);
+  }
 
   /* Cluster picker. This was a wrapped strip of one pill per cluster, which is
      fine at 5 and unusable at 53: it ate most of the screen before a single
@@ -116,6 +131,17 @@
   /* Confirmation has to differ from the resting state, which is now itself
      green: deeper ground, light text. */
   .copy.done{background:#0E7C3A; border-color:#0E7C3A; color:#fff}
+  /* Click to pin (#22). The pinned card leaves #stream for this slot above it,
+     so new cards cannot push it down and the 300-card trim cannot reach it. */
+  .card{cursor:pointer}
+  .pinslot{flex:none; padding:clamp(10px,1.2vw,18px) clamp(12px,1.6vw,24px) 0}
+  .pinslot[hidden]{display:none}
+  .pinslot::before{
+    content:"Pinned \00B7  click it to unpin"; display:block; margin-bottom:6px;
+    font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+    font-size:clamp(10px,1vw,14px); color:var(--rim);
+  }
+  .card.pinned{outline:3px solid var(--rim); outline-offset:-1px; animation:none}
 
   #empty{margin:auto; text-align:center; opacity:.55; font-size:clamp(14px,1.6vw,24px); padding:40px; line-height:1.6}
   footer{padding:10px 0 16px; text-align:center}
@@ -141,7 +167,7 @@
   <path d="M26.6 4.6 l0.85 2.2 l2.2 0.85 l-2.2 0.85 l-0.85 2.2 l-0.85 -2.2 l-2.2 -0.85 l2.2 -0.85 z" fill="#FFD86B"/>
 </symbol></svg>
 
-<header>
+<header id="hdr">
   <div class="brand">
     <svg class="logo"><use href="#cauldron"/></svg>
     BurritoBot <span class="sub">· live prompt wall</span>
@@ -149,6 +175,7 @@
   <div class="spacer"></div>
   <div class="count"><span id="total">0</span> prompts</div>
   <div class="more zero" id="more" aria-live="off">+0 more</div>
+  <button class="pausebtn" id="pausebtn" type="button" aria-pressed="false" title="Pause this screen only (Space)">Pause</button>
   <div class="picker">
     <button class="pickbtn" id="pickbtn" aria-haspopup="listbox" aria-expanded="false">
       <span class="dot" id="pickdot" style="width:9px;height:9px;border-radius:50%;background:#C77DFF"></span>
@@ -166,6 +193,8 @@
   <span>Showing <strong id="filtername"></strong> only</span>
   <button id="clearfilter">Show all</button>
 </div>
+
+<div class="pinslot" id="pinslot" hidden></div>
 
 <div id="stream"><div id="empty">Waiting for the first prompt.<br>Every BurritoBot on the fleet feeds this screen.</div></div>
 
@@ -187,6 +216,9 @@ const list = document.getElementById('list');
 const filterbar = document.getElementById('filterbar');
 const filtername = document.getElementById('filtername');
 const moreEl = document.getElementById('more');
+const hdr = document.getElementById('hdr');
+const pausebtn = document.getElementById('pausebtn');
+const pinslot = document.getElementById('pinslot');
 let cursor = 0, total = 0, clusters = [], filter = null;
 const counts = {};
 
@@ -345,8 +377,12 @@ function addCard(e){
   text.className = 'text'; text.textContent = e.text;
   card.append(copyButton(e.text), meta, text);
   card.hidden = !!filter && e.cluster !== filter;
+  card.title = 'Click to pin this prompt on your screen';
+  // The copy button stops its own click, so copying never pins.
+  card.onclick = () => togglePin(card);
   stream.prepend(card);
-  // Trim the OLDEST, which is now the last child.
+  // Trim the OLDEST, which is now the last child. A pinned card is not in
+  // #stream, so this never removes it (#22).
   while (stream.children.length > 300) stream.removeChild(stream.lastChild);
   if (atTop) stream.scrollTop = 0;
 }
@@ -369,24 +405,60 @@ const CARD_INTERVAL_MS = 1500;
 // reach the page in batches (each server poll, each poll of the fallback), and a
 // card drawn in the same instant as its batch would clear the count before anyone
 // saw it, as on the platform's own /display page.
+//
+// Paused (#22), it still holds the newest prompt and counts every one, but arms
+// no timer, and a timer armed before the pause draws nothing when it fires.
+// Resuming draws the held prompt at once, and the spacing carries on from it.
 function makeThrottle({intervalMs, now, schedule, show, setCount}){
-  let held = null, count = 0, armed = false, last = -Infinity;
-  function tick(){
+  let held = null, count = 0, armed = false, last = -Infinity, paused = false;
+  // Bumped by each pause, so a timer armed before it is void when it fires and
+  // cannot draw a second card too soon after the one resume drew.
+  let timer = 0;
+  function draw(){
     const e = held;
-    held = null; count = 0; armed = false; last = now();
+    held = null; count = 0; last = now();
     show(e);
     setCount(0);
   }
+  function tick(armedAs){
+    if (armedAs !== timer) return;
+    armed = false;
+    // Cleared since the timer was armed (#17): nothing to draw, and no card
+    // went up, so the spacing still counts from the previous one.
+    if (held === null) return;
+    draw();
+  }
   return {
+    // The wall restarted (#17): drop the held prompt and its count, so nothing
+    // from before the restart is drawn after it. An armed timer finds nothing.
+    clear(){
+      held = null; count = 0;
+      setCount(0);
+    },
     // Every prompt that should reach the screen comes through here, once.
     offer(e){
       held = e;
       count += 1;
       setCount(count);
-      if (armed) return;
+      if (armed || paused) return;
       armed = true;
-      schedule(tick, Math.max(intervalMs / 2, last + intervalMs - now()));
+      const armedAs = timer;
+      schedule(() => tick(armedAs), Math.max(intervalMs / 2, last + intervalMs - now()));
     },
+    pause(){
+      if (paused) return;
+      paused = true;
+      armed = false;
+      timer += 1;
+    },
+    // The newest prompt held during the pause goes up now; if none arrived,
+    // nothing does. The ones before it were counted and are dropped.
+    resume(){
+      if (!paused) return;
+      paused = false;
+      if (held !== null) draw();
+    },
+    isPaused(){ return paused; },
   };
 }
 
@@ -407,6 +479,80 @@ const throttle = makeThrottle({
   setCount: setMore,
 });
 
+// --- pause, per viewer (#22) ----------------------------------------------------
+// Freezes this screen so the room can stop on a good attack and talk about it.
+// Nothing here talks to the server: the page keeps receiving every prompt, the
+// cursor and the counts keep moving, and "+N more" keeps counting. Only drawing
+// stops. Resuming draws the newest prompt that arrived meanwhile, and nothing else.
+function setPaused(on){
+  if (on === throttle.isPaused()) return;
+  pausebtn.textContent = on ? 'Paused' : 'Pause';
+  pausebtn.setAttribute('aria-pressed', String(on));
+  hdr.classList.toggle('paused', on);
+  if (on){ throttle.pause(); return; }
+  // A restart landed while paused: its old cards come off now, not under the
+  // room while it was talking about one of them.
+  if (stale){ stale = false; clearCards(); }
+  throttle.resume();
+}
+function togglePause(){ setPaused(!throttle.isPaused()); }
+pausebtn.onclick = togglePause;
+
+function isSpace(e){
+  return (e.key === ' ' || e.code === 'Space') && !e.ctrlKey && !e.metaKey && !e.altKey;
+}
+// Space typed into the cluster search box, or any other text field, is text.
+function typing(t){
+  return !!t && (t.isContentEditable === true || /^(INPUT|TEXTAREA|SELECT)$/i.test(t.tagName || ''));
+}
+document.addEventListener('keydown', e => {
+  if (!isSpace(e) || typing(e.target)) return;
+  // A focused pause button already toggles on its own click, which Space
+  // triggers; toggling here too would pause and resume in one press.
+  if (e.target === pausebtn) return;
+  // Anywhere else Space would scroll the page or press the focused button
+  // (a card's Copy, the picker). It pauses instead, once per press.
+  e.preventDefault();
+  if (!e.repeat) togglePause();
+});
+// Some browsers press a focused button on keyup, not keydown.
+document.addEventListener('keyup', e => {
+  if (isSpace(e) && !typing(e.target) && e.target !== pausebtn) e.preventDefault();
+});
+
+// --- click to pin (#22) ---------------------------------------------------------
+// One card at a time, on this screen only. The pinned card moves out of #stream
+// into the slot above it, so new cards cannot push it off and the trim in
+// addCard() cannot remove it. It stays visible under any cluster filter: pinning
+// is a deliberate act, and a filter is about the stream (decisions.md, #22).
+let pinnedCard = null;
+
+function togglePin(card){
+  // Selecting part of a prompt's text with the mouse is not a pin.
+  const sel = typeof getSelection === 'function' ? String(getSelection() || '') : '';
+  if (sel) return;
+  const was = pinnedCard;
+  if (was) unpin();
+  if (was === card) return;
+  pinnedCard = card;
+  card.classList.add('pinned');
+  // applyFilter() walks #stream only, so no filter hides the slot's card.
+  pinslot.appendChild(card);
+  pinslot.hidden = false;
+}
+
+// Back into the stream where its seq belongs, newest first, under the filter.
+function unpin(){
+  const card = pinnedCard;
+  pinnedCard = null;
+  card.classList.remove('pinned');
+  pinslot.hidden = true;
+  const seq = Number(card.dataset.seq);
+  const below = [...stream.children].find(c => c.dataset && c.dataset.seq && Number(c.dataset.seq) < seq);
+  stream.insertBefore(card, below || null);
+  card.hidden = !!filter && card.dataset.cluster !== filter;
+}
+
 // Every seq this page has drawn. The stream and the polling fallback can both
 // deliver the same prompt after a drop, so this is the guard that draws each
 // prompt once however it arrives (#14). It is keyed by seq, never by text: two
@@ -419,6 +565,49 @@ let boot = null;
 // the page opened, and it goes up at once, so a reloaded projector is not blank;
 // only what arrives after it is sampled (#18).
 let live = false;
+// Bumped by each restart the page detects (#17), so a poll answer that was asked
+// for before it, with the old cursor, cannot land after it.
+let epoch = 0;
+// True when a restart was detected while paused (#22): the cards on screen are
+// the old wall's, kept until resume so a paused screen does not change.
+let stale = false;
+const emptyEl = document.getElementById('empty');
+
+// A wall restarted in place (#17). Watch It Burn empties the wall by restarting
+// its service (`fleet.sh wall-reset`, Unleash#926), and the new process numbers
+// from 0 again, so a snapshot whose seq is below this page's cursor comes from a
+// wall that no longer holds anything the page has drawn. Without this the page
+// kept its old cards and asked only for seqs above its old cursor, so it showed
+// nothing new until the new seq passed the old one (666 on 2026-11-05).
+function restarted(snap){
+  return typeof snap.seq === 'number' && snap.seq < cursor;
+}
+
+// Every card off the screen, the pinned one too: it belongs to a wall that has
+// been emptied on purpose.
+function clearCards(){
+  if (pinnedCard){ pinnedCard.remove(); pinnedCard = null; pinslot.hidden = true; }
+  while (stream.lastChild) stream.removeChild(stream.lastChild);
+  stream.appendChild(emptyEl);
+}
+
+// Forget everything from before the restart: cards, counts, "+N more", the
+// held prompt, the drawn seqs and the cursor. The next snapshot is then what a
+// freshly opened page gets, and goes up at once like one. While paused (#22)
+// the old cards stay until resume, and the new wall's prompts are held and
+// counted like any others, so resume draws its newest.
+function resetWall(){
+  epoch += 1;
+  throttle.clear();
+  if (throttle.isPaused()) stale = true;
+  else clearCards();
+  shown.clear();
+  for (const k of Object.keys(counts)) delete counts[k];
+  total = 0; totalEl.textContent = total;
+  cursor = 0;
+  live = false;
+  if (retry){ clearTimeout(retry); retry = null; }
+}
 
 function apply(snap){
   if (snap.boot){
@@ -427,6 +616,11 @@ function apply(snap){
     // also picks up the page a redeploy shipped.
     else if (snap.boot !== boot){ location.reload(); return; }
   }
+  // A snapshot with no boot to compare, from a wall whose seq went back (#17).
+  // It was asked for with the old cursor, so it carries none of the new wall's
+  // prompts; reconnecting from 0 below fetches them all.
+  const restart = restarted(snap);
+  if (restart) resetWall();
   // The API returns oldest-first. Prepending in that order leaves the newest on
   // top, which is the order the wall reads in, and leaves the newest last in
   // the throttle's holding slot.
@@ -442,13 +636,18 @@ function apply(snap){
     // cards drawn, which are a sample of them.
     counts[e.cluster] = (counts[e.cluster] || 0) + 1;
     total += 1; totalEl.textContent = total;
-    if (!live) addCard(e);
+    // Paused (#22), even the history goes to the throttle: no card is added
+    // until resume, which draws the newest.
+    if (!live && !throttle.isPaused()) addCard(e);
     // With a cluster filter on, only that cluster's prompts compete for the
     // card, or a busy fleet would fill the slot with cards the filter hides.
     else if (!filter || e.cluster === filter) throttle.offer(e);
   }
-  live = true;
+  // After a restart the page stays as if just opened until the stream from 0
+  // delivers the new wall's history, which then goes up at once.
+  if (!restart) live = true;
   if (snap.clusters) { clusters = snap.clusters; if (!panel.hidden) renderList(); }
+  if (restart) connect();
 }
 
 setInterval(() => {
@@ -463,9 +662,14 @@ let es = null, polling = null, retry = null;
 function startPolling(){
   if (polling) return;
   polling = setInterval(async () => {
+    // An answer asked for before a restart was detected carries the old
+    // cursor's view; applied after the reset it would mark the page live.
+    const asked = epoch;
     try {
       const r = await fetch('/api/prompts?since=' + cursor);
-      if (r.ok) apply(await r.json());
+      if (!r.ok) return;
+      const snap = await r.json();
+      if (asked === epoch) apply(snap);
     } catch (_) {}
   }, RETRY_MS);
 }

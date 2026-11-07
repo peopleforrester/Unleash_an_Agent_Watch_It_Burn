@@ -1,11 +1,12 @@
-# ABOUTME: Runs prompts-agenticburn's templates/wall.html, pinned at its #18 commit, in node on a fake clock and holds
+# ABOUTME: Runs prompts-agenticburn's templates/wall.html, pinned at its main of #22, in node on a fake clock and holds
 # ABOUTME: that prompts arriving faster than one per 1.5 s add at most one card per 1.5 s window (#933, #927's criterion).
 # SUITE: e2e (needs node: the page's script runs in verify/wall-clock-harness.js)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """Why (#933). #927 asked the prompt wall, prompts-agenticburn's templates/wall.html, to add at most one card per
 1.5 s however fast prompts arrive, and this repo's tests only checked the same rule on its own /display page. The
 wall's change landed there as prompts-agenticburn#18, commit 6601313a. That repo is private and the gate has no
-GitHub login, so the page this test runs is a byte copy of templates/wall.html at that commit,
+GitHub login, so the page this test runs is a byte copy of templates/wall.html, since #1108 at main's 8e32eda, the
+page as #22 (a07dcad, per-viewer pause and click-to-pin) left it,
 verify/fixtures/prompts-agenticburn/wall.html.fixture (not .html, so the prose gate does not read another repo's
 page as this repo's prose), held here to its SHA-256. test_wall_throttle_upstream_e2e.py, in the live suite, reads
 the wall repo's main and runs the same checks on it, and fails when main has moved past this copy.
@@ -30,15 +31,17 @@ REPO = wall_throttle.REPO
 WALL = REPO / "verify/fixtures/prompts-agenticburn/wall.html.fixture"
 WALL_REPO = "peopleforrester/prompts-agenticburn"
 WALL_PATH = "templates/wall.html"
-WALL_COMMIT = "6601313a76c937418ad70a730709bb8b5b004f44"  # "Draw one card per 1.5 s on the wall, ..." (#18)
-WALL_SHA256 = "52323b0019adae72f2b1fe6e8304a1752832e697f82c9de712dc07196004a81c"
+# main on 2026-11-07 (#1108); the page last changed at a07dcad, "Add per-viewer pause ... and click-to-pin" (#22)
+WALL_COMMIT = "8e32eda46d0744d8f94a987fc52b46aa92aae534"
+WALL_SHA256 = "7eab1e2b2bfb225b31aa758d50f11dd043d8b3e8ae98e6edebff59cc2ca60366"
 
 # Each mutation is (what it breaks, the literal it replaces in the copy, what it puts there).
 MUTATIONS = [
     ("draw every arrival", "else if (!filter || e.cluster === filter) throttle.offer(e);",
      "else if (!filter || e.cluster === filter) addCard(e);"),
     ("drop the 1.5 s floor from the card's timer",
-     "schedule(tick, Math.max(intervalMs / 2, last + intervalMs - now()));", "schedule(tick, intervalMs / 2);"),
+     "schedule(() => tick(armedAs), Math.max(intervalMs / 2, last + intervalMs - now()));",
+     "schedule(() => tick(armedAs), intervalMs / 2);"),
     ("a 1 s interval", "const CARD_INTERVAL_MS = 1500;", "const CARD_INTERVAL_MS = 1000;"),
 ]
 
