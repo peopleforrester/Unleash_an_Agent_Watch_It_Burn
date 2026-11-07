@@ -29080,3 +29080,9 @@ No record or doc was changed.
 
 **Live check.** None: the criterion is the text of two files, and the test reads only those and the probe's source.
 It needs no cluster.
+
+**The suites (run 18123, at `d109e5a6`).** `bash verify/run-e2e-tools.sh`, logged as
+`/var/lib/hecaton/runs/18123/e2e-tools.log`, printed `318 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`79 checks ran (the offline suite and 78 tier tests) in 9m07s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_889_probe_record.py` among the offline tests. The prose gate printed `prose gate: pass`. No
+dependency was added.
