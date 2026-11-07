@@ -29875,5 +29875,11 @@ and boundary later, though no account reads that way today. The 2026-11-07 repor
 for the student accounts were in the 2026-11-06 Notes too and are not among the six findings; the KubeCon roster and
 its standbys are in accen-dev, so no student account needs a lab VPC today.
 
-**Record.** This entry and a comment on #981. Nothing on any cluster or account was changed; every call above was a
-describe, list, get or lookup.
+**Record.** This entry and the comment on #981,
+https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/981#issuecomment-6706883045. Nothing on any
+cluster or account was changed; every call above was a describe, list, get or lookup.
+
+**Suite results, run 18173.** On ff7cb025, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18173/e2e-tools.log` printed `327 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`81 checks ran (the offline suite and 80 tier tests) in 10m45s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`.
