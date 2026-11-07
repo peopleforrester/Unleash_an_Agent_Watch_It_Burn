@@ -32874,3 +32874,24 @@ reply's tool calls) and each reply's sent or failed claim matches whether the co
 ran, log `/var/lib/hecaton/runs/18388/scratch/e2e-tools.log`: `340 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
 then `82 checks ran (the offline suite and 81 tier tests) in 9m39s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+
+## 2026-11-07: a test for segment 3's row in the segments table and the paragraph under it (#1112)
+
+**What changed.** `verify/test_ros_segments_table_seg3.py` is new. It reads `facilitation/kubecon-na-2026-run-of-show.md`
+under "## The segments, in order": row 3 of the segments table (the row whose "#" cell is 3) and the paragraph under
+the table ("Total 30 minutes."). Each must name slide 28's text, `Let's turn on Kubernetes guardrails.`, then slide
+29's retry, `Try your attacks again.`, then one set per guardrail on slides 30 to 42, in that order, and neither may say
+"one slide per guardrail" or "four slides". #1095 made the text say this; its tests read the segment's own steps
+(`### Segment 3:`), so nothing held the table row or the paragraph (test review run 18393). Each cut checks its literal
+first and exits naming it. Each check is also run on a copy with a phrase removed, the order swapped or the old
+wording put back, and each of those copies fails it.
+
+**Checked against the old text.** Run on the run-of-show as it stood before #1095 (`85803838^`), the test fails 11
+checks: both places lack all three phrases, row 3 still says "one slide per guardrail" and the paragraph still says
+"its four slides".
+
+**Scope map.** `verify/scope-map.yaml` gets the one entry `python3 verify/scope_tests.py write` wrote for this test
+(it reads the run-of-show only). The same write also added entries for about twenty other tests that are missing from
+the map on this base; those belong to the runs that added those tests and are left out of this change.
+
+**Live check.** None: the change is a test on a text file, and no cluster reads it.

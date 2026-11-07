@@ -5173,6 +5173,8 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
     - verify/test_trace_walkthrough_view.py
+  test_ros_segments_table_seg3.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_run_shell_failure.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
