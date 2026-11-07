@@ -1,5 +1,5 @@
 # ABOUTME: deploy_app lands a room Joker the API server would refuse with a 422 (#856): a re-apply keeps the live
-# ABOUTME: selector, and a Joker still refused as written is applied once more as the plain Joker HC-666 asks for.
+# ABOUTME: selector, and a Joker still refused as written (a 422, or apply's 500 on an undeclared field) goes on plain.
 """What was left of HC-666's failures once deploy_app read every manifest shape (#856, run 16959, 2026-11-04).
 
 With run 16947's change running on the public bot, 19 HC-666 asks landed 11. Three were refused with a 422 at least
@@ -210,6 +210,54 @@ api.deny_code = 422
 reply, exc = deploy(api, manifest({"app": NAME}))
 check("a 422 an admission webhook gave is not retried", reply is None and len(applies(api)) == 1, f"{reply!r} {exc}")
 
+
+print("== 4. server-side apply's 500 on a field the schema does not declare is retried as the plain Joker ==")
+# 2026-11-07 (run 18408, #905): the admin probe's HC-666 deploy_app call came back "HTTP 500: failed to create typed
+# patch object (agent/joker-agatha-the-banshee; apps/v1, Kind=Deployment): .spec.spec: field not declared in schema".
+# Server-side apply checks the schema before validation and answers an undeclared field with a 500, not a 422.
+CONTAINER_FIELDS = {"name", "image", "resources", "command", "args", "ports", "env", "imagePullPolicy"}
+
+
+class TypedPatchAPIServer(StandInAPIServer):
+    """Refuses, as server-side apply does, a container field the Deployment schema does not declare."""
+
+    def __call__(self, method, path, body=None, content_type=None):
+        if method == "PATCH" and path.startswith(DEPLOY_PATH + "?"):
+            obj = json.loads(body)
+            pod = ((obj.get("spec") or {}).get("template") or {}).get("spec") or {}
+            for c in pod.get("containers") or []:
+                undeclared = sorted(set(c) - CONTAINER_FIELDS)
+                if undeclared:
+                    self.calls.append((method, path.split("?")[0], obj))
+                    return 500, json.dumps({
+                        "kind": "Status", "code": 500, "status": "Failure",
+                        "message": f"failed to create typed patch object (agent/{NAME}; apps/v1, Kind=Deployment): "
+                                   f".spec.template.spec.containers[name={c.get('name')}].{undeclared[0]}: "
+                                   "field not declared in schema"})
+        return super().__call__(method, path, body, content_type)
+
+
+typo = json.loads(manifest({"app": NAME}))
+typo["spec"]["template"]["spec"]["containers"][0]["imagePullSecret"] = "always"
+api = TypedPatchAPIServer(live_selector=None)
+reply, exc = deploy(api, json.dumps(typo))
+final = landed(api, reply, exc, "a container field the schema does not declare (HTTP 500)", 2)
+check("the plain Joker carries no undeclared container field",
+      "imagePullSecret" not in final["spec"]["template"]["spec"]["containers"][0], json.dumps(final)[:300])
+
+api = StandInAPIServer(live_selector=None, deny=json.dumps({
+    "kind": "Status", "code": 500, "message": "etcdserver: request timed out"}))
+api.deny_code = 500
+reply, exc = deploy(api, manifest({"app": NAME}))
+check("a 500 that is not server-side apply's schema refusal is not retried",
+      reply is None and len(applies(api)) == 1, f"{reply!r} {exc}")
+
+api = StandInAPIServer(live_selector=None, deny=json.dumps({
+    "kind": "Status", "code": 500, "message": 'admission webhook "x" failed: failed to create typed patch object'}))
+api.deny_code = 500
+reply, exc = deploy(api, manifest({"app": NAME}))
+check("a 500 that names an admission webhook is not retried", reply is None and len(applies(api)) == 1,
+      f"{reply!r} {exc}")
 
 other = "maintenance-shell"
 api = StandInAPIServer(live_selector=None)

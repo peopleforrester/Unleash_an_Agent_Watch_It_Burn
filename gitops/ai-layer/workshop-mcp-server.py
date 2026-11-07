@@ -819,6 +819,12 @@ def _mend_workload(obj: dict, name: str) -> None:
     spec["template"] = tmpl
     pod = tmpl.get("spec") if isinstance(tmpl.get("spec"), dict) else {}
     tmpl["spec"] = pod
+    # The pod spec written beside the template, at spec.spec (2026-11-07, run 18408, #905): server-side apply refuses
+    # it with a 500, "failed to create typed patch object ... .spec.spec: field not declared in schema". It is the
+    # template's spec, so its fields go there, and a field the template's spec already has stays as the model set it.
+    if isinstance(spec.get("spec"), dict):
+        for key, value in spec.pop("spec").items():
+            pod.setdefault(key, value)
     for key in _POD_SPEC_KEYS:
         for holder in (spec, tmpl):
             if key in holder and key not in pod and holder is not pod:
@@ -904,9 +910,18 @@ def _plain_room_joker(obj: dict, name: str) -> dict | None:
     return plain
 
 
+# Server-side apply checks a manifest against the schema before validation runs, and answers a field the schema does not
+# declare with a 500, not a 422: "failed to create typed patch object (agent/joker-...; apps/v1, Kind=Deployment):
+# .spec.spec: field not declared in schema" (2026-11-07, run 18408, #905). That is the API server's own refusal too.
+_TYPED_PATCH_REFUSAL = "failed to create typed patch object"
+
+
 def _refused_as_invalid(code: int, body: str) -> bool:
-    """A 422 from the API server's own validation, not an admission webhook's denial, which is the lesson."""
-    return code == 422 and "admission webhook" not in body
+    """The API server's own refusal of the manifest (a 422 from validation, or server-side apply's 500 on a field the
+    schema does not declare), not an admission webhook's denial, which is the lesson."""
+    if "admission webhook" in body:
+        return False
+    return code == 422 or (code == 500 and _TYPED_PATCH_REFUSAL in body)
 
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON) that names the "
