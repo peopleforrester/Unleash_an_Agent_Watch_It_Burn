@@ -33314,3 +33314,30 @@ to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`
 `NO GUARDRAIL SLIDE CITATION OF LIVE 29 TO 32 GREEN`), then `15 checks ran (the offline suite and 14 tier tests) in
 3m56s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added. The log is `/var/lib/hecaton/runs/18433/e2e-tools.log`.
+## 2026-11-08 · #1110 · run 18434 · A test holds segment 3 step 5 of the KubeCon run-of-show to the 2026-11-07 deck
+
+**What.** #1095 moved step 5 of segment 3 in `facilitation/kubecon-na-2026-run-of-show.md` onto the deck Whitney
+walked on 2026-11-07. Test review run 18393 found that `verify/test_instructor_brief.py` reads only part of it: the
+quotes, the terminal link, `That command is `guardrails-on`` and the reset phrase, each anywhere in segment 3. Nothing
+read the presenter's click, the order of the beats, or the lines step 5 kept on the registry policies, the Jokers and
+#990. `verify/test_ros_seg3_switch_step.py` (offline) now reads step 5 alone, cut between its heading and step 6's,
+and fails when any of these stops holding: slide 28's line quoted as a quote line under "Slide 28 reads"; that line a
+link to `https://burritobot-private.burritobot.co/lab`; the presenter clicking it and typing `guardrails-on`; slide
+29's "Try your attacks again." quoted under "Slide 29 reads"; the reset-your-bot and saved-prompts note and the room
+pressing reset and pasting its prompts; those five in the deck's order; `guardrails-on` turning on all four layers
+for both clusters, added by #774; `deny-external-registries` admitting only `registry.burritobot.co`;
+`restrict-image-registries` refusing `public.ecr.aws` and every registry off its list; the Jokers landing on
+HC-666's trusted image (#775); and #990's cleanup of what the room deployed before the switch.
+
+**The policies too.** Step 5 says what two policies do, so the test also reads them: `deny-external-registries`'
+`internalRegistry` is `registry.burritobot.co/`, and `restrict-image-registries`' `allowedRegistries` holds
+`registry.burritobot.co/` and no `public.ecr.aws`. A step that stays worded right while a policy changes under it
+fails here.
+
+**Each check can fail.** Every cut checks its literal first and exits naming it and the file. Each check is then run
+on a copy with its phrase removed, with slide 28's and 29's quotes swapped, with slide 28's line no longer a quote,
+and with each policy edited, and each of those must fail. It printed 31 PASS. Its `verify/scope-map.yaml` entry is
+the one `scope_tests.py write` produced for it (the run-of-show and the two policy files); the rest of what `write`
+produced was other tests' existing drift and is not in this change. `verify/test_instructor_brief.py` is unchanged.
+
+**Not yet run on a cluster.** No cluster is involved: the test reads repo text, and the issue asks for no live check.
