@@ -29163,3 +29163,10 @@ the right one. This run removed the first. Run against base's PROGRESS.md, the t
 
 **Live check.** None: the criterion is the text of PROGRESS.md, and the test reads only that file. It needs no
 cluster.
+
+**`verify/test_turn_guard.py` writes to its own temp directory.** The first E2E run in this run's sandbox failed one
+offline check, "the here-document the hint describes does carry an apostrophe through", with `/bin/sh: 1: cannot
+create /tmp/turn-guard-885-body.json: Directory nonexistent`: this host gives a run no writable `/tmp`, and the
+test had the path hardcoded. The check is about the apostrophe getting through the quoted here-document, not about
+the path, so the body file now goes in a `tempfile.TemporaryDirectory` the test makes and removes. On a host with
+`/tmp` the check runs as before.
