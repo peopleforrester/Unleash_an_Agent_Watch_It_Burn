@@ -480,6 +480,15 @@ answer for a host it does not carry, where they answered 502 before. `registry.b
 tags list prints `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended
 "the router serves exactly the roster", exit 0. #945 is done.
 
+**2026-11-07, #931, live: every criterion read green.** Hecaton run 18184 read the routes at 13:36Z, at staging
+`635bfb9a`. `registry-attackme.burritobot.co`'s tags list answers 404, the router's answer for a host it does not
+carry (`no-such-host-931.burritobot.co` answers the same), so its row is gone: community has no registry, and both
+clusters pull from `registry.burritobot.co`, which is private's. The tags list reads 200 with `busybox-1.38.0` on
+`registry.burritobot.co` and `registry-burritobot-private.burritobot.co`. The support desks the talk uses,
+`support.burritobot.co`, `support-attackme.burritobot.co` and `support-burritobot-private.burritobot.co`, answer 200,
+with HC-666 at `/ticket/HC-666` on attackme's and private's. `./fleet.sh router-check` ended "the router serves exactly
+the roster" and `./fleet.sh wall-check` ended "the wall shows every roster cluster", both exit 0. #931 is done.
+
 **2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
 watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
 (`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.

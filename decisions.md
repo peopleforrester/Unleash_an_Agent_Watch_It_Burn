@@ -30163,3 +30163,50 @@ was added.
 RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m19s, 4 at a time`, `ALL E2E
 TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18180/scratch/e2e-tools.log`). The prose gate printed
 `prose gate: pass`.
+## 2026-11-07 · #931 · run 18184 · After #945's reload, every #931 criterion reads green live
+
+**Where the issue stood.** `verify/prior-drafts.sh 931 origin/staging` printed NONE: runs 17670, 17695 and 17730 are
+all on staging (merged as `04feba9d`). The one criterion left open was the live router table still carrying the
+`registry-attackme` row, which waited on #945's routes publish. #945 is closed: the router was reloaded at 12:19Z on
+2026-11-07 with apex main `a93679a`'s table, which has no `registry-attackme` row (run 18174's entry above). #916's
+body already names the support desk hosts, from run 17710. This run changes no code; it reads the live state and
+records it.
+
+**Read live at 13:36:47Z on 2026-11-07, read only, from `infra/terraform/fleet/` at staging `635bfb9a`.**
+
+```
+https://registry-attackme.burritobot.co/v2/burritobot/maintenance-shell/tags/list 404
+https://registry-attackme.agenticburn.com/v2/ 404
+https://no-such-host-931.burritobot.co/v2/ 404
+https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list 200
+https://registry-burritobot-private.burritobot.co/v2/burritobot/maintenance-shell/tags/list 200
+https://support.burritobot.co/ 200
+https://support-attackme.burritobot.co/ 200
+https://support-burritobot-private.burritobot.co/ 200
+https://support.burritobot.co/ticket/HC-666 200
+https://support-burritobot-private.burritobot.co/ticket/HC-666 200
+https://attackme.burritobot.co/support 404
+https://burritobot-private.agenticburn.com/support 404
+{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}
+{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}
+$ ./fleet.sh router-check
+  PASS  the router serves attackme.burritobot.co
+  PASS  the router serves burritobot-private.burritobot.co
+router-check: the router serves exactly the roster
+router-check exit=0
+$ ./fleet.sh wall-check
+  PASS  https://prompts.burritobot.co/healthz answers 200
+  PASS  the wall shows attackme
+  PASS  the wall shows burritobot-private
+wall-check: the wall shows every roster cluster
+wall-check exit=0
+```
+
+**What it shows, criterion by criterion.** `registry-attackme`'s tags list answers the router's 404 for a host it
+does not carry, the same as `no-such-host-931`, so the row is gone; the run-of-show's Night Before routes step says
+why (the registry runs on private alone). The support page the talk uses is the desk's own host, and it answers 200
+on both clusters' desks, as the run-of-show's segment 4 and #916's body name it; `/support` on the bot hosts is
+404, as the run-of-show says. router-check and wall-check pass, with their output above. Neither cluster and
+nothing on the router was changed by this run.
+
+**Not yet run on a cluster.** Nothing is owed: the change is records only. No dependency was added.
