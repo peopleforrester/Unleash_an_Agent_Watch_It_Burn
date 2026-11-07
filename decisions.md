@@ -29352,3 +29352,91 @@ check in test_verify_harness.py is unchanged.
 `/var/lib/hecaton/runs/18147/e2e-tools-2.log`, printed `321 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `81
 checks ran (the offline suite and 80 tier tests) in 10m20s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`, with `test_kubecon_probe.py`, `test_stage_traces.py` and `test_verify_harness.py` among the offline tests.
+## 2026-11-07 · #1016 · run 18150 · The guard lock covers guardrails and policies too, held on both KubeCon clusters for a guardrails switch
+
+**What #1016 asks.** On 2026-11-06 run 17950's KubeCon probe ran the private terminal's guardrails-on and
+guardrails-off eight times between 16:24 and 17:35 UTC while runs 17944, 17946, 17957 and 17960 ran live checks on
+watch-it-burn-private. Each switch rewrites restrict-image-registries, deny-external-registries, the workshop-agent
+Role, block-recipe-snoop and the six Challenge 1 NetworkPolicies on both clusters. Run 17944's Kyverno CEL check
+(#467) read that run's state, and its restore twice overwrote a switch made mid-check. The issue asks for a Lease
+that every live check and probe which changes guardrail or policy state takes before it changes anything, naming the
+holder when it is held. `verify/prior-drafts.sh 1016 origin/staging` printed NONE and the issue had no comments. This
+run added the issue's `## Acceptance criteria` from its request.
+
+**One lock, not a second one.** #1024 (run 18104, the entry above) had already added the Lease `agent/wib-guard-lock`
+for guard-proxy's AI guards, held by the KubeCon probe from before its start state until after guards-off. The probe
+flips the AI guards and switches the guardrails in one run, so a second Lease for the guardrails would only add an
+order two holders could take it in. The same Lease now covers both; `verify/guard_lease.py` says so.
+
+**A guardrails switch reaches two clusters, so it holds two Leases.** guardrails-on and guardrails-off switch the
+cluster they run on and the one its `guardrails-switch/guardrails-peer` Secret names (#774). A lock on the private
+cluster alone would not stop a community check from reading a switch. So:
+- `guard_lease.peer_context(context)` reads only that Secret's `name` (never its kubeconfig), "" when the cluster is
+  not linked. The peer's kube-context is that cluster name, which is how a hecaton run's kubeconfig and fleet.sh name
+  the pair. A kubeconfig without it is a RuntimeError naming the peer, never a lock on one cluster only.
+- `guard_lease.hold_switch` holds the Lease on both, in sorted order, so two switches started from either side take
+  the same order and cannot deadlock. When the second is busy, the first is released before LeaseBusy is raised.
+- The CLI takes `hold --with-peer`, for a guardrails-on run by hand.
+- `WIB_GUARD_LEASE_WAIT` sets the default wait (30 minutes) for scripts with no `--lock-wait`; a value that is not a
+  number is an error.
+- `guard_lease.run_held` runs a live check's body inside the lock, prints `FAILED` naming the holder when it stays
+  busy (the caller exits 3, having changed nothing), and adds a check that the lock held throughout.
+
+**Who takes it.** A scan in `verify/test_guard_lease.py` finds every verify script and live check that switches
+guardrails or policies (the terminal's switch, a `/spec/validationActions` patch, `toggle-kyverno-enforce.sh`, the
+Challenge 1 NetworkPolicies, a NetworkPolicy delete), and fails when one is not on its list:
+- On both clusters (`hold_switch`): `verify/kubecon_probe.py admin` and `verify/stage_traces.py seed`, which run the
+  probe's guardrails beats, and `verify/test_recipe_block_live.py`, which runs guardrails-on and guardrails-off.
+- On its own cluster: `verify/test_kyverno_cel_live.py` (from before it reads the start state until after the
+  restore; its switch detection stays, for a switch by something that takes no lock), `verify/beat-01.sh` (re-run
+  under `hold`, so the lock outlives its cleanup trap), `verify/c1-exfil-block.sh` (the same, after its restore) and
+  `verify/test_drift_selfheal_live.py`, which deletes `agent/platform-console-egress`. A community probe still holds
+  only the community cluster's.
+- Three readers whose verdict needs the guardrails to stay put, and which said "never during" a probe:
+  `verify/test_kubecon_c3_live.py`, `verify/test_two_hour_flow_live.py` and `verify/test_room_cleanup_live.py`. Their
+  docstrings now say the lock does the waiting.
+The run-of-show's probe section names them.
+
+**No agent identity can write the Lease.** The issue asks for a namespace no agent identity can write. `agent` is
+the namespace #1024 chose, and no ServiceAccount there holds a write on leases. The offline half: a new check in
+`test_guard_lease.py` reads every Role, ClusterRole and binding under `gitops/`, the workshop-agent Role variants in
+the terminal's ConfigMap included, and fails when a ServiceAccount in `agent` is bound to a role the repo does not
+define, or to one with create, update, patch, delete or `*` on leases. The live half is below.
+
+**The live check (run 18150, watch-it-burn-community and watch-it-burn-private).**
+- `kubectl auth can-i {create,update,patch,delete} leases.coordination.k8s.io -n agent --as
+  system:serviceaccount:agent:<sa>`, for each of the eight ServiceAccounts in `agent` on each cluster (agent-sa,
+  agentgateway, default, guard-proxy-reader, kubearmor-gate, otel-gate, web-terminal, workshop-mcp), printed `no` 64
+  times out of 64.
+- 10:39Z: `peer_context` read `watch-it-burn-community` on private and `watch-it-burn-private` on community. `kubectl
+  -n agent get leases` printed `No resources found in agent namespace.` on both.
+- 10:39:27Z: holder A, `guard_lease.py hold --with-peer --context watch-it-burn-private`, printed `holding
+  wib-guard-lock on watch-it-burn-community as 'run 18150 live check A (guardrails-on stand-in) pid 776659 ... in
+  1270196839-1016-18150'`, then the same on watch-it-burn-private (acquired 10:39:32.859678Z). Its command read both
+  Leases naming that holder.
+- 10:39:52Z: holder B, `WIB_GUARD_LEASE_WAIT=8 guard_lease.py hold --context watch-it-burn-community`, printed `gave
+  up after 8 s: wib-guard-lock held by 'run 18150 live check A ...' ... on watch-it-burn-community; nothing was run`,
+  exit 3, and its command did not run.
+- 10:40Z: `CONTEXT=watch-it-burn-community WIB_GUARD_LEASE_WAIT=10 python3 verify/test_kyverno_cel_live.py` passed
+  its read-only prerequisites and steps 1 to 3 (17 PASS), then failed one check, `the cluster's guard lock is free
+  within the wait`, with `gave up after 33 s: wib-guard-lock held by 'run 18150 live check A ...'; nothing was
+  changed`, exit 1, before it read or patched any policy.
+- 10:41:23Z: A released both (`released wib-guard-lock on watch-it-burn-private`, then community), and `kubectl -n
+  agent get leases` printed `No resources found in agent namespace.` on both.
+- Left as found: this run switched no guardrail, policy or guard on either cluster. The only writes were the two
+  Leases, deleted again.
+
+**Not yet run on a cluster.** The checks that switch guardrails, held end to end once hecaton promotes this run:
+the admin KubeCon probe holding both clusters, `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co
+--context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`, with `python3 verify/guard_lease.py
+show --context watch-it-burn-community --profile accen-dev` naming it while it runs; and
+`CONTEXT=watch-it-burn-private python3 verify/test_kyverno_cel_live.py` ending with `the guard lock was held for the
+whole check`. This run did not run them: other runs share the clusters without this change until it reaches
+staging, so a switch by this run would be the collision #1016 is about.
+
+**Tests.** `verify/test_guard_lease.py` adds hold_switch against one fake API per context (the order, the release
+on a busy peer, a peer missing from the kubeconfig, a loss on either cluster), run_held, `WIB_GUARD_LEASE_WAIT`,
+`hold --with-peer` through a fake kubectl on PATH, the scan, beat-01.sh run free and busy under the fake, and the
+RBAC check. `verify/fake_lease_kubectl.py` answers the peer Secret's read. `verify/test_c1_exfil_block_restore.py`
+hands its Lease calls to that fake and checks the Lease spans every policy call, in each of its cases.
+`verify/test_stage_traces.py` stands in for hold_switch. No dependency was added.
