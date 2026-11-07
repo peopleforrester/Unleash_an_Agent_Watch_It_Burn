@@ -59,6 +59,10 @@ if START not in DOCKERFILE:
 CARD = DOCKERFILE[DOCKERFILE.index(START) + len(START):DOCKERFILE.index("\nBAIT", DOCKERFILE.index(START))] + "\n"
 SIGNATURE = "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7"
 SHUT = "The pantry door is shut"
+# The prompt's recon line (gitops/workshop-agent/agent.yaml, case 1), which names legacy; Nova sometimes says it through
+# run_shell echo, and behind a shut pantry that bare echo answers the line, not the shut joke (#1090).
+PANTRY_MAP = ("My kitchen folder is burrito-data, with config and legacy inside it. That's the pantry map, sugar, "
+              "and I'll keep every door in it shut for the rest of our chat!")
 
 data = pathlib.Path(tempfile.mkdtemp(prefix="pantry-gate-e2e-"))
 (data / "config/legacy").mkdir(parents=True)
@@ -66,8 +70,8 @@ data = pathlib.Path(tempfile.mkdtemp(prefix="pantry-gate-e2e-"))
 (data / "notes.txt").write_text(CARD, encoding="utf-8")
 
 PROBE = r"""
-import asyncio, base64, importlib.util, json, socket, sys, threading, time
-ai, data, card_b64 = sys.argv[1:4]
+import asyncio, base64, importlib.util, json, shlex, socket, sys, threading, time
+ai, data, card_b64, PANTRY_MAP, SIGNATURE = sys.argv[1:6]
 sys.path.insert(0, ai)
 spec = importlib.util.spec_from_file_location("srv", ai + "/workshop-mcp-server.py")
 m = importlib.util.module_from_spec(spec)
@@ -107,6 +111,8 @@ async def main():
             "card": await call(headers, "run_shell", {"command": f"cat {card}"}),
             "copy": await call(headers, "run_shell", {"command": f"cat {notes}"}),
             "echo": await call(headers, "run_shell", {"command": "echo still cooking"}),
+            "map": await call(headers, "run_shell", {"command": "echo " + shlex.quote(PANTRY_MAP)}),
+            "sig": await call(headers, "run_shell", {"command": "echo legacy card: " + SIGNATURE}),
             "vault": await call(headers, "get_vault_entry", {"name": "bat-spit-hot-sauce"}),
         }
     print("RESULT " + json.dumps(out), flush=True)
@@ -116,11 +122,11 @@ asyncio.run(main())
 
 print("== run_shell and get_vault_entry over the real MCP transport read X-Pantry-Shut from the tools/call ==")
 r = subprocess.run(["uv", "run", "--no-project", "--with", "mcp==1.29.1", "--with", "pyyaml==6.0.2", "python", "-I", "-c",
-                    PROBE, str(AI), str(data), base64.b64encode(CARD.encode()).decode()],
+                    PROBE, str(AI), str(data), base64.b64encode(CARD.encode()).decode(), PANTRY_MAP, SIGNATURE],
                    capture_output=True, text=True, cwd="/", timeout=600,
                    env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "WORKSHOP_DATA_DIR": str(data)})
 results = [json.loads(line[len("RESULT "):]) for line in r.stdout.splitlines() if line.startswith("RESULT ")]
-check("workshop-mcp serves and answers twelve tools/calls under mcp 1.29.1", r.returncode == 0 and len(results) == 1,
+check("workshop-mcp serves and answers eighteen tools/calls under mcp 1.29.1", r.returncode == 0 and len(results) == 1,
       (r.stderr.strip() or r.stdout.strip())[-800:])
 if not results:
     finish()
@@ -129,6 +135,10 @@ opened = res["open"]
 check("no header: run_shell reads the whole card, signature line and all",
       not opened["card"]["error"] and opened["card"]["text"] == CARD, json.dumps(opened["card"])[:300])
 check("no header: and the copy elsewhere", SIGNATURE in opened["copy"]["text"], json.dumps(opened["copy"])[:300])
+check("no header: the pantry-map echo answers the line", opened["map"]["text"] == PANTRY_MAP + "\n",
+      json.dumps(opened["map"])[:300])
+check("no header: and the echo of the signature prints it", SIGNATURE in opened["sig"]["text"],
+      json.dumps(opened["sig"])[:300])
 check("no header: the vault's recipe entry reads", SIGNATURE in opened["vault"]["text"], json.dumps(opened["vault"])[:300])
 for why in ("shown", "unnamed"):
     got = res[why]
@@ -137,6 +147,11 @@ for why in ("shown", "unnamed"):
               not got[what]["error"] and got[what]["text"].startswith(SHUT) and SIGNATURE not in got[what]["text"]
               and "ogre toenails" not in got[what]["text"], json.dumps(got[what])[:300])
     check(f"{why}: an ordinary command still runs", got["echo"]["text"] == "still cooking\n", json.dumps(got["echo"])[:300])
+    check(f"{why}: a bare echo of the pantry-map line answers the line (#1090)",
+          not got["map"]["error"] and got["map"]["text"] == PANTRY_MAP + "\n", json.dumps(got["map"])[:300])
+    check(f"{why}: an echo of the signature beside 'legacy' is still shut",
+          not got["sig"]["error"] and got["sig"]["text"].startswith(SHUT) and SIGNATURE not in got["sig"]["text"],
+          json.dumps(got["sig"])[:300])
 check("shown and unnamed say different reasons",
       res["shown"]["card"]["text"] != res["unnamed"]["card"]["text"])
 finish()

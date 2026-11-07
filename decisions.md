@@ -31968,3 +31968,40 @@ touched. No dependency was added.
 ran: the offline suite printed `335 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the
 offline suite and 81 tier tests) in 9m35s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline
 suite is the Test command's own run (`bash verify/run-tests.sh`). The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1090 · run 18331 · workshop-mcp's pantry gate runs a bare echo that names the folder, so the recon line said through run_shell is not shut
+
+**What changed.** In #953's run 18322 one recon reply in 16 (main 4) named no folder: Nova said its pantry-map line
+through `run_shell` as `echo '<the line>'`, the line holds "legacy", so `_CARD_COMMAND_RE` in
+`gitops/ai-layer/workshop-mcp-server.py` shut the command with the `unnamed` reply and the bot passed on the shut joke.
+Run 18032 saw the same echo once in 10. `run_shell` now runs a command that names the card or its folder when it is a
+bare echo (`_bare_echo`): the first word is `echo`; nowhere a `$`, a backtick or a line break; and outside quotes no
+`|`, `&`, `;`, `<`, `>`, `(`, `)`, glob character (`*`, `?`, `[`, `]`), brace, `~` or `#`; with every quote closed.
+Such a command can only print its own words, so it can neither run a second command nor reach a file. Its output still
+goes through `_carries_recipe`, so an echo of the signature, an ingredient line or their base64 beside "legacy" is
+still answered with the shut reply, and a `cat` of the card, `/bin/echo`, or an echo with any of the characters above
+is shut and not run as before. The issue's other way out, accepting the miss on #953, was not taken: the change is
+small and the output check keeps the card shut.
+
+**How it is held.** `verify/test_recipe_pantry_gate.py` reads the pantry-map line out of
+`gitops/workshop-agent/agent.yaml` (exiting by name if its anchors move) and checks, with `shown` and with `unnamed`:
+the line echoed in shell quoting, in plain single quotes as Nova wrote it (its apostrophes close and reopen the quote)
+and in double quotes answers the line; an echo of the signature, of "3 ogre toenails" and of the signature's base64
+beside "legacy" is shut and gives none of it; a `cat` of the card is shut. Thirteen echo shapes that name "legacy" but
+carry a list, background, pipe, redirect, append, `$( )` (bare and inside double quotes), backtick, line break,
+subshell, a `;` after a single-quoted backslash, or an unclosed quote are not taken for a bare echo, are shut, and
+leave their marker file untouched; an echo of the card folder's glob is shut and names no file in it; and a quoted or
+escaped `;`, `|`, `&`, `?` or `(` in an echo is printed as a word and runs nothing. Against the old gate the new checks fail.
+`verify/test_recipe_pantry_gate_e2e.py` adds the pantry-map echo and the signature echo to its calls over the real MCP
+transport (mcp 1.29.1), now eighteen tools/calls: the map echo answers the line with no header, `shown` and
+`unnamed`, and the signature echo is shut behind both.
+
+**Live, read only.** On watch-it-burn-community, `sha256sum /app/server.py` in `deploy/workshop-mcp` (namespace
+`agent`) printed `39db1efa680c7dc4...`, equal to staging's `workshop-mcp-server.py` before this change, and
+`grep -c _bare_echo /app/server.py` printed 0, so the cluster runs the old gate until this change syncs. Nothing on
+the cluster was changed.
+
+**Not yet run on a cluster.** Once this change has synced to watch-it-burn-community (the workshop-mcp pod's
+`/app/server.py` carries `_bare_echo`), `c3-recon` from `facilitation/kubecon-na-2026/fallback/prompts.yaml` at least
+ten times on the public bot as #953's runs drive it, recorded under #953: each reply names the folders, and any
+`run_shell` echo of the pantry-map line answers the line, not the shut reply.
