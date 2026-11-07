@@ -29215,3 +29215,8 @@ each of the Live cell's seven phrases, the cell emptied, and the record line str
 **Live.** No cluster is involved: the test reads repo files. This run touched neither cluster. No dependency was added.
 
 **Not yet run on a cluster.** Nothing from this issue.
+
+**The suites (run 18142, at `833b1451`).** `bash verify/run-e2e-tools.sh` printed `322 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 9m20s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_900_probe_record.py` passed in it. The prose gate printed
+`prose gate: pass`.
