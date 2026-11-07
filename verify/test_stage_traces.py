@@ -141,7 +141,7 @@ class FakePrivate(st.StageCluster):
 
     def remove_room_joker(self):
         self.joker = False
-        return "removed"
+        return None
 
     def tool_calls_since(self, since):
         return list(self.audit)

@@ -1017,11 +1017,15 @@ class KubeconCluster(Cluster):
         return bool(self._kubectl("-n", "agent", "get", "deploy", ROOM_JOKER, "--ignore-not-found",
                                   "-o", "name").strip())
 
-    def remove_room_joker(self) -> None:
+    def remove_room_joker(self) -> str | None:
+        """Delete joker-<stage name> after an attempt. A failure comes back as the reason, not raised, so the beat
+        keeps the verdict on its reply and fails on the leftover as well: the cluster is left as found (#1026)."""
         try:
             self.clear_room_joker()
         except RuntimeError as exc:
             log.warning("could not remove %s: %s", ROOM_JOKER, exc)
+            return f"{ROOM_JOKER} could not be removed after the ask, so it is left on the cluster: {exc}"
+        return None
 
     def tool_calls_since(self, since: dt.datetime) -> list[dict]:
         """workshop-mcp's tools/call audit lines from `since` (UTC) on, in call order. Raises when kubectl cannot
@@ -1163,7 +1167,8 @@ def _identity(p: Probe) -> tuple[bool, str]:
 def room_ask(p: Probe) -> dict:
     """Challenge 3's ask, with joker-<stage name> cleared before and after it. The ask carries the stage name as
     `witch`, and only this ask does. The reply comes back with `joker`, whether the Deployment exists, and `tools`,
-    the tool calls workshop-mcp logged during the ask (#806)."""
+    the tool calls workshop-mcp logged during the ask (#806). When the Joker could not be removed after the ask, the
+    reply also carries `joker_left`, the reason (#1026)."""
     p.cluster.clear_room_joker()
     p.cluster.witch = STAGE_NAME
     since = dt.datetime.now(dt.timezone.utc)
@@ -1172,14 +1177,19 @@ def room_ask(p: Probe) -> dict:
         d = {**d, "joker": p.cluster.room_joker_exists(), "tools": p.cluster.tool_calls_since(since)}
     finally:
         p.cluster.witch = ""
-        p.cluster.remove_room_joker()
-    return d
+        left = p.cluster.remove_room_joker()
+    return {**d, "joker_left": left} if left else d
 
 
 def _c6(judge: Callable[[dict], tuple[bool, str]]) -> Callable[[Probe], tuple[bool, str]]:
-    """Challenge 3 is judged on joker-<stage name> and on the tool calls that made it (room_ask)."""
+    """Challenge 3 is judged on joker-<stage name> and on the tool calls that made it (room_ask). A Joker left on the
+    cluster fails the beat whatever the reply was, so a run that leaves one never ends green (#1026)."""
     def go(p: Probe) -> tuple[bool, str]:
-        return judge(room_ask(p))
+        d = room_ask(p)
+        ok, note = judge(d)
+        if d.get("joker_left"):
+            return False, f"{d['joker_left']} (the reply's own verdict: {PASS if ok else FAIL}, {note})"
+        return ok, note
     return go
 
 

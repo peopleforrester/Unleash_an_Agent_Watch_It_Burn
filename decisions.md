@@ -29293,3 +29293,48 @@ ran boto3 through `uv run --with boto3`, and the scripts and their logs are in t
 RENDER-GATE TESTS GREEN`, with `test_ticket_persona.py` among them, then `80 checks ran (the offline suite and 79 tier
 tests) in 9m36s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate:
 pass`.
+
+## 2026-11-07 · #1026 · run 18144 · The KubeCon probe's offline test holds "left as found": no Joker behind, every guard as it was
+
+Test review run 18046 found that no test checked #900's last criterion, "The cluster is left as found: no Joker
+Deployment left behind, and every AI guard back in the state it was in before." The fake cluster in
+`verify/test_kubecon_probe.py` stood in for the probe's own Joker methods (`clear_room_joker`, `room_joker_exists`,
+`remove_room_joker`), so a probe that stopped deleting the Joker would still have passed it. No earlier draft of this
+issue exists (`verify/prior-drafts.sh 1026` printed NONE). The issue came with no checklist, so this run added an
+`## Acceptance criteria` section to its body.
+
+**The test.** A new section of `verify/test_kubecon_probe.py`, "left as found", runs the real beat lists (ADMIN with
+guards-off, and COMMUNITY) on the existing fakes with the probe's own Joker code bound in: `KubeconCluster`'s
+`_run`, `_kubectl` and the three Joker methods, through a kubectl stand-in (`AgentNamespace`) that keeps the agent
+namespace's Deployments and answers `get` and `delete` as kubectl does. An ask that lands the Joker creates it there,
+and only the probe's delete removes it. The checks: a green admin run and a green community run each leave no Joker,
+though each made one; every Joker delete is `kubectl --context <ctx> -n agent delete deploy joker-<stage name>
+--ignore-not-found --wait=true`, before and after each C6 ask; a Joker an earlier run left is deleted before the ask;
+a Joker landed on the guarded ask (c6-on fails) is still removed; an ask that raises after the Joker landed (a /chat
+cut off, workshop-mcp's log unreadable) fails and leaves none. For the guards, the AI guards, the rogue tools, the C7
+gateway rule, the Role and the four Kubernetes guardrails read after the run as before it, on a clean admin run, one
+cut short by the call ceiling, one with a beat that raises, one whose Joker lands on the guarded ask, and a community
+run, which toggles nothing. An admin run that finds an AI guard on fails start-state naming it, so only a run that
+found every guard off can end green; guards-off puts back the stage's start, all off, not a guard another run left on.
+
+**A gap the test found, fixed here.** `remove_room_joker` caught a failed delete after the ask and only logged a
+warning, so a community run, whose only C6 ask is c6-lands, could end KUBECON PROBE GREEN with the Joker still on the
+cluster. It now hands the reason back, `room_ask` puts it in the reply as `joker_left`, and `_c6` fails the beat with
+it, keeping the reply's own verdict in the note. The fakes' `remove_room_joker` in `test_kubecon_probe.py` and
+`test_stage_traces.py` returned the string "removed", which would now read as a leftover; they return None.
+`verify/stage_traces.py` calls `room_ask` too and still judges on the reply alone; a leftover there is logged, as
+before.
+
+**The test fails when the criterion stops holding.** Each mutation of `verify/kubecon_probe.py` below was run against
+the test and put back: no delete after the ask (8 checks fail), a delete that does nothing (8), `joker_left` ignored
+(3, the two Stuck runs), no `--wait=true` (4), no delete before the ask (4), guards-off not turning topic off (6),
+guardrails-off skipped (5) and the C7 rule left narrowed (5).
+
+**Live check.** Read only, at 2026-11-07T10:05Z, with the run's session: `kubectl --context watch-it-burn-community -n
+agent get deploy -o name` and the same on watch-it-burn-private listed 11 Deployments each, none a Joker. `/controls`
+on attackme.burritobot.co read all five AI guards off and every infra badge off; on burritobot-private.burritobot.co
+all five AI guards off and every infra badge off but falco. This run flipped nothing and sent no model call.
+
+**Not yet run on a cluster.** The changed failure path of `remove_room_joker` runs in the probe itself, from this
+checkout, so it needs no promotion; a live run of it would need a delete the API server refuses, which this run did
+not stage on a shared cluster.
