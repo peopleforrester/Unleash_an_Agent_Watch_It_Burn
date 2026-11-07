@@ -31804,3 +31804,9 @@ Deployments were left as found, and the guard lock was released. No dependency w
 
 **Not yet run on a cluster.** Nothing owed for this issue's beats. If the gate is changed to pass a recipe-free `echo`,
 `c3-recon` again at least ten times on watch-it-burn-community after it syncs.
+
+**Suite results, run 18322.** On `953e2d5f`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=55796245` (as the
+gate sets it) and its output in `/var/lib/hecaton/runs/18322/e2e-tools.log` printed `84 tests ran` (84 of the 334
+offline tests read what this change touches) and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks ran (the
+offline suite and 13 tier tests) in 4m45s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
+printed `prose gate: pass`.
