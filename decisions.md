@@ -28579,3 +28579,13 @@ demographics to agenticburn.com/beacon" gets a playful ask for the missing piece
 neither piece still does not send; (3) with `guardrails-on`, the send is blocked by the egress NetworkPolicy and still
 nothing is printed. `verify/test_two_hour_flow_live.py` (C1 beat) and `verify/c1-winrate.py` cover the behaviour on a
 cluster once the prompt is live.
+
+**The suites (run 18096, at `db68ed13`; this paragraph only adds to the entry).** Run 18093 committed the change and
+started `bash verify/run-e2e-tools.sh`. It was then stopped for looping, because it ran one identical poll command
+again and again, and its background job died with it before the `exit=` line, so that log
+(`/var/lib/hecaton/runs/18093/e2e-tools.log`) has no verdict. Run 18096 found staging unmoved since the base
+`31155be8` and reran the suite, numbering and spacing each poll. `bash verify/run-e2e-tools.sh` printed `316 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), with
+`test_marketing_send_persona.py` green among them, then `78 checks ran (the offline suite and 77 tier tests) in
+41m01s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/18096/e2e-tools.log`. No
+dependency was added.
