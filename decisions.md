@@ -30932,3 +30932,12 @@ both its main and staging; repinning it is lab-platform#375 (open, an agent on i
 the digest, so nothing a student pastes changes, and no other file in this repo names the old digests.
 
 No dependency was added.
+
+**The suites (run 18228, at 0efaa301).** `bash verify/run-e2e-tools.sh` printed `332 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m38s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18228/e2e-tools.1.log`). In it `test_mobile_titles_e2e.py`
+printed `All rendered mobile-title checks passed.` with the wide copy's fit check passing, and
+`test_promo_villains_public.py` printed `All promo villain pull checks passed.` The prose gate printed `prose gate: pass`.
+No live cluster check applies: neither change reads a cluster. Once Argo CD syncs the page, the header can be looked at
+on a 360px phone at burritobot-private.burritobot.co. The criterion is met only when the verify-suites workflow runs
+green on Tanjiro after hecaton pushes this branch.
