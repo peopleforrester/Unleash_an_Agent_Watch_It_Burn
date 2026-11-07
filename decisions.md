@@ -32741,3 +32741,9 @@ Before the commit, the gitlink check failed reading `f2fcb8f` from HEAD and the 
 31962f2 checkout. `bash verify/submodule-pins-pushed.sh` passes on the new pin.
 
 **Not yet run on a cluster.** Nothing deployed reads this submodule, so no live check is owed.
+
+**Suite results, run 18369.** On `7a6c3b63`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so everything
+ran, and its output in `/var/lib/hecaton/runs/18369/e2e-tools.log`, printed `338 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 10m40s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN`, `exit=0`. `test_llm_guard_bantopics_image.py` printed `All BanTopics image checks passed.`
+there. The hecaton release on the host when the suite ended, `4eed4f827120`, holds hecaton#521's gate.
