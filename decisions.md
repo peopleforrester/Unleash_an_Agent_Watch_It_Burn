@@ -32980,3 +32980,115 @@ reads; it changed nothing. This run changes no code, and this entry maps each of
 scoped to this decisions.md change, printed `85 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks
 ran (the offline suite and 13 tier tests) in 3m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
 printed `prose gate: pass`. No dependency was added. The logs are in `/var/lib/hecaton/runs/18406/`.
+
+## 2026-11-08 · #1115 · #1116 · run 18419 · Every fetch call site classified, and the cold baseline #1115's last child compares against
+
+#1115 is Michael's ruling of 2026-11-07: no run or CI job downloads an artifact we already hold a pinned copy of.
+#1116, its first child, is the inventory and the "before" numbers.
+
+**The scan.** `verify/fetch_inventory.py` runs `git grep` over the tracked files under `verify/`, `.github/workflows/`
+and `scripts/` for the issue's tools: curl, wget, urlopen and http.client, the helm verbs that reach a repository
+and `chart_fetch.pull(`, terraform init (and the `run("init"` wrappers), pip and uv installs (`uv run --with`),
+npm and npx, playwright install, docker and podman pull, crane, git clone and `submodule update`, and a workflow's
+`uses:`. Comment lines are left out. On this branch it finds 665 lines in 199 files. The issue's 354 came from
+planning run 18413's own grep, whose pattern is not recorded; this scan is wider (it adds `uses:`, crane's every
+mention and the uv forms), so most of its lines name a fetch tool without fetching.
+
+**The inventory.** `verify/fetch-inventory.yaml` names each file and gives entries whose `match` is a regular
+expression on the line. Four classes: `pinned` (kind and the file holding the pin), `unpinned` (an artifact at a
+moving reference, which the issue's two classes had no room for and which #1115 has to pin before it can cache),
+`live` (what it reaches) and `none` (the line names a tool and fetches nothing: a stub, an assertion, a docstring, a
+call to a server on 127.0.0.1). Four subagents read the 196 files in four parts against one guide, and this run
+checked the merge and reclassified three of their entries: the Gateway API asset is a `release-asset` (a kind added for
+it), `test_public_images_served.py` is `live` (its job is to see the public registries still serve the pinned
+digests), and the crane row of `e2e-tools.lock` is the pin itself, so `none`.
+
+| Class | Kind or tool | Sites |
+|---|---|---|
+| pinned | python-package | 17 |
+| pinned | github-action | 9 |
+| pinned | helm-chart | 6 |
+| pinned | terraform-provider | 3 |
+| pinned | tool-binary | 3 |
+| pinned | browser | 2 |
+| pinned | container-image | 2 |
+| pinned | git-commit | 2 |
+| pinned | release-asset | 1 |
+| unpinned | github-action | 7 |
+| unpinned | terraform-provider | 2 |
+| unpinned | python-package | 1 |
+| live | urlopen | 54 |
+| live | curl | 32 |
+| live | crane, wget | 2 each |
+| live | git clone | 1 |
+| none | curl 262, urlopen 87, crane 72, playwright install 25, pip and uv 24, terraform init 17, helm 14, git clone 14, wget 4 | 519 |
+
+So 45 pinned, 10 unpinned, 91 live and 519 that fetch nothing. `python3 verify/fetch_inventory.py counts` prints the
+table. The live ones reach the attendee and admin clusters (through `kubectl exec` and port-forwards), our hosts
+under agenticburn.com and burritobot.co, and the GitHub, GHCR and Datadog APIs. The ten unpinned:
+`actions/checkout@v4` in build-web-terminal.yml, keep-sample-app-tag.yml, push-jokers.yml and weaver-registry-check.yml,
+and build-web-terminal.yml's setup-buildx, login and build-push actions at `@v3` and `@v6`; `verify/iam_plan_render.py`'s
+terraform init, which copies each root without its lock; `test_plan_policy_e2e.py`'s init of the plan fixtures, which
+commit no lock; and `test_turn_guard_e2e.py`'s `--with pyyaml` with no version.
+
+Two downloads have no call site the scan can see. llm-guard 0.3.16 fetches its two Hugging Face models itself (1.20
+GB in the cold run below), and a pinned-provider terraform init also resolves registry modules inside their `~>` ranges,
+which no lock holds.
+
+**The test.** `verify/test_fetch_inventory.py`, in the offline suite, re-runs the scan and fails, naming
+`file:line`, on a site no entry of its file matches, an entry with no class or a missing field, a kind outside the list,
+a pin that is no file, and an entry that matches no site. It first holds each of those failures on a small git
+repository it writes. Its scope-map entry is under `always:`, as it runs git grep over the tree.
+
+**The meter.** `verify/fetch_meter.py run LOG -- CMD` runs CMD behind a proxy on 127.0.0.1 that logs each connection's
+host and bytes (tunnels are passed through, never opened), and `summary LOG` adds them up by host.
+`verify/test_fetch_meter.py` holds it offline. #1115's last child can measure its warm run the same way. A client that
+drops the proxy variables is not counted, so the numbers are a floor.
+
+**Cold baseline, the tools tier on netcup.** Base `4fd5b914`, cloned from GitHub into
+`/var/lib/hecaton/runs/18419/cold/repo`, with no `verify/.tools` and with empty uv, npm, Playwright browser and XDG
+(Hugging Face) caches; HECATON_BASE_SHA unset, so every check ran; `E2E_TOOLS_JOBS` 4; on the shared host.
+
+- Wall time 675 s from start to exit. `82 checks ran (the offline suite and 81 tier tests) in 11m14s`. The slowest:
+  the offline suite 646 s, test_lab_pipeline_collector.py 110 s, test_terraform_lock_init.py 108 s.
+- 527 connections, 4,368 MB down. To pinned-artifact hosts: 361 connections (82 of them over 1 MB), 4,366 MB. Live:
+  163 connections, 1.7 MB (registry APIs and our support and storefront hosts). Telemetry: 3 connections.
+
+| Pinned kind (hosts) | Connections | Over 1 MB | MB |
+|---|---|---|---|
+| llm-guard's models (hf.co) | 23 | 17 | 1,202.7 |
+| terraform and its providers (releases.hashicorp.com, registry.terraform.io) | 92 | 15 | 1,186.0 |
+| image blobs (pkg-containers.githubusercontent.com) | 46 | 11 | 647.2 |
+| Python packages (PyPI, the PyTorch index) | 83 | 6 | 500.7 |
+| tool binaries (GitHub release assets, dl.k8s.io, get.helm.sh) | 26 | 12 | 430.7 |
+| Playwright's browsers (storage.googleapis.com, Playwright's CDN) | 6 | 3 | 329.0 |
+| git clones and raw files (github.com) | 51 | 9 | 38.0 |
+| Helm charts (13 chart repositories) | 34 | 9 | 32.1 |
+
+What landed: the 11 tools of e2e-tools.lock (443,215,347 B in `verify/.tools/dl`), 20 chart tarballs, provider
+versions aws 6.72.0 and 6.70.0, tls, time, null and cloudinit, three Playwright builds (chromium-1248, its headless
+shell, ffmpeg) and two models. The aws provider came down six times at about 180 MB each, for its two versions: the
+inits that copy no lock and use no shared cache (`iam_plan_render.py`, the plan-policy fixtures) fetch it again.
+
+The run exited 1 on one check, test_joker_build_digest.py, and on nothing to do with fetching: the run directory's
+directories are setgid (mode 2775), the clone's directories took the bit, and `images/villains/build.sh`'s
+`--mode='a+rX,ug+w,o-w'` kept it, so both Jokers built at other digests. This run adds `ug-s` to the mode, which
+changes no digest for a checkout without the bit, and the test now rebuilds from a setgid copy as well. With the fix
+the test passed in the clone and in this worktree, and the setgid rebuild failed on the old build.sh with the two
+digests the cold run printed.
+
+**Cold baseline, the CI e2e tools job on Tanjiro.** Read from GitHub's API. The first job that fetched
+`verify/.tools` on the runner is run 42356940649 (staging `18f4e569`, 2026-11-07 08:51 UTC): the job took 350 s,
+`79 checks ran (the offline suite and 78 tier tests) in 5m45s`, and it failed on checks #1047 fixed later. Its log
+shows one set of pinned downloads: the 11 tools of e2e-tools.lock, 443,215,347 B by their checksums, ready in 15 s.
+The job logs no other download, so CI's count and bytes for the providers, charts, packages, browsers and models are
+not known; the netcup numbers above come from the same commands. For comparison, the green full jobs from 16:40 to
+21:51 UTC that day took 282 to 396 s, and the last before this run, 42418898832, took 1,244 s (`20m36s`, with a
+954 s model load in one llm-guard check).
+
+**Checked by this run.** On the change, with the same meter: the tools tier scoped to the change
+(HECATON_BASE_SHA=`4fd5b914`) in this worktree, whose `verify/.tools` was empty, took 292 s, ran `75 tests` offline
+and `14 checks ... in 4m52s`, and drew 245 connections and 1,390 MB.
+
+**Not yet run on a cluster.** Nothing: the inventory, the test and the meter read the repo and the network, and this
+run touched neither cluster.
