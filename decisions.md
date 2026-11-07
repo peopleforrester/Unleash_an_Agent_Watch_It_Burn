@@ -33013,3 +33013,47 @@ run-of-show's Probe record has the entry. This supersedes the "Not yet run" para
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is `/var/lib/hecaton/runs/17949/e2e-tools.log`; the two runs
 before it are `e2e-tools.first.log` (stopped at the hour) and `e2e-tools.second.log` (exit 1 on the terraform and
 ttyd timeouts above).
+
+## 2026-11-07 · #651 · run 18396 ports run 17949's unmerged draft and checks both domains again on staging 601dfeab
+
+Run 17949's six commits never reached staging: hecaton ended it "failed (claim-stale)", which is the dispatcher's
+claim on the issue and not a gate this repo's change failed. `bash verify/prior-drafts.sh 651 origin/staging` named
+`origin/agent/651-17949` as the START draft, with one drift line, the run-of-show, which #1095's `85803838` edited in
+place, and a decisions.md APPEND. The six commits were cherry-picked onto staging `601dfeab`. The one conflict was
+the run-of-show's Probe record, where staging had added #900's BanTopics entry at the same place as 17949's probe
+entry; both are kept, #900's first. What differs from the draft: `verify/test_iam_plan_render_plugin_start.py`, which
+the draft added, now has its own entry in `verify/scope-map.yaml`, naming the paths `scope_tests.py write` read for
+it, so a scoped run picks it. The rest of what `write` proposed for the map is other tests' drift and is left to them.
+
+**Argo CD.** On both clusters `ai-layer` is Synced and Healthy at `601dfeab`, this run's base. The live
+`console-conf` ConfigMap in `agent` on each has no line naming a kagent, hedgehog, wombat, unicorn, spider or
+mantis-shrimp host, and 14 lines naming burritobot.co.
+
+**Read-only curl, 2026-11-07 about 23:05Z.** All 42 kept URLs answer 200 or 302 with `ssl_verify_result` 0:
+attackme, burritobot-private, start and `/roster.json`, prompts and `/healthz`, feedback `/quick` and rounds on both
+domains, grafana-, argocd-, backstage-, maintenance-shell-, support- and deployments- on both clusters and both
+domains, and the beacon view at `beacon.burritobot.co/beacon/view` and `agenticburn.com/beacon/view`. All 54 retired
+URLs get the router's "no route" 404 page: provisioning, walkthrough, rounds1, round1, michael-round1, mystery, bare
+backstage, monitoring, standalone grafana and argocd, harbor, s, x, brave-badger and michael-admin, and the six
+retired prefixes on both clusters, each on both domains.
+
+**fleet.sh.** `./fleet.sh router-check` printed a PASS for attackme.burritobot.co and burritobot-private.burritobot.co
+and "the router serves exactly the roster". `./fleet.sh wall-check` printed a PASS for prompts.burritobot.co/healthz
+and both clusters and "the wall shows every roster cluster".
+
+**The pages.** With scripts, styles and HTML comments stripped, `/`, `/brief`, `/platform` and `/links` on
+attackme.burritobot.co, and those with `/lab` and `/kubecon` on burritobot-private.burritobot.co, show no
+"agenticburn" but one address: `/kubecon` shows `agenticburn.com/beacon` and `agenticburn.com/beacon/view` five
+times, in the Challenge 2 send prompt, its success marker and the segment 3 story. That is #1003's change (`36575032`),
+which #1003 and #1002 asked for because the deck's slides 20 and 25 to 27 name that address. It shares its count with
+beacon.burritobot.co, and `verify/test_two_domains.py` admits exactly those two strings on that one page and fails any
+other agenticburn host there. attackme answers 404 for `/lab` and `/kubecon`, as the router intends. A first scan
+that kept HTML comments also counted `/platform`'s header comment, which no browser shows.
+
+**The suites, at this run's head.** `bash verify/run-e2e-tools.sh` printed `340 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m14s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, the draft's collector, ttyd and iam_plan_render tests among
+them. The log is `/var/lib/hecaton/runs/18396/e2e-tools.log`.
+
+**Not run.** The two kubecon probes did not run again: run 17949 ran them on these names (the run-of-show's Probe
+record), nothing they read has changed since, and they switch the guardrails on clusters other sessions share.
