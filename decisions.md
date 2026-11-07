@@ -31671,3 +31671,9 @@ Notes about missing lab VPC and boundary states. The changes still planned on bo
 `nwuser` on 2026-11-07 and how the checkout is moved forward without touching the guard-proxy submodule. No test
 reads that paragraph (`git grep` of its wording in `verify` and `scripts` finds nothing). No code changed and no
 dependency was added.
+
+**The suites (run 18311, at `5debc3b0` on staging `7cfc8e84`).** `bash verify/run-e2e-tools.sh`, with no
+`HECATON_BASE_SHA`, so every test ran: the offline suite printed `334 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 10m37s, 4 at a time`, `ALL E2E TOOLS TIER
+CHECKS GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/18311/e2e-tools.log`. The prose gate printed
+`prose gate: pass`.
