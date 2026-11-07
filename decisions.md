@@ -28657,3 +28657,52 @@ as `/var/lib/hecaton/runs/18110/e2e-tools.1.log`. It printed `315 tests ran`, `A
 `78 checks ran (the offline suite and 77 tier tests) in 20m36s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The offline suite was the slowest check at 1070 s, then test_iam_policy_structural.py at 220 s. No cluster
 check applies: the change is to the gate's runner and offline tests, which reach no cluster.
+
+## 2026-11-07 · #1010 · run 18108 · A finished order is confirmed with "Your order is now complete.", and the page rings it up on that sentence
+
+**What changed.** The persona in `gitops/workshop-agent/agent.yaml` no longer asks BurritoBot to congratulate a
+finished five-step order with "You did it. Free burritos for life!". It asks for exactly "Your order is now complete."
+in the reply that rings the guest up, and in no other reply, and says why: the chat page shows the ring-me-up button
+when it sees that sentence. In `gitops/ai-layer/web/burritbot.html`, `send()` now tests each reply with
+`/your\s+order\s+is\s+now\s+complete/i` where it used to look for "free burritos for life" in the lowercased reply. The
+regex reads any case and any run of spaces, tabs or line breaks between the words, and since it does not name the
+punctuation, a period, an exclamation mark, bold markers or brackets around the sentence all still match. The check
+stays inline in `send()` rather than in a helper function: `verify/test_storefront_witch_name_e2e.py` runs `send()`
+cut from the page with only the witch-name block beside it, and a call to a helper it does not cut would throw inside
+`send()`'s try. `winBubble()`, `celebrate()`, the button's label and the popup's "🌯 Free burritos for life! 🌯"
+heading are unchanged. No other file held the old phrase, the guard-proxy and llm-guard submodules included. #991,
+#1000 and #1002 also edit the system prompt; #1000 is on staging and its lines are untouched here, and the other two
+had not landed when this run started.
+
+**Tests.** `verify/test_order_complete_phrase.py` (offline) reads the persona and the page: the exact sentence, neither
+old phrase in the prompt, the trigger line in `send()`, the popup heading and the button label, and the regex, read out
+of `send()`, against five replies that must match and five that must not. `verify/test_order_complete_button_e2e.py`
+(tools tier) runs the page's own `send()`, `winBubble()` and `celebrate()` in node with `/chat` answering one reply. For
+each of seven order-complete replies ("Your order is now complete.", "your order is now complete", "YOUR ORDER IS NOW
+COMPLETE!", a line-broken one, a tab-spaced one, one in brackets and one in bold) the stream gets exactly one button,
+labelled "🔔 That's my order, ring me up!", and clicking it opens the celebration with its 48 confetti. For six others
+("You did it. Free burritos for life!", "Your order is almost complete", "Your order is complete.", an empty reply and
+two more) it gets none. Run against the page before this change, the node test failed 23 checks and the offline one 3.
+`git grep` found no test or script reading the old phrase.
+
+**Replayed through Bedrock before the deploy.** With the session sourced, a scratch script in the run directory sent
+16 five-step orders to Nova Pro (`us.amazon.nova-pro-v1:0`, the model the Agent's `bedrock-nova` ModelConfig reaches)
+through `converse`, with the persona's `systemMessage` as the system prompt, one pick per turn, and a sixth turn ("That's
+everything, no sauce. Ring me up!") only when the fifth reply did not hold the sentence. No tools and no guard-proxy
+were in the loop. With this change's persona, 12 orders of 12 said "Your order is now complete." in the fifth reply,
+none said it in an earlier reply, and none said "Free burritos" or "You did it". With staging's persona, as a baseline,
+0 of 4 said the new sentence, and 3 of 4 said "Free burritos for life" (two in the fifth reply, one in the sixth), so
+under the old wording the button was already missed on one order in four.
+
+**Live, read-only, 06:55Z.** `https://attackme.burritobot.co/` (watch-it-burn-community) and
+`https://burritobot-private.burritobot.co/` (watch-it-burn-private) each still serve the page with the old
+`includes('free burritos for life')` check and not the new regex, as expected before hecaton promotes this run. Nothing
+on either cluster was changed.
+
+**Not yet run on a cluster.** The issue's owed check needs this change running: once Argo CD syncs it, complete a
+five-step order on the public bot (`https://attackme.burritobot.co`, watch-it-burn-community) several times, in a
+browser, and record for each whether the reply confirms the order without "Free burritos" and whether the ring-me-up
+button appears; report how often "Your order is now complete." is left out of a completed order. The served page can
+be checked first with `curl -s https://attackme.burritobot.co/ | grep -cF 'your\s+order\s+is\s+now\s+complete'`, which
+should print 1. The 2-hour workshop's profiles take the same persona and page; nothing in its flow reads the old
+phrase, and the `delivered/devopsdays-portland-2026` tag is unchanged.
