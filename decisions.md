@@ -28042,6 +28042,7 @@ whole. It also holds the header in `allowedHeaders` for workshop-mcp only and th
 them, over streamable HTTP, and a real MCP client sends twelve tools/calls with no header, `shown` and `unnamed`: the
 header reaches the coroutine `run_shell` and `get_vault_entry`, and the card is shut only with it.
 `verify/test_recipe_persona.py` reads the rule as before; the words it checks are unchanged.
+`verify/test_public_images.py` (#995) held workshop-mcp's `allowedHeaders` equal to `[X-Witch-Name]`; it now holds that X-Witch-Name is there and that no header outside X-Witch-Name and X-Pantry-Shut is, which keeps its intent: nothing is copied from the chat request that no tool reads.
 
 **Measured through Bedrock converse (run 18077).** Nova Pro (`us.amazon.nova-pro-v1:0`) in us-west-2 on `accen-dev`,
 the systemMessage parsed from this branch's `agent.yaml`, workshop-mcp's 12 tool schemas from this branch's server
