@@ -69,7 +69,6 @@ DESK = f"http://127.0.0.1:{desk.server_address[1]}"
 EDGAR = "Edgar the Kelpie"
 AGATHA = "Agatha the Banshee"
 DOMAIN = "deployments-attackme.burritobot.co"
-MIRROR = "public.ecr.aws/docker/library/"
 
 # The server half and the client half in one process on the pinned library: the server on its own thread, as the pod
 # runs it (mcp.run(transport="streamable-http")), and the client on the main one. The Kubernetes API is stubbed the
@@ -216,8 +215,8 @@ check("its hover text is the full image", chat.get("hover") == ["ghcr.io/someone
 want_probe = f"Someone deployed redis at {at.get('probe-redis')}"
 check(f"the probe's line reads {want_probe!r}", want_probe in texts, str(texts))
 probe = next((x for x in lines if x["text"] == want_probe), {})
-check("its hover text is the full image, Docker Hub's redis moved to public.ecr.aws",
-      probe.get("hover") == [MIRROR + "redis:8"], str(probe))
+check("its hover text is the full image, Docker Hub's redis as written (#991 applies it unchanged)",
+      probe.get("hover") == ["redis:8"], str(probe))
 check("every line reads '<witch name or Someone> deployed <short name> at <HH:MM:SS>', and none 'deployed by'",
       len(lines) == 3 and all(re.fullmatch(r"(Someone|[A-Z][a-z]+ the [A-Z][a-z]+) deployed [a-z0-9._-]+ at "
                                            r"\d\d:\d\d:\d\d", t) for t in texts), str(texts))

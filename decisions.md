@@ -31409,6 +31409,9 @@ sides. `prior-drafts.sh 991 origin/staging` read the draft's drift as edits in p
   `test_public_images_served.py` and `test_public_images_retry.py` gain the paths they now read (`verify/docker_hub.py`,
   `gitops/workshop-agent/agent.yaml`). `scope_tests.py write` also proposed entries for other runs' tests; those are
   left to them.
+- `verify/test_deployments_witch_line_e2e.py` (#995, tools tier) checked a probe's hover text was Docker Hub's redis
+  moved to public.ecr.aws; it now checks `redis:8` as written. The first tools-tier run of this rebase failed on it
+  alone (`/var/lib/hecaton/runs/18251/e2e-tools.first.log`).
 
 **Live, run 18251, 2026-11-07.** Both clusters' registry policies read `["Audit"]` (guardrails off) at 16:48Z.
 - `CONTEXT=<each> python3 verify/test_deployments_page_live.py` at 16:47Z passed on both clusters. Run 17981's hang on
