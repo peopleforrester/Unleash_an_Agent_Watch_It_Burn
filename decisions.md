@@ -32797,3 +32797,9 @@ NetworkPolicy) follow in that order, each before its YAML (`deny-external-regist
 
 **Not yet run on a cluster.** Nothing this change needs: it is text. The rehearsal's timing of slides 28 to 42 is
 #1040's, in the Timing table's Rehearsal column.
+
+**The suites (run 18377, #1095).** `bash verify/run-e2e-tools.sh`, unscoped, with its output in
+`/var/lib/hecaton/runs/18377/e2e-tools-3.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 8m52s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`. The two runs before it are `e2e-tools.log` (the offline suite red on the two bullet-start cuts above) and
+`e2e-tools-2.log` (red on the port race above). No dependency was added.
