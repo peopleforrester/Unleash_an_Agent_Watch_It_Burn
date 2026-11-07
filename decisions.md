@@ -31202,3 +31202,11 @@ clusters outside the pair, so they are left as they are. `docs/floor.md` and `do
 `wc -c` and to the first 12 hex of `sha256sum`, never printed: each holds a 33-byte `TTYD_CREDENTIAL` and the two
 digests match, as #1069 says ("the same on both clusters"). mrf-secrets is not on this run's host, so whether it holds
 the same login was not checked. Nothing on either cluster was changed.
+
+**Suite results, run 18293.** `bash verify/run-e2e-tools.sh` on `b5825f21` (log
+`/var/lib/hecaton/runs/18293/e2e-tools.1.log`) printed `335 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with
+`test_instructor_brief.py` among them, then `82 checks ran (the offline suite and 81 tier tests) in 9m28s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+
+**Not yet run on a cluster.** The served pages change only once hecaton promotes this run and Argo CD syncs it; the
+next run that opens `/kubecon` or `/brief` on watch-it-burn-private reads the new footer there.
