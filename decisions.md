@@ -28546,6 +28546,117 @@ was changed.
 **The suites (run 18100, at `264bb112`).** `bash verify/run-e2e-tools.sh` printed `315 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 49m58s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-07 · #1018 · run 18091 · Both runners run only the tests a change touches when HECATON_BASE_SHA is set
+
+**What changed.** With `HECATON_BASE_SHA` set, `verify/run-tests.sh` and `verify/run-e2e-tools.sh` ask
+`verify/scope_tests.py select offline|tools` which of their tests the change can affect. It reads
+`git diff --name-only --no-renames $HECATON_BASE_SHA` (the working tree against the base, so both sides of a rename)
+and the untracked files, against `verify/scope-map.yaml`, and prints to the log, under `scope:`, each test it runs
+with why (`test_stream.py: reads gitops/ai-layer/web/display.js`), or why it runs everything. Each runner's summary
+then says how many of its tests ran and how many it left because they read nothing the change touched. Without the
+variable both runners run everything, as before. The tests themselves run with the variable unset, so a test that
+drives a runner in a fixture still gets the whole runner. When no tier test is selected, run-e2e-tools.sh neither
+checks for nor fetches the pinned tools. A base git does not have exits 1 with `SCOPE FAILED`; it does not fall back.
+
+**The map.** `verify/scope-map.yaml` has five parts. `reads` lists, for each of the 326 tests that read a bounded set
+of paths, every repo path it reads; a path covers itself and everything under it. `always` names the 65 tests (57
+offline, 8 tier) that read the whole tree, run git on its history, or build a path from a value found at run time,
+each with that reason; every scoped run runs them. `full` lists what runs everything: the two runners,
+`scope_tests.py`, `no-cloud.sh`, `no_cloud.py`, `ensure-submodules.sh`, `fetch-e2e-tools.sh`, `e2e-tools.lock`,
+`playwright_browsers.py`, `.gitmodules` and `bootstrap_chart.py`. `unread` lists the paths no test reads beyond the
+always tests (`docs`, `facilitation`, `prds`, `mockups`, `specs`, `access`, `assets`, `LICENSE`, `ATTRIBUTION.md`,
+`.railwayignore`); a test that does read one of their files has it in its own entry and still runs. `bounds` names
+the two helpers that build paths from repo data, with the paths that bound them: `bootstrap_chart.py` reads each
+Application source's `path` (inside `gitops`, `policies`, `backstage`, `observability-idp`, `security`) and
+`collector_render.py` reads the collector Applications' `$values/` files (inside `gitops/otel-collector`).
+
+**How the map is made and held.** `python3 verify/scope_tests.py write` fills `reads` from what its extractor finds in
+each test's source, and keeps whatever is there already. In Python it folds path expressions built from literals
+(`REPO / "a" / "b"`, f-strings, `os.path.join`, `.parent`), with loop variables over literal lists, a function's
+parameters from its call sites in the file, names imported from a helper, and modules on a `sys.path` directory the
+test adds. A glob or a directory walk is an entry of its own. In shell and JavaScript it takes every path-shaped word,
+with a variable inside a word read as a wildcard (`values-${p}.yaml`), and the files a script sources. It follows
+each verify/ helper and each repo script a test names (fleet.sh, and the event.sh and providers it sources), the files
+an HTML page a test renders links, and what a kustomization names outside its directory. `verify/test_scope_tests.py`
+is in always, so every change runs it. It fails when a test has no entry, when an entry misses a path the extractor
+finds, when a verify/ helper that more than 30 tests import or name is not in full, and when a bound stops holding: all
+28 Application sources of this repo and all three collector values files are checked against theirs. It also drives
+both runners in a fixture repo of two areas and four tests (the fifth criterion).
+
+**Checked against what the tests open.** `verify/scope_audit.py offline|tools` runs each mapped test as its runner
+does while inotify reports every file opened under the checkout, by the test and every process it starts, and names
+each tracked file its entry misses. The first offline run found 63 of 267 tests missing something: scripts fleet.sh
+sources, modules imported from `infra/datadog-fleet` and `infra/datadog-room`, `REPO` imported from a helper, and a
+leading dot stripped off `.github` and `../infra`. The extractor now sees all of those. The last runs: offline, 258
+tests audited and one miss, which the kustomize and `${HERE}` rules then fixed, so 0 on its rerun; tier, 68 tests
+audited (the pinned tools fetched, the tier's own environment) and two real misses, a `cwd=` directory and a page's
+`<script src="event.js">`, both fixed and 0 on the rerun. The other flags in that tier run were opens from my own
+commands in the same checkout while it ran, and the six flagged tests audited alone afterwards read 0 misses.
+
+**One departure from the criteria's wording.** A change to the map runs everything when it edits `full`, `unread` or
+`bounds`, or when the base has no map. A change to a test's own entry in `reads` or `always` runs that test, not
+everything. 202 test files were added on staging from 2026-10-30 to 2026-11-07, each needing an entry, so running
+everything on any edit to the map would send most runs whole. It skips nothing: a test whose entry is edited runs, so
+an entry cannot drop a path in the same change that edits the path and leave its test out. A change with no diff at
+all runs everything, as ci-base-sha.sh reads it (#1020).
+
+**What it saves, on staging's last 80 commits, each against its parent.** A decisions.md-only commit runs 75 of the 314
+offline tests and 11 of the 76 tier tests. Across the 80, the median is 75 offline and 11 tier, the most 229 and 33,
+and two run everything (one edited `e2e-tools.lock`, one `bootstrap_chart.py`). Hecaton validates a run's whole
+change, the union of its commits, so a run's numbers are higher than one commit's.
+
+**For the next run.** A new test needs its entry: run `python3 verify/scope_tests.py write`, read what it added, and
+commit it with the test. A test that reads a path its source cannot show (a path read from data) belongs in always,
+with why, or in bounds through the helper that builds it. AGENTS.md says the same next to the Test and E2E commands.
+
+**Not yet run on a cluster.** Nothing here touches a cluster. Hecaton's gate scopes its validations once it passes
+`HECATON_BASE_SHA`; CI's ci-base-sha.sh already does (#1020).
+
+**The suites (run 18091), whole.** `bash verify/run-e2e-tools.sh` at 333344f5, with no `HECATON_BASE_SHA`: `315 tests
+ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 40m32s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added: the
+scripts use the standard library, PyYAML and git, which the suite already needs, and inotify through ctypes.
+
+**The suites (run 18091), scoped.** `HECATON_BASE_SHA=333344f5 bash verify/run-e2e-tools.sh` at 3763bdd7, whose
+change is the record above, decisions.md alone: `scope: running 11 of 76 tools tests` and
+`scope: running 75 of 315 offline tests`, each named with why, then `75 tests ran`, `scoped to the change since
+HECATON_BASE_SHA=333344f5: 75 of the 315 offline tests; the other 240 read nothing it touched`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `12 checks ran (the offline suite and 11 tier tests) in 9m33s`, `11 of the 76
+tier tests; the other 65 read nothing it touched`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`: 9m33s against the
+whole run's 40m32s. Of the 11 tier tests, eight are in always because a line builds a path from a value found at run
+time; bounding those (as bootstrap_chart.py is bounded) is the next saving.
+
+## 2026-11-07 · #1018 · run 18196 · The selector reads each test's source too, so a test the map lacks still runs
+
+**Why run 18091 failed the gate.** Its branch was rebased onto a staging that had gained two tests in #984,
+`test_recipe_pantry_gate.py` and `test_recipe_pantry_gate_e2e.py`, after the branch was cut. The map had no entry for
+either, and `test_scope_tests.py` failed on every test without one, so the gate's `bash verify/run-tests.sh` printed
+`test_scope_tests.py (exit 1)`. Adding the two entries alone would not hold: every run cut before the map reaches
+staging and rebased after it would fail the same way on its own new test, through no fault of its change.
+
+**What changed.** `scope_tests.py select` no longer trusts the map to be current. It reads every test's source with
+the same extractor `write` uses and runs from the committed entry and that reading together (`effective()`). A test
+with no entry gets the reads its source shows, a test whose source now reads more than an entry can name runs always,
+and a verify/ helper more than 30 tests name runs everything even before full lists it. The log names each test the
+map was behind (`test_gamma.py: no entry in the map; read from its source`). `test_scope_tests.py` now fails on the
+map's rules (`structural()`: full, unread and bounds name what the repo has, an always entry says why, no test in two
+lists) and prints the drift (`drift()`) without failing on it; `python3 verify/scope_tests.py check` still exits 1 on
+either. The cost is a reading of all the tests in each select, about 17 seconds. New checks: on the real map with
+test_stream.py's entry deleted and test_two_domains.py's emptied, a change to what each reads still runs it; in the
+fixture repo, a test added without an entry runs in the change that adds it and when its area changes later.
+
+**The map.** `write` added the two #984 tests; `check` prints `0 problems`. `scope_audit.py offline
+test_recipe_pantry_gate.py` and `scope_audit.py tools test_recipe_pantry_gate_e2e.py` each print 0 misses.
+
+**The suites (run 18196).** `bash verify/run-e2e-tools.sh` at 1eb91ca0, with no `HECATON_BASE_SHA`: `316 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 35m21s` with one
+failure, `test_promo_villains_public.py (exit 1)`: every one of the ten `ghcr.io/peopleforrester/lab-platform/promo/*:v1`
+tags serves a digest other than the one `verify/promo_villains.py` pins. That is #1070, filed earlier on 2026-11-07:
+lab-platform's tags moved on ghcr.io, outside this repo, and the test fails the same way without this change; it
+passed in run 18091's tier the same morning. The host's /tmp was removed while the first try of this run's E2E command
+ran (its link count read 0, as #909 saw), taking its log, so the run above had its log and `TMPDIR` under the
+gitignored `verify/.tools/`. The prose gate printed `prose gate: pass`.
 ## 2026-11-06 · #1005 · run 17963 · The E2E command runs its checks four at a time, so it fits the gate's hour again
 
 **What failed.** The heavy gate ran `bash verify/run-e2e-tools.sh` on staging `629c53ea` and stopped it in
@@ -30640,105 +30751,3 @@ moved between the two reads (`dba85843...`, then `df82eb53...`). A lab-platform 
 ended at 15:19Z. Run 18191's tier on this run's base was green on the same check, and this run changes no image pin,
 so the move is lab-platform's, filed as a follow-up. The pins are left as they are, because the test reads a moved tag as
 a new hand-over, not a value to sync. The prose gate printed `prose gate: pass`.
-
-## 2026-11-07 · #1018 · run 18091 · Both runners run only the tests a change touches when HECATON_BASE_SHA is set
-
-**What changed.** With `HECATON_BASE_SHA` set, `verify/run-tests.sh` and `verify/run-e2e-tools.sh` ask
-`verify/scope_tests.py select offline|tools` which of their tests the change can affect. It reads
-`git diff --name-only --no-renames $HECATON_BASE_SHA` (the working tree against the base, so both sides of a rename)
-and the untracked files, against `verify/scope-map.yaml`, and prints to the log, under `scope:`, each test it runs
-with why (`test_stream.py: reads gitops/ai-layer/web/display.js`), or why it runs everything. Each runner's summary
-then says how many of its tests ran and how many it left because they read nothing the change touched. Without the
-variable both runners run everything, as before. The tests themselves run with the variable unset, so a test that
-drives a runner in a fixture still gets the whole runner. When no tier test is selected, run-e2e-tools.sh neither
-checks for nor fetches the pinned tools. A base git does not have exits 1 with `SCOPE FAILED`; it does not fall back.
-
-**The map.** `verify/scope-map.yaml` has five parts. `reads` lists, for each of the 326 tests that read a bounded set
-of paths, every repo path it reads; a path covers itself and everything under it. `always` names the 65 tests (57
-offline, 8 tier) that read the whole tree, run git on its history, or build a path from a value found at run time,
-each with that reason; every scoped run runs them. `full` lists what runs everything: the two runners,
-`scope_tests.py`, `no-cloud.sh`, `no_cloud.py`, `ensure-submodules.sh`, `fetch-e2e-tools.sh`, `e2e-tools.lock`,
-`playwright_browsers.py`, `.gitmodules` and `bootstrap_chart.py`. `unread` lists the paths no test reads beyond the
-always tests (`docs`, `facilitation`, `prds`, `mockups`, `specs`, `access`, `assets`, `LICENSE`, `ATTRIBUTION.md`,
-`.railwayignore`); a test that does read one of their files has it in its own entry and still runs. `bounds` names
-the two helpers that build paths from repo data, with the paths that bound them: `bootstrap_chart.py` reads each
-Application source's `path` (inside `gitops`, `policies`, `backstage`, `observability-idp`, `security`) and
-`collector_render.py` reads the collector Applications' `$values/` files (inside `gitops/otel-collector`).
-
-**How the map is made and held.** `python3 verify/scope_tests.py write` fills `reads` from what its extractor finds in
-each test's source, and keeps whatever is there already. In Python it folds path expressions built from literals
-(`REPO / "a" / "b"`, f-strings, `os.path.join`, `.parent`), with loop variables over literal lists, a function's
-parameters from its call sites in the file, names imported from a helper, and modules on a `sys.path` directory the
-test adds. A glob or a directory walk is an entry of its own. In shell and JavaScript it takes every path-shaped word,
-with a variable inside a word read as a wildcard (`values-${p}.yaml`), and the files a script sources. It follows
-each verify/ helper and each repo script a test names (fleet.sh, and the event.sh and providers it sources), the files
-an HTML page a test renders links, and what a kustomization names outside its directory. `verify/test_scope_tests.py`
-is in always, so every change runs it. It fails when a test has no entry, when an entry misses a path the extractor
-finds, when a verify/ helper that more than 30 tests import or name is not in full, and when a bound stops holding: all
-28 Application sources of this repo and all three collector values files are checked against theirs. It also drives
-both runners in a fixture repo of two areas and four tests (the fifth criterion).
-
-**Checked against what the tests open.** `verify/scope_audit.py offline|tools` runs each mapped test as its runner
-does while inotify reports every file opened under the checkout, by the test and every process it starts, and names
-each tracked file its entry misses. The first offline run found 63 of 267 tests missing something: scripts fleet.sh
-sources, modules imported from `infra/datadog-fleet` and `infra/datadog-room`, `REPO` imported from a helper, and a
-leading dot stripped off `.github` and `../infra`. The extractor now sees all of those. The last runs: offline, 258
-tests audited and one miss, which the kustomize and `${HERE}` rules then fixed, so 0 on its rerun; tier, 68 tests
-audited (the pinned tools fetched, the tier's own environment) and two real misses, a `cwd=` directory and a page's
-`<script src="event.js">`, both fixed and 0 on the rerun. The other flags in that tier run were opens from my own
-commands in the same checkout while it ran, and the six flagged tests audited alone afterwards read 0 misses.
-
-**One departure from the criteria's wording.** A change to the map runs everything when it edits `full`, `unread` or
-`bounds`, or when the base has no map. A change to a test's own entry in `reads` or `always` runs that test, not
-everything. 202 test files were added on staging from 2026-10-30 to 2026-11-07, each needing an entry, so running
-everything on any edit to the map would send most runs whole. It skips nothing: a test whose entry is edited runs, so
-an entry cannot drop a path in the same change that edits the path and leave its test out. A change with no diff at
-all runs everything, as ci-base-sha.sh reads it (#1020).
-
-**What it saves, on staging's last 80 commits, each against its parent.** A decisions.md-only commit runs 75 of the 314
-offline tests and 11 of the 76 tier tests. Across the 80, the median is 75 offline and 11 tier, the most 229 and 33,
-and two run everything (one edited `e2e-tools.lock`, one `bootstrap_chart.py`). Hecaton validates a run's whole
-change, the union of its commits, so a run's numbers are higher than one commit's.
-
-**For the next run.** A new test needs its entry: run `python3 verify/scope_tests.py write`, read what it added, and
-commit it with the test. A test that reads a path its source cannot show (a path read from data) belongs in always,
-with why, or in bounds through the helper that builds it. AGENTS.md says the same next to the Test and E2E commands.
-
-**Not yet run on a cluster.** Nothing here touches a cluster. Hecaton's gate scopes its validations once it passes
-`HECATON_BASE_SHA`; CI's ci-base-sha.sh already does (#1020).
-
-**The suites (run 18091), whole.** `bash verify/run-e2e-tools.sh` at 333344f5, with no `HECATON_BASE_SHA`: `315 tests
-ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 40m32s`,
-`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added: the
-scripts use the standard library, PyYAML and git, which the suite already needs, and inotify through ctypes.
-
-**The suites (run 18091), scoped.** `HECATON_BASE_SHA=333344f5 bash verify/run-e2e-tools.sh` at 3763bdd7, whose
-change is the record above, decisions.md alone: `scope: running 11 of 76 tools tests` and
-`scope: running 75 of 315 offline tests`, each named with why, then `75 tests ran`, `scoped to the change since
-HECATON_BASE_SHA=333344f5: 75 of the 315 offline tests; the other 240 read nothing it touched`,
-`ALL OFFLINE RENDER-GATE TESTS GREEN`, `12 checks ran (the offline suite and 11 tier tests) in 9m33s`, `11 of the 76
-tier tests; the other 65 read nothing it touched`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`: 9m33s against the
-whole run's 40m32s. Of the 11 tier tests, eight are in always because a line builds a path from a value found at run
-time; bounding those (as bootstrap_chart.py is bounded) is the next saving.
-
-## 2026-11-07 · #1018 · run 18196 · The selector reads each test's source too, so a test the map lacks still runs
-
-**Why run 18091 failed the gate.** Its branch was rebased onto a staging that had gained two tests in #984,
-`test_recipe_pantry_gate.py` and `test_recipe_pantry_gate_e2e.py`, after the branch was cut. The map had no entry for
-either, and `test_scope_tests.py` failed on every test without one, so the gate's `bash verify/run-tests.sh` printed
-`test_scope_tests.py (exit 1)`. Adding the two entries alone would not hold: every run cut before the map reaches
-staging and rebased after it would fail the same way on its own new test, through no fault of its change.
-
-**What changed.** `scope_tests.py select` no longer trusts the map to be current. It reads every test's source with
-the same extractor `write` uses and runs from the committed entry and that reading together (`effective()`). A test
-with no entry gets the reads its source shows, a test whose source now reads more than an entry can name runs always,
-and a verify/ helper more than 30 tests name runs everything even before full lists it. The log names each test the
-map was behind (`test_gamma.py: no entry in the map; read from its source`). `test_scope_tests.py` now fails on the
-map's rules (`structural()`: full, unread and bounds name what the repo has, an always entry says why, no test in two
-lists) and prints the drift (`drift()`) without failing on it; `python3 verify/scope_tests.py check` still exits 1 on
-either. The cost is a reading of all the tests in each select, about 17 seconds. New checks: on the real map with
-test_stream.py's entry deleted and test_two_domains.py's emptied, a change to what each reads still runs it; in the
-fixture repo, a test added without an entry runs in the change that adds it and when its area changes later.
-
-**The map.** `write` added the two #984 tests; `check` prints `0 problems`. `scope_audit.py offline
-test_recipe_pantry_gate.py` and `scope_audit.py tools test_recipe_pantry_gate_e2e.py` each print 0 misses.
