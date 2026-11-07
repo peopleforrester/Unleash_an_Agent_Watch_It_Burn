@@ -1678,10 +1678,6 @@ reads:
   test_deploy_app_manifest_shapes.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
-  test_deploy_app_named_app.py:
-    - agent/tron
-    - gitops/ai-layer/tool_audit.py
-    - gitops/ai-layer/workshop-mcp-server.py
   test_deploy_app_reapply_422.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
@@ -4805,13 +4801,20 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/docker_hub.py
   test_public_images_retry.py:
+    - agent
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - verify/docker_hub.py
     - verify/test_public_images_served.py
   test_public_images_served.py:
+    - agent
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - verify/docker_hub.py
   test_public_pod_cap.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
