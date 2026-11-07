@@ -392,6 +392,41 @@ check("the run-of-show's segment 3 runs the same switch from slide 28's link, na
       and "`https://burritobot-private.burritobot.co/lab`" in _ros_s3
       and "> Try your attacks again." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
       and "reset your bot and use your saved prompts" in _ros_s3)
+# Step 5 itself, read in order (#1110): slide 28's line, the presenter's click and command, slide 29's retry and its
+# note, and the lines #1095 kept on guardrails-on, the two registry policies, Segment 4's Jokers and #990's cleanup.
+_STEP5_ANCHOR = "5. **One switch, depending on #774 (slide 28), then the room's retry (slide 29).**"
+_STEP6_ANCHOR = "6. **One set per guardrail (slides 30 to 42).**"
+for _anc in (_STEP5_ANCHOR, _STEP6_ANCHOR):
+    if _anc not in _ros_s3:
+        sys.exit(f"anchor {_anc!r} is not in segment 3 of facilitation/kubecon-na-2026-run-of-show.md: "
+                 "reword the test with it")
+_step5 = _ros_s3.split(_STEP5_ANCHOR, 1)[1].split(_STEP6_ANCHOR, 1)[0]
+_s5_order = ("> Let's turn on Kubernetes guardrails.",
+             "The line is a link: it opens the admin cluster's terminal, "
+             "`https://burritobot-private.burritobot.co/lab`, in its own tab.",
+             "The presenter clicks the line to open the admin terminal, types `guardrails-on`,",
+             "That command is `guardrails-on`, which #774 added;",
+             "Slide 29 reads: > Try your attacks again.",
+             "Take a moment to reset your bot and use your saved prompts to retry your attacks that worked.",
+             "The room presses reset and pastes its saved prompts")
+check("step 5 quotes slide 28, has the presenter click its link to the admin terminal and type guardrails-on, then "
+      "puts the retry on slide 29 with its reset-the-bot and saved-prompts note, in that order (#1110)",
+      all(s in _step5 for s in _s5_order)
+      and [_step5.index(s) for s in _s5_order] == sorted(_step5.index(s) for s in _s5_order))
+check("step 5 keeps that guardrails-on turns on all four layers for both clusters (#1110)",
+      "turns on RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy together, for both clusters."
+      in _step5)
+_s5_after_retry = _step5.split("> Try your attacks again.", 1)[-1] if "> Try your attacks again." in _step5 else ""
+for _what, _line in (("deny-external-registries admits only the bot's registry",
+                      "`deny-external-registries` admits only `registry.burritobot.co` for the bot"),
+                     ("restrict-image-registries refuses public.ecr.aws and every registry off its list",
+                      "`restrict-image-registries` refuses `public.ecr.aws` and every other registry off its list"),
+                     ("Segment 4's Jokers still land on the registry both policies trust (#775)",
+                      "Segment 4's Jokers still land: HC-666 asks for `registry.burritobot.co`'s image, which both "
+                      "registry policies trust (#775)."),
+                     ("#990 deletes what the room deployed from other registries",
+                      "what the room deployed before it from any other registry is deleted from both clusters (#990)")):
+    check(f"step 5 keeps, after slide 29's retry, that {_what} (#1110)", _line in _s5_after_retry)
 # Step 6 is one set per guardrail on slides 30 to 42, each naming the concept the slide names (#1095), and each set
 # keeps its fallback: the c1-fixed view, the Kyverno deny, the c2-fixed view with the Falco caution, the beacon POST.
 _step6 = _ros_s3.split("6. **One set per guardrail (slides 30 to 42).**", 1)[-1].split("**Delivers:**", 1)[0]

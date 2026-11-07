@@ -32874,3 +32874,28 @@ reply's tool calls) and each reply's sent or failed claim matches whether the co
 ran, log `/var/lib/hecaton/runs/18388/scratch/e2e-tools.log`: `340 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
 then `82 checks ran (the offline suite and 81 tier tests) in 9m39s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+
+## 2026-11-07 · #1110 · run 18401 · A test reads Segment 3 step 5 of the run-of-show in order, and the lines #1095 kept in it
+
+Test review run 18393 found that #1095's criterion on step 5 was checked only in part: the existing check in
+`verify/test_instructor_brief.py` looked for slide 28's and slide 29's lines anywhere in segment 3, and for
+`guardrails-on`, but nothing read the presenter's click, the order of the step, or the lines on the two registry
+policies, Segment 4's Jokers and #990's cleanup.
+
+`verify/test_instructor_brief.py` now cuts step 5 out of segment 3 on its own heading and step 6's heading, and exits
+naming either heading when it is not there. It then checks, in this order inside step 5: slide 28's quote
+`> Let's turn on Kubernetes guardrails.`, the link to `https://burritobot-private.burritobot.co/lab`, the presenter
+clicking the line to open the admin terminal and typing `guardrails-on`, "That command is `guardrails-on`, which #774
+added", slide 29's quote `> Try your attacks again.`, the reset-the-bot and saved-prompts note, and the room pressing
+reset and pasting its saved prompts. It checks step 5 still says the command turns on all four layers for both clusters,
+and that after slide 29 it still names `deny-external-registries` admitting only `registry.burritobot.co`,
+`restrict-image-registries` refusing `public.ecr.aws` and every other registry, Segment 4's Jokers landing on the
+registry both policies trust (#775), and #990 deleting what the room deployed from other registries. The run-of-show
+was not changed: it already holds all of this.
+
+Each check was tried against a broken copy of the run-of-show and the test failed each time: slide 28's line
+reworded, the click line reworded, the private host changed, slide 29's line reworded, the saved-prompts note cut, the
+registry list wording cut, the Jokers line reworded, the #990 line removed, and a policy renamed. The file was restored
+after each one.
+
+**Live check.** None: the change is a test over a Markdown file in the repo, and no cluster reads it.
