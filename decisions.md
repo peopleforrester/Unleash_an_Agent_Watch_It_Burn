@@ -29052,3 +29052,8 @@ signal as soon as the sleeper fixture was ready, and nothing made it wait for th
 `test_ends.sh`, so on a busy host the signal could land first. The test now reads the runner's output as it comes and
 sends the signal only once the sleeper is ready and the runner has printed `-- test_ends.sh took`. Three runs of the
 file after the fix passed. The first log is kept as `/var/lib/hecaton/runs/18118/e2e-tools.first.log`.
+
+**The suites (run 18118, at `2485d310` on staging `d21fd611`).** `bash verify/run-e2e-tools.sh` printed `318 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `79 checks ran (the offline suite and 78 tier tests) in 8m46s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; its log is `/var/lib/hecaton/runs/18118/e2e-tools.log`. The prose
+gate printed `prose gate: pass`.
