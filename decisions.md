@@ -29177,3 +29177,41 @@ the path, so the body file now goes in a `tempfile.TemporaryDirectory` the test 
 printed `320 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `80 checks ran (the offline suite and 79 tier tests)
 in 9m56s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_progress_entries.py` and
 `test_turn_guard.py` among the offline tests. The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-07 · #1025 · run 18142 · A test holds #900's record: decisions.md, the run-of-show's Probe record and readiness row 8's Live cell
+
+**What #1025 asks.** Test review run 18046 found that no test checked #900's record criterion: the output is recorded
+in decisions.md and in the run-of-show's Probe record (`facilitation/kubecon-na-2026-run-of-show.md`), and readiness
+row 8's Live cell in `docs/KUBECON-ABSTRACT-READINESS.md` is filled. `test_kubecon_abstract_readiness.py` reads only
+the table's shape, and the reset tests that slice up to `### Probe record` read the Run-through record above it.
+`bash verify/prior-drafts.sh 1025 origin/staging` printed NONE, and the issue had no comments.
+
+**What the test reads.** `verify/test_900_probe_record.py` (offline, in `run-tests.sh`) follows
+`test_889_probe_record.py`'s shape. It reads, as literal text:
+- decisions.md's "## 2026-11-06 · #900 · run 17950" entry: watch-it-burn-private, `checksum/scanners-yml`
+  `61a7adb9a48a`, the five runs "Run N, ending HH:MMZ: `P PASS, F FAIL`" in order and equal to what run 17950
+  printed, run 5 alone `33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, run 1's and run 5's spend, the topic-paraphrase
+  beat's PASS line "In all five", and input-guard.sh's benign pass, injection block, `input guard restored to: off`
+  and exit 0;
+- the run-of-show's `### Probe record` section, which must hold the #900 entry once and no other section may: run
+  17950, the cluster, staging `629c53ea`, the checksum, the birthday-party paraphrase redirected with zero tokens,
+  input-guard.sh's words at 16:50Z, and a five-row table in which a FAIL count above zero reads RED, the spend never
+  goes down from row to row, and topic-paraphrase is PASS in every row;
+- that the two records agree on each run's clock and counts, and on the spend both write (runs 1 and 5);
+- readiness row 8's Live cell, found by the table's header and its row width: the 2026-11-06 storefront run on
+  watch-it-burn-private, `629c53ea`, the checksum, the paraphrase redirected with zero tokens in all five admin runs,
+  the fifth `KUBECON PROBE GREEN`, input-guard.sh (#900), and the readiness record's 2026-11-06 line for it.
+
+It also checks that `kubecon_probe.py` still prints the count, the verdict, the spend line, the topic-paraphrase
+beat's title and its redirect note, that `topic_cases.py`'s `STAGE_PARAPHRASE` is the paraphrase the records name, and
+that `input-guard.sh` still prints the three lines the records quote. Every anchor it cuts on exits naming the literal
+and the file when it is gone. 41 cut copies of the real records are each refused, and each for the reason its name
+gives, read from the verdict's message: in decisions.md, the heading, the entry, the cluster, the checksum, the beat
+line, a run, a clock, a FAIL count, the GREEN, run 5's and run 1's spend, and each input-guard.sh word; in the
+run-of-show, the section's heading, the entry removed, moved under the next heading and doubled, the run, the cluster,
+the checksum, the redirect, the exit, a table row, a clock and a PASS count that disagree with decisions.md, RED over
+no FAIL, GREEN over a FAIL, a spend that goes down, run 5's spend, and a topic-paraphrase FAIL; in the readiness doc,
+each of the Live cell's seven phrases, the cell emptied, and the record line struck.
+
+**Live.** No cluster is involved: the test reads repo files. This run touched neither cluster. No dependency was added.
+
+**Not yet run on a cluster.** Nothing from this issue.
