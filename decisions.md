@@ -28823,3 +28823,8 @@ tier checks beside the offline suite, two of which (test_bootstrap_chart_render.
 remove their own temp directories there; one appeared between the two listings. The check now asks only that the
 test's own scratch directory is gone. The fallback scripts write nothing under tmp/, and each run's TMPDIR is checked
 per beat already.
+
+**The suites (run 18117).** `bash verify/run-e2e-tools.sh` at `5539c604` printed `317 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `80 checks ran (the offline suite and 79 tier tests) in 10m55s, 4 at a time` and `ALL E2E
+TOOLS TIER CHECKS GREEN`, exit 0, with test_turn_guard.py in the offline suite and test_turn_guard_e2e.py in the tier.
+The prose gate printed `prose gate: pass`.
