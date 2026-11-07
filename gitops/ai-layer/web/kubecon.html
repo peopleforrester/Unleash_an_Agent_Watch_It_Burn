@@ -249,11 +249,16 @@
     "deploy" on slides 22 and 27 opens the <a href="https://deployments.burritobot.co" target="_blank" rel="noopener">deployments
     wall</a>, and "agenticburn.com/beacon" on slides 20 and 25 to 27 opens the beacon view,
     <code>https://agenticburn.com/beacon/view</code>. Then Whitney's live attack on the private bot, the recipe
-    read, and its pre-seeded trace, the same read. Then the slide "Kubernetes guardrails on" (slide 28):
-    <code>guardrails-on</code> on the private terminal arms RBAC, Kyverno admission, KubeArmor and the egress
-    NetworkPolicy on both clusters, the room tries Challenges 1 and 2 again and is stopped, and one slide per
-    guardrail names each, not deep. The fallbacks prove each one without the model. The flow runs over the
-    segment's 5 minutes as the deck has it; the run-of-show's segment 3 "Timing" gives the cut proposed.</p>
+    read, and its pre-seeded trace, the same read. Then slide 28, "Let's turn on Kubernetes guardrails.": the
+    line is a link to the admin terminal, <code>https://burritobot-private.burritobot.co/lab</code>, and the
+    presenter clicks it and types <code>guardrails-on</code>, which arms RBAC, Kyverno admission, KubeArmor and the
+    egress NetworkPolicy on both clusters. Then slide 29, "Try your attacks again.": the room resets its bot and
+    retries its saved prompts for Challenges 1 and 2, and is stopped. Then one set per guardrail on slides 30 to
+    42, each recalling its attack, naming what prevented it, then showing the YAML that did it: RBAC (slides 30 to
+    33), an admission policy, Kyverno (34 to 36), runtime security, KubeArmor (37 to 39), and NetworkPolicy (40 to
+    42). Each is named, not deep, and the fallbacks prove each one without the model. The flow runs about 8
+    minutes 40 seconds against the segment's 5 as the 2026-11-07 deck has it; the run-of-show's segment 3
+    "Timing" gives the cut proposed.</p>
     </details>
 
     <article class="beat" data-beat="C2" data-segment="3">
@@ -316,13 +321,24 @@
     read, <code>c2-attack</code> (#843).</div>
 
     <article class="beat" data-beat="guardrails" data-segment="3">
-      <h3>Kubernetes guardrails on: one switch, then the room tries again</h3>
-      <div class="who">A presenter runs it on the private terminal · the room retries Challenges 1 and 2</div>
+      <h3>Let's turn on Kubernetes guardrails: one switch, the retry, one set per guardrail</h3>
+      <div class="who">Slide 28: click its line for the private terminal, run it · slide 29, "Try your attacks
+      again.": after a reset, the room retries Challenges 1 and 2 from saved prompts</div>
       <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal · both clusters · prints every kubectl it runs</span>guardrails-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, both clusters</span>It ends "all four Kubernetes
-      guardrails are on." and each badge lights. The room's Challenge 1 ask now comes back Forbidden, and the
-      three asks above are stopped. Then one slide per guardrail.</div>
+      guardrails are on." and each badge lights. On the retry the Challenge 1 ask comes back Forbidden, and the
+      three asks above are stopped. Then one set per guardrail, slides 30 to 42: RBAC, an admission policy
+      (Kyverno), runtime security (KubeArmor), NetworkPolicy.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
+      <p class="note">Slide 28, "Let's turn on Kubernetes guardrails.", is a link to the admin terminal: click it,
+      type <code>guardrails-on</code>, and point at the bot's guardrails panel, which lists the four. Each set on
+      slides 30 to 42 recalls its attack on a slide of its own, names what prevented it on the next ("This attack
+      was prevented with" its guardrail), then shows the YAML that did it; the slides name the concept, the notes
+      the product. <b>RBAC</b>, slides 30 to 33: the CEO's home address, then the broad Role rule beside the scoped
+      one. <b>An admission policy</b> (Kyverno), slides 34 to 36: the public image, then
+      <code>deny-external-registries</code>; read its deny message aloud. <b>Runtime security</b> (KubeArmor),
+      slides 37 to 39: the recipe read, then <code>block-recipe-snoop</code>. <b>NetworkPolicy</b>, slides 40 to 42:
+      the beacon post, then <code>agent-egress-allowlist</code>.</p>
       <p class="note">RBAC: agent-sa's Role reads one Secret by name, the agent's own <code>workshop-agent</code>
       config Secret, so the CEO's record is out of reach. <code>guardrails-on 12</code> waits 12 seconds between
       guardrails so the room sees each badge arrive; <code>guardrails-off</code> turns all four off again, for

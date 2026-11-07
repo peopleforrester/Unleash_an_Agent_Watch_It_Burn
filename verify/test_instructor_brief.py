@@ -502,6 +502,52 @@ check("slide 42's policy is the agent-egress-allowlist guardrails-on applies: ev
       and "cidr: 10.0.0.0/16" in _np and "0.0.0.0/0" not in _np and "c1-network-policy.yaml" in TERMINAL)
 check("the run-of-show no longer has one slide per guardrail or the four slides",
       "one slide per guardrail" not in " ".join(ROS.split()).lower() and "its four slides" not in " ".join(ROS.split()))
+# The page's segment 3 follows the run-of-show's steps 5 and 6 (#1096): slide 28's text, clicked to open the admin
+# terminal, then guardrails-on; slide 29's retry from saved prompts; then one set per guardrail on slides 30 to 42,
+# with Kyverno shown as an admission policy and KubeArmor as runtime security, as the slides name them.
+_S28, _S29 = "Let's turn on Kubernetes guardrails.", "Try your attacks again."
+_SET_RANGES = (("RBAC", "30 to 33"), ("Kyverno", "34 to 36"), ("KubeArmor", "37 to 39"), ("NetworkPolicy", "40 to 42"))
+_premise_m = re.search(r'<p class="premise">(.*?)</p>', _seg3, re.S)
+if _premise_m is None:
+    sys.exit('anchor <p class="premise"> is not in segment 3 of gitops/ai-layer/web/kubecon.html: reword the test with it')
+_premise = _premise_m.group(1)
+check("the run-of-show's step 6 sets cover the slide ranges the page names",
+      all(f"{n}, " in _step6 and f"slides {r}.**" in _step6 for n, r in _SET_RANGES))
+check("the page's segment 3 summary names slide 28's text, clicked to the admin terminal, then guardrails-on",
+      f'slide 28, "{_S28}"' in _premise and "<code>https://burritobot-private.burritobot.co/lab</code>" in _premise
+      and _before(_premise, f'"{_S28}"', "clicks it and types <code>guardrails-on</code>"))
+check("then slide 29's retry from the room's saved prompts, then one set per guardrail on slides 30 to 42",
+      _before(_premise, "<code>guardrails-on</code>", f'slide 29, "{_S29}"')
+      and "resets its bot and retries its saved prompts" in _premise
+      and _before(_premise, f'"{_S29}"', "one set per guardrail on slides 30 to 42"))
+check("the summary names each set's slides, in the deck's order, Kyverno as an admission policy and KubeArmor as "
+      "runtime security",
+      all(r in _premise for _, r in _SET_RANGES)
+      and [_premise.index(r) for _, r in _SET_RANGES] == sorted(_premise.index(r) for _, r in _SET_RANGES)
+      and "an admission policy, Kyverno (34 to 36)" in _premise and "runtime security, KubeArmor (37 to 39)" in _premise)
+_sw_h3 = re.search(r"<h3>(.*?)</h3>", _sw)
+check("the switch beat is retitled for slide 28's text and the sets after it",
+      _sw_h3 is not None and _sw_h3.group(1).startswith("Let's turn on Kubernetes guardrails:")
+      and "one set per guardrail" in _sw_h3.group(1)
+      and "one switch, then the room tries again" not in KUBECON)
+check("the switch beat has slide 28's line opening the terminal, then slide 29's retry from saved prompts",
+      _before(_sw, "Slide 28: click its line for the private terminal", f'slide 29, "{_S29}"')
+      and "the room retries Challenges 1 and 2 from saved prompts" in _sw
+      and f'Slide 28, "{_S28}", is a link to the admin terminal' in _sw)
+check("its marker ends on one set per guardrail, slides 30 to 42, named as the slides name them",
+      "Then one set per guardrail, slides 30 to 42: RBAC, an admission policy (Kyverno), runtime security "
+      "(KubeArmor), NetworkPolicy." in _sw)
+check("its notes give each set's slides, in the deck's order, with what each recalls and shows",
+      [_sw.index(f"slides {r}:") for _, r in _SET_RANGES if f"slides {r}:" in _sw]
+      == sorted(_sw.index(f"slides {r}:") for _, r in _SET_RANGES if f"slides {r}:" in _sw)
+      and all(f"slides {r}:" in _sw for _, r in _SET_RANGES)
+      and "<b>An admission policy</b> (Kyverno), slides 34 to 36" in _sw
+      and "<b>Runtime security</b> (KubeArmor), slides 37 to 39" in _sw
+      and all(f"<code>{n}</code>" in _sw for n in ("deny-external-registries", "block-recipe-snoop",
+                                                     "agent-egress-allowlist")))
+check("the page has no one slide per guardrail, and no old slide 28 title",
+      "one slide per guardrail" not in " ".join(KUBECON.split()).lower()
+      and '"Kubernetes guardrails on" (slide 28)' not in " ".join(KUBECON.split()))
 check("the switch's RBAC fallback reads the Role, which names the one Secret",
       "-n agent get role workshop-agent -o yaml" in _sw)
 _handoffs = re.findall(r'<p class="note"><b>Hand-off:</b> (.*?)</p>', KUBECON, re.S)
@@ -671,9 +717,12 @@ check("every prompt and toggle stays visible",
 # the OWASP page, Challenge 2's before-and-after markers and its guardrails-on switch beat; the story, notes and
 # fallbacks added with them are folded. 2,400 since #952: C3's recipe read is now the conversational recon-then-attack
 # pair (#925), so it carries a second copy-ready prompt and a second success marker where it had one of each; the two
-# markers are cut terse to hold the growth to the recon prompt itself.
+# markers are cut terse to hold the growth to the recon prompt itself. 2,450 since #1096: the 2026-11-07 deck closes
+# Challenge 2 on slide 28's switch, slide 29's retry and one set per guardrail on slides 30 to 42, so the switch
+# beat's title, who line and marker name the retry and the four sets as the slides name them (about 30 words); each
+# set's slides, attack and YAML are folded into its notes.
 _words = len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split())
-check(f"the visible page is under 2,400 words ({_words})", _words < 2400)
+check(f"the visible page is under 2,450 words ({_words})", _words < 2450)
 
 print("== the run-of-show links the page ==")
 check("the run-of-show drives from /kubecon", "/kubecon" in ROS)

@@ -32980,3 +32980,46 @@ reads; it changed nothing. This run changes no code, and this entry maps each of
 scoped to this decisions.md change, printed `85 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks
 ran (the offline suite and 13 tier tests) in 3m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
 printed `prose gate: pass`. No dependency was added. The logs are in `/var/lib/hecaton/runs/18406/`.
+## 2026-11-07: `/kubecon` segment 3 follows the 2026-11-07 deck's slides 28 to 42 (#1096, run 18407)
+
+#1095 moved the run-of-show's segment 3 steps 5 and 6 to the 2026-11-07 deck (rounds-agenticburn#77), and this change
+brings `gitops/ai-layer/web/kubecon.html` to the same text, with those steps as the source. No earlier draft existed
+(`verify/prior-drafts.sh 1096 origin/staging` printed NONE).
+
+**The summary paragraph.** Segment 3's story no longer quotes the old slide title "Kubernetes guardrails on". It now
+quotes slide 28 as `Let's turn on Kubernetes guardrails.`, a link to the admin terminal
+(`https://burritobot-private.burritobot.co/lab`) that the presenter clicks before typing `guardrails-on`. Slide 29 is
+next, `Try your attacks again.`, where the room resets its bot and retries its saved prompts. Then comes one set per
+guardrail on slides 30 to 42, each recalling its attack, naming what prevented it, then showing its YAML: RBAC 30 to
+33, an admission policy (Kyverno) 34 to 36, runtime security (KubeArmor) 37 to 39, NetworkPolicy 40 to 42. It also
+gives the step 6 length the run-of-show's Timing records, about 8 minutes 40 seconds against the segment's 5.
+
+**The switch beat.** The block once titled "Kubernetes guardrails on: one switch, then the room tries again" is now
+`Let's turn on Kubernetes guardrails: one switch, the retry, one set per guardrail`, since it now ends on the sets.
+Its who line names slide 28's link and slide 29's retry from saved prompts. Its marker ends on the four sets with
+the slides' own names (an admission policy for Kyverno, runtime security for KubeArmor) in place of "one slide per
+guardrail". The folded notes give each set's slides, its attack and the YAML it shows (`deny-external-registries`,
+`block-recipe-snoop`, `agent-egress-allowlist`), and slide 28's click and the guardrails panel. The page names no
+slide after 28 outside this beat, so no later number needed moving. No `.prompt` or `.toggle` line changed:
+`git diff origin/staging -- gitops/ai-layer/web/kubecon.html` touches neither, so the iPad sheet's prompts are
+unchanged.
+
+**Tests.** `git grep -nF` across `verify` and `scripts` found no test that pinned the old summary or marker wording.
+The one phrase a test held, "the room retries Challenges 1 and 2" in the switch beat, is kept.
+`verify/test_instructor_brief.py` gains checks that the summary names slide 28's text, its link and `guardrails-on`,
+then slide 29's retry from saved prompts, then one set per guardrail on slides 30 to 42 with each set's slides in the
+deck's order. It also checks that the switch beat is retitled, names slide 28 and slide 29 in order, ends its marker on
+the four sets as the slides name them, and gives each set's slides and YAML in its notes. The slide ranges it reads
+must be the run-of-show's step 6 headings, and the page must carry no "one slide per guardrail" and no
+`"Kubernetes guardrails on" (slide 28)`. The visible-word cap moves from 2,400 to 2,450: the page stood at 2,397 on
+staging, and the switch beat's title, who line and marker grow by about 30 visible words to name the retry and the
+four sets; the per-set detail is folded.
+
+**Live check (run 18407, read only).** `curl` on `https://rounds.agenticburn.com/attendee.html` answered 200, and the
+deck carries `Let's turn on Kubernetes guardrails.` (3 times), `Try your attacks again.` (once), the admin
+terminal link `burritobot-private.burritobot.co/lab` (3 times), "an admission policy" and "runtime security", the
+text the page now quotes. Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** Look at the `/kubecon` page and its prompt sheet (`/kubecon?sheet=1`) as served, once
+hecaton promotes this change and Argo CD syncs `ai-layer`: segment 3's story and the switch beat read as above, and the
+sheet's prompts are the ones it showed before.
