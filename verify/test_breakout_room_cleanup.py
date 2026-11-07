@@ -112,6 +112,12 @@ m._req = fake_req
 INTERNAL = kp.INTERNAL_IMAGE  # Challenge 3's image on registry.burritobot.co (#775)
 PUBLIC = "quay.io/prometheus/busybox:latest"
 TPL = {"metadata": {"labels": {"app": "x"}}, "spec": {"containers": [{"name": "c", "image": PUBLIC}]}}
+# The Tron game BurritoBot's prompt names by exact image (#991), which deploy_app applies as written, Docker Hub and all.
+_PROMPT = yaml.safe_load((REPO / "gitops/workshop-agent/agent.yaml").read_text())["spec"]["declarative"]["systemMessage"]
+_TRON = [line.split(": ", 1)[1].strip() for line in _PROMPT.splitlines() if line.strip().startswith("- Tron: ")]
+if len(_TRON) != 1:
+    sys.exit("ANCHOR MISSING: no single '- Tron: <image>' line in gitops/workshop-agent/agent.yaml's systemMessage")
+TRON = _TRON[0]
 
 
 def deploy_app(manifest):
@@ -133,8 +139,8 @@ def workload(kind, name, image, init=None, api="apps/v1"):
 
 
 # What the room deploys while the guardrails are off.
-deploy_app("Tron")                                          # an app's name: the landing page on public.ecr.aws (#939)
-deploy_app("redis:8")                                       # Docker Hub's redis, moved to its public.ecr.aws copy
+deploy_app(workload("Deployment", "tron", TRON))           # the Tron game the prompt names, off Docker Hub (#991)
+deploy_app(workload("Deployment", "redis", "redis:8"))      # Docker Hub's redis, applied as written since #991
 deploy_app(workload("Deployment", "quay-app", PUBLIC))
 deploy_app(workload("Deployment", "init-public", INTERNAL, init=PUBLIC))
 deploy_app(workload("Deployment", "lookalike", "registry.burritobot.co.evil.example/burritobot/maintenance-shell:1"))
@@ -158,9 +164,9 @@ for obj in room.values():
     obj["metadata"]["managedFields"] = [WORKSHOP_MCP]
 room["guard-proxy"]["metadata"]["managedFields"].insert(
     0, {"manager": "argocd-controller", "operation": "Apply", "apiVersion": "apps/v1"})
-check("the landing page's image is outside the internal registry",
+check("the Tron game's image is applied as written, outside the internal registry (#991)",
       room.get("tron", {}).get("spec", {}).get("template", {}).get("spec", {}).get("containers", [{}])[0]
-      .get("image", "").startswith("public.ecr.aws/"))
+      .get("image", "") == TRON and not TRON.startswith("registry.burritobot.co/"))
 
 # What deploy_app never made: the platform's own workloads, and the children of the room's.
 agentgateway = workload("Deployment", "agentgateway", "cr.agentgateway.dev/agentgateway:v1.7.0")
@@ -210,8 +216,8 @@ on = run("true")
 if "__cli__" in on:
     check("the kyverno CLI evaluates the DeletingPolicy", False, on["__cli__"])
 else:
-    for name, why in (("tron", "the landing page an app's name gets, on public.ecr.aws"),
-                      ("redis", "Docker Hub's redis, which deploy_app moved to public.ecr.aws"),
+    for name, why in (("tron", "the Tron game from Docker Hub, as BurritoBot's prompt names it"),
+                      ("redis", "Docker Hub's redis, as written"),
                       ("quay-app", "a Deployment from quay.io"),
                       ("init-public", "an internal container with a public init container"),
                       ("lookalike", "a host that only starts with the internal registry's name"),

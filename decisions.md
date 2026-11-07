@@ -31209,3 +31209,50 @@ OFFLINE RENDER-GATE TESTS GREEN`; one fewer than #993's 307, since `test_deploy_
 the tier: `73 checks ran (the offline suite and 72 tier tests) in 41m49s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`.
 The log is `/var/lib/hecaton/runs/17981/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was
 added.
+
+**Run 18251: the rebase onto staging (#991).** Run 17981's two commits ended `failed (rebase-conflict)`: staging had
+moved 44 commits, and `verify/test_public_images.py` and `verify/test_public_images_served.py` were edited on both
+sides. `prior-drafts.sh 991 origin/staging` read the draft's drift as edits in place, so this run rebased it onto
+`c6ff3d48` and resolved each conflict against the staging commit that made it:
+- `workshop-mcp-server.py`: #995 (`582d10ec`) credits a deploy to the chat request's `X-Witch-Name` first. That line
+  is kept, and the name-only branch below it is this change's refusal, not #939's `_named_app`.
+- `agent.yaml`: #1002 (`73f157a6`, `a3ed380a`) rewrote the any-cover paragraph and the asks list to give the marketing
+  send its ticket-and-reason check. Its rules are kept word for word; deploying is still taken out of both, and the
+  list reads "(1) the marketing send, (2) the vault or shell ask" with "For (2)" any plausible cover. #1010's
+  order-complete line, #1000's pantry rule and #996's ticket-to-deploy_app line merged with no conflict and are
+  unchanged. `verify/test_marketing_send_persona.py` checked "For (2) and (3)", the old list with deploy in it; it now
+  checks the vault and shell ask keeps any cover and that deploying has its own rules, in this commit.
+- The run-of-show: #1003 (`36575032`) rewrote Segment 3 to the 2026-11-06 slides. This change's image bullet and the
+  pull-rate paragraph sit in #1003's text, after its beacon paragraph.
+- `test_public_images_served.py`: #976 (`3afcfb77`) and #1029 (`594a0609`) taught `opened()` to retry no answer and a
+  temporary resolver failure and to raise `Unreachable` otherwise, and `test_public_images_retry.py` lifts that code by
+  name. The four-games version is rebuilt on it: every lifted name is kept, `token()` takes the token URL (default
+  public.ecr.aws, so the lifted copy runs alone), and `Unreachable` names the host the request went to.
+- `test_public_images.py`: the docstring keeps #995's witch-name paragraph; #995's "Someone deployed redis" row now
+  expects `redis` as written. #986's and run 17993's fix, which counts only an apply and not a late reaper `/scale`
+  PATCH, is applied to the name-only refusal check too.
+- `test_deploy_app_named_app.py` stays deleted; staging's one edit to it (#995's `get_context` stand-in) is in the
+  stand-ins this change keeps.
+- #990's `remove-untrusted-room-workloads` DeletingPolicy selects on `burritobot.co/workload`, which deploy_app still
+  stamps, so it needs nothing from this change.
+- `verify/test_breakout_room_cleanup.py` (#990) deployed `deploy_app("Tron")` and `deploy_app("redis:8")`, read as
+  #939's landing page and #714's public.ecr.aws copy. Both are refused as only a name now, so the test deploys a
+  `tron` Deployment on the Tron game the prompt names (read from agent.yaml, exiting naming the anchor when the line is
+  gone) and a `redis` Deployment on `redis:8` as written. Both are still judged deleted under guardrails-on.
+- `verify/scope-map.yaml` (#1018): the deleted test's entry is removed, and `test_public_images.py`,
+  `test_public_images_served.py` and `test_public_images_retry.py` gain the paths they now read (`verify/docker_hub.py`,
+  `gitops/workshop-agent/agent.yaml`). `scope_tests.py write` also proposed entries for other runs' tests; those are
+  left to them.
+
+**Live, run 18251, 2026-11-07.** Both clusters' registry policies read `["Audit"]` (guardrails off) at 16:48Z.
+- `CONTEXT=<each> python3 verify/test_deployments_page_live.py` at 16:47Z passed on both clusters. Run 17981's hang on
+  the API server's service proxy was #998's, which now reads the feed over a port-forward, so the follow-up run 17981
+  named is not filed. Section 3, the Tron Deployment deploy_app builds, was admitted on both: the admitted branch run
+  17981 left under "Not yet run".
+- A server-side dry run as `system:serviceaccount:agent:workshop-mcp` of each of the four games as deploy_app builds
+  it was admitted on both clusters with one replica, `IfNotPresent` and limits of 50m and 128Mi. Run 17981 saw the same
+  four refused under guardrails-on, so both sides of the switch are read at admission. Nothing was created.
+- `verify/test_no_docker_hub_live.py`: 0 Docker Hub images on either cluster.
+
+**Still not run on a cluster.** The public bot's friendly-and-insistent Tron ask, the mean ask and the `guardrails-on`
+denial through the bot, once this change is deployed, and the 03-1 shot retaken.
