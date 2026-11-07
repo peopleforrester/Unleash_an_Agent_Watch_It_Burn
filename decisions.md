@@ -32507,3 +32507,10 @@ played one call per chat, `--tag` and `--hours`, the four NOT READ cases, and th
 **Not yet run on a cluster.** The check before each timed run-through (by 2026-11-08) and the night before the talk:
 `python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-traces.json`, recorded in the run-of-show's
 run-through record. Those are live rehearsal steps; none has happened yet.
+
+**The suites (run 18359, at `4da0f6a2`).** `bash verify/run-e2e-tools.sh`, with its output in
+`/var/lib/hecaton/runs/18359/e2e-tools.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 11m42s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`; `test_challenge_traces.py` is in the offline suite and `test_challenge_traces_live.py` in the E2E list. The
+live test, run on its own after the session was sourced, ended `CHALLENGE TRACES RED`, exit 1, on Challenge 2 alone,
+with Challenge 4 now at the newer trace `4ef8fe4d95405cf39d4eb12db59fa787`. No dependency was added.
