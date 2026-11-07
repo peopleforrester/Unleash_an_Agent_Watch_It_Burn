@@ -30493,3 +30493,29 @@ five times (the whole card). The audit log should show the same-chat `run_shell`
 `/var/lib/hecaton/runs/18191/e2e-tools.log` printed `329 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 10m10s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1038 · run 18201 · Step 1 of the deployments page's live test is green on both clusters; #998 already made the change
+
+**What #1038 asks and where it was done.** #1038 was filed from #995's run 18028 on 2026-11-06, before #998 landed.
+Both issues name the same failure: step 1 of `verify/test_deployments_page_live.py` read `/deployments.json` through
+the API server's service proxy and timed out on both clusters. Run 18118 (#998, its entry above) found the cause and
+moved step 1 to a kubectl port-forward (`verify/kube_forward.py`), pinned offline by `verify/test_kube_forward.py`.
+That change is in this run's base, `4a177124`, so this run changes no code and checks it live.
+
+**The cause, read again (2026-11-07T15:07Z).** It is the same as in #998's entry. On each cluster the node security
+group admits the cluster security group on 443, 4443, 6443, 8443, 9443, 10250 and 10251 and not on 8080
+(`sg-0b7d2a0cfaed6fecd` from `sg-04130d5989d5c1ab1` on community, `sg-011fc555e507cfb40` from `sg-0ca9886f5a9d4f6d3`
+on private). The three NetworkPolicies in `agent` select agentgateway, console and workshop-agent, none of them
+fake-ticket. `kubectl get --raw .../services/fake-ticket:8080/proxy/deployments.json --request-timeout=15s` still
+printed `context deadline exceeded` on both. #869's 8080 rule reaches the clusters when #1042 applies the cluster
+root; the test does not wait on it.
+
+**The live run (run 18201).** `CONTEXT=<cluster> python3 verify/test_deployments_page_live.py`, exit 0 on each:
+- watch-it-burn-community: `PASS  it answers a JSON list over a port-forward to svc/fake-ticket :8080`, `INFO
+  /deployments.json lists 28 deployment(s)`; steps 2 and 2b passed; step 3 read `["Audit"]` and passed its admit branch.
+- watch-it-burn-private: `PASS  it answers a JSON list over a port-forward to svc/fake-ticket :8080`, `INFO
+  /deployments.json lists 0 deployment(s)`; steps 2 and 2b passed; step 3 read `["Audit"]` and passed its admit branch.
+`python3 verify/test_kube_forward.py` passed. Step 3 is a server-side dry run, so the clusters are as found.
+
+**Not yet run on a cluster.** Step 3's Deny branch, after `guardrails-on` on watch-it-burn-private, which #998's entry
+already names and #992 asks for.
