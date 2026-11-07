@@ -10,7 +10,7 @@
 The map, verify/scope-map.yaml, has five parts:
 
     full    changed paths that run everything: the runners, this file, and the helpers and config that many tests
-            read (every verify/ helper that more than SHARED_HELPER tests read must be listed here)
+            read (every verify/ helper that more than SHARED_HELPER tests import or name must be listed here)
     unread  changed paths that are known and that no test reads beyond those whose own entry names them
     bounds  helpers that build paths from repo data, each with the paths that bound what it builds and why;
             test_scope_tests.py holds each bound against the data
@@ -43,8 +43,8 @@ import yaml
 VERIFY = pathlib.Path(__file__).resolve().parent
 REPO = VERIFY.parent
 MAP = VERIFY / "scope-map.yaml"
-# A verify/ helper read by more tests than this, about a tenth of the offline suite, is shared: a change to it runs the
-# whole suite, as one to a runner does.
+# A verify/ helper that more tests than this import or name themselves, about a tenth of the offline suite, is shared:
+# a change to it runs the whole suite, as one to a runner does.
 SHARED_HELPER = 30
 # The runners themselves: a test that names one reads its text, never runs the real suite.
 RUNNERS = {"verify/run-tests.sh", "verify/run-e2e-tools.sh", "verify/run-e2e.sh", "verify/run-all.sh"}
@@ -154,11 +154,11 @@ def _candidates(raw: str, path_context: bool, here: str, tree: Tree, out: Extrac
         return
     if " " in s or "\t" in s:
         for tok in s.split():
-            tok = tok.strip(TRAILING).lstrip("(['\"`")
+            tok = tok.rstrip(TRAILING).lstrip("(['\"`")
             if "/" in tok or re.search(r"\.[A-Za-z0-9]{1,6}$", tok):
                 _candidates(tok, False, here, tree, out)
         return
-    s = s.strip(TRAILING) if not any(c in s for c in "*?[") else s.rstrip(".,:;)'\"`")
+    s = (s.rstrip(TRAILING) if not any(c in s for c in "*?[") else s.rstrip(".,:;)'\"`")).lstrip("(['\"`")
     if s.startswith("./"):
         s = s[2:]
     if not s or s.startswith("/") or s.startswith("-"):
@@ -204,8 +204,10 @@ class _PathEval:
     SCOPES = (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp,
               ast.GeneratorExp)
 
-    def __init__(self, tree_ast: ast.AST, file_rel: str):
+    def __init__(self, tree_ast: ast.AST, file_rel: str, root: pathlib.Path = REPO):
         self.file_rel = file_rel
+        self.root = root
+        self.mod = tree_ast
         self.memo: dict[int, frozenset[str] | None] = {}
         self.parent: dict[int, ast.AST] = {}
         for node in ast.walk(tree_ast):
@@ -246,6 +248,72 @@ class _PathEval:
                 self.env.setdefault((id(self.scope_of(node)), node.target.id), []).append(("opaque",))
             elif isinstance(node, ast.ExceptHandler) and node.name:
                 self.env.setdefault((id(self.scope_of(node)), node.name), []).append(("opaque",))
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    bound = a.asname or a.name.split(".")[0]
+                    self.env.setdefault((id(self.scope_of(node)), bound), []).append(
+                        ("module", a.name) if a.asname or "." not in a.name else ("opaque",))
+            elif isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    self.env.setdefault((id(self.scope_of(node)), a.asname or a.name), []).append(
+                        ("from", node.module or "", a.name) if not node.level else ("opaque",))
+        # Where its imports are looked for: its own directory, and each directory it puts on sys.path.
+        self.search = [os.path.dirname(file_rel)]
+        for node in ast.walk(tree_ast):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and \
+                    node.func.attr in ("insert", "append") and isinstance(node.func.value, ast.Attribute) and \
+                    node.func.value.attr == "path" and node.args:
+                got = self(node.args[-1])
+                self.search += sorted(got or [])
+
+    def module_file(self, name: str) -> str | None:
+        """The repo file `import name` loads here, or None for one outside the repo (the standard library, PyYAML)."""
+        parts = name.split(".")
+        for d in self.search:
+            for cand in (os.path.join(d, *parts) + ".py", os.path.join(d, *parts, "__init__.py")):
+                c = _norm(cand)
+                if c is not None and (self.root / c).is_file():
+                    return c
+        return None
+
+    def spec_file(self, call: ast.AST, depth: int = 0) -> str | None:
+        """The file importlib.util.spec_from_file_location(name, path) loads, where path folds to one."""
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and \
+                call.func.attr == "spec_from_file_location" and len(call.args) >= 2:
+            got = self(call.args[1], depth + 1)
+            if got and len(got) == 1:
+                return next(iter(got))
+        return None
+
+    def module_of(self, name: ast.Name, depth: int = 0) -> str | None:
+        """The repo file a name holds as a module: `import x as name`, or name = module_from_spec(spec)."""
+        binds = self.bindings(name) or []
+        if len(binds) != 1:
+            return None
+        b = binds[0]
+        if b[0] == "module":
+            return self.module_file(b[1])
+        if b[0] == "value" and isinstance(b[1], ast.Call) and isinstance(b[1].func, ast.Attribute) and \
+                b[1].func.attr == "module_from_spec" and b[1].args and isinstance(b[1].args[0], ast.Name):
+            sb = self.bindings(b[1].args[0]) or []
+            if len(sb) == 1 and sb[0][0] == "value":
+                return self.spec_file(sb[0][1], depth)
+        return None
+
+    def module_value(self, rel: str, name: str, depth: int) -> frozenset[str] | None:
+        other = _evaluator(rel, self.root)
+        if other is None:
+            return None
+        binds = other.env.get((id(other.mod), name))
+        if not binds:
+            return None
+        vals: set[str] = set()
+        for b in binds:
+            got = other._binding(b, depth + 1)
+            if got is None:
+                return None
+            vals |= got
+        return frozenset(vals)
 
     def scope_of(self, node: ast.AST) -> ast.AST:
         up = self.parent.get(id(node))
@@ -377,8 +445,13 @@ class _PathEval:
         return self.memo[key]
 
     def _binding(self, b: tuple, depth: int) -> frozenset[str] | None:
+        if depth > 60:
+            return None
         if b[0] == "value":
             return self(b[1], depth + 1)
+        if b[0] == "from":
+            rel = self.module_file(b[1])
+            return self.module_value(rel, b[2], depth) if rel else None
         if b[0] == "param":
             args = self._arguments(b[1], b[2])
             if args is None:
@@ -443,6 +516,10 @@ class _PathEval:
                 acc = {(y[1:] if x == "" and i > 0 and y.startswith("/") else x + y) for x in acc for y in got}
             return frozenset(acc)
         if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name):
+                rel = self.module_of(node.value, depth)
+                if rel:
+                    return self.module_value(rel, node.attr, depth)
             base = ev(node.value)
             if base is not None and node.attr == "parent":
                 return frozenset(os.path.dirname(x) for x in base)
@@ -492,6 +569,22 @@ class _PathEval:
         return None
 
 
+_EVALUATORS: dict[tuple[str, str], _PathEval | None] = {}
+
+
+def _evaluator(rel: str, root: pathlib.Path = REPO) -> _PathEval | None:
+    """One evaluator per Python file, so a name another file imports from it folds as it does there."""
+    key = (str(root), rel)
+    if key not in _EVALUATORS:
+        _EVALUATORS[key] = None  # an import cycle folds to nothing
+        try:
+            mod = ast.parse((root / rel).read_text(encoding="utf-8", errors="replace"))
+        except (SyntaxError, OSError):
+            return None
+        _EVALUATORS[key] = _PathEval(mod, rel, root)
+    return _EVALUATORS[key]
+
+
 def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str]:
     """Paths and helpers a Python file reads. Returns the verify/ helpers it imports."""
     try:
@@ -500,7 +593,11 @@ def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str
         out.why_always.append(f"its source does not parse ({e.msg}, line {e.lineno})")
         return []
     here = os.path.dirname(rel)
-    ev = _PathEval(mod, rel)
+    ev = _evaluator(rel, tree.root)
+    if ev is None:
+        out.why_always.append("its source cannot be read")
+        return []
+    mod = ev.mod
     parent = ev.parent
     imports = []
     consts = set()
@@ -556,6 +653,19 @@ def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str
                 return base is not None and "" in base and ev(node) is None
         return False
 
+    def div_tail(node: ast.AST) -> frozenset[str] | None:
+        """The literal parts after an unknown base: x / "facilitation" / "plan.md" -> facilitation/plan.md."""
+        if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+            return None
+        right = ev(node.right)
+        if right is None:
+            return None
+        left = ev(node.left)
+        if left is None:
+            left = div_tail(node.left) or frozenset([""])
+        got = {_join(a, b) for a in left for b in right}
+        return frozenset(g for g in got if g)
+
     for node in ast.walk(mod):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             consts.add(node.value)
@@ -565,11 +675,12 @@ def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str
             if not builds_on(node):
                 _candidates(node.value, listed, here, tree, out)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
+                [node.module or ""] + [f"{node.module}.{a.name}" for a in node.names if node.module]
             for n in names:
-                top = n.split(".")[0]
-                if (VERIFY / f"{top}.py").is_file():
-                    imports.append(f"verify/{top}.py")
+                got = ev.module_file(n) if not getattr(node, "level", 0) else None
+                if got:
+                    imports.append(got)
         elif isinstance(node, (ast.BinOp, ast.Call, ast.JoinedStr, ast.Subscript, ast.Attribute)) or \
                 (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)):
             vals = ev(node)
@@ -577,12 +688,24 @@ def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str
                 for p in vals:
                     if p and p != rel:
                         _candidates(p, True, "", tree, out)
+            elif vals is None and isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div) and \
+                    not (isinstance(parent.get(id(node)), ast.BinOp) and parent[id(node)].left is node):
+                # A path on a base this cannot fold, like a parameter: what follows the base still names the file.
+                tail = div_tail(node)
+                for t in tail or ():
+                    _candidates(t, True, here, tree, out)
+                if anchored_unknown(node):
+                    out.runtime.append(f"line {node.lineno} builds a path under the repo root from a value it "
+                                       "finds at run time")
             elif vals is None and anchored_unknown(node):
                 out.runtime.append(f"line {node.lineno} builds a path under the repo root from a value it "
                                       "finds at run time")
         if isinstance(node, ast.Call):
             f = node.func
             name = f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else None
+            loaded = ev.spec_file(node)
+            if loaded and loaded.endswith(".py") and (tree.root / loaded).is_file():
+                imports.append(loaded)
             if name in ("glob", "rglob") and isinstance(f, ast.Attribute):
                 pats = ev(node.args[0]) if node.args else None
                 if isinstance(f.value, ast.Name) and f.value.id == "glob":  # glob.glob(pattern)
@@ -646,19 +769,48 @@ def _extract_text(src: str, rel: str, tree: Tree, out: Extraction, comment: str)
             _candidates(tok, False, here, tree, out)
 
 
-def extract(rel: str, tree: Tree, bounds: dict | None = None, _seen: set[str] | None = None) -> Extraction:
-    """Every repo path the file at rel (repo-relative) reads, following the verify/ helpers it imports or names.
+SOURCE_LINE = re.compile(r"^\s*(?:source|\.)\s+(.+?)\s*(?:[;&|>]|\s2>|$)", re.M)
+SCRIPT_DIR_FORMS = re.compile(r'"?\$\(\s*dirname\s+"?\$\{?BASH_SOURCE(?:\[0\])?\}?"?\s*\)"?|\$\{?(?:SCRIPT_DIR|HERE|DIR|_HERE\w*)\}?')
 
-    bounds is the map's own: a file listed there builds paths from repo data, and the paths it lists bound them."""
-    bounds = bounds or {}
-    seen = _seen if _seen is not None else set()
-    seen.add(rel)
+
+def _sourced(script: str, tree: Tree) -> set[str]:
+    """The repo files a shell script sources, its own directory standing for $SCRIPT_DIR and the like, and any other
+    variable for a wildcard: `. "${SCRIPT_DIR}/providers/${PROVIDER}.sh"` reads providers/*.sh."""
+    found = set()
+    here = os.path.dirname(script)
+    text = (tree.root / script).read_text(encoding="utf-8", errors="replace")
+    for m in SOURCE_LINE.finditer(text):
+        word = m.group(1)
+        word = SCRIPT_DIR_FORMS.sub("@HERE@", word).strip('"\'')
+        if "@HERE@" not in word:
+            continue  # a file outside the repo, like $HOME/.guardlib, or a path in a variable named elsewhere
+        word = re.sub(r"\$\{?\w+\}?", "*", word.replace("@HERE@", here.replace("*", "")))
+        p = _norm(word)
+        if p is None:
+            continue
+        if "*" in p:
+            if tree.matches(p):
+                found.add(p)
+                found |= {f for f in tree.files if covers(p, f)}
+        elif tree.known(p):
+            found.add(tree.known(p))
+    return found
+
+
+_OWN: dict[tuple[str, str, str], tuple[Extraction, list[str]]] = {}
+
+
+def _own(rel: str, tree: Tree, bounds: dict) -> tuple[Extraction, list[str]]:
+    """What the file at rel reads itself, and the files it names whose own reads count as its too: the helpers it
+    imports or names, the repo scripts it may run, and what a shell script sources."""
+    key = (str(tree.root), rel, repr(bounds.get(rel)))
+    if key in _OWN:
+        return _OWN[key]
     out = Extraction()
-    path = tree.root / rel
-    src = path.read_text(encoding="utf-8", errors="replace")
-    helpers: list[str] = []
+    src = (tree.root / rel).read_text(encoding="utf-8", errors="replace")
+    follow: list[str] = []
     if rel.endswith(".py"):
-        helpers = _extract_python(src, rel, tree, out)
+        follow = _extract_python(src, rel, tree, out)
     elif rel.endswith(".js") or rel.endswith(".mjs"):
         _extract_text(src, rel, tree, out, "//")
     else:
@@ -666,19 +818,52 @@ def extract(rel: str, tree: Tree, bounds: dict | None = None, _seen: set[str] | 
     if rel in bounds:
         out.runtime = []
         out.paths |= set(bounds[rel]["paths"])
+    if rel.endswith(".sh"):
+        out.paths |= _sourced(rel, tree)
     out.paths.discard(rel)
     out.paths.discard("")
-    helpers += [p for p in out.paths if p.startswith("verify/") and not os.path.basename(p).startswith("test_")
-                and p.endswith((".py", ".sh", ".js", ".mjs")) and (tree.root / p).is_file()]
-    for h in sorted(set(helpers)):
-        out.paths.add(h)
+    # A verify/ helper it names, and a repo script it names, which it may run (fleet.sh reads roster.tsv).
+    follow += [p for p in out.paths if p in tree.files and (
+        p.endswith((".sh", ".py")) or (p.startswith("verify/") and p.endswith((".js", ".mjs"))))]
+    follow = sorted({f for f in follow if f != rel and f in tree.files})
+    out.paths |= set(follow)
+    _OWN[key] = (out, follow)
+    return _OWN[key]
+
+
+def extract(rel: str, tree: Tree, bounds: dict | None = None) -> Extraction:
+    """Every repo path the file at rel (repo-relative) reads, its own and those of every file it follows, in turn.
+
+    bounds is the map's own: a file listed there builds paths from repo data, and the paths it lists bound them. A
+    runner is not followed: it is in full, so a change to it runs everything and what it reads needs no entry. A repo
+    script's own git and grep calls outside verify/ are not counted: they work on a cluster or another checkout, like
+    fleet.sh's routes repo; what it reads of this tree is in its paths, and scope_audit.py holds that."""
+    bounds = bounds or {}
+    own, follow = _own(rel, tree, bounds)
+    out = Extraction()
+    out.paths |= own.paths
+    out.why_always += own.why_always
+    out.runtime += own.runtime
+    seen = {rel}
+    queue = list(follow)
+    while queue:
+        h = queue.pop(0)
         if h in seen or h in RUNNERS:
-            continue  # a runner is in full: a change to it runs everything, so what it reads needs no entry
-        sub = extract(h, tree, bounds, seen)
+            continue
+        seen.add(h)
+        sub, more = _own(h, tree, bounds)
         out.paths |= sub.paths
-        out.why_always += [f"{h}: {w}" for w in sub.why_always]
+        if h.startswith("verify/"):
+            out.why_always += [f"{h}: {w}" for w in sub.why_always]
         out.runtime += [f"{h}: {w}" for w in sub.runtime]
+        queue += more
+    out.paths.discard(rel)
     return out
+
+
+def direct(rel: str, tree: Tree, bounds: dict | None = None) -> set[str]:
+    """The files rel follows itself, not through another: the helpers its own source imports or names."""
+    return set(_own(rel, tree, bounds or {})[1])
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -735,14 +920,13 @@ def problems(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
             if not any(covers(e, p) for e in reads[name]):
                 bad.append(f"{name} reads {p}, which its entry does not cover")
     counts: dict[str, int] = {}
-    for name, entries in reads.items():
-        for e in entries:
-            if e.startswith("verify/") and not os.path.basename(e).startswith("test_") and \
-                    e.endswith((".py", ".sh", ".js")):
-                counts[e] = counts.get(e, 0) + 1
+    for name in tests:
+        for h in direct(f"verify/{name}", tree, doc["bounds"]):
+            if h.startswith("verify/") and not os.path.basename(h).startswith("test_"):
+                counts[h] = counts.get(h, 0) + 1
     for helper, n in sorted(counts.items()):
         if n > SHARED_HELPER and not any(covers(f, helper) for f in doc["full"]):
-            bad.append(f"{helper} is read by {n} tests, more than {SHARED_HELPER}, so it is shared: list it in full")
+            bad.append(f"{helper} is named by {n} tests, more than {SHARED_HELPER}, so it is shared: list it in full")
     return bad
 
 
