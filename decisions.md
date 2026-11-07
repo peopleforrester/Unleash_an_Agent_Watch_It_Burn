@@ -29930,3 +29930,60 @@ changed by this run.
 **The suites (run 18174, at `3b222f6e`).** `bash verify/run-e2e-tools.sh` printed `328 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 12m02s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18174/e2e-tools.log`).
+
+## 2026-11-07 · #1047 · run 18178 · the e2e tools job hands gh the run's token and unpacks Chromium's libraries and fonts for itself
+
+**The spec.** #1047: the heavy gate's `CI` check (the verify-suites workflow on Tanjiro's runner, #1020) is red on
+staging. `verify/prior-drafts.sh 1047 origin/staging` printed LANDED for run 18115's draft and NONE else, so this
+starts from staging 5ba3df38. The coordinator's comment of 2026-11-07 named the one red it had read in run
+42366241593: the gh token check of `verify/gh_comments.py`, with gh now on Tanjiro (hecaton deploy/tanjiro/tools.sh)
+and no token in the job. The job log of staging's latest finished run, 42372183956 at ae188261 (read with
+`gh api .../actions/jobs/128402403390/logs`), has ten reds, not one: `81 checks ran ... in 4m37s` with
+`SOME E2E TOOLS TIER CHECKS FAILED`. Six are that token check (test_467_live_record_comment_e2e,
+test_agent_obs_cause_comment, test_dd_credential_comment, test_dispatched_runs_cause_comment,
+test_prose_gate_e2e_wait_cause_comment, test_support_desk_live). The other four are Playwright renders whose Chrome
+Headless Shell does not start: `error while loading shared libraries: libnspr4.so` (test_fallback_deck_e2e,
+test_guardrails_heading_e2e, test_kubecon_prompt_sheet_e2e, test_mobile_titles_e2e). The offline job passed.
+
+**The token.** The e2e tools job sets `GH_TOKEN: ${{ github.token }}` in its own `env`, and its own `permissions`
+are `contents: read` and `issues: read`; the workflow's top-level `contents: read` and the offline job are
+unchanged. The token is the run's own and ends with the job, so the workflow still reads no secret.
+test_kitchen_note_followup.py, added by #1012 after the coordinator's reading, reads peopleforrester/guard-proxy-agenticburn#63,
+another public repository, with the same token; a run token reads public repositories, but that read has not yet
+run on Tanjiro.
+
+**The libraries and fonts.** Tanjiro takes nothing from apt by hecaton or a run (hecaton's
+docs/conventions/fleet-host-boundary.md: its OS packages belong to infrastructure-end-device-management). So a new
+step before the tier, `python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"`, installs nothing. It runs
+`ldd` on the pinned Playwright's headless shell, maps each missing library to its Debian 13 package (a table of the
+21 a bare debian:trixie lacks), and asks apt, as the runner's user with lists, cache and sources of its own (Debian's
+archive alone, so the host's Docker or Tailscale repository cannot fail the update), which packages `install` would
+add against the host's installed set. It downloads those, unpacks each with `dpkg-deb -x` under the job's temp
+directory, and writes LD_LIBRARY_PATH into $GITHUB_ENV. Libraries alone were not enough: with them the shell stopped
+on its first text, `SkFontMgr_FontConfigInterface.cpp:163] Not implemented`, in a container with no fonts. So a host
+with no /etc/fonts/fonts.conf or no font file also gets fontconfig-config, fonts-dejavu-core, fonts-liberation and
+fonts-noto-color-emoji, with fontconfig-config's absolute conf.d links pointed into the unpacked tree, the two links
+its postinst makes from debconf's defaults added (10-hinting-slight and 70-no-bitmaps-except-emoji), and
+FONTCONFIG_FILE naming a fonts.conf that reads them. Without 10-hinting-slight the BurritoBot header button measured
+81px in its 80px box at a 360px viewport and test_mobile_titles_e2e failed by that pixel; this host's own Chromium
+uses the same fonts (Liberation Sans Bold and Noto Color Emoji, read through CDP's `CSS.getPlatformFontsForNode`).
+Before it writes anything the script has the shell render a page of text to a PNG, so a gap fails the step and not a
+test after it. Where the host has every library and a font it writes nothing; once EDM's build carries them, the step
+does no work. Nothing falls back: no GITHUB_ENV, a library the table does not name, a failed apt step, a library
+still missing after the unpack, or a failed render exits 1 naming which.
+
+**Checked here.** In a bare `docker.io/library/debian:trixie` container, as a non-root user, with this host's
+Playwright browsers mounted read-only and the tree from git: the script unpacked 45 packages and wrote both
+variables, and then all four Playwright tests Tanjiro failed passed (`FALLBACK DECK GREEN`,
+`All rendered guardrails-heading checks passed.`, `The iPad prompt sheet carries every /kubecon prompt, in order.`,
+`All rendered mobile-title checks passed.`); the log is `/var/lib/hecaton/runs/18178/ct/final-container.log`. A
+second run with the libraries already on LD_LIBRARY_PATH unpacked only the five font packages. On this host, which
+has every library and 2063 fonts, it printed `nothing to unpack`, exited 0 and wrote nothing.
+`verify/test_ci_chromium_libs.py` holds the script offline (ldd and apt parsing, the soname table against the 21,
+the fonts check, the relinked rules and postinst links, the Debian-only sources, no GITHUB_ENV), and
+`verify/test_verify_suites_workflow.py` now fails a workflow without the token, with any other permissions on either
+job, without the Chromium step, or with that step after the suite.
+
+**Not yet run on a cluster.** Nothing here needs one. What only Tanjiro shows: the verify-suites run on this
+branch's push, its `Chromium's libraries and fonts, unpacked for this job` step and its e2e tools job, which close
+#1047's criterion once green on staging.
