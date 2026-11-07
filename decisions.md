@@ -30941,3 +30941,42 @@ printed `All rendered mobile-title checks passed.` with the wide copy's fit chec
 No live cluster check applies: neither change reads a cluster. Once Argo CD syncs the page, the header can be looked at
 on a 360px phone at burritobot-private.burritobot.co. The criterion is met only when the verify-suites workflow runs
 green on Tanjiro after hecaton pushes this branch.
+## 2026-11-07 · #1040 · run 18244 · Segment 3 re-budgeted for the 2026-11-07 deck: about 8 minutes 40 as the deck has it, about 6 with the cut; the rehearsal is Michael and Whitney's
+
+**What #1040 asks.** #1003 budgeted segment 3 (Challenge 2) at about 6 minutes 40 seconds against its 5, as the
+2026-11-06 deck had it (rounds-agenticburn#68), and proposed a cut to about 5 minutes 10. #1040 asks Michael and
+Whitney to time it in a rehearsal and settle the cut, then update segment 3's 'Timing' and the segments table.
+`verify/prior-drafts.sh 1040 origin/staging` printed NONE, and the issue had no comments, so there was no earlier
+draft. The issue had no checklist, so this run added four acceptance criteria to its body: the budget is for the deck
+the rehearsal times, the rehearsal times it, they settle it, and the run-of-show records the result.
+
+**The deck moved after #1003's budget.** The deck repo's commits of 2026-11-07, `0bfcc860` (#77) and `903f26cb` (#82),
+replace the four single guardrail slides with slide 28's `Let's turn on Kubernetes guardrails.` link, slide 29's
+"Try your attacks again." and one set per guardrail on slides 30 to 42 (RBAC 30 to 33, Kyverno 34 to 36, KubeArmor 37
+to 39, NetworkPolicy 40 to 42). #1065 brings segment 3's steps 5 and 6 in line with those slides; this run leaves the
+steps, the segments table and the paragraph under it to #1065 and changes only the Timing paragraph. Read from
+`attendee.html` at `903f26cb` (slides counted from 1, the URL hash one less), the Say notes are 32 words on slide 28,
+29 on slide 29 and 317 across slides 30 to 42. At about 150 words a minute the sets take about 2 minutes 7 seconds
+before the 13 advances and slide 36's deny message, which its notes say to read aloud: about 2 minutes 15 seconds. With
+30 seconds for the switch and 15 for the retry, the close takes about 3 minutes where #1003 gave it one, so the
+segment runs about 8 minutes 40 seconds as the deck has it. Slides 14 to 27 changed only in style (#77's header and
+hint layout, #82's slide 27 header), so their beats keep #1003's figures. By the same measure the tee-up's notes on
+slides 14 to 17 come to 172 words, about 70 seconds against #1003's 45; the paragraph says so for the rehearsal to
+check rather than changing #1003's figure on an estimate.
+
+**The cut no longer holds 5.** #1003's three changes save 1 minute 20 here (slide 27's minute under the live attack and
+its trace, 50 seconds; the wait after the prompt wall to 30 seconds, 30), and one line said per guardrail set, on its
+"This attack was prevented with" slide, with its recall and YAML slides advanced, saves 1 minute 15. That comes to
+6 minutes 5 seconds. So the paragraph names the three ways the rehearsal can settle the last minute: take the cut and
+move a minute in from segment 1, 2, 5 or 6 (segment 4's Challenge 3 also grew, #1076), change the deck's waits, which
+takes from play time, or drop slides from the sets in the deck. The run-of-show's beat table carries both columns and a
+Rehearsal column, and `verify/test_seg3_timing.py` holds each column's beats to its Segment 3 total, the paragraph's
+totals to the table, and the budget to the 2026-11-07 close; each check is run on a broken copy to show it can fail.
+
+**Left for the rehearsal.** The timing itself and the choice are Michael and Whitney's in person; the run-of-show's
+'Dates to hold' puts the two timed run-throughs by 2026-11-08, and the Run-through record's Segment 3 row is still
+"not yet run". Once they have timed it, the Rehearsal column, the choice in the Timing paragraph, segment 3's row in
+the segments table and the Run-through record's Segment 3 row are written from their times.
+
+**No live check.** This change is to the run-of-show's prose and an offline test; nothing the clusters run reads it,
+so no cluster was read.

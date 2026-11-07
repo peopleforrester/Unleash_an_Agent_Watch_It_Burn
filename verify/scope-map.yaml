@@ -5163,6 +5163,8 @@ reads:
     - gitops/ai-layer/web/skin.js
     - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
+  test_seg3_timing.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_service_links.py:
     - CLAUDE.md
     - agent

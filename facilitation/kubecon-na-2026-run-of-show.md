@@ -1094,18 +1094,49 @@ is a public standby that took attackme before step 5: it came up with Kyverno
 admission already at Deny (#985, "After a promotion on stage"
 above).
 
-**Timing (#1003).** The deck's flow, as slides 17 to 27 have it, runs about 6 minutes
-40 seconds against the segment's 5: the tee-up on slides 14 to 17, 45 seconds; the
-three attacks on slides 18 to 20, 20 seconds; play from slide 20, a minute, then the
-prompt wall and a second minute; the six hint slides, 45 seconds, with the room still
-playing; slide 27's one more minute; the live attack, 30 seconds; its trace, 20
-seconds; and the switch with its four guardrail slides, a minute. The room plays for
-about 3 minutes 45 seconds of it. The cut proposed to hold 5 minutes without touching
-another segment: the room's last minute on slide 27 runs under the live attack and its trace (the room
-keeps playing on the public bot while Whitney works the admin bot), the wait after the
-prompt wall goes to 30 seconds, and each guardrail slide gets one line said aloud. That
-brings it to about 5 minutes 10 seconds, with the room on the bot for about 3 minutes
-15 seconds and through the attack. Michael and Whitney settle the cut in rehearsal.
+**Timing (#1003, #1040).** As the 2026-11-07 deck has it (rounds-agenticburn#77 and
+#82, deck commit `903f26cb`), the segment runs about 8 minutes 40 seconds against its 5.
+#1003 budgeted the 2026-11-06 deck at about 6 minutes 40 seconds, when the segment closed
+on the switch and four single guardrail slides in about a minute. The 2026-11-07 deck
+replaces those four with slide 29's retry ("Try your attacks again.") and one set per
+guardrail on slides 30 to 42 (RBAC 30 to 33, Kyverno 34 to 36, KubeArmor 37 to 39,
+NetworkPolicy 40 to 42; #1065 brings steps 5 and 6 in line), and that close now takes
+about 3 minutes. Slides 14 to 27 changed only in style, so their beats keep #1003's
+figures. The spoken beats from slide 28 on are the slides' Say notes read at about 150
+words a minute: 32 words on slide 28 and 29 on slide 29, then 317 across slides 30 to 42,
+about 2 minutes 7 seconds before the 13 advances and slide 36's deny message read aloud.
+By the same measure the tee-up's notes on slides 14 to 17 come to 172 words, about 70
+seconds, so the rehearsal may find that beat longer than its 45.
+
+| Beat | Slides | As the deck has it | With the cut | Rehearsal |
+|---|---|---|---|---|
+| Tee-up: Challenge 2, what you already knew, "BurritoBot has none of these things.", the challenge sentence | 14 to 17 | 0:45 | 0:45 | |
+| The three attacks built up | 18 to 20 | 0:20 | 0:20 | |
+| Play from slide 20, the prompt wall, play again | 20 | 2:00 | 1:30 | |
+| The six hint slides, the room still playing | 21 to 26 | 0:45 | 0:45 | |
+| The recap and one more minute of play | 27 | 1:00 | 0:10 | |
+| Whitney's live attack on the admin bot | 27 | 0:30 | 0:30 | |
+| Its trace, `c2-attack` | 27 | 0:20 | 0:20 | |
+| The switch: the slide's link, `guardrails-on`, the panel | 28 | 0:30 | 0:30 | |
+| The retry, the room trying again under the next slides | 29 | 0:15 | 0:15 | |
+| One set per guardrail | 30 to 42 | 2:15 | 1:00 | |
+| Segment 3 | 14 to 42 | 8:40 | 6:05 | |
+
+The cut carries #1003's three changes and one more for the new close. The room's last
+minute on slide 27 runs under the live attack and its trace (the room keeps playing on
+the public bot while Whitney works the admin bot), and the wait after the prompt wall
+goes to 30 seconds; the room then plays about 3 minutes 15 seconds and through the
+attack. Each guardrail set gets one line said aloud, on its "This attack was prevented
+with" slide, and its recall and YAML slides are advanced without their notes. That comes
+to about 6 minutes, still a minute over, so the cut alone no longer holds 5. The
+rehearsal settles one of three: take the cut and move about a minute in from another
+segment (segment 4's Challenge 3 also grew in the 2026-11-07 deck, #1076, so the minute
+comes from segment 1, 2, 5 or 6, and the slot stays 30); change the deck's waits, such
+as the minute after the prompt wall or the hint slides 21 to 26 left to slide 27's recap,
+which takes from play time, the beat Whitney's rule keeps first; or drop slides from the
+guardrail sets in the deck. Michael and Whitney time each beat in the Rehearsal column,
+then write the choice here, set segment 3's row in the segments table, and put the time
+in the Run-through record's Segment 3 row.
 
 1. **The pre-AI questions (slides 14 and 15).** After the OWASP page, the slide "It is
    time for Challenge 2!" ("Which brings us to challenge two..."). Then the slide reads:
