@@ -32588,3 +32588,8 @@ ended PASS with all eight mutations failing. `python3 verify/test_wall_throttle_
 read main at `8e32eda4`, printed `PASS  main's page is the pinned copy` and the same 20 checks, and ended PASS. No
 cluster is involved, so there is no live check and nothing waits under "Not yet run on a cluster". No dependency was
 added.
+
+**Suite results, run 18376.** On `a145d473`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA` at the run's base
+`470c95ef`, its output in `/var/lib/hecaton/runs/18376/e2e-tools.log`, printed `90 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `17 checks ran (the offline suite and 16 tier tests) in 3m43s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN`, `exit=0`; `test_wall_throttle_e2e.py` and `test_wall_more_count_e2e.py` were among them.
