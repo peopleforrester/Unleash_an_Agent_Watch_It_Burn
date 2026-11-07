@@ -30711,3 +30711,12 @@ with why, or in bounds through the helper that builds it. AGENTS.md says the sam
 ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 40m32s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added: the
 scripts use the standard library, PyYAML and git, which the suite already needs, and inotify through ctypes.
+
+**The suites (run 18091), scoped.** `HECATON_BASE_SHA=333344f5 bash verify/run-e2e-tools.sh` at 3763bdd7, whose
+change is the record above, decisions.md alone: `scope: running 11 of 76 tools tests` and
+`scope: running 75 of 315 offline tests`, each named with why, then `75 tests ran`, `scoped to the change since
+HECATON_BASE_SHA=333344f5: 75 of the 315 offline tests; the other 240 read nothing it touched`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `12 checks ran (the offline suite and 11 tier tests) in 9m33s`, `11 of the 76
+tier tests; the other 65 read nothing it touched`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`: 9m33s against the
+whole run's 40m32s. Of the 11 tier tests, eight are in always because a line builds a path from a value found at run
+time; bounding those (as bootstrap_chart.py is bounded) is the next saving.
