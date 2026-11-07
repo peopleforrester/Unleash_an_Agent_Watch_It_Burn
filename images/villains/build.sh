@@ -66,12 +66,14 @@ build_joker_web() {
     src="${tmp}/src"
   fi
   # The modes are set, not read from the checkout, so the digest does not follow the umask git checked out under:
-  # rwxrwxr-x for directories and start.sh, rw-rw-r-- for the page and the banner.
+  # rwxrwxr-x for directories and start.sh, rw-rw-r-- for the page and the banner. `ug-s` clears setuid and setgid,
+  # which a checkout under a setgid directory gives its directories and `a+rX,ug+w,o-w` would keep (#1116: a clone in
+  # a hecaton run directory, mode 2775, built both Jokers at other digests).
   # The shell banner (#714): villain-banner.sh goes in as the one file etc/villain-banner.sh, with no etc/ directory
   # entry, so busybox's /etc keeps its own mode. ENV names it, and busybox sh reads ENV only when it starts an
   # interactive shell, so `kubectl exec -it <pod> -- sh` prints the banner, and start.sh's loop, `kubectl logs` and a
   # plain `kubectl exec <pod> -- <cmd>` print what they did before.
-  tar --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name --mode='a+rX,ug+w,o-w' -C "${src}" \
+  tar --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name --mode='a+rX,ug+w,o-w,ug-s' -C "${src}" \
     --transform 's,^villain-banner\.sh$,etc/villain-banner.sh,' \
     --transform 's,^joker-web,villain,' -cf "${layer}" joker-web -C "${HERE}" villain-banner.sh
   "$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f "${layer}" -t "${ref}"

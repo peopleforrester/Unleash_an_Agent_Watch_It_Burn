@@ -162,6 +162,25 @@ with tempfile.TemporaryDirectory() as t:
                 env = []
             check(f"{name}: the config sets ENV=/etc/villain-banner.sh beside PORT=8080",
                   "ENV=/etc/villain-banner.sh" in env and "PORT=8080" in env, str(env) or c.stderr.strip()[:200])
+        # A checkout under a setgid directory has setgid directories (#1116: a clone in a hecaton run directory, mode
+        # 2775, built both Jokers at other digests until build.sh's tar cleared the bit). The same build, from a copy
+        # whose every directory is setgid, must still give the pins.
+        print("== build.sh, from a copy whose directories are setgid, gives the same digests ==")
+        copy = tmp / "setgid" / "villains"
+        copy.parent.mkdir()
+        os.chmod(copy.parent, 0o2775)
+        subprocess.run(["cp", "-r", str(VILLAINS), str(copy)], check=True)
+        for d in [copy, *(p for p in copy.rglob("*") if p.is_dir())]:
+            os.chmod(d, 0o2775)
+        r = subprocess.run(["bash", str(copy / "build-loopback.sh"), f"127.0.0.1:{port}"],
+                           env={**os.environ, "CRANE": crane}, capture_output=True, text=True, timeout=600)
+        check("build-loopback.sh builds both Jokers from the setgid copy (exit 0)", r.returncode == 0,
+              (r.stdout + r.stderr)[-600:])
+        for name, ref in refs.items():
+            d = subprocess.run([crane, "--insecure", "digest", ref.replace(PREFIX, local)], capture_output=True,
+                               text=True, timeout=60)
+            check(f"{name}: the setgid copy's digest is images.lock's {str(want[name])[:19]}...",
+                  d.stdout.strip() == want[name], f"built {d.stdout.strip() or d.stderr.strip()[:200]}")
     finally:
         reg.terminate()
         reg.wait(timeout=10)
