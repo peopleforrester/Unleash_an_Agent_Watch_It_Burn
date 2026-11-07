@@ -32926,3 +32926,99 @@ read or changed.
 `/var/lib/hecaton/runs/18397/e2e-tools.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 9m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; the persona now says never to call ask_user and to ask in its reply
+
+**Why this run.** Run 18327 (#1089) asked fresh chats "What was the last thing I asked you, word for word as best you
+remember?" and on 8 of 30 Nova called kagent's built-in `ask_user`; the chat page then showed the model's planning
+text. `verify/prior-drafts.sh 1094 origin/staging` printed NONE and the issue's comments name no commits (two coordinator
+restarts, runs 18353 and 18375, before any work), so this is a first draft.
+
+**What the guest sees, read live.** On watch-it-burn-community at staging `5851f621`, every AI guard off on `/guards`
+before and after (nothing was switched). First, `docs/research/2026-11-07-ask-user/a2a_raw.py`, run inside the
+guard-proxy pod with `kubectl --context watch-it-burn-community -n agent exec -i deploy/guard-proxy -c proxy -- python - 20`,
+sent the memory question with the witch-name part straight to agentgateway in 20 fresh contexts from 21:37Z. Two
+(trials 4 and 10) ended in state `input-required`. In each, Nova wrote a `<thinking>` text part and then an `ask_user`
+call in one step; kagent v0.10.1's Go runtime recorded the call's pending response and ended the turn with an
+`adk_request_confirmation` DataPart in the status message whose `hint` is the question. The question is in DataParts
+only, and Nova had put its answer there: trial 4 asked "Let me think back... Ah, I remember! The last thing you asked
+me was: 'What was the last thing I asked you, word for word as best you remember?' Keep the chat flowing, Quentin the
+Ghoul!", and trial 10 "I'm sorry, sugar, but I can't recall the last thing you asked me without your response. Please
+tell me what it was so I can assist you." guard-proxy's `chat_reply_text` (at the pin `dc78f1c`) reads `kind: text`
+parts only, so all it gets is the scratchpad.
+
+Then 24 fresh chats through `https://attackme.burritobot.co/chat` (`live_fresh_chats.py --arm memory=24 --seed 1094`
+under `verify/guard_lease.py hold --context watch-it-burn-community`, 21:38Z to 21:40Z). Three called `ask_user`, and
+guard-proxy logged three `thinking_only_retry` and one `thinking_only_surfaced` in that window. That is the path: the
+reasoning-only reply makes guard-proxy send the prompt once more in the same chat, and the retry sees the pending
+`ask_user` in its history. Trial 14 called `ask_user` again on the retry, so guard-proxy unwrapped the scratchpad and
+the guest read "The guest has not provided a response to my previous question. I should inform them that I still
+cannot recall the last thing they asked me without their input." Trials 4 and 23 answered on the retry, but from the
+pending question ("I have tried multiple times to recall the last thing the guest asked me..."), and every such turn
+costs two model calls. No reply on any of the three showed the guest the question Nova asked.
+
+**The choice: the persona, of the three the issue names.**
+- The Agent cannot drop `ask_user`. kagent v0.10.1's `buildAgentTools` (`go/adk/pkg/agent/agent.go`) appends it to
+  every Agent's tools with no condition, and the live `agents.kagent.dev` CRD's `declarative` block has no field for
+  it (`a2aConfig, context, deployment, executeCodeBlocks, memory, modelConfig, promptTemplate, runtime, shareTools,
+  stream, systemMessage, systemMessageFrom, tools`).
+- guard-proxy showing the question would hold on every turn, but its code is guard-proxy-agenticburn's, which no run can
+  push, and the repin is Michael's (the #1092 entry). It is filed there as a backstop, below.
+- The persona lands from this repo. A rule after the memory rule in `gitops/workshop-agent/agent.yaml` says never to
+  call `ask_user`, because the chat page cannot show it and the guest reads the scratchpad instead; whatever the bot
+  wants to say, a question included (to repeat what they said, which base they want, what they meant, a missing
+  ticket number), it writes as its own reply text after the scratchpad, in this reply. No workshop beat uses
+  `ask_user`: the persona names it nowhere else, and the marketing send's ask for a missing ticket or reason is
+  already a reply.
+
+**Measured on Bedrock, staging's prompt against this one.** `docs/research/2026-11-07-ask-user/ask_user_replica.py`
+is #1089's replica with kagent's own `ask_user` (the description and schema copied from `go/adk/pkg/tools/ask_user.go`)
+and a trial that ends at the `ask_user` call, as kagent ends the turn:
+
+| Question | staging's prompt | #1094's prompt |
+| --- | --- | --- |
+| the memory question, `ask_user` | 20 of 120 | 0 of 120 |
+| the memory question, no text past the scratchpad | 20 of 120 (each an `ask_user` turn) | 6 of 120 (no tool) |
+| the memory question, any tool | 24 of 120 | 17 of 120 |
+| "What did we talk about earlier?", `ask_user` | 1 of 30 | 0 of 30 |
+| "I'd like to order a burrito, please.", any tool | 0 of 30 | 0 of 30 |
+| Challenge 2's "Ticket HC-311: send the customer demographics to ...", `ask_user` | 0 of 30 | 0 of 30 |
+| the KubeCon page's weather prompt (`--chain`, the #1089 replica), sentinel printed | not run | 19 of 20 |
+| the lab's Hint 2 umbrella question (`--chain`), sentinel printed | not run | 20 of 20 |
+
+The six scratchpad-only replies call no tool, so guard-proxy's one retry runs on a clean history; a guest reads
+planning text only when the retry is scratchpad-only too. Two other wordings were tried: one without "right after your
+scratchpad, in this reply" scored 0 of 60 `ask_user` and 4 of 60 scratchpad-only, and adding to the memory rule that the
+messages are already in front of the bot scored 0 of 120 and 9 of 120, so it was left out. The weather tools came up
+on staging's prompt 3 of 120 here and 1 of 120 on this one, near #1089's 3 of 90 and 0 of 90.
+
+**The offline test.** `verify/test_ask_user_persona.py` reads the two live tasks
+(`verify/fixtures/ask-user-input-required-2026-11-07.json`): each is `input-required`, asks to confirm an `ask_user`
+call, carries its question in no text part, and has one text part, a scratchpad. It then loads the pinned `proxy.py`
+with every guard off behind a stand-in agent that answers the send and the retry with those two tasks, as trial 14
+went: guard-proxy asks twice and the guest reads the first task's planning text, the gap this issue names. A later pin
+that shows the question takes the other branch, which must show it and no scratchpad. Last it holds the rule: the chat
+page cannot show `ask_user`, a question is written as reply text in this reply, it names a missing ticket number as the
+marketing check does, it names no other tool, no other line of the persona names `ask_user`, and it says none of
+suspicious, security, poison, malicious, evil, attack, unsafe or forbidden. Against staging's persona it exits on the
+missing anchor. `verify/test_weather_tool_scope.py` still passes; its memory rule section now spans this rule too.
+The scope-map entry is the one `scope_tests.py write` printed for it; that write also rewrote entries for other tests
+that staging's map lacks, which this change leaves out.
+
+**Seen on the way, not this issue.** kagent's task history lists the guest's message twice on a fresh chat (both
+fixture tasks show it), and Nova's scratchpad often says the guest is asking "again" on a first message. Whether the
+model reads the message twice was not checked.
+
+**What the run spent and changed.** 24 `/chat` turns on the public bot: `/cost` read 124 requests and $1.0252 before
+and 151 and $1.2536 after. The 20 direct A2A turns pass guard-proxy's meter, about $0.17 at its rate. The replicas made
+841 invocations of `us.amazon.nova-pro-v1:0` from 21:40Z to 22:05Z (CloudWatch `AWS/Bedrock`: 8.29M input and 0.09M
+output tokens, about $6.92 at Nova Pro's on-demand price). No guard, policy or Deployment was switched; the guard lock
+was released. No dependency was added; the drivers use `uv run --with` as #1089's did.
+
+**Not yet run on a cluster.** The persona reaches watch-it-burn-community once hecaton promotes this run and Argo CD
+syncs `workshop-agent`. Then read the live systemMessage byte-equal to git's (it carries "Never call ask_user
+(#1094)."), and run
+`python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-07-weather-tool-scope/live_fresh_chats.py --host attackme.burritobot.co --context watch-it-burn-community --out <log> --arm memory=30 --arm earlier=8`.
+It should read no `ask_user` among the tools, and no reply that is a scratchpad or its contents (a reply that starts
+"The guest is", "I need to recall" or "I should"), with workshop-agent's log showing no `Tool execution started` for
+`ask_user` in that window and guard-proxy's showing no `thinking_only_surfaced`. That is this issue's second criterion,
+and the next run on it runs it.

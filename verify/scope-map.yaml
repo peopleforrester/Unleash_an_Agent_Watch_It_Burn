@@ -362,6 +362,11 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+  test_ask_user_persona.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/workshop-agent/agent.yaml
+    - security
+    - verify/fixtures/ask-user-input-required-2026-11-07.json
   test_attendee_iam_user.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
