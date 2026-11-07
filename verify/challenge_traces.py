@@ -16,10 +16,12 @@ Manager entry watch-it-burn/datadog that the KubeCon clusters ship with):
    session; every --tag must be on the tool row);
 3. every row of that trace, which is judged against the shape.
 
-Ends CHALLENGE TRACES GREEN (exit 0) when all four pass, RED (exit 1) otherwise, each FAIL with its reasons. Exit 2
-when Datadog cannot be read, when it answers a list with meta.status "timeout", or when the window holds more tool
-rows than --max-pages reads: a check that judged only part of the window could pass on an old trace. --out writes
-the results as JSON, for filing each failure as an issue with its link.
+Ends CHALLENGE TRACES GREEN (exit 0) when all four pass, RED (exit 1) otherwise, each FAIL with its reasons. When
+the traces cannot be judged it ends CHALLENGE TRACES NOT READ with the reason, also exit 1: Datadog cannot be read,
+the key reaches another org, Datadog answers a list with meta.status "timeout", or the window holds more tool rows
+than --max-pages reads, since a check that judged only part of the window could pass on an old trace. A check that
+read nothing is a failure like any other, never a pass and never a skip. --out writes the results as JSON, for
+filing each failure as an issue with its link.
 
 The one-root part of the shape is #746, and a trace split in two fails it, as #760 asks; on 2026-11-05 the newest trace
 of each challenge had one root (decisions.md, #760). Tokens and cost are #784's, and a model call Datadog cannot
@@ -295,7 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     # No aws CLI, a refused key, an unreachable Datadog, a window too big to read: the traces were not judged.
     except (ReadError, RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as e:
         print(f"challenge_traces: cannot read the traces: {e}", file=sys.stderr)
-        return 2
+        print("CHALLENGE TRACES NOT READ")
+        return 1
     ok = report(results)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -25,8 +25,8 @@ print(f"== each challenge's newest ml_app:burritobot trace, as {profile} in {reg
       + (f", {tag}" if tag else "") + " ==")
 rc = challenge_traces.main(argv)
 if rc != 0:
-    print("FAIL: " + ("the traces could not be read (reason above)" if rc == 2 else
-                      "a challenge's newest trace is not the shape challenge-trace-shapes.yaml writes down "
-                      "(each FAIL above, with its link)"), file=sys.stderr)
+    print("FAIL: the traces could not be read (CHALLENGE TRACES NOT READ, reason above), or a challenge's newest "
+          "trace is not the shape challenge-trace-shapes.yaml writes down (each FAIL above, with its link)",
+          file=sys.stderr)
     sys.exit(1)
 print("Every challenge's newest trace has its shape.")

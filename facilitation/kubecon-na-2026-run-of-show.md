@@ -149,8 +149,10 @@ its own issue here, with the link as evidence, unless the line already names an
 open issue. `--tag k8s.cluster.name:burritobot-private` reads only the presenters'
 cluster, `--tag k8s.cluster.name:burritobot-public` only the room's. A `note:` line is
 not a failure: in Challenge 4 the bot often asks for both tools in one turn, so the
-trace shows them side by side. On 2026-11-05 every challenge failed only on cost,
-#876, and the private cluster had no chat making both of Challenge 2's calls.
+trace shows them side by side. A run that ends `CHALLENGE TRACES NOT READ` judged
+nothing and is a failure: fix the read it names and run it again. On 2026-11-07,
+with #876's cost fix in, Challenges 1, 3 and 4 passed and Challenge 2 failed: no chat
+on either cluster made both of its calls, since the stage plays them as separate asks.
 
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|

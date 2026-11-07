@@ -300,21 +300,30 @@ check("--tag narrows to one cluster's traces", res[1]["trace_id"] == "prv1" and 
 froms = {urllib.parse.parse_qs(p.split("?", 1)[1])["filter[from]"][0] for p in dd.paths if "?" in p}
 check("--hours sets the window, an hour wider for the whole trace", froms == {"now-48h", "now-49h"}, str(froms))
 
-print("== it says when it could not judge ==")
+print("== it fails, naming why, when it could not judge ==")
+
+
+def not_read() -> bool:
+    """The end line of a run that judged nothing: NOT READ, never GREEN or RED."""
+    out = printed.getvalue()
+    return out.rstrip().endswith("CHALLENGE TRACES NOT READ") and "TRACES GREEN" not in out and "TRACES RED" not in out
+
+
 dd = FakeDatadog(fail="GET /api/v2/llm-obs/v1/spans/events -> 403: Forbidden")
 rc, res = run(dd)
-check("a refused key: exit 2, nothing judged, the reason printed",
-      rc == 2 and res == {} and "403: Forbidden" in printed.getvalue() and "CHALLENGE TRACES" not in printed.getvalue())
+check("a refused key: exit 1, nothing judged, the reason printed, NOT READ",
+      rc == 1 and res == {} and "403: Forbidden" in printed.getvalue() and not_read(), printed.getvalue())
 rc, res = run(FakeDatadog(*good_all()), "--max-pages", "2")
-check("more tool rows than --max-pages reads: exit 2", rc == 2 and res == {})
+check("more tool rows than --max-pages reads: exit 1, NOT READ, even though every trace has its shape",
+      rc == 1 and res == {} and "raise --max-pages" in printed.getvalue() and not_read(), printed.getvalue())
 dd = FakeDatadog(*good_all(), org="Some Other Org")
 rc, res = run(dd)
-check("a key that reaches another org: exit 2, no span read",
-      rc == 2 and res == {} and "not the sandbox org" in printed.getvalue()
+check("a key that reaches another org: exit 1, NOT READ, no span read",
+      rc == 1 and res == {} and "not the sandbox org" in printed.getvalue() and not_read()
       and dd.paths == ["/api/v2/current_user"], printed.getvalue())
 rc, res = run(FakeDatadog(*good_all(), status="timeout"))
-check("a list Datadog answers with meta.status timeout: exit 2",
-      rc == 2 and res == {} and "timed out" in printed.getvalue(), printed.getvalue())
+check("a list Datadog answers with meta.status timeout: exit 1, NOT READ",
+      rc == 1 and res == {} and "timed out" in printed.getvalue() and not_read(), printed.getvalue())
 
 print()
 if failures:
