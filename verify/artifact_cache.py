@@ -18,6 +18,10 @@ get(sha256, url) returns <root>/sha256/<sha256>:
     to the network. The download is written to a temp file in the same directory, hashed, and renamed into place only
     when it matches, so no reader ever sees a half-written or unverified file. A download that does not match is
     removed and fails, naming the URL and both sums.
+  - A fetch the network broke (a refused or reset connection, a failed name lookup, a timeout, a body cut short, a 429
+    or a 5xx) is tried again, up to len(BACKOFF) + 1 times in all, each retry printed to stderr: the curl that
+    fetch-e2e-tools.sh used before #1118 retried three times. Any other failure (a 404, say) and a download that does not
+    match fail at once.
   - Every network fetch, good or bad, is one line appended to the fetch log: ARTIFACT_FETCH_LOG, or <root>/fetch.log.
     A warm run's log is unchanged, which is how the last child of #1115 shows a warm run made no download.
 
@@ -32,13 +36,16 @@ from __future__ import annotations
 import datetime
 import fcntl
 import hashlib
+import http.client
 import os
 import pathlib
 import re
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import BinaryIO
 
 ROOT_VARS = ("HECATON_TOOLS_CACHE", "WIB_ARTIFACT_CACHE")
@@ -47,6 +54,8 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 CHUNK = 1 << 20
 # Seconds a connect or a read may stall before the fetch fails; a slow but moving download is not cut off.
 TIMEOUT = 60
+# Seconds before each retry of a fetch the network broke; one more attempt than there are waits.
+BACKOFF = (2, 5, 10)
 
 # A fetcher writes the bytes at url to the open file it is given.
 Fetcher = Callable[[str, BinaryIO], None]
@@ -62,6 +71,24 @@ class RootInWorktree(ArtifactCacheError):
 
 class ArtifactMismatch(ArtifactCacheError):
     """A cached file, or a fresh download, does not hash to the pinned SHA-256."""
+
+
+class FetchFailed(ArtifactCacheError):
+    """The fetcher raised; transient says whether the network broke it, so another attempt may do better."""
+
+    def __init__(self, message: str, transient: bool):
+        super().__init__(message)
+        self.transient = transient
+
+
+def is_transient(e: BaseException) -> bool:
+    """Whether a fetcher's exception is the network's doing: a 429 or a 5xx, or any connection, name lookup, timeout or
+    short-body error. An HTTP status other than those (a 404 or a 403) is the server's answer and is not retried."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code == 429 or e.code >= 500
+    if isinstance(e, urllib.error.URLError):
+        return not isinstance(e.reason, (FileNotFoundError, PermissionError, IsADirectoryError))
+    return isinstance(e, (TimeoutError, ConnectionError, http.client.HTTPException))
 
 
 def worktree_of(path: pathlib.Path) -> pathlib.Path | None:
@@ -144,9 +171,38 @@ def _check_hit(path: pathlib.Path, sha256: str) -> pathlib.Path:
     return path
 
 
+def _fetch_once(final: pathlib.Path, sha256: str, url: str, fetch: Fetcher, log: pathlib.Path) -> None:
+    """One network fetch of a miss into a temp file beside final, hashed and renamed into place only when it matches.
+    The caller holds the sum's lock."""
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{sha256}.", suffix=".part", dir=final.parent)
+    tmp = pathlib.Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            try:
+                fetch(url, out)
+            except Exception as e:
+                out.flush()
+                log_fetch(log, url, sha256, tmp.stat().st_size, f"error {type(e).__name__}")
+                raise FetchFailed(f"fetch of {url} for SHA-256 {sha256} failed: {e}", is_transient(e)) from e
+            out.flush()
+            os.fsync(out.fileno())
+        size = tmp.stat().st_size
+        got = sha256_of(tmp)
+        log_fetch(log, url, sha256, size, "ok" if got == sha256 else f"mismatch {got}")
+        if got != sha256:
+            raise ArtifactMismatch(f"download of {url} does not match its pin: expected SHA-256 {sha256}, "
+                                   f"got {got} ({size} bytes); nothing was written to {final}")
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, final)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def get(sha256: str, url: str, *, root: pathlib.Path | None = None, fetch: Fetcher = url_fetch,
-        env: Mapping[str, str] | None = None) -> pathlib.Path:
-    """The verified file for sha256: a hit re-checked, or a miss fetched from url once and checked before the rename."""
+        env: Mapping[str, str] | None = None, backoff: Sequence[float] = BACKOFF,
+        sleep: Callable[[float], None] = time.sleep) -> pathlib.Path:
+    """The verified file for sha256: a hit re-checked, or a miss fetched from url once (a fetch the network broke tried
+    again after each wait in backoff) and checked before the rename."""
     if not SHA256.fullmatch(sha256):
         raise ArtifactCacheError(f"{sha256!r} is not a SHA-256: want 64 lowercase hex digits (for {url})")
     root = resolve_root(env) if root is None else root
@@ -165,30 +221,21 @@ def get(sha256: str, url: str, *, root: pathlib.Path | None = None, fetch: Fetch
         # Another run may have fetched it while this one waited for the lock.
         if final.exists():
             return _check_hit(final, sha256)
-        fd, tmp_name = tempfile.mkstemp(prefix=f".{sha256}.", suffix=".part", dir=d)
-        tmp = pathlib.Path(tmp_name)
         log = fetch_log_path(root, env)
-        try:
-            with os.fdopen(fd, "wb") as out:
-                try:
-                    fetch(url, out)
-                except Exception as e:
-                    out.flush()
-                    log_fetch(log, url, sha256, tmp.stat().st_size, f"error {type(e).__name__}")
-                    raise ArtifactCacheError(f"fetch of {url} for SHA-256 {sha256} failed: {e}") from e
-                out.flush()
-                os.fsync(out.fileno())
-            size = tmp.stat().st_size
-            got = sha256_of(tmp)
-            log_fetch(log, url, sha256, size, "ok" if got == sha256 else f"mismatch {got}")
-            if got != sha256:
-                raise ArtifactMismatch(f"download of {url} does not match its pin: expected SHA-256 {sha256}, "
-                                       f"got {got} ({size} bytes); nothing was written to {final}")
-            os.chmod(tmp, 0o644)
-            os.replace(tmp, final)
-        finally:
-            tmp.unlink(missing_ok=True)
-        return final
+        attempts = len(backoff) + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                _fetch_once(final, sha256, url, fetch, log)
+                return final
+            except FetchFailed as e:
+                if not e.transient:
+                    raise
+                if attempt == attempts:
+                    raise FetchFailed(f"{e} (a network error on each of {attempts} attempts)", True) from e
+                wait = backoff[attempt - 1]
+                print(f"  RETRY {e} (attempt {attempt} of {attempts}; again in {wait:g}s)", file=sys.stderr, flush=True)
+                sleep(wait)
+        raise AssertionError("unreachable")
     finally:
         os.close(lock_fd)
 

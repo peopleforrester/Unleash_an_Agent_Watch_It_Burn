@@ -8,20 +8,18 @@ the case is a real overlap every time and not a race the timing happens to win."
 from __future__ import annotations
 
 import hashlib
-import http.server
 import os
 import pathlib
 import shutil
 import subprocess
 import sys
-import tempfile
-import threading
 import time
 
 VERIFY = pathlib.Path(__file__).resolve().parent
 REPO = VERIFY.parent
 sys.path.insert(0, str(VERIFY))
 import artifact_cache as ac  # noqa: E402
+from cache_fixtures import Server, scratch_base  # noqa: E402
 
 SH = VERIFY / "artifact-cache.sh"
 failures: list[str] = []
@@ -40,78 +38,6 @@ def sha(b: bytes) -> str:
 
 
 GOOD = b"pinned artifact bytes\n" * 4096
-HALF = len(GOOD) // 2
-
-
-class Server:
-    """Serves self.files by path and counts requests per path. A path in self.gated sends half its body, then waits on
-    self.gate before sending the rest."""
-
-    def __init__(self):
-        self.files: dict[str, bytes] = {}
-        self.hits: dict[str, int] = {}
-        self.gated: set[str] = set()
-        self.gate = threading.Event()
-        self.lock = threading.Lock()
-        srv = self
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                with srv.lock:
-                    srv.hits[self.path] = srv.hits.get(self.path, 0) + 1
-                body = srv.files.get(self.path)
-                if body is None:
-                    self.send_error(404)
-                    return
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                if self.path in srv.gated:
-                    self.wfile.write(body[:HALF])
-                    self.wfile.flush()
-                    srv.gate.wait(60)
-                    self.wfile.write(body[HALF:])
-                else:
-                    self.wfile.write(body)
-
-            def log_message(self, *_):
-                pass
-
-        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.httpd.daemon_threads = True
-        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
-        self.thread.start()
-
-    def url(self, path: str) -> str:
-        return f"http://127.0.0.1:{self.httpd.server_address[1]}{path}"
-
-    def requests(self) -> int:
-        with self.lock:
-            return sum(self.hits.values())
-
-    def close(self):
-        self.gate.set()
-        self.httpd.shutdown()
-        self.httpd.server_close()
-
-
-def scratch_base() -> pathlib.Path:
-    """A new temp directory outside every git worktree: the first of TMPDIR, /tmp, /var/tmp and /dev/shm that is outside
-    one and takes a new directory. Hecaton points TMPDIR inside the run's worktree, where the helper rightly refuses a
-    root. In run 18422 the dispatcher's private /tmp and /var/tmp were deleted while the run was going (findmnt read
-    both as `//deleted`), so a mkdir there failed with ENOENT though the path was still a directory. With none usable
-    the test fails, naming each one and why."""
-    why = []
-    for cand in dict.fromkeys(map(pathlib.Path, (tempfile.gettempdir(), "/tmp", "/var/tmp", "/dev/shm"))):
-        tree = ac.worktree_of(cand)
-        if tree is not None:
-            why.append(f"{cand} is inside the git worktree {tree}")
-            continue
-        try:
-            return pathlib.Path(tempfile.mkdtemp(prefix="artifact-cache-test-", dir=cand))
-        except OSError as e:
-            why.append(f"{cand}: {e}")
-    raise SystemExit("FAIL: no temp directory outside a git worktree takes a new directory:\n  " + "\n  ".join(why))
 
 
 CLEAN = {k: v for k, v in os.environ.items()
@@ -284,6 +210,62 @@ def test_bad_download(base: pathlib.Path, srv: Server) -> None:
               and "not a SHA-256" in r.stderr, r.stderr)
 
 
+def test_retry(base: pathlib.Path, srv: Server) -> None:
+    print("a fetch the network broke is tried again; any other failure is not (#1118)")
+    import http.client
+    import urllib.error
+    for e, want in ((urllib.error.HTTPError("u", 503, "Service Unavailable", {}, None), True),
+                    (urllib.error.HTTPError("u", 429, "Too Many Requests", {}, None), True),
+                    (urllib.error.HTTPError("u", 404, "Not Found", {}, None), False),
+                    (urllib.error.HTTPError("u", 403, "Forbidden", {}, None), False),
+                    (urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")), True),
+                    (urllib.error.URLError("[Errno -2] Name or service not known"), True),
+                    (http.client.IncompleteRead(b"x", 10), True), (TimeoutError("timed out"), True),
+                    (ConnectionResetError(104, "Connection reset by peer"), True), (ValueError("bad"), False)):
+        check(f"{type(e).__name__} {getattr(e, 'code', '')} is {'a network error' if want else 'not a network error'}",
+              ac.is_transient(e) is want)
+
+    root, log = base / "cache-retry", base / "retry-fetch.log"
+    env = {"ARTIFACT_FETCH_LOG": str(log)}
+    srv.files["/blip.bin"] = GOOD
+    srv.failing["/blip.bin"] = [1, 503]
+    waits: list[float] = []
+    try:
+        got = ac.get(sha(GOOD), srv.url("/blip.bin"), root=root, env=env, sleep=waits.append)
+    except ac.ArtifactCacheError as e:
+        got = None
+        check("a 503 then the file: the file is cached", False, str(e))
+    check("a 503 then the file: the file is cached", got == root / "sha256" / sha(GOOD) and got.read_bytes() == GOOD)
+    check(f"after two requests ({srv.hits.get('/blip.bin')}) and the first wait ({waits})",
+          srv.hits.get("/blip.bin") == 2 and waits == [ac.BACKOFF[0]])
+    lines = log_lines(log)
+    check("both attempts are in the fetch log, the error then the good one",
+          [ln[4] for ln in lines] == ["error HTTPError", "ok"], str(lines))
+    check("with no temp file left", leftovers(root) == [], str(leftovers(root)))
+
+    other = b"another pinned artifact\n" * 64
+    srv.files["/down.bin"] = other
+    srv.failing["/down.bin"] = [len(ac.BACKOFF) + 1, 502]
+    waits = []
+    try:
+        ac.get(sha(other), srv.url("/down.bin"), root=root, env=env, sleep=waits.append)
+        check("a 502 on every attempt fails", False, "get returned")
+    except ac.FetchFailed as e:
+        check(f"a 502 on every attempt fails after the last, saying so ({e})",
+              f"on each of {len(ac.BACKOFF) + 1} attempts" in str(e) and srv.url("/down.bin") in str(e))
+    check(f"each backoff was waited in turn ({waits})", waits == list(ac.BACKOFF))
+    check("and nothing is cached", not (root / "sha256" / sha(other)).exists() and leftovers(root) == [])
+
+    waits = []
+    before = srv.hits.get("/gone.bin", 0)
+    try:
+        ac.get(sha(other), srv.url("/gone.bin"), root=root, env=env, sleep=waits.append)
+        check("a 404 fails at once", False, "get returned")
+    except ac.FetchFailed as e:
+        check("a 404 fails at once, with no wait and one request",
+              not e.transient and waits == [] and srv.hits.get("/gone.bin", 0) - before == 1, f"{e} {waits}")
+
+
 def lock_waiter(pid: int) -> bool:
     """Whether pid is blocked in /proc/locks waiting for an flock, the `->` lines."""
     for ln in pathlib.Path("/proc/locks").read_text().splitlines():
@@ -337,6 +319,7 @@ def main() -> int:
         test_root_in_worktree(base, srv)
         test_mismatching_hit(base, srv)
         test_bad_download(base, srv)
+        test_retry(base, srv)
         test_concurrent(base, srv)
         test_miss_then_hit(base, srv)  # last: it shuts the server down to show a hit needs no network
     finally:
