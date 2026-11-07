@@ -29885,3 +29885,9 @@ points at the new test.
 
 **Not yet run on a cluster.** Nothing here needs one: the test reads the tree and GitHub. #968's own live beats stay
 where its entries name them.
+
+**Suite results, run 18172.** On ea06042f, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18172/e2e-tools.1.log` printed `327 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 9m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_kitchen_note_followup.py` and `test_gh_comments.py` green among them. The prose gate printed
+`prose gate: pass`. No dependency was added.
