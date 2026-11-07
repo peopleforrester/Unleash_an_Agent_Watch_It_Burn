@@ -29796,3 +29796,38 @@ Read-only on watch-it-burn-community at the end of the run: the workshop-mcp pod
 `/tmp/burrito-data/marketing.json` (1,123 bytes, readable) and `/usr/bin/curl`, and the served `workshop-agent`
 systemMessage does not yet carry THE MARKETING SEND CHECK, as expected before promotion. Nothing on the cluster was
 changed.
+## 2026-11-07 · #1031 · run 18165 · test_986_attendee_todo_listed.py holds #986's attendee criterion
+
+Test review run 18050 found that no test read #986's criterion "anything an attendee would have to do is either removed
+or listed in the run-of-show's standby section; lost saved prompts and the deployments wall going down are
+acceptable". The removed half was held live by `verify/test_kubecon_failover_attendee_live.py`, but nothing read the
+listed half: dropping the resend step from the run-of-show's "What an attendee has to do after a promotion" bullet
+failed no test. There was no earlier draft: `bash verify/prior-drafts.sh 1031 origin/staging` printed NONE.
+
+**The test** (`verify/test_986_attendee_todo_listed.py`, offline). It cuts the standby section ("### Standbys and
+automatic promotion (#643)", to its first sub-heading) out of `facilitation/kubecon-na-2026-run-of-show.md` and holds:
+
+1. *Listed.* Exactly one "What an attendee has to do after a promotion" bullet in that section. It says "One thing:",
+   names the resend of a message that failed while the cluster was down, says the message is already in "Your saved
+   prompts", asks for nothing else in that one thing, and ends "Nothing else: no refresh, no new link, no new name."
+2. *The listed step is the page's own ask.* Every outage message `gitops/ai-layer/web/burritbot.html` shows is read:
+   each code line naming the kitchen, setting the composer's placeholder or raising the no-burritos screen, with all
+   its string literals joined, so the 502 message built by concatenation is read whole. None may ask for a refresh, a
+   reload, a new link or name, a sign-in, a QR scan or anyone's help, and at least one must ask to "send that again".
+   `send()` must call `save(v)` before `fetch(CHAT_ENDPOINT`, so a message that failed is in the saved prompts, and a
+   saved prompt must refill the composer when tapped.
+3. *Removed.* Each item of "Nothing else" is a named check in `failover_drill.judge`, and the live test runs judge on
+   both KubeCon clusters and exits 1 on any failed check. No refresh: the page never reloaded, the composer came back
+   by itself and stayed on, the no-burritos screen never showed. No new link: attackme's rows route to the standby
+   and the same page chats again. No new name: the header's witch name, the chat's witch name and session, and both
+   after a refresh, are the same. An item added to "Nothing else" with no judge check behind it fails the test.
+4. *The acceptable losses.* The "What the room sees (#986)" bullet's "What is lost, and needs nothing from anyone"
+   list names the deployments wall and asks nothing of an attendee. Lost saved prompts are acceptable too, so the
+   test does not require that they survive; it fails only when that list loses them while the attendee's one step
+   still reads from them.
+
+Each anchor is checked first and exits naming the literal and the file. Every check runs again on a copy of the texts
+with the thing it reads struck or flipped: 38 copies, each refused. Two needles were tightened while writing it, since
+their first copies were not refused: the 502 message is two string literals joined by `res.status`, so a message is
+now the whole code line's literals rather than one literal naming the kitchen, and `failures.append(` and
+`sys.exit(1)` each appear twice in the live test, so the test reads the judge loop's own lines.
