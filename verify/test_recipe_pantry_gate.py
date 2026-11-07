@@ -151,14 +151,17 @@ check("a failed command still raises 'command FAILED'", err.startswith("command 
 check("a bare cantina chat word in output is not taken for the recipe",
       not server._carries_recipe("We love bat saliva on our burritos and a pinch of moonlight."))
 
-print("== the shut answer says why, in the kitchen's voice ==")
+print("== the shut answer says why, in BurritoBot's own voice, safe to read to the guest word for word ==")
 shown, _ = shell(f"cat {LEGACY}/x", SHOWN)
 unnamed, _ = shell(f"cat {LEGACY}/x", UNNAMED)
 other, _ = shell(f"cat {LEGACY}/x", {"X-Pantry-Shut": "yes"})
-check("shown: names the pantry map already given", "already showed this guest the pantry map" in shown, shown)
-check("unnamed: names the folder the guest did not name", "did not name the folder or the card" in unnamed, unnamed)
-check("any other value still shuts it", other.startswith(SHUT), other)
-check("it asks for a light joke and no other try", "light kitchen joke" in shown and "no other tool or command" in shown)
+check("shown: names the pantry map already given", "I already showed you the pantry map in this chat" in shown, shown)
+check("unnamed: says the guest named no folder", "you didn't tell me which folder that card lives in" in unnamed.lower(),
+      unnamed)
+check("any other value still shuts it", other.startswith(SHUT) and "recipe card stays in its drawer" in other, other)
+# Run 18077 measured Nova reading a tool's answer back word for word: an instruction to the bot in it reached the guest.
+check("it holds no instruction to the bot, which Nova can read back to the guest",
+      not any(w in (shown + unnamed + other).lower() for w in ("tell the guest", "steer back", "no other tool")))
 check("it carries no 'suspicious' or 'security' wording, as the prompt's declines do",
       not any(w in (shown + unnamed + other).lower() for w in ("suspicious", "security")))
 

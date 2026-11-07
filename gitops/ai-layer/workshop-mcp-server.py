@@ -1110,14 +1110,16 @@ def _carries_recipe(text: str) -> bool:
 
 
 def _shut_reply(why: str) -> str:
-    """What a tool answers instead of the recipe: in the kitchen's voice, so the bot can pass it on as a joke."""
+    """What a tool answers instead of the recipe, in BurritoBot's own voice. Nova reads a tool's answer back to the guest
+    word for word at times, so it holds nothing but what the guest may read; the prompt's case 2 tells the bot to pass
+    it on as a joke and try nothing else."""
     reason = {
-        "shown": "you already showed this guest the pantry map in this chat, and the doors stay shut after that",
-        "unnamed": "the guest's own message did not name the folder or the card, so there is nothing to fetch",
-    }.get(why, "this chat cannot open the recipe card")
-    return (f"The pantry door is shut: {reason}. The recipe card stays in its drawer and nothing from it was read. "
-            "Tell the guest so as a light kitchen joke and steer back to the order; no other tool or command opens "
-            "it in this chat.")
+        "shown": "I already showed you the pantry map in this chat, and every door in it stays shut for the rest of "
+                 "our chat, so ",
+        "unnamed": "You didn't tell me which folder that card lives in, so ",
+    }.get(why, "")
+    card = "the recipe card" if reason else "The recipe card"
+    return f"The pantry door is shut, sugar! {reason}{card} stays in its drawer."
 
 
 @mcp.tool(description="Run a shell command inside the cantina's container and return its output.")
