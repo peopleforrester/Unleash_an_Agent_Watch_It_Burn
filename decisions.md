@@ -28516,3 +28516,29 @@ not given one. It now has the same five lines. Run alone it ends "All breakout r
 RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 42m08s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18084/e2e-tools-2.log`). At 04:28Z `railway whoami` on
 tanjiro-wsl2 still printed "Unauthorized", and `registry-attackme.burritobot.co/v2/` still answered 502.
+
+## 2026-11-07 · #984 · run 18100 · Run 17967's work is on staging; its branch is rebased onto it with nothing left over
+
+**Why run 17967 did not merge.** Its report said done, and hecaton's rebase onto staging `40587062` stopped on an
+edit-edit conflict in `docs/KUBECON-ABSTRACT-READINESS.md`. By now all five of its commits are on staging. Four are
+patch-identical (`git patch-id --stable`): 9ddc42fa is c7e9651f, a55cf57e is 3c8468ce, 472a339d is 8c4c9fea, f0c84dae is
+63b9da06. The fifth, 912fcafc, is 6f288fb7: the same added and removed lines, with different diff context, so its
+patch-id differs and a rebase does not drop it as applied. Rebasing it onto a staging that already holds 6f288fb7
+reapplies the change over itself and conflicts in the readiness file, the run-of-show and `kubecon.html`; this run
+reproduced that. The fix is `git rebase --skip` on 912fcafc, after which the other four drop out and the branch is
+staging plus this entry.
+
+**What staging has since that run.** #1003 rewrote segment 3 from Whitney's 2026-11-06 walk (rounds-agenticburn#68,
+slides 16 to 28) on top of #984's text, so the slide 17 to 20 lines #984 quoted from rounds-agenticburn#65 are
+replaced by the deck's current ones. That is the intended order, and nothing is put back. Read against the deck's main
+(`attendee.html`, 103 slides), slides 2 to 10 and 13 to 15 are as #65 had them. Slide 1's list (no deployments wall,
+the terminal login in Michael's mrf-secrets repo) is the one segment 1 now quotes, also from #1003. Slides 11 and 12
+open on "Challenge 1 - attackme.burritobot.co", and segment 2 still quotes "Challenge 1"; that is #1039's, open, and
+this run leaves it to that issue.
+
+**Live, read-only, 04:48Z.** `curl -s https://burritobot-private.burritobot.co/kubecon` is byte for byte the staging
+`gitops/ai-layer/web/kubecon.html`. It holds "Optional, in the quick tour", "That's how it has access to model API
+keys.", "Hint: The CEO's name is Ophelia Thorn." and the segment 1 hand-off once each, and "Whitney plays on the private
+bot too" not at all, which was the check run 17967 named as owed. `https://attackme.burritobot.co/kubecon` printed
+`404`; `https://prompts.burritobot.co/` and `https://attackme.burritobot.co/` printed `200`. Nothing on either cluster
+was changed.
