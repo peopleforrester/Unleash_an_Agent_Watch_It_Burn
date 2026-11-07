@@ -327,9 +327,12 @@ check("deploy_app reads the X-Witch-Name header guard-proxy sends", m.WITCH_HEAD
 _agent = next(d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text()) if d
               and d.get("kind") == "Agent")
 _entries = {(e.get("mcpServer") or {}).get("name"): e.get("mcpServer") or {} for e in _agent["spec"]["declarative"]["tools"]}
+_forwarded = [h.lower() for h in _entries.get("workshop-mcp", {}).get("allowedHeaders") or []]
 check("the Agent's workshop-mcp entry has kagent copy X-Witch-Name from the chat request onto its MCP calls",
-      [h.lower() for h in _entries.get("workshop-mcp", {}).get("allowedHeaders") or []] == [m.WITCH_HEADER],
-      str(_entries.get("workshop-mcp", {}).get("allowedHeaders")))
+      m.WITCH_HEADER in _forwarded, str(_forwarded))
+# #1000 added X-Pantry-Shut beside it; any other header copied from the chat request would be one no tool reads.
+check("and copies no header workshop-mcp does not read (X-Witch-Name, and #1000's X-Pantry-Shut)",
+      set(_forwarded) <= {m.WITCH_HEADER, m.PANTRY_HEADER}, str(_forwarded))
 check("the rogue evil-mcp entry is handed no header from the request",
       not _entries.get("evil-mcp", {}).get("allowedHeaders"), str(_entries.get("evil-mcp")))
 AGATHA = "Agatha the Banshee"
