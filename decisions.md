@@ -27827,4 +27827,14 @@ run the record names is not yet due, and the record is still correct to list it 
 #968's run 17954 entry names it, due once guard-proxy-agenticburn#63 lands and this repo re-pins
 `gitops/ai-layer/guard-proxy`.
 
+**A red tier on staging's base, fixed here.** The first `bash verify/run-e2e-tools.sh` of this run printed `313 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 67m51s`
+and `SOME E2E TOOLS TIER CHECKS FAILED: test_breakout_room_cleanup.py (exit 1)`, `exit=1`. The test died with
+`AttributeError: '_StandInMCP' object has no attribute 'get_context'` in `_request_witch`. #995 (`582d10ec`) made
+deploy_app read the request's X-Witch-Name through `mcp.get_context()` and added a `get_context` that raises
+LookupError to every test's FastMCP stand-in, but `test_breakout_room_cleanup.py` came from #990 (`e0770036`) on a
+parallel branch, so #995's suites never ran it. Its stand-in now carries the same `get_context`, byte-equal to #995's
+in `test_deploy_app_errors.py`; deploy_app is not changed. Every other `_StandInMCP` in verify/ already has one. Run
+alone with the pinned tools, the test printed "All breakout room cleanup checks passed."
+
 **Suites.** Recorded in the next entry once `bash verify/run-e2e-tools.sh` ends.
