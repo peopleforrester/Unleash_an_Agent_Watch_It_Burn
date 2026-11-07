@@ -28191,7 +28191,8 @@ still checks every kept download against e2e-tools.lock and extracts each binary
 but push, a pull_request anywhere outside a comment, a paths or tags filter, a branch other than the two, a job off the
 four labels, a job without its suite step or the base step before it, an `if` or `continue-on-error` on either, a
 missing timeout, a group not per ref, `cancel-in-progress`, a queue other than `max`, a secret, or an action on a tag.
-The checker first runs on 19 copies of the workflow broken one way each and must fail every one. It then runs
+The checker first runs on 17 copies of the workflow broken one way each and on two altered texts (one naming
+pull_request outside a comment, one reading a secret), and must fail every one. It then runs
 ci-base-sha.sh in throwaway repositories: an agent branch cut before staging moved gets the fork point, a commit
 already in staging gets no variable, and no `GITHUB_ENV`, an unrelated history and an origin that cannot be fetched
 each exit 1. Run against this clone's staging, the script printed that 01ccd137 is already in origin/staging and left
@@ -28215,3 +28216,9 @@ does outside its transport. #990's test (98734ebd, an hour earlier) has its own 
 tools tier has been red on it since. Its stand-in now carries the same method, and the test passes with the pinned
 kyverno. The three other tests that load workshop-mcp-server.py without `get_context` never call `deploy_app` and
 passed in the same run.
+
+**The suites (run 18080).** `bash verify/run-e2e-tools.sh` at 64fab303: `314 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 46m08s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added to
+the repo; the workflow pins its actions, uv 0.13.7, Python 3.13 and PyYAML 6.0.3 as above. Logs are under
+`/tmp/r18080/`.
