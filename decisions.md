@@ -28808,3 +28808,43 @@ passes. That run was stopped and its log kept as `e2e-tools.first.log`. The seco
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 52m27s`, `ALL E2E
 TOOLS TIER CHECKS GREEN` and `exit=0`; its log is `/var/lib/hecaton/runs/18104/e2e-tools.log`. The prose gate printed
 `prose gate: pass`.
+## 2026-11-07 · #1047 · run 18115 · The verify-suites CI on Tanjiro: three runner-only reds fixed in the repo
+
+**The spec.** #1047: the heavy gate's `CI` check, the verify-suites workflow #1020 added, failed on staging at
+31155be8, and every staging push since (001599aa, 70531d81, 3c1220dc, 6b5ca710) has failed it the same way; it has
+never passed. `verify/prior-drafts.sh 1047 origin/staging` printed NONE and the issue has no comments, so this is a
+first draft. The job logs (Actions run 42334131931, jobs 128287105837 and 128287106081, and run 42344262248 at
+3c1220dc) name three causes. None reproduced on the hecaton host, where the suites were green, because each one hangs
+on something the runner does differently.
+
+**The tools tier: no unzip on the runner.** The E2E job stopped in its prerequisite check after 6 s,
+`E2E TOOLS TIER CANNOT RUN` with `unzip is not on PATH`. The decisions entry for #1020 says Tanjiro's `gha-agent`
+account has no sudo to install packages, so the fix is in the repo: `verify/fetch-e2e-tools.sh` reads a zip member with
+python3's standard `zipfile` instead of `unzip -p`, and run-e2e-tools.sh and run-e2e.sh stop asking for unzip. python3
+was already a prerequisite of both. run-e2e.sh's fetch condition and its missing line now name python3 where they named
+unzip. In test_e2e_tools_tier.py the `unzip` stub is now a tripwire that logs any call and exits 127, and a new check
+fails if the fetch calls it; against the old fetch script the test fails three checks, among them that one.
+test_e2e_toolchain.py's expected missing lines follow the scripts and it checks unzip is never asked for. No package
+was added.
+
+**test_drift_report.py: a symlinked venv python loses the venv.** The cron wrapper's three checks failed because
+`scheduled-drift.sh` refuses to run when `python3 -c 'import yaml'` fails. The test put `python3` on its narrowed PATH
+as a symlink to `sys.executable`. CI runs the suite from a uv venv, and Python finds a venv by the `pyvenv.cfg` beside
+the path it was started by, so the symlink started the base interpreter without the venv's PyYAML. Reproduced here with
+a uv Python 3.13 venv holding PyYAML 6.0.3: the same three checks failed. Both symlinks are now a two-line `exec` shim
+to `sys.executable`, and the test passes under that venv and under the host's python3.
+
+**test_fleet_teardown_hooks.sh: two dependencies the test did not own.** First, its `src` helper never set
+`WIB_LOG_DIR`, so the failure ledger went to the clone's `infra/terraform/fleet/logs`, which is gitignored and absent
+on a fresh checkout until some other test makes it. With that directory removed, four ledger checks failed here. `src`
+now passes `WIB_LOG_DIR="${T}/logs"`, made at setup, and the test leaves no files in the clone. Second, the deadline
+check, the one that failed on the runner: it set `WIB_LB_WAIT_TIMEOUT=1` with no poll interval and a fake kubectl that
+answers from poll 99 on (`LB_READY_AFTER=99`), so the wait busy-polls for one to two seconds and a fast enough host
+gets an answer before the deadline. This host made 26 polls in that window under load. The case now runs with
+`WIB_LB_WAIT_TIMEOUT=0` and `LB_READY_AFTER=never`, which the shim never answers, as the target-group sweep's leak
+case already does with its timeout of 0.
+
+**Not yet run on a runner.** The fixes reach Tanjiro's runner only once hecaton pushes this branch. What the tools tier
+needs from the host beyond its prerequisite check, Playwright's Chromium libraries among them, has not yet run there,
+because every earlier E2E job stopped at the prerequisite check. No cluster is involved: the change is to the gate's
+scripts and offline tests.

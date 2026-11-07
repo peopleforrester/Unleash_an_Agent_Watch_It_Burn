@@ -16,7 +16,8 @@ it found. With Node 24 and corepack on PATH neither is listed, and it still exit
 case stops in the prerequisite check, before anything runs: CONTEXT is unset, so no kubectl is ever called.
 
 Since #585 run-e2e.sh fetches kyverno, conftest, terraform, kubectl and helm itself, since #654 otelcol-contrib
-too and since #770 ttyd, so none of the seven is ever listed as missing from PATH. With no curl, tar, unzip or sha256sum it cannot fetch them, and it says so instead.
+too and since #770 ttyd, so none of the seven is ever listed as missing from PATH. With no curl, tar, python3 or sha256sum it cannot fetch them, and it says so instead.
+Since #1047 the fetch reads zip archives with python3's zipfile, so unzip is no longer asked for.
 What a fetch does inside run-e2e.sh is held in test_e2e_tools_tier.py, next to the fetch's own fixtures.
 """
 from __future__ import annotations
@@ -106,9 +107,9 @@ bare = run_e2e({})
 check(f"with no toolchain it exits 1 (exit {bare.returncode})", bare.returncode == 1)
 check("it says it cannot run, as a failure and not a skip", CANNOT_RUN in bare.stderr)
 for item in ("node is not on PATH", "corepack is not on PATH", "CONTEXT is not set", "curl is not on PATH",
-             "unzip is not on PATH", "sha256sum is not on PATH", "uv is not on PATH",
+             "python3 is not on PATH", "sha256sum is not on PATH", "uv is not on PATH",
              "the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not fetched: "
-             "fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum"):
+             "fetch-e2e-tools.sh needs curl, tar, python3 and sha256sum"):
     check(f"it lists what is missing: {item}", f"  - {item}" in bare.stderr)
 # The pinned tools come from fetch-e2e-tools.sh (#585, #654, #770, #775, #782), never from PATH, so PATH is never asked
 # for them.
@@ -117,6 +118,8 @@ for tool in ("kubectl", "helm", "kyverno", "conftest", "terraform", "otelcol-con
     check(f"it never asks for {tool} on PATH",
           not any(tool in line and "not on PATH" in line for line in bare.stderr.splitlines()))
 check("it runs no check before the prerequisites pass", "E2E checks ran" not in bare.stdout + bare.stderr)
+check("it never asks for unzip, which Tanjiro's CI runner lacks; python3 reads the zips (#1047)",
+      "unzip" not in bare.stdout + bare.stderr)
 
 old = run_e2e({"node": node_stub("22.11.0"), "corepack": "exit 0"})
 check(f"with Node 22 on PATH it exits 1 (exit {old.returncode})", old.returncode == 1)

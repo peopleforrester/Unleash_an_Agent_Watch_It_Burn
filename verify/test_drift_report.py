@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import shlex
 import shutil
 import subprocess
 import sys
@@ -203,6 +204,17 @@ FIXTURE = {
 C002 = "fleet/states/watch-it-burn-attendee-002-drifted"
 
 
+def python_shim(bindir: pathlib.Path) -> None:
+    """Put a python3 in bindir that runs this test's own interpreter, its site-packages included.
+
+    Not a symlink: Python finds a venv by the pyvenv.cfg beside the path it was started by, so a link to a venv's
+    python3 from another directory starts the base interpreter without the venv's PyYAML. CI runs the suite from a
+    uv venv, and the wrapper's `import yaml` check then refused every run (#1047)."""
+    shim = bindir / "python3"
+    shim.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+    shim.chmod(0o755)
+
+
 class Env:
     def __init__(self, root: pathlib.Path):
         self.root = root
@@ -214,7 +226,7 @@ class Env:
         self.body = root / "gh-body.md"
         self.bin.mkdir()
         # Only these tools are on PATH: whatever a real machine has in /usr/bin cannot leak into a test.
-        (self.bin / "python3").symlink_to(sys.executable)
+        python_shim(self.bin)
         for name, src in (("aws", FAKE_AWS), ("terraform", FAKE_TF), ("gh", FAKE_GH)):
             (self.bin / name).write_text(src)
             (self.bin / name).chmod(0o755)
@@ -451,7 +463,7 @@ with tempfile.TemporaryDirectory(prefix="drift-test-") as tmp:
 
     nobin = env.root / "nobin"
     nobin.mkdir()
-    (nobin / "python3").symlink_to(sys.executable)
+    python_shim(nobin)
     (nobin / "aws").symlink_to(env.bin / "aws")
     rc, out = env.run(path=str(nobin))
     check(f"terraform missing from PATH is exit 1 (got {rc})", rc == 1 and "terraform is not on PATH" in out)
