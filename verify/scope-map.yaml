@@ -975,6 +975,8 @@ reads:
     - verify/datadog-orgs.sh
     - verify/fleet-walkthrough.sh
     - verify/last_trace.py
+  test_challenge_slide_headers.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_chat_coc.py:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml

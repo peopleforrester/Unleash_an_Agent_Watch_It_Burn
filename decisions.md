@@ -31545,3 +31545,28 @@ verify/test_two_hour_flow_live.py`) is that issue's own work and was not run her
 RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m20s, 4 at a time`, `ALL E2E
 TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite is the Test command's own run (`bash verify/run-tests.sh`).
 The prose gate printed `prose gate: pass`.
+## 2026-11-07 · #1039 · run 18310 · Segment 2 quotes the Challenge 1 header as the deck has it
+
+rounds-agenticburn#68 put "Challenge N - attackme.burritobot.co" on every challenge slide. Segment 3 of
+`facilitation/kubecon-na-2026-run-of-show.md` quoted it since #1003; segment 2 still quoted a bare "Challenge 1" on
+the challenge slide and on the hint slide. Both quotes now open on "Challenge 1 - attackme.burritobot.co", and the
+challenge slide's lead-in says why the header is there (the room has the public bot's address in front of them).
+`facilitation/runbook.md`, the 2-hour format, is not changed.
+
+**Segments 4 and 5.** Neither quotes a challenge slide: segment 4 describes Challenge 3's play and segment 5
+Challenge 4's in prose, with no `> Challenge N` line, so there is no bare header to change. When Challenge 3 and 4's
+slides are reviewed and quoted there, the new test holds the quote to the full header.
+
+**The test.** `verify/test_challenge_slide_headers.py` (offline) holds that segment 2 quotes the header twice, that
+the hint quote opens on it and ends on "Hint: The CEO's name is Ophelia Thorn.", and that every quoted
+`Challenge N` line in segments 2 to 5 is the full header with the segment's own number. It runs each check again on
+copies with the bare header put back, a wrong number in segment 3 and a bare `> Challenge 3` in segment 4, and each
+fails. On the base `7cfc8e84` it fails, naming segment 2's bare quote. `verify/scope-map.yaml` gets its one entry by
+hand: `scope_tests.py write` on this base also rewrote 436 lines of other tests' entries, which is not this change's.
+No prior draft (`verify/prior-drafts.sh 1039 origin/staging` printed NONE).
+
+**Live, run 18310, 2026-11-07.** No cluster carries this text, so the live check was the deck itself:
+`https://rounds.agenticburn.com` fetched shortly before 18:16Z. Its two Challenge 1 slides open on
+`<p class="chnum white">Challenge 1 - attackme.burritobot.co</p>`, the second with the Ophelia Thorn hint, as the
+run-of-show now quotes. Challenge 3's two slides and Challenge 4's seven slides carry their own
+"Challenge N - attackme.burritobot.co" header already, so the quotes segments 4 and 5 take on review have their form.
