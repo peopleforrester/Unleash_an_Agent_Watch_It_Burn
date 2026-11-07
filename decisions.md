@@ -28339,3 +28339,10 @@ landed after #990 wrote that test's stand-in, so it fails the same way at the ba
 the read into `_request_header`. Its stand-in now raises LookupError from `get_context`, as the other deploy_app tests'
 stand-ins do, and it passes with the pinned tools on PATH. The run before that one was stopped by this run after its
 offline suite failed on `test_public_images.py`, changed above.
+
+**The suites (run 18077, at `ed321c4b`; this paragraph only adds to the entry).** `bash verify/run-e2e-tools.sh` printed
+`313 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then `78
+checks ran (the offline suite and 77 tier tests) in 40m44s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
+`test_recipe_pantry_gate_e2e.py` and `test_breakout_room_cleanup.py` among them. The prose gate printed `prose gate:
+pass`. No dependency was added to the repo. The log is `/var/lib/hecaton/runs/18077/e2e-tools.log`; the two earlier
+attempts are `e2e-tools.attempt1.log` and `e2e-tools.attempt2.log`.
