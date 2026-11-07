@@ -32284,3 +32284,10 @@ staging, and Argo CD syncs `ai-layer` on watch-it-burn-community:
    line for any reply it redacted, and a `/chat` turn with the output guard on still redacts the recipe card.
 
 No dependency was added.
+
+**Suite results, run 18337.** On `d3b5b42f`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so every test
+ran, with its output in `/var/lib/hecaton/runs/18337/e2e-tools.log`: `336 tests ran` and `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, with `verify/test_always_redact_marketing.py` among them, then `82 checks ran (the offline suite and 81
+tier tests) in 9m11s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite is the Test
+command's own run. The prose gate printed `prose gate: pass`. The guard-proxy submodule is on its pin `dc78f1c`, its
+pointer unchanged.
