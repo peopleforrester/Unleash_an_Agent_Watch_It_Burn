@@ -64,6 +64,7 @@ always:
   test_gitattributes_union.py: it runs git log, ls-files, which reads the tree or history as a whole
   test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
   test_guard_proxy_pin_on_main.sh: 'verify/guard-proxy-pin-on-main.sh: it runs git on the tree or history as a whole; verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
+  test_guardrail_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 193 builds a path under the repo root from a value it finds at run time; line 189 builds a path under the repo root from a value it finds at run time
   test_harvest_tracked.sh: it runs git on the tree or history as a whole
   test_iam_policy_ci.py: 'verify/test_iam_policy_coverage.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_iam_policy_coverage.py: line 124 builds a path under the repo root from a value it finds at run time; verify/test_iam_policy_coverage.py: line 162 builds a path under the repo root from a value it finds at run time'
   test_iam_policy_coverage.py: it runs git ls-files, which reads the tree or history as a whole; line 124 builds a path under the repo root from a value it finds at run time; line 162 builds a path under the repo root from a value it finds at run time

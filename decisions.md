@@ -33267,3 +33267,44 @@ offline suite and 14 tier tests) in 4m32s`, `ALL E2E TOOLS TIER CHECKS GREEN` an
 `8af856f7`, failed on `test_artifact_cache.py` alone, with the deleted `/tmp` described above. The prose gate
 printed `prose gate: pass`. No dependency was added: the helper and its test use only the standard library. The log
 is `/var/lib/hecaton/runs/18422/e2e-tools-3.log`.
+
+## 2026-11-08 · #1125 · run 18433 · A test runs #1097's slide-citation search over the four directories
+
+**What.** `verify/test_guardrail_slide_citations.py` (offline) holds #1097's criterion: a search of `facilitation/`,
+`gitops/ai-layer/web/`, `challenges/` and `verify/` for "slide"/"slides" finds no citation of live slides 29 to 32 as
+single guardrail slides. Before it, only the run-of-show's segment 3 and `/kubecon` were held, by literals in
+`test_instructor_brief.py`, `test_ros_segments_table_seg3.py` and `test_seg3_timing.py`; #1097's sweep was a manual
+grep. No earlier draft existed (`verify/prior-drafts.sh 1125 origin/staging` printed NONE, and run 18428 on this issue
+was restarted by the coordinator before it committed anything).
+
+**The search.** Every file `git ls-files --cached --others --exclude-standard` lists under the four directories (731
+today), binary files aside, read with HTML tags, `*` and backticks blanked, whitespace flattened and case folded, so a
+wrapped or bolded citation is still found; a block-level tag reads as a sentence break. It fails on five forms: a
+range of 29 to 32 after "slide", "one slide per guardrail", "four slides" with or without "single" or "guardrail",
+"guardrail slide(s)", and "slide N" for N of 29 to 32 (not the start of a range) with a guardrail named in its own
+clause or just before it that the 2026-11-07 deck does not put there. Slide 29 is the retry and carries none; 30 to
+32 are RBAC's, so "Slide 31 adds "This attack was prevented with RBAC."" passes and "slide 30, Kyverno admission"
+fails. Each hit is reported as file, line, rule and text.
+
+**What it allows.** The `ALLOWED` list names a file and a stretch of its text for each hit that is not a
+citation of the current deck: the run-of-show's Timing paragraph, which dates the four single slides to the 2026-11-06
+deck and says the 2026-11-07 deck replaces them; `test_progress_entries.py`'s pin of #1065's entry, which records the
+replacement; and the stale wording the three segment 3 tests ban or swap in to show their checks fail. Each entry
+must still be found in its file, so a reworded one fails by name rather than excusing nothing. The test file itself is
+the one file left out of the search, since its docstring, regexes and `ALLOWED` stretches have to spell out the forms
+it bans; its fixtures are built from pieces all the same. A first version read `/kubecon`'s switch-beat heading,
+which ends "one set per guardrail", into the next element's "Slide 28" as "guardrail slide"; the block-tag break is
+for that, and a fixture holds it.
+
+**It can fail.** The self-checks flag the pre-#1095 run-of-show and pre-#1096 `/kubecon` wording quoted from git
+history and eight synthetic numbered or phrased citations, pass the current deck's wording (slide 29's retry, the
+sets' ranges, slides 31 and 32's RBAC lines, the `/kubecon` marker), find a citation planted at the end of a real
+`challenges/` file on its own line, and fail with the `ALLOWED` list emptied, with an entry no file holds, and with an
+entry carried to another file. Run by hand on `git show 85803838^:facilitation/kubecon-na-2026-run-of-show.md` it
+reported lines 863, 872, 1341 (twice) and 1586, and on `db09ce77^:gitops/ai-layer/web/kubecon.html` lines 254 and 324,
+which are every old citation #1095 and #1096 moved. It printed 38 PASS at the base.
+
+**Scope map.** `scope_tests.py write` puts the test under `always`, since it runs `git ls-files`; that one line is
+in this change, and the rest of what `write` produced was other tests' existing drift and is not.
+
+**Not yet run on a cluster.** Nothing: the change is an offline test and its record.
