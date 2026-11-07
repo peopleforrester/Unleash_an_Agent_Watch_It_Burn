@@ -28150,3 +28150,58 @@ to take it; the commands are docs/floor.md's "Rebuilding a lost state", run ther
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `75 checks ran (the offline suite and 74 tier tests) in 38m17s`,
 `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
 Logs are under `/tmp/r18049/`.
+
+## 2026-11-07 · #1020 · run 18080 · The offline and E2E tools suites run as push-only CI on Tanjiro
+
+**What changed.** `.github/workflows/verify-suites.yml` runs on `push` to `agent/**` and `staging` and on nothing
+else: no `pull_request`, no `pull_request_target`, no `workflow_dispatch`, no paths filter. This repo is public, and a
+pull request trigger would run a fork's code on Tanjiro, a self-hosted runner on Michael's machine; only accounts with
+write access can push. Two jobs, `offline suite (verify/run-tests.sh)` and `e2e tools suite (verify/run-e2e-tools.sh)`,
+each on `runs-on: [self-hosted, Linux, X64, tanjiro]`, the labels hecaton's `config/runners.yaml` gives Tanjiro's
+runners. Each ends in its suite as a plain `run:` step, so the suite's exit code is the check's. Permissions are
+`contents: read` and the workflow reads no secret. Actions are pinned to commit SHAs: checkout v7.0.1 (as in
+iam-policy.yml), astral-sh/setup-uv v10.3.3 (68559e99) installing uv 0.13.7, and actions/setup-node v7.1.0 (949feb24)
+for Node 24, all current on 2026-11-07. Each job builds a Python 3.13 venv with PyYAML 6.0.3, the only package the
+offline suite reads beyond the standard library (an import sweep of every offline test found no other), and puts it
+first on PATH.
+
+**HECATON_BASE_SHA.** `verify/ci-base-sha.sh` fetches staging, takes the merge base of the checked-out commit and
+`origin/staging`, and writes `HECATON_BASE_SHA=<sha>` to `$GITHUB_ENV` before the suite step, for the scoped runners
+#1018 asks for (that issue is still open, so today the variable changes nothing and both runners run whole). One case
+differs from the issue's wording: when the merge base is the pushed commit itself, as on every push to staging, the
+diff is empty, and a scoped runner reading it would run nothing. The script then leaves the variable unset, so staging
+always runs both suites whole, as #1018's own criterion for a run without the variable says. A missing `GITHUB_ENV`,
+a failed fetch or a history with nothing in common with staging exits 1.
+
+**Timeouts and queueing.** The offline job has `timeout-minutes: 60`; the E2E job has 150, since run-e2e-tools.sh
+runs the offline suite first and took 36 to 73 minutes on a loaded netcup (the `checks ran` lines above). Each job's
+`concurrency` group is per ref (`verify-suites-<job>-${{ github.ref }}`) with `cancel-in-progress: false` and
+`queue: max`. Without `queue: max`, GitHub keeps one running and one pending job per group, and a third push cancels
+the pending one; `queue: max` (GitHub changelog 2026-05-07, "concurrency groups now allow larger queues", and the
+workflow syntax reference for `jobs.<job_id>.concurrency`) holds up to 100 pending jobs, so every pushed SHA gets its
+checks. actionlint 1.7.12 (2026-03-30, its latest release) reports `queue` as an unknown key because it predates the
+option; with `tanjiro` declared as a self-hosted label, that is its only finding on the file.
+
+**The workspace.** A self-hosted runner keeps its workspace between jobs, and checkout's default clean would remove
+the gitignored `verify/.tools`, about 800 MB of Terraform provider cache among it, on every job. So checkout runs with
+`clean: false` and the next step runs `git clean -ffdx -e verify/.tools/` and cleans each submodule. fetch-e2e-tools.sh
+still checks every kept download against e2e-tools.lock and extracts each binary again, so nothing unverified runs.
+
+**The test.** `verify/test_verify_suites_workflow.py`, in the offline suite, fails when the workflow gains any trigger
+but push, a pull_request anywhere outside a comment, a paths or tags filter, a branch other than the two, a job off the
+four labels, a job without its suite step or the base step before it, an `if` or `continue-on-error` on either, a
+missing timeout, a group not per ref, `cancel-in-progress`, a queue other than `max`, a secret, or an action on a tag.
+The checker first runs on 19 copies of the workflow broken one way each and must fail every one. It then runs
+ci-base-sha.sh in throwaway repositories: an agent branch cut before staging moved gets the fork point, a commit
+already in staging gets no variable, and no `GITHUB_ENV`, an unrelated history and an origin that cannot be fetched
+each exit 1. Run against this clone's staging, the script printed that 01ccd137 is already in origin/staging and left
+the variable unset.
+
+**What the runner needs from Tanjiro.** The setup actions bring uv, Python and Node. The rest comes from the host:
+git, bash, curl, tar, unzip, sha256sum, xz, jq and openssl, which run-e2e-tools.sh checks before any test and fails
+naming each one missing, and the system libraries Playwright's Chromium needs, since `gha-agent` has no sudo to
+install them. Tanjiro is Debian 13 (hecaton's docs/runbooks/ci-runners.md, measured 2026-10-18). Hecaton registers
+the runner and switches this repo to the CI path once this is on main; the first push after that is the live check.
+
+**Not yet run on a cluster or a runner.** No cluster is involved. The workflow itself first runs when hecaton has
+registered the `tanjiro` runner for this repo and a push reaches an `agent/**` branch or staging.
