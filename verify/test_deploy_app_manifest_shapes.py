@@ -254,9 +254,20 @@ def no_api_version(d):
     del d["apiVersion"]
 
 
+def pod_spec_beside_template(d):
+    # 2026-11-07 (run 18408, #905), the admin probe's HC-666 ask: the pod spec at spec.spec, the template holding only
+    # its labels. Server-side apply refused it with a 500, ".spec.spec: field not declared in schema".
+    d["spec"]["spec"] = d["spec"]["template"].pop("spec")
+
+
+def pod_spec_on_spec_and_no_template(d):
+    d["spec"] = {"replicas": 1, "spec": d["spec"]["template"]["spec"]}
+
+
 for edit in (no_selector, no_template_labels, selector_without_its_label, nothing_but_containers, containers_on_spec,
              containers_on_template, spec_fields_at_top, container_without_name, container_not_in_a_list,
-             replicas_as_text, command_as_text, no_api_version):
+             replicas_as_text, command_as_text, no_api_version, pod_spec_beside_template,
+             pod_spec_on_spec_and_no_template):
     label = edit.__name__.replace("_", " ")
     before = variant(edit)
     reply, exc = deploy(json.dumps(before))
