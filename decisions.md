@@ -29987,3 +29987,10 @@ job, without the Chromium step, or with that step after the suite.
 **Not yet run on a cluster.** Nothing here needs one. What only Tanjiro shows: the verify-suites run on this
 branch's push, its `Chromium's libraries and fonts, unpacked for this job` step and its e2e tools job, which close
 #1047's criterion once green on staging.
+
+**Suite results, run 18178.** On 138c1093, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18178/e2e-tools.1.log` printed `329 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 11m12s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_ci_chromium_libs.py` and `test_verify_suites_workflow.py` green among them. No dependency was
+added: the script uses apt, dpkg-deb and ldd from the host and the Playwright pin that verify/playwright_browsers.py
+already holds.
