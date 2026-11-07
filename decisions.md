@@ -29137,3 +29137,7 @@ apostrophe through the same here-document. `test_467_live_record.py` and `test_4
 in that run, and every tier test passed (`81 checks ran (the offline suite and 80 tier tests) in 10m09s`).
 
 **Not yet run on a cluster.** Nothing from this issue.
+
+**The suites (run 18131, at `6094bf58`).** `bash verify/run-e2e-tools.sh` printed `320 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 10m12s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Both new tests passed in it, `test_turn_guard.py` too.
