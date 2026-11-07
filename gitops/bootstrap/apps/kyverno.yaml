@@ -47,6 +47,18 @@ spec:
         # Resource limits for Kyverno admission controller
         admissionController:
           container:
+            # Upstream's v1.19.1 with its breaker fix, kyverno/kyverno#17085, built by images/kyverno/build.sh (#1015).
+            # Each controller that writes reports drops every write while its breaker is open, and in v1.19.1 the
+            # breaker stays open for the rest of the pod's life the first time the watch behind its counter is
+            # answered 410 Gone. On 2026-11-07 this controller had dropped 717 of 720 admission report writes on
+            # watch-it-burn-community and 1788 of 2039 on watch-it-burn-private, with no EphemeralReport on either
+            # cluster to count. The fix is in v1.20.0-rc.1 and in no 1.19 release; drop this override (and the
+            # reports controller's) at the first release that has it. verify/test_kyverno_breaker_fix.py holds the
+            # tag and digest to images.lock and build.sh, and push-kyverno.yml pushes the build to its pin.
+            image:
+              registry: ghcr.io
+              repository: peopleforrester/watch-it-burn
+              tag: "kyverno-v1.19.1-17085@sha256:c1abb924a527210bae23f6dbff273794711a2ee0447568b2d7851577d07e6fc7"
             resources:
               requests: { cpu: 100m, memory: 128Mi }
               limits: { cpu: 500m, memory: 512Mi }
@@ -134,6 +146,14 @@ spec:
           # So the interval is the chart's 1h default again, set here so it stays explicit, and the CPU limit
           # is 1 so a full scan (at startup and hourly) takes about two minutes instead of ten. At rest the
           # controller uses about 30m CPU.
+          #
+          # The image is the admission controller's fix again (#1015): its background-scan breaker had dropped 14386
+          # of 14704 writes on watch-it-burn-community by 2026-11-07, every one after the first 318, so no Pod
+          # created in agent after the pod's first hours got a PolicyReport and Challenge 2's report line never came.
+          image:
+            registry: ghcr.io
+            repository: peopleforrester/watch-it-burn
+            tag: "kyverno-reports-controller-v1.19.1-17085@sha256:16d6029866350264601fe92207a2e2f67fd259f8053b4ad471f37bbae7f95300"
           podLabels: { tags.datadoghq.com/service: burritobot-kyverno-reports-controller, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             limits:

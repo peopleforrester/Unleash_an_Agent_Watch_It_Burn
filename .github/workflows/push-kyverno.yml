@@ -1,0 +1,63 @@
+# ABOUTME: Keep the two patched Kyverno tags (#1015) on the digests images.lock pins: build them with images/kyverno/build.sh
+# ABOUTME: on loopback, and push one only where ghcr.io lacks the pinned digest and the build has exactly it.
+name: push-kyverno
+
+# gitops/bootstrap/apps/kyverno.yaml runs Kyverno v1.19.1's admission controller and reports controller rebuilt with
+# upstream's breaker fix, kyverno/kyverno#17085, at digests images.lock pinned before their first push: a run may not
+# write to ghcr.io. This builds both on the runner's loopback, where nothing is published, and hands each tag to
+# scripts/ghcr_version_tag.py as a crane: build, the way push-jokers.yml does: a tag that serves its pin is left alone,
+# a moved one is put back on its pin, and a pinned digest ghcr.io lacks is pushed only when the build's digest is that
+# pin. Until it is pushed, Argo CD's new pods wait in ImagePullBackOff and the old ones keep running (the chart's
+# maxUnavailable of 40% rounds to none of one replica).
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [staging, main]
+    paths:
+      - 'images/kyverno/**'
+      - 'images.lock'
+      - 'verify/e2e-tools.lock'
+      - '.github/workflows/push-kyverno.yml'
+      - 'scripts/ghcr_version_tag.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push-kyverno
+  cancel-in-progress: false
+
+jobs:
+  kyverno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The crane build.sh is pinned to (verify/e2e-tools.lock): gzip output can differ between crane releases, and the
+      # digest the build must reach was computed with this one. Its SHA-256 is checked before it runs.
+      - name: Fetch the pinned crane
+        run: |
+          read -r name version sha url member < <(grep -E '^crane[[:space:]]' verify/e2e-tools.lock)
+          [ "${name}" = crane ] || { echo "verify/e2e-tools.lock has no crane row" >&2; exit 1; }
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/crane.tar.gz" "${url}"
+          echo "${sha}  ${RUNNER_TEMP}/crane.tar.gz" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf "${RUNNER_TEMP}/crane.tar.gz" -C "${RUNNER_TEMP}/bin" "${member}"
+          echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
+          "${RUNNER_TEMP}/bin/crane" version
+      # No registry credential is in this step's environment, and build.sh refuses any address but loopback, so the
+      # build cannot reach ghcr.io. The runner's own go fetches the toolchain build.sh pins (GOTOOLCHAIN).
+      - name: Build both images with build.sh into crane's registry on loopback
+        run: |
+          nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &
+          for _ in $(seq 50); do curl -fsS http://127.0.0.1:5000/v2/ >/dev/null 2>&1 && break; sleep 0.2; done
+          curl -fsS http://127.0.0.1:5000/v2/ >/dev/null
+          bash images/kyverno/build.sh 127.0.0.1:5000
+      # The same GHCR_TOKEN push-jokers.yml, keep-sample-app-tag.yml and build-web-terminal.yml write with (issue #91).
+      - name: Keep each tag on its pin, pushing the build only to a pinned digest ghcr.io lacks
+        env:
+          GHCR_USER: peopleforrester
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          for tag in kyverno-v1.19.1-17085 kyverno-reports-controller-v1.19.1-17085; do
+            python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/peopleforrester/watch-it-burn:${tag}" "ghcr.io/peopleforrester/watch-it-burn:${tag}" images.lock
+          done

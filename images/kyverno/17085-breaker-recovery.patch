@@ -1,0 +1,368 @@
+diff --git a/cmd/kyverno/watch/watcher.go b/cmd/kyverno/watch/watcher.go
+index ecb1fa65f277..ddb6a81e5fd0 100644
+--- a/cmd/kyverno/watch/watcher.go
++++ b/cmd/kyverno/watch/watcher.go
+@@ -7,6 +7,7 @@ import (
+ 	"io"
+ 	"net/http"
+ 	"sync"
++	"sync/atomic"
+ 	"time"
+ 
+ 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+@@ -39,7 +40,7 @@ type RetryWatcher struct {
+ 	stopChan            chan struct{}
+ 	doneChan            chan struct{}
+ 	minRestartDelay     time.Duration
+-	isRunning           bool
++	isRunning           atomic.Bool
+ }
+ 
+ // NewRetryWatcher creates a new RetryWatcher.
+@@ -66,7 +67,6 @@ func newRetryWatcher(initialResourceVersion string, watcherClient cache.Watcher,
+ 		doneChan:            make(chan struct{}),
+ 		resultChan:          make(chan watch.Event),
+ 		minRestartDelay:     minRestartDelay,
+-		isRunning:           false,
+ 	}
+ 
+ 	go rw.receive()
+@@ -121,6 +121,13 @@ func (rw *RetryWatcher) doReceive() (bool, time.Duration) {
+ 			return false, 0
+ 		}
+ 
++		if apierrors.IsResourceExpired(err) || apierrors.IsGone(err) {
++			// The apiserver rejected the resource version we hold, retrying it can
++			// never succeed. Stop and let the consumer relist, like a reflector does.
++			klog.V(1).InfoS("Watch rejected the resource version, stopping", "err", err, "resourceVersion", currentRV)
++			return true, 0
++		}
++
+ 		klog.ErrorS(err, msg)
+ 		// Retry
+ 		return false, 0
+@@ -135,10 +142,8 @@ func (rw *RetryWatcher) doReceive() (bool, time.Duration) {
+ 	ch := watcher.ResultChan()
+ 	defer watcher.Stop()
+ 
+-	rw.isRunning = true
+-	defer func() {
+-		rw.isRunning = false
+-	}()
++	rw.isRunning.Store(true)
++	defer rw.isRunning.Store(false)
+ 
+ 	for {
+ 		select {
+@@ -301,7 +306,7 @@ func (rw *RetryWatcher) Done() <-chan struct{} {
+ 	return rw.doneChan
+ }
+ 
+-// Done allows the caller to be notified when Retry watcher stops.
++// IsRunning tells whether a watch connection is currently established.
+ func (rw *RetryWatcher) IsRunning() bool {
+-	return rw.isRunning
++	return rw.isRunning.Load()
+ }
+diff --git a/pkg/breaker/resource_counter.go b/pkg/breaker/resource_counter.go
+index ec5c7771d05a..93129bcc6438 100644
+--- a/pkg/breaker/resource_counter.go
++++ b/pkg/breaker/resource_counter.go
+@@ -3,10 +3,12 @@ package breaker
+ import (
+ 	"context"
+ 	"sync"
++	"time"
+ 
+ 	reportsv1 "github.com/kyverno/kyverno/api/reports/v1"
+ 	watchtools "github.com/kyverno/kyverno/cmd/kyverno/watch"
+ 	"github.com/kyverno/kyverno/pkg/client/informers/externalversions/internalinterfaces"
++	"github.com/kyverno/kyverno/pkg/logging"
+ 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ 	"k8s.io/apimachinery/pkg/runtime/schema"
+ 	"k8s.io/apimachinery/pkg/types"
+@@ -54,8 +56,29 @@ func (c *counter) Count() (int, bool) {
+ 	return c.entries.Len(), c.retryWatcher.IsRunning()
+ }
+ 
+-func StartResourceCounter(ctx context.Context, client metadataclient.Interface, gvr schema.GroupVersionResource, tweakListOptions internalinterfaces.TweakListOptionsFunc) (*counter, error) {
+-	objs, err := client.Resource(gvr).List(ctx, metav1.ListOptions{})
++func (c *counter) consume(events <-chan k8swatch.Event) {
++	for event := range events {
++		getter, ok := event.Object.(resourceUIDGetter)
++		if !ok {
++			continue
++		}
++		switch event.Type {
++		case k8swatch.Added, k8swatch.Modified:
++			c.Record(getter.GetUID())
++		case k8swatch.Deleted:
++			c.Forget(getter.GetUID())
++		}
++	}
++}
++
++// resync lists the resource and replaces the entries and watcher the counter
++// reports on with a watcher started from the returned resource version.
++func (c *counter) resync(ctx context.Context, client metadataclient.Interface, gvr schema.GroupVersionResource, tweakListOptions internalinterfaces.TweakListOptionsFunc) (retryWatcher, error) {
++	listOptions := metav1.ListOptions{}
++	if tweakListOptions != nil {
++		tweakListOptions(&listOptions)
++	}
++	objs, err := client.Resource(gvr).List(ctx, listOptions)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -75,26 +98,40 @@ func StartResourceCounter(ctx context.Context, client metadataclient.Interface,
+ 	for _, entry := range objs.Items {
+ 		entries.Insert(entry.GetUID())
+ 	}
+-	w := &counter{
+-		entries:      entries,
+-		retryWatcher: watchInterface,
++	c.lock.Lock()
++	defer c.lock.Unlock()
++	c.entries = entries
++	c.retryWatcher = watchInterface
++	return watchInterface, nil
++}
++
++func StartResourceCounter(ctx context.Context, client metadataclient.Interface, gvr schema.GroupVersionResource, tweakListOptions internalinterfaces.TweakListOptionsFunc) (*counter, error) {
++	c := &counter{}
++	watchInterface, err := c.resync(ctx, client, gvr, tweakListOptions)
++	if err != nil {
++		return nil, err
+ 	}
++	logger := logging.WithName("resource-counter").WithValues("resource", gvr.Resource)
+ 	go func() {
+-		for event := range watchInterface.ResultChan() {
+-			getter, ok := event.Object.(resourceUIDGetter)
+-			if ok {
+-				switch event.Type {
+-				case k8swatch.Added:
+-					w.Record(getter.GetUID())
+-				case k8swatch.Modified:
+-					w.Record(getter.GetUID())
+-				case k8swatch.Deleted:
+-					w.Forget(getter.GetUID())
+-				}
++		for {
++			c.consume(watchInterface.ResultChan())
++			// The watcher stopped for good, the counter reports itself as not
++			// running until a fresh List gives it a usable resource version.
++			logger.Info("resource counter watcher stopped, restarting")
++			select {
++			case <-ctx.Done():
++				return
++			case <-time.After(time.Second):
++			}
++			restarted, err := c.resync(ctx, client, gvr, tweakListOptions)
++			if err != nil {
++				logger.Error(err, "failed to restart resource counter watcher, retrying...")
++				continue
+ 			}
++			watchInterface = restarted
+ 		}
+ 	}()
+-	return w, nil
++	return c, nil
+ }
+ 
+ func StartAdmissionReportsCounter(ctx context.Context, client metadataclient.Interface) (Counter, error) {
+diff --git a/pkg/breaker/resource_counter_recovery_test.go b/pkg/breaker/resource_counter_recovery_test.go
+new file mode 100644
+index 000000000000..eecb177bc94c
+--- /dev/null
++++ b/pkg/breaker/resource_counter_recovery_test.go
+@@ -0,0 +1,191 @@
++package breaker
++
++import (
++	"context"
++	"sync"
++	"testing"
++	"time"
++
++	apierrors "k8s.io/apimachinery/pkg/api/errors"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/apimachinery/pkg/runtime"
++	"k8s.io/apimachinery/pkg/runtime/schema"
++	"k8s.io/apimachinery/pkg/types"
++	"k8s.io/apimachinery/pkg/util/wait"
++	k8swatch "k8s.io/apimachinery/pkg/watch"
++	metadatafake "k8s.io/client-go/metadata/fake"
++	k8stesting "k8s.io/client-go/testing"
++)
++
++var testGVR = schema.GroupVersionResource{Group: "reports.kyverno.io", Version: "v1", Resource: "ephemeralreports"}
++
++// listResult is one canned response for the List call, in order.
++type listResult struct {
++	resourceVersion string
++	items           []metav1.PartialObjectMetadata
++}
++
++// fakeReportsClient serves a scripted sequence of Lists and hands out a fresh
++// watcher for every Watch call. Receive on watchers to get the nth one, in order.
++type fakeReportsClient struct {
++	*metadatafake.FakeMetadataClient
++
++	mu        sync.Mutex
++	lists     []listResult
++	listed    int
++	expiredRV string
++	watchers  chan *k8swatch.RaceFreeFakeWatcher
++}
++
++// expireRV makes every Watch call starting at rv fail with 410, however often
++// it is retried.
++func (c *fakeReportsClient) expireRV(rv string) {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.expiredRV = rv
++}
++
++func newFakeReportsClient(lists ...listResult) *fakeReportsClient {
++	scheme := metadatafake.NewTestScheme()
++	if err := metav1.AddMetaToScheme(scheme); err != nil {
++		panic(err)
++	}
++	c := &fakeReportsClient{
++		FakeMetadataClient: metadatafake.NewSimpleMetadataClient(scheme),
++		lists:              lists,
++		watchers:           make(chan *k8swatch.RaceFreeFakeWatcher, 8),
++	}
++	c.PrependReactor("list", "*", func(k8stesting.Action) (bool, runtime.Object, error) {
++		c.mu.Lock()
++		defer c.mu.Unlock()
++		result := c.lists[min(c.listed, len(c.lists)-1)]
++		c.listed++
++		list := &metav1.List{ListMeta: metav1.ListMeta{ResourceVersion: result.resourceVersion}}
++		for i := range result.items {
++			list.Items = append(list.Items, runtime.RawExtension{Object: &result.items[i]})
++		}
++		return true, list, nil
++	})
++	c.PrependWatchReactor("*", func(action k8stesting.Action) (bool, k8swatch.Interface, error) {
++		rv := action.(k8stesting.WatchAction).GetWatchRestrictions().ResourceVersion
++		c.mu.Lock()
++		expired := c.expiredRV != "" && rv == c.expiredRV
++		c.mu.Unlock()
++		if expired {
++			return true, nil, apierrors.NewResourceExpired("too old resource version: " + rv)
++		}
++		w := k8swatch.NewRaceFreeFake()
++		select {
++		case c.watchers <- w:
++		default: // nobody is watching for more watchers, don't block the client
++		}
++		return true, w, nil
++	})
++	return c
++}
++
++func report(name string, uid types.UID, source string) metav1.PartialObjectMetadata {
++	return metav1.PartialObjectMetadata{
++		ObjectMeta: metav1.ObjectMeta{
++			Name:   name,
++			UID:    uid,
++			Labels: map[string]string{"audit.kyverno.io/source": source},
++		},
++	}
++}
++
++func admissionOnly(lo *metav1.ListOptions) {
++	lo.LabelSelector = "audit.kyverno.io/source==admission"
++}
++
++// awaitHealthyCount waits for the counter to report itself running with the given count.
++func awaitHealthyCount(t *testing.T, c Counter, want int) {
++	t.Helper()
++	var count int
++	var running bool
++	if err := wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 15*time.Second, true, func(context.Context) (bool, error) {
++		count, running = c.Count()
++		return running && count == want, nil
++	}); err != nil {
++		t.Fatalf("Count() = (%d, %v), want (%d, true)", count, running, want)
++	}
++}
++
++// A watch that dies on "resource version too old" must not leave the counter
++// unhealthy for good: that keeps the reports breaker open and silently drops
++// every admission report for the lifetime of the process.
++func TestResourceCounterRecoversFromResourceVersionTooOld(t *testing.T) {
++	client := newFakeReportsClient(
++		listResult{resourceVersion: "100", items: []metav1.PartialObjectMetadata{
++			report("a", "uid-a", "admission"),
++			report("b", "uid-b", "admission"),
++		}},
++		listResult{resourceVersion: "200", items: []metav1.PartialObjectMetadata{
++			report("c", "uid-c", "admission"),
++		}},
++	)
++
++	c, err := StartResourceCounter(t.Context(), client, testGVR, admissionOnly)
++	if err != nil {
++		t.Fatalf("StartResourceCounter: %v", err)
++	}
++	awaitHealthyCount(t, c, 2)
++
++	(<-client.watchers).Error(&metav1.Status{
++		Status: metav1.StatusFailure,
++		Code:   410,
++		Reason: metav1.StatusReasonGone,
++	})
++
++	// Back to healthy, and holding the entries of the second List - which it can
++	// only have if it re-Listed for a fresh resource version.
++	awaitHealthyCount(t, c, 1)
++}
++
++// The apiserver usually rejects a stale resource version when the watch is
++// established, not mid-stream. Retrying that can never succeed, so the counter
++// has to relist here too.
++func TestResourceCounterRecoversFromRejectedWatch(t *testing.T) {
++	client := newFakeReportsClient(
++		listResult{resourceVersion: "100", items: []metav1.PartialObjectMetadata{
++			report("a", "uid-a", "admission"),
++			report("b", "uid-b", "admission"),
++		}},
++		listResult{resourceVersion: "200", items: []metav1.PartialObjectMetadata{
++			report("c", "uid-c", "admission"),
++		}},
++	)
++
++	c, err := StartResourceCounter(t.Context(), client, testGVR, admissionOnly)
++	if err != nil {
++		t.Fatalf("StartResourceCounter: %v", err)
++	}
++	awaitHealthyCount(t, c, 2)
++
++	// The watch drops, and every reconnect at resource version 100 is rejected
++	// because it has been compacted away.
++	client.expireRV("100")
++	(<-client.watchers).Stop()
++
++	awaitHealthyCount(t, c, 1)
++}
++
++// The seeding List has to be restricted the same way the watch is, or the
++// admission counter counts background scan reports and the other way around.
++func TestResourceCounterSeedsOnlyMatchingResources(t *testing.T) {
++	client := newFakeReportsClient(
++		listResult{resourceVersion: "100", items: []metav1.PartialObjectMetadata{
++			report("a", "uid-a", "admission"),
++			report("b", "uid-b", "background-scan"),
++		}},
++	)
++
++	c, err := StartResourceCounter(t.Context(), client, testGVR, admissionOnly)
++	if err != nil {
++		t.Fatalf("StartResourceCounter: %v", err)
++	}
++
++	if count, _ := c.Count(); count != 1 {
++		t.Fatalf("Count() = %d, want 1: only the admission report should be counted", count)
++	}
++}

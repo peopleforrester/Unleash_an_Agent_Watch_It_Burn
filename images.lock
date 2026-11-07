@@ -32,6 +32,9 @@
 # after both: both Jokers, re-pinned (#714), the three llm-guard-cpu-offline rows (#719), the node and debian rows,
 # which #714 moved to lab-platform#353's ghcr.io copies, and llm-guard at lab-platform#341's rebuild (#895); run 17809
 # copied those dates the same way. Every row that owes a copy is saved at its current digest.
+# The two patched Kyverno rows (#1015) are images/kyverno/build.sh's reproducible builds of v1.19.1 with kyverno/kyverno#17085,
+# pinned on 2026-11-07 before their first push, the way the Jokers were: verify/test_kyverno_build_digest.py rebuilds both
+# and holds them to these rows, and push-kyverno.yml pushes each build to its tag on staging.
 # verify/test_images_lock.py holds every reference to a row here.
 ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node 2026-11-06
 ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts 2026-11-06
@@ -117,6 +120,8 @@ reg.kyverno.io/kyverno/cleanup-controller:v1.19.1 sha256:67a48e62a8d8f8120c86914
 reg.kyverno.io/kyverno/reports-controller:v1.19.1 sha256:c0eee97b9b44a0dd35805d56b358fa52548480f79d4944602b9609538eccd64c upstream:https://github.com/kyverno/kyverno 2026-11-04
 reg.kyverno.io/kyverno/kyverno-cli:v1.19.1 sha256:ced7b2be0b04250cabfe695f15307f69eb715fe23234816388af4f3812915b2a upstream:https://github.com/kyverno/kyverno 2026-11-04
 ghcr.io/kyverno/readiness-checker:v1.19.1 sha256:31bb42ce7f5b2e27c1cf633aeff4f0cad1f5bb63761e2cb09f0e25cdd26572bf upstream:https://github.com/kyverno/kyverno 2026-11-04
+ghcr.io/peopleforrester/watch-it-burn:kyverno-v1.19.1-17085@sha256:c1abb924a527210bae23f6dbff273794711a2ee0447568b2d7851577d07e6fc7 sha256:c1abb924a527210bae23f6dbff273794711a2ee0447568b2d7851577d07e6fc7 build:images/kyverno -
+ghcr.io/peopleforrester/watch-it-burn:kyverno-reports-controller-v1.19.1-17085@sha256:16d6029866350264601fe92207a2e2f67fd259f8053b4ad471f37bbae7f95300 sha256:16d6029866350264601fe92207a2e2f67fd259f8053b4ad471f37bbae7f95300 build:images/kyverno -
 ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921 sha256:5b66b0dc6921f2a439cf50b942ccb9e2a4375f136239a9fdf709ef33e4bfc668 upstream:https://github.com/open-telemetry/opentelemetry-collector-releases 2026-11-04
 ghcr.io/open-telemetry/opentelemetry-operator/opentelemetry-operator:0.158.0 sha256:d4789a6537fdbc69929dc9227900511224b2fe8e5a0938e604cc8ca56b07336e upstream:https://github.com/open-telemetry/opentelemetry-operator 2026-11-04
 quay.io/prometheus/node-exporter:v1.12.1-distroless sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106 upstream:https://github.com/prometheus/node_exporter 2026-11-04

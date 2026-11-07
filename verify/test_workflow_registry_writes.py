@@ -168,8 +168,8 @@ for path in files:
         check(f"{rel} holds a registry write (packages: write or GHCR_TOKEN), so it calls {SCRIPT_CALL}",
               calls_script(text))
 
-# The three that hold the write today, by name, so a rename that dropped one from the loop above reads here.
-for name in ("build-web-terminal.yml", "keep-sample-app-tag.yml", "push-jokers.yml"):
+# The four that hold the write today, by name, so a rename that dropped one from the loop above reads here.
+for name in ("build-web-terminal.yml", "keep-sample-app-tag.yml", "push-jokers.yml", "push-kyverno.yml"):
     path = WORKFLOWS / name
     check(f"{name} is there and calls {SCRIPT_CALL}", path.is_file() and calls_script(path.read_text(encoding="utf-8")))
 

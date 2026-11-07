@@ -27795,3 +27795,93 @@ GREEN`) and then the tier: `75 checks ran (the offline suite and 74 tier tests) 
 CHECKS GREEN`, exit 0. The new `verify/test_deployments_witch_line_e2e.py` is one of the 74. No dependency was added:
 the new test fetches mcp 1.29.1 and pyyaml 6.0.2 through uv, the versions images/workshop-mcp already pins. The prose
 gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1015 · run 18068 · Kyverno's report breaker latches open after a 410; both controllers now run v1.19.1 with upstream's fix
+
+**What stops the reports.** Kyverno's admission controller and reports controller each pass every report write
+through a circuit breaker (`pkg/breaker`). The breaker is open, and the write is dropped with no error and no log
+line, when the EphemeralReport counter behind it has more than `maxBackgroundReports` (10000) entries or when that
+counter's watch is not running. In v1.19.1 the counter starts its RetryWatcher once. The first time the API server
+answers that watch with 410 Gone (too old resource version), the watcher stops for good, `IsRunning()` stays false,
+and the breaker drops every write until the pod restarts. That is why a restart brought reports back within 85s in
+run 17286, and why they stopped again some hours later.
+
+**The evidence, read between 23:20 UTC on 2026-11-06 and 00:40 UTC on 2026-11-07.** Nothing in the logs: since the pods started, the
+reports controller on watch-it-burn-community logged only its startup, leader election (it acquired
+`kyverno/kyverno-reports-controller` at 15:26:56 on 2026-11-05 and still renews it every few seconds) and API
+deprecation warnings. On watch-it-burn-private the only errors are writes into terminating namespaces. The metrics,
+read through `kubectl port-forward` to each pod's :8000:
+
+| Cluster | Controller | Breaker | Drops | Total |
+|---|---|---|---|---|
+| community | reports | background scan reports | 14386 | 14704 |
+| community | admission | admission reports | 717 | 720 |
+| private | reports | background scan reports | 13598 | 37546 |
+| private | admission | admission reports | 1788 | 2039 |
+
+On community the 318 writes that passed (14704 less 14386) are exactly the 257 EphemeralReport creates in `agent` and
+61 in `apps` the same scrape counts, so every write went through until one moment and none after it, while the
+background scan kept reconciling (30053 reconciles). `kubectl get ephemeralreports -A` was empty on both clusters, so
+the count was 0 and the open breaker can only be the stopped watcher. In `agent`, 80 of 121 Pods, ReplicaSets and
+Deployments on community and 101 of 118 on private had a PolicyReport, and none created since the stall did: 0 of
+the 41 created after 15:40 on 2026-11-05 on community and 0 of the 17 created after 10:50 on 2026-11-06 on private,
+the workshop-agent, workshop-mcp, fake-ticket and console Pods of 23:03 to 23:25 among them. The admission breaker is the
+reason run 17286 saw no admission-time EphemeralReport for the villain.
+
+**Upstream.** kyverno/kyverno#17084 reports this bug, and #17085 (merged to main on 2026-09-10, commit `7c7042fb5f`)
+fixes it: the counter lists again and starts a new watcher when the old one ends, the List takes the counter's label
+selector, a 410 on the watch request stops the watcher instead of retrying a dead resource version forever, and
+`isRunning` becomes atomic. It is in v1.20.0-rc.1 (2026-11-02) and in no 1.19 release: v1.19.2's
+`resource_counter.go` has no resync. Upstream's three recovery tests from #17085, run on v1.19.1 with only the test
+file added, fail as the PR says (`Count() = (2, false), want (1, true)` after a rejected watch); with the patch applied
+they and `cmd/kyverno/watch` pass.
+
+**The fix: v1.19.1 with #17085, built here.** Two alternatives were set aside. Moving the whole platform to a
+release candidate (v1.20.0-rc.1, chart and CLI) changes far more than this bug. A job that restarts the pods when the
+breaker latches is the workaround the issue rules out. So:
+
+- `images/kyverno/build.sh` clones the v1.19.1 tag, checks it is commit `40ec788d`, applies
+  `images/kyverno/17085-breaker-recovery.patch` (#17085's diff as merged, its tests included), runs upstream's
+  recovery tests, and builds `cmd/kyverno` and `cmd/reports-controller` with go1.26.6 (the version v1.19.1's go.mod
+  names and upstream built with), `-trimpath`, no VCS stamp and version `v1.19.1+17085`. Each binary goes in as one
+  layer at `/ko-app/<name>` over upstream's own linux/amd64 image at the digest images.lock pins, so the entrypoint,
+  user 65532, CA bundle and ko's LICENSE and NOTICE are upstream's. It pushes only to a loopback registry.
+- The build is reproducible: a warm build and a build with empty module and build caches under umask 002 both gave
+  `sha256:c1abb924…` for `ghcr.io/peopleforrester/watch-it-burn:kyverno-v1.19.1-17085` and `sha256:16d60298…` for
+  `…:kyverno-reports-controller-v1.19.1-17085`. images.lock pins both (source `build:images/kyverno`), and
+  `gitops/bootstrap/apps/kyverno.yaml` sets `admissionController.container.image` and `reportsController.image` to
+  those tags at those digests. The chart renders both image lines as `ghcr.io/peopleforrester/watch-it-burn:<tag>@<digest>`;
+  the background and cleanup controllers, which write no reports, stay upstream's.
+- `.github/workflows/push-kyverno.yml` builds with build.sh on the runner's loopback and hands each tag to
+  `scripts/ghcr_version_tag.py` as a `crane:` build, the way push-jokers.yml does, so a tag is pushed only when the
+  build's digest is the pin. Until it is on ghcr.io, Argo CD's new pod waits in ImagePullBackOff and the old one keeps
+  running (the chart's `maxUnavailable: 40%` of one replica is none).
+- The verify-image-signatures policy matches `ghcr.io/peopleforrester/watch-it-burn*`, but Kyverno's webhook leaves
+  out the `kyverno` namespace, so it never sees these pods.
+- Tests: `verify/test_kyverno_breaker_fix.py` (offline) holds the overrides, the pins, build.sh's version, commit,
+  toolchain and bases, the patch's three changes and the workflow together, and fails when the chart moves off
+  v1.19.1, which is the reminder to drop both overrides at the first release with #17085.
+  `verify/test_kyverno_build_digest.py` (tools tier) rebuilds both images, holds the digests to the pins and finds
+  `pkg/breaker.(*counter).resync` and `v1.19.1+17085` in each binary; upstream's binary has neither. It needs a go
+  1.21 or later on PATH, which fetches the pinned toolchain; the build took 6m46s warm on this host at load 48.
+  `verify/test_workflow_registry_writes.py` names push-kyverno.yml among the workflows that hold a registry write.
+
+**Dependencies.** No package was added. The build fetches Go 1.26.6 through GOTOOLCHAIN (checked against Go's checksum
+database) and Kyverno v1.19.1's own modules through its go.sum.
+
+**Left as found.** Nothing on either cluster was changed: the metrics were read through port-forwards, and no pod was
+restarted, so both controllers still drop reports until the new images roll out.
+
+**Not yet run on a cluster** (the images reach the clusters once hecaton promotes this run, push-kyverno.yml pushes
+them and Argo CD syncs):
+- On each cluster, the admission and reports controller pods run the pinned digests, and their :8000/metrics show
+  `kyverno_info{version="v1.19.1+17085"}`.
+- With guardrails off and nobody else switching them, `CONTEXT=watch-it-burn-private python3 -u
+  verify/test_kyverno_cel_live.py` passes step 4 with the lab's PolicyReport line, and the same on community.
+- A day later, `kyverno_breaker_drops_total` on all four pods stays near zero while `kyverno_breaker_total` grows,
+  so the counter outlived at least one watch restart.
+
+**Still open upstream.** kyverno/kyverno#17852 (the reports controller's resource watchers keep a stale cache after a
+410, so resources created in that window are never scanned) and #18464 are not merged. They lose a report another
+way: in what was measured here the background scan kept reconciling while the breaker dropped its writes.
+Filed as a follow-up to take them in when they land.
