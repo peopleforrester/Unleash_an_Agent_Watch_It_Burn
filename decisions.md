@@ -31425,3 +31425,9 @@ sides. `prior-drafts.sh 991 origin/staging` read the draft's drift as edits in p
 
 **Still not run on a cluster.** The public bot's friendly-and-insistent Tron ask, the mean ask and the `guardrails-on`
 denial through the bot, once this change is deployed, and the 03-1 shot retaken.
+
+**The suites (run 18251, at `3efa76e7` on staging `c6ff3d48`).** `bash verify/run-e2e-tools.sh`, with no
+`HECATON_BASE_SHA`, so every test ran: the offline suite printed `332 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m14s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS
+GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/18251/e2e-tools.log`. The prose gate printed `prose gate: pass`.
+No dependency was added.
