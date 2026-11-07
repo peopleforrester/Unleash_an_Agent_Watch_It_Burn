@@ -1,0 +1,157 @@
+# ABOUTME: Wave -1 gate Job: wait for the OTel operator's pod webhook to be SERVING and the Instrumentation to
+# ABOUTME: exist before ai-layer's wave 0 and the Agent CR are applied, so BurritoBot's pods are admitted WITH instrumentation.
+#
+# Why. The operator's pod webhook (mpod.kb.io) fails open. When the Agent CR landed before the webhook was
+# serving, kagent's Deployment created the BurritoBot pod with its inject annotation and nothing injected,
+# and that cluster never produced an agent trace. Nine of ten fresh clusters on 2026-09-06. Same shape as
+# kubearmor-ordering-gate.yaml; fleet.sh converge holds the runtime backstop (repair_agent_injection).
+#
+# A plain Sync-phase Job at wave -1 since #898, not a PreSync hook, so a full-sync self-heal does not re-run it;
+# the Job's comment and kubearmor-ordering-gate.yaml's header say how the ordering still holds on a fresh cluster.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-gate-script
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  gate.py: |
+    import json, os, ssl, sys, time, urllib.request, urllib.error
+    SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+    TOKEN = open(f"{SA}/token").read().strip()
+    CTX = ssl.create_default_context(cafile=f"{SA}/ca.crt")
+    BASE = f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ['KUBERNETES_SERVICE_PORT']}"
+    def api(path):
+        req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {TOKEN}"})
+        with urllib.request.urlopen(req, context=CTX, timeout=10) as r:
+            return json.load(r)
+    def webhook_serving():
+        try:
+            ep = api("/api/v1/namespaces/opentelemetry-operator-system/endpoints/otel-operator-opentelemetry-operator-webhook")
+        except urllib.error.HTTPError:
+            return False
+        return any(s.get("addresses") for s in ep.get("subsets") or [])
+    def instrumentation_present():
+        try:
+            api("/apis/opentelemetry.io/v1alpha1/namespaces/agent/instrumentations/watch-it-burn-python"); return True
+        except urllib.error.HTTPError:
+            return False
+    # Bounded, and it DEGRADES rather than blocks (#407). An uninstrumented agent pod is a real problem;
+    # an AI layer that can never be changed again is a bigger one, and converge repairs the first.
+    deadline = time.time() + 480
+    wh = ins = False
+    while time.time() < deadline:
+        try:
+            wh, ins = webhook_serving(), instrumentation_present()
+            if wh and ins:
+                print("[gate] OTel operator webhook serving and Instrumentation present; the agent pod will be instrumented.")
+                sys.exit(0)
+        except Exception as e:
+            print(f"[gate] transient check error: {e}")
+        time.sleep(10)
+    # Name what was still missing, by its own address. The next person reads this line rather than
+    # tracing a stuck Application back to an operator pod in a namespace they were not looking at.
+    missing = []
+    if not wh:
+        missing.append("endpoints/otel-operator-opentelemetry-operator-webhook in ns opentelemetry-operator-system has no ready address")
+    if not ins:
+        missing.append("instrumentation watch-it-burn-python in ns agent does not exist")
+    print(f"[gate] DEGRADED after 480s: {'; '.join(missing)}. Proceeding so the sync is not parked; "
+          "the agent pod may come up with no instrumentation and produce no trace. "
+          "fleet.sh converge recreates it once the webhook serves.")
+    sys.exit(0)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+  - apiGroups: ["opentelemetry.io"]
+    resources: ["instrumentations"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-gate
+subjects:
+  - kind: ServiceAccount
+    name: otel-gate
+    namespace: agent
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: otel-gate-0353f97d
+  annotations:
+    # A plain Sync-phase resource at wave -1, not a hook (#898). Everything else in ai-layer is at wave 0, and Argo
+    # CD applies wave 0 only once this Job reads Healthy, which for a Job is Complete: so on the first sync the
+    # gated pods are admitted after the gate passed, as before. A later full sync re-applies this unchanged, already
+    # Complete Job, which is a no-op that reads Healthy at once, so no pod runs and a self-heal does not wait on it.
+    # The PreSync hook it replaces was deleted, re-created and run on every full sync: 20.1 to 27.2 s of a 30 s heal.
+    #
+    # The name carries a hash of this Job's spec and its script, because a Job's pod template is immutable: an edit
+    # in place would fail every sync. Any edit gives a new name instead, Argo CD prunes the old Job and runs the new
+    # one. verify/test_ai_layer_gates.py computes the hash and names the right suffix when this one is stale.
+    #
+    # No ttlSecondsAfterFinished: a finished Job that the cluster deletes reads as missing, and self-heal would
+    # re-create and re-run it. No hook delete policy either; the #407 park (a fixed-name HookSucceeded hook left
+    # behind) cannot happen to a plain resource. Its own failure mode: the gate script always exits 0, so the Job
+    # fails only when its pod cannot run for activeDeadlineSeconds. A Failed Job reads Degraded and fails every
+    # later ai-layer sync, naming this Job, until it is deleted: `kubectl --context "$CONTEXT" -n agent delete job
+    # -l app.kubernetes.io/name=otel-gate`, then a requested sync of ai-layer re-creates it (auto-sync does not retry
+    # a revision whose sync failed; docs/floor.md has both commands). Kyverno's block-argocd-drift does not cover
+    # Jobs, so that delete is admitted.
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/name: otel-gate
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      # The Datadog Agent tags this pod's logs from these labels (#662), as on every BurritoBot pod.
+      labels: { tags.datadoghq.com/service: burritobot-otel-gate, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: otel-gate
+      restartPolicy: Never
+      containers:
+        - name: gate
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
+          command: ["python3", "/gate/gate.py"]
+          volumeMounts:
+            - name: script
+              mountPath: /gate
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: script
+          configMap: { name: otel-gate-script }

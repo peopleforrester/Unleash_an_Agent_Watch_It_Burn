@@ -1,0 +1,320 @@
+# ABOUTME: agentgateway OSS v1.7.0 (released 2026-10-27) — the DEPLOYED gateway fronting the kagent agent (A2A)
+# ABOUTME: and both MCP servers (workshop-mcp, evil-mcp). Namespace is set by the ai-layer kustomization (agent).
+#
+# Config schema verified live against agentgateway.dev/docs/standalone/latest on 2026-06-25:
+#   - image registry is cr.agentgateway.dev (NOT ghcr.io).
+#   - proxy config is binds[].port -> listeners[].routes[].backends[].host ("host:port" string, no separate
+#     port field).
+#   - OTLP tracing is the config-file frontend policy frontendPolicies.tracing: host is the collector's
+#     host:port (:4318), protocol http, randomSampling true (#864; config.tracing, its form until then, is
+#     deprecated in v1.7.0). The OTEL_EXPORTER_OTLP_ENDPOINT env var is inert for trace export (resolves PRD #20
+#     M4 / blocker #4).
+#   - MCP front is the binds backend form backends[].mcp.targets[].mcp.host with route-level
+#     policies.mcpAuthorization.rules (CEL, OR-combined; 'true' = default allow).
+#
+# GUARDING STAYS ON guard-proxy: agentgateway prompt-guards are documented ONLY for llm.models[] LLM-provider
+# backends and are confirmed NOT to attach to a plain HTTP/A2A (JSON-RPC) backend (verified 2026-06-25). The
+# workshop-agent is an A2A endpoint, so agentgateway fronts it as a plain L7 hop; the input/output guard
+# decisions remain in guard-proxy (the LLM-Guard reverse proxy, the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) recommended primary).
+#
+# What goes through this gateway (#239, pinned by verify/test_agentgateway_path.py):
+#   - :3000 every chat message, guard-proxy -> here -> workshop-agent (A2A).
+#   - :3001 every workshop-mcp tool call: the workshop-mcp RemoteMCPServer url is agentgateway:3001/mcp.
+#     Measured live 2026-09-05 (386 request log lines in the first hour on a fresh attendee cluster).
+#   - :3002 model calls ONLY when the Agent is switched to a gateway-* ModelConfig. The committed default
+#     (bedrock-nova) calls Bedrock directly. Either way the spend is tagged: the bedrock backend calls the
+#     cluster's application profile through BEDROCK_NOVA_MODEL, as the ModelConfigs do (#561).
+#   - :3003 every evil-mcp tool call (#514): the evil-mcp RemoteMCPServer url is agentgateway:3003/mcp, so
+#     C7's rogue tools are reached through the gateway. That bind is served by the agentgateway-c7 container
+#     from its own ConfigMap (see both below for why). Its mcpAuthorization rule is committed 'true', so it
+#     gates nothing yet; the 3001 rule below gates only workshop-mcp.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentgateway
+  labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  labels:
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/version: "1.7.0"
+spec:
+  replicas: 1
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app.kubernetes.io/name: agentgateway } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway, tags.datadoghq.com/service: burritobot-gateway, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+    spec:
+      serviceAccountName: agentgateway
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: agentgateway
+          # Pinned by digest as well as tag. This is the one image we run from a registry we do not
+          # control, so it is the one where a moving tag matters most (#415). Re-resolve with
+          # `docker buildx imagetools inspect cr.agentgateway.dev/agentgateway:<tag>` on any bump.
+          image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+          imagePullPolicy: IfNotPresent
+          args: ["-f", "/etc/agentgateway/config.yaml"]
+          env:
+            # UST for Datadog correlation (resource attributes on agentgateway's spans).
+            # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES wherever the SDK honors
+            # it. agentgateway is a Rust binary whose reported name has been "agentgateway" regardless, so
+            # the collector conditions below tolerate BOTH names until this is measured to take (#265).
+            - name: OTEL_SERVICE_NAME
+              value: burritobot-gateway
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=burritobot-gateway,service.version=v1.7.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
+            # The model the bedrock-nova backend calls; agentgateway-config reads it as ${BEDROCK_NOVA_MODEL}
+            # (#561). The value below is the system profile id, the pin. A system profile cannot be tagged, so
+            # fleet.sh pin_bedrock_profiles sets the live value to this cluster's tagged application profile
+            # ARN on bootstrap and converge, the same way it sets each Bedrock ModelConfig's .spec.model, and
+            # ai-layer ignores this one env entry so selfHeal keeps the ARN.
+            - name: BEDROCK_NOVA_MODEL
+              value: us.amazon.nova-pro-v1:0
+            # The region that model is called in, read by agentgateway-config as ${BEDROCK_REGION} (#643).
+            # Committed as the home region; pin_bedrock_profiles sets it to the region of this cluster's
+            # application profile ARN, and ai-layer ignores this entry too.
+            - name: BEDROCK_REGION
+              value: us-west-2
+            # NOTE: tracing is configured in the config file's frontendPolicies.tracing block (below), NOT via
+            # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emitted ZERO spans on the pre-v1.5.0 build (verified live 2026-06-26: a targeted
+            # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.
+          ports:
+            - { name: proxy, containerPort: 3000 } # A2A reverse proxy -> workshop-agent
+            - { name: mcp, containerPort: 3001 }    # MCP front -> workshop-mcp
+            - { name: llm, containerPort: 3002 }
+            - { name: ready, containerPort: 15021 } # agentgateway built-in readiness listener (verified live)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          # No documented /healthz on the OSS standalone binary; use TCP checks (verified 2026-06-25).
+          readinessProbe: { tcpSocket: { port: proxy }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe: { tcpSocket: { port: ready }, initialDelaySeconds: 20, periodSeconds: 15 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/agentgateway, readOnly: true }
+            - { name: tmp, mountPath: /tmp } # writable scratch under readOnlyRootFilesystem
+        # C7's gateway (#514, part of #496): the same binary, serving ONLY the evil-mcp bind on :3003 from its
+        # own ConfigMap. It is a second process rather than a fourth bind in agentgateway-config because the
+        # C7 rule is meant to change live, and the config is one string: Argo CD can only ignore drift on that
+        # whole string, which on agentgateway-config would take the A2A, workshop-mcp and LLM routes out of
+        # GitOps on every cluster. Here it would cover exactly the evil-mcp bind.
+        # It listens on 3003 and 15022 only. Admin and stats are off: their defaults (15000, 15020) and the
+        # readiness default (15021) are the first container's, and the pod shares one network namespace.
+        - name: agentgateway-c7
+          image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+          imagePullPolicy: IfNotPresent
+          args: ["-f", "/etc/agentgateway-c7/config.yaml"]
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: burritobot-gateway
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=burritobot-gateway,service.version=v1.7.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
+          ports:
+            - { name: mcp-c7, containerPort: 3003 }   # MCP front -> evil-mcp-shim (C7)
+            - { name: ready-c7, containerPort: 15022 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "250m", memory: "128Mi" }
+          readinessProbe: { tcpSocket: { port: mcp-c7 }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe: { tcpSocket: { port: ready-c7 }, initialDelaySeconds: 20, periodSeconds: 15 }
+          volumeMounts:
+            # A directory mount, never subPath. A subPath file never changes when the ConfigMap does. With a
+            # directory mount the config file is a projected-volume symlink, and agentgateway v1.5.0 then
+            # watches the parent directory (crates/agentgateway/src/util.rs, should_watch_parent) and keeps
+            # the previous state when a reload fails (crates/agentgateway/src/state_manager.rs,
+            # reload_config_after_change); both read at tag v1.5.0 on 2026-10-24. So a rule edit needs no
+            # restart, and a bad one leaves the last good config serving.
+            - { name: config-c7, mountPath: /etc/agentgateway-c7, readOnly: true }
+            - { name: tmp-c7, mountPath: /tmp }
+      volumes:
+        - name: config
+          configMap: { name: agentgateway-config }
+        - name: tmp
+          emptyDir: {}
+        - name: config-c7
+          configMap: { name: agentgateway-c7-config }
+        - name: tmp-c7
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  labels: { app.kubernetes.io/name: agentgateway }
+spec:
+  selector: { app.kubernetes.io/name: agentgateway }
+  ports:
+    - { name: proxy, port: 3000, targetPort: proxy }
+    - { name: mcp, port: 3001, targetPort: mcp }
+    # The LLM bind. Inference goes kagent -> here -> bedrock or a local vLLM, so the backend is a
+    # route change rather than an edit to every Agent's ModelConfig. See PRD #389 / issue #394.
+    - { name: llm, port: 3002, targetPort: llm }
+    # C7's rogue MCP server (#514), served by the agentgateway-c7 container.
+    - { name: mcp-c7, port: 3003, targetPort: mcp-c7 }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  labels: { app.kubernetes.io/name: agentgateway }
+data:
+  config.yaml: |
+    config:
+      # v1.7.0 standalone encrypts MCP session ids and writes a generated key into the config file, which is a
+      # read-only ConfigMap here; 'disabled' keeps them unencrypted, as on v1.5.0 (#698).
+      session:
+        key: disabled
+    # Tracing is a frontend policy (#864). v1.7.0 still reads config.tracing but logs it as deprecated and turns
+    # it into exactly this (crates/agentgateway/src/types/local.rs, merge_deprecated_frontend_policies, read at
+    # tag v1.7.0): the endpoint's host:port as an inline backend, otlpProtocol as protocol, randomSampling as is.
+    # OTLP/HTTP to the collector's :4318, every new trace sampled; an incoming sampled traceparent is followed.
+    frontendPolicies:
+      tracing:
+        host: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        protocol: http
+        randomSampling: true
+    binds:
+    - port: 3000
+      listeners:
+      - protocol: HTTP
+        routes:
+        - backends:
+          - host: workshop-agent.agent.svc.cluster.local:8080
+            weight: 1
+    - port: 3001
+      listeners:
+      - protocol: HTTP
+        routes:
+        - policies:
+            mcpAuthorization:
+              rules:
+              - 'true'
+          backends:
+          - mcp:
+              targets:
+              - name: workshop-mcp
+                mcp:
+                  host: http://workshop-mcp.agent.svc.cluster.local:8000/mcp
+    - port: 3002
+      listeners:
+      - protocol: HTTP
+        routes:
+        - matches:
+          - path:
+              pathPrefix: /bedrock
+          policies:
+            urlRewrite:
+              path:
+                prefix: /
+          backends:
+          - ai:
+              name: bedrock-nova
+              provider:
+                bedrock:
+                  # From the container env, not inline (#561): agentgateway v1.5.0 runs the whole config
+                  # file through shellexpand::full before parsing it (crates/agentgateway/src/config.rs,
+                  # parse_config), and an undefined variable fails the config. Live, it is this cluster's
+                  # application profile ARN. The provider puts the model into the URL path and escapes
+                  # only '/' and '%' in it (crates/llm/src/bedrock.rs, get_path_for_route), so the ARN's
+                  # one '/' goes out as %2F, the form Bedrock takes; upstream's own tests send an
+                  # application-inference-profile ARN that way. Read at tag v1.5.0 on 2026-10-25.
+                  model: ${BEDROCK_NOVA_MODEL}
+                  # Required by the bedrock provider; omitting it fails the whole config at startup
+                  # with "missing field `region`". From the container env like the model (#643): the
+                  # cluster's own region, which pin_bedrock_profiles sets from the profile ARN, so a
+                  # standby built outside us-west-2 calls its own region's profile. The default is not
+                  # optional: v1.7.0 expands the file with shellexpand::full and refuses the whole config
+                  # on an unset variable ("environment variable not found", crates/agentgateway/src/
+                  # config.rs, errors_on_unset_environment_variable). ai-layer ignores the env entry, so a
+                  # cluster built before #643 can sync this file without ever getting BEDROCK_REGION.
+                  region: ${BEDROCK_REGION:-us-west-2}
+              # NO auth block here, and that is the correct configuration, not a gap. Read from the
+              # v1.5.0 source rather than inferred from rejection messages (#394):
+              # crates/agentgateway/src/llm/mod.rs, AIProvider::default_connector_policies, gives the
+              # Bedrock arm backend_auth: BackendAuthKind::Aws(AwsAuth::Implicit{..}) by itself, and
+              # crates/agentgateway/src/http/auth/aws.rs resolves Implicit through
+              # aws_config::load_defaults, signs for service "bedrock" by default, and takes the region
+              # from the request extension the provider sets from `region` below.
+              #
+              # So the credential is ambient and the gateway's ServiceAccount has to carry one. It does
+              # now: infra/terraform/aws/cluster/main.tf associates the agentgateway SA with the same
+              # Bedrock Pod Identity role as agent-sa. An explicit policies.backendAuth.aws block is
+              # accepted by the schema (LocalNamedAIProvider.policies -> backendAuth -> aws) and would
+              # be redundant here; `auth:` at this level is not a field at all.
+        - matches:
+          - path:
+              pathPrefix: /local
+          policies:
+            urlRewrite:
+              path:
+                prefix: /
+          backends:
+          - ai:
+              name: local-qwen3
+              provider:
+                openAI:
+                  model: qwen3-1.7b
+              # hostOverride, not host: the binary enumerates the valid keys in its rejection message
+              # (name, provider, hostOverride, pathOverride, pathPrefix, tokenize, policies...). This is
+              # what redirects the OpenAI provider at a local vLLM instead of api.openai.com.
+              hostOverride: vllm-qwen3.agent.svc.cluster.local:8000
+
+---
+# C7's gateway config (#514), read by the agentgateway-c7 container. One bind, one target: a lone target is
+# not multiplexed, so the tool names reach the agent unprefixed and get_weather's poisoned description still
+# names a tool that exists (docs/research/2026-10-24-agentgateway-evaluation.md, section 2).
+#
+# The rule line is the contract a C7 control reads and rewrites: key config.yaml, the one line ending in
+# the c7-rule marker comment. 'true' is off (every tool allowed); 'mcp.tool.name == "get_weather"' is on (a bare CEL string
+# is an mcpAuthorization allow rule, OR-combined, and anything no rule allows is denied, so the gateway drops the rogue tools from tools/list and refuses a
+# tools/call to them before evil-mcp runs it). Committed state is 'true': C7 starts open, like every other
+# guard. On an admin cluster the web terminal's guard-mcp-on/guard-mcp-off and guards-on/guards-off flip it,
+# through _c7rule in gitops/ai-layer/web-terminal/entrypoint.sh. Keep this ConfigMap to the evil-mcp bind.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-c7-config
+  labels: { app.kubernetes.io/name: agentgateway }
+data:
+  config.yaml: |
+    config:
+      adminAddr: "off"
+      statsAddr: "off"
+      readinessAddr: 0.0.0.0:15022
+      session:
+        key: disabled # as agentgateway-config: v1.7.0 cannot write a generated key into a ConfigMap (#698)
+    frontendPolicies:
+      tracing: # as agentgateway-config (#864)
+        host: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        protocol: http
+        randomSampling: true
+    binds:
+    - port: 3003
+      listeners:
+      - protocol: HTTP
+        routes:
+        - policies:
+            mcpAuthorization:
+              rules:
+              - 'true' # c7-rule
+          backends:
+          - mcp:
+              targets:
+              - name: evil-mcp
+                mcp:
+                  host: http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp

@@ -1,0 +1,203 @@
+# ABOUTME: Wave -1 gate Job that holds ai-layer's wave 0 (workshop-mcp) until the KubeArmor daemonset +
+# ABOUTME: controller webhook are Ready, so the workshop-mcp pod is admitted AFTER the webhook
+# ABOUTME: and gets the kubearmor-policy=enabled annotation (validated 2026-07-18: enforcement needs this).
+#
+# WHY: KubeArmor annotates pods for ENFORCEMENT at admission via its controller's mutating webhook.
+# gitops/bootstrap/apps/kubearmor.yaml is sync-wave -6, but the operator (autoDeploy) creates the daemonset +
+# controller ASYNC after its Application reports Healthy, so ai-layer (wave 3) otherwise races ahead and
+# workshop-mcp comes up un-annotated -> KubeArmor observes but does not block (proven live). A manual
+# `kubectl rollout restart` is NOT an option on armed clusters: Kyverno block-argocd-drift denies it.
+# This gate is the GitOps-native fix: ai-layer's wave -1 waits for KubeArmor readiness, then the workload
+# (wave 0) is admitted through the live webhook.
+#
+# SOFT-FAIL BY DESIGN: the gate always exits 0 (proceed) after at most ~7 min. If KubeArmor is ready it
+# proceeds immediately (normal path). If KubeArmor is genuinely broken it proceeds anyway rather than wedge
+# the whole BurritoBot demo. NOTE since the Tetragon retirement (2026-08-30, gate proven reliable across
+# all six full-profile provisions: annotation=enabled everywhere): KubeArmor is now the SOLE C3 enforcer,
+# so a soft-fail means C3 runs UNENFORCED, not dual-run. That is the deliberate trade: one un-blocked
+# challenge beats wedging the entire demo. The gate has been reliable in practice, so this is a last resort.
+#
+# All resources are plain Sync-phase resources at sync-wave -1, not hooks (#898): the Job's comment says why.
+# Within one wave Argo CD applies kinds in order, so the ServiceAccount, ConfigMap and RBAC exist before the
+# Job. The gate runs when its Job is first created: on a fresh cluster, and after an edit renames it. A
+# rollout of workshop-mcp on a running cluster no longer waits on it; KubeArmor is up by then. kustomize's
+# `namespace: agent` lands the namespaced pieces in agent; the ClusterRole/Binding are cluster-scoped.
+# Image is the workshop's own ghcr.io image (allowed by restrict-image-registries; has python). The gate
+# talks to the API with its ServiceAccount token (read-only on the KubeArmor resources it checks).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubearmor-gate-script
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  gate.py: |
+    # ABOUTME: Poll the k8s API for KubeArmor readiness (daemonset + controller + webhook), then exit 0.
+    # ABOUTME: Always exits 0 (soft-fail) so a KubeArmor problem delays but never wedges ai-layer.
+    import json, os, ssl, sys, time, urllib.request, urllib.error
+    SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+    TOKEN = open(f"{SA}/token").read().strip()
+    CTX = ssl.create_default_context(cafile=f"{SA}/ca.crt")
+    BASE = f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ['KUBERNETES_SERVICE_PORT']}"
+
+    def api(path):
+        req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {TOKEN}"})
+        with urllib.request.urlopen(req, context=CTX, timeout=10) as r:
+            return json.load(r)
+
+    def exists(path):
+        try:
+            api(path); return True
+        except urllib.error.HTTPError as e:
+            if e.code == 404: return False
+            raise
+
+    def ka_ns():
+        return exists("/api/v1/namespaces/kubearmor")
+
+    def ds_ready():
+        try:
+            d = api("/apis/apps/v1/namespaces/kubearmor/daemonsets")
+        except urllib.error.HTTPError:
+            return False
+        items = [i for i in d.get("items", [])
+                 if "kubearmor" in i["metadata"]["name"] and "operator" not in i["metadata"]["name"]]
+        if not items:
+            return False
+        return all(i.get("status", {}).get("numberReady", 0) > 0
+                   and i["status"].get("numberReady") == i["status"].get("desiredNumberScheduled")
+                   for i in items)
+
+    def ctrl_ready():
+        try:
+            d = api("/apis/apps/v1/namespaces/kubearmor/deployments/kubearmor-controller")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return False
+            raise
+        return d.get("status", {}).get("readyReplicas", 0) >= 1
+
+    def webhook():
+        return exists("/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations/"
+                      "kubearmor-controller-mutating-webhook-configuration")
+
+    # If KubeArmor is not in this profile at all, do not block (proceed after a short look).
+    t0 = time.time()
+    while not ka_ns():
+        if time.time() - t0 > 90:
+            print("[gate] kubearmor namespace absent after 90s; assuming KubeArmor not in this profile; proceeding.")
+            sys.exit(0)
+        time.sleep(5)
+
+    deadline = time.time() + 420  # ~7 min budget for the operator to bring up daemonset + controller + webhook
+    while time.time() < deadline:
+        try:
+            if ds_ready() and ctrl_ready() and webhook():
+                print("[gate] KubeArmor ready (daemonset + controller + webhook). "
+                      "Proceeding; workshop-mcp will be admitted with the enforcement annotation.")
+                sys.exit(0)
+        except Exception as e:  # transient API blips: keep polling
+            print(f"[gate] transient check error: {e}")
+        time.sleep(10)
+
+    print("[gate] KubeArmor not fully ready before deadline; proceeding anyway "
+          "(C3 runs unenforced this sync; KubeArmor will enforce on the next pod admission once ready).")
+    sys.exit(0)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["mutatingwebhookconfigurations"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubearmor-gate
+subjects:
+  - kind: ServiceAccount
+    name: kubearmor-gate
+    namespace: agent
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kubearmor-gate-d92910c4
+  annotations:
+    # A plain Sync-phase resource at wave -1, not a hook (#898). Everything else in ai-layer is at wave 0, and Argo
+    # CD applies wave 0 only once this Job reads Healthy, which for a Job is Complete: so on the first sync the
+    # gated pods are admitted after the gate passed, as before. A later full sync re-applies this unchanged, already
+    # Complete Job, which is a no-op that reads Healthy at once, so no pod runs and a self-heal does not wait on it.
+    # The PreSync hook it replaces was deleted, re-created and run on every full sync: 20.1 to 27.2 s of a 30 s heal.
+    #
+    # The name carries a hash of this Job's spec and its script, because a Job's pod template is immutable: an edit
+    # in place would fail every sync. Any edit gives a new name instead, Argo CD prunes the old Job and runs the new
+    # one. verify/test_ai_layer_gates.py computes the hash and names the right suffix when this one is stale.
+    #
+    # No ttlSecondsAfterFinished: a finished Job that the cluster deletes reads as missing, and self-heal would
+    # re-create and re-run it. No hook delete policy either; the #407 park (a fixed-name HookSucceeded hook left
+    # behind) cannot happen to a plain resource. Its own failure mode: the gate script always exits 0, so the Job
+    # fails only when its pod cannot run for activeDeadlineSeconds. A Failed Job reads Degraded and fails every
+    # later ai-layer sync, naming this Job, until it is deleted: `kubectl --context "$CONTEXT" -n agent delete job
+    # -l app.kubernetes.io/name=kubearmor-gate`, then a requested sync of ai-layer re-creates it (auto-sync does not retry
+    # a revision whose sync failed; docs/floor.md has both commands). Kyverno's block-argocd-drift does not cover
+    # Jobs, so that delete is admitted.
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app.kubernetes.io/name: kubearmor-gate
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      # The Datadog Agent tags this pod's logs from these labels (#662), as on every BurritoBot pod.
+      labels: { tags.datadoghq.com/service: burritobot-kubearmor-gate, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: kubearmor-gate
+      restartPolicy: Never
+      containers:
+        - name: gate
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
+          command: ["python3", "/gate/gate.py"]
+          volumeMounts:
+            - name: script
+              mountPath: /gate
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: script
+          configMap: { name: kubearmor-gate-script }

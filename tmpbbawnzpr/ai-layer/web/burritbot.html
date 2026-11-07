@@ -1,0 +1,897 @@
+<!-- ABOUTME: BurritoBot customer chat frontend (issue #38 / B1). Real chat: POST {prompt} -> /chat, renders
+     ABOUTME: {reply,guarded,tokens}. Backend-agnostic (Vertex or Bedrock). -->
+<!doctype html>
+<html lang="en">
+<head>
+  <!-- A BURRITO, not the flame. lab.html carries the flame, and an attendee has both tabs open for the
+       whole workshop: the lab on one side, BurritoBot on the other, switching between them on every
+       challenge. Identical favicons made that switch a guess. Whitney asked for this by name during a
+       walkthrough on 2026-09-03. -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%8C%AF</text></svg>">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BurritoBot</title>
+<style>
+  :root{
+    --dd:#632CA6;--acn:#A100FF;--accent:#8A00D6;--cream:#FDF6EE;--lav:#ECE3FB;--ink:#2b2230;--mid:#4A4A4A;--line:#e4d8f5;
+    --r3:#1f9d57; /* green: a control measured ON (the badges and the infra panel) */
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  /* FLUID TYPE (#144). Everything below was fixed pixels, so a 4K display rendered the same 14px chat
+     text as a laptop inside a much wider column, and a phone got laptop padding. The root size now grows
+     with the viewport and the sizes that matter are expressed against it, which scales the whole page
+     from one knob instead of needing a breakpoint per display.
+     Floor 16px so nothing shrinks below the browser default; ceiling 21px so a 3840 display gets larger
+     text without the layout turning into a poster. */
+  /* Root size grows with the viewport so the whole page scales from one knob instead of a breakpoint per
+     display (#144). Solved for 16px at 1280 and 21px at 3840: a laptop is unchanged (16.3px at 1440),
+     2560 gets 18.5px, 4K gets 21px, and nothing ever drops below the browser default.
+     The first attempt at this curve was 0.62vw + 13.6px, which reaches the 21px ceiling at 1440 and would
+     have rendered every laptop at 4K type. Check the endpoints before trusting a clamp. */
+  html{font-size:clamp(16px, 0.1953vw + 13.5px, 21px)}
+  /* APP SHELL. The composer and its Send button are the one control a student must always be able to
+     reach, so the page is sized to the viewport and the MESSAGE STREAM is the only thing that scrolls.
+     Reported twice on 2026-09-02: Send sitting below the fold on a laptop.
+     dvh, not vh: on mobile Safari and Chrome, vh is the height with the browser chrome RETRACTED, so a
+     100vh shell is taller than what you can actually see and the bottom row hides under the URL bar.
+     The vh line is the fallback for browsers without dvh; the dvh line overrides it where supported. */
+  html{height:100%}
+  html,body{margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  @supports (height:100dvh){body{height:100dvh}}
+  /* Chrome and footer never shrink; the middle band absorbs whatever is left. */
+  body>header,body>footer{flex:0 0 auto}
+  header{background:var(--dd);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px}
+  header .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;flex-shrink:0;white-space:nowrap}
+  header .brand .em{font-size:22px}
+  .brand .logo{width:26px;height:26px;display:inline-block;vertical-align:middle}
+  .avatar .logo{width:22px;height:22px;display:block}
+  header .spacer{flex:1}
+  header a.hb[hidden]{display:none}
+  header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
+  header a.hb:hover{background:rgba(255,255,255,.28)}
+  /* PHONE TITLE BAR (#387). A flex-wrap here put "BurritoBot" and one stray button on the top row and
+     dropped the rest below it, ragged: at 390px Terminal rode up beside the title and three buttons sat
+     under it, at 360px three sat under it and Feedback was left alone on a third row. Below 680px, where
+     the title and four buttons stop fitting on one line, the title gets its own row and the four buttons
+     share one even row beneath it, or two even rows of two where four cannot fit (under 360px).
+     681-760px keeps the one row, with the smaller buttons that let it fit. */
+  @media(max-width:760px){header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}}
+  @media(max-width:680px){
+    header{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 6px;padding:10px 12px}
+    header .brand{grid-column:1/-1}
+    header .spacer{display:none}
+    header a.hb{font-size:11px;padding:7px 4px;margin:0;text-align:center;overflow:hidden;text-overflow:ellipsis}
+  }
+  @media(max-width:359px){header{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
+  .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
+  /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
+     placeholders, #211). Driven by the /controls poll; names the actual tool the student installed. */
+  /* The community-cluster banner. Bold because its job is to stop a wrong assumption before it forms;
+     contained because it must not read as an error. */
+  /* RED, deliberately not the page accent (#335). Everything else on this page is Accenture purple:
+     the header, the send button, every card edge. A warning wearing the house colour reads as
+     branding, and this is the one element whose whole job is to say "this is not your cluster".
+     A student has two BurritoBot tabs open during the Community phase and acting on the wrong one
+     is the confusion that follows them all session. */
+  .combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:#C62222;
+             border:1px solid #8E1414;border-radius:10px;padding:10px 12px;margin:0 0 10px}
+  .badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
+  .bdg{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+       border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:#fff;color:var(--mid);
+       opacity:.55;transition:opacity .2s,background .2s,color .2s,border-color .2s}
+  .bdg .bdot{width:8px;height:8px;border-radius:50%;background:#c9bce0;flex:none}
+  .bdg.on{opacity:1;background:var(--r3);color:#fff;border-color:var(--r3)}
+  .bdg.on .bdot{background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+  .badgesnote{font-size:11.5px;color:var(--mid);margin:4px 0 2px;line-height:1.35;font-style:italic}
+  /* Backend Insights header (#212, renamed #761): marks the right column as backend/infra, visually
+     apart from the BurritoBot storefront so a first-time viewer does not read it as part of the app. */
+  .panelhdr{display:flex;flex-direction:column;gap:2px;font-weight:800;font-size:13px;color:#0d3b2e;
+            background:#e6f4ec;border:1px solid #bfe3d0;border-left:4px solid var(--r3);
+            border-radius:10px;padding:9px 12px;margin-bottom:2px}
+  .panelhdr .panelsub{font-weight:600;font-size:11px;color:#3a6a54;opacity:.9}
+  /* #144: the hard max-width:1340px meant a 2560 or 3840 display rendered the same columns as a laptop
+     with dead margins either side, and nothing used the extra space. The cap is now fluid: it grows with
+     the viewport and only stops at a width where line length would get uncomfortable. Padding and gap
+     scale too, so 1280 / 2560 / 3840 each look deliberate instead of one being the design. */
+  .wrap{flex:1 1 auto;display:flex;min-height:0;min-width:0;overflow:hidden;max-width:min(96vw, 2200px);width:100%;margin:0 auto;padding:clamp(12px,1.4vw,34px);gap:clamp(12px,1.4vw,34px)}
+  .chatcol{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 6px 22px rgba(99,44,166,.08)}
+  .chathead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .chathead .avatar{width:34px;height:34px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-size:18px}
+  .chathead h2{margin:0;font-size:0.94rem}
+  .chathead .sub{font-size:12px;color:var(--mid)}
+  .chathead .witch{display:inline-block;margin-top:3px;font-size:12px;font-weight:800;color:var(--accent);text-decoration:none}
+  /* Very small, label-only re-roll (#762): the only text is "Get a new witch name", no tooltip or explanation. */
+  /* "see your deployments" (#773): hidden until the visitor's first deployment lands, then a plain small link. */
+  .chathead .mydeploys{margin-left:6px;font-size:11px;font-weight:700;color:var(--accent)}
+  .chathead .newwitch{margin-left:6px;font:inherit;font-size:10px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--accent);padding:1px 6px;border-radius:6px;cursor:pointer;vertical-align:middle}
+  .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  /* PHONE CHAT TITLE (#387). In a row, the tagline squeezed between the avatar and Reset ran to three or
+     four lines at phone width and Reset broke onto two ("↺" over "Reset"). Below 760px the avatar, the
+     "BurritoBot" title and Reset share the first row and the tagline takes the full width under them. */
+  @media(max-width:760px){
+    .chathead{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;padding:10px 12px}
+    .chathead .ctitle{display:contents}
+    .chathead .avatar{grid-column:1;grid-row:1}
+    .chathead h2{grid-column:2;grid-row:1;align-self:center}
+    .chathead .reset{grid-column:3;grid-row:1}
+    .chathead .sub{grid-column:1/-1;grid-row:2}
+  }
+  /* The ONLY scroller in the desktop layout. min-height:0 is what lets it actually shrink. */
+  .stream{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#fff,#fdfaff)}
+  .msg{max-width:78%;padding:0.7rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+  .msgts{margin-top:5px;font-size:10.5px;color:var(--mid);opacity:.75;font-variant-numeric:tabular-nums}
+  .me .msgts{text-align:right;color:rgba(255,255,255,.8)}
+  .bot{align-self:flex-start;background:var(--lav);border-bottom-left-radius:4px}
+  .me{align-self:flex-end;background:var(--dd);color:#fff;border-bottom-right-radius:4px}
+  .sys{align-self:center;font-size:12px;color:var(--mid);background:#f5eefc;border:1px solid var(--line);padding:5px 10px;border-radius:999px}
+  .typing{align-self:flex-start;color:var(--mid);font-size:0.81rem;font-style:italic}
+  /* Pinned: never shrinks, never scrolls away. */
+  .composer{flex:0 0 auto;border-top:1px solid var(--line);padding:12px;display:flex;gap:10px;background:#fff;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .composer input,.composer textarea{flex:1;font:inherit;font-size:0.9rem;padding:0.7rem 0.8rem;border:1px solid var(--line);border-radius:10px}
+  .composer textarea{resize:none;line-height:1.35;max-height:140px;overflow-y:auto}
+  .composer button{font:inherit;font-weight:800;background:var(--accent);color:#fff;border:0;padding:0 18px;border-radius:10px;cursor:pointer}
+  .composer button:disabled{opacity:.5;cursor:default}
+  .store{flex:1 1 auto;display:flex;min-width:0;min-height:0;gap:18px}
+  /* The column has its OWN ground, not just a titled header (Whitney, doc line 165). She asked for
+     "a whole different color scheme" so a first-time student does not read the right column as part
+     of the app they are ordering from. The header alone did not carry that: it sat on the same white
+     as the storefront. Same green family as .panelhdr so the two read as one surface. */
+  .infra{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;
+         padding:14px;background:#f4faf6;border:1px solid #cfe6d9;border-radius:14px;border-left:4px solid var(--r3)}
+  .imrow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
+  .imlbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
+  .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:1rem;color:var(--ink)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+  .card h3{margin:0 0 8px;font-size:0.81rem;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
+  .saved{display:flex;flex-direction:column;gap:8px}
+  #clearsaved{margin-left:auto;font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.4px;border:1px solid var(--line);background:#fff;color:var(--mid);padding:2px 9px;
+    border-radius:6px;cursor:pointer}
+  #clearsaved:hover{background:#f0e9ff;color:var(--accent);border-color:var(--accent)}
+  .saved-item{border:1px solid var(--line);background:#faf6ff;border-radius:8px;padding:8px 10px}
+  .saved-item .ts{font-size:11px;color:#8a7fa6;margin-bottom:4px}
+  .saved-item .txt{text-align:left;font:inherit;font-size:12.5px;color:var(--ink);line-height:1.4;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+  .saved-item .acts{display:flex;gap:6px;margin-top:7px}
+  .saved-item .acts button{font:inherit;font-size:11.5px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:3px 10px;border-radius:6px;cursor:pointer}
+  .saved-item .acts button:hover{background:#f0e9ff}
+  .hint{font-size:12px;color:var(--mid)}
+  /* B-storefront: build-your-burrito menu board (left rail). Tap an item -> sends that order step. */
+  .menu{width:clamp(260px,21vw,420px);flex:0 0 clamp(260px,21vw,420px);display:flex;flex-direction:column;min-height:0;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 22px rgba(99,44,166,.08)}
+  .menu .mhead{background:linear-gradient(135deg,var(--dd),var(--accent));color:#fff;padding:13px 15px}
+  .menu .mhead h2{margin:0;font-size:16px;font-weight:800;letter-spacing:.2px}
+  .menu .mhead .sub{font-size:11.5px;opacity:.92;margin-top:2px}
+  .menu .mscroll{overflow-y:auto;min-height:0;padding:12px 13px;flex:1 1 auto}
+  /* Each course is a STEP, and has to look like one (#143). Previously the five groups ran together as
+     one long list, so it was not obvious where a category ended or that they were sequential. A rule
+     between sections, a heavier header and a plain-language hint make the sequence readable at a glance. */
+  .msec{margin-bottom:14px;padding-bottom:13px;border-bottom:1px solid var(--line)}
+  .msec:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+  .msec .lbl{font-size:12.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink);font-weight:800;margin:0 0 8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .msec .lbl .n{width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;flex:0 0 20px}
+  /* The hint carries the "why this order" without a legend nobody reads. */
+  .msec .lbl .hint{text-transform:none;letter-spacing:0;font-weight:600;font-size:11px;color:var(--mid);opacity:.9}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  /* The menu is a static reference of what BurritoBot can make; not clickable. */
+  .chip{font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:6px 10px;border-radius:999px;line-height:1.2}
+  #noburritos{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:50}
+  #noburritos b{font-size:min(9vw,72px);font-weight:800;letter-spacing:.5px}
+  #noburritos span{margin-top:10px;color:#666;font-size:13px}
+  .winbtn{align-self:flex-start;font:inherit;font-weight:800;font-size:14px;background:linear-gradient(135deg,var(--dd),var(--accent));color:#fff;border:0;padding:11px 16px;border-radius:12px;cursor:pointer;box-shadow:0 4px 14px rgba(138,0,214,.35);animation:winpop .25s ease}
+  @keyframes winpop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  #celebrate{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:60;background:rgba(20,10,30,.5);overflow:hidden}
+  #celebrate .winmsg{background:#fff;border-radius:18px;padding:26px 34px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);max-width:90vw;animation:winpop .3s ease}
+  #celebrate .winmsg h2{margin:0 0 6px;font-size:26px;color:var(--dd)}
+  #celebrate .winmsg p{margin:0;color:var(--mid);font-size:13px}
+  .confetti{position:fixed;top:-40px;font-size:26px;pointer-events:none;z-index:61;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
+  /* flex-wrap so the sponsor line drops to its own row on a narrow viewport instead of forcing the page
+     wider than the screen. flex-shrink:0 keeps it from being squeezed out of the column layout. */
+  footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+  footer .sp{flex:1;min-width:0}
+  .think{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px}
+  .think>summary{cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+    color:var(--mid);opacity:.7;list-style:none}
+  .think>summary::-webkit-details-marker{display:none}
+  .think>summary::before{content:"\25B8 ";font-size:9px}
+  .think[open]>summary::before{content:"\25BE "}
+  .thinkbody{margin-top:6px;font-size:12px;color:var(--mid);white-space:pre-wrap;opacity:.85}
+  @media(max-width:560px){footer .sp{flex-basis:100%;height:0}}
+  .clusterfoot{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--mid);font-size:11.5px}
+  .clusterid{margin-top:auto;padding-top:9px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--mid);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all}
+  /* RESPONSIVE. Three bands, and the composer stays on screen in all of them.
+     The shell above already guarantees it on a wide screen; these only change how the three columns are
+     arranged, never whether the page as a whole scrolls.
+
+     1200px and under: the infra rail is the least important column, so it drops under the chat and the
+     two of them share a scroller, while the menu and chat keep full height side by side.
+     980px and under: everything stacks. The middle band becomes the scroller and the chat column is
+     given a definite height, so the message stream still scrolls INSIDE it and the composer stays
+     pinned to the bottom of a visible box rather than being pushed down the page.
+     640px and under: the menu collapses to a disclosure, because at that width a fixed rail leaves no
+     usable room for the conversation. */
+  @media(max-width:980px){
+    .wrap{flex-direction:column;overflow-y:auto;min-height:0}
+    .infra{width:100%;flex:0 0 auto;border-left:4px solid var(--r3);padding:14px;overflow:visible}
+    .store{flex-direction:column;min-height:0}
+    .menu{width:100%;flex:0 0 auto;max-height:34dvh}
+    .chatcol{flex:0 0 auto;height:min(66dvh,620px)}
+  }
+  @media(max-width:640px){
+    .wrap{padding:10px;gap:10px}
+    .menu{max-height:none}
+    .menu .mscroll{max-height:26dvh}
+    .chatcol{height:min(70dvh,560px)}
+    .msg{max-width:92%}
+    .composer{padding:10px}
+    .composer button{padding:0 14px}
+  }
+  /* Short and wide (a projector, a half-height window) is the same failure without ever being narrow. */
+  @media(min-width:1201px) and (max-height:640px){
+    .wrap{padding-top:8px;padding-bottom:8px}
+    .stream{padding:10px}
+  }
+  /* Phones KEEP the menu (#144). It used to be display:none below 760px, which removed the one surface
+     that tells an attendee what they can order. It now becomes a short scrollable strip above the chat. */
+  @media(max-width:760px){
+    .store{flex-direction:column}
+    .menu{width:100%;flex:0 0 auto;max-height:38vh}
+    .menu .mscroll{padding:10px 11px}
+    .msec{margin-bottom:10px;padding-bottom:9px}
+  }
+  /* PHONES: one natural page scroll, not a stack of viewport-fraction panes (#355). The desktop layout
+     gives .chatcol and .infra each their own dvh-capped height and internal scroller; stacked in a column
+     those heights sum past the screen and the panes overlap (.chatcol and .infra measured 328px of
+     overlap at 390px wide, which is the chat text bleeding through the workshop cards in the bug report).
+     Below 760px the whole document scrolls once: every pane is natural height, no pane owns a private
+     scroller, and nothing is sized to the viewport. */
+  @media(max-width:760px){
+    html,body{height:auto;overflow:visible}
+    .wrap{flex-direction:column;height:auto;overflow:visible;padding:12px;gap:12px}
+    .store{flex-direction:column;height:auto;min-height:0;overflow:visible;gap:12px}
+    .menu,.chatcol,.infra{width:100%;flex:0 0 auto;height:auto;min-height:0;overflow:visible}
+    .menu{max-height:none}
+    .menu .mscroll{max-height:none;overflow:visible}
+    .infra{border-left:4px solid var(--r3);padding:14px}
+    /* The one place a bounded scroller earns its keep: a long conversation should not push the composer
+       and the Backend Insights panel miles down the page. Cap the stream and let it scroll inside the chat card;
+       everything else flows. */
+    .chatcol{order:-1}
+    .stream{max-height:60vh}
+    .composer{position:sticky;bottom:0}
+  }
+  /* Large displays: scale the type up rather than leaving a 4K screen reading like a phone held far away. */
+  @media(min-width:1900px){ body{font-size:17px} .msg{font-size:15.5px} .chip{font-size:13px} }
+  @media(min-width:2560px){ body{font-size:19px} .msg{font-size:17px} .chip{font-size:14.5px} }
+</style>
+</head>
+<body>
+  <!-- BB-2: burrito-in-a-cauldron mark, defined once and reused in the header + chat avatar. -->
+  <!-- Redesigned 2026-08-30 (#134). The old mark read as "a potato on a grill" at its rendered size
+       (~22px): the cauldron was near-black on a dark header with a thin low-contrast rim, and the burrito
+       was a plain rounded rect. This version is built for legibility SMALL, not for detail: chunky shapes,
+       no hairlines, the glyph fills the viewBox, a BRIGHT rim so the cauldron reads as a vessel, and a
+       burrito with a visible spiral tuck + wrap folds so it reads as a rolled tortilla. -->
+  <svg style="display:none" aria-hidden="true"><symbol id="cauldron" viewBox="0 0 32 32">
+    <!-- legs: short and thick so they survive downscaling -->
+    <path d="M10 27.5 l-2.2 3" stroke="#120d18" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M22 27.5 l2.2 3" stroke="#120d18" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- body: wide, deep, near-black for maximum contrast against the bright rim and the pale burrito -->
+    <path d="M3.6 17 a12.4 11.5 0 0 0 24.8 0 z" fill="#120d18"/>
+    <!-- rim: the brightest ring in the mark. This is what makes it read as a cauldron at 22px. -->
+    <ellipse cx="16" cy="17" rx="13.2" ry="3.6" fill="#C77DFF"/>
+    <ellipse cx="16" cy="17" rx="13.2" ry="3.6" fill="none" stroke="#120d18" stroke-width="1.1"/>
+    <!-- brew: hot magenta so the burrito sits on colour, not on black -->
+    <ellipse cx="16" cy="17.1" rx="10.2" ry="2.3" fill="#E040FB"/>
+    <circle cx="10.6" cy="16.6" r="1.25" fill="#FBD3FF"/>
+    <circle cx="21" cy="16.9" r="1" fill="#FBD3FF"/>
+    <!-- the burrito, rising out of the pot and filling the upper half -->
+    <g transform="rotate(-20 16 9)">
+      <!-- body with a dark outline so it holds against both the dark header and a light card -->
+      <rect x="11" y="0.8" width="10" height="15.5" rx="5" fill="#F5CE8B" stroke="#7A4A16" stroke-width="1.3"/>
+      <!-- folded tuck at the top: the detail that says "rolled tortilla", not "potato" -->
+      <path d="M11.6 4.4 a5 3.4 0 0 1 8.8 0 z" fill="#E0B36A" stroke="#7A4A16" stroke-width="1.1" stroke-linejoin="round"/>
+      <!-- wrap folds: thick enough to survive downscaling -->
+      <path d="M12.2 8.6 h7.6 M12.4 11.8 h7.2" stroke="#C0863C" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <!-- spark: the witchy accent, kept clear of the glyph so it never muddies the silhouette -->
+    <path d="M26.6 4.6 l0.85 2.2 l2.2 0.85 l-2.2 0.85 l-0.85 2.2 l-0.85 -2.2 l-2.2 -0.85 l2.2 -0.85 z" fill="#FFD86B"/>
+  </symbol></svg>
+  <header>
+    <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· burritobot.co</small></div>
+    <div class="spacer"></div>
+    <!-- THE SAME FOUR BUTTONS AS THE VTT, same order (Michael, 2026-08-30). This page had no navigation
+         at all, so an attendee who opened BurritoBot had no way back to their terminal except browser
+         history. Keep in sync with the identical block in lab.html. -->
+    <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener">&#9000; Terminal</a>
+    <a class="hb" id="bbbtn" href="/">&#127791; BurritoBot</a>
+    <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
+    <!-- /quick, not the long end-of-workshop form (#364). This is the tab a student sits in for the
+         whole workshop, so it is the likeliest place a thought gets dropped mid-attack, and /quick stays
+         on the page after a send. source=burritobot separates a note left here from one left in the
+         guide, which is what says whether friction was in the chat or in the instructions.
+         This href is the workshop default. An event that names its own survey overrides it from
+         event.js (#451); do not edit an event's URL in here. -->
+    <a class="hb" id="fbbtn" href="https://feedback.burritobot.co/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener">&#128172; Feedback</a>
+  </header>
+
+  <div class="wrap">
+    <div class="store"><!-- left: the storefront product (menu + chat) -->
+    <aside class="menu">
+      <div class="mhead"><h2>Hex &amp; Cauldron</h2><div class="sub">Build your burrito. The BurritoBot will take your order.</div></div>
+      <div class="mscroll">
+        <!-- Single source of truth: keep in sync with the menu in the Agent systemMessage (resources.yaml). -->
+        <div class="msec"><p class="lbl"><span class="n">1</span> Base<span class="hint">rice or greens, in first</span></p><div class="chips">
+          <span class="chip">🟢 Cilantro-Slime Rice</span>
+          <span class="chip">🌫️ Black-Bog Rice</span>
+          <span class="chip">🪦 Graveyard Greens</span>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">2</span> Protein<span class="hint">pick one</span></p><div class="chips">
+          <span class="chip">🍲 Bogbacoa</span>
+          <span class="chip">🐸 Croak-nitas</span>
+          <span class="chip">🧙 Sorcerizo</span>
+          <span class="chip">🌑 Soot-Fritas</span>
+          <span class="chip">🦶 Toe-Fu</span>
+          <span class="chip">🧚 Fae-jita Veggies</span>
+          <span class="chip">🐔 Cluck-a-cadabra</span>
+          <span class="chip">🧛 Vampire Stake</span>
+          <span class="chip">🐺 Werewolf Asada</span>
+          <span class="chip">👻 Al Ghastor</span>
+          <span class="chip">🍯 Honeyed Hex Hen</span>
+          <span class="chip">🔥 Bonfire Brisket</span>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">3</span> Fillings<span class="hint">beans, queso, guac</span></p><div class="chips">
+          <span class="chip">🖤 Black Bane Beans</span>
+          <span class="chip">😈 Imp Pinto Beans</span>
+          <span class="chip">🧀 Kelpie Queso</span>
+          <span class="chip">🥑 Ogre Snot Guac</span>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">4</span> Toppings<span class="hint">the crunchy bits</span></p><div class="chips">
+          <span class="chip">😱 Sour Scream</span>
+          <span class="chip">🌿 Crow's-Foot Cilantro</span>
+          <span class="chip">🥒 Hag Wrinkle Relish</span>
+          <span class="chip">🦠 Tardigrade Crunch</span>
+          <span class="chip">💀 Grated Ghoul Cheese</span>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">5</span> Salsa<span class="hint">goes on last</span></p><div class="chips">
+          <span class="chip">🍅 Pixie-o de Gallo</span>
+          <span class="chip">🌽 Cursed-Corn</span>
+          <span class="chip">👺 Goblin-Green</span>
+          <span class="chip">🐉 Dragon's Blood</span>
+          <span class="chip">🌶️ Ghoul-st Pepper</span>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">+</span> Sides<span class="hint">optional</span></p><div class="chips">
+          <span class="chip">🔺 Toad-illa Chips</span>
+        </div></div>
+      </div>
+    </aside>
+    <div class="chatcol">
+      <div class="chathead">
+        <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
+        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a><button type="button" class="newwitch" id="newwitch" hidden>Get a new witch name</button><a class="mydeploys" id="mydeploys" hidden target="_blank" rel="noopener">see your deployments</a></div>
+        <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
+      </div>
+      <div class="stream" id="stream"></div>
+      <div class="composer">
+        <textarea id="inp" rows="1" placeholder="Tell BurritoBot what you'd like…" onkeydown="composerKey(event)" oninput="growComposer(this)" autocomplete="off"></textarea>
+        <button id="sendbtn" onclick="send()">Send</button>
+      </div>
+    </div>
+    </div><!-- /.store -->
+    <!-- BACKEND INSIGHTS panel. Deliberately distinct from the BurritoBot storefront: a first-time viewer
+         must read this column as the backend watching the app, not as part of the app they are ordering
+         from (Whitney, 2026-09-05, #212; renamed from "Workshop Panel" in #761 since the KubeCon talk is a
+         breakout, not a workshop). No round selector: students only ever use their own cluster, and
+         "rounds" is admin-only jargon (#213). -->
+    <aside class="infra">
+      <div class="panelhdr">&#128295; Backend Insights</div>
+      <!-- Shown ONLY on the private (administrator) bot (#761). The public bot carries no banner: the
+           room only ever uses the public bot, so a "this is the community bot" line told them nothing
+           (that was the old #292 banner, retired here). The two presenters switch between the public and
+           private bots mid-demo, and nothing on the private bot told them which one they were on. This
+           warning does, driven by the host guard-proxy reports, so attendee clusters and the public bot
+           never show it. -->
+      <div id="privatebanner" class="combanner" hidden>This is the private (administrator) BurritoBot.</div>
+      <!-- Guardrails the student has installed. A badge APPEARS only when its control is on; nothing is
+           shown grayed-out, because dim placeholders telegraph how many controls exist and spoil the arc
+           (Whitney, 2026-09-05, #211). The empty-state header is shown until the first control goes in.
+           The heading starts as "No guardrails installed" and becomes "Guardrails installed" when the first
+           badge appears (#923): the old fixed heading read as a claim that guardrails were on. -->
+      <div class="card">
+        <h3 id="badgeshead">No guardrails installed</h3>
+        <div id="badges" class="badges" aria-live="polite"></div>
+        <div id="badgesnote" class="badgesnote">Guardrails will appear here when you install them.</div>
+      </div>
+      <div class="card">
+        <div class="imrow"><span class="imlbl">Tokens</span><b class="imval" id="tokens">0</b></div>
+        <div class="imrow"><span class="imlbl">Cost</span><b class="imval" id="costusd">$0.0000</b></div>
+      </div>
+      <div class="card">
+        <h3 style="display:flex;align-items:center;gap:8px">Your saved prompts
+          <button type="button" id="clearsaved" onclick="clearSaved()" title="Remove every saved prompt">clear</button>
+        </h3>
+        <div class="saved" id="saved"><div class="hint">Every prompt you send is saved here, reuse it any time.</div></div>
+      </div>
+      <div class="clusterid" id="clusterid"></div>
+    </aside>
+  </div>
+
+  <footer>
+    <span>🔥 Watch It Burn</span>
+    <span class="clusterfoot" id="clusterfoot"></span>
+    <span class="sp"></span>
+    <span>Co-sponsored by <strong style="color:var(--dd)">Datadog</strong> &amp; <strong style="color:var(--acn)">Neo4j</strong></span>
+  </footer>
+
+  <div id="noburritos"><b>NO BURRITOS FOR YOU</b><span id="nbsub">(no cluster connected)</span></div>
+  <div id="celebrate"><div class="winmsg"><h2>🌯 Free burritos for life! 🌯</h2><p>You made it through the whole order at Hex &amp; Cauldron. Click anywhere to close.</p></div></div>
+
+<!-- The event knob (#451): where Feedback goes for the event this fleet serves. A missing file leaves
+     window.WIB_EVENT unset, and the button keeps the workshop's /quick form below. -->
+<script src="event.js"></script>
+<script>
+  // Every cluster's BurritoBot talks to its OWN same-origin /chat. The agenticburn.com router proxies the
+  // whole host+path (e.g. burritobot-private.agenticburn.com/chat) to that cluster's console, so same-origin
+  // reaches the right backend with NO cross-origin call (a cross-origin POST triggers a CORS preflight the
+  // backend returns 501 on -> the browser blocks it -> "couldn't reach the kitchen").
+  // The backend is always this cluster's own console, same-origin, so there is one endpoint. The round
+  // selector is gone (#213): students only ever use their own cluster and "rounds" is admin jargon.
+  const CHAT_ENDPOINT = "/chat";
+  // THE BANNER REPORTS MEASURED STATE, NOT A GUESS FROM THE HOSTNAME.
+  //
+  // It used to be derived from the cluster name, and that inverted twice in one day. First it defaulted
+  // to r1, so a themed attendee host (hexhen-zelda) matched no round pattern and read "NO GUARDRAILS".
+  // The default was flipped to r3, and then every student cluster read "ALL GUARDRAILS" while the live
+  // /guards endpoint reported all four guards false, which is what a student cluster ships as so the
+  // attacks land. Whitney hit that in a walkthrough on 2026-09-03: the banner told her everything was
+  // on, the model's own refusals read as guardrails, and she had no way to tell the two apart.
+  //
+  // A hostname cannot answer this question. /guards can, it is authoritative, and checkBackend already
+  // polls it every 12s. Driving the badges from it also makes a toggle visible: turn a guard on in the
+  // terminal and its badge lights up within a poll, which is a better demo than a static label.
+  // One badge per control the student installs, each naming the real tool, lit when that control is
+  // measured ON. Ordered by challenge number so the strip reads left to right the way the lab does.
+  //   src 'infra' -> read from /controls.infra (a real cluster object: NetworkPolicy, Kyverno enforce,
+  //                  KubeArmor, Falco, the MCP tool allow-list).
+  //   src 'ai'    -> read from /controls.ai (the guard-proxy toggles: C4 budget, C5 output, C6 input).
+  // C3 is TWO badges on purpose (Michael, 2026-09-04): KubeArmor prevents and Falco detects, which is
+  // the point of the challenge. Falco is the one badge that is not a thing the student turns on: it is
+  // installed with the cluster, or (the burn profile) not at all, and /controls reports which (#486).
+  const BADGES = [
+    {src:'infra', key:'networkpolicy',  label:'NetworkPolicy'},
+    {src:'infra', key:'kyverno',        label:'Kyverno'},
+    {src:'infra', key:'kubearmor',      label:'KubeArmor'},
+    {src:'infra', key:'falco',          label:'Falco',            pairWith:'kubearmor'},
+    {src:'ai',    key:'budget',         label:'Budget cap'},
+    {src:'ai',    key:'output',         label:'LLM Guard · output'},
+    {src:'ai',    key:'input_blocklist',label:'LLM Guard · input'},
+    {src:'infra', key:'tool_allowlist', label:'Tool allow-list'},
+    {src:'infra', key:'rbac_scoped',    label:'RBAC scope'}
+  ];
+  // Accepts the /controls shape {ai:{...}, infra:{...}}. Tolerates the older /guards shape (a flat AI
+  // object) so a stale cache or a proxy that predates /controls still lights the AI badges instead of
+  // showing everything dark.
+  // Render a badge ONLY for a control that is measured ON. No grayed-out placeholders: dim badges
+  // telegraph how many controls exist and spoil the arc (Whitney, 2026-09-05, #211). The panel starts
+  // empty with a header, and fills in one badge at a time as the student installs each control.
+  function applyControls(c){
+    // The private (administrator) bot announces itself, driven by the host guard-proxy reports rather than
+    // anything baked into this page: the same page ships to every cluster, so the condition is the private
+    // bot's host (burritobot-private.) and nothing else. The public bot (attackme.) and every attendee
+    // cluster match no host rule here and show no banner at all (#761).
+    var ban=document.getElementById('privatebanner');
+    if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^burritobot-private\./.test(c.host)); }
+    var strip=document.getElementById('badges'); if(!strip) return;
+    var ai    = (c && c.ai)    ? c.ai    : (c || {});
+    var infra = (c && c.infra) ? c.infra : {};
+    var shown=0;
+    strip.innerHTML='';
+    BADGES.forEach(function(bd){
+      var on = ((bd.src==='infra') ? infra[bd.key] : ai[bd.key]) === true;
+      // Falco runs from the start, so on its own it would light a lone badge on a fresh cluster and break
+      // the empty start Whitney asked for (#211). It is the detection half of the C3 pair, so it appears
+      // WITH KubeArmor (the prevention half the student installs), never alone, and only where /controls
+      // measured Falco on the cluster.
+      if(bd.pairWith) on = on && infra[bd.pairWith]===true;
+      if(!on) return;                          // absent-until-installed
+      shown++;
+      var el=document.createElement('span');
+      el.className='bdg on';
+      el.innerHTML='<span class="bdot"></span>'+bd.label;
+      el.title=bd.label+' is installed on this cluster';
+      strip.appendChild(el);
+    });
+    var note=document.getElementById('badgesnote');
+    if(note) note.hidden = shown>0;            // header shows only while the panel is empty
+    // The heading follows the same count as the badges (#923), never the hostname: it reads "No guardrails
+    // installed" until the first badge appears and goes back to it if every badge goes off. Only the text
+    // changes, so the styling is the same .card h3 either way.
+    var head=document.getElementById('badgeshead');
+    if(head) head.textContent = shown>0 ? 'Guardrails installed' : 'No guardrails installed';
+  }
+  // Back-compat alias: earlier code and any external caller referenced applyGuardState.
+  function applyGuardState(g){ applyControls(g); }
+  let tokens=0, costUsd=0, busy=false, unreachable=0;
+  // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
+  // 5-step order across turns. Reset starts a fresh order (new id).
+  function newSession(){var s='sess-'+Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('wib-sess',s);return s;}
+  function getSession(){return sessionStorage.getItem('wib-sess')||newSession();}
+  // Each chat bubble carries the clock time it was sent plus a live-updating age ("just now", "30s ago"),
+  // so a student waiting on a trace can tell elapsed time from a feeling (#282). The age is refreshed by a
+  // single interval below rather than a timer per message.
+  const _stamped = [];
+  function relAge(ms){const s=Math.round((Date.now()-ms)/1000);
+    if(s<10)return 'just now'; if(s<60)return s+'s ago';
+    const m=Math.round(s/60); if(m<60)return m+' min ago'; return Math.round(m/60)+'h ago';}
+  function bubble(t,who){
+    const d=document.createElement('div');d.className='msg '+who;
+    const body=document.createElement('div');body.textContent=t;d.appendChild(body);
+    const now=Date.now();
+    const meta=document.createElement('div');meta.className='msgts';
+    meta.innerHTML='<span class="clock">'+fmtTs(now)+'</span> <span class="age">just now</span>';
+    d.appendChild(meta);
+    _stamped.push({at:now, el:meta.querySelector('.age')});
+    const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
+  // One ticker updates every bubble's age. 15s is fine: the numbers it shows change on that granularity.
+  setInterval(function(){for(const m of _stamped){ if(m.el) m.el.textContent=relAge(m.at); }},15000);
+  // Nova emits its scratchpad wrapped in <thinking>...</thinking> and the raw tags were rendering into the
+  // customer chat (seen live on round1, 2026-09-02). It is FOLDED, never dropped: a workshop about what
+  // leaks out of an agent cannot quietly delete part of the model's output, and challenge 5's secret can
+  // land inside the scratchpad. The customer sees a clean reply; one click shows what the model thought.
+  // Whitespace-tolerant as well as case-insensitive. Nova varies the tag (<Thinking>, </thinking >), and
+  // a variant that does not match renders RAW to the student, which is the #100 symptom returning by a
+  // side door. Matching loosely costs nothing here: the only thing between these markers is scratchpad.
+  // A block Nova never closes runs to the end of the reply, and a tag left over on its own is dropped, so
+  // no "<thinking>" text reaches the bubble (#530). When folding leaves nothing to read, the reasoning IS
+  // the reply and is shown untagged, as guard-proxy does for a reasoning-only answer. verify/kubecon_probe.py
+  // reads these two patterns off this page to judge what the room sees; keep them one line each.
+  const THINK_RE=/<\s*thinking\s*>([\s\S]*?)(?:<\s*\/\s*thinking\s*>|$)/gi;
+  const THINK_TAG_RE=/<\s*\/?\s*thinking\s*>/gi;
+  function splitThinking(t){
+    t=String(t==null?'':t);
+    const thoughts=[]; let m;
+    THINK_RE.lastIndex=0;
+    while((m=THINK_RE.exec(t))!==null){
+      const th=m[1].replace(THINK_TAG_RE,' ').trim(); if(th) thoughts.push(th);
+    }
+    let visible=t.replace(THINK_RE,'\n').replace(THINK_TAG_RE,' ').replace(/\n{3,}/g,'\n\n').trim();
+    if(!visible && thoughts.length){ visible=thoughts.join('\n\n'); thoughts.length=0; }
+    return {visible:visible, thoughts:thoughts};
+  }
+  function botReply(t){
+    const split=splitThinking(t), visible=split.visible, thoughts=split.thoughts;
+    const d=bubble(visible||'…','bot');
+    thoughts.forEach(function(th){
+      const det=document.createElement('details'); det.className='think';
+      const sum=document.createElement('summary'); sum.textContent='model reasoning';
+      const body=document.createElement('div'); body.className='thinkbody'; body.textContent=th;
+      det.appendChild(sum); det.appendChild(body);
+      // Insert before the timestamp line so the stamp stays the last thing in the bubble.
+      const meta=d.querySelector('.msgts'); if(meta) d.insertBefore(det, meta); else d.appendChild(det);
+    });
+    const s=document.getElementById('stream'); s.scrollTop=s.scrollHeight;
+    return d;
+  }
+  function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
+  function fmtTs(ts){try{return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+  function renderSaved(item){
+    const t=(typeof item==='string')?item:item.t;
+    const ts=(typeof item==='string')?null:item.ts;
+    const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';
+    const w=document.createElement('div');w.className='saved-item';
+    if(ts){const d=document.createElement('div');d.className='ts';d.textContent=fmtTs(ts);w.appendChild(d);}
+    const tx=document.createElement('div');tx.className='txt';tx.textContent=t;tx.title='Click to reuse';
+    const reuse=()=>{const i=document.getElementById('inp');i.value=t;growComposer(i);i.focus();};
+    tx.onclick=reuse;w.appendChild(tx);
+    const a=document.createElement('div');a.className='acts';
+    const rb=document.createElement('button');rb.textContent='Reuse';rb.onclick=reuse;
+    const cb=document.createElement('button');cb.textContent='Copy';
+    cb.onclick=()=>{navigator.clipboard.writeText(t).then(()=>{cb.textContent='Copied';setTimeout(()=>{cb.textContent='Copy';},1200);}).catch(()=>{});};
+    a.appendChild(rb);a.appendChild(cb);w.appendChild(a);
+    // Newest first (Michael, 2026-09-08). A student sends dozens of prompts in an hour and wants the
+    // one they just sent, not the one they opened with. Prepending also means the rail does not grow
+    // downward out of view on a laptop.
+    s.insertBefore(w, s.firstChild);
+    // Trim from the BOTTOM now, because the bottom is the oldest.
+    var items=s.querySelectorAll('.saved-item');
+    while(items.length>10){s.removeChild(items[items.length-1]);items=s.querySelectorAll('.saved-item');}
+  }
+  // The code-of-conduct check for "Your saved prompts" (#947, the first half of #922). COC_TERMS is guard-proxy's
+  // PROFANITY list, the words its wall feed masks with [redacted], and cocViolation matches them the way
+  // proxy.py's _profanity_pattern() does: whole words, an optional plural s, longest term first, case-blind.
+  // JavaScript's \b and i flag are not Python's, so both are spelled out: a word edge is any character that is
+  // not a Unicode letter, digit or underscore, and each letter matches what re.IGNORECASE folds it with (i also
+  // takes the dotted and dotless i, k the Kelvin sign, s the long s). Only this list: BLOCK_LIST attack words and
+  // personal data are masked on the wall but are not code-of-conduct problems in the attendee's own saved list.
+  // verify/test_chat_coc_e2e.py runs this against the pinned proxy.py on every assigned code point.
+  const COC_TERMS='fuck,fucks,fucked,fucker,fucking,fuckin,motherfucker,motherfucking,shit,shitty,shitting,bullshit,shithead,cunt,bitch,bitches,bitching,bastard,dick,dickhead,cock,pussy,asshole,dumbass,jackass,wanker,twat,nigger,faggot,retard,retarded,tranny,slut,whore,rape,raped,rapist,kike,spic,chink';
+  const COC_FOLD={i:'iI\u0130\u0131',k:'kK\u212A',s:'sS\u017F'};
+  function cocLetter(c){return '['+(COC_FOLD[c]||c+c.toUpperCase())+']';}
+  const COC_RE=new RegExp('(?<![\\p{L}\\p{N}_])(?:'+COC_TERMS.split(',')
+    .sort(function(a,b){return b.length-a.length;})
+    .map(function(w){return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/[a-z]/g,cocLetter);})
+    .join('|')+')'+cocLetter('s')+'?(?![\\p{L}\\p{N}_])','u');
+  function cocViolation(t){return COC_RE.test(String(t==null?'':t));}
+  // A prompt cocViolation flags is not saved (#948, the second half of #922): it is still sent and still shows as
+  // the person's bubble, since guard-proxy and the bot handle it as before, but it never reaches the rail or
+  // wib-saved. loadSaved does the same at page load for entries saved before this check, and writes the pruned
+  // list back, so an old violation does not return on a reload. Entries are {t,ts}, or a bare string from an
+  // older page. verify/test_chat_saved_coc_e2e.py runs this script in node and holds both paths.
+  function loadSaved(){
+    var a; try{ a=JSON.parse(localStorage.getItem('wib-saved')||'[]'); }catch(e){ return; }
+    if(!Array.isArray(a)) return;
+    var kept=a.filter(function(x){return !cocViolation((x&&typeof x==='object')?x.t:x);});
+    if(kept.length!==a.length){ try{ localStorage.setItem('wib-saved',JSON.stringify(kept)); }catch(e){} }
+    try{ kept.forEach(renderSaved); }catch(e){}
+  }
+  function save(t){if(cocViolation(t))return;const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
+  function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
+  // Reset clears the CONVERSATION and the saved-prompt rail, and says so. Previously it cleared only the
+  // stream while the rail kept every prompt from every prior session in localStorage, so a student who
+  // pressed Reset still saw a screen full of someone else's work and reasonably concluded it had not
+  // reset. Whitney hit exactly this. Refresh is not Reset: the rail is deliberately durable across a
+  // reload so a prompt survives a closed tab, which is why only this button empties it.
+  function clearSaved(){
+    try{ localStorage.removeItem('wib-saved'); }catch(e){}
+    const s=document.getElementById('saved');
+    if(s) s.innerHTML='<div class="hint">Every prompt you send is saved here, reuse it any time.</div>';
+  }
+  // Reset mints a new session id, which is sent as the A2A contextId, so the agent genuinely forgets. A
+  // page refresh does NOT: sessionStorage survives both a refresh and a hard refresh in the same tab, and
+  // that surprises students (#311). The saved prompts are deliberately KEPT: the reason to reset is that
+  // BurritoBot refused you, and the very next thing you want is the prompt you just sent.
+  function resetChat(){
+    document.getElementById('stream').innerHTML='';
+    newSession();
+    greet();
+    sys('New conversation. BurritoBot has forgotten everything you said. Your saved prompts are still here.');
+  }
+  // Asks for the BASE, the first step on the board (#143). It asked for the protein before, which was
+  // step 2, so the bot and the menu disagreed about where to start.
+  function greet(){bubble("Welcome to BurritoBot, the Hex & Cauldron ordering app. 🧙 Let's build your burrito, starting from the bottom. What base would you like? (Cilantro-Slime Rice, Black-Bog Rice, or Graveyard Greens, or ask me for the full menu.)",'bot');}
+  // Easter egg (#36): when BurritoBot rings up a completed five-step order it says "Free burritos for life";
+  // that surfaces a ring-me-up button in chat, and clicking it sets off a silly celebration.
+  function winBubble(){
+    const s=document.getElementById('stream');
+    const d=document.createElement('div'); d.className='msg bot';
+    const b=document.createElement('button'); b.className='winbtn'; b.type='button';
+    b.textContent="🔔 That's my order, ring me up!"; b.onclick=celebrate;
+    d.appendChild(b); s.appendChild(d); s.scrollTop=s.scrollHeight;
+  }
+  function celebrate(){
+    const o=document.getElementById('celebrate'); o.style.display='flex';
+    const em=['🌯','🧙‍♀️','✨','🔥','🫔','🌶️','🪄','👻'];
+    for(let i=0;i<48;i++){
+      const c=document.createElement('div'); c.className='confetti'; c.textContent=em[i%em.length];
+      c.style.left=Math.random()*100+'vw'; c.style.animationDuration=(2+Math.random()*3)+'s'; c.style.animationDelay=(Math.random()*0.6)+'s';
+      o.appendChild(c); setTimeout(function(){c.remove();},6000);
+    }
+    o.onclick=function(){o.style.display='none';};
+  }
+
+  // Enter sends; Ctrl+Enter (or Cmd+Enter on Mac) inserts a newline. Works the same on Mac + Windows.
+  function composerKey(e){
+    if(e.key!=='Enter')return;
+    if(e.ctrlKey||e.metaKey){
+      e.preventDefault();
+      const t=e.target, s=t.selectionStart, en=t.selectionEnd;
+      t.value=t.value.slice(0,s)+'\n'+t.value.slice(en);
+      t.selectionStart=t.selectionEnd=s+1;
+      growComposer(t);
+    } else {
+      e.preventDefault(); send();
+    }
+  }
+  function growComposer(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,140)+'px'; }
+  async function send(){
+    if(busy)return;const i=document.getElementById('inp');const v=i.value.trim();if(!v)return;
+    bubble(v,'me');save(v);i.value='';growComposer(i);busy=true;document.getElementById('sendbtn').disabled=true;
+    const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
+    const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
+    try{
+      // The session rides as a header too, so the console's nginx can hold one conversation to its 10 a minute,
+      // the room's only limit there: nothing keys on the network (#450, console.conf).
+      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-BurritoBot-Session':getSession()},body:JSON.stringify({prompt:v,session:getSession(),witch:WITCH_NAME})});
+      t.remove();
+      // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead
+      // screen here; that is reserved for a genuinely unreachable cluster (the catch below).
+      unreachable=0; noBurritos(false);
+      // guard-proxy and the console's nginx both answer an error in the /chat shape, so its reply is the
+      // sentence to show; the status code is for a body that carries none (BurritoBot#110, #450).
+      if(!res.ok){ let r=''; try{ r=(await res.json()).reply||''; }catch(e){}
+        bubble(r||("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again."),'bot'); return; }
+      const data=await res.json();
+      botReply(data.reply);
+      checkMyDeployments();
+      if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();
+      const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;
+      document.getElementById('tokens').textContent=tokens.toLocaleString();
+      document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
+    }catch(e){
+      // Could not reach the cluster at all (network error). One blip is transient; only treat the
+      // cluster as actually down after two in a row, then show the real cluster-dead screen.
+      t.remove(); unreachable++;
+      if(unreachable>=2){ noBurritos(true,'(no cluster connected)'); }
+      else { bubble("Couldn't reach the kitchen just now, give it a moment and send that again.",'bot'); }
+    }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
+  }
+  // The left menu is a static reference of what BurritoBot can make; ordering happens in chat.
+  // Cluster identity comes from the link the provisioning app built (it knows the student's cluster + email).
+  // Enable/disable the chat based on whether THIS cluster's backend answers. Never let the user type into
+  // a chat whose backend is down (Michael's note): if the kitchen is closed, say so and disable input.
+  function setBackendUp(up){
+    var inp=document.getElementById('inp'), btn=document.getElementById('sendbtn');
+    if(inp){ inp.disabled=!up; inp.placeholder = up ? "Tell BurritoBot what you'd like…" : "BurritoBot backend is starting up — give it a moment…"; }
+    if(btn) btn.disabled=!up;
+  }
+  // The checks run every 12 seconds and can overlap: while the cluster is unreachable each one waits out the
+  // router's 5-second retry budget twice (/controls, then /guards). So a check that set out before a standby took
+  // the hostname can land after a newer one has already found the standby up, and it greyed the composer out again
+  // until the next check (the #986 failover drill, 2026-11-06). A check's answer counts only when no check that
+  // started after it has already landed.
+  let backendStarted=0, backendLanded=0;
+  async function checkBackend(){
+    const mine=++backendStarted;
+    const current=function(){ if(mine<backendLanded) return false; backendLanded=mine; return true; };
+    refreshCap();
+    // /controls is both the liveness probe AND the badge source: it returns 200 whenever the proxy is
+    // up (even if it cannot read the cluster, in which case infra fields are false/null and only the AI
+    // badges light). One fetch drives both, and it is the authoritative answer to "what is guarding me".
+    try{ const r=await fetch('/controls',{method:'GET',cache:'no-store'});
+         if(r.ok){ if(!current()) return; setBackendUp(true); unreachable=0; noBurritos(false);
+                   try{ applyControls(await r.json()); }catch(e){}
+                   return; } }catch(e){}
+    // Fall back to /guards for a proxy image that predates /controls, so the AI badges still light.
+    try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'});
+         if(r.ok){ if(!current()) return; setBackendUp(true); unreachable=0; noBurritos(false);
+                   try{ applyControls(await r.json()); }catch(e){}
+                   return; } }catch(e){}
+    if(!current()) return;
+    setBackendUp(false);
+  }
+  // Show the ACTIVE spend ceiling next to the counter (#138). The backend reports whichever cap would bite
+  // first: the always-on infra cap, or the tighter C4 budget cap once that guard is toggled on. Polled with
+  // the backend check so flipping the budget guard live updates the number without a reload. Server-side
+  // spend is authoritative here (it survives a page reload; the local counter does not), so use it when it
+  // is ahead of what this tab has accumulated.
+  // Keep the Cost counter authoritative (server spend survives a reload; the local tally does not).
+  // The spend-cap display was removed (#214): "infra backstop, not a guardrail" confused students. The
+  // C4 budget cap still ENFORCES at the proxy; only its confusing UI readout is gone.
+  async function refreshCap(){
+    try{
+      const r=await fetch('/cost',{cache:'no-store'}); if(!r.ok) return;
+      const d=await r.json();
+      // Tokens moves with Cost, so the two always count the same thing (a fresh tab showed 0 beside $0.24).
+      if(typeof d.usd==='number' && d.usd>costUsd){
+        costUsd=d.usd; document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
+        if(typeof d.total_tokens==='number'){
+          tokens=d.total_tokens; document.getElementById('tokens').textContent=tokens.toLocaleString();
+        }
+      }
+    }catch(e){}
+  }
+  (function init(){
+    var q=new URLSearchParams(location.search);
+    var cluster=q.get('cluster'), user=q.get('user');
+    // Identity follows the nav links, so the VTT button lands on THIS cluster's terminal.
+    var nq=[]; if(cluster)nq.push('cluster='+encodeURIComponent(cluster)); if(user)nq.push('user='+encodeURIComponent(user));
+    // An event that names its own survey (event.js, #451) sends Feedback there verbatim: it is a third
+    // party's page, so no cluster or user rides along. Otherwise the button keeps the workshop's /quick.
+    var ev=window.WIB_EVENT||{}, fb=document.getElementById('fbbtn');
+    var evfb=(typeof ev.feedbackUrl==='string' && /^https:\/\//.test(ev.feedbackUrl)) ? ev.feedbackUrl : '';
+    if(fb&&evfb)fb.href=evfb;
+    // A talk's room uses the public bot from phones and has no use for a shell (#645, Whitney 2026-10-28:
+    // "terminal invites chaos"). When the event says so, the Terminal button is hidden on the host the room
+    // was handed, publicUrl's host; the presenters' private bot and every attendee cluster keep it.
+    // Both domains serve the public bot (#651), so every name in publicHosts counts, plus publicUrl's host.
+    var pubHosts=Array.isArray(ev.publicHosts) ? ev.publicHosts.slice() : [];
+    try{ if(ev.publicUrl) pubHosts.push(new URL(ev.publicUrl).hostname); }catch(e){}
+    var onPublic=pubHosts.indexOf(location.hostname)>=0;
+    var vtb=document.getElementById('vttbtn');
+    if(vtb && ev.hideTerminalOnPublic===true && onPublic) vtb.hidden=true;
+    // Nor a Datadog button (#647, Whitney 2026-11-01): the room gets no link to any Datadog view and sees
+    // Datadog only when the presenters put it on the big screen.
+    var ddb=document.getElementById('ddbtn');
+    if(ddb && ev.hideDatadogOnPublic===true && onPublic) ddb.hidden=true;
+    if(nq.length){
+      var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
+      // Join with & when the href already carries a query string (#364). A bare '?' on a URL that
+      // already has one drops the cluster identity silently instead of failing loudly.
+      if(fb&&!evfb)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
+      var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
+    }
+    // Same as lab.html: show the name the student was GIVEN (the hostname they are on), not the
+    // internal watch-it-burn-attendee-NNN slot id, which is not what is on their claim page and is not
+    // something anyone can act on. Internal id stays in the tooltip.
+    var _host=(location.hostname||'').split('.')[0];
+    var _pretty=(_host && _host!=='localhost') ? _host : cluster;
+    if(_pretty){var txt='Cluster '+_pretty+(user?(' \u00b7 '+user):'');
+      var ci=document.getElementById('clusterid'); if(ci){ci.textContent=txt; ci.title=cluster||'';}
+      var cf=document.getElementById('clusterfoot'); if(cf){cf.textContent=txt; cf.title=cluster||'';}}
+    loadSaved();
+    setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
+  })();
+  // The visitor's witchy name (#685, #762/#763). The name shows as PLAIN TEXT with no link (#763): linking the
+  // header to the support desk gave away Challenge 3 before the presenters reached it. Every visitor gets a name
+  // on their FIRST visit (#762): the page picks one from the same vocabulary the support desk uses and sets the
+  // wib_witch cookie on .burritobot.co itself, so the desk, /me and the projected wall all find the person's
+  // Joker under one name. WITCH_FIRST and WITCH_CREATURES are mirrored from ticket_site.py's FIRST and CREATURES
+  // and kept in step by verify/test_witch_name_vocab.py. The name is sent with each /chat call (the `witch`
+  // field in the POST body) so the bot knows who it is talking to without the visitor typing it, and HC-666
+  // still lands joker-<slug> once guard-proxy forwards it into the agent context (guard-proxy-agenticburn#34).
+  var WITCH_FIRST=["Agatha","Barnaby","Beatrix","Cassius","Cordelia","Dorian","Edgar","Elspeth","Fenwick","Gideon",
+    "Griselda","Hazel","Ichabod","Isolde","Jasper","Lenore","Lucius","Mabel","Morgana","Mortimer","Nettie","Octavia",
+    "Percival","Prudence","Quentin","Rowena","Silas","Tabitha","Ursula","Victoria","Walter","Wilhelmina"];
+  var WITCH_CREATURES=["Banshee","Basilisk","Cyclops","Djinn","Gargoyle","Ghoul","Goblin","Gorgon","Harpy","Imp",
+    "Kelpie","Lich","Mummy","Ogre","Phantom","Pixie","Siren","Sorcerer","Troll","Vampire","Warlock","Werewolf",
+    "Witch","Wraith"];
+  var WITCH_NAME="";   // the current visitor's display name, read by the /chat sender
+  function witchSlug(n){ return n.toLowerCase().replace(/ /g,'-'); }
+  // Accept a slug only when both halves are in the vocabulary, mirroring the desk's name_from_slug: a name from
+  // any other vocabulary is not recognized and is replaced with a fresh one.
+  function witchFromSlug(s){
+    var m=/^([a-z]+)-the-([a-z]+)$/.exec(s||""); if(!m) return null;
+    var f=m[1].charAt(0).toUpperCase()+m[1].slice(1), c=m[2].charAt(0).toUpperCase()+m[2].slice(1);
+    return (WITCH_FIRST.indexOf(f)>=0 && WITCH_CREATURES.indexOf(c)>=0) ? (f+" the "+c) : null;
+  }
+  function randWitch(){
+    return WITCH_FIRST[Math.floor(Math.random()*WITCH_FIRST.length)]+" the "+
+           WITCH_CREATURES[Math.floor(Math.random()*WITCH_CREATURES.length)];
+  }
+  // A re-roll picks among the other 767 names, so "Get a new witch name" never hands back the same one (#802).
+  function otherWitch(old){
+    var C=WITCH_CREATURES.length, p=(old||"").split(" the "), f=WITCH_FIRST.indexOf(p[0]), c=WITCH_CREATURES.indexOf(p[1]);
+    var i=Math.floor(Math.random()*(WITCH_FIRST.length*C-1));
+    if(f>=0 && c>=0 && i>=f*C+c) i++;
+    return WITCH_FIRST[Math.floor(i/C)]+" the "+WITCH_CREATURES[i%C];
+  }
+  function setWitchCookie(name){
+    var host=location.hostname||"";
+    var domain=/\.burritobot\.co$/.test(host) ? "; Domain=.burritobot.co" : "";
+    document.cookie="wib_witch="+witchSlug(name)+"; Path=/; Max-Age=172800; SameSite=Lax"+domain;
+  }
+  (function witchName(){
+    var host=location.hostname||"", el=document.getElementById('witch'), btn=document.getElementById('newwitch');
+    if(!el || !/\.burritobot\.co$/.test(host))return;   // the desk and wall live on burritobot.co; other domains show no name
+    el.removeAttribute('href'); el.removeAttribute('target'); el.removeAttribute('rel');
+    var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||"");
+    var name = m && witchFromSlug(m[1]);
+    if(!name){ name=randWitch(); setWitchCookie(name); }   // first visit, or a slug from another vocabulary: assign one
+    WITCH_NAME=name;
+    el.textContent='\uD83E\uDDD9 You are '+name;
+    el.hidden=false;
+    if(btn){
+      btn.hidden=false;
+      // Re-roll: a new name, cookie replaced on .burritobot.co. Jokers already deployed under the old name keep it.
+      btn.addEventListener('click',function(){
+        WITCH_NAME=otherWitch(WITCH_NAME); setWitchCookie(WITCH_NAME);
+        el.textContent='\uD83E\uDDD9 You are '+WITCH_NAME;
+        checkMyDeployments();
+      });
+    }
+  })();
+  // "see your deployments" (#773, the link #763 removed as "see your Jokers", renamed). Hidden until BurritoBot has
+  // deployed something under this visitor's witch name, then a link to the deployments page, filtered to them. The
+  // page is deployments-<this cluster>, which the console serves (console.conf) and which links to nothing on the
+  // support desk. Checked on load, after each reply and once more a few seconds later, since deploy_app reports to
+  // the desk on its own thread: /deployments.json on this same host, so the check is same-origin.
+  function checkMyDeployments(again){
+    var a=document.getElementById('mydeploys'), host=location.hostname||"";
+    if(!a) return;
+    if(!WITCH_NAME || !/\.burritobot\.co$/.test(host)){ a.hidden=true; return; }
+    var s=witchSlug(WITCH_NAME);
+    fetch('/deployments.json?witch='+encodeURIComponent(s),{cache:'no-store'}).then(function(r){return r.ok?r.json():[];})
+      .then(function(rows){
+        if(witchSlug(WITCH_NAME)!==s) return;   // re-rolled while the check was out
+        var mine=Array.isArray(rows) && rows.length>0;
+        a.href='https://deployments-'+host.replace(/\.burritobot\.co$/,'')+'.burritobot.co/mine?witch='+encodeURIComponent(s);
+        a.hidden=!mine;
+        if(!mine && !again) setTimeout(function(){ checkMyDeployments(true); },4000);
+      }).catch(function(){});
+  }
+  checkMyDeployments(true);
+  greet();
+</script>
+</body>
+</html>
