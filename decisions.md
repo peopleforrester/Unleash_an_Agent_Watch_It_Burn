@@ -28631,3 +28631,23 @@ read, so that red is not named; it is filed as a follow-up. The second and third
 `74 checks ran (the offline suite and 73 tier tests) in 13m23s, 4 at a time` (11m59s for the third),
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No cluster check applies: the change is to the gate's runner and two
 offline tests, which reach no cluster.
+
+## 2026-11-07 · #1005 · run 18110 · Run 18039's commits ported to staging 3c1220dc
+
+**What stopped run 18039.** Hecaton ended it `failed (rebase-conflict)`: staging had moved under its branch.
+`verify/prior-drafts.sh 1005 origin/staging` printed START for `origin/agent/1005-18039`, with drift that was all
+edits in place (`verify/test_e2e_tools_tier.py`, from 138c77de, and `verify/test_public_images.py`, from 79e34466) and
+an APPEND on decisions.md. Its six commits were cherry-picked onto staging 3c1220dc in order. Five applied as they were.
+
+**What differs from the draft.** One conflict, in `verify/test_public_images.py`, in 9f1fb4d8. Staging had already
+fixed the same race on its own (run 17993): its "refused before any apply" check leaves out a PATCH on `.../scale`,
+the 0.3 s reaper Timer of the earlier `web` deploy. The draft's fix, an `_earlier_scale_down` helper that does the same
+thing, was dropped and staging's version kept. Everything else in the draft, the four-at-a-time runner, its timings,
+the serial terraform turn and the `checks ran` line, is as run 18039 left it.
+
+**Tier tests staging added since the draft's base.** Six tier tests are new or changed since 61fbbde7
+(test_breakout_room_cleanup.py, test_deployments_witch_line_e2e.py, test_public_images_served.py,
+test_recipe_pantry_gate_e2e.py, test_storefront_backend_check_order_e2e.py, test_e2e_tools_tier.py). None binds a
+fixed port (the ones that serve bind port 0) and none runs terraform, so none needs `# E2E SERIAL: terraform`, and
+test_e2e_tools_tier.py's check that only the four terraform tests are serial still holds. Staging's own serial runner
+took 42m08s in run 18084's record, which is why the gate's hour keeps running out without this change.
