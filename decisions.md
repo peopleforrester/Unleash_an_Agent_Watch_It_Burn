@@ -29141,3 +29141,25 @@ in that run, and every tier test passed (`81 checks ran (the offline suite and 8
 **The suites (run 18131, at `6094bf58`).** `bash verify/run-e2e-tools.sh` printed `320 tests ran` and
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 10m12s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Both new tests passed in it, `test_turn_guard.py` too.
+
+## 2026-11-07 · #1023 · run 18134 · test_progress_entries.py holds the PROGRESS.md entries of #990, #986, #995, #1000, #1003 and #984
+
+Test review run 18040 found that no test read #990's PROGRESS.md entry, and its note said the entry was written
+twice, the first copy stale. Runs 18050, 18063, 18075 and 18092 reported the same gap for #986, #995, #1003 (with
+#984's bullet) and #1000, as comments on #1023. No earlier draft of this issue exists (`verify/prior-drafts.sh 1023`
+printed NONE). The issue came with no checklist, so this run added an `## Acceptance criteria` section to its body.
+
+**The test.** `verify/test_progress_entries.py` already held #759, #905 and #915 this way (#892), so this run added
+entries to its list rather than writing a new file. Each new entry names its head, such as `- (2026-11-06) #990:`,
+and 10 to 16 literal facts its line must hold: the files, tests, headers and counts the change recorded, and the
+decisions.md pointer where the line has one. #1003's line has no dated pointer and ends "See decisions.md.", so that
+is the literal. The finder is run on each entry taken out, moved below [Unreleased], undated, doubled and left with
+no ### heading, and must refuse each one. #1023's own bullet is held the same way.
+
+**The doubled #990 entry.** Base `94bfd5d9` had two lines starting `- (2026-11-06) #990:`. The second has the words
+"is not applied by Argo CD" and the first does not; the policy file excludes Argo CD's workloads, so the second is
+the right one. This run removed the first. Run against base's PROGRESS.md, the test fails 17 checks, all on #990
+(the entry is not found since there are two); on the changed file it passes.
+
+**Live check.** None: the criterion is the text of PROGRESS.md, and the test reads only that file. It needs no
+cluster.

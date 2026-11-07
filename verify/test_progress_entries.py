@@ -1,13 +1,18 @@
-# ABOUTME: PROGRESS.md carries the changelog entries of #759 (both), #905 and #915 (#892): each a dated bullet,
-# ABOUTME: once, under a ### heading in [Unreleased], that records the facts of its change as literal text.
-"""Pins the "Update PROGRESS.md" criterion of #759, #905 and #915, which no test checked (#892).
+# ABOUTME: PROGRESS.md carries the entries of #759 (both), #905, #915 (#892) and #990, #986, #995, #1000, #1003, #984,
+# ABOUTME: #1023: each a dated bullet, once, under a ### heading in [Unreleased], holding its facts as literal text.
+"""Pins the "Update PROGRESS.md" criterion of #759, #905, #915 (#892) and #990, #986, #995, #1000, #1003, #984 (#1023).
 
 #759 has two entries: the 2026-11-03 bullet for verify/dd_traces.py and the 2026-11-05 "live check" bullet that
 #892 names. #905 (the allergen card) and #915 (the /display page's masked prompts) reported the same gap on #892.
 The facts are read as literal text, not from the code: a changelog line is history, and a later change gets its
 own entry rather than rewriting an old one. The finder is also run with each entry taken out, moved below
 [Unreleased], stripped of its date, doubled and left with no ### heading above it, so a check that could never
-fail would show up here. verify/test_progress_764.py holds #764's entry the same way.
+fail would show up here.
+
+#1023 added #990's entry, and the entries of #986, #995, #1000, #1003 and #984 for which the same gap was reported
+on #1023, and #1023's own. #990's entry had been written twice, the first copy stale (it lacked "is not applied by
+Argo CD"), so the doubled-entry rule failed on the real file until #1023 removed that copy.
+verify/test_progress_764.py holds #764's entry the same way.
 """
 from __future__ import annotations
 
@@ -79,6 +84,104 @@ ENTRIES: list[tuple[str, str, list[tuple[str, str]]]] = [
         ("it names the wall's change", "prompts-agenticburn#15"),
         ("it says the live check after deploy is owed", "the live check on `/display` after deploy is owed"),
         ("it points at its decisions.md entry", "(decisions.md, 2026-11-05, #915)"),
+    ]),
+    # #1023: #990's entry, and the same gap reported on #1023 from #986, #995, #1003 (with #984's bullet) and #1000.
+    ("#990", "- (2026-11-06) #990:", [
+        ("it says what guardrails-on now does",
+         "when `guardrails-on` arms Kyverno, the room's deployments from untrusted registries come off the cluster"),
+        ("it names the policy file", "`policies/kyverno-breakout/remove-untrusted-room-workloads.yaml`"),
+        ("it says it is a DeletingPolicy run each minute", "a Kyverno DeletingPolicy that runs each minute"),
+        ("it says it acts only while the registry policy reads Deny",
+         "only while `deny-external-registries` reads Deny"),
+        ("it names the label deploy_app sets", "`burritobot.co/workload`"),
+        ("it says Argo CD's workloads are left alone", "is not applied by Argo CD"),
+        ("it names the trusted registry", "runs any image outside `registry.burritobot.co`"),
+        ("it says nothing is deleted at Audit", "at Audit nothing is deleted"),
+        ("it names the RBAC file", "`remove-untrusted-room-workloads-rbac.yaml`"),
+        ("it says the switch token's grant is unchanged", "the guardrails-switch token's grant is unchanged"),
+        ("it says only the KubeCon profiles install it", "Only the two KubeCon profiles install it"),
+        ("it names the tools-tier test", "`verify/test_breakout_room_cleanup.py` (tools tier)"),
+        ("it names the switch test", "`verify/test_guardrails_switch.py`"),
+        ("it names the live test", "`verify/test_room_cleanup_live.py` (live suite)"),
+        ("it records the live check", "checked live on watch-it-burn-community in a throwaway namespace"),
+        ("it points at its decisions.md entry", "(decisions.md, 2026-11-06, #990)"),
+    ]),
+    ("#986", "- (2026-11-06) #986:", [
+        ("it says what failover is tested as",
+         "failover is tested as a KubeCon cluster from the attendee's side"),
+        ("it names the drill", "`verify/failover_drill.py`"),
+        ("it names the pinned Caddy", "(v2.11.4, now pinned in `verify/e2e-tools.lock`)"),
+        ("it names the live test", "`verify/test_kubecon_failover_attendee_live.py` (live suite)"),
+        ("it records the live run", "all 13 checks passed each way"),
+        ("it says the attendee keeps the witch name", "The attendee keeps the same witch name"),
+        ("it records the recovery time", "79 to 86 seconds after the fault"),
+        ("it names the page fix", "`checkBackend` in `gitops/ai-layer/web/burritbot.html`"),
+        ("it names the tools-tier test", "`verify/test_storefront_backend_check_order_e2e.py` (tools tier)"),
+        ("it says no cluster was created or torn down", "No cluster was created or torn down"),
+        ("it says the re-run after sync is owed", "after Argo CD syncs the change is owed"),
+        ("it points at its decisions.md entry", "(decisions.md, 2026-11-06, #986)"),
+    ]),
+    ("#995", "- (2026-11-06) #995:", [
+        ("it gives the page's line", "\"<witch name> deployed <image short name> at <time>\""),
+        ("it names the page", "deployments.burritobot.co"),
+        ("it gives the line for a deploy with no name", "\"Someone deployed ...\""),
+        ("it says the name comes from the chat request", "The witch name now comes from the chat request"),
+        ("it names the header deploy_app reads", "`deploy_app` reads an `X-Witch-Name` header first"),
+        ("it names the Agent's header list", "(`allowedHeaders`)"),
+        ("it says requested_by is the fallback", "falls back to `requested_by` only when there is none"),
+        ("it records the count that moved it", "113 of the page's 149 rows had no witch"),
+        ("it names the offline test", "`verify/test_public_images.py` (offline)"),
+        ("it names the tools-tier test", "`verify/test_deployments_witch_line_e2e.py` (tools tier"),
+        ("it names guard-proxy's half", "the guard-proxy-agenticburn half"),
+    ]),
+    ("#1000", "- (2026-11-07) #1000:", [
+        ("it says the tool shuts the card", "Challenge 2's recipe card is shut by the tool, not only the prompt"),
+        ("it names the header", "`X-Pantry-Shut`"),
+        ("it names the folders", "burrito-data, config/legacy or secret-sauce-recipe"),
+        ("it names run_shell", "workshop-mcp's `run_shell`"),
+        ("it says encoded output is withheld too", "plain or base64"),
+        ("it names get_vault_entry", "`get_vault_entry` withholds a planted recipe Secret"),
+        ("it gives the bot's answer", "\"The pantry door is shut, sugar!\""),
+        ("it names the Agent's header list", "(`allowedHeaders`)"),
+        ("it says the card reads as before with no header", "With no header the card reads as before"),
+        ("it records the Bedrock replay", "gave the recipe 0 of 10 times"),
+        ("it records the fresh attack", "a fresh named attack 6 of 6"),
+        ("it names the offline test", "`verify/test_recipe_pantry_gate.py`"),
+        ("it names the tools-tier test", "`verify/test_recipe_pantry_gate_e2e.py`"),
+        ("it says guard-proxy's half is a followup", "guard-proxy's half is a followup"),
+    ]),
+    ("#1003", "- (2026-11-07) #1003:", [
+        ("it says what segment 3 follows",
+         "segment 3 of the KubeCon run-of-show and of `/kubecon` follow Challenge 2's 2026-11-06 slides"),
+        ("it names the slides' change", "(rounds-agenticburn#68)"),
+        ("it says the slides are quoted word for word", "quoted word for word"),
+        ("it names the slide that turns the guardrails on", "\"Kubernetes guardrails on\" on 28"),
+        ("it names the beacon address", "`https://agenticburn.com/beacon`"),
+        ("it names the admin bot's seed", "`c2-attack` seed"),
+        ("it records the flow's length", "about 6 minutes 40 seconds against the segment's 5"),
+        ("it says the run-of-show proposes a cut", "the run-of-show proposes a cut"),
+        ("it says #984's draft is carried", "#984's unmerged draft (run 17967) is carried with it"),
+        ("it points at decisions.md", "See decisions.md."),
+    ]),
+    ("#984", "- (2026-11-06) #984:", [
+        ("it says what segments 1 to 3 follow",
+         "segments 1 to 3 of the KubeCon run-of-show and `/kubecon` follow the deck as Whitney walked it "
+         "on 2026-11-05"),
+        ("it names the slides' change", "(rounds-agenticburn#65, slides 1 to 21)"),
+        ("it quotes the opening slide", "\"You get access to an insecure BurritoBot.\""),
+        ("it names the wall link", "\"THE PROMPT WALL\""),
+        ("it says Whitney no longer plays on the admin bot", "Whitney no longer plays on the admin bot in it"),
+        ("it quotes Challenge 1's slide", "\"Convince BurritoBot to give you the CEO's home address.\""),
+        ("it names the hint's name", "Ophelia Thorn"),
+        ("it names the sauce", "'Bat Spit Amazing Awesome Sauce'"),
+        ("it names the readiness row", "`docs/KUBECON-ABSTRACT-READINESS.md` row 9"),
+        ("it points at its decisions.md entry", "(decisions.md, 2026-11-06, #984)"),
+    ]),
+    ("#1023", "- (2026-11-07) #1023:", [
+        ("it names the test", "`verify/test_progress_entries.py`"),
+        ("it names the entries it now holds", "#990, #986, #995, #1000, #1003 and #984"),
+        ("it says the stale #990 copy is gone", "the stale first copy of #990's bullet is removed"),
+        ("it points at its decisions.md entry", "(decisions.md, 2026-11-07, #1023)"),
     ]),
 ]
 
@@ -153,4 +256,4 @@ if failures:
     for name in failures:
         print(f"  - {name}")
     sys.exit(1)
-print(f"All {len(ENTRIES)} PROGRESS.md entry checks passed (#759, #905, #915).")
+print(f"All {len(ENTRIES)} PROGRESS.md entry checks passed ({', '.join(dict.fromkeys(i for i, _, _ in ENTRIES))}).")
