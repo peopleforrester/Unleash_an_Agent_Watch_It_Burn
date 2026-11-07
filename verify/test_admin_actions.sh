@@ -87,6 +87,7 @@ chmod +x "${SHIM}"/*
 export T CALLS PATH="${SHIM}:${PATH}"
 A=watch-it-burn-attendee-007; ADMIN=watch-it-burn-whitney-admin
 touch "${T}/states/${A}.tfstate" "${T}/states/${ADMIN}.tfstate"
+touch "${T}/states/watch-it-burn-community.tfstate" "${T}/states/watch-it-burn-private.tfstate"
 echo accen-qa >"${T}/states/${A}.account"
 ctx_of() { printf 'arn:aws:eks:us-west-2:111122223333:cluster/%s' "$1"; }
 # Sourcing fleet.sh: the source guard keeps main() from running; WIB_* settings make every wait instant.
@@ -156,6 +157,17 @@ KCTX="$(ctx_of "${ADMIN}")" src "cmd_terminal_password ${ADMIN}"
 check "an admin cluster gets the presenter login, on a file descriptor" \
   'grep -qx "env-file TTYD_CREDENTIAL=placeholder-presenter:placeholder-presenter-pw" "${CALLS}" && ! grep "^kubectl " "${CALLS}" | grep -q "placeholder-presenter"'
 check "the presenter login is never logged, the user included" '! grep -q "placeholder-presenter" "${T}/stderr"'
+
+echo "== terminal-password is refused on the KubeCon pair, whose login is set by hand (#1069, #1074) =="
+for n in watch-it-burn-community watch-it-burn-private; do
+  : >"${CALLS}"; : >"${T}/stderr"; rm -f "${T}/applied" "${T}/replaced" "${T}/created" "${T}/pool/${n}.terminal"
+  KCTX="$(ctx_of "${n}")" src "cmd_terminal_password ${n}"; rc=$?
+  check "${n}: exits non-zero, naming the refusal" \
+    '[[ "${rc}" -ne 0 ]] && grep -q "${n}: REFUSED: its terminal login is set by hand (#1069) and fleet.sh never writes it (#1074)" "${T}/stderr"'
+  check "${n}: writes no Secret by any verb, and reads no login to write" \
+    '! grep -q "create secret\| replace \| apply \|create -f" "${CALLS}" && [[ ! -e "${T}/applied" && ! -e "${T}/replaced" && ! -e "${T}/created" ]] && ! grep -q "^env-file" "${CALLS}"'
+  check "${n}: restarts no terminal and harvests nothing" '! grep -q "web-terminal\|delete pod\|^harvest" "${CALLS}"'
+done
 
 echo "== the presenter login comes from mrf-secrets, with no default (#910) =="
 # ${T}/terminal.env is a test-owned stand-in for ~/secrets/projects/watch-it-burn-terminal.env. Each case below

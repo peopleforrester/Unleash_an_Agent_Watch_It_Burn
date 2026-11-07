@@ -376,6 +376,14 @@ TF_TIER=""
 # meaningless for the roster. The admin half is is_presenter_name, not a second copy of its regex.
 is_instructor_name() { [[ "$1" == "watch-it-burn-community" ]] || is_presenter_name "$1" || is_standby_name "$1"; }
 
+# The presenter terminal login on the two KubeCon clusters is set by hand (#1069), to one Michael and Whitney can
+# remember, and this script never writes it there (#1074): no create, rotate, regenerate or restore of
+# agent/terminal-auth, at bring-up, at converge or through terminal-password. A missing Secret on either one is
+# reported by name for a person to set by hand. Reading it (the harvest) is still allowed. Their standbys
+# (-bNN, #643) are not on the list: their login is still the one this script writes from mrf-secrets.
+readonly HAND_SET_TERMINAL_LOGINS="watch-it-burn-community watch-it-burn-private"
+terminal_login_hand_set() { [[ " ${HAND_SET_TERMINAL_LOGINS} " == *" $1 "* ]]; }
+
 # --- Memorable attendee hostnames (#142) ---------------------------------------------------------
 # An attendee used to be handed a raw load-balancer hostname
 # (k8s-agent-console-afa5f8550a-702bee5329c72c51.elb.us-west-2.amazonaws.com). That cannot be read to a
@@ -760,6 +768,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
+                      Refused on watch-it-burn-community and watch-it-burn-private, whose login
+                      is set by hand (#1069, #1074).
     serve-actions [--once]
                       The admin console's runner (#268): poll the provisioning app's action queue with
                       the admin token, run each queued restart-agent | restart-console | converge |
@@ -1773,6 +1783,13 @@ bootstrap_terminal_auth() {
     # Role-split (#109): instructor clusters get the presenter login from mrf-secrets, the attendee pool
     # gets agentic. A roster cluster whose login is unavailable gets NO Secret and fails the run by name
     # (#910): writing a fallback would hand it a known login. `instructors up` checks this before it builds.
+    # The KubeCon pair's login is set by hand (#1069, #1074): with none there, say so and write nothing.
+    if terminal_login_hand_set "${name}"; then
+        log "  FAILED: terminal-auth NOT created for ${name}: its login is set by hand (#1069), and fleet.sh never writes it (#1074)"
+        log "  WARN: ${name}'s terminal is UNAUTHENTICATED until a person sets agent/terminal-auth on it by hand"
+        record_fail "${name}:terminal-login-by-hand"
+        return
+    fi
     local cred
     if ! cred="$(terminal_creds_for "${name}")"; then
         log "  FAILED: terminal-auth NOT created for ${name}: the presenter login is not in mrf-secrets (${WIB_TERMINAL_ENV})"
@@ -3394,8 +3411,11 @@ cmd_instructors() {
     [[ "${#PROVISION_SPEC[@]}" -gt 0 ]] || { log "no roster clusters for the requested role(s)"; return 0; }
     # Every roster cluster's terminal-auth is the presenter login, read from mrf-secrets (#910). Check it
     # BEFORE anything is built: the bootstrap brings the web terminal up before it writes the Secret, so a
-    # login found missing then leaves a billing cluster whose terminal is open. A bare build writes no Secret.
-    if [[ -z "${WIB_NO_BOOTSTRAP:-}" ]] && ! presenter_login >/dev/null; then
+    # login found missing then leaves a billing cluster whose terminal is open. A bare build writes no Secret,
+    # and neither does a build of only the KubeCon pair, whose login is set by hand (#1074).
+    local _writes_login="" _n
+    for _n in "${!PROVISION_SPEC[@]}"; do terminal_login_hand_set "${_n}" || _writes_login=1; done
+    if [[ -z "${WIB_NO_BOOTSTRAP:-}" && -n "${_writes_login}" ]] && ! presenter_login >/dev/null; then
         log "REFUSING instructors up: the roster clusters' terminal login is unavailable; nothing was built"
         exit 1
     fi
@@ -5107,6 +5127,11 @@ terminal_auth_manifest() {
 # writes the whole object, so it also drops an annotation an earlier apply left behind.
 terminal_password_one() {
     local name="$1" kcfg="$2" ctx="$3" cred
+    # Refused on the KubeCon pair before anything is read or written: their login is set by hand (#1069, #1074).
+    if terminal_login_hand_set "${name}"; then
+        log "  ${name}: REFUSED: its terminal login is set by hand (#1069) and fleet.sh never writes it (#1074); agent/terminal-auth is left as it is"
+        return 1
+    fi
     if ! cred="$(terminal_creds_for "${name}")"; then
         log "  ${name}: no terminal login to write: the presenter login is not in mrf-secrets (${WIB_TERMINAL_ENV})"
         return 1

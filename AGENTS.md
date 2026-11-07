@@ -187,6 +187,14 @@ to the fifth (#796).
    `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`: it reads
    the working tree against staging with the gate's own scanner, names each file, label and added line the gate
    would fail, and exits 1 on any.
+6. **No run touches the presenter terminal login on the two KubeCon clusters.** On 2026-11-07 Michael had the
+   presenter terminal login set by hand on both (#1069), to one he and Whitney can remember, and asked that it be
+   left alone (#1074). No run creates, rotates, regenerates or restores the `agent/terminal-auth` Secret
+   (`TTYD_CREDENTIAL`) on watch-it-burn-private or watch-it-burn-community, in converge, reset or bring-up paths
+   included. `infra/terraform/fleet/fleet.sh` refuses to write it there (`terminal_login_hand_set`): its
+   `terminal-password` verb fails on either name, and a bring-up that finds no Secret writes none and fails by
+   name. A live check reads the login from that Secret, never from an issue, a commit or a transcript, and never
+   prints it. Their standbys (`-bNN`) are not covered by this rule.
 
 ## Tests own their inputs
 

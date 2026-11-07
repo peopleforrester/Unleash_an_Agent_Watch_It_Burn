@@ -30,3 +30,6 @@ carries no login value, old or new, and nothing posted on it should carry one ei
 Once it is stored, `./fleet.sh terminal-password watch-it-burn-private watch-it-burn-community`, run on tanjiro-wsl2
 from `infra/terraform/fleet/`, writes it to both clusters, and `bash verify/terminal-login-live.sh` checks that each
 terminal takes it and refuses the old one (#912 in the workshop repo).
+
+(Note kept in the workshop repo, not part of the body: on 2026-11-07 the login on both clusters was set by hand
+instead (#1069), and since #1074 `fleet.sh terminal-password` refuses those two clusters.)

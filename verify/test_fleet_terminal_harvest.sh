@@ -103,7 +103,7 @@ chmod +x "${SHIM}"/* "${PROV}/scripts/harvest_terminal_credential.sh"
 export T CALLS PATH="${SHIM}:${PATH}"
 
 A=watch-it-burn-attendee-007; B=watch-it-burn-attendee-008; ADMIN=watch-it-burn-whitney-admin
-COMMUNITY=watch-it-burn-community
+COMMUNITY=watch-it-burn-community; PRIVATE=watch-it-burn-private; STANDBY=watch-it-burn-community-b01
 for n in "${A}" "${B}" "${ADMIN}" "${COMMUNITY}"; do
   touch "${T}/states/${n}.tfstate"
   printf 'user,cluster,access_key,secret_key\nu,%s,AKIAREAL%s,secret%s\n' "${n}" "${n##*-}" "${n##*-}" >"${POOL}/${n}.csv"
@@ -171,8 +171,8 @@ check "a new admin Secret gets the test's presenter login" \
 printf 'export WIB_TERMINAL_USER=placeholder-file-user\nWIB_TERMINAL_PASSWORD=placeholder-file-pw\r\n' >"${T}/terminal.env"
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/terminal.env" \
-  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${COMMUNITY} acct-default ${T}/kcfg"
-check "the community cluster's login is read from WIB_TERMINAL_ENV, an export prefix and a CR dropped" \
+  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${STANDBY} acct-default ${T}/kcfg"
+check "a community standby's login is read from WIB_TERMINAL_ENV, an export prefix and a CR dropped" \
   'grep -qx "env-file TTYD_CREDENTIAL=placeholder-file-user:placeholder-file-pw" "${CALLS}"'
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
@@ -187,9 +187,32 @@ WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env
   src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${A} accen-qa ${T}/kcfg"
 check "an attendee bootstrap does not need the presenter login" \
   'grep -qx "env-file TTYD_CREDENTIAL=agentic:agentic" "${CALLS}" && [[ -z "$(ledger)" ]]'
+echo "== the KubeCon pair's login is set by hand, and fleet.sh never writes it there (#1069, #1074) =="
+for n in "${COMMUNITY}" "${PRIVATE}"; do
+  reset
+  src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${n} acct-default ${T}/kcfg"
+  check "${n}: a bring-up that finds no Secret creates none and restarts nothing" \
+    '! grep -q "create secret\| replace \| apply \|rollout" "${CALLS}" && ! grep -q "^env-file" "${CALLS}"'
+  check "${n}: and fails by name, saying a person sets the login by hand" \
+    'ledger | grep -qx "${n}:terminal-login-by-hand" && grep -q "terminal-auth NOT created for ${n}: its login is set by hand (#1069)" "${T}/stderr" && grep -q "until a person sets agent/terminal-auth on it by hand" "${T}/stderr"'
+  check "${n}: and harvests nothing" '! grep -q "^harvest" "${CALLS}"'
+  reset
+  LIVE_CRED='placeholder-hand:placeholder-hand-pw' HARVEST_CRED='placeholder-hand:placeholder-hand-pw' \
+    src "mkdir -p \"\${LOG_DIR}\"; bootstrap_terminal_auth ${n} acct-default ${T}/kcfg"
+  check "${n}: a Secret set by hand is left as it is, only read back" \
+    '! grep -q "create secret\| replace \| apply \|rollout" "${CALLS}" && grep -q "^harvest ${n} " "${CALLS}" && [[ -z "$(ledger)" ]]'
+  check "${n}: and the login it holds is not logged" '! grep -q "placeholder-hand" "${T}/stderr"'
+done
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
-  src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
+  src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; print_bootstrap_hints() { :; }; cmd_guardrails_link() { :; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "instructors up of only the KubeCon pair, which writes no login there, does not need the presenter login" \
+  'grep -qx "rc=0" "${T}/out" && grep -q "BUILD-RAN" "${T}/stderr" && ! grep -q "REFUSING instructors up" "${T}/stderr"'
+# A roster with a presenter cluster beside the pair: that one's Secret is written from mrf-secrets, so the check holds.
+printf 'watch-it-burn-community|community|||-1|burn|\nwatch-it-burn-whitney-admin|admin||||admin|whitney\n' >"${T}/roster.tsv"
+reset
+WIB_ROSTER_FILE="${T}/roster.tsv" WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
+  src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
 check "instructors up with the login absent exits 1 before anything is built" \
   'grep -qx "rc=1" "${T}/out" && grep -q "REFUSING instructors up: the roster clusters. terminal login is unavailable; nothing was built" "${T}/stderr" && ! grep -q "BUILD-RAN" "${T}/stderr"'
 reset

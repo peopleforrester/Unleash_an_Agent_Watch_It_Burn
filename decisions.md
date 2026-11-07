@@ -30988,3 +30988,48 @@ time`, `SOME E2E TOOLS TIER CHECKS FAILED: test_promo_villains_public.py (exit 1
 #1070's: lab-platform's promo villain `:v1` tags on ghcr.io serve digests other than the pinned ones (skeletor at
 `7b973b14d4d5...` against the pinned `df82eb53...`). This change touches no image pin. The prose gate printed `prose
 gate: pass`.
+## 2026-11-07 · #1074 · run 18234 · No run and no script writes the presenter terminal login on the KubeCon pair; fleet.sh refuses to
+
+On 2026-11-07 Michael had the presenter terminal login set by hand on watch-it-burn-private and
+watch-it-burn-community (#1069), to one he and Whitney can remember, and asked that hecaton leave it alone. A run
+takes its instructions from this repo, so the rule is now CLAUDE.md's Dispatched runs point 6 (CLAUDE.md is a link to
+AGENTS.md): no run creates, rotates, regenerates or restores `agent/terminal-auth` (`TTYD_CREDENTIAL`) on either
+cluster, at converge, reset or bring-up, and a live check reads the login from that Secret and never prints it.
+`verify/test_terminal_login_hand_set.py` holds the two sentences word for word.
+
+**What on staging wrote the Secret on these two.** Searched for `terminal-auth`, `TTYD_CREDENTIAL`,
+`create secret generic`, `terminal_creds_for` and `presenter_login` across the tree. Two writers, both in
+`infra/terraform/fleet/fleet.sh`:
+
+- `bootstrap_terminal_auth`, the bring-up step `bootstrap_one` runs (reached from `instructors up` and the standby
+  builds). It already left an existing Secret alone, but with none there it created one from mrf-secrets'
+  presenter login, which is not the login set by hand.
+- `terminal_password_one`, the `terminal-password` verb, which the admin console's queue runner also runs
+  (`ADMIN_ACTIONS`). It replaced the Secret with mrf-secrets' login and restarted the terminal: the exact overwrite
+  Michael asked to prevent.
+
+Neither converge path writes it: `converge_one` and the admin `converge` action never call either function. No reset
+path writes it, and none deletes the `agent` namespace or its Secrets. The live checks that read it
+(`verify/terminal-login-live.sh`, `verify/test_terminal_ws_auth_live.py`, `verify/fleet-drift-audit.sh`) only read
+it, and none prints it (`fleet-drift-audit.sh` prints `presenter` for any user but `agentic`). One offline test wrote
+it on the pair, under shims: `verify/test_fleet_terminal_harvest.sh` had community's bootstrap create the Secret from
+`WIB_TERMINAL_ENV`.
+
+**What changed.** fleet.sh has `HAND_SET_TERMINAL_LOGINS` (the two names) and `terminal_login_hand_set`. On either
+name, `terminal-password` refuses before it reads any login, writes nothing, restarts nothing and exits non-zero.
+A bring-up that finds a Secret there still only harvests it (a read). One that finds none writes none, logs that
+the terminal is open until a person sets it by hand, and records `<name>:terminal-login-by-hand` in the run's
+ledger. The `instructors up` preflight now asks for mrf-secrets' login only when the build includes a roster
+cluster outside the pair, since a build of the pair alone writes no login. The standbys (`-bNN`, #643) are not on
+the list: their login is still written from mrf-secrets. The harvest test's community case moved to
+`watch-it-burn-community-b01`. It and `verify/test_admin_actions.sh` now hold the refusal on both names: no create,
+replace, apply or restart, nothing harvested on a refusal, and the hand-set login never logged. The old fleet.sh
+fails 7 of the harvest test's new checks. `docs/admin-console.md`, `docs/floor.md` and the mrf-secrets request
+body name the refusal.
+
+**Left as it is.** `gitops/ai-layer/web/brief.html` and the run-of-show still tell presenters the login is in
+mrf-secrets (`verify/test_instructor_brief.py` holds that wording). Whether the hand-set login was copied there is
+not recorded (#1069 keeps the value out of every repo), so that wording is a follow-up for Michael's call and not
+changed here.
+
+**No live check.** The issue asks for none, and this run touched neither cluster's Secret, nor read it.
