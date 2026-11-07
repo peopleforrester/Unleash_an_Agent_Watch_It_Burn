@@ -29926,3 +29926,7 @@ this one read 502. The internal registry still lists `busybox-1.38.0`. Neither c
 changed by this run.
 
 **Not yet run on a cluster.** Nothing is owed: the change is records only. No dependency was added.
+
+**The suites (run 18174, at `3b222f6e`).** `bash verify/run-e2e-tools.sh` printed `328 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 12m02s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18174/e2e-tools.log`).
