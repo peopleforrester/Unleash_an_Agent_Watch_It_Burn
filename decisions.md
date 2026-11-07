@@ -33201,3 +33201,10 @@ produced for it, plus `verify/artifact_cache.py`, which `write` could not see wh
 what `write` produced was other tests' existing drift and is not in this change.
 
 **Not yet run on a cluster.** No cluster is involved, and the issue asks for no live check.
+
+**Suite results, run 18422.** On `6eb52f2c`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=0984c2fc`, so
+scoped to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `15 checks ran (the
+offline suite and 14 tier tests) in 4m32s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The run before it, on
+`8af856f7`, failed on `test_artifact_cache.py` alone, with the deleted `/tmp` described above. The prose gate
+printed `prose gate: pass`. No dependency was added: the helper and its test use only the standard library. The log
+is `/var/lib/hecaton/runs/18422/e2e-tools-3.log`.
