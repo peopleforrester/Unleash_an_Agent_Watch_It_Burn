@@ -32105,3 +32105,9 @@ systemMessage byte-equal to git's and run
 `python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-07-weather-tool-scope/live_fresh_chats.py --host attackme.burritobot.co --context watch-it-burn-community --out <log> --arm memory=30 --arm earlier=8`,
 which should read no weather tool and no sentinel, and send the KubeCon page's weather prompt ten times with the
 guards off, which should print the sentinel on nearly every one (`verify/kubecon_probe.py`'s C7 beat covers it too).
+
+**Suite results, run 18327.** On `71000cf4`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=11ee65bc` (as the
+gate sets it) and its output in `/var/lib/hecaton/runs/18327/e2e-tools-2.log` printed `225 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `26 checks ran (the offline suite and 25 tier tests) in 8m20s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. On `bf5f2e5b`, the persona change and its test alone, it had printed `216 tests
+ran` and `24 checks ran ... in 8m13s` with `exit=0`. The prose gate printed `prose gate: pass`.
