@@ -28651,3 +28651,9 @@ test_recipe_pantry_gate_e2e.py, test_storefront_backend_check_order_e2e.py, test
 fixed port (the ones that serve bind port 0) and none runs terraform, so none needs `# E2E SERIAL: terraform`, and
 test_e2e_tools_tier.py's check that only the four terraform tests are serial still holds. Staging's own serial runner
 took 42m08s in run 18084's record, which is why the gate's hour keeps running out without this change.
+
+**The suites (run 18110, at `6c6f29db`).** `bash verify/run-e2e-tools.sh` ran once, at a load average near 27, logged
+as `/var/lib/hecaton/runs/18110/e2e-tools.1.log`. It printed `315 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`78 checks ran (the offline suite and 77 tier tests) in 20m36s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The offline suite was the slowest check at 1070 s, then test_iam_policy_structural.py at 220 s. No cluster
+check applies: the change is to the gate's runner and offline tests, which reach no cluster.
