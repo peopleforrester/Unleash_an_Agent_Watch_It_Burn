@@ -33093,3 +33093,62 @@ before it ending `cancelled` in the Actions list.
 scoped to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `15 checks ran (the
 offline suite and 14 tier tests) in 4m10s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
 `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18411/e2e-tools.log`.
+## 2026-11-08 · #1097 · run 18421 · The slide-citation sweep for the 2026-11-07 renumbering finds nothing to move; #1065's PROGRESS.md entry is added and pinned
+
+In the 2026-11-07 deck (rounds-agenticburn#77) slide 28 stays 28, the four single guardrail slides that were live 29 to
+32 give way to slide 29's retry and one set per guardrail on slides 30 to 42, and every slide from live 33 ("AI
+guardrails") on is numbered 10 higher, so "AI guardrails" is slide 43. No earlier draft existed
+(`verify/prior-drafts.sh 1097 origin/staging` printed NONE).
+
+**The deck read (run 18421, read only).** `curl -L` on `https://rounds.agenticburn.com` landed on
+`/attendee.html` (200). Counting its top-level sections, slide 28 is `Let's turn on Kubernetes guardrails.` with the
+one link `https://burritobot-private.burritobot.co/lab`, 29 is "Try your attacks again.", 30 to 33 are RBAC (30 the
+CEO's-address recall, 31 "This attack was prevented with RBAC.", 32 and 33 the Role YAML), 34 to 36 the admission policy
+(36 `deny-external-registries`), 37 to 39 runtime security (39 `block-recipe-snoop`), 40 to 42 NetworkPolicy (42
+`agent-egress-allowlist`), and 43 is "AI guardrails", with Challenge 3 from 44. Slides 14 to 27 read as the run-of-show
+quotes them, and the links fall where it and `/kubecon` say: the beacon view on 20, 25, 26 and 27, the deployments wall
+on 22 and 27. Nothing on either cluster was read or changed.
+
+**The sweep.** `grep -rniE "slides? *[0-9]"` over `facilitation/`, `gitops/ai-layer/web/`, `challenges/` and `verify/`,
+then every line holding "slide" and a number of 29 or more, then the unnumbered forms ("four slides", "guardrail
+slide", "29 to 32"). `challenges/` cites no slide number.
+
+**Citations changed: none.** #1095 and #1096, merged before this run, had already moved every citation of the old
+close, and no file in these directories cites a slide of live 33 or later (none names a slide past 42), so no number
+needed moving up by 10. Each citation of 28 to 42 was checked against the deck read above and matches it:
+
+- `facilitation/kubecon-na-2026-run-of-show.md`: the segments table's row 3 and the paragraph under it (slides 28, 29,
+  30 to 42), the segment 3 opening note (slides 28 to 42), the Timing paragraph and table (28, 29, 30 to 42, the sets'
+  ranges, slide 36's deny message), step 4's `c2-fixed` (slides 37 to 39), steps 5 and 6 (slides 28 to 42, each set and
+  each slide in it), and abstract-points row 5 and the Challenge 2 row of "Challenges shown live" (30 to 42).
+- `gitops/ai-layer/web/kubecon.html`: segment 3's story (slides 28, 29, 30 to 42 and each set's range), and the switch
+  beat's who line, marker and notes.
+- `verify/`: the literals in `test_instructor_brief.py`, `test_seg3_timing.py`, `test_ros_segments_table_seg3.py`,
+  `test_c3_fallback.py` and `test_fleet_routes_roster.sh`, which read the texts above.
+
+**Left alone, because they cite another deck or are history.**
+
+- `facilitation/cold-open-script.md` (slides 2, 3, 4, 9 and 14), `facilitation/slides-outline.md` (slides 3, 8, 10,
+  11, 12, and 2 and 3) and `facilitation/slides-draft-2026-currency.md` (slides 2, 3 and 13) number the earlier
+  outline, not the KubeCon deck. None cites a number from 29 up.
+- `verify/test_recipe_persona.py`'s "slide 21" (three places) names the recipe slide of the deck of #951's day,
+  2026-11-05 (rounds-agenticburn#65); it is below 29 and outside this renumbering.
+- The run-of-show's Timing paragraph says the 2026-11-06 deck closed "on the switch and four single guardrail slides"
+  and that the 2026-11-07 deck replaces them: that is the history of the change, as #1095 kept it, not a citation of
+  the current deck. Its "slides 1 to 21 on 2026-11-05" and "slides 14 and 15 from Whitney's walk on 2026-11-05" are
+  dated history too.
+- The phrases "four guardrail slides", "four slides" and "one slide per guardrail" in `test_seg3_timing.py`,
+  `test_ros_segments_table_seg3.py` and `test_instructor_brief.py` are the stale text those tests swap in to show their
+  checks fail; they cite no slide.
+- `verify/test_progress_entries.py`'s "(rounds-agenticburn#65, slides 1 to 21)" reads #984's PROGRESS.md entry, and
+  PROGRESS.md's own earlier entries (#1003's "on 28", #1040's slides 29 to 42) and decisions.md stay as written: they
+  are append-only history.
+
+No `/kubecon` prompt text was changed; this change touches no file under `gitops/`.
+
+**PROGRESS.md.** The new `- (2026-11-08) #1065:` bullet under `### Changed` describes the run-of-show's change (#1095,
+tested by #1111 and #1112), the `/kubecon` change (#1096) and this sweep. `verify/test_progress_entries.py` now holds it:
+13 facts read as literal text, and the finder fails with the entry removed, moved out of [Unreleased], undated, doubled
+or with no heading above it. `git grep -nF` on the quoted words found no other test reading PROGRESS.md's #1065 line.
+
+**Not yet run on a cluster.** Nothing: the change is text and its offline test.
