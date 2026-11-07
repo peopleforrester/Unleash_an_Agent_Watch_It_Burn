@@ -47,6 +47,14 @@ readonly PROXY="http://guard-proxy.${NS}:8080"
 command -v kubectl >/dev/null 2>&1 || { echo "FAIL: kubectl not found on PATH" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found on PATH" >&2; exit 1; }
 
+# Take the cluster's guard lock before any toggle (#1024): re-run this script under verify/guard_lease.py's hold, which
+# waits while another run holds the Lease agent/wib-guard-lock on this context, gives up after 30 minutes naming
+# the holder, and releases it when this script exits. Under hold, WIB_GUARD_LEASE names the context, so this runs once.
+GUARD_LEASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/guard_lease.py"
+if ! python3 "${GUARD_LEASE}" held --context "${CONTEXT}"; then
+    exec python3 "${GUARD_LEASE}" hold --context "${CONTEXT}" --what "verify/beat-02.sh" -- bash "${BASH_SOURCE[0]}" "$@"
+fi
+
 # Run a curl inside the cluster (the proxy is a ClusterIP service). Prints the response to stdout.
 # --pod-running-timeout=180s so a cold first image pull does not trip "timed out waiting for the
 # condition". Ephemeral pod by design; no port-forward (same contract as beat-cost.sh).
@@ -59,7 +67,9 @@ in_cluster_curl() {
 }
 
 # Runtime guard flips via the proxy /toggle endpoint (Argo CD-safe; no pod restart, no spec change).
-toggle() { in_cluster_curl curl -s "${PROXY}/toggle?$1" >/dev/null; }
+# X-WIB-Caller names the guard lock's holder, so guard-proxy's toggle log can say which run flipped (#1024).
+CALLER="$(python3 "${GUARD_LEASE}" caller --context "${CONTEXT}")"
+toggle() { in_cluster_curl curl -s -H "X-WIB-Caller: ${CALLER}" "${PROXY}/toggle?$1" >/dev/null; }
 
 # Send a single A2A message/send and print the raw JSON-RPC response. messageId is required by kagent.
 send_prompt() {

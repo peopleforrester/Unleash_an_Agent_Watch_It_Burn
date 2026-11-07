@@ -28711,3 +28711,91 @@ phrase, and the `delivered/devopsdays-portland-2026` tag is unchanged.
 RENDER-GATE TESTS GREEN`, then `79 checks ran (the offline suite and 78 tier tests) in 50m51s`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`, with both new tests passing in it. The prose gate printed `prose gate: pass`. No dependency
 was added to the repo; the replay ran boto3 1.40.70 through `uv run --with`, outside it.
+## 2026-11-07 · #1024 · run 18104 · Runs take turns on a cluster's guards through a Lease; guard-proxy's toggle log goes to guard-proxy-agenticburn
+
+**What #1024 asks.** On 2026-11-06 run 17950 (#900) ran the admin KubeCon probe five times on watch-it-burn-private,
+and three runs read the output guard on when that run had never turned it on. Three other runs were on the same
+cluster, and guard-proxy logs no toggle, so the caller could not be named. The issue asks for two things: a lock the
+probe and every guard-toggling script take before they flip guards, and guard-proxy logging each `/toggle` that
+changes state. `verify/prior-drafts.sh 1024 origin/staging` printed NONE, and the issue had no comments. This run
+added the issue's `## Acceptance criteria` from its request.
+
+**The lock.** `verify/guard_lease.py`, a Lease named `wib-guard-lock` in the `agent` namespace, the place the issue
+names:
+- The holderIdentity names the script, its pid, the user and host, and the checkout, so a hecaton run's worktree
+  (`<id>-<issue>-<run>`) names the run.
+- The holder renews it every 60 seconds in a background thread. A holder that dies frees it 300 seconds after its
+  last renewal, so a killed run holds a cluster for minutes, not for good.
+- Every write is optimistic: a create that answers AlreadyExists when the Lease is there, a takeover of an expired
+  Lease by a replace carrying the resourceVersion read, and a release by a delete with that resourceVersion as its
+  precondition. Two runs racing for a free or expired Lease cannot both win, and a release never deletes another
+  holder's Lease.
+- A second holder polls every 15 seconds, says whom it waits on once a minute (so a long wait is never a silent one),
+  and gives up after 30 minutes by default, naming the holder. A create refused for any other reason (Forbidden)
+  raises at once rather than looping.
+- `hold` runs a command inside the lock and exits with its code, or 3 when the lock stayed busy, having run nothing.
+  It passes a SIGTERM on to the command and releases after; a SIGTERM while the lock is being taken deletes the Lease
+  if the create had won. The command's environment carries `WIB_GUARD_LEASE` (context to holder), so a script that
+  `hold` already wraps does not try to take the lock again.
+
+**Who takes it.** Every verify script that flips guards through the cluster, found by a scan for `/toggle?` and for
+the KubeCon probe's closing `GUARDS_OFF_BEAT`: `verify/kubecon_probe.py` (both roles; a community run reads the
+wide-open start, which another run's flip would turn red), `verify/stage_traces.py seed`, which runs the probe's
+beats and was not in the issue's list, `verify/agent_probe.py` when given `--context` (without one it flips nothing),
+`verify/input-guard.sh`, `verify/beat-02.sh` and `verify/beat-cost.sh`. The Python ones hold it from before the start
+state is read until after guards-off; a lock lost mid-run adds a FAIL beat, `The guard lock was held for the whole
+run`. The shell ones re-run themselves under `hold` when `WIB_GUARD_LEASE` does not name their context. The probes'
+`--lock-wait` sets the wait. The lock is advisory: the presenters' terminal helpers do not take it, since no run
+flips guards during a live session.
+
+**The caller header.** Every toggle these scripts send carries `X-WIB-Caller`, the lock's holder. guard-proxy reads
+no such header today, so it changes nothing yet. It is there for the log: a `kubectl exec` toggle reaches guard-proxy
+from 127.0.0.1, so the peer address alone cannot tell two runs apart.
+
+**guard-proxy's toggle log goes to guard-proxy-agenticburn.** Its code lives in that repo, which no run can push, and
+hecaton's `forbidden` gate refuses a move of this repo's `gitops/ai-layer/guard-proxy` pin (the 2026-11-05 #382
+entry). Run 17641 handled #921 the same way. This run wrote the change in the submodule's checkout at
+guard-proxy-agenticburn main `c5f71f3`, ran that repo's suites, saved the diff, and put the checkout back on its pin
+`0f0c809`. Nothing was committed there. The change:
+- proxy.py and the Go build (`internal/server/server.go`) each write one `guard_toggle` INFO line per guard a
+  `/toggle` changed, the cost cap included, with `guard`, `value`, `was`, `peer` (the TCP client) and `caller` (the
+  `X-WIB-Caller` header, cut to 200 characters, `""` when absent). A `/toggle` that changes nothing logs nothing, and
+  a refused `cost_cap` logs nothing.
+- `conformance/test_toggle_log.py` holds both builds to it: each guard on and off, no line for a no-op or an unknown
+  key, `input=on`'s two lines in answer order, the header carried and cut, and the cost cap.
+- Results: ruff `All checks passed!`, the Python suite green, and the Go build `gofmt` clean, `go vet` clean,
+  `go test ./...` green and the conformance suite green but for one timing bound,
+  `test_turn_deadline.py::test_dangling_tool_use_retry_shares_the_turn` (`2.50142274890095 < 2.5`) at load average
+  67, which passed on a rerun of that file on both builds and does not touch `/toggle`. The followup names it.
+The followup carries the diff. The repin after it is Michael's commit, as every repin here has been, and with it
+`checksum/proxy-py` in `gitops/ai-layer/resources.yaml` moves.
+
+**The live check, on watch-it-burn-private (run 18104).** `kubectl auth can-i create` and `update` on
+`leases.coordination.k8s.io` in `agent` both printed `yes`, and a server-side dry run of the Lease was admitted.
+- 05:54Z: holder A took the lock (`holding wib-guard-lock on watch-it-burn-private as 'run 18104 live check A pid
+  1160016 ... in 1270196839-1024-18104'`). Holder B, with `--wait 8`, printed `gave up after 9 s: wib-guard-lock held
+  by 'run 18104 live check A ...'`, `nothing was run`, exit 3. A released (`released wib-guard-lock`), and
+  `kubectl -n agent get leases` printed `No resources found in agent namespace.`
+- 06:16Z: a holder renewing every 20 seconds sent a query-less `/toggle` through the probe's new one-liner, with the
+  holder as `X-WIB-Caller`, which answered every guard false and `cost_cap_usd` 25.0 and changed nothing. Its
+  renewTime moved from `06:16:45.574069Z` to `06:17:16.291566Z` with acquireTime unchanged. A contender with `--wait
+  5` exited 3 naming it. It ended `lost: None` and the Lease was gone.
+- A precondition delete with a stale resourceVersion on a throwaway Lease answered Conflict, and with the current one
+  Success.
+- Left as found: `/controls` read all five AI guards off before and after, and `agent` holds no Lease. This run
+  flipped no guard: other runs share the cluster without the lock until this change reaches staging, so a flip by
+  this run would be the very thing #1024 is about.
+
+**Not yet run on a cluster.** The admin KubeCon probe holding the lock end to end, `python3 verify/kubecon_probe.py
+admin burritobot-private.burritobot.co --context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev`,
+once hecaton promotes this run; and guard-proxy's `guard_toggle` lines, once guard-proxy-agenticburn takes the
+followup's change and the pin moves.
+
+**Tests.** `verify/test_guard_lease.py` (offline) runs the lock against `verify/fake_lease_kubectl.py`, which answers
+the four Lease calls the way the API server does, Conflict included: create, wait and give up, hand-over, expired
+takeover, the race, renewal, loss, the nested hold, the CLI with its exit codes and SIGTERM, the scan for scripts that
+flip guards, each shell script taking the lock before its first toggle and releasing after its last with every toggle
+naming the holder, and the probes holding it around their beats. `verify/test_input_guard_host.sh` hands its Lease
+calls to the same fake, and its check that the guard is restored off now reads the last toggle rather than the last
+kubectl call, which is now the release. `verify/test_stage_traces.py` gives the seed a stand-in lock. No dependency
+was added.
