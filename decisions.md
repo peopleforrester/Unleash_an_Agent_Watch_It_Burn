@@ -33193,7 +33193,8 @@ request); a download that does not match and a 404 (both logged, nothing cached)
 `artifact-cache.sh get` processes on one sum. For that last case the server holds the first download half-sent until
 `/proc/locks` shows the second process waiting on the sum's lock, so the overlap is real on every run; the checks
 then read one request, one log line, the same path from both and no temp file. With the `flock` call removed, four of
-those checks fail. It printed 45 PASS. Its entry in `verify/scope-map.yaml` is the one `scope_tests.py write`
-produced for it; the rest of what `write` produced was other tests' existing drift and is not in this change.
+those checks fail. It printed 45 PASS. Its entry in `verify/scope-map.yaml` is what `scope_tests.py write`
+produced for it, plus `verify/artifact_cache.py`, which `write` could not see while the module was untracked; the rest of
+what `write` produced was other tests' existing drift and is not in this change.
 
 **Not yet run on a cluster.** No cluster is involved, and the issue asks for no live check.
