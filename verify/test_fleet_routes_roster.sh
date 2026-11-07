@@ -198,8 +198,12 @@ check "the Night Before writes the roster table and checks the router before che
   '[[ -n "$(line_of "./fleet.sh routes roster")" && -n "$(line_of "./fleet.sh router-check")" && -n "$(line_of "./fleet.sh check-tls --closed-terminal attackme")" ]] &&
    (( $(line_of "./fleet.sh routes roster") < $(line_of "./fleet.sh router-check") &&
       $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh check-tls --closed-terminal attackme") ))'
+# Since #1095 the C1 beat is segment 3 step 6's NetworkPolicy set, which runs to the segment's Delivers line.
+C1_SET='- **NetworkPolicy, slides 40 to 42.**'
+grep -qF -- "${C1_SET}" "${ROS}" \
+  || { echo "  FAIL  ${ROS} has no '${C1_SET}' bullet to read the C1 beat from"; exit 1; }
 check "the C1 beat names the beacon view by URL" \
-  'grep -A3 -E "^ *- C1 exfiltrate" "${ROS}" | grep -qF "https://agenticburn.com/beacon/view"'
+  'sed -n "/^ *- \*\*NetworkPolicy, slides 40 to 42\.\*\*/,/^- \*\*Delivers:\*\*/p" "${ROS}" | grep -qF "https://agenticburn.com/beacon/view"'
 
 echo "== offline means offline =="
 check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'

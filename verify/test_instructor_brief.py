@@ -385,9 +385,33 @@ check("the switch beat runs guardrails-on, ends on its own last line, and the ro
       'class="toggle"' in _sw and "guardrails-on" in _sw and 'class="marker"' in _sw and 'class="fallback"' in _sw
       and "all four Kubernetes guardrails are on." in _sw and "the room retries Challenges 1 and 2" in _sw
       and "all four Kubernetes guardrails are $st." in TERMINAL)
-check("the run-of-show's segment 3 runs the same switch and names it guardrails-on",
-      "> **Kubernetes guardrails on**" in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
-      and "That command is `guardrails-on`" in _ros_s3)
+# Slide 28's 2026-11-07 text, then slide 29's retry (rounds-agenticburn#77, #1095).
+check("the run-of-show's segment 3 runs the same switch from slide 28's link, names it guardrails-on, and retries on 29",
+      "> Let's turn on Kubernetes guardrails." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
+      and "That command is `guardrails-on`" in _ros_s3
+      and "`https://burritobot-private.burritobot.co/lab`" in _ros_s3
+      and "> Try your attacks again." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
+      and "reset your bot and use your saved prompts" in _ros_s3)
+# Step 6 is one set per guardrail on slides 30 to 42, each naming the concept the slide names (#1095), and each set
+# keeps its fallback: the c1-fixed view, the Kyverno deny, the c2-fixed view with the Falco caution, the beacon POST.
+_step6 = _ros_s3.split("6. **One set per guardrail (slides 30 to 42).**", 1)[-1].split("**Delivers:**", 1)[0]
+_sets = [("**RBAC, slides 30 to 33.**", "This attack was prevented with RBAC.", "`c1-fixed`"),
+         ('**Kyverno, "an admission policy", slides 34 to 36.**', "This attack was prevented with an admission policy.",
+          "challenges/c2-villain-image/fallback.kubectl.sh"),
+         ('**KubeArmor, "runtime security", slides 37 to 39.**', "This attack was prevented with runtime security.",
+          "Do not promise a Falco alert here"),
+         ("**NetworkPolicy, slides 40 to 42.**", "This attack was prevented with NetworkPolicy.",
+          "challenges/c1-exfil-s3/fallback.kubectl.sh")]
+check("the run-of-show's step 6 is one set per guardrail on slides 30 to 42, in the deck's order",
+      "6. **One set per guardrail (slides 30 to 42).**" in _ros_s3
+      and all(h in _step6 for h, _, _ in _sets)
+      and [_step6.index(h) for h, _, _ in _sets] == sorted(_step6.index(h) for h, _, _ in _sets))
+for _h, _line, _fb in _sets:
+    _blk = _step6.split(_h, 1)[-1].split("- **", 1)[0]
+    check(f"the set {_h.strip('*')} quotes its slide's line and keeps its fallback",
+          _h in _step6 and _line in _blk and _fb in _blk)
+check("the run-of-show no longer has one slide per guardrail or the four slides",
+      "one slide per guardrail" not in " ".join(ROS.split()).lower() and "its four slides" not in " ".join(ROS.split()))
 check("the switch's RBAC fallback reads the Role, which names the one Secret",
       "-n agent get role workshop-agent -o yaml" in _sw)
 _handoffs = re.findall(r'<p class="note"><b>Hand-off:</b> (.*?)</p>', KUBECON, re.S)

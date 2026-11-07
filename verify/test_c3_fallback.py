@@ -157,7 +157,12 @@ check("the chart defaults under them do not turn stdout process logs on", defaul
 print("== Challenge 2's C3 beat names the signal that fires ==")
 ros = RUN_OF_SHOW.read_text()
 s3 = ros[ros.find("### Segment 3: Challenge 2"):ros.find("### Segment 4:")]  # the Kubernetes catch-all (#687)
-c3 = s3[s3.find("- C3 "):s3.find("- C1 ")]
+# Since #1095 the C3 beat is step 6's KubeArmor set, which runs to the NetworkPolicy set (the C1 beat).
+C3_SET, C1_SET = '- **KubeArmor, "runtime security", slides 37 to 39.**', "- **NetworkPolicy, slides 40 to 42.**"
+for lit in (C3_SET, C1_SET):
+    if lit not in s3:
+        sys.exit(f"ANCHOR MISSING: {lit!r} is not in segment 3 of {RUN_OF_SHOW}; the C3 beat checks cut on it")
+c3 = s3[s3.find(C3_SET):s3.find(C1_SET)]
 check("Challenge 2 has a C3 bullet", bool(c3.strip()))
 check("C3 names KubeArmor's alert", "KubeArmor's own alert" in c3)
 check("C3 no longer promises Falco alerting", "with Falco alerting" not in c3)

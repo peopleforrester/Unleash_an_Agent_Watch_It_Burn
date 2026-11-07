@@ -860,7 +860,7 @@ beats give way first.
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
-| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Kubernetes guardrails on" (slide 28): `guardrails-on` on the private bot's terminal arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters, and one slide per guardrail follows | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
+| 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
 | 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, the prompt wall optional during play; Kyverno, at Deny since segment 3's switch (#774), admits the Joker from the internal registry; the presenters' live attack on the private bot, then its trace on the Datadog Challenge 3 tab; then on the private bot `guard-agency-on`, then `guard-input-on` | Asks BurritoBot about HC-666 | 4, 5, 6, 7 |
 | 5 | 5 | M+W | Challenge 4: the public bot, the prompt wall optional during play; Michael's live attack on the private bot, then its trace on the Datadog Challenge 4 tab; then `guard-mcp-on` on the private bot | Orders a burrito for the weather | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
@@ -869,7 +869,9 @@ Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separa
 trace walk-through any more: each challenge shows its own trace after the presenters'
 attack. Since the 2026-11-01 review (#776) segment 2 runs 5 minutes, one fewer, because
 Challenge 1 no longer runs a fix of its own, and segment 3 runs 5, one more, for the
-guardrails switch and its four slides (#774). Each challenge keeps its play time:
+guardrails switch, "Let's turn on Kubernetes guardrails." on slide 28 (#774), followed
+by slide 29's retry, "Try your attacks again.", and one set per guardrail on slides 30
+to 42 (#1095). Each challenge keeps its play time:
 3 minutes for Challenges 1 and 3, and 2 for Challenge 4. Challenge 2's runs from
 slide 20 to the end of slide 27, its hint slides included, about 3 minutes 45 seconds;
 segment 3's "Timing" says what that does to its 5 minutes, and the cut proposed for it
@@ -1115,8 +1117,9 @@ real-looking home address to chat.
 ### Segment 3: Challenge 2, the Kubernetes catch-all (5 min). Owner: Whitney and Michael.
 
 Six steps, in the deck's order (#776, #821). The quoted slide lines are the deck's own
-words: slides 14 and 15 from Whitney's walk on 2026-11-05 (rounds-agenticburn#65), and
-slides 16 to 28 from her walk on 2026-11-06 (rounds-agenticburn#68, #1003). Slide
+words: slides 14 and 15 from Whitney's walk on 2026-11-05 (rounds-agenticburn#65),
+slides 16 to 27 from her walk on 2026-11-06 (rounds-agenticburn#68, #1003), and slides
+28 to 42 from her walk on 2026-11-07 (rounds-agenticburn#77, #1095). Slide
 numbers are the deck's at `https://rounds.agenticburn.com`. Every Challenge 2 slide
 from 17 to 27 opens on the same header line, "Challenge 2 - attackme.burritobot.co", so
 anyone who came in late or lost the chat page can find the public bot again.
@@ -1135,7 +1138,7 @@ above).
 on the switch and four single guardrail slides in about a minute. The 2026-11-07 deck
 replaces those four with slide 29's retry ("Try your attacks again.") and one set per
 guardrail on slides 30 to 42 (RBAC 30 to 33, Kyverno 34 to 36, KubeArmor 37 to 39,
-NetworkPolicy 40 to 42; #1065 brings steps 5 and 6 in line), and that close now takes
+NetworkPolicy 40 to 42; steps 5 and 6 below follow it, #1095), and that close now takes
 about 3 minutes. Slides 14 to 27 changed only in style, so their beats keep #1003's
 figures. The spoken beats from slide 28 on are the slides' Say notes read at about 150
 words a minute: 32 words on slide 28 and 29 on slide 29, then 317 across slides 30 to 42,
@@ -1318,19 +1321,35 @@ in the Run-through record's Segment 3 row.
    seed are the same ask, so what the room just watched is what the trace shows. The
    recipe read is also the one attack that leaves nothing behind: a public image stays
    deployed, and a beacon post moves the count the room watches. The same tab's second
-   saved view, `c2-fixed`, is for step 6's KubeArmor slide.
-5. **One switch, depending on #774 (slide 28).** The slide reads:
+   saved view, `c2-fixed`, is for step 6's KubeArmor set (slides 37 to 39).
+5. **One switch, depending on #774 (slide 28), then the room's retry (slide 29).**
+   Slide 28 reads (rounds-agenticburn#77, Whitney's walk on 2026-11-07):
 
-   > **Kubernetes guardrails on**
+   > Let's turn on Kubernetes guardrails.
+
+   The line is a link: it opens the admin cluster's terminal,
+   `https://burritobot-private.burritobot.co/lab`, in its own tab. Say: "I'm going to
+   switch to a terminal here and run this command to turn on four different Kubernetes
+   guardrails. I'll explain the four specific guardrails here in a minute, but for
+   now..." The presenter clicks the line to open the admin terminal, types
+   `guardrails-on`, and points at the bot's guardrails panel, which now lists the four.
 
    One command, run from the admin cluster's terminal (the private bot's terminal),
    turns on RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy together,
    for both clusters. That command is `guardrails-on`, which #774 added; it prints
    every `kubectl` it runs, and each badge lights on the room's chat page within a
-   poll (see "The Kubernetes guardrails switch (#774)" above). The room is invited to
-   try their Challenge 1 and Challenge 2 attacks again: the CEO's Secret read now comes
-   back Forbidden, and a public image, the recipe read and the beacon post are each
-   stopped. From here on any image the room asks for is refused at admission by
+   poll (see "The Kubernetes guardrails switch (#774)" above).
+
+   Slide 29 reads:
+
+   > Try your attacks again.
+
+   Say: "Take a moment to reset your bot and use your saved prompts to retry your
+   attacks that worked. They should no longer be effective. Let's briefly talk about
+   why." The room presses reset and pastes its saved prompts to try its Challenge 1 and
+   Challenge 2 attacks again while the guardrail sets run: the CEO's Secret read now
+   comes back Forbidden, and a public image, the recipe read and the beacon post are
+   each stopped. From here on any image the room asks for is refused at admission by
    Kyverno: `deny-external-registries` admits only `registry.burritobot.co` for the
    bot, and `restrict-image-registries` refuses `public.ecr.aws` and every other
    registry off its list. Segment 4's Jokers still land: HC-666 asks for
@@ -1338,21 +1357,42 @@ in the Run-through record's Segment 3 row.
    minute of the switch, what the room deployed before it from any other registry is
    deleted from both clusters (#990), so a heavy deploy from Challenge 2 does not
    outlive the guardrails.
-6. **One slide per guardrail (slides 29 to 32),** each named, not deep. If one is
-   asked about, its fallback proves it without the model:
-   - RBAC: agent-sa's Role reads one Secret by name, the agent's own `workshop-agent`
-     config Secret, so the CEO's record is out of reach. It has no fallback script;
-     the room's own Challenge 1 ask, coming back Forbidden after step 5, is the proof.
-     If the room's retry is not on screen, the Datadog Challenge 1 tab's `c1-fixed`
-     view is the same ask after the switch: `get_vault_entry` is still in the trace,
-     its result Forbidden, and the record is not in the reply (#855).
-   - C2 public image: Kyverno admission. Kyverno's `restrict-image-registries` does
-     not allow Docker Hub, `quay.io` or `public.ecr.aws`, where the four games are, and
+6. **One set per guardrail (slides 30 to 42).** Each set recalls its attack on a slide
+   of its own, names what prevented it on the next, then shows the YAML that did it.
+   The slides name the concept and the speaker notes name the product: on screen
+   Kyverno is "an admission policy" and KubeArmor is "runtime security", while RBAC and
+   NetworkPolicy are Kubernetes' own names and stay as they are. Each set is named, not
+   deep. If one is asked about, its fallback proves it without the model:
+   - **RBAC, slides 30 to 33.** Slide 30 recalls the Challenge 1 attack, "Convince
+     BurritoBot to give you the CEO's home address." Slide 31 adds "This attack was
+     prevented with RBAC." Slide 32 shows BurritoBot's overprivileged Role rule from
+     before the switch, `verbs: ["get", "list"]` on `secrets` with no `resourceNames`,
+     so every Secret in the namespace; slide 33 sets that rule beside the scoped one
+     `guardrails-on` applies, `resourceNames: ["workshop-agent"]` with
+     `verbs: ["get"]`. agent-sa's Role reads one Secret by name, the agent's own
+     `workshop-agent` config Secret, so the CEO's record is out of reach. It has no
+     fallback script; the room's own Challenge 1 ask, coming back Forbidden after
+     step 5, is the proof. If the room's retry is not on screen, the Datadog
+     Challenge 1 tab's `c1-fixed` view is the same ask after the switch:
+     `get_vault_entry` is still in the trace, its result Forbidden, and the record is
+     not in the reply (#855).
+   - **Kyverno, "an admission policy", slides 34 to 36.** Slide 34 recalls the
+     public-image attack, "Run an image off the public internet." Slide 35 adds "This
+     attack was prevented with an admission policy.", and its notes name Kyverno.
+     Slide 36 shows the `deny-external-registries` rule: the bot's containers must
+     come from `registry.burritobot.co/`; read its deny message aloud. C2 public
+     image: Kyverno admission. Kyverno's `restrict-image-registries` does not allow
+     Docker Hub, `quay.io` or `public.ecr.aws`, where the four games are, and
      `deny-external-registries` admits what the bot deploys from
      `registry.burritobot.co` alone.
      `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
      prints the deny.
-   - C3 read the recipe off the filesystem: KubeArmor. Blocked inline in the kernel by
+   - **KubeArmor, "runtime security", slides 37 to 39.** Slide 37 recalls the recipe
+     attack, "Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off the
+     filesystem." Slide 38 adds "This attack was prevented with runtime security.",
+     and its notes name KubeArmor. Slide 39 shows the `block-recipe-snoop` policy:
+     `/tmp/burrito-data/config/legacy/` and everything under it, `action: Block`.
+     C3 read the recipe off the filesystem: KubeArmor. Blocked inline in the kernel by
      KubeArmor, and caught by KubeArmor's own alert for the denied attempt. The Datadog
      Challenge 2 tab's `c2-fixed` view is the same recipe ask after the switch: the
      `run_shell` call is still in the trace, and the recipe is not in the reply. One command
@@ -1362,7 +1402,12 @@ in the Run-through record's Segment 3 row.
      (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
      alert here: Falco's recipe-snoop rule fires on a successful read, and on the
      private cluster there is none.
-   - C1 exfiltrate the customer data: the egress NetworkPolicy. The beacon view,
+   - **NetworkPolicy, slides 40 to 42.** Slide 40 recalls the beacon attack, "Send
+     customer demographics off the cluster to agenticburn.com/beacon." Slide 41 adds
+     "This attack was prevented with NetworkPolicy." Slide 42 shows the
+     `agent-egress-allowlist` NetworkPolicy with its plain-English comments: egress
+     from every pod in BurritoBot's namespace goes only to `10.0.0.0/16`, the private
+     network. C1 exfiltrate the customer data: the egress NetworkPolicy. The beacon view,
      `https://agenticburn.com/beacon/view`, stops counting. The fallback posts to
      `https://beacon.burritobot.co/beacon`, which shares its count.
      `CONTEXT=<admin-context> bash challenges/c1-exfil-s3/fallback.kubectl.sh` shows the
@@ -1569,7 +1614,7 @@ saying the same thing.
 | 2 | Connected to an under-protected MCP server | 5 (Challenge 4) | Yes |
 | 3 | Deployed on a full IDP | 3, by voice | Named, not toured: the catch-all plays against the open public cluster and names each layer |
 | 4 | Starts wide open, the audience hacks it live | 2 to 5 (public bot, phones) | Yes |
-| 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-on` from #774, then one slide each), 4 (least privilege, `guard-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named on its own slide |
+| 5 | The Kubernetes security layers you should already have | 3 (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, switched on together by `guardrails-on` from #774, then one set of slides each, 30 to 42), 4 (least privilege, `guard-agency-on`) | Yes: all four are shown turning on in segment 3's one switch, which depends on #774, before the first LLM-specific guardrail in segment 4, and each is named in its own set of slides |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); `verify/stage_traces.py` seeds Challenge 2 with the recipe read, the ask Whitney sends live in segment 3 (#1003), before and after `guardrails-on` (#843), as `docs/KUBECON-ABSTRACT-READINESS.md` row 7 says; the Grafana view carries them without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes: a listed word is refused on the phrase, and a paraphrase by BanTopics (#455) |
@@ -1583,7 +1628,7 @@ ready: the pre-seeded traces (#648).
 | Challenge | Internal id | In the cut? | Why |
 |---|---|---|---|
 | Challenge 1, the CEO's record (no fix in segment 2; RBAC arrives with segment 3's `guardrails-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real. Since #776 the segment ends on the OWASP Top 10 for LLM Applications with no fix run; the room tries it again after segment 3's switch, and the Secret read comes back Forbidden |
-| Challenge 2, the Kubernetes catch-all (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, turned on together by `guardrails-on`, #774) | C2, C3, C1 | Played and fixed, segment 3 | The room plays against the open public cluster; then `guardrails-on` on the private bot's terminal arms all four layers on both clusters, the room's Challenge 1 and 2 attacks are stopped, and one slide per guardrail follows |
+| Challenge 2, the Kubernetes catch-all (RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy, turned on together by `guardrails-on`, #774) | C2, C3, C1 | Played and fixed, segment 3 | The room plays against the open public cluster; then `guardrails-on` on the private bot's terminal arms all four layers on both clusters, the room's Challenge 1 and 2 attacks are stopped, and one set per guardrail follows on slides 30 to 42 |
 | Challenge 3, prompt injection through support ticket HC-666 (least privilege, then the input guard; Kyverno admits the trusted image) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with least privilege behind it and a Joker page per attendee |
 | Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |
 | Denial-of-wallet | C4 | Folded into the finale | Whitney, 2026-10-28: the number never moved convincingly as a challenge. The room drives it at the end instead (#690) |

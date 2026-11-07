@@ -307,6 +307,52 @@ def stalled() -> dict[str, float]:
     return out
 
 
+BIND_TRIES = 5
+
+
+def start_collector(d: pathlib.Path, procs: list, lprocs: list, conf: dict, out: pathlib.Path, lout: pathlib.Path,
+                    profile: str):
+    """Start the collector on a free port and wait for it to come up, or to exit. free_port closes its socket before
+    the collector binds the port, so on the shared host another process can take it in between, and the collector
+    then exits with `bind: address already in use` (#1095's run 18377 saw it on burn, 127.0.0.1:45755). That exit is
+    the race, not the collector: start again on a new port, up to BIND_TRIES times. Any other exit, or a collector
+    still not ready after 100 polls, is handed back as it is, for the checks to read."""
+    log_file = d / "collector.log"
+    for attempt in range(1, BIND_TRIES + 1):
+        port = free_port()
+        cfg = {
+            "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
+            "processors": {p: conf["processors"][p] for p in procs + lprocs},
+            "connectors": {"forward/llmobs": conf["connectors"]["forward/llmobs"]},
+            "exporters": {"file/apm": {"path": str(out)}, "file/llmobs": {"path": str(lout)}},
+            "service": {"telemetry": {"metrics": {"level": "none"}},
+                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
+                                                 "exporters": ["file/apm", "forward/llmobs"]},
+                                      "traces/llmobs": {"receivers": ["forward/llmobs"], "processors": lprocs,
+                                                        "exporters": ["file/llmobs"]}}},
+        }
+        cfg_file = d / "config.yaml"
+        cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
+        if attempt == 1:
+            val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *feature_gate_args(profile)],
+                                 capture_output=True, text=True, env=env)
+            check(f"{profile}: the collector accepts the traces processors", val.returncode == 0, val.stderr)
+        log = log_file.open("w")
+        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log,
+                                stderr=subprocess.STDOUT, env=env)
+        polls = 0
+        while polls < 100 and proc.poll() is None and "Everything is ready" not in log_file.read_text():
+            polls += 1
+            time.sleep(0.3)
+        if proc.poll() is not None and "address already in use" in log_file.read_text() and attempt < BIND_TRIES:
+            log.close()
+            print(f"  ({profile}: port {port} was taken before the collector bound it; starting again on a new one)")
+            continue
+        return proc, log, log_file, port
+    raise AssertionError("unreachable: the last attempt returns")
+
+
 def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str, str]:
     """The profile's two trace pipelines with datadog-secret present (both orgs on attendee), from OTLP/HTTP in to a
     file per Datadog intake: the datadog exporter's (APM) and otlp_http/llmobs's (Agent Observability)."""
@@ -324,37 +370,16 @@ def run_collector(profile: str) -> tuple[dict[str, dict], dict[str, dict], str, 
           [o.replace("datadog", "otlp_http/llmobs", 1).replace("/admin", "_admin") for o in orgs] == intakes)
     # Each intake's endpoint, header and key are verify/test_collector_no_datadog.py's, offline.
     procs, lprocs = traces["processors"], llmobs.get("processors", [])
-    port = free_port()
     with tempfile.TemporaryDirectory() as d:
         out, lout = pathlib.Path(d) / "apm.json", pathlib.Path(d) / "llmobs.json"
-        cfg = {
-            "receivers": {"otlp": {"protocols": {"http": {"endpoint": f"127.0.0.1:{port}"}}}},
-            "processors": {p: conf["processors"][p] for p in procs + lprocs},
-            "connectors": {"forward/llmobs": conf["connectors"]["forward/llmobs"]},
-            "exporters": {"file/apm": {"path": str(out)}, "file/llmobs": {"path": str(lout)}},
-            "service": {"telemetry": {"metrics": {"level": "none"}},
-                        "pipelines": {"traces": {"receivers": ["otlp"], "processors": procs,
-                                                 "exporters": ["file/apm", "forward/llmobs"]},
-                                      "traces/llmobs": {"receivers": ["forward/llmobs"], "processors": lprocs,
-                                                        "exporters": ["file/llmobs"]}}},
-        }
-        cfg_file = pathlib.Path(d) / "config.yaml"
-        cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
-        env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *feature_gate_args(profile)], capture_output=True, text=True,
-                             env=env)
-        check(f"{profile}: the collector accepts the traces processors", val.returncode == 0, val.stderr)
-        log_file = pathlib.Path(d) / "collector.log"
-        log = log_file.open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log, stderr=subprocess.STDOUT,
-                                env=env)
+        proc, log, log_file, port = start_collector(pathlib.Path(d), procs, lprocs, conf, out, lout, profile)
         try:
-            # free_port closes its socket before the collector binds the port, so until this collector says it is
-            # ready another process's server may hold it and answer 200 to spans this collector never sees (#799).
-            # Once it is up and running, the port is its own. Both waits count polls in place of wall seconds, so a
-            # host stall that freezes this test with the collector spends none of them: frozen together for 31 s, the
-            # old wall-clock deadline ran out before the woken collector's file exporter flushed, and all 26 spans
-            # read as lost (#799).
+            # The collector is up, or has exited, before this: start_collector waited for it. Until it says it is
+            # ready another process's server may hold the port and answer 200 to spans it never sees (#799), so the
+            # send still waits on "Everything is ready". Both waits count polls in place of wall seconds, so a host
+            # stall that freezes this test with the collector spends none of them: frozen together for 31 s, the old
+            # wall-clock deadline ran out before the woken collector's file exporter flushed, and all 26 spans read as
+            # lost (#799).
             sent, polls = False, 0
             while not sent and polls < 100 and proc.poll() is None:
                 polls += 1
@@ -574,6 +599,36 @@ for profile in PROFILES:
     ccopy = {k.split("/", 1)[1]: s for k, s in lgot.items() if k.startswith(copy_trace(TRACE_CAPPED) + "/")}
     check(f"{profile}: and its Agent Observability row is not red either",
           len(ccopy) == 1 and not any(is_error(s) for s in ccopy.values()), str([s.get("status") for s in ccopy.values()]))
+
+print("== a port taken before the collector binds it is the race, not a failure ==")
+# The race (run 18377, #1095), made to happen: the first port start_collector draws is held open here, so the collector
+# exits on `bind: address already in use`, and start_collector must start it again on the next port it draws.
+_held = socket.socket()
+_held.bind(("127.0.0.1", 0))
+_held.listen()
+_taken, _draws, _real_free_port = _held.getsockname()[1], [], free_port
+
+
+def free_port() -> int:  # noqa: F811 - the held port first, then real ones
+    _draws.append(1)
+    return _taken if len(_draws) == 1 else _real_free_port()
+
+
+_conf = collector_config("instructor", datadog_secret=True)
+_pipes = _conf["service"]["pipelines"]
+with tempfile.TemporaryDirectory() as _d:
+    _dp = pathlib.Path(_d)
+    _proc, _log, _lf, _port = start_collector(_dp, _pipes["traces"]["processors"],
+                                              _pipes.get("traces/llmobs", {}).get("processors", []), _conf,
+                                              _dp / "apm.json", _dp / "llmobs.json", "instructor")
+    _ready = _proc.poll() is None and "Everything is ready" in _lf.read_text()
+    _proc.terminate()
+    _proc.wait(timeout=15)
+    _log.close()
+_held.close()
+free_port = _real_free_port
+check("a collector whose port was taken is started again on a new one, and comes up",
+      _ready and _port != _taken and len(_draws) == 2, f"taken {_taken}, got {_port}, {len(_draws)} draw(s)")
 
 print()
 if failures:

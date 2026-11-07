@@ -32755,3 +32755,45 @@ which had been running since before hecaton#521's release (`4eed4f827120`, on di
 `gate_forbidden` (release `466bdb0ffe56`) against base `470c95ef` and this branch, on the changed paths `decisions.md`,
 `images/llm-guard` and `verify/test_llm_guard_bantopics_image.py`, and it returned `pass`, because `images/llm-guard`
 is already a gitlink at the base and `.gitmodules` is unchanged. The commits stay as run 18369 made them.
+
+## 2026-11-07: segment 3's switch, retry and guardrail sets follow the 2026-11-07 deck (#1095)
+
+**What changed.** `facilitation/kubecon-na-2026-run-of-show.md`, segment 3 step 5, now quotes slide 28 as the deck has
+it since Whitney's walk on 2026-11-07 (rounds-agenticburn#77), `Let's turn on Kubernetes guardrails.`, says the line
+links the admin terminal at `https://burritobot-private.burritobot.co/lab`, and has the presenter click it, type
+`guardrails-on` and point at the guardrails panel. The room's retry moved onto slide 29, "Try your attacks again.",
+with its Say note (reset the bot, retry the saved prompts that worked). What the step said about `guardrails-on`, the
+two registry policies, the Jokers and #990's cleanup is kept as it was. Step 6 is now one set per guardrail on slides 30
+to 42: RBAC 30 to 33, Kyverno 34 to 36 ("an admission policy" on screen), KubeArmor 37 to 39 ("runtime security") and
+NetworkPolicy 40 to 42, each recalling its attack, naming the fix and showing its YAML. Each set keeps its old fallback
+text word for word: `c1-fixed` under RBAC, the Kyverno deny script, `c2-fixed` and the Falco caution under KubeArmor,
+the beacon POST under NetworkPolicy. The segments table's row 3, the paragraph under it, the segment's opening note,
+the abstract-points row 5 and the Challenge 2 row of "Challenges shown live" now name the slide 28 text, slide 29's
+retry and the sets. The Timing paragraph's history of the 2026-11-06 deck's four single slides stays, as history.
+
+**Tests.** The pin in `verify/test_instructor_brief.py` on `> **Kubernetes guardrails on**` now reads slide 28's new
+line, the terminal URL and slide 29's retry. New checks in the same file hold step 6's four sets in the deck's order,
+each set's slide line and its fallback, and that no "one slide per guardrail" or "its four slides" is left.
+`verify/test_seg3_timing.py` already read the 2026-11-07 close and passes unchanged. Two tests cut the old step 6 on its bullet starts,
+`- C3 ` and `- C1 exfiltrate`, and missed the first suite run: `verify/test_c3_fallback.py` now cuts the KubeArmor set
+from its heading to the NetworkPolicy set's, and `verify/test_fleet_routes_roster.sh` reads the NetworkPolicy set to the
+`**Delivers:**` line, each exiting by name when its heading is gone.
+
+**A broken tools-tier test, fixed.** The second suite run went red on `verify/test_trace_shape_e2e.py` alone, burn's
+collector exiting on `listen tcp 127.0.0.1:45755: bind: address already in use`; the first run had passed it.
+`free_port()` closes its socket before the collector binds, so another process on the shared host can take the port in
+between. The test now starts the collector through `start_collector`, which waits for it to come up or exit, and on that
+one exit starts it again on a new port, up to five times; any other exit is handed to the checks as before. A new check
+holds the port it draws first open and passes only when the collector is started again on a new port and comes up. `git grep -nF` on the old words
+across `verify` and `scripts` found no other pin on the run-of-show; `test_progress_entries.py`'s
+"Kubernetes guardrails on" reads #1003's PROGRESS.md entry, which is history and stays. No `/kubecon` prompt text was
+changed (#1063).
+
+**Live check (run 18377, read only).** `curl` on `https://burritobot-private.burritobot.co/lab` answered 200. The live
+deck, `https://rounds.agenticburn.com/attendee.html`, has 136 sections; slide 28's line links that terminal, and "Try
+your attacks again." and the four "This attack was prevented with" lines (RBAC, an admission policy, runtime security,
+NetworkPolicy) follow in that order, each before its YAML (`deny-external-registries`, `block-recipe-snoop`,
+`agent-egress-allowlist`), as step 6 now says. Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** Nothing this change needs: it is text. The rehearsal's timing of slides 28 to 42 is
+#1040's, in the Timing table's Rehearsal column.
