@@ -32425,3 +32425,10 @@ through the gateway failed: HTTPError: HTTP Error 500` with the attempts, the pr
 and no traceback. With the test as committed: one run exited 0 with every check PASS, including `with port <p> held,
 the first start exits naming it taken ('Address in use', exit 1)` and `and the gateway starts on a fresh port (2
 starts)`, and ten copies at once all exited 0.
+
+**Suite results, run 18351.** On `7fcf9403`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so
+everything ran, and its output in `/var/lib/hecaton/runs/18351/e2e-tools.log`, printed `337 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m39s, 4 at a time`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. `test_agentgateway_tracing_e2e.py` took 34s there, and its held-port
+control passed (`with port 43281 held, the first start exits naming it taken ('Address in use', exit 1)`). No cluster
+is involved, so there is no live check and nothing waits under "Not yet run on a cluster". No dependency was added.
