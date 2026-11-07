@@ -30367,3 +30367,8 @@ behind the two Notes exist, and only their states are missing on tanjiro-wsl2.
 
 **Not yet run on a cluster.** Nothing is owed: the change is records only, and this run changed no account or
 cluster. No dependency was added.
+
+**Suite results, run 18188.** On commit `06c2aae1`, `bash verify/run-e2e-tools.sh` wrote
+`/var/lib/hecaton/runs/18188/e2e-tools.log`, which printed `329 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+then `82 checks ran (the offline suite and 81 tier tests) in 8m55s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
+and `exit=0`.
