@@ -472,21 +472,57 @@ check("C6's least-privilege fallback asks the API whether workshop-mcp may creat
 check("the page hands each person their own Joker page and the deployments page",
       "https://maintenance-shell-attackme.burritobot.co/joker-</code> plus their name" in _c6
       and "https://deployments.burritobot.co</code> under their witch name" in _c6)
-# The roster's terminals take the presenter login, which fleet.sh reads from mrf-secrets and no tracked file
-# carries (#910, #911; verify/test_admin_actions.sh, verify/test_no_presenter_login.py); the public bot shows no
-# Terminal button (#645). So the page and the run-of-show point at mrf-secrets and the key, and write no login.
+# The KubeCon pair's presenter login was set by hand on 2026-11-07 (#1069) and lives only in each cluster's
+# agent/terminal-auth Secret, which fleet.sh refuses to write there (#1074). Nothing records a copy in
+# mrf-secrets, so the pages send presenters to the Secret for the pair (#1086). fleet.sh still writes every other
+# roster cluster's login from mrf-secrets, the pair's standbys included until #1085 decides theirs, so mrf-secrets
+# is named only for those. No tracked file carries a login (#910, #911; verify/test_no_presenter_login.py); the
+# public bot shows no Terminal button (#645). #1085's decision changes the standby sentences checked here.
 _MRF_HTML = ("mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> "
              "and <code>WIB_TERMINAL_PASSWORD</code>)")
 _MRF_MD = "mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`)"
+_READ_HTML = ("<code>kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' "
+              "| base64 -d</code>")
+_READ_MD = "`kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`"
 _KFLAT = " ".join(KUBECON.split())
 _RFLAT = " ".join(ROS.split())
-check("the page sends presenters to mrf-secrets for the private terminal login, in the notes and the footer",
-      _KFLAT.count(_MRF_HTML) == 2
-      and "terminal login is the presenter login, which lives in " + _MRF_HTML in _KFLAT
-      and "Terminal login on the private cluster: the presenter login in " + _MRF_HTML in _KFLAT)
-check("the run-of-show sends presenters to mrf-secrets for the private terminal login",
-      "Terminal login on the private cluster is the presenter login" in _RFLAT and _MRF_MD in _RFLAT
+_BFLAT = " ".join(BRIEF.split())
+# The wording #1086 replaced, which said the pair's login is the one in mrf-secrets.
+_OLD_PAIR_MRF = ("terminal login is the presenter login, which lives in mrf-secrets",
+                 "Terminal login on the private cluster: the presenter login in mrf-secrets",
+                 "instructor and Community clusters take the presenter login, kept in mrf-secrets",
+                 "the presenter login every roster cluster gets; the attendee pool takes the student login. "
+                 "It lives in mrf-secrets")
+check("the page says the private terminal login was set by hand and lives in agent/terminal-auth, with how to read it",
+      "terminal login is the presenter login set by hand on 2026-11-07, the same on both clusters" in _KFLAT
+      and "It lives in each cluster's <code>agent/terminal-auth</code> Secret, which no script rewrites" in _KFLAT
+      and "Read it off the cluster if in doubt: " + _READ_HTML in _KFLAT
+      and "Terminal login on the private cluster: the presenter login set by hand, in its "
+          "<code>agent/terminal-auth</code> Secret" in _KFLAT)
+check("the page names mrf-secrets only for a standby",
+      _KFLAT.count("mrf-secrets") == 2
+      and "A standby that takes over on a failover still carries the presenter login in " + _MRF_HTML in _KFLAT
+      and "(a standby carries the one in mrf-secrets)" in _KFLAT)
+check("the run-of-show says the private terminal login was set by hand and lives in agent/terminal-auth",
+      "Terminal login on the private cluster is the presenter login set by hand on 2026-11-07 on "
+      "watch-it-burn-private and watch-it-burn-community (#1069)" in _RFLAT
+      and "It lives in each cluster's `agent/terminal-auth` Secret, not in this repo" in _RFLAT
+      and "read it off the cluster if in doubt: " + _READ_MD in _RFLAT
       and "`agentic` / `agentic`" not in ROS)
+check("the run-of-show names mrf-secrets only for a standby, until #1085",
+      _RFLAT.count("mrf-secrets") == 2
+      and "Nothing records whether a copy is in mrf-secrets" in _RFLAT
+      and "is still built with the presenter login in " + _MRF_MD + ", which may differ, until #1085" in _RFLAT)
+check("the brief says the pair's login is in agent/terminal-auth and mrf-secrets holds the other clusters'",
+      "on the KubeCon pair, <code>watch-it-burn-private</code> and <code>watch-it-burn-community</code>, the presenter "
+      "login was set by hand on 2026-11-07 and lives only in each cluster's <code>agent/terminal-auth</code> Secret"
+      in _BFLAT
+      and "Every other instructor and Community cluster, the pair's standbys included, takes the presenter login "
+          "kept in " + _MRF_HTML in _BFLAT
+      and _BFLAT.count("mrf-secrets") == 1
+      and "Read it off the cluster if in doubt: " + _READ_HTML in _BFLAT)
+check("no page still says the pair's login is the one in mrf-secrets",
+      not [s for s in _OLD_PAIR_MRF if s in _KFLAT or s in _RFLAT or s in _BFLAT])
 check("neither writes a terminal login out as a user / password pair",
       not re.search(r"[Tt]erminal login[^.]{0,80}<code>[^<]+</code> / <code>[^<]+</code>", _KFLAT)
       and not re.search(r"[Tt]erminal login[^.]{0,80}`[^`]+` / `[^`]+`", _RFLAT))

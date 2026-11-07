@@ -116,7 +116,7 @@
   KubeArmor and the egress NetworkPolicy) present and <b>off</b> (#774), so Challenges 1 and 2 land on either bot,
   until <code>guardrails-on</code> in Challenge 2 arms all four on both at once. The night before, run
   <code>guards-off</code> and <code>guardrails-off</code> from the private terminal. The private cluster's
-  terminal login is the presenter login, which lives in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>); it is not written on this page. The AI-guard toggles below go through the guard-proxy,
+  terminal login is the presenter login set by hand on 2026-11-07, the same on both clusters and one Michael and Whitney can remember. It lives in each cluster's <code>agent/terminal-auth</code> Secret, which no script rewrites, and it is not written on this page. Read it off the cluster if in doubt: <code>kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d</code>. A standby that takes over on a failover still carries the presenter login in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>), which may differ, so read a standby's off the standby. The AI-guard toggles below go through the guard-proxy,
   which Argo CD does not revert and which keeps the cost counter alive. Never flip a guard with
   <code>kubectl set env</code>.</div>
 
@@ -508,7 +508,7 @@
   both clusters; <code>guard-agency-on</code> and <code>guard-input-on</code> (Challenge 3),
   <code>guard-mcp-on</code> (Challenge 4), <code>guard-topic-on</code> (Segment 6) flip one at a time, and each
   prints the kubectl it runs. Terminal login on the private
-  cluster: the presenter login in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>); the public cluster has no terminal. The full 2-hour
+  cluster: the presenter login set by hand, in its <code>agent/terminal-auth</code> Secret (a standby carries the one in mrf-secrets); the public cluster has no terminal. The full 2-hour
   workshop brief is at <a href="/brief">/brief</a>.
 </footer>
 

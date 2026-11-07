@@ -195,7 +195,7 @@
 <footer>
   <span class="spons">Co-sponsored by <strong style="color:#B98CFF">Datadog</strong> &amp; <strong style="color:#D08BFF">Neo4j</strong></span>Guard toggles (terminal): <code>guards-on</code> / <code>guards-off</code> flip everything;
 <code>guard-output-on</code>, <code>guard-input-on</code>, <code>guard-mcp-on</code>, <code>guard-budget-on</code> individually.
-Terminal login: instructor and Community clusters take the presenter login, kept in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>); every attendee cluster is <code>agentic</code> / <code>agentic</code>, including one claimed by you or Whitney. Read it off the cluster if in doubt: <code>kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d</code>.</footer>
+Terminal login: on the KubeCon pair, <code>watch-it-burn-private</code> and <code>watch-it-burn-community</code>, the presenter login was set by hand on 2026-11-07 and lives only in each cluster's <code>agent/terminal-auth</code> Secret. Every other instructor and Community cluster, the pair's standbys included, takes the presenter login kept in mrf-secrets (<code>projects/watch-it-burn-terminal.env</code>, keys <code>WIB_TERMINAL_USER</code> and <code>WIB_TERMINAL_PASSWORD</code>); every attendee cluster is <code>agentic</code> / <code>agentic</code>, including one claimed by you or Whitney. Read it off the cluster if in doubt: <code>kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d</code>.</footer>
 
 <div id="toast"></div>
 <script>

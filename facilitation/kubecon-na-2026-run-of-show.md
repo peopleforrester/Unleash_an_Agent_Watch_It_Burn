@@ -776,11 +776,17 @@ about 12 hours at 6 and 8 hours at 15: roughly $95, with the VPCs. The rehearsal
 credits if a standby runs hot (t3 launches Unlimited); and the self-check's
 Bedrock calls. Those are estimates, not measured.
 
-Terminal login on the private cluster is the presenter login every roster
-cluster gets; the attendee pool takes the student login. It lives in
-mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`),
-not in this repo. Read it off the cluster if in doubt:
+Terminal login on the private cluster is the presenter login set by hand on
+2026-11-07 on watch-it-burn-private and watch-it-burn-community (#1069), the same
+on both and one Michael and Whitney can remember; the attendee pool takes the
+student login. It lives in each cluster's `agent/terminal-auth` Secret, not in
+this repo, and no script or run rewrites it there (#1074). Nothing records whether
+a copy is in mrf-secrets, so read it off the cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
+A standby (`-bNN`) that takes over a hostname on a failover is still built with
+the presenter login in mrf-secrets (`projects/watch-it-burn-terminal.env`, keys `WIB_TERMINAL_USER` and `WIB_TERMINAL_PASSWORD`),
+which may differ, until #1085 decides which login the standbys carry; read a
+standby's login off the standby the same way.
 
 Guard toggles on the private cluster, from its terminal: `guard-output-on`,
 `guard-input-on`, `guard-mcp-on`, `guard-budget-on` and `guard-topic-on` flip one

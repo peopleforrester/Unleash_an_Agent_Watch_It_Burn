@@ -31175,3 +31175,30 @@ also listed was run by #1059. The draft's line about adding acceptance criteria 
 RENDER-GATE TESTS GREEN`, with `test_ticket_persona.py` among them, then `82 checks ran (the offline suite and 81 tier
 tests) in 9m44s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite is the Test command's
 own run (`bash verify/run-tests.sh`). The prose gate printed `prose gate: pass`.
+## 2026-11-07 · #1086 · run 18293 · The presenter pages send presenters to the pair's terminal-auth Secret, not mrf-secrets
+
+**What was wrong.** `gitops/ai-layer/web/brief.html`, `gitops/ai-layer/web/kubecon.html` and
+`facilitation/kubecon-na-2026-run-of-show.md` said the presenter terminal login on watch-it-burn-private and
+watch-it-burn-community is the one in mrf-secrets (`projects/watch-it-burn-terminal.env`). Since #1069 it is a login
+set by hand on both clusters, and nothing records a copy in mrf-secrets. The issue names brief.html and the
+run-of-show; kubecon.html, the page read on stage, said the same twice and is the page `verify/test_instructor_brief.py`
+held, so it changed too.
+
+**Why now, with #1085 open.** The issue says to reword once the standby question (#1085) is settled. The coordinator
+holds #1085 until after the talk, by Michael's word of 2026-11-07, so waiting would leave the old wording up for the
+talk. Where the pair's own login lives does not depend on #1085. The pages now say what is true today on both sides:
+the pair's login is in each cluster's `agent/terminal-auth` Secret, with the command to read it; a standby (`-bNN`)
+is still built with the mrf-secrets login, which may differ, until #1085 decides. When #1085 is decided, its run
+changes the standby sentences on kubecon.html and the run-of-show and in the brief's footer, which the test names.
+
+**What changed.** kubecon.html's control note and footer, the brief's footer and the run-of-show's login paragraph.
+Other instructor and Community clusters still take the mrf-secrets login, and the brief says so. No page writes a
+login out. `verify/test_instructor_brief.py` now holds the new sentences on all three pages, counts mrf-secrets to the
+standby and other-cluster sentences only, and refuses the four old phrasings. On the old pages it fails 6 checks.
+`facilitation/WHITNEY-START-HERE.md` and `docs/RUN-OF-SHOW-2026-08.md` are the August workshop's and name instructor
+clusters outside the pair, so they are left as they are. `docs/floor.md` and `docs/admin-console.md` are #1085's.
+
+**Live check, read-only.** `kubectl --context <c> -n agent get secret terminal-auth` on both clusters, piped to
+`wc -c` and to the first 12 hex of `sha256sum`, never printed: each holds a 33-byte `TTYD_CREDENTIAL` and the two
+digests match, as #1069 says ("the same on both clusters"). mrf-secrets is not on this run's host, so whether it holds
+the same login was not checked. Nothing on either cluster was changed.
