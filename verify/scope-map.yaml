@@ -3169,6 +3169,13 @@ reads:
     - infra/terraform/aws/audit
     - infra/terraform/aws/cluster
     - verify/iam_plan_render.py
+  test_iam_plan_render_plugin_start.py:
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/permissions-boundary.json.tftpl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/cluster
+    - verify/iam_plan_render.py
   test_iam_policy_pipeline.py:
     - infra
     - infra/**.tf
