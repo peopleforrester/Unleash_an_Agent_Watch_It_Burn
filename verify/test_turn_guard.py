@@ -191,11 +191,40 @@ check("a call with no traceparent runs and its lines carry turn null",
 check("each server has its own guard", tool_audit.AuditedFastMCP("other").turn_guard is not srv.turn_guard)
 
 print("== the wiring ==")
+
+
+def duplicate_keys(text: str) -> list[str]:
+    """Every mapping key the YAML text names twice in one mapping, which safe_load would settle by keeping the last.
+
+    Run 18117 found the draft's own allowedHeaders list beside the one #995 and #1000 had added to the same entry;
+    PyYAML kept #1000's, so traceparent would never have been forwarded and every test that read the parsed file
+    passed. A YAML node walk sees both keys."""
+    found: list[str] = []
+
+    def walk(node: yaml.Node) -> None:
+        if isinstance(node, yaml.MappingNode):
+            keys = [k.value for k, _ in node.value if isinstance(k, yaml.ScalarNode)]
+            found.extend(sorted({k for k in keys if keys.count(k) > 1}))
+            for _, v in node.value:
+                walk(v)
+        elif isinstance(node, yaml.SequenceNode):
+            for v in node.value:
+                walk(v)
+
+    for doc in yaml.compose_all(text, Loader=yaml.SafeLoader):
+        walk(doc)
+    return found
+
+
+check("the duplicate-key walk sees a key named twice in one mapping", duplicate_keys("a:\n  b: 1\n  b: 2\n") == ["b"])
+check("the Agent manifest names no key twice in one mapping, so each allowedHeaders list is the one kagent reads",
+      duplicate_keys((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8")) == [])
 agent = next(d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8"))
              if d and d.get("kind") == "Agent")
 servers = {(t.get("mcpServer") or {}).get("name"): t.get("mcpServer") or {} for t in agent["spec"]["declarative"]["tools"]}
 check("the workshop-mcp entry forwards traceparent from the A2A request (allowedHeaders, inside mcpServer)",
-      [h.lower() for h in servers.get("workshop-mcp", {}).get("allowedHeaders") or []] == ["traceparent"])
+      "traceparent" in [h.lower() for h in servers.get("workshop-mcp", {}).get("allowedHeaders") or []],
+      str(servers.get("workshop-mcp", {}).get("allowedHeaders")))
 check("no other server is forwarded the turn", all(not s.get("allowedHeaders") for n, s in servers.items() if n != "workshop-mcp"))
 check("the Agent runs the Go runtime, whose MCP transport forwards allowedHeaders per request",
       agent["spec"]["declarative"].get("runtime") == "go")
@@ -215,6 +244,11 @@ class _StandInMCP:
 
     def tool(self, *a, **kw):
         return lambda f: f
+
+    def get_context(self):
+        # As FastMCP outside a request: run_shell reads #1000's X-Pantry-Shut through it, and with no tools/call in
+        # flight there is no header to read.
+        raise LookupError("no request in flight")
 
 
 sys.modules["tool_audit"] = types.SimpleNamespace(AuditedFastMCP=_StandInMCP)
@@ -244,13 +278,13 @@ def shell(case: str) -> str:
 
 
 msg = shell("unclosed")
-check("an unclosed quote fails with dash's message, exit 2", "command FAILED with exit code 2" in msg
+check("an unclosed quote fails with dash's message and status 2", "command FAILED with exit code 2" in msg
       and "Syntax error: Unterminated quoted string" in msg, msg)
 check("and says nothing ran, that resending fails the same way, and how to send JSON",
       "none of it ran" in msg and "fails the same way" in msg and "curl -d @/tmp/body.json" in msg, msg)
 check("any dash parse error gets it, an unexpected token too", "none of it ran" in shell("paren"))
 msg = shell("ls")
-check("an ordinary failure with exit 2 carries no parse hint", "exit code 2" in msg and "here-document" not in msg, msg)
+check("an ordinary failure with status 2 carries no parse hint", "exit code 2" in msg and "here-document" not in msg, msg)
 msg = shell("mention")
 check("output that only mentions a syntax error is not read as one", "here-document" not in msg, msg)
 body = "/tmp/turn-guard-885-body.json"

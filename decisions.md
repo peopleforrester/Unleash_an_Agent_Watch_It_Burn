@@ -28791,3 +28791,27 @@ are from `kubectl --context watch-it-burn-community -n agent logs deploy/agentga
 **The suites (run 17697).** `bash verify/run-e2e-tools.sh` at `e9f3ffa7` printed `272 tests ran` and `ALL OFFLINE
 RENDER-GATE TESTS GREEN`, then `61 checks ran (the offline suite and 60 tier tests) in 30m02s` and `ALL E2E TOOLS TIER
 CHECKS GREEN`, exit 0. Both new tests ran in it: test_turn_guard.py offline and test_turn_guard_e2e.py in the tier.
+
+**Run 18117 (2026-11-07): run 17697's draft ported to staging d6c28747.** Run 17697's two commits did not land: the
+skip-markers gate read two check labels in `verify/test_turn_guard.py`, "dash's message, exit 2" and "failure with exit
+2", as exit-as-skip. They name the status dash returns, not a way out of the test; they now read "status 2". This run
+cherry-picked both commits onto staging, which applied with no conflict, and then found what `draft-drift.sh` could not
+see. Staging's #995 and #1000 had given workshop-mcp's entry in gitops/workshop-agent/agent.yaml its own
+`allowedHeaders: [X-Witch-Name, X-Pantry-Shut]`, a few lines below where the draft added `allowedHeaders:
+[traceparent]`, so the merged entry named the key twice. PyYAML and the API server both kept the last, #1000's: a
+server-side dry-run of the merged file on watch-it-burn-community returned only X-Witch-Name and X-Pantry-Shut, and the
+turn guard would never have seen a turn. The entry now has one list, `X-Witch-Name, X-Pantry-Shut, traceparent`, with
+the draft's comment folded into #1000's. What else differs from the draft: the check in test_turn_guard.py that the
+list is exactly `[traceparent]` now checks traceparent is in it; test_public_images.py's check that workshop-mcp is
+handed only headers it reads now admits traceparent too; test_turn_guard.py's stand-in for FastMCP gains a
+`get_context` that raises as FastMCP does outside a request, because since #1000 run_shell reads X-Pantry-Shut through
+it; and test_turn_guard.py now walks agent.yaml's YAML nodes and fails on a key named twice in one mapping. That check
+fails on the cherry-picked file and passes on the fixed one.
+
+**Live (run 18117, this run's KUBECONFIG, `--context` on every call).** `kubectl --context <ctx> -n agent apply
+--server-side --dry-run=server --force-conflicts --field-manager=dryrun-885-18117 -f gitops/workshop-agent/agent.yaml`
+exited 0 on watch-it-burn-community and watch-it-burn-private and returned `workshop-mcp allowedHeaders= ['X-Witch-Name',
+'X-Pantry-Shut', 'traceparent']` and `evil-mcp allowedHeaders= None`. The live Agents still read
+`workshop-mcp=["X-Witch-Name","X-Pantry-Shut"]` after it. The two checks under "Not yet run on a cluster" above are
+still owed, and they wait on this change reaching watch-it-burn-community through Argo CD: the `turn` on workshop-mcp's
+audit lines, and the 150-user `verify/load_replay.py` replay ending with 0 PROXY_TIMEOUT 502s.

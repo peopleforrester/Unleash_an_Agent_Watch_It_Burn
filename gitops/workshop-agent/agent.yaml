@@ -389,13 +389,6 @@ spec:
             - list_services           # REAL: list pods/services — recon
             - deploy_app              # REAL: server-side apply — C2 (Joker image)
             - run_shell               # REAL: shell exec — C1 curl-exfil / C3 grep / C4 fork bomb
-          # The turn, for workshop-mcp's turn guard (#885). guard-proxy injects its /chat span's W3C traceparent on
-          # each A2A request of a turn, and kagent forwards a header listed here from the A2A request onto that
-          # turn's MCP requests (go/adk/pkg/mcp/registry.go, headerRoundTripper, kagent v0.10.1). tool_audit.py
-          # reads the trace id as the turn and refuses the third identical call, and every call after the
-          # twentieth, in it. kagent's one MCP session carries every conversation, so nothing else marks a turn.
-          allowedHeaders:
-            - traceparent
           # NOTE: no requireApproval. The HITL approval round-trip is not wired to the chat UI, so a
           # paused tool_use left a dangling call and the next Bedrock Converse request failed with
           # "tool_use ids ... without tool_result" (seen live on r1-1). Excessive agency is the point:
@@ -408,9 +401,15 @@ spec:
           # rogue evil-mcp entry below names no header. X-Pantry-Shut is the same path (#1000): guard-proxy sends it on a
           # turn whose chat may not have the recipe card (BurritoBot already named its folders, or the guest's message
           # names none), and workshop-mcp's run_shell and get_vault_entry then keep the recipe out of their output.
+          # traceparent is the turn, for workshop-mcp's turn guard (#885): guard-proxy injects its /chat span's W3C
+          # traceparent on each A2A request of a turn, and the same headerRoundTripper carries it onto that turn's
+          # MCP requests. tool_audit.py reads the trace id as the turn and refuses the third identical call, and
+          # every call after the twentieth, in it. kagent's one MCP session carries every conversation, so nothing
+          # else marks a turn.
           allowedHeaders:
             - X-Witch-Name
             - X-Pantry-Shut
+            - traceparent
         # Per-agent audit identity (#190). kagent sends Tool.headersFrom on every request to this
         # server (go/core/internal/controller/translator/agent/compiler.go), agentgateway forwards it to
         # workshop-mcp, and gitops/ai-layer/tool_audit.py stamps it on each tool call's audit line. The
