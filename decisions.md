@@ -32711,3 +32711,9 @@ unpriced llm row, two of them, no llm row) now use Challenge 3, since a Challeng
 prefix. No dependency was added.
 
 **Not yet run on a cluster.** Nothing is owed. The live check reads Datadog, not the change, and passed above.
+
+**Suite results, run 18379.** On `97271cd6`, `bash verify/run-e2e-tools.sh` with
+`HECATON_BASE_SHA=f4bc92c6`, so scoped to this change, wrote its output to `/var/lib/hecaton/runs/18379/e2e-tools.log`.
+It printed `116 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` with `test_challenge_traces.py` among them,
+then `16 checks ran (the offline suite and 15 tier tests) in 5m20s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
+and `exit=0`.
