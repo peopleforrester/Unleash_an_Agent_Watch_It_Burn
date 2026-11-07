@@ -28866,6 +28866,12 @@ its prerequisite check:
   that pull from ghcr.io (test_image_version_tags.py, test_c6_joker_public.py, test_mirror_copies_public.py,
   test_promo_villains_public.py) then passed against the network.
 
+**The suites (run 18115, at `abdf6626`).** `bash verify/run-e2e-tools.sh`, logged as
+`/var/lib/hecaton/runs/18115/e2e-tools.2.log`, printed `315 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`78 checks ran (the offline suite and 77 tier tests) in 10m29s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with the fetch reading terraform's zip through python3. The prose gate printed `prose gate: pass`. No
+dependency was added.
+
 **Not yet run on a runner.** The fixes reach Tanjiro's runner only once hecaton pushes this branch. What the tools tier
 needs from the host beyond its prerequisite check, Playwright's Chromium libraries among them, has not yet run there,
 because every earlier E2E job stopped at the prerequisite check. No cluster is involved: the change is to the gate's
