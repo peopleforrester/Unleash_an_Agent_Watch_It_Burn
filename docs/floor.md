@@ -167,7 +167,10 @@ writes a state. Each run covers three things:
    `resource_drift`, read with `terraform show -json`, and that list is the finding. It does not depend
    on the variables, which only have to make the configuration valid, so each plan is given the ones
    its root requires, read from the tags that root put on its own resources (`event`, and a cluster's
-   `hostname` and `role`). A state whose tags do not say makes the report incomplete rather than guessed.
+   `hostname` and `role`). A state whose tags do not say makes the report incomplete rather than guessed. The
+   one exception is a roster cluster built before #636 put `role` on every cluster: its role is its
+   `infra/terraform/fleet/roster.tsv` row's, the data `fleet.sh` passes its apply, and the report's Notes say so.
+   watch-it-burn-private is one (#979).
 2. **Resources Terraform does not manage.** A plan cannot report these: a bucket made by hand is in no
    state, so no plan ever mentions it. So the report lists every S3 bucket in each account and every
    EKS cluster in each region the fleet builds in (us-west-2, every region in `backups.tsv`, and every
@@ -180,7 +183,9 @@ writes a state. Each run covers three things:
 The accounts are `WIB_ATTENDEE_ACCOUNTS`, read from `fleet.sh` when the environment does not set it, so
 the report covers the accounts the fleet builds in. Run it on the machine that holds the states. Anywhere
 else every cluster `fleet.sh` built is in no state the report can read, so each one is listed as
-unmanaged: run from the hecaton host on 2026-11-05, it listed both KubeCon clusters that way. Exit codes: 0 means clean, 2 means findings, 1 means
+unmanaged: run from the hecaton host on 2026-11-05, it listed both KubeCon clusters that way. Their states,
+and accen-dev's lab VPC and boundary states, were on no machine at all, and are rebuilt from AWS as
+"Rebuilding a lost state" below says (#979). Exit codes: 0 means clean, 2 means findings, 1 means
 the report is incomplete. An incomplete report is a failure: if the report could not look at something,
 it has not shown that thing is free of drift.
 
@@ -207,6 +212,65 @@ credential for the fleet accounts first.
 
 driftctl is not used because it is in maintenance mode. If the states move off the laptop, HCP
 Terraform, Spacelift and env0 are the managed alternatives that run drift detection themselves.
+
+### Rebuilding a lost state
+
+The states are local files, so a state lives only on the machine that applied it, and a machine that is
+lost, or a worktree that is retired, takes its states with it. The KubeCon clusters watch-it-burn-community
+and watch-it-burn-private were built from `infra/terraform/aws/cluster` by `fleet.sh` on 2026-10-28 (their
+`ManagedBy=terraform`, `Purpose=attendee-cluster` and `attendee` tags and their module-named roles say so),
+and on 2026-11-06 no machine held their states or accen-dev's lab VPC and boundary states (#979). They
+are rebuilt from AWS on the machine that is to keep them, the boundary and lab VPC first, since a cluster's
+plan reads the boundary policy and takes its subnets from the lab VPC state:
+
+```bash
+for r in org/boundary terraform/aws/network terraform/aws/cluster; do terraform -chdir=infra/$r init; done
+python3 infra/terraform/fleet/import-state.py boundary accen-dev
+python3 infra/terraform/fleet/import-state.py network accen-dev
+python3 infra/terraform/fleet/import-state.py cluster accen-dev watch-it-burn-community
+python3 infra/terraform/fleet/import-state.py cluster accen-dev watch-it-burn-private
+```
+
+The script plans the root against an empty state with the variables the resources were built with, read
+from AWS (the tags, the node group and its launch template; a roster cluster built before #636 takes its
+role from `roster.tsv`). Every planned resource is one to import. It finds each one's import id in AWS
+before it imports any, and stops at the first it cannot find, so it never writes half a state. Then it
+imports them one at a time, settles the state with the refresh-only apply below, and plans again. It
+refuses a state that already manages a resource; `--resume` carries on a rebuild that stopped part way (a
+credential timeout stopped one on 2026-11-06), importing only what the state does not hold. Imports, the
+settle and the plan only read AWS, so it changes nothing there: CloudTrail holds 3,230 events from the
+run that rebuilt the five accen-dev states, and none of them is a write. `--resolve-only` prints the
+import ids and stops. Exit 0 means the last plan has no changes, 2 that the state is rebuilt and the plan
+still has some, which it lists with the attributes each one changes, and 1 an error.
+
+Two things in the cluster root needed care. The EKS module passes the cluster's name, endpoint, version and
+CA to the node group and the access entries through a `time_sleep`'s triggers. Terraform imports a
+`time_sleep` with no triggers, after which nothing that reads them evaluates. So the script writes it into
+the state itself, its triggers read from the imported cluster, and the last plan shows it unchanged. And
+the node group states `kubernetes_version = var.kubernetes_version`: left to the module, the version came
+through that `time_sleep`, which is unknown in an empty state, and a `count` that hangs on it failed every
+import.
+
+Rebuild a cluster's state as the machine's own operator, the identity that built it: the module's
+`cluster_creator` access entry and the KMS key policy name whoever runs the plan. A state rebuilt by another
+identity, a hecaton run's role for one, plans both as changed, and a copy of that state must not be taken
+to the operator machine.
+
+Exit 2 is what the KubeCon clusters give, and none of their changes replaces the cluster, its node group or
+an access entry. Three security group rules the cluster root has committed since 2026-10-28 are on neither
+cluster: #869's node rules for 8080 and 3000, and #906's lab VPC rule to the API on 443 (#906's fix was made
+by hand as a rule from the other cluster's nodes). AWS does not hold them, so they are not imported, and the
+plan creates them. The rest is configuration committed after the build: the launch template's user data
+(#714 removed the containerd registry part, so the next apply rolls the node), the agent and tutor
+policies (#203 dropped the `bedrock:Converse` actions), the tutor's inference profile, replaced for #882's
+model, and on watch-it-burn-private the `role` tag on every resource. Then there are settings Terraform keeps
+and AWS has no copy of (`force_destroy`, `force_detach_policies`, `force_update_version`, the addons'
+conflict settings), as after any import. The next `fleet.sh` apply of each cluster makes all of it; until
+then the drift report, which plans refresh-only, reads both states as clean. A cluster's rebuild takes
+about 35 minutes (65 imports, each one refreshing the root's data sources), the lab VPC's 9 and the
+boundary's 1. `verify/test_fleet_import_state.py` holds the import ids to an AWS world of the clusters'
+shape, and holds the script to a rule for each resource type the three roots plan
+(`verify/fixtures/import-state/planned-types.txt`, from the plans of 2026-11-06).
 
 ### Settling a fresh state
 

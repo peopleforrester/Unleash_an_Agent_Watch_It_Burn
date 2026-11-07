@@ -158,6 +158,29 @@ def state_tag(state: dict, key: str, label: str, rtype: str | None = None) -> st
     return seen.pop()
 
 
+def cluster_role(state: dict, name: str, roster: pathlib.Path) -> tuple[str, bool]:
+    """The role a cluster plan is given: its state's role= tag, or, when no cluster in the state carries one, its row's
+    in fleet/roster.tsv (`name|role|...`), the data fleet.sh's role_for_cluster answers from. Roster clusters built
+    before #636 have no such tag (watch-it-burn-private, #979). A cluster with no tag and no community or admin row,
+    or with several values, still stops the report. Returns the role and whether the roster gave it, which the
+    report's Notes then say."""
+    seen = {(a.get("tags_all") or a.get("tags") or {}).get("role") for t, a in managed(state) if t == "aws_eks_cluster"}
+    seen.discard(None)
+    if seen:
+        return state_tag(state, "role", f"cluster {name}", "aws_eks_cluster"), False
+    try:
+        lines = roster.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        raise Incomplete(f"cluster {name}: its state carries no `role` tag and {roster} cannot be read: {e}") from e
+    for ln in lines:
+        fields = [f.strip() for f in ln.split("|")]
+        if ln.strip() and not ln.lstrip().startswith("#") and fields[0] == name and len(fields) > 1 \
+                and fields[1] in ("community", "admin"):
+            return fields[1], True
+    raise Incomplete(f"cluster {name}: its state's resources carry no `role` tag and it is not a community or admin "
+                     f"row of {roster.name}, so the plan cannot be given -var role= as it was applied")
+
+
 def hop_limit(state: dict) -> str | None:
     """The node IMDS hop limit a cluster was built with (#113), from its launch template, so the plan states it."""
     for t, a in managed(state):
@@ -290,7 +313,13 @@ def collect_plans(rep: Report, tf_dir: pathlib.Path, org_dir: pathlib.Path, flee
         remember(prof, state)
         variables = [("name", name), ("profile", prof), ("region", region),
                      ("vpc_id", lab["vpc_id"]), ("private_subnet_ids", json.dumps(subnets))]
-        variables += [(k, state_tag(state, k, f"cluster {name}", "aws_eks_cluster")) for k in CLUSTER_TAG_VARS]
+        variables += [(k, state_tag(state, k, f"cluster {name}", "aws_eks_cluster")) for k in CLUSTER_TAG_VARS
+                      if k != "role"]
+        role, from_roster = cluster_role(state, name, tf_dir / "fleet/roster.tsv")
+        variables.append(("role", role))
+        if from_roster:
+            rep.notes.append(f"cluster {name}: no `role` tag in its state (built before #636), so it is planned with "
+                             f"its roster.tsv role, {role}; its next apply adds the tag")
         hop = hop_limit(state)
         if hop:
             variables.append(("imds_hop_limit", hop))

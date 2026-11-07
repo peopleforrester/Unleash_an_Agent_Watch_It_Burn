@@ -1,0 +1,36 @@
+# ABOUTME: The managed resource types each root planned against an empty state in accen-dev on 2026-11-06 (run 17958, #979).
+# ABOUTME: verify/test_fleet_import_state.py holds import-state.py to a rule for each. Regenerate after a module bump.
+boundary aws_iam_policy
+network aws_budgets_budget
+network aws_default_network_acl
+network aws_default_route_table
+network aws_default_security_group
+network aws_eip
+network aws_internet_gateway
+network aws_nat_gateway
+network aws_route
+network aws_route_table
+network aws_route_table_association
+network aws_security_group
+network aws_subnet
+network aws_vpc
+network aws_vpc_endpoint
+cluster aws_bedrock_inference_profile
+cluster aws_eks_access_entry
+cluster aws_eks_access_policy_association
+cluster aws_eks_addon
+cluster aws_eks_cluster
+cluster aws_eks_node_group
+cluster aws_eks_pod_identity_association
+cluster aws_iam_policy
+cluster aws_iam_role
+cluster aws_iam_role_policy_attachment
+cluster aws_iam_user
+cluster aws_iam_user_policy
+cluster aws_kms_alias
+cluster aws_kms_key
+cluster aws_launch_template
+cluster aws_security_group
+cluster aws_security_group_rule
+cluster null_resource
+cluster time_sleep

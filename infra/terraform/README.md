@@ -79,7 +79,9 @@ cd ../aws/network && terraform destroy -var profile=<profile> -var event="${WIB_
 - **Drift:** nothing reconciles this plane, so `drift/drift-report.py` runs a refresh-only plan of every
   state and lists the S3 buckets and EKS clusters that are in no state. `drift/scheduled-drift.sh` is its
   daily cron wrapper. `aws/audit/` is the per-account AWS Config recorder and CloudTrail trail, applied after
-  the boundary. What is left unmanaged on purpose, and why, is in `docs/floor.md` (#205).
+  the boundary. What is left unmanaged on purpose, and why, is in `docs/floor.md` (#205). A lost boundary, lab
+  VPC or cluster state is rebuilt from AWS with `fleet/import-state.py` (`docs/floor.md`, "Rebuilding a lost
+  state", #979).
 - **Per-cluster ceiling:** ~60 concurrent on the `/18` subnets. For more, widen `lab-vpc` subnets and
   raise `MAX_PARALLEL` + AWS API limits. EC2 vCPU quota (L-1216C47A) is the deliberate increase to request.
 

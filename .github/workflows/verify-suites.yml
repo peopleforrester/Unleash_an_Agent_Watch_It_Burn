@@ -1,0 +1,116 @@
+# ABOUTME: Hecaton's CI path for this repo (#1020): the offline suite and the E2E tools suite on Tanjiro's runner, on
+# ABOUTME: every push to agent/** or staging, so validation leaves netcup. Push only: never a pull_request trigger.
+#
+# Why push only. This repo is public. A pull_request or pull_request_target trigger would run a fork's code on
+# Tanjiro, a self-hosted runner on Michael's own machine. Only accounts with write access can push a branch here, and
+# hecaton's dispatcher pushes each candidate to its run's agent/<issue>-<run> branch and waits for these two checks on
+# that exact SHA. verify/test_verify_suites_workflow.py fails if a trigger other than push is added, if either job
+# leaves the tanjiro label, or if either job stops running its suite.
+#
+# Each job computes HECATON_BASE_SHA, the merge base of the pushed commit and origin/staging, with
+# verify/ci-base-sha.sh, so the runners scoped by #1018 run only what the push touched. A push already in staging
+# leaves it unset and runs everything.
+#
+# The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
+# removes every untracked and ignored file except verify/.tools, whose downloads fetch-e2e-tools.sh checks against
+# e2e-tools.lock again each run (the Terraform provider cache there is about 800 MB).
+name: verify-suites
+
+on:
+  push:
+    branches:
+      - 'agent/**'
+      - staging
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    name: offline suite (verify/run-tests.sh)
+    runs-on: [self-hosted, Linux, X64, tanjiro]
+    timeout-minutes: 60
+    # One per ref; a later push waits its turn (queue: max holds up to 100), and none is cancelled.
+    concurrency:
+      group: verify-suites-offline-${{ github.ref }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      # Actions pinned to commit SHAs, not tags, as in plan-policy.yml (#200).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          clean: false
+          persist-credentials: false
+
+      - name: Clean the workspace, keeping the verified tool downloads
+        run: |
+          set -euo pipefail
+          git clean -ffdx -e verify/.tools/
+          git submodule foreach --recursive 'git clean -ffdx && git reset --hard'
+
+      # uv 0.13.7 (latest, 2026-11-07) brings Python 3.13; the suite's only package beyond the standard library is
+      # PyYAML, pinned as in iam-policy.yml.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: '0.13.7'
+          enable-cache: false
+
+      - name: Python 3.13 with PyYAML first on PATH
+        run: |
+          set -euo pipefail
+          uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" PyYAML==6.0.3
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: HECATON_BASE_SHA, the merge base with origin/staging
+        run: bash verify/ci-base-sha.sh
+
+      - name: bash verify/run-tests.sh
+        run: bash verify/run-tests.sh
+
+  e2e-tools:
+    name: e2e tools suite (verify/run-e2e-tools.sh)
+    runs-on: [self-hosted, Linux, X64, tanjiro]
+    # run-e2e-tools.sh runs the offline suite first, then the tier; on netcup it took 36 to 73 minutes.
+    timeout-minutes: 150
+    concurrency:
+      group: verify-suites-e2e-tools-${{ github.ref }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          clean: false
+          persist-credentials: false
+
+      - name: Clean the workspace, keeping the verified tool downloads
+        run: |
+          set -euo pipefail
+          git clean -ffdx -e verify/.tools/
+          git submodule foreach --recursive 'git clean -ffdx && git reset --hard'
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: '0.13.7'
+          enable-cache: false
+
+      - name: Python 3.13 with PyYAML first on PATH
+        run: |
+          set -euo pipefail
+          uv venv --python 3.13 "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" PyYAML==6.0.3
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      # The node harnesses run on Node 24, which run-e2e-tools.sh checks before any test (#440).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: HECATON_BASE_SHA, the merge base with origin/staging
+        run: bash verify/ci-base-sha.sh
+
+      - name: bash verify/run-e2e-tools.sh
+        run: bash verify/run-e2e-tools.sh

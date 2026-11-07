@@ -28108,3 +28108,241 @@ checks ran (the offline suite and 77 tier tests) in 40m44s`, `ALL E2E TOOLS TIER
 `test_recipe_pantry_gate_e2e.py` and `test_breakout_room_cleanup.py` among them. The prose gate printed `prose gate:
 pass`. No dependency was added to the repo. The log is `/var/lib/hecaton/runs/18077/e2e-tools.log`; the two earlier
 attempts are `e2e-tools.attempt1.log` and `e2e-tools.attempt2.log`.
+## 2026-11-06 · #979 · run 17958 · The KubeCon clusters, accen-dev's lab VPC and its boundary are rebuilt into states from AWS; the drift report reads all five accen-dev states as clean
+
+**Context.** Run 17843's drift report (#955) listed watch-it-burn-community and watch-it-burn-private as unmanaged:
+`user/nwuser` made both on 2026-10-28, and no machine a run can read holds their states. Its Notes also said accen-dev
+has no lab VPC and no boundary state. The issue asked for each cluster to be imported into a cluster-root state if
+it was built from `infra/terraform/aws/cluster`, or registered in `known-unmanaged.yaml` if not.
+`bash verify/prior-drafts.sh 979 origin/staging` printed NONE, and the issue had no comments, so there was no
+earlier draft.
+
+**Decision: import both, register neither.** Both were built from the cluster root by `fleet.sh`. Each carries
+`ManagedBy=terraform`, `Purpose=attendee-cluster`, `attendee=<name>` and `hostname` tags (local.fleet_tags), and
+the module's naming: `watch-it-burn-community-cluster-54c5a01d...` for the cluster role, `default-<suffix>` for the
+node group and its launch template, `<name>-node-*` for the node group's security group. Each is in the lab VPC
+`vpc-0607c27ee51fb233c`, which carries the network root's `Purpose=lab-shared-vpc`. A register entry would say
+"nobody manages these" of two clusters that are Terraform's and that `fleet.sh down` has to be able to destroy
+after the event, so they are brought into states. The lab VPC (22 resources) and the boundary policy (1) are
+brought in the same way.
+
+**How: `infra/terraform/fleet/import-state.py`.** #955's audit script imports a fixed list, which works because
+every name in that root is fixed. The cluster root's modules add a random suffix to the names of roles, policies,
+security groups, the node group and the launch template, and which resources exist follows the root's variables.
+So the script plans the root against an empty state, with the variables read from AWS (the cluster's tags, its
+node group, the launch template's user data and IMDS options), and treats every planned resource as one to import.
+It finds each one's import id in AWS from what uses it, never from the suffix: a pod-identity role through its
+association, the node role through the node group, an unnamed policy as the one left attached to its role. It
+finds every id before it imports any. Then it imports, settles with the refresh-only apply, and plans. Subcommands
+`boundary`, `network` and `cluster`; `--resolve-only`; `--resume`. Exit 0 clean, 2 rebuilt with changes still
+planned (listed with their attributes), 1 error. It refuses a state that already manages a resource unless
+`--resume` is given.
+
+**What the live run found, and what changed for it.**
+- *A count no import can get past.* The first `terraform import` failed on `Invalid count argument` in the node
+  group module's `data "aws_eks_cluster_versions"`. Its count reads the node group's version, which came from
+  `time_sleep.this[0].triggers`, unknown in an empty state. `terraform import` evaluates the whole configuration,
+  so every import failed, the cluster's own included. The default node group now states
+  `kubernetes_version = var.kubernetes_version`. That is the value the trigger carries, the cluster's version, and
+  the node group still waits for the cluster through the trigger's name. The plans after the rebuild show no change
+  to either node group's version.
+- *The time_sleep.* Terraform imports a `time_sleep` with no triggers, and the import then fails ("The given key
+  does not identify an element"), since the node group and the access entries read `triggers["name"]`. With no
+  time_sleep in the state at all, those reads are unknown, and `cluster_name` forces replacement, so the plan would
+  have replaced the node group and the access entries. The script writes the time_sleep into the state itself, its
+  triggers (name, endpoint, version, service CIDR, CA) taken from the imported cluster. The last plan shows it
+  unchanged on both clusters.
+- *Rules AWS does not hold.* Neither cluster has #869's node rules for 8080 and 3000 or #906's lab-VPC rule to
+  the API on 443. #906 was put in by hand as a rule from the other cluster's node group, described "... nodes to
+  this cluster API, the guardrails switch (#906)". A rule the security group provably lacks is not imported; the
+  plan creates it. Any other lookup that fails stops the resolve.
+- *watch-it-burn-private has no role tag.* It was built before #636 put `role=` on every cluster: none of its
+  resources carries one. The cluster root needs `var.role`, and `drift-report.py` refused a state without the tag.
+  Both scripts now take a roster cluster's role from its `infra/terraform/fleet/roster.tsv` row (`admin`), the data
+  `fleet.sh`'s role_for_cluster answers from, and the report's Notes say so. A cluster with no tag and no community
+  or admin row still stops both. Sourcing `fleet.sh` to call the function was tried first. Under the drift test's
+  sealed PATH it has no `dirname` and no `providers/`, and the roster is the same answer without either.
+- *A test that read a fixed window.* `verify/test_backups.py` looked for `subnet_ids = var.node_subnet_ids` in the
+  first 800 characters after `eks_managed_node_groups = {`. The comment above the new line moved it out of that
+  window. The test reads the whole block now.
+
+**Live, in accen-dev, with this run's session (`hecaton-run-17958`).** In this worktree: `import-state.py boundary
+accen-dev` exit 0, `plan: no changes`, in 1m12s (event `devopsdays-portland-2026`, read from the policy's tag).
+`import-state.py network accen-dev` exit 0, 22 imports, `plan: no changes`, 9m13s. The two clusters ran in
+parallel. Their first runs stopped at the time_sleep after 50 imports each. `--resume` finished community (exit 2).
+Private's resume stopped on `credential process timed out`, and a second `--resume` finished it (exit 2). Each
+reports 65 imports, 3 rules not in AWS, the time_sleep written, and the null_resource
+(`validate_cluster_service_cidr`) left for the next apply. Community's last plan has 33 changes, private's 41.
+Neither replaces the cluster, the node group or an access entry; the one replacement is each tutor profile
+(description and model, #882). The rest: the launch template's user data (#714's containerd part, so the next
+apply rolls the node), the agent and tutor policies without `bedrock:Converse`/`ConverseStream`, the `role` tag
+(private only), and settings AWS keeps no copy of (`force_destroy`, `force_detach_policies`, `force_update_version`,
+the addons' conflict settings). The `cluster_creator` access entry and the KMS key policy name `role/hecaton-run`,
+the identity this run planned as; on tanjiro, as `user/nwuser`, they match. The audit state was rebuilt here too
+with #955's `import-state.sh accen-dev` (`plan: no changes`), so the report covered every root.
+
+Then `python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region us-west-2`, exit 2: **0 drifted
+states**, Clean states (5) `lab VPC accen-dev, boundary accen-dev, audit accen-dev, cluster watch-it-burn-community,
+cluster watch-it-burn-private`, the recorder recording, and the one Note on private's role. The Unmanaged table holds
+neither KubeCon cluster. Its one row is `watch-it-burn-attendee-099`, which run 17970's session
+(`hecaton-run-17970`) created at 18:14:49Z, during this run, and whose state is in that run's worktree. It is not one
+of the two this issue is about. By 19:35Z run 17970 had removed it, and the same command run again then exited
+**0**: `0 finding(s)`, Unmanaged `None.`, the same five clean states and the same Note. CloudTrail holds 3,230 events from this run's session between 16:52Z and 18:24Z, and
+every one is `readOnly`, so the rebuild changed nothing in AWS.
+
+**Not yet run where it counts.** These five states, and the audit one, are in this worktree, and they go when it is
+retired. A copy must not be taken to tanjiro-wsl2: rebuilt as `hecaton-run`, the creator entry and the KMS policy
+would plan as changed for `nwuser`. The states to keep are rebuilt on tanjiro, in
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, once its checkout holds this change. Run the three
+`terraform -chdir=... init`, then `import-state.py boundary accen-dev`, `network accen-dev`, `cluster accen-dev
+watch-it-burn-community` and `cluster accen-dev watch-it-burn-private` (docs/floor.md, "Rebuilding a lost state",
+about 80 minutes). Then `drift-report.py --accounts accen-dev --region us-west-2` without `--post`, which should
+read the five states (six with #955's audit rebuild there) as clean and list neither cluster. The run cannot touch
+that machine, so those commands are this run's escalation. The next `fleet.sh` apply of each KubeCon cluster makes
+the planned changes above, the node roll included; that apply is the operator's to schedule, not this run's.
+
+**Tests.** `verify/test_fleet_import_state.py` (new) holds the script against an AWS world of the clusters' shape:
+every import id, the two absent rules left out, the time_sleep's triggers, the variables, the refusals (a live
+state, two candidate node groups' security groups, an access entry AWS cannot answer for, a failed import), `--resume`
+and `--resolve-only`, the network root's composite ids, the role from the roster, and a rule for every resource type
+the three roots planned live (`verify/fixtures/import-state/planned-types.txt`) and every one their main.tf files
+declare. It also pins the node group's `kubernetes_version` line. `verify/test_drift_report.py` gains the
+roster-role case and the no-row refusal.
+
+**The suites (run 17958).** `bash verify/run-e2e-tools.sh` at `a6cca618` printed `308 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then ran out the 60-minute background limit in the tools tier, inside its 46th
+test (`test_kyverno_cel_policies.py`), with the host shared by other runs. It is the longest limit a background job
+can be given, so it was not started again. The 72 tier tests were then run in two parts with the tier's own
+environment (the no-cloud stubs, the pinned tools first on PATH, the empty Helm home, the provider cache), each test's
+exit code printed. The 27 from `test_kyverno_cel_policies.py` on: `27 tier tests, 0 failed, in 14m19s`. The 45 before it:
+`45 tier tests, 0 failed, in 16m58s`. Logs: `/tmp/r17958/e2e-tools-final.log`, `tier-rest.log`, `tier-first.log`. An
+earlier run of the command, before the `test_backups.py` fix, failed the offline suite on that one check, which is
+what led to the fix. The commits after `a6cca618` touch only this file.
+
+## 2026-11-07 · #979 · run 18049 · Run 17958's draft ported to staging ade8f80e, the five accen-dev states rebuilt again and the drift report exit 0
+
+**Context.** Run 17958 ended failed (claim-stale), so its seven commits did not reach staging.
+`bash verify/prior-drafts.sh 979 origin/staging` printed START from `origin/agent/979-17958`, 39 staging commits
+behind, with the verdict CLEAN (staging had only appended to decisions.md among its ten paths). The seven commits
+were cherry-picked onto ade8f80e with no conflict and no change. Nothing in the draft is redone in code; what this
+run redid is the live evidence, at the new base, since the states run 17958 built went with its worktree.
+
+**Live, in accen-dev, with this run's session (`hecaton-run-18049`), on 2026-11-06 UTC.** Both clusters still
+stand as the entry above says: `aws eks describe-cluster` shows each in `vpc-0607c27ee51fb233c` with
+`ManagedBy=terraform`, `Purpose=attendee-cluster` and its `attendee` tag, module-named cluster roles
+(`watch-it-burn-community-cluster-54c5a01d...`, `watch-it-burn-private-cluster-48f52af8...`), created
+2026-10-28 12:39 CET, and only watch-it-burn-community carries `role`. `list-clusters` shows those two and no
+other. In this worktree: `import-state.py boundary accen-dev` exit 0, `plan: no changes` (22:55Z to 22:56Z);
+`import-state.py network accen-dev` exit 0, `plan: no changes` (to 22:59Z); `--resolve-only` for each cluster
+exit 0; then `import-state.py cluster accen-dev <name>` for both in parallel, 23:05Z to 23:20Z, each exit 2:
+`64 to import, 3 not in AWS, 1 written after the imports, 1 not importable`, the time_sleep written from the
+imported cluster, and 33 changes still planned on community and 41 on private, the same counts run 17958 saw. The
+one delete/create in each is `aws_bedrock_inference_profile.tutor` (description, #882); none touches the cluster,
+the node group or an access entry. The audit state was rebuilt with `infra/terraform/aws/audit/import-state.sh
+accen-dev`, exit 0, `plan: no changes`. Then:
+
+```
+$ python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region us-west-2
+# Fleet drift report, 2026-11-06T23:26Z
+**0 finding(s)**: 0 drifted state(s), 0 unmanaged resource(s), 0 account(s) without a Config record.
+## Terraform drift
+No state has drifted.
+## Unmanaged: in the account, in no Terraform state, not in the register
+None.
+## AWS Config
+- accen-dev: ok: recorder watch-it-burn is recording
+## Clean states (5)
+lab VPC accen-dev, boundary accen-dev, audit accen-dev, cluster watch-it-burn-community, cluster watch-it-burn-private
+## Notes
+- cluster watch-it-burn-private: no `role` tag in its state (built before #636), so it is planned with its roster.tsv role, admin; its next apply adds the tag
+exit 0
+```
+
+CloudTrail's `lookup-events` for user `hecaton-run-18049` from 22:40Z returned 2,996 events, and none has
+`readOnly` false (events from the last minutes before the lookup may not have been delivered yet).
+
+**Not yet run on tanjiro-wsl2.** Read with the `sources-elevated fleet tanjiro-wsl2` wrapper, this repo's checkout
+there, under `~/repos/talks`, is at ec03eb5f (2026-11-06 04:34 +0100) with the guard-proxy
+submodule modified, it has no `infra/terraform/fleet/import-state.py`, and `infra/terraform/fleet/states/` is
+empty. The coordinator's answer to question 1103 sent the tanjiro rebuild back to the run, but the escalation's own
+guard stopped because that checkout does not hold this change, and moving the operator's checkout onto an unpromoted
+branch is not this run's to do. So the rebuild on tanjiro waits for hecaton to promote this branch and that checkout
+to take it; the commands are docs/floor.md's "Rebuilding a lost state", run there as `nwuser`, then
+`drift-report.py --accounts accen-dev --region us-west-2` without `--post`.
+
+**The suites (run 18049).** `bash verify/run-e2e-tools.sh` at 26c81d4f: `312 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `75 checks ran (the offline suite and 74 tier tests) in 38m17s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+Logs are under `/tmp/r18049/`.
+
+## 2026-11-07 · #1020 · run 18080 · The offline and E2E tools suites run as push-only CI on Tanjiro
+
+**What changed.** `.github/workflows/verify-suites.yml` runs on `push` to `agent/**` and `staging` and on nothing
+else: no `pull_request`, no `pull_request_target`, no `workflow_dispatch`, no paths filter. This repo is public, and a
+pull request trigger would run a fork's code on Tanjiro, a self-hosted runner on Michael's machine; only accounts with
+write access can push. Two jobs, `offline suite (verify/run-tests.sh)` and `e2e tools suite (verify/run-e2e-tools.sh)`,
+each on `runs-on: [self-hosted, Linux, X64, tanjiro]`, the labels hecaton's `config/runners.yaml` gives Tanjiro's
+runners. Each ends in its suite as a plain `run:` step, so the suite's exit code is the check's. Permissions are
+`contents: read` and the workflow reads no secret. Actions are pinned to commit SHAs: checkout v7.0.1 (as in
+iam-policy.yml), astral-sh/setup-uv v10.3.3 (68559e99) installing uv 0.13.7, and actions/setup-node v7.1.0 (949feb24)
+for Node 24, all current on 2026-11-07. Each job builds a Python 3.13 venv with PyYAML 6.0.3, the only package the
+offline suite reads beyond the standard library (an import sweep of every offline test found no other), and puts it
+first on PATH.
+
+**HECATON_BASE_SHA.** `verify/ci-base-sha.sh` fetches staging, takes the merge base of the checked-out commit and
+`origin/staging`, and writes `HECATON_BASE_SHA=<sha>` to `$GITHUB_ENV` before the suite step, for the scoped runners
+#1018 asks for (that issue is still open, so today the variable changes nothing and both runners run whole). One case
+differs from the issue's wording: when the merge base is the pushed commit itself, as on every push to staging, the
+diff is empty, and a scoped runner reading it would run nothing. The script then leaves the variable unset, so staging
+always runs both suites whole, as #1018's own criterion for a run without the variable says. A missing `GITHUB_ENV`,
+a failed fetch or a history with nothing in common with staging exits 1.
+
+**Timeouts and queueing.** The offline job has `timeout-minutes: 60`; the E2E job has 150, since run-e2e-tools.sh
+runs the offline suite first and took 36 to 73 minutes on a loaded netcup (the `checks ran` lines above). Each job's
+`concurrency` group is per ref (`verify-suites-<job>-${{ github.ref }}`) with `cancel-in-progress: false` and
+`queue: max`. Without `queue: max`, GitHub keeps one running and one pending job per group, and a third push cancels
+the pending one; `queue: max` (GitHub changelog 2026-05-07, "concurrency groups now allow larger queues", and the
+workflow syntax reference for `jobs.<job_id>.concurrency`) holds up to 100 pending jobs, so every pushed SHA gets its
+checks. actionlint 1.7.12 (2026-03-30, its latest release) reports `queue` as an unknown key because it predates the
+option; with `tanjiro` declared as a self-hosted label, that is its only finding on the file.
+
+**The workspace.** A self-hosted runner keeps its workspace between jobs, and checkout's default clean would remove
+the gitignored `verify/.tools`, about 800 MB of Terraform provider cache among it, on every job. So checkout runs with
+`clean: false` and the next step runs `git clean -ffdx -e verify/.tools/` and cleans each submodule. fetch-e2e-tools.sh
+still checks every kept download against e2e-tools.lock and extracts each binary again, so nothing unverified runs.
+
+**The test.** `verify/test_verify_suites_workflow.py`, in the offline suite, fails when the workflow gains any trigger
+but push, a pull_request anywhere outside a comment, a paths or tags filter, a branch other than the two, a job off the
+four labels, a job without its suite step or the base step before it, an `if` or `continue-on-error` on either, a
+missing timeout, a group not per ref, `cancel-in-progress`, a queue other than `max`, a secret, or an action on a tag.
+The checker first runs on 17 copies of the workflow broken one way each and on two altered texts (one naming
+pull_request outside a comment, one reading a secret), and must fail every one. It then runs
+ci-base-sha.sh in throwaway repositories: an agent branch cut before staging moved gets the fork point, a commit
+already in staging gets no variable, and no `GITHUB_ENV`, an unrelated history and an origin that cannot be fetched
+each exit 1. Run against this clone's staging, the script printed that 01ccd137 is already in origin/staging and left
+the variable unset.
+
+**What the runner needs from Tanjiro.** The setup actions bring uv, Python and Node. The rest comes from the host:
+git, bash, curl, tar, unzip, sha256sum, xz, jq and openssl, which run-e2e-tools.sh checks before any test and fails
+naming each one missing, and the system libraries Playwright's Chromium needs, since `gha-agent` has no sudo to
+install them. Tanjiro is Debian 13 (hecaton's docs/runbooks/ci-runners.md, measured 2026-10-18). Hecaton registers
+the runner and switches this repo to the CI path once this is on main; the first push after that is the live check.
+
+**Not yet run on a cluster or a runner.** No cluster is involved. The workflow itself first runs when hecaton has
+registered the `tanjiro` runner for this repo and a push reaches an `agent/**` branch or staging.
+
+**A red tier test found on staging, fixed here.** The first `bash verify/run-e2e-tools.sh` at eb95617f printed
+`314 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests)
+in 46m32s` with one failure, `test_breakout_room_cleanup.py (exit 1)`: `AttributeError: '_StandInMCP' object has no
+attribute 'get_context'`. #995 (582d10ec, 2026-11-07 00:09) made `deploy_app` read the request's witch name through
+`mcp.get_context()` and gave every test's FastMCP stand-in a `get_context` that raises LookupError, as the real one
+does outside its transport. #990's test (98734ebd, an hour earlier) has its own stand-in and was missed, so staging's
+tools tier has been red on it since. Its stand-in now carries the same method, and the test passes with the pinned
+kyverno. The three other tests that load workshop-mcp-server.py without `get_context` never call `deploy_app` and
+passed in the same run.
+
+**The suites (run 18080).** `bash verify/run-e2e-tools.sh` at 64fab303: `314 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 46m08s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added to
+the repo; the workflow pins its actions, uv 0.13.7, Python 3.13 and PyYAML 6.0.3 as above. Logs are under
+`/tmp/r18080/`.
