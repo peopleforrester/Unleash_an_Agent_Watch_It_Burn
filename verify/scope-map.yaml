@@ -4332,6 +4332,19 @@ reads:
     - policies/network-policies/per-namespace/apps-allow-ingress.yaml
     - security
     - verify/bootstrap_chart.py
+  test_no_single_guardrail_slides.py:
+    - challenges
+    - challenges/**
+    - challenges/LAB-TEXT.md
+    - facilitation
+    - facilitation/**
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/web
+    - gitops/ai-layer/web/**
+    - gitops/ai-layer/web/kubecon.html
+    - verify
+    - verify/**
+    - verify/test_seg3_timing.py
   test_offline_suite_no_cloud.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

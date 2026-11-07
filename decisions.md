@@ -33152,3 +33152,47 @@ tested by #1111 and #1112), the `/kubecon` change (#1096) and this sweep. `verif
 or with no heading above it. `git grep -nF` on the quoted words found no other test reading PROGRESS.md's #1065 line.
 
 **Not yet run on a cluster.** Nothing: the change is text and its offline test.
+## 2026-11-08 · #1125 · run 18428 · A test runs #1097's slide-citation search: no file in the four directories cites live slides 29 to 32 as single guardrail slides
+
+#1097 swept `facilitation/`, `gitops/ai-layer/web/`, `challenges/` and `verify/` for citations of the 2026-11-06
+deck's four single guardrail slides (live 29 to 32: RBAC, Kyverno, KubeArmor, NetworkPolicy, one each) by a manual
+grep, and the tests that held it read only the run-of-show and `/kubecon`. `verify/test_no_single_guardrail_slides.py`
+now runs the search over every file in the four directories. No earlier draft existed
+(`verify/prior-drafts.sh 1125 origin/staging` printed NONE).
+
+**What it reads as a citation.** "slide" or "slides" followed by a number, a range ("to", "through", a hyphen or an
+en dash) or a list ("29, 30, 31 and 32"). Three rules:
+
+1. No citation names exactly slides 29 to 32.
+2. A citation of slides only from 29 to 32 names no guardrail the 2026-11-07 deck does not show there. Slide 29 is the
+   retry and shows none; 30 to 32 are RBAC's set, so RBAC is the one name they may carry. A name is bound to the
+   citation when it is in the same sentence after the number, before the next citation, or up to 60 characters before
+   the word "slide" in the same sentence ("Kyverno (slide 30)").
+3. In `facilitation/`, `gitops/ai-layer/web/` and `challenges/`, no text calls the close "one slide per guardrail",
+   "four slides", "four guardrail slides" or "single guardrail slides". `verify/` is held to rules 1 and 2 alone,
+   because there those words are the stale text `test_seg3_timing.py`, `test_ros_segments_table_seg3.py`,
+   `test_instructor_brief.py` and `test_progress_entries.py` plant or quote to prove their own checks fail.
+
+A sentence naming "2026-11-06" is history and no rule reads it: the run-of-show's Timing paragraph keeps "#1003
+budgeted the 2026-11-06 deck ... four single guardrail slides" on purpose (#1095). The test file itself is left out of
+the search, since it holds the old citations it plants. Each exemption is a rule the test states; none names a
+known failure.
+
+**How it shows it can fail.** It first checks that the search finds the live citations of slide 29 and of slides 30
+to 42 in the run-of-show and on `/kubecon`, exiting ANCHOR MISSING when either file or literal is gone. Then 13 old
+citations are planted in copies of the run-of-show, of `kubecon.html` and of a verify file, and each fails; the four
+unnumbered phrases are planted in three prose files and fail, and in a verify file pass; the dated history sentence
+passes and the same sentence without its date fails with three findings; nine of the live deck's own forms pass,
+among them "the egress NetworkPolicy on both clusters. Then slide 29" from `/kubecon`. Run on the pre-#1095 text
+(`git show 85803838^:` of both files) the search names seven citations: the run-of-show's "One slide per guardrail
+(slides 29 to 32)" at line 1341 (by rules 1 and 3), its "one slide per guardrail" at 863 and 1586 and "four slides" at
+872, and `/kubecon`'s "one slide per guardrail" at 254 and 324. On this tree it reads 31, 17, 45 and 634 files and
+finds none.
+
+**Scope map.** `python3 verify/scope_tests.py write` rewrote some 470 lines of other tests' entries along with this
+one; only this test's entry is committed, as `write` generated it (the four directories, their globs, and the three
+real files the test opens by name). The first draft planted text under made-up paths, which the extractor took for
+repo files, so the plants now use real ones.
+
+**Not yet run on a cluster.** Nothing: the change is an offline test over repo text, and neither cluster holds
+anything it reads.
