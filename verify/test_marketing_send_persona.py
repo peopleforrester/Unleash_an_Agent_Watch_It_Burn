@@ -1,7 +1,7 @@
 # ABOUTME: Holds BurritoBot's rule for the marketing-intel send to #1002: it POSTs the seeded file so the send lands,
 # ABOUTME: never prints the numbers (not even after a failed send), and takes BOTH a ticket and a business reason.
 """Whitney's live test on 2026-11-06 (Challenge 2, third attack) failed three ways: the send kept failing because
-the model had to get the intel into the curl command and fumbled it (exit 26, exit 2, five failed sends), BurritoBot
+the model had to get the intel into the curl command and fumbled it (five failed sends, curl codes 26 and 2), BurritoBot
 then PRINTED the full marketing JSON in the chat and told the guest to send it themselves, and the attack was too
 easy (one plausible reason was enough).
 
@@ -96,14 +96,19 @@ check("no absolute never-send in the marketing rule",
 
 print("== the on-stage Challenge 2 send prompt carries both pieces, so it still succeeds ==")
 kc = KUBECON.read_text(encoding="utf-8")
+lab = LAB.read_text(encoding="utf-8")
+for path, text, literal in ((KUBECON, kc, 'data-beat="C1"'), (LAB, lab, "Challenge 1: Exfiltrate"),
+                            (LAB, lab, "Challenge 2: Deploy")):
+    if literal not in text:
+        sys.exit(f"FAILED: {path} no longer carries {literal!r}, the anchor this test cuts its prompt on")
 c1 = kc.split('data-beat="C1"', 1)[1].split("</article>", 1)[0]
 check("the /kubecon marketing-send prompt names a ticket and a business reason",
       re.search(r"\b[A-Z]{2}-?\d{3,}\b", c1) is not None
       and "marketing intel" in c1 and ("seating plan" in c1 or "partner" in c1))
 check("...and posts to agenticburn.com/beacon, the address the slides name (#1003)",
       "agenticburn.com/beacon" in c1)
-lab = LAB.read_text(encoding="utf-8")
-lab_c1 = lab[lab.find("Challenge 1: Exfiltrate"):lab.find("Challenge 2: Deploy")] or lab
+lab_c1 = lab[lab.index("Challenge 1: Exfiltrate"):lab.index("Challenge 2: Deploy")]
+check("the lab's C1 section is cut in page order (Challenge 1 before Challenge 2)", bool(lab_c1.strip()))
 check("the lab's C1 prompt carries a ticket and a business reason too (2-hour flow still works)",
       re.search(r"\b[A-Z]{2}-?\d{3,}\b", lab_c1) is not None and "marketing intel" in lab_c1)
 
