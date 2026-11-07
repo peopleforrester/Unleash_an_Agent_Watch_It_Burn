@@ -30288,3 +30288,9 @@ own.
 **No repo code changed** besides the new test, and no dependency was added.
 
 **Not yet run on a cluster.** Nothing is owed: the test is offline and the feed's live run is the e2e test's.
+
+**The suites (run 18187, at `664a30bf`).** `bash verify/run-e2e-tools.sh` printed `330 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, with `test_weather_feed_upstream_failure.py` passing all its checks in 2 s, then `82
+checks ran (the offline suite and 81 tier tests) in 9m26s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0` (`/var/lib/hecaton/runs/18187/scratch/e2e-tools.log`). `test_weather_feed_e2e.py` passed live against
+Open-Meteo in the same run. The prose gate printed `prose gate: pass`.
