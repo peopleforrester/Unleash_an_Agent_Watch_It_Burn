@@ -16,6 +16,14 @@
 # e2e-tools.lock again each run. The Terraform provider cache, about 2.4 GB, is not in the workspace at all: the
 # e2e-tools job keeps it under the runner's tool cache, which outlives the job, and the lock-init test reads it warm
 # instead of downloading every provider again (#1114).
+#
+# Staging tests only its newest tip (#1113). Hecaton merges into staging every few minutes and the e2e job takes about
+# 45 minutes on Tanjiro's one runner, so queued staging runs fell further behind with each merge. The workflow's own
+# concurrency group is the workflow and the ref, and on staging a newer push cancels the queued and running run before
+# it. An agent/** branch gets a group of its own run, so no run there is ever cancelled: hecaton's dispatcher waits on
+# the checks of that exact SHA and reads a cancelled one as red. The per-job groups below still queue each ref's pushes
+# in order. GitHub refuses `queue: max` beside `cancel-in-progress: true` in one block, so the two stay in separate
+# blocks.
 name: verify-suites
 
 on:
@@ -27,12 +35,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref != 'refs/heads/staging' && format('-run-{0}', github.run_id) || '' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/staging' }}
+
 jobs:
   offline:
     name: offline suite (verify/run-tests.sh)
     runs-on: [self-hosted, Linux, X64, tanjiro]
     timeout-minutes: 60
-    # One per ref; a later push waits its turn (queue: max holds up to 100), and none is cancelled.
+    # One per ref; a later push waits its turn (queue: max holds up to 100). Nothing here cancels a job; on staging
+    # the workflow's group above cancels the whole superseded run.
     concurrency:
       group: verify-suites-offline-${{ github.ref }}
       cancel-in-progress: false

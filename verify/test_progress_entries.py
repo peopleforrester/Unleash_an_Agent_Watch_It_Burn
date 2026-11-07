@@ -1,6 +1,7 @@
-# ABOUTME: PROGRESS.md carries the entries of #759 (both), #905, #915 (#892) and #990, #986, #995, #1000, #1003, #984,
-# ABOUTME: #1023: each a dated bullet, once, under a ### heading in [Unreleased], holding its facts as literal text.
-"""Pins the "Update PROGRESS.md" criterion of #759, #905, #915 (#892) and #990, #986, #995, #1000, #1003, #984 (#1023).
+# ABOUTME: PROGRESS.md carries the entries of #759 (both), #905, #915 (#892), #990, #986, #995, #1000, #1003, #984,
+# ABOUTME: #1023 and #1065 (#1097): each a dated bullet, once, under a ### heading in [Unreleased], with literal facts.
+"""Pins the "Update PROGRESS.md" criterion of #759, #905, #915 (#892), #990, #986, #995, #1000, #1003, #984 (#1023)
+and #1065 (#1097).
 
 #759 has two entries: the 2026-11-03 bullet for verify/dd_traces.py and the 2026-11-05 "live check" bullet that
 #892 names. #905 (the allergen card) and #915 (the /display page's masked prompts) reported the same gap on #892.
@@ -12,6 +13,8 @@ fail would show up here.
 #1023 added #990's entry, and the entries of #986, #995, #1000, #1003 and #984 for which the same gap was reported
 on #1023, and #1023's own. #990's entry had been written twice, the first copy stale (it lacked "is not applied by
 Argo CD"), so the doubled-entry rule failed on the real file until #1023 removed that copy.
+#1097 added #1065's entry: the 2026-11-07 deck's segment 3 close (slide 28's switch, slide 29's retry, one set per
+guardrail on slides 30 to 42) as the run-of-show and /kubecon carry it, and #1097's sweep of the slide citations.
 verify/test_progress_764.py holds #764's entry the same way.
 """
 from __future__ import annotations
@@ -188,6 +191,28 @@ ENTRIES: list[tuple[str, str, list[tuple[str, str]]]] = [
         ("it names the sauce", "'Bat Spit Amazing Awesome Sauce'"),
         ("it names the readiness row", "`docs/KUBECON-ABSTRACT-READINESS.md` row 9"),
         ("it points at its decisions.md entry", "(decisions.md, 2026-11-06, #984)"),
+    ]),
+    ("#1065", "- (2026-11-08) #1065:", [
+        ("it says what segment 3 follows",
+         "segment 3 of the KubeCon run-of-show and of `/kubecon` follow the 2026-11-07 deck (rounds-agenticburn#77)"),
+        ("it quotes slide 28", "Slide 28 now reads `Let's turn on Kubernetes guardrails.`"),
+        ("it names the terminal slide 28 links", "`https://burritobot-private.burritobot.co/lab`"),
+        ("it quotes slide 29's retry", "slide 29, \"Try your attacks again.\", is the room's retry"),
+        ("it says the sets replace live 29 to 32",
+         "one set per guardrail on slides 30 to 42 replaces the four single guardrail slides that were live 29 to 32"),
+        ("it gives each set's slides",
+         "RBAC 30 to 33, an admission policy (Kyverno) 34 to 36, runtime security (KubeArmor) 37 to 39, "
+         "NetworkPolicy 40 to 42"),
+        ("it names the run-of-show's change and its tests", "#1095 moved steps 5 and 6"),
+        ("it names the tests of it", "#1111 and #1112 test them"),
+        ("it names the /kubecon change",
+         "#1096 moved segment 3's story and its switch beat, with no prompt text changed"),
+        ("it says live 33 on moved",
+         "Every slide from live 33 on is now numbered 10 higher, so \"AI guardrails\" is slide 43"),
+        ("it names the sweep's directories",
+         "`facilitation/`, `gitops/ai-layer/web/`, `challenges/` and `verify/`"),
+        ("it says what the sweep found", "so no citation changed"),
+        ("it points at its decisions.md entry", "(decisions.md, 2026-11-08, #1097)"),
     ]),
     ("#1023", "- (2026-11-07) #1023:", [
         ("it names the test", "`verify/test_progress_entries.py`"),

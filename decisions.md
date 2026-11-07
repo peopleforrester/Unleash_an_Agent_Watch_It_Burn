@@ -33039,3 +33039,175 @@ then `83 checks ran (the offline suite and 82 tier tests) in 15m51s, 4 at a time
 and `exit=0`. Inside it, with three other checks running beside it, `test_terraform_lock_init.py took 35s` on the warm
 cache and `test_terraform_plugin_cache_lock.py took 8s`. The prose gate printed `prose gate: pass`. No dependency was
 added. The logs are in `/var/lib/hecaton/runs/18412/logs/`.
+## 2026-11-07: `/kubecon` segment 3 follows the 2026-11-07 deck's slides 28 to 42 (#1096, run 18407)
+
+#1095 moved the run-of-show's segment 3 steps 5 and 6 to the 2026-11-07 deck (rounds-agenticburn#77), and this change
+brings `gitops/ai-layer/web/kubecon.html` to the same text, with those steps as the source. No earlier draft existed
+(`verify/prior-drafts.sh 1096 origin/staging` printed NONE).
+
+**The summary paragraph.** Segment 3's story no longer quotes the old slide title "Kubernetes guardrails on". It now
+quotes slide 28 as `Let's turn on Kubernetes guardrails.`, a link to the admin terminal
+(`https://burritobot-private.burritobot.co/lab`) that the presenter clicks before typing `guardrails-on`. Slide 29 is
+next, `Try your attacks again.`, where the room resets its bot and retries its saved prompts. Then comes one set per
+guardrail on slides 30 to 42, each recalling its attack, naming what prevented it, then showing its YAML: RBAC 30 to
+33, an admission policy (Kyverno) 34 to 36, runtime security (KubeArmor) 37 to 39, NetworkPolicy 40 to 42. It also
+gives the step 6 length the run-of-show's Timing records, about 8 minutes 40 seconds against the segment's 5.
+
+**The switch beat.** The block once titled "Kubernetes guardrails on: one switch, then the room tries again" is now
+`Let's turn on Kubernetes guardrails: one switch, the retry, one set per guardrail`, since it now ends on the sets.
+Its who line names slide 28's link and slide 29's retry from saved prompts. Its marker ends on the four sets with
+the slides' own names (an admission policy for Kyverno, runtime security for KubeArmor) in place of "one slide per
+guardrail". The folded notes give each set's slides, its attack and the YAML it shows (`deny-external-registries`,
+`block-recipe-snoop`, `agent-egress-allowlist`), and slide 28's click and the guardrails panel. The page names no
+slide after 28 outside this beat, so no later number needed moving. No `.prompt` or `.toggle` line changed:
+`git diff origin/staging -- gitops/ai-layer/web/kubecon.html` touches neither, so the iPad sheet's prompts are
+unchanged.
+
+**Tests.** `git grep -nF` across `verify` and `scripts` found no test that pinned the old summary or marker wording.
+The one phrase a test held, "the room retries Challenges 1 and 2" in the switch beat, is kept.
+`verify/test_instructor_brief.py` gains checks that the summary names slide 28's text, its link and `guardrails-on`,
+then slide 29's retry from saved prompts, then one set per guardrail on slides 30 to 42 with each set's slides in the
+deck's order. It also checks that the switch beat is retitled, names slide 28 and slide 29 in order, ends its marker on
+the four sets as the slides name them, and gives each set's slides and YAML in its notes. The slide ranges it reads
+must be the run-of-show's step 6 headings, and the page must carry no "one slide per guardrail" and no
+`"Kubernetes guardrails on" (slide 28)`. The visible-word cap moves from 2,400 to 2,450: the page stood at 2,397 on
+staging, and the switch beat's title, who line and marker grow by about 30 visible words to name the retry and the
+four sets; the per-set detail is folded.
+
+**Live check (run 18407, read only).** `curl` on `https://rounds.agenticburn.com/attendee.html` answered 200, and the
+deck carries `Let's turn on Kubernetes guardrails.` (3 times), `Try your attacks again.` (once), the admin
+terminal link `burritobot-private.burritobot.co/lab` (3 times), "an admission policy" and "runtime security", the
+text the page now quotes. Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** Look at the `/kubecon` page and its prompt sheet (`/kubecon?sheet=1`) as served, once
+hecaton promotes this change and Argo CD syncs `ai-layer`: segment 3's story and the switch beat read as above, and the
+sheet's prompts are the ones it showed before.
+
+**The suites (run 18407, #1096).** `bash verify/run-e2e-tools.sh`, unscoped, with its output in
+`/var/lib/hecaton/runs/18407/e2e-tools.log`, printed `341 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 9m21s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`. No dependency was added.
+
+## 2026-11-07 · #1113 · run 18411 · Staging CI cancels superseded runs, so Tanjiro's runner tests only the newest tip
+
+**The change.** `.github/workflows/verify-suites.yml` gains a workflow-level `concurrency` block. Its group is
+`${{ github.workflow }}-${{ github.ref }}`, with `-run-<run id>` added on any ref but staging, and `cancel-in-progress`
+is `${{ github.ref == 'refs/heads/staging' }}`. On staging the group is `verify-suites-refs/heads/staging` and a newer
+push cancels the queued and running run before it, both jobs at once. Michael approved this on 2026-11-07 in the
+status session (the issue's body); it reverses, for staging alone, the #1020 entry's "every pushed SHA gets its
+checks", which queued a 45-minute e2e job per merge behind one runner (four runs pending since 22:04Z and main 31
+commits behind at 22:33Z).
+
+**Why agent/** branches are left as they were.** Hecaton's dispatcher pushes each candidate to its run's branch and
+waits on the checks of that exact SHA, and `promote.ci_verdict` (`hecaton/run/basered.py`, `verdict`) reads any
+conclusion outside success, neutral and skipped as fail, cancelled included. So an agent/** push never cancels: its
+group carries the run id, which no other run shares, and its `cancel-in-progress` is false. The per-job groups from
+#1020 (`verify-suites-<job>-${{ github.ref }}`, `cancel-in-progress: false`, `queue: max`) stay, and still queue an
+agent branch's pushes in order. They cannot carry the cancel themselves: GitHub's workflow syntax reference says "The
+combination of `queue: max` and `cancel-in-progress: true` is not allowed and will result in a workflow validation
+error", so the cancel lives in the workflow block, which has no `queue`.
+
+**The test.** `verify/test_verify_suites_workflow.py` now evaluates the workflow block's two expressions for a staging
+push and for two pushes to one agent branch, with a small evaluator of the forms the block uses (github fields,
+string literals, `==`, `!=`, `&&`, `||`, `format()`), and fails when a staging push's group is not the workflow and
+the ref, when staging's `cancel-in-progress` is not true, when an agent push's is not false, when two agent pushes share
+a group or land in staging's, or when any block pairs `queue: max` with a cancel. It runs on eleven new broken copies
+(no block, a group without the ref or the workflow, one group for every agent push, cancel false, cancel true on every
+ref, cancel keyed on main, `queue: max` on the workflow block, a job pairing it with a cancel, an expression the
+evaluator cannot read), and the evaluator is checked on its own first, so a pass means the expressions were read. It
+printed 46 PASS and "verify-suites.yml and ci-base-sha.sh hold".
+
+**Hecaton's gate, read at `/var/lib/hecaton/app/current/src/hecaton/run/` on 2026-11-07.**
+
+- *Earlier SHAs' cancelled runs are never read.* `mainline._attempt` fetches the mirror and takes staging's tip;
+  `_heavy_gate` calls `_ci(expected=True)` on that SHA alone, since the repo is on the CI path (`config/runners.yaml`
+  names it for Tanjiro). A run cancelled because staging moved on belongs to a SHA the next attempt no longer reads.
+  A deferred attempt retries after `retry_minutes` (2, `config/governance.yaml`) with a fresh fetch, and
+  `ci_wait_minutes` (120) is counted per SHA from its first attempt, so a new tip starts its own wait.
+- *The base-red check already skips a cancelled run.* `basered.lookup` walks up to 20 first-parent ancestors of a
+  candidate's base and passes over `NO_RESULT` conclusions (cancelled, stale, skipped), written for hecaton's own
+  ci.yml, which also tests only the newest of a burst.
+- *No approved older SHA is promoted here.* The path where main takes a SHA Michael approved (`_decided`) is only for a
+  repo whose main publishes live; `config/publication.yaml` lists this repo under `not_publication`.
+- *Gap one: a cancelled tip is read as red.* `_ci` reads the tip's check runs through `ci_verdict`, and a cancelled
+  conclusion is "fail", which `_red` files as "Heavy gate red on staging: CI". With this change that happens when
+  staging moves between the attempt's fetch and its check-runs read: the SHA it read was cancelled in that window. The
+  window is seconds wide and merges come every few minutes, so it is rare, but it would file a false red issue. Filed
+  on hecaton: read a cancelled or stale check on the staging tip as no result, defer, and read the new tip next.
+- *Gap two: promotion takes the tip, not the newest green SHA.* `_fast_forward` pushes the tip to main, and only the tip. While the
+  tip's run is pending, an older staging SHA that finished green is not promoted, so in a burst of merges main moves
+  only once the tip has stood unmerged for one e2e run (about 45 minutes). That is still ahead of the queue it
+  replaces, which never caught up, but it is not "the newest green SHA". Filed on hecaton: when the tip is pending,
+  fast-forward main to the newest first-parent ancestor of the tip, ahead of main, whose checks all finished green,
+  with cancelled read as no result.
+
+Neither gap blocks this change: with both open, main still reaches a green staging tip and no earlier SHA's
+cancellation is read. Both are this run's follow-ups on peopleforrester/hecaton.
+
+**Not yet run on a cluster or a runner.** No cluster is involved, and the issue asks for no live check. The workflow
+block first runs on the first push to staging after hecaton promotes this run; the cancel shows there as the run
+before it ending `cancelled` in the Actions list.
+
+**Suite results, run 18411.** On `709695d8`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=4fd5b914`, so
+scoped to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `15 checks ran (the
+offline suite and 14 tier tests) in 4m10s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18411/e2e-tools.log`.
+## 2026-11-08 · #1097 · run 18421 · The slide-citation sweep for the 2026-11-07 renumbering finds nothing to move; #1065's PROGRESS.md entry is added and pinned
+
+In the 2026-11-07 deck (rounds-agenticburn#77) slide 28 stays 28, the four single guardrail slides that were live 29 to
+32 give way to slide 29's retry and one set per guardrail on slides 30 to 42, and every slide from live 33 ("AI
+guardrails") on is numbered 10 higher, so "AI guardrails" is slide 43. No earlier draft existed
+(`verify/prior-drafts.sh 1097 origin/staging` printed NONE).
+
+**The deck read (run 18421, read only).** `curl -L` on `https://rounds.agenticburn.com` landed on
+`/attendee.html` (200). Counting its top-level sections, slide 28 is `Let's turn on Kubernetes guardrails.` with the
+one link `https://burritobot-private.burritobot.co/lab`, 29 is "Try your attacks again.", 30 to 33 are RBAC (30 the
+CEO's-address recall, 31 "This attack was prevented with RBAC.", 32 and 33 the Role YAML), 34 to 36 the admission policy
+(36 `deny-external-registries`), 37 to 39 runtime security (39 `block-recipe-snoop`), 40 to 42 NetworkPolicy (42
+`agent-egress-allowlist`), and 43 is "AI guardrails", with Challenge 3 from 44. Slides 14 to 27 read as the run-of-show
+quotes them, and the links fall where it and `/kubecon` say: the beacon view on 20, 25, 26 and 27, the deployments wall
+on 22 and 27. Nothing on either cluster was read or changed.
+
+**The sweep.** `grep -rniE "slides? *[0-9]"` over `facilitation/`, `gitops/ai-layer/web/`, `challenges/` and `verify/`,
+then every line holding "slide" and a number of 29 or more, then the unnumbered forms ("four slides", "guardrail
+slide", "29 to 32"). `challenges/` cites no slide number.
+
+**Citations changed: none.** #1095 and #1096, merged before this run, had already moved every citation of the old
+close, and no file in these directories cites a slide of live 33 or later (none names a slide past 42), so no number
+needed moving up by 10. Each citation of 28 to 42 was checked against the deck read above and matches it:
+
+- `facilitation/kubecon-na-2026-run-of-show.md`: the segments table's row 3 and the paragraph under it (slides 28, 29,
+  30 to 42), the segment 3 opening note (slides 28 to 42), the Timing paragraph and table (28, 29, 30 to 42, the sets'
+  ranges, slide 36's deny message), step 4's `c2-fixed` (slides 37 to 39), steps 5 and 6 (slides 28 to 42, each set and
+  each slide in it), and abstract-points row 5 and the Challenge 2 row of "Challenges shown live" (30 to 42).
+- `gitops/ai-layer/web/kubecon.html`: segment 3's story (slides 28, 29, 30 to 42 and each set's range), and the switch
+  beat's who line, marker and notes.
+- `verify/`: the literals in `test_instructor_brief.py`, `test_seg3_timing.py`, `test_ros_segments_table_seg3.py`,
+  `test_c3_fallback.py` and `test_fleet_routes_roster.sh`, which read the texts above.
+
+**Left alone, because they cite another deck or are history.**
+
+- `facilitation/cold-open-script.md` (slides 2, 3, 4, 9 and 14), `facilitation/slides-outline.md` (slides 3, 8, 10,
+  11, 12, and 2 and 3) and `facilitation/slides-draft-2026-currency.md` (slides 2, 3 and 13) number the earlier
+  outline, not the KubeCon deck. None cites a number from 29 up.
+- `verify/test_recipe_persona.py`'s "slide 21" (three places) names the recipe slide of the deck of #951's day,
+  2026-11-05 (rounds-agenticburn#65); it is below 29 and outside this renumbering.
+- The run-of-show's Timing paragraph says the 2026-11-06 deck closed "on the switch and four single guardrail slides"
+  and that the 2026-11-07 deck replaces them: that is the history of the change, as #1095 kept it, not a citation of
+  the current deck. Its "slides 1 to 21 on 2026-11-05" and "slides 14 and 15 from Whitney's walk on 2026-11-05" are
+  dated history too.
+- The phrases "four guardrail slides", "four slides" and "one slide per guardrail" in `test_seg3_timing.py`,
+  `test_ros_segments_table_seg3.py` and `test_instructor_brief.py` are the stale text those tests swap in to show their
+  checks fail; they cite no slide.
+- `verify/test_progress_entries.py`'s "(rounds-agenticburn#65, slides 1 to 21)" reads #984's PROGRESS.md entry, and
+  PROGRESS.md's own earlier entries (#1003's "on 28", #1040's slides 29 to 42) and decisions.md stay as written: they
+  are append-only history.
+
+No `/kubecon` prompt text was changed; this change touches no file under `gitops/`.
+
+**PROGRESS.md.** The new `- (2026-11-08) #1065:` bullet under `### Changed` describes the run-of-show's change (#1095,
+tested by #1111 and #1112), the `/kubecon` change (#1096) and this sweep. `verify/test_progress_entries.py` now holds it:
+13 facts read as literal text, and the finder fails with the entry removed, moved out of [Unreleased], undated, doubled
+or with no heading above it. `git grep -nF` on the quoted words found no other test reading PROGRESS.md's #1065 line.
+
+**Not yet run on a cluster.** Nothing: the change is text and its offline test.
