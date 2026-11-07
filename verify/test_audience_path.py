@@ -137,8 +137,17 @@ check(f"each LLM Guard stage in /chat is one _post_guard call {guard_calls}",
       all(calls_in(funcs[g], "_post_guard") == 1 for g in guard_calls) and calls_in(funcs["_post_guard"], "urlopen") == 1)
 check("each agent forward is one urlopen", calls_in(funcs["_forward"], "urlopen") == 1
       and calls_in(funcs["_attempt"], "_forward") == 1)
-check(f"/chat runs each LLM Guard stage once and forwards at most three times (found {forwards})",
-      all(v == 1 for v in guard_calls.values()) and forwards == 3)
+# The first forward, and one retry behind each reply check this test knows: a dangling tool_use, a reasoning-only
+# reply, and since guard-proxy-agenticburn#62 (44b98d1, #1060) Bedrock's 424 tool-call grammar error. A pin from
+# before #62 has no 424 check, so it forwards at most three times; a retry with no check named here fails.
+RETRY_CHECKS = ("_is_dangling_tooluse", "_is_thinking_only", "_is_tooluse_model_error")
+retry_checks = [g for g in RETRY_CHECKS if calls_in(chat, g, skip_nested=True)]
+check(f"/chat checks a reply for each retry it knows: {retry_checks}",
+      retry_checks[:2] == ["_is_dangling_tooluse", "_is_thinking_only"])
+want_forwards = 1 + len(retry_checks)
+check(f"/chat runs each LLM Guard stage once and forwards at most {want_forwards} times, once and once per "
+      f"retry check (found {forwards})",
+      all(v == 1 for v in guard_calls.values()) and forwards == want_forwards)
 upstream_calls = sum(guard_calls.values()) + forwards
 check("guard-proxy's TIMEOUT is PROXY_TIMEOUT", any(
     isinstance(n, ast.Assign) and any(getattr(t, "id", None) == "TIMEOUT" for t in n.targets)

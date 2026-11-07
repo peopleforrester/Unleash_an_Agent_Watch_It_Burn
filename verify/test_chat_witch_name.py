@@ -12,7 +12,12 @@ What this holds, offline:
   can assign, sends the agent exactly two text parts: the prompt as typed, then a sentence that carries the name.
   Every first name and every creature in burritbot.html's vocabulary is sent once, so a shape check the
   storefront's names do not pass cannot drop them.
-- The input guards and the /prompts feed see the prompt only, never the name.
+- The input guards see the prompt only, never the name, and the /prompts feed's `prompts` list is the prompt alone.
+- Since guard-proxy-agenticburn#59 (92fd19f, #1048) the feed carries each prompt's witch name in a `witches` list
+  at the same index, for the prompt wall (#921); a pin before it has no `witches`.
+- Since guard-proxy-agenticburn#64 (5a48d25, #995) the message/send of a named turn carries the name as an
+  X-Witch-Name header too, which kagent copies onto workshop-mcp's calls; a turn with no name carries none, and a
+  pin before it sends none.
 - A /chat with no witch field, an empty or blank one, or a non-string one reaches the agent as the prompt alone.
 
 The live half (an HC-666 turn on a cluster that lands joker-<visitor slug>) is not here; see #803's decisions entry.
@@ -35,6 +40,8 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SUB = REPO / "gitops/ai-layer/guard-proxy"
 WITCH_FIX = "6f2de7310f8ec578b1178d21e88c2256316be7eb"  # guard-proxy-agenticburn#34
+WITCHES_FEED = "92fd19f599b4df53c51b0f0ac6a70d857dcd084c"  # guard-proxy-agenticburn#59: /prompts carries `witches`
+WITCH_HEADER = "5a48d250e7021f54c17fd3403aed8dc123d176a6"  # guard-proxy-agenticburn#64: X-Witch-Name on the forward
 PAGE = (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")
 PROMPT = "One bean burrito with extra salsa, please"
 REPLY = "Coming right up."
@@ -62,6 +69,22 @@ contains = subprocess.run(["git", "-C", str(SUB), "merge-base", "--is-ancestor",
 check(f"the pin {pin_sha[:7]} contains guard-proxy-agenticburn#34's witch-name forwarding {WITCH_FIX[:7]}",
       contains.returncode == 0, contains.stderr.strip())
 
+
+def pin_contains(sha: str) -> bool:
+    """Whether the pinned guard-proxy holds the commit. A commit the clone does not have fails the test rather
+    than reading as an older pin."""
+    has = subprocess.run(["git", "-C", str(SUB), "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True)
+    if has.returncode != 0:
+        print(f"FAILED: guard-proxy commit {sha[:7]} is not in {SUB}; fetch it (git -C {SUB} fetch origin)")
+        sys.exit(1)
+    return subprocess.run(["git", "-C", str(SUB), "merge-base", "--is-ancestor", sha, pin_sha or "HEAD"],
+                          capture_output=True).returncode == 0
+
+
+has_witches_feed, has_witch_header = pin_contains(WITCHES_FEED), pin_contains(WITCH_HEADER)
+print(f"  the pin {'holds' if has_witches_feed else 'predates'} #59's witches feed and "
+      f"{'holds' if has_witch_header else 'predates'} #64's X-Witch-Name header")
+
 first, creatures = js_array("WITCH_FIRST"), js_array("WITCH_CREATURES")
 check(f"burritbot.html's witch vocabulary reads ({len(first)} first names, {len(creatures)} creatures)",
       bool(first) and bool(creatures))
@@ -72,6 +95,7 @@ check("the storefront still sends the name as the /chat body's witch field",
 class Agent(BaseHTTPRequestHandler):
     """Answers message/send with a finished task, as kagent does for a short turn, and keeps every message."""
     messages: list[dict] = []
+    headers: list[dict] = []  # each message/send's request headers, at the same index as messages
 
     def do_POST(self):  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
@@ -80,6 +104,7 @@ class Agent(BaseHTTPRequestHandler):
             self.end_headers()
             return
         Agent.messages.append(body["params"]["message"])
+        Agent.headers.append({k.lower(): v for k, v in self.headers.items()})
         out = json.dumps({"jsonrpc": "2.0", "id": body.get("id"),
                           "result": {"kind": "task", "id": "task-803", "contextId": "ctx-803",
                                      "status": {"state": "completed"},
@@ -136,9 +161,9 @@ BASE = f"http://127.0.0.1:{proxy_srv.server_address[1]}"
 _turn = 0
 
 
-def chat(body: dict) -> tuple[int, dict, dict | None]:
+def chat(body: dict) -> tuple[int, dict, dict | None, dict]:
     """POST one /chat turn, each under its own session (the Deployment's 10/min per conversation stays out of it).
-    Returns the status, the reply and the message the agent received, None when none reached it."""
+    Returns the status, the reply, the message the agent received (None when none reached it) and its headers."""
     global _turn
     _turn += 1
     before = len(Agent.messages)
@@ -153,7 +178,8 @@ def chat(body: dict) -> tuple[int, dict, dict | None]:
         reply = json.loads(raw)
     except ValueError:
         reply = {}
-    return status, reply, (Agent.messages[before] if len(Agent.messages) > before else None)
+    reached = len(Agent.messages) > before
+    return status, reply, (Agent.messages[before] if reached else None), (Agent.headers[before] if reached else {})
 
 
 def texts(message: dict | None) -> list[tuple[str, str]]:
@@ -165,7 +191,7 @@ names = [f"{first[i % len(first)]} the {creatures[i % len(creatures)]}" for i in
 sent = {}
 for name in names:
     sent[name] = chat({"prompt": PROMPT, "witch": name})
-status, reply, message = sent[names[0]]
+status, reply, message, _ = sent[names[0]]
 parts = texts(message)
 check(f"{names[0]!r}: the visitor gets the agent's reply", status == 200 and reply.get("reply") == REPLY,
       f"got {status} {reply}")
@@ -174,16 +200,37 @@ check(f"{names[0]!r}: the agent receives two text parts", len(parts) == 2 and al
 check(f"{names[0]!r}: the first part is the prompt as typed", parts[:1] == [("text", PROMPT)], f"parts {parts}")
 check(f"{names[0]!r}: the second part carries the name", len(parts) == 2 and names[0] in (parts[1][1] or ""),
       f"parts {parts}")
-dropped = [n for n, (_, _, m) in sent.items()
+dropped = [n for n, (_, _, m, _) in sent.items()
            if texts(m)[:1] != [("text", PROMPT)] or len(texts(m)) != 2 or n not in (texts(m)[1][1] or "")]
 check(f"every first name and creature the storefront assigns is forwarded ({len(names)} names, "
       f"{len(dropped)} not)", not dropped, f"not forwarded: {dropped[:5]}")
 check("no input guard scans the name, each scans the prompt",
       bool(scanned) and all(t == PROMPT for t in scanned), f"scanned {sorted(set(scanned))[:5]}")
+if has_witch_header:
+    wrong = [n for n, (_, _, _, h) in sent.items() if h.get("x-witch-name") != n]
+    check(f"each named turn's message/send carries X-Witch-Name equal to its name ({len(wrong)} of {len(names)} not)",
+          not wrong, f"not carried: {wrong[:5]}")
+else:
+    carried = [n for n, (_, _, _, h) in sent.items() if "x-witch-name" in h]
+    check("a pin before #64 sends no X-Witch-Name header", not carried, f"carried: {carried[:5]}")
 with urllib.request.urlopen(f"{BASE}/prompts", timeout=10) as r:
-    feed = r.read().decode("utf-8", "replace")
-check("the /prompts feed shows the prompt", "bean burrito" in feed, feed[:200])
-check("the /prompts feed shows no witch name", not any(n in feed for n in names), feed[:200])
+    raw_feed = r.read().decode("utf-8", "replace")
+try:
+    feed = json.loads(raw_feed)
+except ValueError:
+    feed = {}
+prompts = feed.get("prompts") or []
+check("the /prompts feed shows the prompt", any("bean burrito" in str(t) for t in prompts), raw_feed[:200])
+check("the /prompts feed's prompts carry no witch name",
+      all(isinstance(t, str) for t in prompts) and not any(n in t for n in names for t in prompts), raw_feed[:200])
+if has_witches_feed:
+    witches = feed.get("witches")
+    check(f"the feed's witches list is as long as its prompts ({len(witches or [])} and {len(prompts)})",
+          isinstance(witches, list) and len(witches) == len(prompts), raw_feed[:200])
+    check(f"the feed names each of the {len(names)} turns' witch at its prompt's index",
+          isinstance(witches, list) and witches[-len(names):] == names, f"witches {(witches or [])[-5:]}")
+else:
+    check("a pin before #59 has no witches list in the feed", "witches" not in feed, raw_feed[:200])
 
 print("== a /chat with no witch name reaches the agent as the prompt alone ==")
 for label, body in [("no witch field", {"prompt": PROMPT}),
@@ -191,11 +238,13 @@ for label, body in [("no witch field", {"prompt": PROMPT}),
                     ("a blank witch", {"prompt": PROMPT, "witch": "   "}),
                     ("a null witch", {"prompt": PROMPT, "witch": None}),
                     ("a non-string witch", {"prompt": PROMPT, "witch": {"name": names[0]}})]:
-    status, reply, message = chat(body)
+    status, reply, message, headers = chat(body)
     check(f"{label}: the visitor gets the agent's reply", status == 200 and reply.get("reply") == REPLY,
           f"got {status} {reply}")
     check(f"{label}: the agent receives exactly the prompt", texts(message) == [("text", PROMPT)],
           f"parts {texts(message)}")
+    check(f"{label}: the message/send carries no X-Witch-Name header", "x-witch-name" not in headers,
+          f"headers {headers}")
 
 proxy_srv.shutdown()
 agent_srv.shutdown()

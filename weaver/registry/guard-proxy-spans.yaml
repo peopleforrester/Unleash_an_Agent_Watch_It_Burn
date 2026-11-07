@@ -146,6 +146,14 @@ groups:
         note: >-
           The forwarded prompt, emitted as a JSON string. Equal to gen_ai.input.messages because the proxy
           forwards unchanged. Same opt-in content-capture gating as the input messages.
+      - ref: error.type
+        requirement_level:
+          conditionally_required: When the agent forward fails and the proxy answers 502.
+        note: >-
+          The same class name agent.forward carries (type(exc).__name__), alongside an ERROR status whose
+          description is the failure (guard-proxy-agenticburn#61, Unleash_an_Agent_Watch_It_Burn#1057). The
+          collector makes sanitize the root of an A2A turn and drops agent.forward, so without it a failed turn
+          read as a green row. It sets no http.response.status_code.
 
   # --- The outbound CLIENT hop. guard-proxy -> agentgateway (the next hop fronting the kagent agent). ---
   #
