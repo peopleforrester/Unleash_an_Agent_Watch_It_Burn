@@ -27752,3 +27752,19 @@ decisions.md check, which this entry is written to meet.
 
 **Not yet run on a cluster.** Nothing for this change: it reads GitHub and the repo. #968's own live run, named in
 its entries above, still waits on #63's commit and this repo's submodule bump.
+
+**The tier's one red, and the fix to `test_kagent_service_name_collector.py`.** The first `bash
+verify/run-e2e-tools.sh` of this run, at `088379fc`, printed `312 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 57m41s` with one failure:
+`test_kagent_service_name_collector.py` stopped on `json.decoder.JSONDecodeError: Unterminated string starting at: line
+1 column 2639` while it parsed the collector's file output. `test_kitchen_note_followup_e2e.py` passed in that run.
+The test sent SIGTERM to otelcol-contrib, gave it 10 seconds, then sent SIGKILL without waiting and parsed the files
+anyway. Its stderr went to a pipe nothing read. Three timed runs on this host stopped in 0.03 to 0.72 seconds, and a
+SIGKILL after the output had flushed left whole files, so a cut-off line needs the kill to land during the shutdown
+flush: a stop longer than 10 seconds on a loaded host. That cause is inferred and was not reproduced. The test now
+writes the collector's stderr to a file, waits 60 seconds for the stop, and on a kill waits for the process and fails
+a named check ("the collector stops on SIGTERM within 60s, so its file output is whole") without parsing. One of the
+first three runs of the patched test failed earlier, at "the collector starts", with no detail: the collector was
+alive, gave no answer in 30 seconds and wrote nothing to stderr. The next six runs passed. The start wait is now 60
+seconds, and the failure names the exit code or the port and what the collector printed, so a repeat names itself.
+The slow start is filed as a followup through this run's report, since its cause was not found.

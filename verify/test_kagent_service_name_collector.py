@@ -115,8 +115,11 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
     }
     cf = tmp / f"{profile}-cfg.yaml"
     cf.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    # stderr goes to a file: a pipe nobody reads fills and blocks a collector that logs, at shutdown too (#1012).
+    log = tmp / f"{profile}-stderr.log"
+    log_f = log.open("w", encoding="utf-8")
     proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.PIPE, text=True)
+                            stderr=log_f, text=True)
 
     def post(path: str, body: dict) -> int:
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=json.dumps(body).encode(),
@@ -125,15 +128,18 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
             return r.status
 
     try:
-        deadline = time.time() + 30
+        # A minute to answer: run 18059 saw one start with no answer in 30s and nothing on stderr (#1012).
+        deadline = time.time() + 60
         while True:
             try:
                 post("/v1/traces", {"resourceSpans": []})
                 break
             except OSError:
                 if time.time() > deadline or proc.poll() is not None:
-                    err = proc.stderr.read() if proc.poll() is not None else ""
-                    check(f"{profile}: the collector starts on the shipped pipelines", False, err[-600:])
+                    code = proc.poll()
+                    said = log.read_text(encoding="utf-8", errors="replace")[-600:]
+                    check(f"{profile}: the collector starts on the shipped pipelines", False,
+                          f"exited {code}: {said}" if code is not None else f"no answer on {port} in 60s: {said}")
                     return {}, set(), set()
                 time.sleep(0.3)
         check(f"{profile}: one /chat's spans and kagent's token metric are accepted (200)",
@@ -145,11 +151,22 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
             time.sleep(0.3)
         time.sleep(1.5)
     finally:
+        # A killed collector leaves its file exporter's buffered last line cut off, and run 18059's tier read such a
+        # line as a JSONDecodeError. So it gets a minute to stop on SIGTERM, which flushes the files; a kill is waited
+        # on and failed by name, and the cut-off output is never parsed (#1012).
         proc.terminate()
         try:
-            proc.wait(timeout=10)
+            proc.wait(timeout=60)
+            stopped = True
         except subprocess.TimeoutExpired:
             proc.kill()
+            proc.wait()
+            stopped = False
+        log_f.close()
+    check(f"{profile}: the collector stops on SIGTERM within 60s, so its file output is whole", stopped,
+          "killed; its output is not read")
+    if not stopped:
+        return {}, set(), set()
 
     spans: dict[str, tuple[dict, dict]] = {}
     for line in (out_t.read_text().splitlines() if out_t.exists() else []):
