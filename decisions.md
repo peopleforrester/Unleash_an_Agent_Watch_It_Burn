@@ -28844,6 +28844,28 @@ gets an answer before the deadline. This host made 26 polls in that window under
 `WIB_LB_WAIT_TIMEOUT=0` and `LB_READY_AFTER=never`, which the shim never answers, as the target-group sweep's leak
 case already does with its timeout of 0.
 
+**Two more reds the first E2E run here found.** `bash verify/run-e2e-tools.sh` at ddd1a083 (log
+`/var/lib/hecaton/runs/18115/e2e-tools.1.log`) failed two checks, and CI's E2E job would meet both once it gets past
+its prerequisite check:
+
+- `test_challenge_fallbacks.py`, inside the offline suite, read `the repo's tmp/ is left as it was found:
+  (['hecaton', 'tmp3ctvkn11'], ['hecaton'])`. It compared a snapshot of the whole of the repo's `tmp/` taken before and
+  after its runs. Since #1005, run-e2e-tools.sh runs the offline suite beside the tier tests, four at a time, and
+  test_bootstrap_chart_render.py makes and removes `tempfile` directories in that same `tmp/` while it runs, so the
+  snapshot caught another test's directory. Run 17882 met the same collision from a second suite started by hand in
+  one worktree. The fallback scripts write to no temp path (each run's TMPDIR is already checked empty), so what the
+  check holds is the test's own scratch: it now reads `its scratch directory in the repo's tmp/ is removed`, true when
+  `tmp/test-challenge-fallbacks-<pid>` is gone.
+- `test_image_version_tags.py` died on a traceback, `http.client.RemoteDisconnected` from ghcr.io on a manifest HEAD in
+  `verify/ghcr_pull.py`. That exception is not a `URLError`, so the helper's handler missed it, and nothing asked
+  again. The helper now asks a request again when the connection drops before any answer (an `http.client`
+  exception, `ConnectionError`, `TimeoutError` or a `URLError` that is not an `HTTPError`), up to 3 tries with 2 s and
+  4 s between, and after the last try it returns no digest with a reason naming the step, the exception and the tries.
+  An HTTP answer (a 401 or a 404) is never asked again, so #678's step reasons stand. `verify/test_ghcr_pull.py`
+  checks one drop then a digest, a drop on every try, and a 404 asked once, with the sleep stubbed. The four tests
+  that pull from ghcr.io (test_image_version_tags.py, test_c6_joker_public.py, test_mirror_copies_public.py,
+  test_promo_villains_public.py) then passed against the network.
+
 **Not yet run on a runner.** The fixes reach Tanjiro's runner only once hecaton pushes this branch. What the tools tier
 needs from the host beyond its prerequisite check, Playwright's Chromium libraries among them, has not yet run there,
 because every earlier E2E job stopped at the prerequisite check. No cluster is involved: the change is to the gate's

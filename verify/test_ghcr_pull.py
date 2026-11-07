@@ -8,6 +8,7 @@ for a private or missing package, and gives a public one a token, so the step th
 """
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import pathlib
@@ -77,6 +78,44 @@ try:
     check("no digest", digest is None, repr(digest))
     check("the reason names the manifest step", why == "manifest: HTTP 404 Not Found", why)
     check("it does not blame visibility", "private" not in why, why)
+
+    print("== a dropped connection is asked again, an HTTP answer never (#1047) ==")
+    naps: list[float] = []
+    ghcr_pull._sleep = naps.append
+
+    def dropping(drops: int):
+        """stub(200, 200), but the first <drops> manifest HEADs lose the connection before any answer."""
+        answer, seen = stub(200, 200)
+        left = [drops]
+
+        def urlopen(req, timeout=None):
+            url = req if isinstance(req, str) else req.full_url
+            if "/manifests/" in url and left[0] > 0:
+                left[0] -= 1
+                seen.append(url)
+                raise http.client.RemoteDisconnected("Remote end closed connection without response")
+            return answer(req, timeout)
+
+        return urlopen, seen
+
+    urllib.request.urlopen, seen = dropping(1)
+    got = ghcr_pull.served_digest(REF)
+    check("one dropped HEAD, then the digest", got == (DIGEST, ""), repr(got))
+    check("the HEAD was asked twice, after one nap", sum("/manifests/" in u for u in seen) == 2 and len(naps) == 1,
+          repr((seen, naps)))
+    naps.clear()
+    urllib.request.urlopen, seen = dropping(ghcr_pull.TRIES)
+    digest, why = ghcr_pull.served_digest(REF)
+    check("a HEAD that drops every try is no digest", digest is None, repr(digest))
+    check("its reason names the manifest step, the drop and the tries",
+          why.startswith("manifest: RemoteDisconnected: Remote end closed connection")
+          and f"after {ghcr_pull.TRIES} tries" in why, why)
+    check(f"asked {ghcr_pull.TRIES} times in all", sum("/manifests/" in u for u in seen) == ghcr_pull.TRIES, repr(seen))
+    naps.clear()
+    urllib.request.urlopen, seen = stub(200, 404)
+    digest, why = ghcr_pull.served_digest(REF)
+    check("a 404 is asked once, with no nap", why == "manifest: HTTP 404 Not Found"
+          and sum("/manifests/" in u for u in seen) == 1 and not naps, repr((why, seen, naps)))
 finally:
     urllib.request.urlopen = real
 
