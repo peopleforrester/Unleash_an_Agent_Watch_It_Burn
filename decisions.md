@@ -32926,3 +32926,34 @@ read or changed.
 `/var/lib/hecaton/runs/18397/e2e-tools.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 9m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+
+## 2026-11-07: a test for segment 3's step 5, slide 28's switch and slide 29's retry (#1110, run 18403)
+
+Test review run 18393 found that #1095's step 5 was checked only by one check that looked for its quotes anywhere in
+segment 3, and that nothing read what the step kept from before #1095: the two registry policies, the Jokers and
+#990's sweep. `verify/test_instructor_brief.py` now cuts step 5 out between its heading and step 6's and checks it on
+its own. Under "Slide 28 reads" the one quoted line has to be `Let's turn on Kubernetes guardrails.`, the line has to
+be the link to `https://burritobot-private.burritobot.co/lab`, and the presenter has to click it to open the admin
+terminal and type `guardrails-on`. Under "Slide 29 reads:", after the switch, the one quoted line has to be "Try your
+attacks again.", with the "reset your bot and use your saved prompts" line to say and the room pressing reset and
+pasting its saved prompts. The kept text has to stay as written: `guardrails-on` as #774's one command for all four
+layers on both clusters, `deny-external-registries` admitting only `registry.burritobot.co` and
+`restrict-image-registries` refusing `public.ecr.aws`, Segment 4's Jokers landing with HC-666's image from a registry
+both policies trust (#775), and #990's sweep within a minute from both clusters. Those four claims are also checked
+against the files they speak for: `deny-external-registries` trusts `registry.burritobot.co/` alone,
+`restrict-image-registries` trusts it and has no `public.ecr.aws`, `ROOM_IMAGE` in `gitops/ai-layer/ticket_site.py`
+is on `registry.burritobot.co/`, and `remove-untrusted-room-workloads` runs each minute. Every literal the block is
+cut on exits by name when it is gone. Eleven edits to the run-of-show and four to the policies and the ticket site,
+each reverted after, made the test fail on the check that names it, or exit on the anchor's name. The scope map's
+entry for this test gained `policies/kyverno/restrict-image-registries.yaml` and
+`policies/kyverno-breakout/remove-untrusted-room-workloads.yaml`, the two files `verify/scope_tests.py write` added for
+it. That command also rewrote other tests' entries, the drift #1111's run found before this one, and those are left
+as they were.
+
+**Live check (run 18403, read only).** `curl` on `https://rounds.agenticburn.com/attendee.html` answered 200. In
+the deck, slide 28 reads `Let's turn on Kubernetes guardrails.`, its one link is
+`https://burritobot-private.burritobot.co/lab`, and its note says to click the line to open the admin terminal.
+Slide 29 reads "Try your attacks again." with the reset-and-saved-prompts line step 5 quotes. The lab URL answered
+200. Nothing on either cluster was read or changed.
+
+**Not yet run on a cluster.** Nothing: the change is a test.

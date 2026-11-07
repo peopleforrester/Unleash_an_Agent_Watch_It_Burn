@@ -392,6 +392,78 @@ check("the run-of-show's segment 3 runs the same switch from slide 28's link, na
       and "`https://burritobot-private.burritobot.co/lab`" in _ros_s3
       and "> Try your attacks again." in ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
       and "reset your bot and use your saved prompts" in _ros_s3)
+# Step 5 on its own (#1110): slide 28's line is quoted under its "Slide 28 reads", the presenter clicks it to open the
+# admin terminal and types guardrails-on, then slide 29's retry is quoted under "Slide 29 reads" with its reset and
+# saved-prompts note. What the step said before #1095 stays: the command, the two registry policies, the Jokers and
+# #990's sweep. Every literal the block is cut on is checked first, by name.
+_STEP5_ANCHOR = "5. **One switch, depending on #774 (slide 28), then the room's retry (slide 29).**"
+_STEP6_HEAD = "6. **One set per guardrail (slides 30 to 42).**"
+_ros_raw_s3_5 = ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
+for _a in (_STEP5_ANCHOR, _STEP6_HEAD):
+    if _a not in _ros_raw_s3_5:
+        sys.exit(f"anchor {_a!r} is not in segment 3 of facilitation/kubecon-na-2026-run-of-show.md: "
+                 "reword the test with it")
+_step5_raw = _ros_raw_s3_5.split(_STEP5_ANCHOR, 1)[1].split(_STEP6_HEAD, 1)[0]
+_step5 = " ".join(_step5_raw.split())
+_S28, _S29 = "Slide 28 reads", "Slide 29 reads:"
+for _a in (_S28, _S29):
+    if _a not in _step5:
+        sys.exit(f"anchor {_a!r} is not in segment 3's step 5 of facilitation/kubecon-na-2026-run-of-show.md: "
+                 "reword the test with it")
+_s28_part = _step5_raw.split(_S28, 1)[1].split(_S29, 1)[0]
+_s29_part = _step5_raw.split(_S29, 1)[1]
+_quoted = lambda part: [ln.strip().lstrip(">").strip() for ln in part.splitlines() if ln.strip().startswith(">")]
+check("step 5 quotes slide 28 as \"Let's turn on Kubernetes guardrails.\" and nothing else",
+      _quoted(_s28_part) == ["Let's turn on Kubernetes guardrails."])
+check("step 5 says slide 28's line is a link to the admin cluster's terminal at its lab URL",
+      "The line is a link: it opens the admin cluster's terminal, "
+      "`https://burritobot-private.burritobot.co/lab`, in its own tab." in " ".join(_s28_part.split()))
+check("step 5 says the presenter clicks the line to open the admin terminal and types guardrails-on",
+      "The presenter clicks the line to open the admin terminal, types `guardrails-on`" in " ".join(_s28_part.split()))
+check("step 5 quotes slide 29 as \"Try your attacks again.\", after slide 28's switch",
+      _quoted(_s29_part) == ["Try your attacks again."] and _before(_step5, _S28, _S29)
+      and _before(_step5, "types `guardrails-on`", _S29))
+_s29_flat = " ".join(_s29_part.split())
+check("slide 29's retry tells the room to reset its bot and use its saved prompts, and the room does",
+      'Say: "Take a moment to reset your bot and use your saved prompts to retry your attacks that worked.'
+      in _s29_flat and "The room presses reset and pastes its saved prompts to try its Challenge 1 and Challenge 2 "
+      "attacks again" in _s29_flat)
+check("step 5 keeps that guardrails-on, #774's one command, turns on all four layers on both clusters",
+      "turns on RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy together, for both clusters. "
+      "That command is `guardrails-on`, which #774 added; it prints every `kubectl` it runs" in _step5)
+check("step 5 keeps the two registry policies: deny-external-registries admits only registry.burritobot.co, "
+      "restrict-image-registries refuses public.ecr.aws",
+      "refused at admission by Kyverno: `deny-external-registries` admits only `registry.burritobot.co` for the bot, "
+      "and `restrict-image-registries` refuses `public.ecr.aws` and every other registry off its list." in _step5)
+check("step 5 keeps that Segment 4's Jokers still land, HC-666's image on a registry both policies trust (#775)",
+      "Segment 4's Jokers still land: HC-666 asks for `registry.burritobot.co`'s image, which both registry "
+      "policies trust (#775)." in _step5)
+check("step 5 keeps #990's sweep of what the room deployed before the switch, from both clusters within a minute",
+      "Within a minute of the switch, what the room deployed before it from any other registry is deleted from both "
+      "clusters (#990)" in _step5)
+# What step 5 keeps is held against the files it speaks for: the policies, HC-666's image and the sweep's schedule.
+_DENY = (REPO / "policies/kyverno-breakout/deny-external-registries.yaml").read_text(encoding="utf-8")
+_RIR = (REPO / "policies/kyverno/restrict-image-registries.yaml").read_text(encoding="utf-8")
+_SWEEP = (REPO / "policies/kyverno-breakout/remove-untrusted-room-workloads.yaml").read_text(encoding="utf-8")
+_TICKETS = (REPO / "gitops/ai-layer/ticket_site.py").read_text(encoding="utf-8")
+_m_allowed = re.search(r"- name: allowedRegistries\n\s+expression: >-\n((?:\s+\S.*\n)+?)\s+- name:", _RIR)
+_m_room = re.search(r'^ROOM_IMAGE = "([^"]+)"', _TICKETS, re.M)
+for _what, _m in (("allowedRegistries in policies/kyverno/restrict-image-registries.yaml", _m_allowed),
+                  ("ROOM_IMAGE in gitops/ai-layer/ticket_site.py", _m_room)):
+    if _m is None:
+        sys.exit(f"{_what} is not where the test reads it: reword the test with it")
+_allowed = re.findall(r"'([^']+)'", _m_allowed.group(1))
+check("deny-external-registries is named so and trusts registry.burritobot.co/ alone",
+      "\n  name: deny-external-registries\n" in _DENY
+      and re.findall(r"expression: \"'([^']+/)'\"", _DENY) == ["registry.burritobot.co/"])
+check("restrict-image-registries trusts registry.burritobot.co/ and has no public.ecr.aws on its list",
+      "\n  name: restrict-image-registries\n" in _RIR and "registry.burritobot.co/" in _allowed
+      and not any("public.ecr.aws" in r for r in _allowed) and "public.ecr.aws" not in _RIR)
+check("HC-666's image is on registry.burritobot.co, so both registry policies admit it",
+      'ROOM_TICKET_ID = "HC-666"' in _TICKETS
+      and _m_room.group(1).startswith("registry.burritobot.co/"))
+check("#990's sweep runs each minute and spares only registry.burritobot.co/",
+      'schedule: "* * * * *"' in _SWEEP and "expression: \"'registry.burritobot.co/'\"" in _SWEEP)
 # Step 6 is one set per guardrail on slides 30 to 42, each naming the concept the slide names (#1095), and each set
 # keeps its fallback: the c1-fixed view, the Kyverno deny, the c2-fixed view with the Falco caution, the beacon POST.
 _step6 = _ros_s3.split("6. **One set per guardrail (slides 30 to 42).**", 1)[-1].split("**Delivers:**", 1)[0]
