@@ -28706,3 +28706,8 @@ button appears; report how often "Your order is now complete." is left out of a 
 be checked first with `curl -s https://attackme.burritobot.co/ | grep -cF 'your\s+order\s+is\s+now\s+complete'`, which
 should print 1. The 2-hour workshop's profiles take the same persona and page; nothing in its flow reads the old
 phrase, and the `delivered/devopsdays-portland-2026` tag is unchanged.
+
+**The suites (run 18108, at `9feac6d2`).** `bash verify/run-e2e-tools.sh` printed `316 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `79 checks ran (the offline suite and 78 tier tests) in 50m51s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`, with both new tests passing in it. The prose gate printed `prose gate: pass`. No dependency
+was added to the repo; the replay ran boto3 1.40.70 through `uv run --with`, outside it.
