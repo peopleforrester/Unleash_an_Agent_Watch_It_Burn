@@ -41113,3 +41113,58 @@ the same for the seed. Against the code before this change, the missing-context 
 passed, as did `python3 verify/test_kubecon_probe.py` and `python3 verify/test_scope_tests.py` after
 `python3 verify/scope_tests.py write` added `verify/fake_lease_kubectl.py` to test_stage_traces.py's entry. No
 dependency was added. The full Test and E2E commands are left to hecaton's validation.
+## 2026-11-07 · #1087 · run 18295 · Docker Hub's anonymous pull limit for Challenge 2's games: measured, and put to Michael
+
+#991 (still a draft on `origin/agent/991-17981` at `abb4be07`, held in review, so its entry of run 17981 is not on
+staging yet) makes `deploy_app` apply the image a room asks for. Two of the four games its prompt pins, Tron
+(`docker.io/iamassif731/tron-lightcycle-game`) and Tetris (`docker.io/bsord/tetris`), are on Docker Hub. This issue
+asks whether the clusters keep pulling Docker Hub anonymously or get a login. It is a choice between accepting a
+risk and providing a token, so this run measured and asked, and built nothing. `verify/prior-drafts.sh 1087
+origin/staging` printed NONE, and the issue had no comments.
+
+**Measured, 2026-11-07.**
+- Docker Hub, an anonymous token on `ratelimitpreview/test` and a HEAD of its manifest from the hecaton host at
+  17:42Z (a HEAD does not count): `ratelimit-limit: 100;w=3600`, `ratelimit-remaining: 93;w=3600`, source the host's
+  own IPv6 /64. Run 17981's reading of 2026-11-06 holds: 100 manifest pulls an hour per address. Docker's own page
+  (docs.docker.com/docker-hub/usage/, read the same day) says 100 per 6 hours for anonymous pulls, 200 per 6 hours
+  for a signed-in Personal account and unlimited, under fair use, for Pro, Team and Business. The header is what
+  the registry enforces; the page is older or stricter, and either way an anonymous room shares one small budget.
+- `aws ec2 describe-nat-gateways` (accen-dev, us-west-2): one available gateway, `nat-07ffd533da0fa727b`, at
+  35.166.107.99 in `vpc-0607c27ee51fb233c`. Both KubeCon clusters run one node each in that VPC, so every pull from
+  either, and from any standby, is counted against that one address.
+- Every image of every pod on both clusters (`kubectl get pods -A`, init containers included): 52 distinct on
+  watch-it-burn-community, 71 on watch-it-burn-private, and none from Docker Hub. Redis comes from
+  `ecr-public.aws.com/docker/library/`. So the platform spends none of the budget, and it is all the room's.
+- `aws ecr describe-pull-through-cache-rules`: none in the account. `aws secretsmanager list-secrets`: one secret,
+  `watch-it-burn/datadog`, so no Docker Hub credential is stored in the account.
+- decisions.md 2026-10-31 · #664: both Docker Hub tokens on disk answer `personal access token is expired`. The
+  peopleforrester account is on Docker's Team plan (2026-10-29 · #664), which is the unlimited tier once signed in.
+
+**What a room can spend.** With #991, every room container pulls `IfNotPresent` and the four games are pinned by
+digest, so each distinct Docker Hub image costs one pull per cluster the first time and nothing after. The four games
+cost two pulls a cluster. To pass 100 in an hour, a room has to get the bot, which deploys reluctantly and only for an
+exact image, to deploy about 100 different Docker Hub images within the hour. Past the limit, the new pod sits in
+`ImagePullBackOff` with `toomanyrequests` and its row on the deployments page never starts; pods already running are
+not touched, and 2048 (public.ecr.aws) and Infinite Mario (quay.io) still pull.
+
+**The ways past it.**
+1. Accept the risk as it stands. Nothing changes. The fallback in the room is to steer to 2048 or Infinite Mario.
+2. A Docker Hub login on the nodes: a read-only token of the Team account in
+   `/etc/containerd/certs.d/docker.io/hosts.toml`. `e9a97dcc` (#714) removed exactly this from
+   `infra/terraform/aws/cluster/main.tf` (`dockerhub_auth_b64` and its cloud-config part) and from fleet.sh, so it
+   can come back from git. It is written at node bootstrap, so the two KubeCon nodes only get it when their node
+   group is rolled, which no dispatched run may do; writing the file on a live node instead needs a privileged pod
+   or SSM on the node. The room's agent cannot read a node file.
+3. An imagePullSecret: the token as a `kubernetes.io/dockerconfigjson` Secret in the agent namespace, named on the
+   ServiceAccount the room's pods run as (or set by `deploy_app` on every room pod). It takes effect on the next pod
+   with no node change, but it puts a live token where the agent, and so the room, can be talked into reading it.
+4. An ECR pull-through cache rule for `registry-1.docker.io`, with the token in Secrets Manager under the
+   `ecr-pullthroughcache/` prefix. The room would have to ask for the ECR path, or `deploy_app` rewrite Docker Hub
+   names to it, which is the rewrite #991 removes; a containerd mirror for docker.io cannot carry ECR's credential
+   (2026-10-26 · #622).
+A copy of the games under `ghcr.io/peopleforrester/` stays out, as the issue says: `restrict-image-registries`
+trusts that path, which would defeat Challenge 2's lesson.
+
+**Asked.** The run's report puts one question to Michael: accept the risk for the KubeCon breakout (recommended), or
+provide a fresh read-only Docker Hub token for way 2. The answer goes in this file, and the chosen way, if it is not
+the first, is its own issue.
