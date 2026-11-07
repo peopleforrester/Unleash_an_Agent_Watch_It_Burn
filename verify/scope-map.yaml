@@ -7404,6 +7404,10 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
     - verify/test_trace_walkthrough_view.py
+  test_ros_seg3_switch_step.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - policies/kyverno-breakout/deny-external-registries.yaml
+    - policies/kyverno/restrict-image-registries.yaml
   test_ros_seg4_flow.py:
     - docs/mcp-server-vetting-checklist.md
     - facilitation/kubecon-na-2026-run-of-show.md
