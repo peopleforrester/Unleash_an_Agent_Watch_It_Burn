@@ -362,6 +362,10 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+  test_artifact_cache.py:
+    - verify/.tools
+    - verify/.tools/cache
+    - verify/artifact-cache.sh
   test_attendee_iam_user.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

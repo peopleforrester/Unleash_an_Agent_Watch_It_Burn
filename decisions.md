@@ -33152,3 +33152,48 @@ tested by #1111 and #1112), the `/kubecon` change (#1096) and this sweep. `verif
 or with no heading above it. `git grep -nF` on the quoted words found no other test reading PROGRESS.md's #1065 line.
 
 **Not yet run on a cluster.** Nothing: the change is text and its offline test.
+
+## 2026-11-08 · #1117 · run 18422 · One content-addressed artifact cache per host, outside any worktree
+
+**What.** `verify/artifact_cache.py` and its shell entry point `verify/artifact-cache.sh` are the helper every later
+child of #1115 routes its pinned fetches through. Nothing calls them yet: #1118 ports the E2E tools and the charts,
+#1119 the Terraform providers.
+
+**The root.** The first of `HECATON_TOOLS_CACHE`, `WIB_ARTIFACT_CACHE`, `${XDG_CACHE_HOME}/wib-artifacts` and
+`$HOME/.cache/wib-artifacts` that is set and not empty, resolved to an absolute path. A root with a `.git` entry (a
+directory or a submodule's file) on itself or any parent is refused, naming the path, the variable it came from and the
+worktree, and the helper does not move on to the next candidate: a set variable that points somewhere wrong is a
+mistake to fix, not to route around. Hecaton points TMPDIR inside the run's worktree, so the test makes its scratch
+roots in the system temp directory when TMPDIR is inside one.
+
+**get(sha256, url).** Layout `<root>/sha256/<hex>`. A hit is hashed again on every call and served with no network
+access; a hit that does not match raises `ArtifactMismatch` naming the path and both sums, and the file is left in
+place, never deleted and fetched again. A miss takes an `flock` on `<root>/sha256/.<hex>.lock`, looks again (another
+run may have finished it while this one waited), then downloads into a `mkstemp` file in the same directory, hashes
+it, and `os.replace`s it into place only when it matches. A download that does not match is removed and fails, naming
+the URL and both sums. The lock is what makes two runs side by side download once between them; without it both
+would download and the later rename would replace the earlier. The fetcher is a parameter (default: urllib, 60 s
+stall timeout, redirects followed), so a later child can fill an entry another way and keep the same checks.
+
+**The fetch log.** One tab-separated line per network fetch, appended with a single `O_APPEND` write: UTC time, URL,
+pinned sum, bytes received, and `ok`, `mismatch <sum>` or `error <exception>`. It goes to `ARTIFACT_FETCH_LOG` when
+that is set, else to `<root>/fetch.log`, so a host's log exists even when no caller set the variable. A hit writes
+nothing, which is what the last child of #1115 reads to show a warm run made no download.
+
+**A read-only store.** hecaton#540 describes `HECATON_TOOLS_CACHE` as read-only. A hit there needs only read access
+and is served; a miss fails on the write, naming the directory, and does not drop to `WIB_ARTIFACT_CACHE`. That
+variable is not set on this run's host, so nothing reads it today; #1118 is where a run first meets it.
+
+**The test.** `verify/test_artifact_cache.py` (offline) serves files from a `ThreadingHTTPServer` on 127.0.0.1 and
+counts requests. It covers the root's order, a root in a fresh repository, in this repo's `verify/.tools` and in a
+submodule, each refused with no fetch; a miss (one request, one log line with URL, sum and bytes, no temp file left);
+a hit with the server shut down and a hit through `get()` whose fetcher raises; a hit flipped by one bit after it was
+served; a mismatching hit while the server holds the right bytes (exit 1, path and both sums, file unchanged, no
+request); a download that does not match and a 404 (both logged, nothing cached); three malformed sums; and two
+`artifact-cache.sh get` processes on one sum. For that last case the server holds the first download half-sent until
+`/proc/locks` shows the second process waiting on the sum's lock, so the overlap is real on every run; the checks
+then read one request, one log line, the same path from both and no temp file. With the `flock` call removed, four of
+those checks fail. It printed 45 PASS. Its entry in `verify/scope-map.yaml` is the one `scope_tests.py write`
+produced for it; the rest of what `write` produced was other tests' existing drift and is not in this change.
+
+**Not yet run on a cluster.** No cluster is involved, and the issue asks for no live check.
