@@ -27978,3 +27978,8 @@ cluster was changed.
 https://burritobot-private.burritobot.co/kubecon` contains "intake webhook at https://agenticburn.com/beacon." and
 "Whitney sends this one, no recon first.". The send itself landing on the new address with the guardrails off, and
 held by the egress NetworkPolicy after `guardrails-on`, is #1002's owed live check.
+
+**The suites (run 18057, at `4cc5455f`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`312 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`) and then the tier: `76 checks ran (the offline suite and 75 tier tests) in
+54m36s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
+added.
