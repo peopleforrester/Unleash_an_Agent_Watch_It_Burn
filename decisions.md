@@ -33088,3 +33088,8 @@ cancellation is read. Both are this run's follow-ups on peopleforrester/hecaton.
 **Not yet run on a cluster or a runner.** No cluster is involved, and the issue asks for no live check. The workflow
 block first runs on the first push to staging after hecaton promotes this run; the cancel shows there as the run
 before it ending `cancelled` in the Actions list.
+
+**Suite results, run 18411.** On `709695d8`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=4fd5b914`, so
+scoped to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `15 checks ran (the
+offline suite and 14 tier tests) in 4m10s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18411/e2e-tools.log`.
