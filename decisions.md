@@ -32379,3 +32379,49 @@ and the other armed policies gone again, and the guard lock released on both. No
 printed `84 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks ran (the offline suite and 13 tier
 tests) in 5m02s, 4 at a time`, scoped to the one path this run touches (`decisions.md`), with `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`.
+## 2026-11-07 · #1091 · run 18351 · test_agentgateway_tracing_e2e.py retries a taken port and counts its waits in polls
+
+**What was red.** The heavy gate ran `bash verify/run-e2e-tools.sh` on staging `11ee65bc` and printed
+`test_agentgateway_tracing_e2e.py (exit 1)`, so main stayed at `110b542f`. The issue kept only the runner's tail,
+not the test's own lines, so which of its checks failed is not on record, and the gate's log directory is not
+readable from a run. The four commits from `110b542f` to `11ee65bc` change only `decisions.md` and `docs/floor.md`,
+the test and the gateway config are the same on both, and the gate passed the test on `110b542f`. Staging's CI run of
+`11ee65bc` (42403448289) passed it too, and none of the three CI runs that failed around it (42405149040,
+42407284907, 42407902277) failed it; they failed on ghcr.io, GitHub and registry.terraform.io handshakes, which
+#1047 covers. Here, on `12f7827f` with the pinned agentgateway v1.7.0, it passed three times alone and ten copies at
+once. It fails only some of the time, so the cause is in what the test hangs on, not in the gateway config.
+
+**What the test hung on.** Two things, each of which the otelcol_local helper already removed for the collector
+(#969):
+
+- A port taken in between. `free_port()` closes its socket before the gateway binds the port. Run here with a
+  listener held on its bind port, agentgateway v1.7.0 exits 1 logging `Error: failed to start bind listener(s): bind
+  bind/<port>: bind listener for [::]:<port>: Address in use (os error 98)`, and with its readiness port held,
+  `Error: readiness server starts ... Address in use (os error 98)`. It binds `[::]`, so a listener on that port on
+  any address stops it, not only one on 127.0.0.1. The test took one pair of ports and failed on any clash.
+- Wall-clock waits on a loaded host. The start had 30 seconds, the export 20, and each request a 5-second urlopen
+  timeout that, when it ran out, ended the test on a traceback naming nothing. Measured here, the start takes 0.02 to
+  0.3 s and the batch exporter posts about 5.1 s after the requests, so on an idle host each wait has room. #799
+  is why that is not enough: a host stall freezes this process with the gateway.
+
+**The change.** `run_gateway` now starts the gateway up to five times on fresh ports while its log says `Address in
+use`, and it counts as started only once the upstream has seen its `/warmup`, so a 200 from another process on the
+port cannot stand in for it. The start waits up to 600 polls of 0.3 s, or until six warmups time out against a
+gateway that takes a connection and never answers. The two requests have 60 seconds each, and a failed one is the
+new check `it answered the traced and the untraced request`, printing the error and not a traceback. The export
+waits up to 400 polls for the traced trace id and `/untraced` both. Every check that can fail prints the same
+detail: how many starts and on which ports, their exits, the polls, the POSTs, the seconds, the host's
+`/proc/pressure` stall over the run, and the gateway's log of each start. A new control holds the first bind port
+with a listener and requires the first start to exit naming it `Address in use` and a later one to come up on another
+port, so a later agentgateway that words the error differently fails the control and does not loop.
+`free_port()` and `stalled()` stay in the test and are not imported from the otelcol_local helper. Importing them
+made `python3 verify/scope_tests.py write` add the collector's paths (`gitops/otel-collector`,
+`verify/collector_render.py`, `verify/.tools/bin/otelcol-contrib`) to this test's entry, which would run a gateway test
+on every collector change, so its entry in `verify/scope-map.yaml` stays as it was. That write also proposed entries
+for 20 tests other runs added and some `always:` lines; those are not this change's and are left out.
+
+**Run here.** With an upstream mutated to answer `/untraced` with 500, the new check failed printing `a request
+through the gateway failed: HTTPError: HTTP Error 500` with the attempts, the pressure stall and the gateway log,
+and no traceback. With the test as committed: one run exited 0 with every check PASS, including `with port <p> held,
+the first start exits naming it taken ('Address in use', exit 1)` and `and the gateway starts on a fresh port (2
+starts)`, and ten copies at once all exited 0.

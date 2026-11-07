@@ -25,6 +25,21 @@ stats and readiness listeners move to free ports or off. Tracing is not touched.
 A negative control puts the same tracing back under config.tracing and requires the warning, so a log this test
 cannot read does not pass as a clean one.
 
+Why the start retries and the waits count polls (#1091). The heavy gate failed this test once, on staging 11ee65bc,
+with four checks running at once on the shared host, and passed it alone and ten copies at a time on the same commit.
+The issue kept only the runner's tail, so which check failed is not on record. Two things in the test hung on the
+host and not on the gateway, and both are gone, as the otelcol_local helper removed them for the collector (#969):
+
+  * A taken port. free_port() closes its socket before the gateway binds the port, and the gateway binds [::]:port, so
+    a listener on that port on any address, taken in between, stops it: it exits logging "Address in use". The start
+    now tries again on fresh ports, up to ATTEMPTS times, and a control holds the first bind port to prove it does.
+    The gateway counts as started only once the upstream has seen its warmup request, so a 200 from some other
+    process on the port does not pass for it.
+  * Wall-clock waits. The start had 30 seconds, the export 20, and each request 5, after which urlopen raised and the
+    test died on a traceback that named nothing. A host stall freezes this process with the gateway (the lesson of
+    #799), so each wait now counts polls, a request has REQUEST_TIMEOUT, and a request that fails is a failed check
+    that prints the error, the gateway's log, the attempts and the host's pressure stall over the run.
+
 The binary is the release's agentgateway-linux-amd64 for the image tag the Deployment runs, pinned in e2e-tools.lock
 (the image's own /app/agentgateway is a separate build of the same tag). Run by hand:
 AGENTGATEWAY=verify/.tools/bin/agentgateway python3 verify/test_agentgateway_tracing_e2e.py
@@ -52,6 +67,13 @@ GATEWAY = REPO / "gitops/ai-layer/agentgateway.yaml"
 LOCK = REPO / "verify/e2e-tools.lock"
 COLLECTOR = "otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318"
 DEPRECATED = "config.tracing is deprecated"
+IN_USE = "Address in use"  # agentgateway v1.7.0's word for EADDRINUSE, on its bind and its readiness listener alike
+ATTEMPTS = 5
+POLL = 0.3
+START_POLLS = 600  # 180 s of polls at least, against a start that takes under one on an idle host
+EXPORT_POLLS = 400  # 120 s of polls at least; the batch exporter posts about 5 s after the spans end
+REQUEST_TIMEOUT = 60
+WARMUP_HANGS = 6
 
 failures: list[str] = []
 
@@ -76,6 +98,17 @@ def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def stalled() -> dict[str, float]:
+    """The host's pressure stall totals in seconds (/proc/pressure), as the otelcol_local helper reads them."""
+    out = {}
+    for res, kind in (("cpu", "some"), ("memory", "full"), ("io", "full")):
+        path = pathlib.Path(f"/proc/pressure/{res}")
+        if path.exists():
+            line = next(ln for ln in path.read_text().splitlines() if ln.startswith(kind))
+            out[f"{kind} {res}"] = int(line.rsplit("total=", 1)[1]) / 1e6
+    return out
 
 
 class Receiver:
@@ -103,11 +136,15 @@ class Receiver:
 
 
 class Upstream:
-    """The backend the one bind routes to: answers every GET with 200."""
+    """The backend the one bind routes to: answers every GET with 200 and keeps each path it was asked for."""
 
     def __init__(self) -> None:
+        self.paths: list[str] = []
+        paths = self.paths
+
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(self) -> None:  # noqa: N802
+                paths.append(self.path)
                 self.send_response(200)
                 self.send_header("content-length", "2")
                 self.end_headers()
@@ -121,54 +158,114 @@ class Upstream:
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
 
-def run_gateway(binary: str, cfg: dict, tmp: pathlib.Path, label: str) -> dict:
-    """Start the gateway on cfg, send one traced and one untraced request, and return what it logged and exported."""
+class Holder:
+    """Another process's listener on a port, as the one a test beside this one could take between free_port() and the
+    gateway's bind."""
+
+    def __init__(self) -> None:
+        self.sock = socket.socket()
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen()
+        self.port = self.sock.getsockname()[1]
+
+
+def get(url: str, timeout: float, headers: dict[str, str] | None = None) -> None:
+    urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}), timeout=timeout).read()
+
+
+def run_gateway(binary: str, cfg: dict, tmp: pathlib.Path, label: str, first_bind: int | None = None,
+                send: bool = True) -> dict:
+    """Start the gateway on cfg, retrying on fresh ports while the one it was given is taken, then (with send) send
+    one traced and one untraced request and wait for their export. Returns what it logged and exported, and how the
+    start went. first_bind, when given, is the bind port of the first attempt."""
     rx, up = Receiver(), Upstream()
     text = yaml.safe_dump(cfg).replace(COLLECTOR, f"127.0.0.1:{rx.port}")
-    cfg = yaml.safe_load(text)
-    bind = free_port()
-    cfg.setdefault("config", {}).update(
-        {"adminAddr": "off", "statsAddr": "off", "readinessAddr": f"127.0.0.1:{free_port()}"})
-    cfg["binds"] = [{"port": bind, "listeners": [{"protocol": "HTTP", "routes": [
-        {"backends": [{"host": f"127.0.0.1:{up.port}", "weight": 1}]}]}]}]
-    path = tmp / f"{label}.yaml"
-    path.write_text(yaml.safe_dump(cfg))
-    log = tmp / f"{label}.log"
     env = {"PATH": os.environ.get("PATH", ""), "HOME": str(tmp), "BEDROCK_NOVA_MODEL": "us.amazon.nova-pro-v1:0",
            "BEDROCK_REGION": "us-west-2", "OTEL_SERVICE_NAME": "burritobot-gateway"}
     trace_id = secrets.token_hex(16)
-    out = {"trace_id": trace_id, "started": False, "posts": rx.posts, "log": ""}
-    with log.open("w") as fh:
-        proc = subprocess.Popen([binary, "-f", str(path)], stdout=fh, stderr=subprocess.STDOUT, env=env)
-        try:
-            deadline = time.time() + 30
-            while time.time() < deadline and proc.poll() is None:
+    out = {"trace_id": trace_id, "started": False, "posts": rx.posts, "log": "", "error": "", "attempts": [],
+           "start_polls": 0, "export_polls": 0}
+    before, t0 = stalled(), time.monotonic()
+    proc = None
+    try:
+        for attempt in range(ATTEMPTS):
+            bind = first_bind if attempt == 0 and first_bind is not None else free_port()
+            ready = free_port()
+            while ready == bind:
+                ready = free_port()
+            run_cfg = yaml.safe_load(text)
+            run_cfg.setdefault("config", {}).update(
+                {"adminAddr": "off", "statsAddr": "off", "readinessAddr": f"127.0.0.1:{ready}"})
+            run_cfg["binds"] = [{"port": bind, "listeners": [{"protocol": "HTTP", "routes": [
+                {"backends": [{"host": f"127.0.0.1:{up.port}", "weight": 1}]}]}]}]
+            path = tmp / f"{label}-{attempt}.yaml"
+            path.write_text(yaml.safe_dump(run_cfg))
+            log = tmp / f"{label}-{attempt}.log"
+            with log.open("w") as fh:
+                proc = subprocess.Popen([binary, "-f", str(path)], stdout=fh, stderr=subprocess.STDOUT, env=env)
+            out["log_file"], out["bind"] = log, bind
+            polls = hung = 0
+            # Started means the upstream saw the warmup through this gateway, not only that the port answered. A
+            # refused connection returns at once; a gateway that takes a connection and never answers ends the start
+            # after WARMUP_HANGS warmups of 10 s, rather than spending START_POLLS of them.
+            while polls < START_POLLS and hung < WARMUP_HANGS and proc.poll() is None:
+                polls += 1
                 try:
-                    urllib.request.urlopen(f"http://127.0.0.1:{bind}/warmup", timeout=2).read()
+                    get(f"http://127.0.0.1:{bind}/warmup", timeout=10)
+                except TimeoutError:
+                    hung += 1
+                except OSError as e:
+                    hung += isinstance(getattr(e, "reason", None), TimeoutError)
+                if "/warmup" in up.paths:
                     out["started"] = True
                     break
-                except OSError:
-                    time.sleep(0.3)
-            if out["started"]:
-                req = urllib.request.Request(f"http://127.0.0.1:{bind}/traced",
-                                             headers={"traceparent": f"00-{trace_id}-{secrets.token_hex(8)}-01"})
-                urllib.request.urlopen(req, timeout=5).read()
-                urllib.request.urlopen(f"http://127.0.0.1:{bind}/untraced", timeout=5).read()
-                deadline = time.time() + 20
-                while time.time() < deadline and not any(bytes.fromhex(trace_id) in b for _, _, b in rx.posts):
-                    time.sleep(0.3)
-                time.sleep(1)
-        finally:
+                time.sleep(POLL)
+            out["start_polls"] += polls
+            logged = clean(log.read_text(errors="replace"))
+            out["attempts"].append({"bind": bind, "readiness": ready, "polls": polls, "exit": proc.poll(),
+                                    "log": logged})
+            if out["started"] or proc.poll() is None or IN_USE not in logged:
+                break
+        if out["started"] and send:
+            try:
+                get(f"http://127.0.0.1:{bind}/traced", REQUEST_TIMEOUT,
+                    {"traceparent": f"00-{trace_id}-{secrets.token_hex(8)}-01"})
+                get(f"http://127.0.0.1:{bind}/untraced", REQUEST_TIMEOUT)
+            except OSError as e:
+                out["error"] = f"a request through the gateway failed: {type(e).__name__}: {e}"
+            exported = lambda: b"".join(b for _, _, b in rx.posts)  # noqa: E731
+            while (out["export_polls"] < EXPORT_POLLS and not out["error"]
+                   and not (bytes.fromhex(trace_id) in exported() and b"/untraced" in exported())):
+                out["export_polls"] += 1
+                time.sleep(POLL)
+    finally:
+        if proc is not None and proc.poll() is None:
             proc.terminate()
             try:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
-    out["log"] = re.sub(r"\x1b\[[0-9;]*m", "", log.read_text(errors="replace"))
-    rx.server.shutdown()
-    up.server.shutdown()
+        if "log_file" in out:
+            out["log"] = clean(out["log_file"].read_text(errors="replace"))
+        rx.server.shutdown()
+        up.server.shutdown()
+    after = stalled()
+    pressure = ", ".join(f"{k} {after[k] - v:.1f} s" for k, v in before.items() if k in after)
+    out["detail"] = "\n        ".join(
+        [f"{len(out['attempts'])} start(s) on bind ports {[a['bind'] for a in out['attempts']]}, "
+         f"exits {[a['exit'] for a in out['attempts']]}; {out['start_polls']} start polls, {out['export_polls']} "
+         f"export polls, {len(rx.posts)} POSTs, over {time.monotonic() - t0:.1f} s; the host's pressure stall over "
+         f"it: {pressure or 'n/a'}"]
+        + ([out["error"]] if out["error"] else [])
+        + [f"gateway log of the start on port {a['bind']}:\n{a['log'][-1500:] or '(empty)'}"
+           for a in out["attempts"][:-1]]
+        + [f"gateway log:\n{out['log'][-2000:] or '(empty)'}"])
     return out
+
+
+def clean(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 binary = os.environ.get("AGENTGATEWAY", "")
@@ -201,20 +298,22 @@ with tempfile.TemporaryDirectory() as t:
         tracing = (cfg.get("frontendPolicies") or {}).get("tracing") or {}
         check(f"{name} sends its spans to the collector ({tracing.get('host')!r})", tracing.get("host") == COLLECTOR)
         r = run_gateway(binary, cfg, tmp, name)
-        check(f"{name}: the gateway started and served the bind", r["started"], r["log"][-2000:])
+        check(f"{name}: the gateway started and served the bind", r["started"], r["detail"])
+        check(f"{name}: it answered the traced and the untraced request", r["started"] and not r["error"],
+              r["detail"])
         dep = [ln for ln in r["log"].splitlines() if "deprecated" in ln]
         check(f"{name}: it logs no deprecation warning ({len(dep)})", not dep, "\n".join(dep[:3]))
         posts = r["posts"]
-        check(f"{name}: it exported spans ({len(posts)} POSTs)", bool(posts), r["log"][-2000:])
+        check(f"{name}: it exported spans ({len(posts)} POSTs)", bool(posts), r["detail"])
         check(f"{name}: every export is OTLP/HTTP protobuf to /v1/traces ({sorted({(p, c) for p, c, _ in posts})})",
               bool(posts) and all(p == "/v1/traces" and c.startswith("application/x-protobuf") for p, c, _ in posts))
         check(f"{name}: the incoming traceparent's trace id is in what it exported",
-              any(bytes.fromhex(r["trace_id"]) in b for _, _, b in posts))
+              any(bytes.fromhex(r["trace_id"]) in b for _, _, b in posts), r["detail"])
         # The warmup and the untraced request both arrive with no traceparent, so each is a random-sampling decision;
         # randomSampling true traces them, and their spans carry trace ids the test did not choose.
         spans_text = b"".join(b for _, _, b in posts)
         check(f"{name}: a request with no traceparent is traced too (randomSampling true)",
-              b"/untraced" in spans_text or b"/warmup" in spans_text)
+              b"/untraced" in spans_text or b"/warmup" in spans_text, r["detail"])
 
     print("== the negative control: the same tracing under the deprecated config.tracing ==")
     cfg = yaml.safe_load(yaml.safe_dump(configmaps.get("agentgateway-config", {})))
@@ -225,8 +324,18 @@ with tempfile.TemporaryDirectory() as t:
     r = run_gateway(binary, cfg, tmp, "deprecated")
     dep = [ln for ln in r["log"].splitlines() if DEPRECATED in ln]
     check(f"config.tracing logs the deprecation warning, so this test reads the gateway's log ({len(dep)} lines)",
-          len(dep) >= 1, r["log"][-2000:])
+          len(dep) >= 1, r["detail"])
     check("and exports the same way, so the two forms are the same configuration",
-          any(bytes.fromhex(r["trace_id"]) in b for _, _, b in r["posts"]))
+          any(bytes.fromhex(r["trace_id"]) in b for _, _, b in r["posts"]), r["detail"])
+
+    print("== the start retries on a fresh port when another process holds the one it was given ==")
+    holder = Holder()
+    r = run_gateway(binary, configmaps.get("agentgateway-config", {}), tmp, "taken", first_bind=holder.port, send=False)
+    holder.sock.close()
+    first = r["attempts"][0] if r["attempts"] else {}
+    check(f"with port {holder.port} held, the first start exits naming it taken ({IN_USE!r}, exit {first.get('exit')})",
+          first.get("exit") not in (None, 0) and IN_USE in first.get("log", ""), r["detail"])
+    check(f"and the gateway starts on a fresh port ({len(r['attempts'])} starts)",
+          r["started"] and len(r["attempts"]) >= 2 and r["attempts"][-1]["bind"] != holder.port, r["detail"])
 
 finish()
