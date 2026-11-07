@@ -96,12 +96,22 @@ class Server:
 
 
 def scratch_base() -> pathlib.Path:
-    """A temp directory outside every git worktree. Hecaton points TMPDIR inside the run's worktree, where the helper
-    rightly refuses a root, so the system temp directory is used when TMPDIR is in one."""
-    for cand in (pathlib.Path(tempfile.gettempdir()), pathlib.Path("/tmp")):
-        if cand.is_dir() and ac.worktree_of(cand) is None:
+    """A new temp directory outside every git worktree: the first of TMPDIR, /tmp, /var/tmp and /dev/shm that is outside
+    one and takes a new directory. Hecaton points TMPDIR inside the run's worktree, where the helper rightly refuses a
+    root. In run 18422 the dispatcher's private /tmp and /var/tmp were deleted while the run was going (findmnt read
+    both as `//deleted`), so a mkdir there failed with ENOENT though the path was still a directory. With none usable
+    the test fails, naming each one and why."""
+    why = []
+    for cand in dict.fromkeys(map(pathlib.Path, (tempfile.gettempdir(), "/tmp", "/var/tmp", "/dev/shm"))):
+        tree = ac.worktree_of(cand)
+        if tree is not None:
+            why.append(f"{cand} is inside the git worktree {tree}")
+            continue
+        try:
             return pathlib.Path(tempfile.mkdtemp(prefix="artifact-cache-test-", dir=cand))
-    raise SystemExit(f"FAIL: no temp directory outside a git worktree: {tempfile.gettempdir()} and /tmp are both in one")
+        except OSError as e:
+            why.append(f"{cand}: {e}")
+    raise SystemExit("FAIL: no temp directory outside a git worktree takes a new directory:\n  " + "\n  ".join(why))
 
 
 CLEAN = {k: v for k, v in os.environ.items()

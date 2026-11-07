@@ -33164,7 +33164,10 @@ child of #1115 routes its pinned fetches through. Nothing calls them yet: #1118 
 directory or a submodule's file) on itself or any parent is refused, naming the path, the variable it came from and the
 worktree, and the helper does not move on to the next candidate: a set variable that points somewhere wrong is a
 mistake to fix, not to route around. Hecaton points TMPDIR inside the run's worktree, so the test makes its scratch
-roots in the system temp directory when TMPDIR is inside one.
+roots in the first of TMPDIR, `/tmp`, `/var/tmp` and `/dev/shm` that is outside a worktree and takes a new directory. The first
+version tried TMPDIR and `/tmp` only, and its second suite run failed on it: partway through this run the dispatcher's private `/tmp`
+and `/var/tmp` were deleted (`findmnt` read both as `//deleted`), so a mkdir there failed with ENOENT while the path
+still read as a directory. With none usable the test fails, naming each directory and why.
 
 **get(sha256, url).** Layout `<root>/sha256/<hex>`. A hit is hashed again on every call and served with no network
 access; a hit that does not match raises `ArtifactMismatch` naming the path and both sums, and the file is left in
