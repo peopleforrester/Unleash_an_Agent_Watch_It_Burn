@@ -30247,3 +30247,44 @@ owed: the other three criteria are met and recorded on staging, the counts are o
 `82 checks ran (the offline suite and 81 tier tests) in 8m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The prose gate printed `prose gate: pass`. No code or dependency changed this run; the only edit is this
 decisions.md record.
+
+## 2026-11-07 · #983 · run 18187 · An offline test serves the real weather feed handler with Open-Meteo failing and holds what the e2e test prints
+
+This is the second child of #964, after #982 (run 17965) made `verify/test_weather_feed_e2e.py` print a failed
+request's status, the feed's `error` field and its time through `verify/weather_feed_probe.py`. #982's proof of that
+path was a scratch copy checked by hand; this test holds it in the offline suite. `verify/prior-drafts.sh 983
+origin/staging` printed NONE and the issue had no comments, so nothing earlier was reused.
+
+**The test, `verify/test_weather_feed_upstream_failure.py`.** It loads `gitops/ai-layer/weather_feed.py` as a module
+and serves its own `Handler` on a free loopback port with a `ThreadingHTTPServer` subclass that only counts the
+requests it receives. The feed's `GEOCODE` and `FORECAST` point at a loopback upstream and its `TIMEOUT` is cut to
+0.4 s; `_get_json` is not patched, so the feed's real urlopen call is what fails. Three upstreams are tried: a socket
+that listens and never answers (a timeout), an HTTP server answering 503 (an upstream HTTP error), and a socket
+bound but not listening (refused at once, and no other process can take the port meanwhile). The feed's
+`weather-feed` logger is captured with a logging handler.
+
+For each upstream, `request` and `failure_line` are called as the e2e test calls them, and then the e2e test's own
+`check_reading` is run with its stdout captured. The test holds that the feed answered 502 with an `error` field
+starting `weather service unavailable: ` and naming the cause ("timed out", "HTTP Error 503", "Connection refused"),
+with no other cause's words in it; that the printed line carries `HTTP 502 (expected 200)` and that error text; that
+the feed's log holds exactly one `upstream lookup for 'Salt Lake City' failed: ...` line with the same cause and
+one 502 access line; and that each helper call reached the feed exactly once. For the timeout it holds that the
+answer came after the feed's own 0.4 s timeout and not the helper's 20 s; for the 503 it holds that the feed asked
+the geocoder once and stopped. Before any check, every literal it reads in the feed, the probe and the e2e test is
+checked to be in that file, and a missing one exits naming the literal and the file. It runs in about 2 s.
+
+The timeout prints `/current for Salt Lake City: HTTP 502 (expected 200) after 0.42 s; error: weather service
+unavailable: timed out`, and the 503 prints `... error: weather service unavailable: HTTP Error 503: Service
+Unavailable`, so #964's two causes read apart in the line the e2e test prints.
+
+**Checked against mutations, on scratch copies** (`/var/lib/hecaton/runs/18187/scratch/mut/`). A probe whose
+`request` sends twice failed 16 checks, among them "the helper sent exactly one request (no retry)" with
+`2 requests`. A feed with its `log.warning` line disabled failed 9 checks on the missing upstream-failure line. A
+feed whose error text read `weather lookup unavailable` exited at once on the missing literal, naming
+`gitops/ai-layer/weather_feed.py`. The first draft hung: its log handler replaced `logging.Handler.lock` with a plain
+lock and took it again inside `emit`, which `handle` already holds. The handler now appends without a lock of its
+own.
+
+**No repo code changed** besides the new test, and no dependency was added.
+
+**Not yet run on a cluster.** Nothing is owed: the test is offline and the feed's live run is the e2e test's.
