@@ -30585,3 +30585,47 @@ No dependency was added.
 verify/run-e2e-tools.sh` printed `331 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the
 offline suite and 81 tier tests) in 11m12s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`
 (`/var/lib/hecaton/runs/18195/e2e-tools.log`). The prose gate printed `prose gate: pass`.
+## 2026-11-07 · #1038 · run 18206 · Step 1 of the deployments page's live test already reads over a port-forward (#998); the cause and both clusters read again
+
+#1038 asks for what #998 (run 18118, `07bafd6f`, in staging) already did: find why the API server's service proxy
+cannot reach fake-ticket:8080, read `/deployments.json` another way, pin that offline, and run the live test green on
+both clusters. `verify/prior-drafts.sh 1038 origin/staging` printed NONE. This run changes no code; it reads the cause
+and the live test again at 2026-11-07T15:22Z and records them under this issue.
+
+**Why the proxy cannot reach fake-ticket:8080.** The cause is #998's entry, "What drops the connection", and it still
+holds. The service proxy dials the pod from the control plane, which carries the module's cluster security group. The
+node security group admits that group only on 443, 4443, 6443, 8443, 9443, 10250 and 10251, and admits 8080 only from
+the load balancer controller's shared group. Read this run with `aws ec2 describe-security-group-rules`:
+- watch-it-burn-community: fake-ticket pod `10.0.24.183` on `ip-10-0-31-163`, node group `sg-0b7d2a0cfaed6fecd`, cluster
+  group `sg-04130d5989d5c1ab1` on the seven ports above; 8080 to 8443 only from `sg-0307dc0f6c5517868`
+  (`elbv2.k8s.aws/targetGroupBinding=shared`).
+- watch-it-burn-private: fake-ticket pod `10.0.109.213` on `ip-10-0-90-162`, node group `sg-011fc555e507cfb40`, cluster
+  group `sg-0ca9886f5a9d4f6d3` on the same seven ports; 8080 to 8443 only from `sg-00b123a200f276649`.
+- The EKS-managed cluster groups (`sg-06137354364297b90`, `sg-004dd5dea385c0a7f`) have no ingress rule on either node
+  group.
+- The three NetworkPolicies in `agent` select agentgateway, console and workshop-agent; none selects fake-ticket, so
+  the issue's first guess is not the cause.
+- `kubectl get --raw /api/v1/namespaces/agent/services/fake-ticket:8080/proxy/deployments.json --request-timeout=15s`
+  printed `context deadline exceeded (Client.Timeout exceeded while awaiting headers)` on community and `net/http:
+  request canceled (Client.Timeout exceeded while awaiting headers)` on private.
+The rule that admits it, #869's `ingress_cluster_8080_workshop_apps` in `infra/terraform/aws/cluster/main.tf`, is in
+the root and not on either cluster; #1042 (open) is the apply that puts it there. Step 1 does not wait on it.
+
+**The path step 1 reads, and its offline pin.** Step 1 calls `kube_forward.get` on `svc/fake-ticket` :8080, a
+`kubectl port-forward` that goes API server to kubelet on 10250, which the node group admits. `verify/test_kube_forward.py`
+(offline, found by `run-tests.sh`) holds that step 1 calls `kube_forward.get` on `svc/fake-ticket` :8080 for
+`/deployments.json` with `--context CONTEXT`, and fails if any part of the live test reads fake-ticket through
+`/proxy/`. It printed `PASS: kube_forward makes one GET over a port-forward, leaves nothing running, and step 1 of the
+deployments page's live test uses it` this run.
+
+**The live run (run 18206, 2026-11-07T15:20Z).** `CONTEXT=<cluster> python3 verify/test_deployments_page_live.py`:
+- watch-it-burn-community: `PASS  it answers a JSON list over a port-forward to svc/fake-ticket :8080`, `INFO
+  /deployments.json lists 28 deployment(s)`; step 2 passed on `https://deployments-attackme.agenticburn.com/` (five
+  checks), 2b passed (two), step 3 read `validationActions here: ["Audit"]` and `PASS  with no Deny, the room's image is
+  admitted (the attack lands)`; `The deployments page and the room's public image hold on this cluster.`, exit 0.
+- watch-it-burn-private: `PASS  it answers a JSON list over a port-forward to svc/fake-ticket :8080`, `INFO
+  /deployments.json lists 0 deployment(s)`; step 2 passed on `https://deployments-burritobot-private.agenticburn.com/`
+  (five checks), 2b passed (two), step 3 read `["Audit"]` and passed on its Audit branch; exit 0.
+Step 3 is a server-side dry run and the other reads change nothing, so both clusters are as found.
+
+**Not yet run on a cluster.** Nothing for this issue. Step 3's Deny branch stays where #998's entry left it, with #992.
