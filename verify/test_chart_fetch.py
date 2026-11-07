@@ -1,5 +1,5 @@
 # ABOUTME: Holds verify/chart_fetch.py: a network error is retried and then named, any other fails at once, and a
-# ABOUTME: chart fetched once is read from the cache, all against a stub helm the test writes (#1028).
+# ABOUTME: chart's tarball fetched once is read from the cache, against a stub helm the test writes (#1028).
 """In run 17993 charts.external-secrets.io answered one index read with EOF and test_datadog_log_services_render.py
 failed on it; run alone right after, it passed (#1028). The tier's chart fetches now go through chart_fetch.pull(),
 and this holds what it does, offline: the stub helm below fails as told (a count of failures, then a pull that untars
@@ -28,7 +28,8 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 # The stub: each call is a line in $STUB_DIR/calls. It fails while $STUB_DIR/fail holds a count above zero, printing
-# $STUB_DIR/error, and otherwise untars a one-file chart named by its pull reference into --untardir.
+# $STUB_DIR/error, and otherwise writes, into --destination, the tarball of a one-file chart named by its pull reference,
+# as `helm pull` names it: <chart>-<version>.tgz.
 STUB = """#!/usr/bin/env bash
 echo "$*" >>"$STUB_DIR/calls"
 n=$(cat "$STUB_DIR/fail" 2>/dev/null || echo 0)
@@ -38,10 +39,13 @@ if [ "$n" -gt 0 ]; then
     exit 1
 fi
 ref="$2"; dir=""
-while [ $# -gt 0 ]; do [ "$1" = --untardir ] && dir="$2"; shift; done
+while [ $# -gt 0 ]; do [ "$1" = --destination ] && dir="$2"; shift; done
 name="${ref##*/}"
-mkdir -p "$dir/$name"
-printf 'apiVersion: v2\\nname: %s\\nversion: 1.0.0\\n' "$name" >"$dir/$name/Chart.yaml"
+src=$(mktemp -d "$STUB_DIR/src.XXXXXX")
+mkdir -p "$src/$name"
+printf 'apiVersion: v2\\nname: %s\\nversion: 1.0.0\\n' "$name" >"$src/$name/Chart.yaml"
+tar -czf "$dir/$name-1.0.0.tgz" -C "$src" "$name"
+rm -rf "$src"
 """
 
 EOF_ERROR = ('Error: looks like "https://charts.external-secrets.io" is not a valid chart repository or cannot be '
@@ -106,17 +110,20 @@ with tempfile.TemporaryDirectory() as t:
     cache, waits = root / "cache1", []
     stub.fail(1, EOF_ERROR)
     got, err = pull(stub, cache, waits)
-    check(f"the chart is fetched ({err})", got is not None and (got / "Chart.yaml").is_file())
+    check(f"the chart is fetched as a tarball holding its Chart.yaml ({err})",
+          got is not None and chart_fetch.holds_chart(got, CHART))
     check("it lives in the cache, named by chart and version",
-          got is not None and got.parent.parent == cache and got.parent.name.startswith(f"{CHART}-{VERSION}-")
-          and got.name == CHART, str(got))
+          got is not None and got.parent == cache and got.name.startswith(f"{CHART}-{VERSION}-")
+          and got.suffix == ".tgz", str(got))
     check(f"Helm was asked twice ({len(stub.calls())})", len(stub.calls()) == 2, str(stub.calls()))
     check(f"one wait came between them, the first backoff ({waits})", waits == [chart_fetch.BACKOFF[0]])
-    check("the pull asks for the pinned version and untars",
-          all(f"pull {CHART} --repo {REPO} --version {VERSION} --untar --untardir " in c for c in stub.calls()),
+    check("the pull asks for the pinned version, into a directory of its own",
+          all(f"pull {CHART} --repo {REPO} --version {VERSION} --destination " in c for c in stub.calls()),
           str(stub.calls()))
-    check("no staging directory is left beside the cached chart",
-          sorted(p.name for p in cache.iterdir()) == [got.parent.name] if got else False, str(list(cache.iterdir())))
+    # Tarballs alone: an untarred chart's files would be read by the offline tests that scan the tree for text, as
+    # test_mesh_enrollment.py read three cached charts' istio.io/dataplane-mode when they were untarred.
+    check("the cache holds the tarball and nothing else, no staging directory and no untarred chart",
+          sorted(p.name for p in cache.iterdir()) == [got.name] if got else False, str(list(cache.iterdir())))
 
     print("== a chart in the cache is read from there: Helm is not asked again ==")
     stub.reset()
@@ -160,7 +167,7 @@ with tempfile.TemporaryDirectory() as t:
     r = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
                        env={**os.environ, "CHART_CACHE": str(root / "cache4")})
     check(f"the probe fetched the chart (exit {r.returncode})", r.returncode == 0, r.stderr)
-    check("CHART_CACHE moved the cache", any((root / "cache4").glob(f"{CHART}-{VERSION}-*/{CHART}/Chart.yaml")))
+    check("CHART_CACHE moved the cache", any((root / "cache4").glob(f"{CHART}-{VERSION}-*.tgz")))
     check("one RETRY line names the chart and the attempt",
           [ln.strip() for ln in r.stdout.splitlines() if "RETRY" in ln][:1]
           == [f"RETRY helm pull {CHART} {VERSION} from {REPO}: {EOF_ERROR.strip()} (attempt 1 of 2; again in 0s)"],
@@ -177,9 +184,9 @@ with tempfile.TemporaryDirectory() as t:
         th.join()
     paths = {r[0] for r in results}
     check(f"each fetch got the one cached chart ({results})",
-          len(results) == 4 and len(paths) == 1 and None not in paths and all((p / "Chart.yaml").is_file() for p in paths))
-    check("the cache holds that chart alone, no staging directory",
-          [p.name for p in cache.iterdir()] == [next(iter(paths)).parent.name] if paths and None not in paths else False,
+          len(results) == 4 and len(paths) == 1 and None not in paths and all(chart_fetch.holds_chart(p, CHART) for p in paths))
+    check("the cache holds that tarball alone, no staging directory",
+          [p.name for p in cache.iterdir()] == [next(iter(paths)).name] if paths and None not in paths else False,
           str(list(cache.iterdir())))
 
 print("== the tier tests that fetch upstream charts go through chart_fetch ==")

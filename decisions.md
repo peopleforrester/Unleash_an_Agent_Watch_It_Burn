@@ -29441,6 +29441,7 @@ RBAC check. `verify/fake_lease_kubectl.py` answers the peer Secret's read. `veri
 hands its Lease calls to that fake and checks the Lease spans every policy call, in each of its cases.
 `verify/test_stage_traces.py` stands in for hold_switch. No dependency was added.
 ## 2026-11-07 · #1028 · run 18149 · a pinned chart is fetched once into verify/.tools/charts, and a network error is retried
+## 2026-11-07 · #1028 · run 18149 · a pinned chart's tarball is fetched once into verify/.tools/charts, and a network error is retried
 
 **What happened.** In run 17993 the tools tier failed `test_datadog_log_services_render.py` on
 `external-secrets.yaml[external-secrets] renders`: `helm template --repo` got EOF reading
@@ -29448,11 +29449,21 @@ hands its Lease calls to that fake and checks the Lease spans every policy call,
 upstream chart in the tier read the chart's repository live, so one upstream blip failed the whole tier.
 `bash verify/prior-drafts.sh 1028 origin/staging` printed NONE, and the issue had no comments.
 
-**What changed.** `verify/chart_fetch.py` holds `pull(helm, repo, chart, version)`. It returns the untarred chart from
-`verify/.tools/charts/<chart>-<version>-<hash>/<chart>`, gitignored with the pinned tools, and fetches it there with
-`helm pull --untar` only when it is not there yet. A fetch untars into a staging directory beside the cache and is
-renamed into place whole, so the four checks the runner runs side by side never read a half-written chart; when two
-fetch one chart at once, the first rename wins and the other drops its copy. A fetch whose Helm error is a network one
+**What changed.** `verify/chart_fetch.py` holds `pull(helm, repo, chart, version)`. It returns the chart's tarball,
+`verify/.tools/charts/<chart>-<version>-<hash>.tgz`, gitignored with the pinned tools, and fetches it there with
+`helm pull --destination` only when it is not there yet; `helm template` renders a tarball as it renders a directory.
+A fetch writes into a staging directory beside the cache, checks the one tarball Helm left holds `<chart>/Chart.yaml`,
+and renames it into place, so the four checks the runner runs side by side never read a half-written chart; when two
+fetch one chart at once, both hold the same pinned chart and the later rename replaces the earlier.
+
+The cache holds tarballs only, and that was found the hard way. This run's first draft kept the untarred charts there,
+and its first `bash verify/run-e2e-tools.sh` (at `78c4ee2e`) failed the offline suite on `test_mesh_enrollment.py`:
+`only gitops/ai-layer/resources.yaml sets istio.io/dataplane-mode` listed the cached istiod, cni and ztunnel charts'
+templates as well, since that test reads every `.yaml`, `.sh`, `.tpl` and `.tf` under `verify/`. Seven more offline
+tests walk the tree with `rglob` (`test_docs_current.py`, `test_event_tag.py`, `test_image_registry.py`,
+`test_image_version_tags.py`, `test_kube_safety.py`, `test_plan_policy.py`, `test_sizing_measure.py`), and an
+untarred chart's README.md, values.yaml and scripts are what they read. A `.tgz` is none of those, and the issue had
+named the tarballs as the thing to cache. A fetch whose Helm error is a network one
 (an EOF, a reset or refused connection, a timeout, a failed name lookup, a 429 or a 5xx) is tried again after 2, 5 and
 10 seconds, four attempts in all, and each retry prints a `RETRY` line naming the chart and Helm's error. Any other
 error (a chart or version not in the repository, a 404, an auth refusal) fails at once in Helm's words, and so does
@@ -29472,7 +29483,7 @@ read OCI as `oci://` or a `ghcr.io` substring and two as anything not starting `
 it writes, which fails a set number of times with a set error and logs each call, and records the waits without
 sleeping them. It holds: Helm's network errors told from the rest (nine network lines, four that are not, the
 external-secrets EOF of run 17993 among the first); the HTTP and OCI references; one EOF retried after the first wait,
-with the chart in the cache and no staging directory left; a cached chart read again with Helm not called, and another
+with the chart's tarball in the cache and nothing else there, no staging directory and no untarred chart; a cached chart read again with Helm not called, and another
 version fetched on its own; a not-found error failing at once, with one call, no wait and an empty cache; four EOFs
 failing after the fourth with each wait in turn, naming the attempts; the `RETRY` line as a tier log prints it and
 `CHART_CACHE` moving the cache; four fetches of one chart at once all getting the one cached copy; and that the five
@@ -29481,9 +29492,9 @@ callers above use `chart_fetch.pull` and pass neither `--repo` nor `pull` to Hel
 **Live.** No cluster is involved: the change is to how the tier fetches charts. This run touched neither cluster. Run
 by hand with the pinned tools and an empty Helm home before the suites, `test_datadog_log_services_render.py`,
 `test_enforce_floor.py`, `test_image_registry_render.py`, `test_no_docker_hub_render.py`,
-`test_images_lock_render.py` and `test_kubearmor_config_render.py` each exited 0 with no FAIL and no RETRY, the
-Datadog test in 28s against the cache. Its first run, which fetched the charts into the cache, took 48s and failed
-only on `ai-layer.yaml`'s kustomize build, since this worktree's submodules were not checked out until
-`verify/ensure-submodules.sh` ran, as the runner runs it. No dependency was added.
+`test_images_lock_render.py` and `test_kubearmor_config_render.py` each exited 0 with no FAIL and no RETRY, run in
+that order with the cache emptied first, so the Datadog test (50s) fetched the 20 tarballs and the rest read most of
+theirs from the cache. The eight tree-walking tests above then each exited 0 with the cache full. No dependency was
+added.
 
 **Not yet run on a cluster.** Nothing from this issue.
