@@ -33023,3 +33023,8 @@ text the page now quotes. Nothing on either cluster was read or changed.
 **Not yet run on a cluster.** Look at the `/kubecon` page and its prompt sheet (`/kubecon?sheet=1`) as served, once
 hecaton promotes this change and Argo CD syncs `ai-layer`: segment 3's story and the switch beat read as above, and the
 sheet's prompts are the ones it showed before.
+
+**The suites (run 18407, #1096).** `bash verify/run-e2e-tools.sh`, unscoped, with its output in
+`/var/lib/hecaton/runs/18407/e2e-tools.log`, printed `341 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 9m21s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`. No dependency was added.
