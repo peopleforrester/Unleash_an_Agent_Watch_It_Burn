@@ -193,7 +193,11 @@ def run_collector(profile: str, env_map: dict[str, str]) -> tuple[dict[str, dict
                 got, lgot, polls = read_spans(out), read_spans(lout), polls + 1
         finally:
             proc.terminate()
-            proc.wait(timeout=15)
+            try:  # a loaded host held SIGTERM past 15 s (#1011); kill as otelcol_local.stop does
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=15)
             log.close()
         return got, lgot, log_file.read_text()
 

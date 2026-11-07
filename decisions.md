@@ -27716,3 +27716,20 @@ names must equal `KITCHEN_NOTE` and the note the Agent's rule quotes, and that t
 counts. Each literal the test cuts on is checked first, and 26 mutations of the record or of the files it stands on
 (the ModelConfig, the server, the Agent, `test_recipe_persona.py`) are each refused, for the reason the test prints.
 No other file changed and no dependency was added (PyYAML is already the suite's).
+
+**A cleanup that failed on a loaded host, fixed (run 18054).** The first `bash verify/run-e2e-tools.sh` of this run
+printed `313 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `76 checks ran (the offline suite and 75 tier
+tests) in 47m55s` with one failure, `test_trace_shape_e2e.py (exit 1)`, at a load average of 85. Every check that
+test printed had passed; it then sent the local otelcol-contrib SIGTERM and gave it 15 s to exit
+(`proc.wait(timeout=15)`), and the collector took longer, so `subprocess.TimeoutExpired` ended the test. Rerun alone
+at a load of 28 it passed, so the cause is host load and not a check. `verify/otelcol_local.py`'s `stop()` already
+falls back to `kill()` when the wait runs out. `test_trace_shape_e2e.py`, `test_adk_model_content_e2e.py`,
+`test_collector_llmobs_model_e2e.py`, `test_collector_one_root_e2e.py` and `test_collector_pii_scrub_e2e.py` had the
+bare wait, and each now does the same as `stop()`. The spans are read before shutdown in each, so no check changes.
+All five passed when run alone after the edit.
+
+**Live read (run 18054).** The record counts workshop-mcp's tools from git. On both clusters, `kubectl get
+agents.kagent.dev` showed the workshop-agent Agent listing the same 12 workshop-mcp toolNames the test holds git's
+server and Agent to. The live `bedrock-nova` ModelConfig on each cluster names an application inference profile ARN,
+the per-cluster pin, and not git's `us.amazon.nova-pro-v1:0`. The test reads git's id, the one run 17897's record
+names, so the live pin does not bear on it. Nothing on either cluster was changed.

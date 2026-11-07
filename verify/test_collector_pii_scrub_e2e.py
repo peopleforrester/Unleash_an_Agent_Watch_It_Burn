@@ -147,7 +147,11 @@ with tempfile.TemporaryDirectory() as d:
                             got[s["name"]] = s
     finally:
         proc.terminate()
-        proc.wait(timeout=15)
+        try:  # a loaded host held SIGTERM past 15 s (#1011); kill as otelcol_local.stop does
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=15)
         log.close()
     collector_log = (pathlib.Path(d) / "collector.log").read_text()
 
