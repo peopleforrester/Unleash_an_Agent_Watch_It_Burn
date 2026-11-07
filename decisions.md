@@ -29086,3 +29086,46 @@ It needs no cluster.
 `79 checks ran (the offline suite and 78 tier tests) in 9m07s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`, with `test_889_probe_record.py` among the offline tests. The prose gate printed `prose gate: pass`. No
 dependency was added.
+## 2026-11-07 · #1017 · run 18131 · Two tests hold #467's record: decisions.md's run 17944 entry and run 17944's report on the issue
+
+`verify/prior-drafts.sh 1017 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging at `f48a7a88`. Test review run 18030 found that no test checked #467's second criterion, "The result and the
+commands are recorded on this issue and in decisions.md". Run 17944 met it on 2026-11-06 with the
+"## 2026-11-06 · #467 · run 17944" entry and its run report on #467. The live run cannot be repeated from a test; the
+record can be read, so the tests read the record. The acceptance criteria were added to #1017's body first.
+
+**The verdicts, `verify/record_467.py`.** `entry_verdict(decisions)` reads the run 17944 entry. Its paragraph
+labelled "**Both clusters, the commands and what they printed (2026-11-06, 16:19 to 17:35 UTC).**" must carry the
+date and times, and be followed by an indented block of `kubectl` commands with what each printed indented under
+it. For each of watch-it-burn-private and watch-it-burn-community the block must hold
+`kubectl --context <cluster> get clusterpolicy` printing `No resources found`, and
+`kubectl --context <cluster> get validatingpolicy,imagevalidatingpolicy` naming the policies it listed with READY
+true and no READY false. The prose after it must give each cluster's profile (kubecon-private, kubecon-community) and
+a count of policies ("twelve on kubecon-private", "Two on kubecon-community") equal to the names the block lists, and
+record `CONTEXT=<context> python3 -u verify/test_kyverno_cel_live.py` passing its prerequisites and steps 1 to 3 on
+both. `comment_verdict(body, entry)` reads one comment: it must name both clusters, record
+`kubectl --context watch-it-burn-private get clusterpolicy` and `get clusterpolicy` printing 'No resources found' on
+each, `get validatingpolicy,imagevalidatingpolicy`, the entry's two counts each with READY, the live check passing
+its prerequisites, branch `agent/467-17944`, and the record criterion's table row marked yes naming the entry.
+
+**The tests.** `verify/test_467_live_record.py` is offline, so both suites run it. It runs `entry_verdict` on the
+tree, and checks that `verify/test_kyverno_cel_live.py` still prints its prerequisites and steps 1 to 3 under the
+headings the record's "steps 1 to 3" stand for, with step 2 compared against `bootstrap_chart.kyverno_policies`.
+It then runs the verdict on 19 cut copies of the real entry, and each is refused, each for its own reason (read off
+a debug copy that printed every refusal): the heading, the label, the label's date and times, the block's indent,
+each cluster's `get clusterpolicy`, community's answer turned into a resource-type error, private's answer turned
+into a policy, each cluster's `get validatingpolicy`, READY false, not READY, private's list emptied, one name
+dropped from it, private's count changed, community's count struck, private's profile struck, the live check
+recorded failing, and the live check recorded through step 2 only. `verify/test_467_live_record_comment_e2e.py` is
+`# SUITE: e2e` and `# E2E TIER: tools`, since it reads #467's comments through `verify/gh_comments.py` with gh's
+token (#863). It passes on run 17944's report (issuecomment-6693500676), and the verdict refuses 12 cut copies of
+that comment: no entry to hold it against, community unnamed, private's `get clusterpolicy` struck, community's
+answer not 'No resources found', `get validatingpolicy` struck, private's count not the entry's, community not READY,
+the live check failing, another run's branch, the criterion's row struck, marked no, or not naming the entry. Neither
+test cross-checks the recorded names against the profile's current set in the tree: the record is of 2026-11-06,
+and a policy added later would not make it false.
+
+**Live.** No cluster is involved: the offline test reads two repo files, and the tools-tier test reads GitHub. This
+run touched neither cluster. No dependency was added.
+
+**Not yet run on a cluster.** Nothing from this issue.
