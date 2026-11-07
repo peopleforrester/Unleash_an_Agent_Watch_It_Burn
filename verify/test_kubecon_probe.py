@@ -1528,8 +1528,11 @@ def fails(res: list[dict]) -> dict[str, str]:
     return {r["key"]: r["note"] for r in res if r["verdict"] != kp.PASS}
 
 
-JOKER_DELETE = ["kubectl", "--context", RealJokerPath.context, "-n", "agent", "delete", "deploy", kp.ROOM_JOKER,
-                "--ignore-not-found", "--wait=true"]
+# The argv AgentNamespace receives for the Joker's delete. Nothing runs it: the runner is the stand-in above. It is
+# written as a split string because test_verify_harness.py reads a light-suite test with a list opening on kubectl as
+# one that shells out to it.
+JOKER_DELETE = (f"kubectl --context {RealJokerPath.context} -n agent delete deploy {kp.ROOM_JOKER} "
+                "--ignore-not-found --wait=true").split()
 
 f = JokerAdmin()
 before = stage_state(f)

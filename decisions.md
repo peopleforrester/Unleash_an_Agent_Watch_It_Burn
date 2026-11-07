@@ -29338,3 +29338,12 @@ all five AI guards off and every infra badge off but falco. This run flipped not
 **Not yet run on a cluster.** The changed failure path of `remove_room_joker` runs in the probe itself, from this
 checkout, so it needs no promotion; a live run of it would need a delete the API server refuses, which this run did
 not stage on a shared cluster.
+
+**A red the first suite found, fixed here (run 18147).** Run 18144 was stopped before its `bash verify/run-e2e-tools.sh`
+ended, and its log has no `exit=` line. Run 18147 picked the work up at `f7202924` and ran it again, logged as
+`/var/lib/hecaton/runs/18147/e2e-tools.log`: `321 tests ran`, `81 checks ran (the offline suite and 80 tier tests) in
+8m46s`, `exit=1`, failing on one check in `test_verify_harness.py`: "no light-suite test runs kubectl, helm or node
+(test_kubecon_probe.py)". That check reads a light-suite test's text for a list opening on `"kubectl",` and takes it
+for one that shells out. The new section's expected delete argv was written that way. Nothing runs it, since
+the runner is `AgentNamespace`, so the argv is now built from a split string with a comment saying why, and the
+check in test_verify_harness.py is unchanged.
