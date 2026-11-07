@@ -30805,3 +30805,10 @@ its new and old value, the peer and the X-WIB-Caller header.
 
 The replay script and its JSONL (`live/replay.py`, `live/whitney.jsonl`, `live/attack.jsonl`, `live/c3-private.jsonl`)
 are in the run's directory, not the repo. No dependency was added.
+
+**The suites (run 18215, at `643e9c05`, pin dc78f1c; this paragraph only adds to the entry).** `bash
+verify/run-e2e-tools.sh` printed `331 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the
+offline suite and 81 tier tests) in 9m48s, 4 at a time`, `SOME E2E TOOLS TIER CHECKS FAILED: test_promo_villains_public.py
+(exit 1)` and `exit=1` (`/var/lib/hecaton/runs/18215/e2e-tools.log`). Its nine FAIL lines are each a lab-platform
+promo `:v1` tag on ghcr.io serving a digest other than the one pinned, the move #1070 (open) records and run 18206 saw;
+this run changes only this file. The prose gate printed `prose gate: pass`.
