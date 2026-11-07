@@ -29891,3 +29891,38 @@ where its entries name them.
 `82 checks ran (the offline suite and 81 tier tests) in 9m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`, with `test_kitchen_note_followup.py` and `test_gh_comments.py` green among them. The prose gate printed
 `prose gate: pass`. No dependency was added.
+## 2026-11-07 · #945 · run 18174 · The router serves the table without registry-attackme; router-check and the curls read after the reload
+
+**Where the issue stood.** `verify/prior-drafts.sh 945 origin/staging` printed NONE: every earlier #945 draft is on
+staging. Michael's comment on the issue says the hecaton coordinator reloaded the router from netcup at 12:19Z on
+2026-11-07, where Railway is signed in as Michael, with the pinned act from run 18021's entry above, unchanged. Apex
+main was still `a93679a5ba49accb702feb87e6fcaa65c13480d9`, `routes.map` and `scripts/reload-routes.sh` matched their
+pinned sha256, `reload-routes.sh` staged the 31-route table on the watch-it-burn-apex `/config` volume, Caddy printed
+"Valid configuration", and the table was moved into place and reloaded at 12:19:17Z with no redeploy. Escalation 875,
+the `railway login` on tanjiro-wsl2, was dropped as no longer needed.
+
+**The publish, as `./fleet.sh routes roster` does it.** It has two halves. The push half is `a93679a`, "routes:
+regenerate agenticburn.com router map from live fleet (31 hosts)", on apex main since 2026-11-06T03:47:37Z, with no
+`registry-attackme` row, so the shrink guard had nothing to refuse. The reload half is `reload-routes.sh` on that
+table, which ran at 12:19Z. Neither half refused.
+
+**Read live after the reload, read only (12:23:51Z), from `infra/terraform/fleet/`.**
+
+```
+https://registry-attackme.burritobot.co/v2/ 404
+https://registry-attackme.agenticburn.com/v2/ 404
+https://no-such-host-945.burritobot.co/v2/ 404
+https://registry.burritobot.co/v2/ 200
+{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}
+  PASS  the router serves attackme.burritobot.co
+  PASS  the router serves burritobot-private.burritobot.co
+router-check: the router serves exactly the roster
+router-check exit=0
+```
+
+`gh api repos/peopleforrester/apex-agenticburn/commits/main` still reads `a93679a5`. Both registry-attackme URLs now
+give the router's 404 for a host it does not carry, the same answer as `no-such-host-945`, where every run before
+this one read 502. The internal registry still lists `busybox-1.38.0`. Neither cluster and nothing on the router was
+changed by this run.
+
+**Not yet run on a cluster.** Nothing is owed: the change is records only. No dependency was added.

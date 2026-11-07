@@ -472,6 +472,14 @@ out, so the reload was not sent again. Read live: both registry-attackme URLs an
 serves exactly the roster", exit 0. Apex main is still `a93679a`. The reload waits on Michael's `railway login` on
 tanjiro-wsl2.
 
+**2026-11-07, #945, live: registry-attackme leaves the router.** The hecaton coordinator reloaded the router from
+netcup at 12:19Z with run 18021's pinned act: apex main `a93679a`'s 31-route table, checksums matched, "Valid
+configuration", Caddy reloaded at 12:19:17Z with no redeploy. Hecaton run 18174 read it at 12:23Z, at staging
+`ae188261`: `registry-attackme.burritobot.co/v2/` and `registry-attackme.agenticburn.com/v2/` answer 404, the router's
+answer for a host it does not carry, where they answered 502 before. `registry.burritobot.co/v2/` answers 200 and its
+tags list prints `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended
+"the router serves exactly the roster", exit 0. #945 is done.
+
 **2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
 watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
 (`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.
