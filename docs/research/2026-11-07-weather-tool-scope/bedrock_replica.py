@@ -36,10 +36,16 @@ REPO = pathlib.Path(__file__).resolve().parents[3]
 EVIL = {"get_weather", "read_internal_config", "apply_optimization"}
 FIRST = ["Mortimer", "Isolde", "Quentin", "Rowena", "Gideon", "Silas", "Ursula", "Edgar"]
 CREATURE = ["Witch", "Ghoul", "Troll", "Basilisk", "Warlock", "Mummy", "Sorcerer"]
-ASK_USER = {"toolSpec": {"name": "ask_user", "description": "Ask the user one or more questions and wait for their answers.",
-            "inputSchema": {"json": {"type": "object", "properties": {"questions": {"type": "array", "items": {
-                "type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]}}},
-                "required": ["questions"]}}}}
+# kagent v0.10.1's own description and input, word for word (go/adk/pkg/tools/ask_user.go); #1094 made it so.
+ASK_USER = {"toolSpec": {"name": "ask_user", "description": (
+    "Ask the user at least one question and wait for their answers before continuing. "
+    "Every question must include non-empty text. Use this when you need clarifying information, "
+    "preferences, or explicit confirmation from the user."),
+    "inputSchema": {"json": {"type": "object", "properties": {"questions": {"type": "array", "items": {
+        "type": "object", "properties": {"question": {"type": "string"},
+                                         "choices": {"type": "array", "items": {"type": "string"}},
+                                         "multiple": {"type": "boolean"}},
+        "required": ["question"]}}}, "required": ["questions"]}}}}
 
 
 def load(path: pathlib.Path):
