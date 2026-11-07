@@ -30640,3 +30640,69 @@ moved between the two reads (`dba85843...`, then `df82eb53...`). A lab-platform 
 ended at 15:19Z. Run 18191's tier on this run's base was green on the same check, and this run changes no image pin,
 so the move is lab-platform's, filed as a follow-up. The pins are left as they are, because the test reads a moved tag as
 a new hand-over, not a value to sync. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1018 · run 18091 · Both runners run only the tests a change touches when HECATON_BASE_SHA is set
+
+**What changed.** With `HECATON_BASE_SHA` set, `verify/run-tests.sh` and `verify/run-e2e-tools.sh` ask
+`verify/scope_tests.py select offline|tools` which of their tests the change can affect. It reads
+`git diff --name-only --no-renames $HECATON_BASE_SHA` (the working tree against the base, so both sides of a rename)
+and the untracked files, against `verify/scope-map.yaml`, and prints to the log, under `scope:`, each test it runs
+with why (`test_stream.py: reads gitops/ai-layer/web/display.js`), or why it runs everything. Each runner's summary
+then says how many of its tests ran and how many it left because they read nothing the change touched. Without the
+variable both runners run everything, as before. The tests themselves run with the variable unset, so a test that
+drives a runner in a fixture still gets the whole runner. When no tier test is selected, run-e2e-tools.sh neither
+checks for nor fetches the pinned tools. A base git does not have exits 1 with `SCOPE FAILED`; it does not fall back.
+
+**The map.** `verify/scope-map.yaml` has five parts. `reads` lists, for each of the 326 tests that read a bounded set
+of paths, every repo path it reads; a path covers itself and everything under it. `always` names the 65 tests (57
+offline, 8 tier) that read the whole tree, run git on its history, or build a path from a value found at run time,
+each with that reason; every scoped run runs them. `full` lists what runs everything: the two runners,
+`scope_tests.py`, `no-cloud.sh`, `no_cloud.py`, `ensure-submodules.sh`, `fetch-e2e-tools.sh`, `e2e-tools.lock`,
+`playwright_browsers.py`, `.gitmodules` and `bootstrap_chart.py`. `unread` lists the paths no test reads beyond the
+always tests (`docs`, `facilitation`, `prds`, `mockups`, `specs`, `access`, `assets`, `LICENSE`, `ATTRIBUTION.md`,
+`.railwayignore`); a test that does read one of their files has it in its own entry and still runs. `bounds` names
+the two helpers that build paths from repo data, with the paths that bound them: `bootstrap_chart.py` reads each
+Application source's `path` (inside `gitops`, `policies`, `backstage`, `observability-idp`, `security`) and
+`collector_render.py` reads the collector Applications' `$values/` files (inside `gitops/otel-collector`).
+
+**How the map is made and held.** `python3 verify/scope_tests.py write` fills `reads` from what its extractor finds in
+each test's source, and keeps whatever is there already. In Python it folds path expressions built from literals
+(`REPO / "a" / "b"`, f-strings, `os.path.join`, `.parent`), with loop variables over literal lists, a function's
+parameters from its call sites in the file, names imported from a helper, and modules on a `sys.path` directory the
+test adds. A glob or a directory walk is an entry of its own. In shell and JavaScript it takes every path-shaped word,
+with a variable inside a word read as a wildcard (`values-${p}.yaml`), and the files a script sources. It follows
+each verify/ helper and each repo script a test names (fleet.sh, and the event.sh and providers it sources), the files
+an HTML page a test renders links, and what a kustomization names outside its directory. `verify/test_scope_tests.py`
+is in always, so every change runs it. It fails when a test has no entry, when an entry misses a path the extractor
+finds, when a verify/ helper that more than 30 tests import or name is not in full, and when a bound stops holding: all
+28 Application sources of this repo and all three collector values files are checked against theirs. It also drives
+both runners in a fixture repo of two areas and four tests (the fifth criterion).
+
+**Checked against what the tests open.** `verify/scope_audit.py offline|tools` runs each mapped test as its runner
+does while inotify reports every file opened under the checkout, by the test and every process it starts, and names
+each tracked file its entry misses. The first offline run found 63 of 267 tests missing something: scripts fleet.sh
+sources, modules imported from `infra/datadog-fleet` and `infra/datadog-room`, `REPO` imported from a helper, and a
+leading dot stripped off `.github` and `../infra`. The extractor now sees all of those. The last runs: offline, 258
+tests audited and one miss, which the kustomize and `${HERE}` rules then fixed, so 0 on its rerun; tier, 68 tests
+audited (the pinned tools fetched, the tier's own environment) and two real misses, a `cwd=` directory and a page's
+`<script src="event.js">`, both fixed and 0 on the rerun. The other flags in that tier run were opens from my own
+commands in the same checkout while it ran, and the six flagged tests audited alone afterwards read 0 misses.
+
+**One departure from the criteria's wording.** A change to the map runs everything when it edits `full`, `unread` or
+`bounds`, or when the base has no map. A change to a test's own entry in `reads` or `always` runs that test, not
+everything. 202 test files were added on staging from 2026-10-30 to 2026-11-07, each needing an entry, so running
+everything on any edit to the map would send most runs whole. It skips nothing: a test whose entry is edited runs, so
+an entry cannot drop a path in the same change that edits the path and leave its test out. A change with no diff at
+all runs everything, as ci-base-sha.sh reads it (#1020).
+
+**What it saves, on staging's last 80 commits, each against its parent.** A decisions.md-only commit runs 75 of the 314
+offline tests and 11 of the 76 tier tests. Across the 80, the median is 75 offline and 11 tier, the most 229 and 33,
+and two run everything (one edited `e2e-tools.lock`, one `bootstrap_chart.py`). Hecaton validates a run's whole
+change, the union of its commits, so a run's numbers are higher than one commit's.
+
+**For the next run.** A new test needs its entry: run `python3 verify/scope_tests.py write`, read what it added, and
+commit it with the test. A test that reads a path its source cannot show (a path read from data) belongs in always,
+with why, or in bounds through the helper that builds it. AGENTS.md says the same next to the Test and E2E commands.
+
+**Not yet run on a cluster.** Nothing here touches a cluster. Hecaton's gate scopes its validations once it passes
+`HECATON_BASE_SHA`; CI's ci-base-sha.sh already does (#1020).

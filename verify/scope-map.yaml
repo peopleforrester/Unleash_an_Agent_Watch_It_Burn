@@ -208,7 +208,11 @@ reads:
     - gitops/ai-layer/*.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/apps/cluster-network-policies.yaml
@@ -240,6 +244,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -295,6 +300,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/bootstrap/apps/workshop-agent.yaml
     - gitops/workshop-agent
@@ -432,6 +438,7 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - verify/ensure-submodules.sh
   test_audit_import_state.py:
     - docs/floor.md
@@ -597,6 +604,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -615,6 +623,7 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -653,11 +662,19 @@ reads:
     - challenges/LAB-TEXT.md
     - challenges/PROMPT-CATALOG.md
     - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_c3_talon_claim.py:
     - challenges/c3-secret-grep/README.md
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_c5_secret.py:
     - agent
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
@@ -666,7 +683,11 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -674,6 +695,7 @@ reads:
   test_c6_joker_public.py:
     - gitops/ai-layer/ticket_site.py
     - images.lock
+    - images/villains
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/joker-web-internal/www/index.html
@@ -722,10 +744,15 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/apps/kubearmor.yaml
@@ -847,8 +874,12 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
     - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - verify/agent_probe.py
   test_c8_pod_secret_mount.py:
     - gitops/ai-layer/resources.yaml
@@ -858,7 +889,11 @@ reads:
     - policies/kyverno/restrict-agent-spawned-workloads.yaml
   test_c8_teaching.py:
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_ceo_persona.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
@@ -868,6 +903,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -878,12 +914,20 @@ reads:
     - docs/CHALLENGE-ASSETS.md
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - policies/kubearmor/block-recipe-snoop.yaml
   test_challenge_colours.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_challenge_controls_unarmed.sh:
     - CLAUDE.md
     - agent
@@ -935,14 +979,17 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - verify/ensure-submodules.sh
   test_chat_coc_e2e.py:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - verify/ensure-submodules.sh
     - verify/run-e2e-tools.sh
   test_chat_no_desk_link.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_chat_path_ingress.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -982,16 +1029,22 @@ reads:
     - scripts/reload-routes.sh
   test_chat_saved_coc_e2e.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - verify/chat-saved-harness.js
     - verify/run-e2e-tools.sh
   test_chat_ui.py:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/app.js
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/console.html
+    - gitops/ai-layer/web/console.js
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/index.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_check_inventory_ingredient.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
@@ -1087,7 +1140,11 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
   test_collector_config.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap/apps/kyverno.yaml
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
@@ -1212,8 +1269,13 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_concept_before_tool.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_console_no_toggle.py:
     - CLAUDE.md
     - agent
@@ -1233,7 +1295,11 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -1361,7 +1427,11 @@ reads:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/workshop-agent/agent.yaml
     - infra/datadog-fleet
     - infra/org/boundary
@@ -1492,6 +1562,7 @@ reads:
     - verify/datadog-secret-fields.sh
     - verify/run-e2e-tools.sh
   test_datadog_secret_manifests_render.py:
+    - infra/terraform/fleet
     - verify/run-e2e-tools.sh
   test_datadog_secrets_off_argv.py:
     - CLAUDE.md
@@ -1594,6 +1665,7 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -1684,7 +1756,11 @@ reads:
     - infra/dns/README.md
     - infra/dns/set-demo-dns.py
   test_doc_links.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_docs_current.py:
     - '**.md'
     - ACTION_ITEMS.md
@@ -1834,7 +1910,11 @@ reads:
     - scripts/reload-routes.sh
   test_enforcement_points.py:
     - docs/CHALLENGE-ASSETS.md
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_ensure_submodules.sh:
     - verify/ensure-submodules.sh
   test_every_prompt_view.py:
@@ -1865,6 +1945,7 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/workshop-agent/agent.yaml
     - infra/datadog-fleet
     - infra/org/boundary
@@ -1936,6 +2017,7 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/falco.yaml
     - infra
     - security
@@ -1947,9 +2029,14 @@ reads:
     - scripts/check-fallback-assets.py
     - verify/playwright_browsers.py
   test_feedback_links.py:
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/platform.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_finale_cap.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -2076,8 +2163,12 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/platform.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -2215,6 +2306,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
@@ -2577,8 +2669,13 @@ reads:
     - infra/terraform/aws/cluster/main.tf
   test_fresh_context.py:
     - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_friendly_hostnames.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -2726,6 +2823,7 @@ reads:
     - backstage/k8s/templated-test-svc.yaml
     - gitops/ai-layer/resources.yaml
     - images.lock
+    - images/villains
     - images/villains/**
     - images/villains/build-loopback.sh
     - images/villains/build.sh
@@ -2863,8 +2961,10 @@ reads:
     - verify/bootstrap_chart.py
   test_guardrails_heading.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_guardrails_heading_e2e.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - infra
     - verify/playwright_browsers.py
   test_guardrails_switch.py:
@@ -3100,6 +3200,7 @@ reads:
     - images/sample-app/Dockerfile
     - images/tool-pin
     - images/tool-pin/Dockerfile
+    - images/villains
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/villain-banner.sh
@@ -3144,6 +3245,7 @@ reads:
     - gitops/ai-layer/web/*.html
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
@@ -3168,6 +3270,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -3200,10 +3303,15 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/otel-collector/values-burn.yaml
     - gitops/workshop-agent/agent.yaml
@@ -3258,6 +3366,7 @@ reads:
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
   test_joker_web_busybox.py:
+    - images/villains
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/joker-web/www/index.html
@@ -3300,6 +3409,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -3454,10 +3564,15 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -3510,6 +3625,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -3572,6 +3688,7 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -3643,6 +3760,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -3690,8 +3808,13 @@ reads:
     - CLAUDE.md
     - backstage
     - gitops
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -3713,9 +3836,13 @@ reads:
   test_lab_events.py:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
     - gitops/bootstrap/apps/otel-collector.yaml
@@ -3753,7 +3880,11 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/falco.yaml
     - images/villains/README.md
@@ -3812,6 +3943,7 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
@@ -3940,7 +4072,11 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap
     - gitops/bootstrap/*
     - gitops/bootstrap/apps
@@ -4056,10 +4192,13 @@ reads:
     - verify/mirror_copies.py
   test_mobile_layout.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_mobile_titles.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_mobile_titles_e2e.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - verify/playwright_browsers.py
   test_model_pin_check.py:
     - gitops/ai-layer/guard-proxy
@@ -4105,8 +4244,13 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
   test_no_internal_abstractions.py:
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_no_permanent_drift.py:
     - CLAUDE.md
     - backstage
@@ -4255,9 +4399,13 @@ reads:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/links.html
     - gitops/ai-layer/web/platform.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/argocd/values.yaml
     - gitops/bootstrap
     - gitops/bootstrap/*
@@ -4428,6 +4576,7 @@ reads:
     - verify/no-cloud.sh
   test_playwright_browsers.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - verify
     - verify/playwright_browsers.py
     - verify/test_*.py
@@ -4525,6 +4674,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -4573,9 +4723,14 @@ reads:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/villains/README.md
@@ -4621,6 +4776,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/workshop-agent/agent.yaml
@@ -4712,6 +4868,7 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -4816,6 +4973,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -4852,6 +5010,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+    - images/villains
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/villain-banner.sh
@@ -4881,9 +5040,14 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap
     - gitops/bootstrap/*
@@ -4983,7 +5147,11 @@ reads:
     - scripts/reload-routes.sh
   test_section0_wording.py:
     - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
   test_service_links.py:
     - CLAUDE.md
@@ -5140,10 +5308,15 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -5189,9 +5362,11 @@ reads:
     - verify/topic_cases.py
   test_storefront_backend_check_order_e2e.py:
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_storefront_counters_e2e.py:
     - cost
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_storefront_thinking_e2e.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
@@ -5201,6 +5376,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -5211,6 +5387,7 @@ reads:
   test_storefront_witch_name_e2e.py:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_stream.py:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/web/display.html
@@ -5233,7 +5410,11 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/namespaces
     - gitops/namespaces/namespaces.yaml
     - gitops/workshop-agent/agent.yaml
@@ -5490,6 +5671,7 @@ reads:
     - verify/fetch-e2e-tools.sh
   test_tool_pin.py:
     - CLAUDE.md
+    - docs/research/2026-10-24-tool-pin-spike
     - docs/research/2026-10-24-tool-pin-spike/README.md
     - docs/research/2026-10-24-tool-pin-spike/baseline.json
     - docs/research/2026-10-24-tool-pin-spike/gateway_bind.py
@@ -5585,6 +5767,7 @@ reads:
     - agent/Service/evil-mcp-src
     - agent/Service/lab-bootstrap
     - agent/Service/workshop-agent
+    - docs/research/2026-10-24-tool-pin-spike
     - docs/research/2026-10-24-tool-pin-spike/gateway_bind.py
     - docs/research/2026-10-24-tool-pin-spike/live-check.sh
     - docs/research/2026-10-24-tool-pin-spike/probe.py
@@ -5620,6 +5803,7 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
@@ -5732,9 +5916,14 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap
     - gitops/bootstrap/*
@@ -5844,12 +6033,17 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/links.html
     - gitops/ai-layer/web/platform.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
     - infra/datadog-fleet
@@ -5884,9 +6078,14 @@ reads:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -5908,6 +6107,7 @@ reads:
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - games/villain-apps/deploy-villain.yaml
     - gitops/ai-layer/ticket_site.py
+    - images/villains
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/villain-banner.sh
@@ -6040,6 +6240,7 @@ reads:
   test_witch_name_vocab.py:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_workflow_registry_writes.py:
     - .github/workflows
     - .github/workflows/*.yaml

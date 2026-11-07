@@ -115,6 +115,9 @@ for part, edit in (("full", lambda d: d["full"].append("README.md")), ("unread",
     mode, why = st.select(doc, "offline", ["decisions.md", st.MAP_REL], tests, before)
     check(f"a change to the map's {part} section runs everything",
           mode == "full" and why.get(st.MAP_REL) == [f"its {part} section changed"], str(why))
+mode, why = st.select(doc, "offline", [], tests)
+check("a change that touches no path runs everything, as there is nothing to scope it by",
+      mode == "full" and "HECATON_BASE_SHA" in why, str(why))
 mode, why = st.select(doc, "offline", [st.MAP_REL], tests, None)
 check("a map the base did not have runs everything", mode == "full" and st.MAP_REL in why, str(why))
 before = copy.deepcopy(doc)

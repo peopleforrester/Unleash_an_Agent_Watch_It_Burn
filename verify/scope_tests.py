@@ -622,7 +622,9 @@ def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str
         """The node is a part of a larger path expression, which is read in its place: REPO in REPO / "a"."""
         up = parent.get(id(node))
         if isinstance(up, ast.keyword):
-            return up.arg in ("cwd", "dir")  # where a command runs, or a temp dir is made, is not a file it reads
+            # A temp dir made inside a directory reads nothing of it. A command run in a directory may read any file
+            # there by a relative name, so cwd counts, the repo root aside (an entry of the root would be everything).
+            return up.arg == "dir"
         if isinstance(up, ast.Call) and isinstance(up.func, ast.Attribute) and up.func.attr in ("insert", "append") \
                 and isinstance(up.func.value, ast.Attribute) and up.func.value.attr == "path":
             return True  # sys.path: what it imports from there is followed as an import
@@ -777,6 +779,42 @@ SOURCE_LINE = re.compile(r"^\s*(?:source|\.)\s+(.+?)\s*(?:[;&|>]|\s2>|$)", re.M)
 SCRIPT_DIR_FORMS = re.compile(r'"?\$\(\s*dirname\s+"?\$\{?BASH_SOURCE(?:\[0\])?\}?"?\s*\)"?|\$\{?(?:SCRIPT_DIR|HERE|DIR|_HERE\w*)\}?')
 
 
+# $HERE or ${SCRIPT_DIR} as a whole word, not the start of a path under it.
+STANDALONE_DIR = re.compile(r'"?\$\{?(?:SCRIPT_DIR|HERE|DIR)\}?"?(?=[\s;|&)]|$)', re.M)
+KUSTOMIZE_LISTS = ("resources", "bases", "components", "patchesStrategicMerge", "crds")
+
+
+def _kustomized(paths: set[str], tree: Tree) -> set[str]:
+    """What a kustomization in a directory the file reads names outside that directory: kustomize reads it too."""
+    found: set[str] = set()
+    queue = [p for p in paths if p in tree.dirs]
+    seen: set[str] = set()
+    while queue:
+        d = queue.pop()
+        if d in seen:
+            continue
+        seen.add(d)
+        for name in ("kustomization.yaml", "kustomization.yml", "Kustomization"):
+            if f"{d}/{name}" not in tree.files:
+                continue
+            try:
+                k = yaml.safe_load((tree.root / d / name).read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError:
+                continue
+            refs = [r for key in KUSTOMIZE_LISTS for r in (k.get(key) or []) if isinstance(r, str)]
+            refs += [x["path"] for x in (k.get("patches") or []) if isinstance(x, dict) and "path" in x]
+            for gen in (k.get("configMapGenerator") or []) + (k.get("secretGenerator") or []):
+                refs += [f.split("=", 1)[-1] for f in (gen.get("files") or []) if isinstance(f, str)]
+            for r in refs:
+                if "://" in r:
+                    continue
+                q = _norm(os.path.join(d, r))
+                if q and not covers(d, q) and tree.known(q):
+                    found.add(tree.known(q))
+                    queue.append(tree.known(q))
+    return found
+
+
 def _sourced(script: str, tree: Tree) -> set[str]:
     """The repo files a shell script sources, its own directory standing for $SCRIPT_DIR and the like, and any other
     variable for a wildcard: `. "${SCRIPT_DIR}/providers/${PROVIDER}.sh"` reads providers/*.sh."""
@@ -813,6 +851,17 @@ def _own(rel: str, tree: Tree, bounds: dict) -> tuple[Extraction, list[str]]:
     out = Extraction()
     src = (tree.root / rel).read_text(encoding="utf-8", errors="replace")
     follow: list[str] = []
+    if rel.endswith((".html", ".htm")):
+        # A page a test renders loads what it links: <script src="event.js">.
+        here = os.path.dirname(rel)
+        for ref in re.findall(r'(?:src|href)\s*=\s*["\']([^"\'#?]+)', src):
+            if "://" not in ref and not ref.startswith(("/", "data:", "mailto:")):
+                q = _norm(os.path.join(here, ref))
+                if q and tree.known(q):
+                    out.paths.add(tree.known(q))
+        out.paths.discard(rel)
+        _OWN[key] = (out, [])
+        return _OWN[key]
     if rel.endswith(".py"):
         follow = _extract_python(src, rel, tree, out)
     elif rel.endswith(".js") or rel.endswith(".mjs"):
@@ -824,11 +873,14 @@ def _own(rel: str, tree: Tree, bounds: dict) -> tuple[Extraction, list[str]]:
         out.paths |= set(bounds[rel]["paths"])
     if rel.endswith(".sh"):
         out.paths |= _sourced(rel, tree)
+        if not rel.startswith("verify/") and STANDALONE_DIR.search(src):
+            out.paths.add(os.path.dirname(rel))  # a repo script that hands its own directory on, to kustomize say
+    out.paths |= _kustomized(out.paths, tree)
     out.paths.discard(rel)
     out.paths.discard("")
     # A verify/ helper it names, and a repo script it names, which it may run (fleet.sh reads roster.tsv).
     follow += [p for p in out.paths if p in tree.files and (
-        p.endswith((".sh", ".py")) or (p.startswith("verify/") and p.endswith((".js", ".mjs"))))]
+        p.endswith((".sh", ".py", ".html", ".htm")) or (p.startswith("verify/") and p.endswith((".js", ".mjs"))))]
     follow = sorted({f for f in follow if f != rel and f in tree.files})
     out.paths |= set(follow)
     _OWN[key] = (out, follow)
@@ -1032,6 +1084,9 @@ def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str], bef
     A changed submodule (its pin moved) counts as read by every glob over the whole tree, which reads its files too."""
     full_why: dict[str, list[str]] = {}
     entry_changed: set[str] = set()
+    if not changed:
+        # No diff is no change to scope by, not a change that touches nothing (ci-base-sha.sh's reading, #1020).
+        return "full", {"HECATON_BASE_SHA": ["the change touches no path, so there is nothing to scope it by"]}
     if MAP_REL in changed:
         if before is None:
             full_why[MAP_REL] = ["the base has no map to compare it with"]
