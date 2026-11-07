@@ -28799,3 +28799,12 @@ naming the holder, and the probes holding it around their beats. `verify/test_in
 calls to the same fake, and its check that the guard is restored off now reads the last toggle rather than the last
 kubectl call, which is now the release. `verify/test_stage_traces.py` gives the seed a stand-in lock. No dependency
 was added.
+
+**The suites (run 18104, at `f82c7b07` on staging `70531d81`).** The first `bash verify/run-e2e-tools.sh`, at
+`473c03a7`, failed offline on `test_verify_harness.py`: `no light-suite test runs kubectl, helm or node
+(test_guard_lease.py)`. That check scans a test's text for the literal `["kubectl",`, and `test_guard_lease.py` used
+it to compare the fake API's recorded argv. It ran no kubectl, but the literal is gone (`f82c7b07`), and the check
+passes. That run was stopped and its log kept as `e2e-tools.first.log`. The second printed `316 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 52m27s`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`; its log is `/var/lib/hecaton/runs/18104/e2e-tools.log`. The prose gate printed
+`prose gate: pass`.
