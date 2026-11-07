@@ -52,7 +52,7 @@ def stub_gh(bindir: pathlib.Path, exit_code: int, stdout: str = "", stderr: str 
 
 def run_case(exit_code: int, stdout: str = "", stderr: str = "", with_gh: bool = True, what: str = "comments"):
     """The helper's Read and the checks check_read printed, with only the stub's directory on PATH. what="body"
-    reads with read_body instead of read."""
+    reads with read_body instead of read, and what="title" with read_body(with_title=True)."""
     with tempfile.TemporaryDirectory() as td:
         bindir = pathlib.Path(td)
         if with_gh:
@@ -60,12 +60,16 @@ def run_case(exit_code: int, stdout: str = "", stderr: str = "", with_gh: bool =
         old = os.environ.get("PATH", "")
         os.environ["PATH"] = str(bindir)
         try:
-            got = (gh_comments.read_body if what == "body" else gh_comments.read)("owner/repo", 7)
+            if what == "title":
+                got = gh_comments.read_body("owner/repo", 7, with_title=True)
+            else:
+                got = (gh_comments.read_body if what == "body" else gh_comments.read)("owner/repo", 7)
         finally:
             os.environ["PATH"] = old
         args = (bindir / "args").read_text().split("\n") if (bindir / "args").exists() else []
     seen: list[tuple[str, bool, str]] = []
-    gh_comments.check_read(got, "owner/repo#7", lambda n, ok, d="": seen.append((n, ok, d)), what)
+    gh_comments.check_read(got, "owner/repo#7", lambda n, ok, d="": seen.append((n, ok, d)),
+                           "body" if what == "title" else what)
     return got, seen, args
 
 
@@ -155,6 +159,20 @@ for label, out in [("a list", "[]"), ("no body field", '{"title": "x"}'), ("a nu
     got, seen, _ = run_case(0, out, what="body")
     check(f"output with {label} is an error naming the missing body",
           "no body" in got.error and only_failure(seen) == "gh answers the read of owner/repo#7's body", str(got))
+
+print("== read_body(with_title=True) reads the title in the same read (#1012) ==")
+got, seen, args = run_case(0, json.dumps({"title": "Add the note", "body": "The note."}), what="title")
+check("it holds the title and the body gh answers", got.ok and got.title == "Add the note" and got.body == "The note.",
+      str(got))
+check("gh is asked with `issue view 7 -R owner/repo --json title,body`",
+      args[:7] == ["issue", "view", "7", "-R", "owner/repo", "--json", "title,body"], str(args))
+check("check_read(what='body') passes all four checks on it", [ok for _, ok, _ in seen] == [True] * 4, str(seen))
+got, seen, _ = run_case(0, '{"body": "The note."}', what="title")
+check("output with no title field is an error naming the missing title",
+      "no title" in got.error and only_failure(seen) == "gh answers the read of owner/repo#7's body", str(got))
+got, _, _ = run_case(0, json.dumps({"body": "x"}), what="body")
+check("read_body without with_title leaves the title empty and asks for the body alone", got.ok and got.title == "",
+      str(got))
 
 print("== the three cause-comment tests read through the helper, and nothing reads anonymously ==")
 for name in CAUSE_TESTS:

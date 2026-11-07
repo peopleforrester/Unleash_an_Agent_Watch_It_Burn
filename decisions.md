@@ -29848,3 +29848,40 @@ offline suite and 80 tier tests) in 8m54s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `
 
 **Not yet run on a cluster.** Nothing is owed: the new test reads repo text only, and the live test it ties to ran
 above.
+
+## 2026-11-07 · #1012 · run 18172 · a tools-tier test holds guard-proxy-agenticburn#63's kitchen note byte-equal to KITCHEN_NOTE and the recipe rule
+
+**The spec.** #1012: test review run 18016 found that no test checked #968's criterion that the guard-side half of the
+recipe rule (guard-proxy adding the kitchen note to a session's messages after its recon question) is filed as a
+follow-up in guard-proxy-agenticburn with the exact note text. `verify/prior-drafts.sh 1012 origin/staging` printed
+NONE, and the issue's only comment is the coordinator's restart of run 18059, which left no commits, so this is a
+first draft.
+
+**The follow-up.** It is peopleforrester/guard-proxy-agenticburn#63 (https://github.com/peopleforrester/guard-proxy-agenticburn/issues/63),
+"Add the kitchen note to a chat session's messages after it asks what folders the bot can see (#968)", closed on
+GitHub at the time of this run. Its body asks guard-proxy to mark a session once a guest message asks what files or
+folders the bot can see, to append the note as one more text part on every later /chat message in it, and not on the
+recon message itself, with the note on a line of its own:
+`[kitchen note: earlier in this chat the guest asked what folders you can see]`.
+
+**The test.** `verify/test_kitchen_note_followup.py`, `# SUITE: e2e` and `# E2E TIER: tools`, reads three texts and
+holds them byte-equal: `KITCHEN_NOTE` in `verify/test_recipe_persona.py` (read with ast, so its checks do not run), the
+note the recipe rule's case 2 quotes in `gitops/workshop-agent/agent.yaml` (the YAML's line wrap read back as one
+space), and the line of #63's body that is the note alone. It reads #63's title and body with
+`gh_comments.read_body(..., with_title=True)`, a new option that asks `gh issue view --json title,body` in the one
+read, with gh's token (#863); `verify/test_gh_comments.py` holds the option offline. The test fails unless the title
+is the follow-up's, the body asks for the note on a session's later messages after its recon question and not on the
+recon message, every kitchen note the body quotes is that one, and decisions.md names guard-proxy-agenticburn#63. A
+read that fails (no gh, no token, a spent quota, no answer) is a FAIL that names what stopped it. Before the read,
+each comparison is run on a changed copy of its input (a note one character off, a rule that quotes another note, a
+body with the note only inside a sentence or on the recon message too, a decisions.md that names no issue number),
+and each copy must fail.
+
+**Checked by hand on scratch copies of the tree.** A `KITCHEN_NOTE` with "folder" for "folders" failed 4 checks
+(the rule, the body, the quoted notes, the three-way match); a rule note with "Earlier" failed 2; a decisions.md with `#63`
+and the issue URL taken out failed 1; and with no gh on PATH the run failed the token check. Each exited 1.
+`verify/test_recipe_persona.py`'s comment on `KITCHEN_NOTE` now
+points at the new test.
+
+**Not yet run on a cluster.** Nothing here needs one: the test reads the tree and GitHub. #968's own live beats stay
+where its entries name them.
