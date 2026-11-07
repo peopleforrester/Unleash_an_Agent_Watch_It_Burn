@@ -28511,3 +28511,8 @@ ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline su
 made `deploy_app` read the request's X-Witch-Name through `mcp.get_context()` and gave every test's stand-in FastMCP a
 `get_context` that raises LookupError. `test_breakout_room_cleanup.py` came in with #990 (`e0770036`) beside it and was
 not given one. It now has the same five lines. Run alone it ends "All breakout room cleanup checks passed.", exit 0.
+
+**The suites (run 18084, at `3c852df3`).** `bash verify/run-e2e-tools.sh` printed `313 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 42m08s`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18084/e2e-tools-2.log`). At 04:28Z `railway whoami` on
+tanjiro-wsl2 still printed "Unauthorized", and `registry-attackme.burritobot.co/v2/` still answered 502.
