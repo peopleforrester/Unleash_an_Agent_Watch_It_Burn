@@ -1,6 +1,6 @@
 # ABOUTME: Static gate for #719 and #895: BanTopics may enter llm-guard-scanners only with an image known to bake the zero-shot
-# ABOUTME: model, loaded from /home/user/models/zero-shot; images.lock records the zero-shot images by digest.
-"""Why this exists (#719, #455, lab-platform#341, #895).
+# ABOUTME: model, loaded from /home/user/models/zero-shot; images.lock records it; images/llm-guard pins 31962f2 (#896).
+"""Why this exists (#719, #455, lab-platform#341, #895, #896).
 
 The on-topic guard (#455) needs LLM Guard's BanTopics scanner, which needs the zero-shot model
 deberta-v3-base-zeroshot-v2.0 at revision 8e7e5af5 baked into the image. lab-platform's llm-guard:v1 as first built
@@ -17,13 +17,17 @@ too, because an image this repo has not checked could lack the model as the old 
 added, so it is shown to fire. cpu.5 is built from llm-guard-cpu-offline 31962f2, whose Dockerfile bakes both models
 at the paths the scanners use; lab-platform's rebuild bakes the same two at the same paths, each file held to a
 sha256 there (lab-platform's llm-guard-model.sha256 and llm-guard-zero-shot.sha256), and sets WIB_ZS_MODEL_DIR in
-its config, which #895 read back from ghcr.io. images/llm-guard still pins f2fcb8f, the commit lab-platform's v1 was built from: a run
-cannot move a gitlink, so the move to 31962f2 #719 decided waits on a session that can (decisions.md, #719).
+its config, which #895 read back from ghcr.io. The rest holds the submodule pin #719 decided and #896 made:
+images/llm-guard at 31962f2, the commit lab-platform's build reads since lab-platform 27f4a49 and the one cpu.5 was
+built from. Its Dockerfile bakes both models at the paths the scanners use, and its src/ is the same tree as at
+f2fcb8f, the commit lab-platform's first v1 was built from, so the move changes no file the image serves.
 """
 from __future__ import annotations
 
 import copy
 import pathlib
+import re
+import subprocess
 import sys
 
 import yaml
@@ -31,7 +35,10 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import APPS, REPO, kustomize_images  # noqa: E402
 
+PIN = "31962f2074f758a2e9e06a9a91b4d758bcd56f03"
+V1_SOURCE = "f2fcb8f4676c62319b50d95a23320aaa12d5a13d"
 ZS_DIR = "/home/user/models/zero-shot"
+PI_DIR = "/home/user/models/prompt-injection"
 ZS_IMAGE_DIGEST = "sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8"
 CPU5 = "sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791"
 V1 = "sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
@@ -41,6 +48,7 @@ V1_REBUILD = "sha256:46b3d20203147d36d2e023c01bfd889f27f1c3900246777abe48cb16d0f
 # and V1_REBUILD from lab-platform's deploy/images at lab-platform#341's build.
 BAKES_ZERO_SHOT = {CPU5, V1_REBUILD}
 AI = REPO / "gitops/ai-layer"
+SUB = REPO / "images/llm-guard"
 
 failures: list[str] = []
 
@@ -110,6 +118,33 @@ lock = {ln.split()[0]: ln.split()[1:] for ln in (REPO / "images.lock").read_text
 for ref, want in (("ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5", CPU5),
                   ("ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5", ZS_IMAGE_DIGEST)):
     check(f"{ref.rsplit(':', 1)[1]} has a row at {want[:15]}...", lock.get(ref, [])[:1] == [want], str(lock.get(ref)))
+
+print("== images/llm-guard pins llm-guard-cpu-offline 31962f2 (#896) ==")
+tree = subprocess.run(["git", "-C", str(REPO), "ls-tree", "HEAD", "images/llm-guard"],
+                      capture_output=True, text=True, check=True).stdout.split()
+check(f"the gitlink is {PIN[:7]}, the commit lab-platform's build reads since lab-platform 27f4a49",
+      tree[:1] == ["160000"] and tree[2:3] == [PIN], " ".join(tree))
+head = subprocess.run(["git", "-C", str(SUB), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+check("the submodule is checked out at the gitlink (verify/ensure-submodules.sh)", head == PIN, head)
+same = subprocess.run(["git", "-C", str(SUB), "diff", "--quiet", V1_SOURCE, PIN, "--", "src"],
+                      capture_output=True, text=True)
+check(f"its src/ is the same tree as at {V1_SOURCE[:7]}, which the first llm-guard:v1 was built from, so the move "
+      "changes no API file", same.returncode == 0, same.stderr.strip() or f"exit {same.returncode}")
+
+dockerfile = (SUB / "Dockerfile").read_text(encoding="utf-8")
+check(f"its Dockerfile bakes the prompt-injection model at {PI_DIR}, where llm-guard-scanners loads it",
+      re.search(rf"^ENV WIB_PI_MODEL_DIR={re.escape(PI_DIR)}$", dockerfile, re.M) is not None)
+check(f"its Dockerfile bakes the zero-shot model at {ZS_DIR} (WIB_ZS_MODEL_DIR), the path lab-platform#341 uses",
+      re.search(rf"^ENV WIB_ZS_MODEL_DIR={re.escape(ZS_DIR)}$", dockerfile, re.M) is not None)
+check("it takes the zero-shot weights from the scratch image llm-guard-model-zeroshot-8e7e5af5, by digest",
+      re.search(rf"^ARG ZERO_SHOT_IMAGE=\S+:llm-guard-model-zeroshot-8e7e5af5@{ZS_IMAGE_DIGEST}$", dockerfile, re.M)
+      is not None)
+check("the scratch image's build context, model-zero-shot/, is in the checkout",
+      (SUB / "model-zero-shot/Dockerfile").is_file() and (SUB / "model-zero-shot/LICENSE.model").is_file())
+sub_cfg = yaml.safe_load((SUB / "config/scanners.yml").read_text(encoding="utf-8"))
+sub_bt = [s for s in sub_cfg.get("input_scanners") or [] if s.get("type") == "BanTopics"]
+check("its default config loads BanTopics from ${WIB_ZS_MODEL_DIR}",
+      [(s.get("params") or {}).get("model_path") for s in sub_bt] == ["${WIB_ZS_MODEL_DIR}"], str(sub_bt))
 
 print()
 if failures:

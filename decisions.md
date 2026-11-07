@@ -32717,3 +32717,27 @@ prefix. No dependency was added.
 It printed `116 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` with `test_challenge_traces.py` among them,
 then `16 checks ran (the offline suite and 15 tier tests) in 5m20s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
 and `exit=0`.
+## 2026-11-07 · #896 · run 18369 · images/llm-guard pinned at llm-guard-cpu-offline 31962f2, with the submodule checks run 15912 had
+
+**The change.** `images/llm-guard` moves from `f2fcb8f` to `31962f2074f758a2e9e06a9a91b4d758bcd56f03`, the move #719
+decided. 31962f2 is the commit lab-platform's build reads since lab-platform 27f4a49 and the one cpu.5 was built from,
+and it is on llm-guard-cpu-offline's `main` and `staging`. `git -C images/llm-guard diff --quiet f2fcb8f 31962f2 -- src`
+exits 0, so `src/` is the same tree and nothing deployed changes: the guard runs lab-platform#341's rebuild of
+`llm-guard:v1` (#895), which builds from lab-platform, not from this submodule. The move brings llm-guard-cpu-offline's
+twelve commits since f2fcb8f into the checkout: its tests, `config/`, `overrides.txt` and the `model-zero-shot/` mirror.
+Earlier runs could not commit it because hecaton's forbidden gate failed every changed mode-160000 path as "adds
+submodule" (run 15974). hecaton#521 changed the gate to admit a pin move on a path that is a gitlink at the base, and
+to refuse a new submodule or a changed `.gitmodules` url; it merged to hecaton's staging as `54ad6cbe` on 2026-11-07.
+This change leaves `.gitmodules` as it was.
+
+**Tests.** `verify/test_llm_guard_bantopics_image.py` gets back the section run 15912's draft (`ffecd4f0` on
+`origin/agent/719-15912`) had and run 16431 dropped with the move: the gitlink is 31962f2, the submodule is checked out
+there, its `src/` matches f2fcb8f, its Dockerfile sets `WIB_PI_MODEL_DIR` and `WIB_ZS_MODEL_DIR` to the directories
+the scanners load from and takes the zero-shot weights from `llm-guard-model-zeroshot-8e7e5af5` at the digest
+images.lock records, `model-zero-shot/` is in the checkout, and `config/scanners.yml` loads BanTopics from
+`${WIB_ZS_MODEL_DIR}`. The section was ported onto staging's version of the test, which since #895 also allows
+lab-platform#341's rebuild, and its docstring no longer says the pin waits on a session that can commit a gitlink.
+Before the commit, the gitlink check failed reading `f2fcb8f` from HEAD and the other checks passed against the
+31962f2 checkout. `bash verify/submodule-pins-pushed.sh` passes on the new pin.
+
+**Not yet run on a cluster.** Nothing deployed reads this submodule, so no live check is owed.
