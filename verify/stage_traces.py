@@ -77,6 +77,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "infra/datadog-fleet"))
+import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 
 log = logging.getLogger("stage-traces")
@@ -533,18 +534,29 @@ def cmd_seed(args) -> int:
     started = dt.datetime.now(dt.timezone.utc)
     stamp = args.stamp or started.strftime("%Y%m%d%H%M")
     cluster = StageCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)
-    # The stage's start state first, read only: a cluster that is not there (another profile, or guardrails left on)
-    # would fail the seeds, and the closing guards-off would then change a cluster this run never armed. So nothing
-    # is sent and nothing is flipped.
-    pre = kp.Probe(cluster, 0)
-    for key, step in (("identity", kp._identity), ("start-state", kp._start_state)):
-        ok, note = step(pre)
-        if not ok:
-            log.error("%s  %s: %s", kp.FAIL, key, note)
-            log.error("SEEDED RED: not at the stage's start state, so nothing was sent and nothing was flipped")
-            return 1
-    probe = StageProbe(cluster, args.max_calls, settle=args.settle)
-    results = probe.run(seed_beats(stamp), final=kp.GUARDS_OFF_BEAT)
+    # The cluster's guard lock (#1024), from the start-state read to guards-off, so another run's toggles cannot land
+    # between the seeds, exactly as for the KubeCon probe.
+    try:
+        with guard_lease.hold(args.context, args.kubeconfig, args.profile, what=f"stage_traces.py seed {args.host}",
+                              wait=args.lock_wait) as lease:
+            # The stage's start state first, read only: a cluster that is not there (another profile, or guardrails
+            # left on) would fail the seeds, and the closing guards-off would then change a cluster this run never
+            # armed. So nothing is sent and nothing is flipped.
+            pre = kp.Probe(cluster, 0)
+            for key, step in (("identity", kp._identity), ("start-state", kp._start_state)):
+                ok, note = step(pre)
+                if not ok:
+                    log.error("%s  %s: %s", kp.FAIL, key, note)
+                    log.error("SEEDED RED: not at the stage's start state, so nothing was sent and nothing was flipped")
+                    return 1
+            probe = StageProbe(cluster, args.max_calls, settle=args.settle)
+            results = probe.run(seed_beats(stamp), final=kp.GUARDS_OFF_BEAT)
+    except guard_lease.LeaseBusy as e:
+        log.error("SEEDED NOT RUN: the guard lock on %s stayed busy: %s", args.context, e)
+        return guard_lease.BUSY_EXIT
+    if lease.lost:
+        results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",
+                        "verdict": kp.FAIL, "note": f"{lease.lost}: another run may have flipped guards mid-seed"})
     seeded_ok = all(r["verdict"] == kp.PASS for r in results)
     dd, site = datadog(args.profile, args.region)
     end = dt.datetime.now(dt.timezone.utc)
@@ -622,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--settle", type=float, default=20.0, help="seconds after narrowing C7's gateway rule")
     s.add_argument("--wait", type=int, default=600, help="seconds to wait for the traces (default 600)")
     s.add_argument("--stamp", help="session id suffix (default: the UTC minute)")
+    s.add_argument("--lock-wait", type=float, default=guard_lease.WAIT_S,
+                   help=f"seconds to wait for another run's guard lock (default {guard_lease.WAIT_S}, #1024)")
     c = sub.add_parser("check", help="re-read the seeded traces from LLM Observability")
     for p in (s, c):
         p.add_argument("--profile", required=True, help="AWS profile holding watch-it-burn/datadog")

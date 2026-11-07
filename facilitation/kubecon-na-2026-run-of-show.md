@@ -1670,6 +1670,14 @@ is merely slow rather than rebuilding:
     admin one, never during it: the admin probe's `guardrails-on` reaches attackme.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
     up in the feed the room sees.
+  - Each run holds the cluster's guard lock (#1024), the Lease `agent/wib-guard-lock`,
+    from before the start state is read until after `guards-off`, and so do
+    `verify/stage_traces.py seed`, `verify/agent_probe.py`, `verify/input-guard.sh`,
+    `verify/beat-02.sh` and `verify/beat-cost.sh`. A second run on the same cluster
+    waits for it, up to 30 minutes (`--lock-wait`), then exits 3 naming the holder;
+    the probe prints `KUBECON PROBE NOT RUN`. `python3 verify/guard_lease.py show
+    --context <context>` prints who holds it. On 2026-11-06 three of five admin runs
+    went red on an output guard another run turned on (#900).
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
     fallback for before the day, not something to find out on stage. The two beats
     that failed on 2026-10-24 for want of a fix, the Kyverno badge (#487) and the

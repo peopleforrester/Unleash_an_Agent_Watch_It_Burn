@@ -45,11 +45,14 @@ fetch_one() { # name version sha256 url member
         mv "${file}.part" "${file}"
     fi
     tmp="$(mktemp "${TOOLS_DIR}/bin/.${name}.XXXXXX")"
+    # A zip member is read with python3's zipfile, not unzip: Tanjiro's CI runner has no unzip and its account no
+    # sudo to install one (#1047), and python3 is a prerequisite of both runners already.
     case "${member}:${file}" in
         -:*)        cp "${file}" "${tmp}" ;;
         *:*.tar.gz) tar -xzOf "${file}" "${member}" >"${tmp}" ;;
         *:*.tar.xz) tar -xJOf "${file}" "${member}" >"${tmp}" ;;
-        *:*.zip)    unzip -p "${file}" "${member}" >"${tmp}" ;;
+        *:*.zip)    python3 -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' \
+                        "${file}" "${member}" >"${tmp}" ;;
         *)          false ;;
     esac || {
         rm -f "${tmp}"

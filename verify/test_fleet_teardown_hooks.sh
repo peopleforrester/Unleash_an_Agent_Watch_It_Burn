@@ -38,7 +38,8 @@ cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
 echo "kubectl $*" >>"${CALLS}"
 n=$(cat "${T}/k_polls" 2>/dev/null || echo 0); echo $((n+1)) >"${T}/k_polls"
-[[ "$n" -ge "${LB_READY_AFTER:-0}" ]] && echo "lb-${n}.elb.amazonaws.com"
+# LB_READY_AFTER=never: no poll ever answers, however many the wait gets through before its deadline (#1047).
+[[ "${LB_READY_AFTER:-0}" != never && "$n" -ge "${LB_READY_AFTER:-0}" ]] && echo "lb-${n}.elb.amazonaws.com"
 exit 0
 S
 cat >"${SHIM}/curl" <<'S'
@@ -55,8 +56,12 @@ for c in terraform railway; do printf '#!/usr/bin/env bash\necho "%s $*" >>"${CA
 chmod +x "${SHIM}"/*
 export T CALLS PATH="${SHIM}:${PATH}"
 # Sourcing fleet.sh: the source guard keeps main() from running; WIB_* settings make every wait instant.
+# The failure ledger goes under the test's own logs/, not the clone's infra/terraform/fleet/logs: that directory is
+# gitignored, so on a fresh checkout it is absent until some other test makes it, and record_fail had nowhere to
+# write (#1047).
+mkdir -p "${T}/logs"
 src() { # $1: bash snippet to run after sourcing
-  ( cd "$(dirname "${FLEET}")" && WIB_ADMIN_TOKEN=test-token WIB_PROVISIONING_URL=https://prov.test \
+  ( cd "$(dirname "${FLEET}")" && WIB_LOG_DIR="${T}/logs" WIB_ADMIN_TOKEN=test-token WIB_PROVISIONING_URL=https://prov.test \
       DATABASE_URL="${TEST_DATABASE_URL-postgresql://lab@db.test/lab}" USER="${TEST_USER-tester}" WIB_EVENT=test-event \
       WIB_TG_BACKOFF=0 WIB_LB_GONE_INTERVAL=0 WIB_LB_WAIT_INTERVAL=0 WIB_RELOAD_BACKOFF=0 \
       bash -c "source '${FLEET}' >/dev/null 2>&1; $1" 2>>"${T}/stderr" )
@@ -157,7 +162,9 @@ rm -f "${T}/k_polls"; : >"${CALLS}"
 LB_READY_AFTER=2 src 'wait_for_console_lbs watch-it-burn-attendee-009; echo rc=$?' >"${T}/out"
 check "returns 0 once the console has a hostname (3 kubectl polls)" 'grep -qx "rc=0" "${T}/out" && [[ "$(cat "${T}/k_polls")" -eq 3 ]]'
 rm -f "${T}/k_polls"
-LB_READY_AFTER=99 WIB_LB_WAIT_TIMEOUT=1 src 'if wait_for_console_lbs watch-it-burn-attendee-009; then echo rc=0; else echo rc=$?; fi; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
+# Timeout 0 and a console that never answers: one poll, then the deadline. With a one-second deadline and no
+# interval, a fast runner got through LB_READY_AFTER=99 polls inside it and the console answered (#1047).
+LB_READY_AFTER=never WIB_LB_WAIT_TIMEOUT=0 src 'if wait_for_console_lbs watch-it-burn-attendee-009; then echo rc=0; else echo rc=$?; fi; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
 check "gives up at the deadline, returns 1, records routes:lb-wait-timeout" 'grep -qx "rc=1" "${T}/out" && grep -qx "routes:lb-wait-timeout" "${T}/out"'
 rm -f "${T}/k_polls"
 src 'echo watch-it-burn-attendee-009 >"${FAIL_FILE}"; wait_for_console_lbs watch-it-burn-attendee-009; echo rc=$?; rm -f "${FAIL_FILE}"' >"${T}/out"

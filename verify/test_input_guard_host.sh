@@ -42,9 +42,15 @@ case "$url" in
     *) exit 6 ;;
 esac
 EOF
-cat >"$work/bin/kubectl" <<'EOF'
+# kubectl: log every call; hand the guard lock's Lease calls (#1024) to verify/fake_lease_kubectl.py, which keeps the
+# Lease in $FAKE_LOG/lease.json, and answer the rest with an empty object.
+cat >"$work/bin/kubectl" <<EOF
 #!/usr/bin/env bash
-printf '%s\n' "$*" >>"$FAKE_LOG/kubectl"
+printf '%s\\n' "\$*" >>"\$FAKE_LOG/kubectl"
+case "\$*" in
+    *" lease "*|*"/leases/"*|*" create -f - -o json"*|*" replace -f - -o json"*)
+        FAKE_LEASE_STATE="\$FAKE_LOG/lease.json" exec python3 "${HERE}/fake_lease_kubectl.py" "\$@" ;;
+esac
 echo '{}'
 EOF
 chmod +x "$work/bin/curl" "$work/bin/kubectl"
@@ -74,7 +80,10 @@ check "it prints both OK lines" \
 check "every kubectl call names --context watch-it-burn-private" \
     "$([[ -s $d/kubectl ]] && ! grep -v -- '--context watch-it-burn-private' "$d/kubectl" | grep -q . && echo ok)"
 check "it turns the input guard on and restores it off" \
-    "$(grep -q 'toggle?input=on' "$d/kubectl" && tail -n 1 "$d/kubectl" | grep -q 'toggle?input=off' && echo ok)"
+    "$(grep -q 'toggle?input=on' "$d/kubectl" && grep 'toggle?' "$d/kubectl" | tail -n 1 | grep -q 'toggle?input=off' && echo ok)"
+check "it takes the guard lock before the first toggle and releases it after the last (#1024)" \
+    "$(head -n 1 "$d/kubectl" | grep -q 'create -f -' && tail -n 1 "$d/kubectl" | grep -q 'delete --raw' \
+        && grep -q 'holding wib-guard-lock' "$d/out" && ! grep -q 'lost' "$d/out" && echo ok)"
 
 echo "== a bare fleet name gets .agenticburn.com =="
 run_case bare michael-admin

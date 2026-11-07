@@ -8,8 +8,9 @@ binaries in verify/e2e-tools.lock, which verify/fetch-e2e-tools.sh downloads int
 against the lock's SHA-256 before use.
 
 The fetch is run here for real, in a scratch copy of the scripts, with `curl` stubbed to serve fixture
-archives and log each call, and `uname`, `sha256sum` and `unzip` stubbed so the run does not depend on the
-host. A good lock installs every binary, a second run downloads nothing, and a missing artifact or a
+archives and log each call, and `uname` and `sha256sum` stubbed so the run does not depend on the host. Zip
+members are read with python3's zipfile since #1047, and `unzip` is a stub that logs any call and fails, so a fetch
+that reaches for it again is caught on a host that has one. A good lock installs every binary, a second run downloads nothing, and a missing artifact or a
 checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
 failed fetch or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing
 from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
@@ -226,10 +227,13 @@ STUB_SHA = f"""#!{PY}
 import hashlib, sys
 print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() + "  " + sys.argv[1])
 """
+# A tripwire, not a stand-in: Tanjiro's CI runner has no unzip (#1047), so the fetch must never call one.
 STUB_UNZIP = f"""#!{PY}
-import sys, zipfile
-assert sys.argv[1] == "-p"
-sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[2]).read(sys.argv[3]))
+import os, sys
+with open(os.path.join(os.environ["HOME"], "unzip.log"), "a") as f:
+    f.write(" ".join(sys.argv[1:]) + "\\n")
+sys.stderr.write("unzip: not on Tanjiro's runner (#1047)\\n")
+sys.exit(127)
 """
 STUB_UNAME = '#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\n'
 
@@ -348,6 +352,8 @@ with tempfile.TemporaryDirectory() as t:
         check(f"{name} is in .tools/bin, executable, holding the archive's member",
               b.is_file() and os.access(b, os.X_OK) and body in b.read_bytes())
     check("each artifact was downloaded once", len(curl_calls(tmp)) == 4, str(curl_calls(tmp)))
+    check("the zip artifact was read without unzip, which Tanjiro's runner lacks (#1047)",
+          not (tmp / "unzip.log").exists(), (tmp / "unzip.log").read_text() if (tmp / "unzip.log").exists() else "")
     first = len(curl_calls(tmp))
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
     check(f"a second run reuses the verified downloads and fetches nothing (exit {r.returncode})",

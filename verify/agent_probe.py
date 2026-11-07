@@ -33,8 +33,11 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Callable
+
+import guard_lease  # verify/, next to this file
 
 log = logging.getLogger("agent-probe")
 
@@ -124,9 +127,12 @@ class Cluster:
     def set_guards(self, **flags: str) -> dict:
         """Flip guards via the proxy's own /toggle, the same path the workshop's scripts use."""
         query = "&".join(f"{k}={v}" for k, v in flags.items())
+        # X-WIB-Caller names the guard lock's holder, so guard-proxy's toggle log can say which run flipped (#1024).
+        who = guard_lease.caller(self.context)
         py = (
             "import urllib.request;"
-            f"print(urllib.request.urlopen('http://localhost:8080/toggle?{query}',timeout=10).read().decode())"
+            f"r=urllib.request.Request('http://localhost:8080/toggle?{query}',headers={{'X-WIB-Caller':{who!r}}});"
+            "print(urllib.request.urlopen(r,timeout=10).read().decode())"
         )
         raw = self._kubectl(*GUARD_PROXY_EXEC, py)
         return json.loads(raw.strip().splitlines()[-1])
@@ -493,8 +499,20 @@ def main() -> int:
 
     cluster = Cluster(args.host, args.context, args.profile, args.timeout)
     log.info("probing %s (%d beats, max %d model calls)", args.host, len(probes), args.max_calls)
-    results = run(cluster, probes, args.max_calls, restore=not args.no_restore, repeat=args.repeat,
-                  min_rate=args.min_rate)
+    # With --context the harness flips guards, so it holds the cluster's guard lock while it does (#1024); without
+    # one it flips nothing and takes no lock.
+    lock = (guard_lease.hold(args.context, profile=args.profile, what=f"agent_probe.py {args.host}")
+            if args.context else nullcontext())
+    try:
+        with lock as lease:
+            results = run(cluster, probes, args.max_calls, restore=not args.no_restore, repeat=args.repeat,
+                          min_rate=args.min_rate)
+    except guard_lease.LeaseBusy as e:
+        log.error("not run: the guard lock on %s stayed busy: %s", args.context, e)
+        return guard_lease.BUSY_EXIT
+    if lease is not None and lease.lost:
+        results.append({"key": "guard-lock", "title": "The guard lock was held for the whole run", "verdict": RED,
+                        "note": f"{lease.lost}: another run may have flipped guards mid-probe"})
 
     try:
         spend = cluster.cost()

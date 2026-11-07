@@ -40,6 +40,11 @@ probe sends the terminal helpers' own /toggle queries, toolNames patches and C7 
 (verify/test_kubecon_probe.py holds them equal), and its last act on an admin cluster is guards-off, run even
 when a beat fails or the call ceiling is hit, then guardrails-off.
 
+The probe holds the cluster's guard lock (#1024, verify/guard_lease.py), the Lease agent/wib-guard-lock, from before
+the start state is read until after guards-off, so two runs sharing a cluster take turns on its guards: a second one
+waits up to --lock-wait seconds (30 minutes by default), then exits 3 with KUBECON PROBE NOT RUN, naming the holder.
+Its /toggle requests carry the holder as X-WIB-Caller, for guard-proxy's toggle log.
+
 guardrails-on and guardrails-off are the terminal's own commands, run in the private cluster's terminal pod, and
 each switches the community cluster too (#774): run the community probe before the private one, or after it, never
 during it.
@@ -91,6 +96,7 @@ import yaml
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
+import guard_lease  # noqa: E402
 import topic_cases as tc  # noqa: E402
 from agent_probe import (  # noqa: E402
     C6_IMAGE, EXCERPT, GREEN, GUARD_PROXY_EXEC, MCP_PROMPT, MCP_SENTINEL, Cluster, ceo_record_leaked, ticket_site,
@@ -918,8 +924,11 @@ class KubeconCluster(Cluster):
             return None
 
     def toggle(self, query: str) -> dict:
+        # X-WIB-Caller names the guard lock's holder, so guard-proxy's toggle log can say which run flipped (#1024).
+        who = guard_lease.caller(self.context)
         py = ("import urllib.request;"
-              f"print(urllib.request.urlopen('http://localhost:8080/toggle?{query}',timeout=10).read().decode())")
+              f"r=urllib.request.Request('http://localhost:8080/toggle?{query}',headers={{'X-WIB-Caller':{who!r}}});"
+              "print(urllib.request.urlopen(r,timeout=10).read().decode())")
         raw = self._kubectl(*GUARD_PROXY_EXEC, py)
         return json.loads(raw.strip().splitlines()[-1])
 
@@ -1395,6 +1404,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--settle", type=float, default=20.0,
                     help="seconds to wait after narrowing the C7 gateway rule before the re-ask (default 20)")
     ap.add_argument("--timeout", type=float, default=120.0)
+    ap.add_argument("--lock-wait", type=float, default=guard_lease.WAIT_S,
+                    help="seconds to wait for another run's guard lock on the cluster before giving up "
+                         f"(default {guard_lease.WAIT_S}, #1024)")
     ap.add_argument("--json", action="store_true", help="print the results as JSON")
     args = ap.parse_args(argv)
 
@@ -1409,11 +1421,25 @@ def main(argv: list[str] | None = None) -> int:
     cluster = KubeconCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)
     probe = Probe(cluster, args.max_calls, settle=args.settle)
     log.info("KubeCon probe: %s %s, max %d model calls", args.role, args.host, args.max_calls)
-    if args.role == "community":
-        # No final beat: nothing on the community cluster is toggled. C6's Deployment is removed by its own beat.
-        results = probe.run(COMMUNITY)
-    else:
-        results = probe.run(ADMIN, final=GUARDS_OFF_BEAT)
+    # The cluster's guard lock (#1024), held from before the start state is read until after guards-off, so another
+    # run's toggles cannot land between the probe's beats: in run 17950 (#900) three of five admin runs read an output
+    # guard the probe never turned on. A community run holds it too, since its beats read the wide-open start.
+    try:
+        with guard_lease.hold(args.context, args.kubeconfig, args.profile,
+                              what=f"kubecon_probe.py {args.role} {args.host}", wait=args.lock_wait) as lease:
+            if args.role == "community":
+                # No final beat: nothing on the community cluster is toggled. C6's Deployment is removed by its own
+                # beat.
+                results = probe.run(COMMUNITY)
+            else:
+                results = probe.run(ADMIN, final=GUARDS_OFF_BEAT)
+    except guard_lease.LeaseBusy as e:
+        log.error("the guard lock on %s stayed busy: %s", args.context, e)
+        print("\nKUBECON PROBE NOT RUN: another holder kept the cluster's guard lock (no beat ran, nothing was flipped)")
+        return guard_lease.BUSY_EXIT
+    if lease.lost:
+        results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",
+                        "verdict": FAIL, "note": f"{lease.lost}: another run may have flipped guards mid-probe"})
 
     spend = cluster.get_json("/cost")
     before = probe.state.get("cost_before") or {}

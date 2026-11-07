@@ -745,11 +745,11 @@ finally:
     FAKE.shutdown()
     FAKE_AGENT.shutdown()
     shutil.rmtree(SCRATCH, ignore_errors=True)
-# Only this test's own scratch is checked. The E2E command runs tier checks beside the offline suite, and some of them
-# (test_bootstrap_chart_render.py, test_image_pins.py) make and remove temp directories under the same tmp/, so a
-# before-and-after listing of all of tmp/ failed on one of theirs in run 18117 (#885). The fallbacks write nothing
-# there: each run's TMPDIR is its own work/tmpdir, checked per beat above.
-check("the test's scratch under the repo's tmp/ is removed", not SCRATCH.exists(), str(SCRATCH))
+# Only this test's own scratch is checked. The fallbacks write to no temp path (each run's TMPDIR is checked empty
+# above), and since #1005 run-e2e-tools.sh runs this suite beside the tier tests, four at a time, and
+# test_bootstrap_chart_render.py makes and removes its own directories in the repo's tmp/ meanwhile, so a snapshot of
+# the whole of tmp/ read another test's directory as this one's leftover (#1047).
+check("its scratch directory in the repo's tmp/ is removed", not SCRATCH.exists(), str(SCRATCH))
 
 print("\n== the run-of-show names each script per beat ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text()
