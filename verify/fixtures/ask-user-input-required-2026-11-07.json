@@ -1,0 +1,272 @@
+{
+ "source": "Recorded live by run 18353 (#1094) on watch-it-burn-community, 2026-11-07 20:35Z: kagent v0.10.1's workshop-agent (Go runtime, Nova Pro, #1089's systemMessage) answering a fresh chat's memory question over A2A on a port-forward to service workshop-agent, sent as guard-proxy's /chat sends it (the question, then the witch-name part, non-blocking message/send polled with tasks/get). 'send' is the task the turn ended on; 'retry' is the task the same message sent again in the same contextId ended on, as guard-proxy's thinking-only retry sends it. Nothing is cut; message ids are as kagent wrote them.",
+ "send": {
+  "jsonrpc": "2.0",
+  "id": "chat",
+  "result": {
+   "kind": "task",
+   "id": "01a1b7b9-9d72-7ef4-a1c6-17f3f72d032e",
+   "contextId": "p1094-3nbe97f76hxe",
+   "history": [
+    {
+     "kind": "message",
+     "messageId": "p1094-11-0.09257363531827789",
+     "contextId": "p1094-3nbe97f76hxe",
+     "parts": [
+      {
+       "kind": "text",
+       "text": "What was the last thing I asked you, word for word as best you remember?"
+      },
+      {
+       "kind": "text",
+       "text": "The person chatting with you gave their name as Edgar the Mummy."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "kind": "message",
+     "messageId": "p1094-11-0.09257363531827789",
+     "contextId": "p1094-3nbe97f76hxe",
+     "parts": [
+      {
+       "kind": "text",
+       "text": "What was the last thing I asked you, word for word as best you remember?"
+      },
+      {
+       "kind": "text",
+       "text": "The person chatting with you gave their name as Edgar the Mummy."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "kind": "message",
+     "messageId": "01a1b7b9-a150-7ac6-9f09-3711c32709b9",
+     "contextId": "p1094-3nbe97f76hxe",
+     "metadata": {
+      "adk_app_name": "agent__NS__workshop_agent",
+      "adk_author": "workshop_agent",
+      "adk_invocation_id": "e-ba6875eb-891d-4c17-b75e-3f3258f88671",
+      "adk_session_id": "p1094-3nbe97f76hxe",
+      "adk_usage_metadata": {
+       "candidatesTokenCount": 80,
+       "promptTokenCount": 9802,
+       "totalTokenCount": 9882
+      },
+      "adk_user_id": "A2A_USER_p1094-3nbe97f76hxe"
+     },
+     "parts": [
+      {
+       "kind": "text",
+       "text": "<thinking> I need to recall the last thing Edgar the Mummy asked me. Since I don't have memory of past interactions, I'll have to ask him directly. </thinking>\n\n"
+      },
+      {
+       "kind": "data",
+       "data": {
+        "args": {
+         "questions": [
+          {
+           "question": "Edgar the Mummy, could you please remind me what was the last thing you asked me?"
+          }
+         ]
+        },
+        "id": "tooluse_DOVwzZe4hQ9QVrVfUp7Pub",
+        "name": "ask_user"
+       },
+       "metadata": {
+        "adk_is_long_running": false,
+        "adk_type": "function_call"
+       }
+      }
+     ],
+     "role": "agent",
+     "taskId": "01a1b7b9-9d72-7ef4-a1c6-17f3f72d032e"
+    },
+    {
+     "kind": "message",
+     "messageId": "01a1b7b9-a154-7a6b-a9c7-bd9bad5ebc63",
+     "contextId": "p1094-3nbe97f76hxe",
+     "metadata": {
+      "adk_app_name": "agent__NS__workshop_agent",
+      "adk_author": "workshop_agent",
+      "adk_invocation_id": "e-ba6875eb-891d-4c17-b75e-3f3258f88671",
+      "adk_session_id": "p1094-3nbe97f76hxe",
+      "adk_user_id": "A2A_USER_p1094-3nbe97f76hxe"
+     },
+     "parts": [
+      {
+       "kind": "data",
+       "data": {
+        "id": "tooluse_DOVwzZe4hQ9QVrVfUp7Pub",
+        "name": "ask_user",
+        "response": {
+         "questions": [
+          {
+           "question": "Edgar the Mummy, could you please remind me what was the last thing you asked me?"
+          }
+         ],
+         "status": "pending"
+        }
+       },
+       "metadata": {
+        "adk_type": "function_response"
+       }
+      }
+     ],
+     "role": "agent",
+     "taskId": "01a1b7b9-9d72-7ef4-a1c6-17f3f72d032e"
+    }
+   ],
+   "metadata": {
+    "adk_app_name": "agent__NS__workshop_agent",
+    "adk_author": "workshop_agent",
+    "adk_invocation_id": "e-ba6875eb-891d-4c17-b75e-3f3258f88671",
+    "adk_session_id": "p1094-3nbe97f76hxe",
+    "adk_usage_metadata": {
+     "candidatesTokenCount": 80,
+     "promptTokenCount": 9802,
+     "totalTokenCount": 9882
+    },
+    "adk_user_id": "A2A_USER_p1094-3nbe97f76hxe"
+   },
+   "status": {
+    "message": {
+     "kind": "message",
+     "messageId": "01a1b7b9-a157-77b4-9784-0653f9d61055",
+     "contextId": "p1094-3nbe97f76hxe",
+     "parts": [
+      {
+       "kind": "data",
+       "data": {
+        "args": {
+         "originalFunctionCall": {
+          "args": {
+           "questions": [
+            {
+             "question": "Edgar the Mummy, could you please remind me what was the last thing you asked me?"
+            }
+           ]
+          },
+          "id": "tooluse_DOVwzZe4hQ9QVrVfUp7Pub",
+          "name": "ask_user"
+         },
+         "toolConfirmation": {
+          "confirmed": false,
+          "hint": "Edgar the Mummy, could you please remind me what was the last thing you asked me?",
+          "payload": null
+         }
+        },
+        "id": "adk-84158e88-490f-4c0f-9ad2-3dd207d8b3c5",
+        "name": "adk_request_confirmation"
+       },
+       "metadata": {
+        "adk_is_long_running": true,
+        "adk_type": "function_call"
+       }
+      }
+     ],
+     "role": "agent",
+     "taskId": "01a1b7b9-9d72-7ef4-a1c6-17f3f72d032e"
+    },
+    "state": "input-required",
+    "timestamp": "2026-11-07T20:35:58.42350639Z"
+   }
+  }
+ },
+ "retry": {
+  "jsonrpc": "2.0",
+  "id": "chat",
+  "result": {
+   "kind": "task",
+   "id": "01a1b7bb-2193-74d6-b800-23871514409a",
+   "artifacts": [
+    {
+     "artifactId": "01a1b7bb-25b3-7388-9cb1-6cd4ab0f2f56",
+     "parts": [
+      {
+       "kind": "text",
+       "text": "<thinking> Since Edgar the Mummy hasn't responded yet, I can't provide the information he asked for. I'll wait for his response. </thinking> "
+      }
+     ]
+    }
+   ],
+   "contextId": "p1094-3nbe97f76hxe",
+   "history": [
+    {
+     "kind": "message",
+     "messageId": "p1094-911-0.04992957676575027",
+     "contextId": "p1094-3nbe97f76hxe",
+     "parts": [
+      {
+       "kind": "text",
+       "text": "What was the last thing I asked you, word for word as best you remember?"
+      },
+      {
+       "kind": "text",
+       "text": "The person chatting with you gave their name as Edgar the Mummy."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "kind": "message",
+     "messageId": "p1094-911-0.04992957676575027",
+     "contextId": "p1094-3nbe97f76hxe",
+     "parts": [
+      {
+       "kind": "text",
+       "text": "What was the last thing I asked you, word for word as best you remember?"
+      },
+      {
+       "kind": "text",
+       "text": "The person chatting with you gave their name as Edgar the Mummy."
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "kind": "message",
+     "messageId": "01a1b7bb-25b3-72c6-bc9d-a78215c76cb8",
+     "contextId": "p1094-3nbe97f76hxe",
+     "metadata": {
+      "adk_app_name": "agent__NS__workshop_agent",
+      "adk_author": "workshop_agent",
+      "adk_invocation_id": "e-6d625179-6e36-4cbb-83cc-8347ee90d12c",
+      "adk_session_id": "p1094-3nbe97f76hxe",
+      "adk_usage_metadata": {
+       "candidatesTokenCount": 45,
+       "promptTokenCount": 10028,
+       "totalTokenCount": 10073
+      },
+      "adk_user_id": "A2A_USER_p1094-3nbe97f76hxe"
+     },
+     "parts": [
+      {
+       "kind": "text",
+       "text": "<thinking> Since Edgar the Mummy hasn't responded yet, I can't provide the information he asked for. I'll wait for his response. </thinking> "
+      }
+     ],
+     "role": "agent",
+     "taskId": "01a1b7bb-2193-74d6-b800-23871514409a"
+    }
+   ],
+   "metadata": {
+    "adk_app_name": "agent__NS__workshop_agent",
+    "adk_author": "workshop_agent",
+    "adk_invocation_id": "e-6d625179-6e36-4cbb-83cc-8347ee90d12c",
+    "adk_session_id": "p1094-3nbe97f76hxe",
+    "adk_usage_metadata": {
+     "candidatesTokenCount": 45,
+     "promptTokenCount": 10028,
+     "totalTokenCount": 10073
+    },
+    "adk_user_id": "A2A_USER_p1094-3nbe97f76hxe"
+   },
+   "status": {
+    "state": "completed",
+    "timestamp": "2026-11-07T20:37:37.843232413Z"
+   }
+  }
+ }
+}

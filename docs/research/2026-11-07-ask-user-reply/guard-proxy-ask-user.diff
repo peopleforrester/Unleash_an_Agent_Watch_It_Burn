@@ -1,0 +1,353 @@
+diff --git a/README.md b/README.md
+index 9cb728e..b3a9ebe 100644
+--- a/README.md
++++ b/README.md
+@@ -188,6 +188,13 @@ breaking the tool-call grammar, is re-sent in the same conversation (`model_erro
+ 424 is the reply. A reply that is only the model's scratchpad is re-sent (`thinking_only_retry`), and
+ when the retry fails or is also reasoning-only the turn surfaces the scratchpad's contents.
+ 
++A turn the agent stops on kagent's `ask_user` tool ends in A2A's `input-required` state, and its
++question is in data parts alone (the `adk_request_confirmation` call in the status message carries the
++original `ask_user` call), while the turn's only text is usually the model's scratchpad. The reply is
++that text followed by each question, with its choices in parentheses, that the text does not already
++carry, so the guest reads the question and the scratchpad stays for the chat page to fold. Such a
++reply is not reasoning-only, so it is not retried. A confirmation for any other tool adds nothing.
++
+ The `/chat` forward is an A2A task (#27). It is sent as a non-blocking `message/send`, which answers
+ with the task's id, and polled with `tasks/get` until the task leaves `submitted` and `working`.
+ `PROXY_TIMEOUT` bounds the whole forward, every poll included. When the forward fails or runs out of
+diff --git a/conformance/test_chat_ask_user.py b/conformance/test_chat_ask_user.py
+new file mode 100644
+index 0000000..b867226
+--- /dev/null
++++ b/conformance/test_chat_ask_user.py
+@@ -0,0 +1,142 @@
++# ABOUTME: Conformance for a /chat turn kagent stops on its ask_user tool: the guest reads the question, not the
++# ABOUTME: scratchpad that is the turn's only text, and no thinking-only retry is sent (Watch_It_Burn#1094).
++from __future__ import annotations
++
++import pytest
++
++from fakes import Reply, verdict
++
++SCRATCH = (
++    "<thinking> I need to recall the last thing Edgar the Mummy asked me. Since I don't have memory of past "
++    "interactions, I'll have to ask him directly. </thinking>\n\n"
++)
++QUESTION = "Edgar the Mummy, could you please remind me what was the last thing you asked me?"
++
++
++def ask_user_task(questions, text=SCRATCH, state="input-required", call_name="ask_user"):
++    """A task in the shape kagent v0.10.1's Go runtime ends an ask_user turn on, as recorded live on
++    watch-it-burn-community on 2026-11-07: the model's text and the ask_user call in the agent history, its
++    pending response, and the adk_request_confirmation call in the status message carrying the original call."""
++    call = {"args": {"questions": questions}, "id": "tooluse_1", "name": call_name}
++    hint = "; ".join(q.get("question", "") for q in questions if isinstance(q, dict))
++    agent_parts = [{"kind": "data", "data": call, "metadata": {"adk_type": "function_call"}}]
++    if text:
++        agent_parts.insert(0, {"kind": "text", "text": text})
++    return {
++        "jsonrpc": "2.0",
++        "id": "chat",
++        "result": {
++            "kind": "task",
++            "id": "task-1094",
++            "contextId": "ctx-1094",
++            "history": [
++                {"role": "user", "parts": [{"kind": "text", "text": "What was the last thing I asked you?"}]},
++                {"role": "agent", "parts": agent_parts},
++                {"role": "agent", "parts": [{"kind": "data", "data": {
++                    "id": "tooluse_1", "name": call_name,
++                    "response": {"questions": questions, "status": "pending"}},
++                    "metadata": {"adk_type": "function_response"}}]},
++            ],
++            "metadata": {"kagent_usage_metadata": {"promptTokenCount": 9802, "candidatesTokenCount": 80}},
++            "status": {
++                "state": state,
++                "message": {"kind": "message", "role": "agent", "parts": [{"kind": "data", "data": {
++                    "args": {"originalFunctionCall": call,
++                             "toolConfirmation": {"confirmed": False, "hint": hint, "payload": None}},
++                    "id": "adk-1", "name": "adk_request_confirmation"},
++                    "metadata": {"adk_is_long_running": True, "adk_type": "function_call"}}]},
++            },
++        },
++    }
++
++
++def test_ask_user_question_is_the_reply(start_proxy, agent):
++    agent.respond = lambda req: Reply(body=ask_user_task([{"question": QUESTION}]))
++    p = start_proxy()
++    body = p.chat("What was the last thing I asked you?").json()
++    # The scratchpad stays, for the chat page to fold away as it folds every one; the question follows it.
++    assert body["reply"] == SCRATCH.strip() + "\n\n" + QUESTION
++    assert body["input_tokens"] == 9802
++    assert len(agent.calls()) == 1, "a question is an answer: no thinking-only retry"
++    events = p.events()
++    assert "thinking_only_retry" not in events
++    assert "thinking_only_surfaced" not in events
++
++
++def test_ask_user_with_no_text_is_the_question_alone(start_proxy, agent):
++    agent.respond = lambda req: Reply(body=ask_user_task([{"question": QUESTION}], text=""))
++    p = start_proxy()
++    assert p.chat("hi").json()["reply"] == QUESTION
++    assert len(agent.calls()) == 1
++
++
++def test_ask_user_choices_and_every_question_in_order(start_proxy, agent):
++    questions = [
++        {"question": "  Which base would you like?  ", "choices": ["Cilantro-Slime Rice", " Graveyard Greens ", ""]},
++        {"question": "Any salsa?", "choices": [], "multiple": True},
++    ]
++    agent.respond = lambda req: Reply(body=ask_user_task(questions))
++    reply = start_proxy().chat("I'd like a burrito").json()["reply"]
++    assert reply == (SCRATCH.strip() + "\n\nWhich base would you like? (Cilantro-Slime Rice, Graveyard Greens)"
++                     "\n\nAny salsa?")
++
++
++def test_ask_user_question_already_in_the_text_is_not_repeated(start_proxy, agent):
++    text = "Sure thing! " + QUESTION
++    agent.respond = lambda req: Reply(body=ask_user_task([{"question": QUESTION}], text=text))
++    assert start_proxy().chat("hi").json()["reply"] == text
++
++
++def test_input_required_for_another_tool_is_left_alone(start_proxy, agent):
++    """Only ask_user's question is the guest's to answer: a confirmation for any other tool adds nothing, and
++    a reasoning-only reply is retried and surfaced as before."""
++    agent.respond = lambda req: Reply(body=ask_user_task([{"question": QUESTION}], call_name="deploy_app"))
++    p = start_proxy()
++    reply = p.chat("hi").json()["reply"]
++    assert QUESTION not in reply
++    assert len(agent.calls()) == 2
++    assert "thinking_only_surfaced" in p.events()
++
++
++def test_a_finished_task_adds_no_question(start_proxy, agent):
++    agent.respond = lambda req: Reply(body=ask_user_task([{"question": QUESTION}], state="completed"))
++    p = start_proxy()
++    assert QUESTION not in p.chat("hi").json()["reply"]
++    assert "thinking_only_surfaced" in p.events()
++
++
++@pytest.mark.parametrize(
++    "mangle",
++    [
++        lambda s: s.update(message={"parts": "not a list"}),
++        lambda s: s.update(message="not a dict"),
++        lambda s: s["message"]["parts"][0].update(data="not a dict"),
++        lambda s: s["message"]["parts"][0].update(kind="text"),
++        lambda s: s["message"]["parts"][0]["data"].update(args="not a dict"),
++        lambda s: s["message"]["parts"][0]["data"]["args"].update(originalFunctionCall=None),
++        lambda s: s["message"]["parts"][0]["data"]["args"]["originalFunctionCall"].update(args=None),
++        lambda s: s["message"]["parts"][0]["data"]["args"]["originalFunctionCall"]["args"].update(questions="x"),
++        lambda s: s["message"]["parts"][0]["data"]["args"]["originalFunctionCall"]["args"].update(
++            questions=[None, "a string", {"question": 7}, {"question": "   "}]),
++    ],
++)
++def test_odd_ask_user_shapes_fall_back_to_the_text(start_proxy, agent, mangle):
++    body = ask_user_task([{"question": QUESTION}])
++    mangle(body["result"]["status"])
++    agent.respond = lambda req: Reply(body=body)
++    p = start_proxy()
++    r = p.chat("hi")
++    assert r.status == 200
++    assert QUESTION not in r.json()["reply"]
++    assert "thinking_only_surfaced" in p.events()
++
++
++def test_output_guard_reads_the_question(start_proxy, agent, guard):
++    """The question is the model's output like any reply, so the output guard scans and can redact it."""
++    agent.respond = lambda req: Reply(body=ask_user_task([{"question": "Is the code OPHELIA?"}], text=""))
++    guard.respond = lambda req: Reply(body=verdict(False, "Is the code [REDACTED]?", output=True))
++    p = start_proxy(OUTPUT_GUARD="on")
++    body = p.chat("hi").json()
++    assert body["reply"] == "Is the code [REDACTED]?"
++    assert body["guarded"] is True
++    assert guard.calls("/analyze/output")[0].json()["output"] == "Is the code OPHELIA?"
+diff --git a/internal/server/chat.go b/internal/server/chat.go
+index de10fd6..b719bd0 100644
+--- a/internal/server/chat.go
++++ b/internal/server/chat.go
+@@ -646,14 +646,74 @@ func (s *Server) rotateContext(session string) int {
+ 	return s.ctxGen[session]
+ }
+ 
+-// replyText is the agent's reply from an A2A response. kagent echoes the same text into artifacts and the
+-// agent-role history, so it takes one source, artifacts first, then agent history, then the status
+-// message, rather than joining them and doubling the reply.
++// replyText is the agent's reply from an A2A response: its text parts, then any question a task stopped on
++// ask_user asks the guest that the text does not already carry, so the guest reads the question
++// (Unleash_an_Agent_Watch_It_Burn#1094).
+ func replyText(resp any) string {
+ 	result, ok := field(resp, "result").(map[string]any)
+ 	if !ok {
+ 		return ""
+ 	}
++	text := chatText(result)
++	parts := []string{}
++	if text != "" {
++		parts = append(parts, text)
++	}
++	for _, q := range pendingQuestions(result) {
++		if !strings.Contains(text, q) {
++			parts = append(parts, q)
++		}
++	}
++	return strings.Join(parts, "\n\n")
++}
++
++// pendingQuestions is the questions a task stopped on kagent's ask_user puts to the guest, each with its
++// choices. kagent ends such a turn in input-required with the question in data parts alone: the ask_user
++// call in the history and, in the status message, the adk_request_confirmation call that carries it as
++// originalFunctionCall. The turn's only text is the model's scratchpad.
++func pendingQuestions(result map[string]any) []string {
++	status, ok := result["status"].(map[string]any)
++	if !ok || status["state"] != "input-required" {
++		return nil
++	}
++	var out []string
++	for _, p := range asList(field(status["message"], "parts")) {
++		if field(p, "kind") != "data" {
++			continue
++		}
++		data, ok := field(p, "data").(map[string]any)
++		if !ok || data["name"] != "adk_request_confirmation" {
++			continue
++		}
++		call, ok := field(data["args"], "originalFunctionCall").(map[string]any)
++		if !ok || call["name"] != "ask_user" {
++			continue
++		}
++		for _, q := range asList(field(call["args"], "questions")) {
++			text, _ := field(q, "question").(string)
++			if strings.TrimSpace(text) == "" {
++				continue
++			}
++			var choices []string
++			for _, c := range asList(field(q, "choices")) {
++				if c, ok := c.(string); ok && strings.TrimSpace(c) != "" {
++					choices = append(choices, strings.TrimSpace(c))
++				}
++			}
++			line := strings.TrimSpace(text)
++			if len(choices) > 0 {
++				line += " (" + strings.Join(choices, ", ") + ")"
++			}
++			out = append(out, line)
++		}
++	}
++	return out
++}
++
++// chatText is the text parts of an A2A task's reply. kagent echoes the same text into artifacts and the
++// agent-role history, so it takes one source, artifacts first, then agent history, then the status
++// message, rather than joining them and doubling the reply.
++func chatText(result map[string]any) string {
+ 	var art []string
+ 	for _, a := range asList(result["artifacts"]) {
+ 		art = append(art, textOf(asList(field(a, "parts"))))
+diff --git a/internal/server/chat_test.go b/internal/server/chat_test.go
+index a982518..b0b2060 100644
+--- a/internal/server/chat_test.go
++++ b/internal/server/chat_test.go
+@@ -42,6 +42,28 @@ func TestReplyTextTakesOneSource(t *testing.T) {
+ 	}
+ }
+ 
++func TestReplyTextShowsAskUserQuestion(t *testing.T) {
++	task := func(state, name, questions string) string {
++		return `{"result": {"history": [{"role": "agent", "parts": [{"kind": "text", "text": "<thinking>ask</thinking>"}]}],` +
++			`"status": {"state": "` + state + `", "message": {"parts": [{"kind": "data", "data": {"name": "adk_request_confirmation",` +
++			`"args": {"originalFunctionCall": {"name": "` + name + `", "args": {"questions": ` + questions + `}}}}}]}}}}`
++	}
++	for body, want := range map[string]string{
++		task("input-required", "ask_user", `[{"question": " Which base? ", "choices": ["Black-Bog Rice", " ", "Graveyard Greens"]}, {"question": "Salsa?"}]`): "<thinking>ask</thinking>\n\nWhich base? (Black-Bog Rice, Graveyard Greens)\n\nSalsa?",
++		task("input-required", "ask_user", `[{"question": "ask"}]`):                            "<thinking>ask</thinking>",
++		task("input-required", "ask_user", `[{"question": "  "}, {"question": 7}, "x", null]`): "<thinking>ask</thinking>",
++		task("input-required", "ask_user", `"not a list"`):                                     "<thinking>ask</thinking>",
++		task("input-required", "deploy_app", `[{"question": "Deploy?"}]`):                      "<thinking>ask</thinking>",
++		task("completed", "ask_user", `[{"question": "Which base?"}]`):                         "<thinking>ask</thinking>",
++		`{"result": {"status": {"state": "input-required", "message": {"parts": [{"kind": "data", "data": {"name": "adk_request_confirmation", "args": {"originalFunctionCall": {"name": "ask_user", "args": {"questions": [{"question": "Alone?"}]}}}}}]}}}}`: "Alone?",
++		`{"result": {"status": {"state": "input-required", "message": "x"}}}`: "",
++	} {
++		if got := replyText(decode(t, body)); got != want {
++			t.Errorf("%s: replyText = %q, want %q", body, got, want)
++		}
++	}
++}
++
+ func TestThinkingOnly(t *testing.T) {
+ 	for reply, want := range map[string]bool{
+ 		"<thinking>I should list the proteins.</thinking>":    true,
+diff --git a/proxy.py b/proxy.py
+index 76a9831..168de27 100644
+--- a/proxy.py
++++ b/proxy.py
+@@ -1164,13 +1164,42 @@ def pantry_read(session, reply):
+             flags[1] = True
+ 
+ 
+-def chat_reply_text(resp):
+-    """The AGENT's reply text from an A2A response. kagent echoes the SAME text into artifacts AND the
+-    agent-role history, so take ONE source (artifacts first, then agent history, then status) rather than
+-    concatenating all three, or the storefront reply comes back doubled."""
+-    result = resp.get("result") if isinstance(resp, dict) else None
+-    if not isinstance(result, dict):
+-        return ""
++def pending_questions(result):
++    """The questions a task stopped on kagent's ask_user puts to the guest, each with its choices, else [].
++
++    kagent ends a turn that calls ask_user in A2A's input-required state, and its question is in data parts alone:
++    the ask_user call in the history and, in the status message, the adk_request_confirmation call that carries it
++    as originalFunctionCall. The turn's only text is the model's scratchpad, so without this the reply was that
++    scratchpad, surfaced after a retry that came back the same (Unleash_an_Agent_Watch_It_Burn#1094)."""
++    status = result.get("status")
++    if not isinstance(status, dict) or status.get("state") != "input-required":
++        return []
++    message = status.get("message")
++    parts = message.get("parts") if isinstance(message, dict) else None
++    out = []
++    for p in parts if isinstance(parts, list) else []:
++        data = p.get("data") if isinstance(p, dict) and p.get("kind") == "data" else None
++        if not isinstance(data, dict) or data.get("name") != "adk_request_confirmation":
++            continue
++        args = data.get("args")
++        call = args.get("originalFunctionCall") if isinstance(args, dict) else None
++        if not isinstance(call, dict) or call.get("name") != "ask_user" or not isinstance(call.get("args"), dict):
++            continue
++        questions = call["args"].get("questions")
++        for q in questions if isinstance(questions, list) else []:
++            text = q.get("question") if isinstance(q, dict) else None
++            if not isinstance(text, str) or not text.strip():
++                continue
++            choices = q.get("choices")
++            choices = [c.strip() for c in choices if isinstance(c, str) and c.strip()] if isinstance(choices, list) else []
++            out.append(text.strip() + (" (" + ", ".join(choices) + ")" if choices else ""))
++    return out
++
++
++def _chat_text(result):
++    """The text parts of an A2A task's reply. kagent echoes the SAME text into artifacts AND the agent-role
++    history, so take ONE source (artifacts first, then agent history, then status) rather than concatenating
++    all three, or the storefront reply comes back doubled."""
+     art = " ".join(extract_text(a.get("parts")) for a in (result.get("artifacts") or [])).strip()
+     if art:
+         return art
+@@ -1181,6 +1210,17 @@ def chat_reply_text(resp):
+     return extract_text(result.get("status", {}).get("message", {}).get("parts")).strip()
+ 
+ 
++def chat_reply_text(resp):
++    """The AGENT's reply text from an A2A response: its text parts, then any question a task stopped on
++    ask_user asks the guest that the text does not already carry, so the guest reads the question."""
++    result = resp.get("result") if isinstance(resp, dict) else None
++    if not isinstance(result, dict):
++        return ""
++    text = _chat_text(result)
++    asks = [q for q in pending_questions(result) if q not in text]
++    return "\n\n".join([text] + asks if text else asks)
++
++
+ def chat_usage_tokens(resp):
+     """(input_tokens, output_tokens) for one A2A response from kagent_usage_metadata (adk fallback)."""
+     result = resp.get("result", {}) if isinstance(resp, dict) else {}
