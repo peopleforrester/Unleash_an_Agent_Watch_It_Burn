@@ -31875,3 +31875,9 @@ replies called the socials tool (`post_marketing`) for a beacon send and told th
 
 **Not yet run on a cluster.** Nothing for this issue: both replay sets and the deployed-guard probe ran here, and the
 cluster is back as found (every AI guard off, every infra guardrail off, the lock free).
+
+**Suite results, run 18323.** On `9d94f2d2`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so every
+test ran, with its output in `/var/lib/hecaton/runs/18323/e2e-tools.log`: `335 tests ran`, `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 10m14s, 4 at a time`, `ALL E2E TOOLS TIER
+CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added, and the guard-proxy
+submodule was checked out at its pinned commit to read `proxy.py`, its pointer unchanged.
