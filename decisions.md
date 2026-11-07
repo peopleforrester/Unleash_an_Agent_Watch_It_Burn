@@ -30071,3 +30071,8 @@ run routes a comment write through escalate.
 
 **Not yet run on a cluster.** Nothing further: all three owed checks ran here. The leak fix is the follow-up's, and
 its live check belongs to the run that makes it.
+
+**Suite results, run 18179.** On `08bcdc76`, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18179/e2e-tools.1.log` printed `328 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 12m04s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
