@@ -357,6 +357,11 @@ reads:
   test_allergen_card.py:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
+  test_always_redact_marketing.py:
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
   test_attendee_iam_user.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

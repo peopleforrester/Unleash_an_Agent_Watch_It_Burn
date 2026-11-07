@@ -32184,3 +32184,103 @@ OFFLINE RENDER-GATE TESTS GREEN`, then `23 checks ran (the offline suite and 22 
 printed `prose gate: pass`. No dependency was added. Other tier tests still read the network with no second try, such
 as `test_gateway_api_crds_upstream.py` (github.com, urlopen) and `test_delivered_tags_github_e2e.py` (`git
 ls-remote`); none of them went red in the three CI runs read here, so they are left as they are.
+## 2026-11-07 · #1092 · run 18337 · The marketing intel is redacted from every reply whatever the toggles say; the guard-proxy half goes to guard-proxy-agenticburn, the repin after it is Michael's
+
+**What #1092 asks.** #1064 put a scrub for the marketing intel (the Q4 campaign name, the 66,600 budget and the five
+demographic rows) in `llm-guard`'s Regex output scanner, and run 18323 proved it live. But guard-proxy calls that
+scanner only while the output guard is on (`proxy.py`, `if GUARDS["output"] and reply`), and the public bot starts
+with every guard off, which is the state Challenge 2's marketing send is played in. So #1002's rule that the intel
+never reaches the chat still rested on the prompt alone exactly then. The issue names two ways out: a scrub guard-proxy
+applies to every reply, or a recorded decision to accept the prompt-only barrier. `verify/prior-drafts.sh 1092
+origin/staging` printed NONE and the issue had no comments, so this is a first draft. The issue had no checklist, so
+this run added three acceptance criteria to its body: the guard-proxy change written, tested and filed; this repo's
+setting and its offline test; and the live replay of 20 with every guard off once the repin is synced.
+
+**The choice: the always-on redaction, not the prompt-only barrier.** #1002's rule has no guard-state exception, and
+#1064 already judged the prompt alone too weak (run 18179 saw it leak in 2 of 20 replies). Accepting the prompt-only
+barrier would leave the rule holding in every state but the one the send is played in, so this run takes the first
+option, as the issue's candidate. The recipe, the CEO address and the MCP sentinel stay in the toggleable output
+guard, because Challenges 2, 5 and 7 turn that guard on as their fix and the room has to see the difference.
+
+**How the redaction works.** guard-proxy gains one setting, `ALWAYS_REDACT`, a regular expression. Every non-empty
+match in every agent-authored reply text, on `/chat` and on the A2A pass-through, is replaced with `[REDACTED]`
+whatever the toggles say, before the output guard runs. It runs in the proxy's own process with no `llm-guard` call,
+for three reasons: a wide-open turn gains no upstream call and no latency; it has no fail-closed path, so an
+`llm-guard` outage cannot blank wide-open replies; and the toggleable scanner list needs no second scanner of the
+same type, which `llm-guard`'s per-type suppression could not tell apart. A redaction by it alone leaves `guarded`
+false and stamps no `witb.guard.decision`. The leaderboard reads `output_redacted` as "the output guard is on"
+(`infra/datadog-fleet/leaderboard.yaml`, C5), so the always-on redaction logs event `always_redact` instead. A pattern
+that does not compile stops guard-proxy at startup rather than running without the redaction.
+
+**The guard-proxy half, filed as a followup on guard-proxy-agenticburn.** Its code lives in that repo, which no run can
+push, and hecaton's forbidden gate refuses a move of this repo's `gitops/ai-layer/guard-proxy` gitlink (the 2026-11-05
+#382 entry, and #1046's). As run 18104 did for #1024, this run wrote the change in the submodule's checkout at
+guard-proxy-agenticburn main `ed2a2a3` (fetched this run; staging is the same commit), ran that repo's suites, saved
+the diff, and put the checkout back on its pin `dc78f1c`. Nothing was committed there. The change:
+- `proxy.py`: `ALWAYS_REDACT` and `always_redact()`, called on the `/chat` reply after the thinking-only handling and
+  before the output guard, and on every agent-authored A2A text part through one walker the output scrub now shares
+  (`_agent_text_parts`), which skips a field of an unexpected shape rather than raising, since it now runs with every
+  guard off.
+- The Go build: `always_redact` in the config (YAML key and env), compiled at load so a bad pattern fails startup, and
+  the same two call sites (`internal/server/chat.go`, `internal/server/a2a.go`, whose `scrubReply` now shares the
+  walker `eachAgentText` with `redactReply`). The Go build compiles the pattern as RE2, so the README notes that
+  lookarounds and backreferences are refused there and its classes are ASCII.
+- `conformance/test_always_redact.py`, 16 checks on both builds: `/chat` with every guard off (redacted, `guarded`
+  false, no `llm-guard` call, one `always_redact` event, no decision on the root span); the order before the output
+  guard on `/chat` and A2A; a toggle of the output guard to off leaving the redaction on; no pattern, blank or unset,
+  leaving the reply verbatim; a reply the pattern misses left alone; every match redacted; an empty match left alone;
+  a pattern that does not compile stopping startup; every agent-authored A2A part redacted and the guest's own history
+  turn not; and odd A2A shapes passed through.
+- `internal/config/config_test.go` `TestAlwaysRedact`, and the README's configuration section.
+- Results on this host: the Test command (`uv run --locked ruff check conformance && uv run --locked pytest`) printed
+  `All checks passed!` and `519 passed in 594.89s`; the E2E command (gofmt, `go vet`, `go test ./...`, the Go build,
+  then the suite against it) printed every package `ok` and `519 passed in 482.40s`
+  (`/var/lib/hecaton/runs/18337/gp-suites.log`). The mutation check was not run.
+The diff, 8 files, is `/var/lib/hecaton/runs/18337/guard-proxy-always-redact.diff`, and the followup carries it whole.
+On `ed2a2a3` it makes `proxy.py`'s sha256 start `ddf97ec452c0`.
+
+**This repo's half.** The guard-proxy Deployment in `gitops/ai-layer/resources.yaml` sets `ALWAYS_REDACT` to the 16
+marketing branches of the output scanner's pattern, verbatim, beside `OUTPUT_GUARD`. The pinned `dc78f1c` reads no
+such variable, so until the repin the setting does nothing. Adding it changes the pod template, so Argo CD rolls
+guard-proxy once when this syncs, which starts every guard off and resets its in-memory state, as any guard-proxy
+change does. Nothing else moves. Once guard-proxy-agenticburn takes the change, the repin is two lines, as #1046's
+was: the gitlink to that commit, and `checksum/proxy-py` on guard-proxy's pod template to the first 12 hex characters
+of that commit's `proxy.py` sha256 (`ddf97ec452c0` if the diff lands as written on `ed2a2a3`). The repin is Michael's
+commit, as every repin here has been.
+
+**Offline proof.** `verify/test_always_redact_marketing.py` reads the Deployment's value and holds that it carries no
+`$(` or `$$` (Kubernetes would expand them), compiles, and holds no lookaround or backreference. It holds that every
+branch is one of the output scanner's, so turning the output guard on still covers it; that every scanner branch that
+fires on a marketing leak is among them; and that none fires on Challenge 2's recipe signature or amounts, Challenge
+5's CEO address or Challenge 7's sentinel, each of which the scanner does redact. Run as guard-proxy runs it, it
+leaves no share, budget, average order or campaign name in run 18179's two leaks or five other shapes (one inside a
+`<thinking>` scratchpad), and leaves seven benign replies unchanged, a witch-name greeting and a beacon send
+confirmation among them. Run 18179's second leak comes out as "Q4 campaign '[REDACTED]', budget [REDACTED]. Rows:
+[REDACTED] avg), [REDACTED]), [REDACTED]), [REDACTED]), [REDACTED])." Then it loads the pinned `proxy.py` with the
+Deployment's env and every guard off, behind a stand-in agent that answers with that leak. At a pin that reads
+`ALWAYS_REDACT` the reply must carry none of the intel with `guarded` false; at a pin from before it the reply must
+pass through verbatim, the gap this issue names. Both arms ran this run: the first with the submodule checkout
+carrying the change, the second at the pin `dc78f1c`. Its scope-map entry is the one `scope_tests.py write` found for
+it; that write also listed about 20 other tests whose entries were already behind on staging, and this run left
+those as they were.
+
+**Live read on watch-it-burn-community (read only, nothing changed).** After `. "$HECATON_CLUSTER_ENV"`, with
+`--context watch-it-burn-community`: guard-proxy's `checksum/proxy-py` read `729ba1620cd9` (`dc78f1c`), 1/1 ready, and
+its env lists no `ALWAYS_REDACT`; `sha256sum /app/proxy.py` in the `proxy` container starts `729ba1620cd9` and the
+file holds no `ALWAYS_REDACT`; `/guards` read every guard false; Argo CD's `ai-layer` read `Synced` at `a09063ac`,
+`Healthy`. So the cluster runs the gap as the issue describes it. No replay was run: before the repin, 20 replies with
+every guard off would measure the prompt alone again, which run 18323 already did (0 of 20).
+
+**Not yet run on a cluster.** After guard-proxy-agenticburn takes the followup's change, Michael's repin reaches
+staging, and Argo CD syncs `ai-layer` on watch-it-burn-community:
+1. `kubectl --context watch-it-burn-community -n agent get deploy guard-proxy -o
+   jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'` prints the new checksum, and `sha256sum
+   /app/proxy.py` in the `proxy` container starts with it.
+2. Holding `wib-guard-lock` (`verify/guard_lease.py hold --context watch-it-burn-community`), with every AI guard and
+   every Kubernetes guardrail off as found, run 18323's `replay.py` 20 times in fresh sessions: no reply prints a
+   share, a segment row, the budget or the campaign name, and the beacon count at
+   `https://agenticburn.com/beacon/view` still moves on each send that lands.
+3. `kubectl --context watch-it-burn-community -n agent logs deploy/guard-proxy -c proxy` shows an `always_redact`
+   line for any reply it redacted, and a `/chat` turn with the output guard on still redacts the recipe card.
+
+No dependency was added.

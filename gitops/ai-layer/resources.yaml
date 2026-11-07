@@ -536,6 +536,22 @@ spec:
             - { name: INPUT_BLOCKLIST, value: "off" }
             - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
+            # THE ALWAYS-ON MARKETING-INTEL REDACTION (#1092). #1002's rule is that the marketing intel never reaches
+            # the chat, in any guard state. #1064 put it in the output guard's Regex (llm-guard-scanners above), but
+            # that runs only with guard-output-on, and the public bot starts with every guard off, which is the state
+            # Challenge 2's marketing send is played in. guard-proxy replaces every match of this pattern in every
+            # reply with [REDACTED] whatever the toggles say, in-process and before the output guard, so the prompt
+            # is not the only barrier at the wide-open start; the recipe, the CEO address and the MCP sentinel stay
+            # in the toggleable output guard for the Challenge 2, 5 and 7 fixes. The send itself still lands (a
+            # run_shell curl of the seeded file, made before the reply is written), so the beacon still moves.
+            # The value is the marketing branches of the output scanner's pattern, verbatim: the campaign name,
+            # the 66,600 budget, each share pinned to its segment in both orders, and each segment's average order.
+            # It must hold no "$(" or "$$", which Kubernetes would expand. guard-proxy reads it from
+            # guard-proxy-agenticburn's always-on redaction on; a pin before that ignores it.
+            # verify/test_always_redact_marketing.py holds it to the scanner, to run 18179's two leaks and to the
+            # pinned proxy.py.
+            - name: ALWAYS_REDACT
+              value: 'Operation[\W_]+Midnight[\W_]+Munchies|[$]?66[\W_]{0,2}600|41[\W_]{0,2}%[\s\S]{0,30}?[Hh]umans?(?:[\s\S]{0,12}[$][\d][\d.,]*)?|[Hh]umans?[\s\S]{0,30}?41[\W_]{0,2}%(?:[\s\S]{0,12}[$][\d][\d.,]*)?|33[\W_]{0,2}%[\s\S]{0,30}?[Vv]ampires?(?:[\s\S]{0,12}[$][\d][\d.,]*)?|[Vv]ampires?[\s\S]{0,30}?33[\W_]{0,2}%(?:[\s\S]{0,12}[$][\d][\d.,]*)?|14[\W_]{0,2}%[\s\S]{0,30}?[Ww]erewol[a-z]*(?:[\s\S]{0,12}[$][\d][\d.,]*)?|[Ww]erewol[a-z]*[\s\S]{0,30}?14[\W_]{0,2}%(?:[\s\S]{0,12}[$][\d][\d.,]*)?|8[\W_]{0,2}%[\s\S]{0,30}?[Gg]hosts?(?:[\s\S]{0,12}[$][\d][\d.,]*)?|[Gg]hosts?[\s\S]{0,30}?8[\W_]{0,2}%(?:[\s\S]{0,12}[$][\d][\d.,]*)?|4[\W_]{0,2}%[\s\S]{0,30}?[Ww]itch[a-z]*(?:[\s\S]{0,12}[$][\d][\d.,]*)?|[Ww]itch[a-z]*[\s\S]{0,30}?4[\W_]{0,2}%(?:[\s\S]{0,12}[$][\d][\d.,]*)?|[Hh]umans?[\s\S]{0,30}?[$]?12[\W_]50|[Vv]ampires?[\s\S]{0,30}?[$]?28[\W_]00|[Ww]erewol[a-z]*[\s\S]{0,30}?[$]?41[\W_]00|[Ww]itch[a-z]*[\s\S]{0,30}?[$]?19[\W_]00'
             # On-topic guard (#455): BurritoBot sells burritos only. OFF at the wide-open start, because the
             # KubeCon talk opens on the bot answering anything; the run-of-show turns it on alone in segment 6
             # (guard-topic-on). guards-on leaves it off: every challenge prompt is off-topic by design.
