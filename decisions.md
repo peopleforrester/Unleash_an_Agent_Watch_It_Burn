@@ -30210,3 +30210,8 @@ on both clusters' desks, as the run-of-show's segment 4 and #916's body name it;
 nothing on the router was changed by this run.
 
 **Not yet run on a cluster.** Nothing is owed: the change is records only. No dependency was added.
+
+**Suite results, run 18184.** On commit `50e5c800`, `bash verify/run-e2e-tools.sh` wrote
+`/var/lib/hecaton/runs/18184/e2e-tools.log`, which printed `329 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+then `82 checks ran (the offline suite and 81 tier tests) in 8m51s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
+and `exit=0`.
