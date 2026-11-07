@@ -33032,3 +33032,10 @@ is module downloads and plugin start-up. The cache holds 2.5 GB. The 326 s in th
 other tier checks downloading beside it; the warm run does no provider download at all.
 
 **Not yet run on a cluster.** Nothing: this changes only the cluster-free tier and its CI job.
+
+**Suite results, run 18412.** On `74ce501a`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=4fd5b914`, which
+ran everything since the change touches the runner, printed `342 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+then `83 checks ran (the offline suite and 82 tier tests) in 15m51s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
+and `exit=0`. Inside it, with three other checks running beside it, `test_terraform_lock_init.py took 35s` on the warm
+cache and `test_terraform_plugin_cache_lock.py took 8s`. The prose gate printed `prose gate: pass`. No dependency was
+added. The logs are in `/var/lib/hecaton/runs/18412/logs/`.
