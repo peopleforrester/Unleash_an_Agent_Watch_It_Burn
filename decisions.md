@@ -33028,3 +33028,63 @@ sheet's prompts are the ones it showed before.
 `/var/lib/hecaton/runs/18407/e2e-tools.log`, printed `341 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 9m21s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+
+## 2026-11-07 · #1113 · run 18411 · Staging CI cancels superseded runs, so Tanjiro's runner tests only the newest tip
+
+**The change.** `.github/workflows/verify-suites.yml` gains a workflow-level `concurrency` block. Its group is
+`${{ github.workflow }}-${{ github.ref }}`, with `-run-<run id>` added on any ref but staging, and `cancel-in-progress`
+is `${{ github.ref == 'refs/heads/staging' }}`. On staging the group is `verify-suites-refs/heads/staging` and a newer
+push cancels the queued and running run before it, both jobs at once. Michael approved this on 2026-11-07 in the
+status session (the issue's body); it reverses, for staging alone, the #1020 entry's "every pushed SHA gets its
+checks", which queued a 45-minute e2e job per merge behind one runner (four runs pending since 22:04Z and main 31
+commits behind at 22:33Z).
+
+**Why agent/** branches are left as they were.** Hecaton's dispatcher pushes each candidate to its run's branch and
+waits on the checks of that exact SHA, and `promote.ci_verdict` (`hecaton/run/basered.py`, `verdict`) reads any
+conclusion outside success, neutral and skipped as fail, cancelled included. So an agent/** push never cancels: its
+group carries the run id, which no other run shares, and its `cancel-in-progress` is false. The per-job groups from
+#1020 (`verify-suites-<job>-${{ github.ref }}`, `cancel-in-progress: false`, `queue: max`) stay, and still queue an
+agent branch's pushes in order. They cannot carry the cancel themselves: GitHub's workflow syntax reference says "The
+combination of `queue: max` and `cancel-in-progress: true` is not allowed and will result in a workflow validation
+error", so the cancel lives in the workflow block, which has no `queue`.
+
+**The test.** `verify/test_verify_suites_workflow.py` now evaluates the workflow block's two expressions for a staging
+push and for two pushes to one agent branch, with a small evaluator of the forms the block uses (github fields,
+string literals, `==`, `!=`, `&&`, `||`, `format()`), and fails when a staging push's group is not the workflow and
+the ref, when staging's `cancel-in-progress` is not true, when an agent push's is not false, when two agent pushes share
+a group or land in staging's, or when any block pairs `queue: max` with a cancel. It runs on eleven new broken copies
+(no block, a group without the ref or the workflow, one group for every agent push, cancel false, cancel true on every
+ref, cancel keyed on main, `queue: max` on the workflow block, a job pairing it with a cancel, an expression the
+evaluator cannot read), and the evaluator is checked on its own first, so a pass means the expressions were read. It
+printed 46 PASS and "verify-suites.yml and ci-base-sha.sh hold".
+
+**Hecaton's gate, read at `/var/lib/hecaton/app/current/src/hecaton/run/` on 2026-11-07.**
+
+- *Earlier SHAs' cancelled runs are never read.* `mainline._attempt` fetches the mirror and takes staging's tip;
+  `_heavy_gate` calls `_ci(expected=True)` on that SHA alone, since the repo is on the CI path (`config/runners.yaml`
+  names it for Tanjiro). A run cancelled because staging moved on belongs to a SHA the next attempt no longer reads.
+  A deferred attempt retries after `retry_minutes` (2, `config/governance.yaml`) with a fresh fetch, and
+  `ci_wait_minutes` (120) is counted per SHA from its first attempt, so a new tip starts its own wait.
+- *The base-red check already skips a cancelled run.* `basered.lookup` walks up to 20 first-parent ancestors of a
+  candidate's base and passes over `NO_RESULT` conclusions (cancelled, stale, skipped), written for hecaton's own
+  ci.yml, which also tests only the newest of a burst.
+- *No approved older SHA is promoted here.* The path where main takes a SHA Michael approved (`_decided`) is only for a
+  repo whose main publishes live; `config/publication.yaml` lists this repo under `not_publication`.
+- *Gap one: a cancelled tip is read as red.* `_ci` reads the tip's check runs through `ci_verdict`, and a cancelled
+  conclusion is "fail", which `_red` files as "Heavy gate red on staging: CI". With this change that happens when
+  staging moves between the attempt's fetch and its check-runs read: the SHA it read was cancelled in that window. The
+  window is seconds wide and merges come every few minutes, so it is rare, but it would file a false red issue. Filed
+  on hecaton: read a cancelled or stale check on the staging tip as no result, defer, and read the new tip next.
+- *Gap two: promotion takes the tip, not the newest green SHA.* `_fast_forward` pushes the tip to main, and only the tip. While the
+  tip's run is pending, an older staging SHA that finished green is not promoted, so in a burst of merges main moves
+  only once the tip has stood unmerged for one e2e run (about 45 minutes). That is still ahead of the queue it
+  replaces, which never caught up, but it is not "the newest green SHA". Filed on hecaton: when the tip is pending,
+  fast-forward main to the newest first-parent ancestor of the tip, ahead of main, whose checks all finished green,
+  with cancelled read as no result.
+
+Neither gap blocks this change: with both open, main still reaches a green staging tip and no earlier SHA's
+cancellation is read. Both are this run's follow-ups on peopleforrester/hecaton.
+
+**Not yet run on a cluster or a runner.** No cluster is involved, and the issue asks for no live check. The workflow
+block first runs on the first push to staging after hecaton promotes this run; the cancel shows there as the run
+before it ending `cancelled` in the Actions list.

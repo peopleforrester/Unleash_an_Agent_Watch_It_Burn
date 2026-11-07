@@ -13,6 +13,13 @@ job sets GH_TOKEN to the run's own token and widens its permissions to contents 
 job reads no issue and keeps the workflow's contents: read alone. Before the tier, the e2e job runs
 verify/ci_chromium_libs.py, which unpacks the libraries and fonts Playwright's Chromium needs and Tanjiro lacks.
 
+#1113: staging tests only its newest tip. The workflow-level concurrency group is the workflow and the ref, and on a
+staging push `cancel-in-progress` is true, so a newer push cancels the queued and running run before it. On an
+agent/** push the group carries the run id and `cancel-in-progress` is false, so no candidate's checks are cancelled
+(the dispatcher reads a cancelled check as red). The test evaluates both expressions for a staging push and for two
+pushes to one agent branch, rather than matching their text, and GitHub's refusal of `queue: max` beside
+`cancel-in-progress: true` in one block is checked on every block.
+
 The checker runs first on copies of the workflow, each broken one way, so a check that stopped matching reads as that
 and not as a pass. verify/ci-base-sha.sh is then run in throwaway repositories: an agent branch gets the merge base,
 a commit already in staging gets no HECATON_BASE_SHA (so #1018's runners run whole), and a missing GITHUB_ENV or an
@@ -40,6 +47,8 @@ BASE_STEP = "bash verify/ci-base-sha.sh"
 GH_TOKEN = "${{ github.token }}"
 E2E_PERMISSIONS = {"contents": "read", "issues": "read"}
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
+STAGING_REF = "refs/heads/staging"
+AGENT_REF = "refs/heads/agent/1113-1"
 
 failures: list[str] = []
 
@@ -58,6 +67,90 @@ def triggers(doc: dict) -> dict:
     if isinstance(on, list):
         return {e: None for e in on}
     return dict(on or {})
+
+
+def evaluate(value: object, ctx: dict[str, str]) -> object:
+    """A workflow value with each `${{ }}` expression evaluated against `ctx`, the github context's fields.
+
+    Only what this workflow's concurrency block uses is understood: github.<field>, string literals, == and !=, &&
+    and ||, and format(). GitHub's && and || return an operand, as Python's and and or do, and '' is falsy in both. A
+    value that is one whole expression keeps its type (a boolean stays a boolean); one with text around an expression
+    becomes a string, as on GitHub. Anything else raises ValueError, so an expression this does not read fails.
+    """
+    if not isinstance(value, str):
+        return value
+
+    def one(expr: str) -> object:
+        tokens = re.findall(r"\s+|'[^']*'|github\.[\w-]+|format|==|!=|&&|\|\||[(),]|.", expr)
+        out = []
+        for tok in tokens:
+            if tok.isspace():
+                continue
+            if tok.startswith("github."):
+                field = tok.split(".", 1)[1]
+                if field not in ctx:
+                    raise ValueError(f"github.{field} is not in the test's context")
+                out.append(repr(ctx[field]))
+            elif tok.startswith("'") or tok in ("==", "!=", "(", ")", ","):
+                out.append(tok)
+            elif tok == "&&":
+                out.append(" and ")
+            elif tok == "||":
+                out.append(" or ")
+            elif tok == "format":
+                out.append("fmt")
+            else:
+                raise ValueError(f"`{tok}` in `{expr}` is not an expression this test reads")
+        fmt = lambda s, *args: s.format(*args)  # noqa: E731
+        return eval("".join(out), {"__builtins__": {}}, {"fmt": fmt})  # the repo's own workflow text
+
+    parts = re.split(r"\$\{\{(.*?)\}\}", value)
+    if len(parts) == 3 and parts[0] == "" and parts[2] == "":
+        return one(parts[1])
+    text = []
+    for i, part in enumerate(parts):
+        got = part if i % 2 == 0 else one(part)
+        text.append(str(got).lower() if isinstance(got, bool) else str(got))
+    return "".join(text)
+
+
+def push_context(doc: dict, ref: str, run_id: str) -> dict[str, str]:
+    return {"workflow": str(doc.get("name", "")), "ref": ref, "run_id": run_id, "sha": "0" * 40}
+
+
+def concurrency_problems(doc: dict) -> list[str]:
+    """#1113: how the workflow-level group behaves on a staging push and on two pushes to one agent branch."""
+    found: list[str] = []
+    conc = doc.get("concurrency")
+    if not isinstance(conc, dict):
+        return ["no workflow-level concurrency block, so superseded staging runs queue behind the runner (#1113)"]
+    if set(conc) != {"group", "cancel-in-progress"}:
+        found.append(f"workflow concurrency keys are {sorted(conc)}, not group and cancel-in-progress (#1113)")
+    try:
+        staging = [{k: evaluate(conc.get(k), push_context(doc, STAGING_REF, rid))
+                    for k in ("group", "cancel-in-progress")} for rid in ("101", "102")]
+        agent = [{k: evaluate(conc.get(k), push_context(doc, AGENT_REF, rid))
+                  for k in ("group", "cancel-in-progress")} for rid in ("201", "202")]
+    except (ValueError, SyntaxError, NameError, TypeError, IndexError, KeyError) as exc:
+        return found + [f"the workflow concurrency block does not evaluate: {exc}"]
+    want = f"{doc.get('name')}-{STAGING_REF}"
+    if staging[0]["group"] != want or staging[1]["group"] != want:
+        found.append(f"a staging push's group is {staging[0]['group']!r}, not {want!r}, the workflow and the ref, "
+                     "so a newer staging push does not supersede the one before it (#1113)")
+    if staging[0]["cancel-in-progress"] is not True:
+        found.append(f"cancel-in-progress on a staging push is {staging[0]['cancel-in-progress']!r}, not true, so a "
+                     "superseded staging run keeps the runner (#1113)")
+    if agent[0]["cancel-in-progress"] is not False:
+        found.append(f"cancel-in-progress on an agent/** push is {agent[0]['cancel-in-progress']!r}, not false; the "
+                     "dispatcher reads a cancelled candidate check as red")
+    if agent[0]["group"] == agent[1]["group"]:
+        found.append(f"two pushes to one agent branch share the group {agent[0]['group']!r}, so the default single "
+                     "pending slot cancels a queued candidate's run")
+    if any(str(a["group"]).lower() == want.lower() for a in agent):
+        found.append("an agent/** push lands in staging's group")
+    if not all(AGENT_REF in str(a["group"]) and str(doc.get("name")) in str(a["group"]) for a in agent):
+        found.append(f"an agent/** push's group {agent[0]['group']!r} does not name the workflow and the ref")
+    return found
 
 
 def problems(doc: dict, text: str) -> list[str]:
@@ -83,6 +176,16 @@ def problems(doc: dict, text: str) -> list[str]:
         found.append("the workflow reads a secret; a public repo's self-hosted job holds none")
     if doc.get("permissions") != {"contents": "read"}:
         found.append(f"permissions are {doc.get('permissions')!r}, not contents: read")
+    found += concurrency_problems(doc)
+    # GitHub rejects the whole workflow when one block pairs queue: max with cancel-in-progress true.
+    blocks = [("the workflow", doc.get("concurrency"))] + [
+        (name, job.get("concurrency")) for name, job in (doc.get("jobs") or {}).items() if isinstance(job, dict)]
+    for where, block in blocks:
+        if not isinstance(block, dict):
+            continue
+        if block.get("queue") == "max" and block.get("cancel-in-progress", False) is not False:
+            found.append(f"{where}: queue max beside cancel-in-progress {block.get('cancel-in-progress')!r} is a "
+                         "workflow validation error on GitHub")
 
     jobs = doc.get("jobs") or {}
     # #1047: the tools tier reads issues with gh, so the e2e job hands gh the run's own token, read-only.
@@ -180,6 +283,21 @@ cases = {
     "cancel-in-progress": lambda d: d["jobs"]["e2e-tools"]["concurrency"].update({"cancel-in-progress": True}),
     "a group not per ref": lambda d: d["jobs"]["offline"]["concurrency"].update({"group": "verify-suites"}),
     "the default single-slot queue": lambda d: d["jobs"]["offline"]["concurrency"].pop("queue"),
+    "no workflow-level concurrency": lambda d: d.pop("concurrency"),
+    "the workflow group not per ref": lambda d: d["concurrency"].update({"group": "${{ github.workflow }}"}),
+    "the workflow group without the workflow": lambda d: d["concurrency"].update(
+        {"group": d["concurrency"]["group"].replace("${{ github.workflow }}-", "")}),
+    "one workflow group for every agent push": lambda d: d["concurrency"].update(
+        {"group": "${{ github.workflow }}-${{ github.ref }}"}),
+    "staging runs never cancelled": lambda d: d["concurrency"].update({"cancel-in-progress": False}),
+    "every run cancelled, agent branches too": lambda d: d["concurrency"].update({"cancel-in-progress": True}),
+    "cancel-in-progress keyed on main": lambda d: d["concurrency"].update(
+        {"cancel-in-progress": "${{ github.ref == 'refs/heads/main' }}"}),
+    "queue max on the workflow block": lambda d: d["concurrency"].update({"queue": "max"}),
+    "queue max beside cancel in a job": lambda d: d["jobs"]["offline"]["concurrency"].update(
+        {"cancel-in-progress": "${{ github.ref == 'refs/heads/staging' }}"}),
+    "an expression the test cannot read": lambda d: d["concurrency"].update(
+        {"cancel-in-progress": "${{ startsWith(github.ref, 'refs/heads/staging') }}"}),
     "no base step": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != BASE_STEP]}),
     "an action on a tag": lambda d: d["jobs"]["offline"]["steps"][0].update({"uses": "actions/checkout@v7"}),
@@ -201,6 +319,14 @@ for what, edit in cases.items():
 check("the checker fails a text that names pull_request outside a comment",
       bool(problems(doc, text + "\n# a comment is fine\nx: pull_request\n")))
 check("the checker fails a text that reads a secret", bool(problems(doc, text + "\n# ${{ secrets.TOKEN }}\n")))
+
+# The evaluator on its own, so a pass below means the expressions were read and not skipped.
+ctx = push_context(doc, STAGING_REF, "7")
+check("the evaluator reads a whole boolean expression as a boolean",
+      evaluate("${{ github.ref == 'refs/heads/staging' }}", ctx) is True)
+check("the evaluator joins text around expressions into a string",
+      evaluate("a-${{ github.run_id }}-${{ github.ref != 'refs/heads/staging' && 'x' || '' }}", ctx) == "a-7-")
+check("the evaluator reads format()", evaluate("${{ format('-run-{0}', github.run_id) }}", ctx) == "-run-7")
 
 # The workflow itself.
 got = problems(doc, text)
