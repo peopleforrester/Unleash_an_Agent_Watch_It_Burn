@@ -5749,6 +5749,7 @@ reads:
     - infra/terraform/dashboards/.terraform.lock.hcl
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/tf_plugin_cache.py
   test_terraform_lock_init_retry.py:
     - VERSIONS.lock
     - infra/org/boundary
@@ -5769,6 +5770,39 @@ reads:
     - verify/.tools/charts
     - verify/chart_fetch.py
     - verify/test_terraform_lock_init.py
+    - verify/tf_plugin_cache.py
+  test_terraform_plugin_cache_lock.py:
+    - VERSIONS.lock
+    - infra/terraform/aws/cluster/.terraform.lock.hcl
+    - verify/.tools/charts
+    - verify/chart_fetch.py
+  test_tf_plugin_cache.py:
+    - .github/workflows/verify-suites.yml
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/boundary/*.tf
+    - infra/org/boundary/.terraform.lock.hcl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/audit/*.tf
+    - infra/terraform/aws/audit/.terraform.lock.hcl
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/*.tf
+    - infra/terraform/aws/cluster/.terraform.lock.hcl
+    - infra/terraform/aws/network
+    - infra/terraform/aws/network/*.tf
+    - infra/terraform/aws/network/.terraform.lock.hcl
+    - infra/terraform/dashboards
+    - infra/terraform/dashboards/*.tf
+    - infra/terraform/dashboards/.terraform.lock.hcl
+    - verify/.tools
+    - verify/.tools/charts
+    - verify/.tools/plugin-cache
+    - verify/.tools/plugin-cache-test-1114
+    - verify/chart_fetch.py
+    - verify/run-e2e-tools.sh
+    - verify/test_terraform_lock_init.py
+    - verify/test_terraform_plugin_cache_lock.py
+    - verify/tf_plugin_cache.py
   test_tier_swap_live_judges.py:
     - agent
     - gitops/ai-layer/guard-proxy

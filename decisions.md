@@ -32980,3 +32980,55 @@ reads; it changed nothing. This run changes no code, and this entry maps each of
 scoped to this decisions.md change, printed `85 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks
 ran (the offline suite and 13 tier tests) in 3m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
 printed `prose gate: pass`. No dependency was added. The logs are in `/var/lib/hecaton/runs/18406/`.
+
+## 2026-11-08 · #1114 · run 18412 · The terraform lock-init test reads a provider plugin cache that outlives the checkout
+
+**What was slow.** `verify/test_terraform_lock_init.py` took 326 s in the tools tier on 2026-11-07, the slowest check
+by 200 s. It cleared `TF_PLUGIN_CACHE_DIR` (the #778 entry kept it cleared "since the test exists to check a fresh
+init"), so its five roots downloaded about 2.4 GB of providers on every run: aws 6.70.0 twice (cluster and boundary),
+6.51.0, 6.71.0, datadog 3.91.0 and the cluster root's four small ones. The tier's own cache sat in
+`verify/.tools/plugin-cache`, which every new checkout, so every hecaton run, starts empty.
+
+**What changed.**
+- `verify/tf_plugin_cache.py` (new) names the cache: `TF_PLUGIN_CACHE_DIR` when the caller sets it, else
+  `$HECATON_TOOLS_CACHE/terraform-plugin-cache`, else `${XDG_CACHE_HOME:-$HOME/.cache}/unleash-watch-it-burn/terraform-plugin-cache`.
+  A path inside the working tree, a relative one, or one it cannot create or write fails by name, and the next rule is
+  never tried in its place. As a script it prints the path it created.
+- `test_terraform_lock_init.py` inits with that cache and unsets `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE`. Each
+  init is still `-lockfile=readonly` in a new empty directory with no `.terraform/` and no module cache, which is what
+  #468 needed: only the provider downloads are shared. It prints each root's init time.
+- `run-e2e-tools.sh` takes its cache from the helper, never `verify/.tools`, prints it, and runs every tier test with
+  the loosening switch unset. Since a run in another checkout can now share the cache, each `# E2E SERIAL: terraform`
+  test holds `<cache>.lock` (flock) while it runs; past `TF_CACHE_LOCK_WAIT` (1800 s) the check fails, naming the lock.
+  `flock` joins the prerequisites the runner checks for.
+- `verify-suites.yml`'s e2e-tools job sets `TF_PLUGIN_CACHE_DIR` to `${{ runner.tool_cache }}/terraform-plugin-cache`
+  on Tanjiro's runner: outside the workspace, so the clean step never removes it, and kept between jobs.
+- `scope_audit.py` gives a tier test the same cache. `test_terraform_lock_init_retry.py` gives its stub a cache of its
+  own outside the checkout (`tf_plugin_cache.scratch`): a hecaton run's TMPDIR is `<worktree>/tmp/hecaton`, which the
+  helper reads as inside the tree.
+
+**In a hecaton run.** #1004's shared tools cache is not there yet: hecaton#540, which would provide
+`HECATON_TOOLS_CACHE`, is open, and this run's environment has no such variable. Until it is, a run takes the third rule,
+its pool's home (`/var/lib/hecaton/pools/<pool>/.cache/...`), which outlives the run and is outside the worktree. When hecaton sets `HECATON_TOOLS_CACHE`, the cache moves under it with no change here, provided
+`terraform-plugin-cache` there is writable: #540 proposes a read-only, checksum-keyed store, and terraform installs
+into its cache, so a read-only one fails the helper's check by name.
+
+**The lock still decides.** Terraform 1.4 and later take a cached provider only when its `h1:` checksum is one the lock
+records. Each committed lock records one `h1:` per provider, the linux_amd64 one, so the cache is usable on the tier's
+platform. Tried on the pinned terraform 1.15.6 with hashicorp/null 3.3.2 and the cluster root's lock block: with 8
+bytes appended to the cached binary, a fresh init printed `Installing hashicorp/null v3.3.2... (signed by HashiCorp)`,
+downloaded it again and put the verified bytes back in the cache; the lock was unchanged. With
+`TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE=true` the same init failed with "doesn't match any of the checksums
+recorded in the dependency lock file", so neither way takes the tampered bytes, and the test unsets it anyway.
+`verify/test_terraform_plugin_cache_lock.py` (new tier test, `# E2E SERIAL: terraform`) holds the cold, warm and
+tampered cases in a cache of its own; it took 8 s. `verify/test_tf_plugin_cache.py` (offline) holds the helper's order,
+its refusals and the wiring in the test, the runner and the workflow. `test_e2e_tools_tier.py` now counts five serial
+terraform tests and holds that a lock held elsewhere fails the terraform test by name while a plain test passes.
+
+**Cold and warm times, this host, pinned terraform 1.15.6.** The base version of the test (no cache): 96 s. With the
+change, cold (an empty cache in this pool's home): 81 s, per root 33.3, 20.5, 18.5, 3.6 and 4.6 s (boundary took
+cluster's aws 6.70.0 from the cache). Warm, twice: 25 s and 27 s, per root about 12, 6, 3, 3.5 and 1 s; what is left
+is module downloads and plugin start-up. The cache holds 2.5 GB. The 326 s in the issue came from a loaded host with
+other tier checks downloading beside it; the warm run does no provider download at all.
+
+**Not yet run on a cluster.** Nothing: this changes only the cluster-free tier and its CI job.

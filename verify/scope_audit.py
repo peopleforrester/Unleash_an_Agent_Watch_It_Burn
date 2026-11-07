@@ -31,6 +31,7 @@ VERIFY = pathlib.Path(__file__).resolve().parent
 REPO = VERIFY.parent
 sys.path.insert(0, str(VERIFY))
 import scope_tests as st  # noqa: E402
+import tf_plugin_cache  # noqa: E402
 
 IN_OPEN = 0x00000020
 IN_ISDIR = 0x40000000
@@ -100,7 +101,7 @@ def tier_env(base: dict[str, str], no_cloud_bin: str, helm: pathlib.Path) -> dic
     for d in ("config", "cache", "data"):
         (helm / d).mkdir(parents=True, exist_ok=True)
     env.update({"KUBECONFIG": "/dev/null", "PATH": f"{no_cloud_bin}:{tools}:{base['PATH']}",
-                "TF_PLUGIN_CACHE_DIR": str(VERIFY / ".tools" / "plugin-cache"),
+                "TF_PLUGIN_CACHE_DIR": str(tf_plugin_cache.ensure(base)),
                 "KYVERNO_CLI": str(tools / "kyverno"), "CONFTEST": str(tools / "conftest"),
                 "TERRAFORM": str(tools / "terraform"), "OTELCOL_CONTRIB": str(tools / "otelcol-contrib"),
                 "TTYD": str(tools / "ttyd"), "CRANE": str(tools / "crane"),

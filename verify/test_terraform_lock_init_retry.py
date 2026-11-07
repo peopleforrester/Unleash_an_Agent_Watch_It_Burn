@@ -13,9 +13,10 @@ import os
 import pathlib
 import subprocess
 import sys
-import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import tf_plugin_cache  # noqa: E402
 TEST = HERE / "test_terraform_lock_init.py"
 SRC = TEST.read_text(encoding="utf-8")
 
@@ -47,7 +48,9 @@ ROOTS = SRC.count('"infra/')
 def run(fail_runs: str, words: str) -> tuple[int, str, int]:
     """The tier test's exit, output and how many times it ran terraform, with a stub that fails the runs fail_runs
     names (a shell case pattern, `*` for all, `0` for none) printing words."""
-    with tempfile.TemporaryDirectory() as td:
+    # Outside the checkout, since the tier test refuses a plugin cache inside it and TMPDIR can be (#1114). The stub
+    # never writes the cache, so an offline run leaves nothing behind.
+    with tf_plugin_cache.scratch("tf-lock-init-retry-") as td:
         tmp = pathlib.Path(td)
         (tmp / "words").write_text(words)
         stub = tmp / "terraform"
@@ -56,7 +59,9 @@ def run(fail_runs: str, words: str) -> tuple[int, str, int]:
                         f'case $n in {fail_runs}) cat "{tmp}/words" >&2; exit 1;; esac\n'
                         'echo "Terraform has been successfully initialized!"\n')
         stub.chmod(0o755)
-        env = {**os.environ, "TERRAFORM": str(stub), "TF_LOCK_INIT_BACKOFF": "0,0"}
+        # A plugin cache of its own, so an offline run never creates the shared one.
+        env = {**os.environ, "TERRAFORM": str(stub), "TF_LOCK_INIT_BACKOFF": "0,0",
+               "TF_PLUGIN_CACHE_DIR": str(tmp / "plugin-cache")}
         p = subprocess.run([sys.executable, str(TEST)], capture_output=True, text=True, env=env, timeout=120)
         runs = int((tmp / "n").read_text()) if (tmp / "n").exists() else 0
     return p.returncode, p.stdout + p.stderr, runs

@@ -60,8 +60,9 @@ fi
 missing=()
 # curl, tar, python3 (zipfile, #1047) and sha256sum fetch and verify the tools, and xz unpacks weaver's archive; uv brings the Python
 # pins; openssl mints the Kyverno test's wrong key; jq runs test_ai_layer_rollout.py's filters; node runs the harnesses.
+# flock holds the shared Terraform provider cache for one terraform test at a time (#1114).
 tools=(python3 git)
-[[ "${need_tools}" -eq 0 ]] || tools+=(curl tar sha256sum xz uv node jq openssl)
+[[ "${need_tools}" -eq 0 ]] || tools+=(curl tar sha256sum xz uv node jq openssl flock)
 for tool in "${tools[@]}"; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
@@ -107,11 +108,20 @@ timings=()
 . "${SCRIPT_DIR}/no-cloud.sh"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
-# The Terraform provider cache outlives each test, so the ~800 MB aws provider downloads once per checkout, not once
-# per test process. Terraform does not promise a cache is safe to write from two processes at once, so the tests
-# marked `# E2E SERIAL: terraform` run one at a time (#572, #1005).
-TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
-mkdir -p "${TF_CACHE}"
+# The Terraform provider cache outlives the checkout (#1114): TF_PLUGIN_CACHE_DIR when the caller sets it (Tanjiro's
+# runner does, under RUNNER_TOOL_CACHE), else hecaton's shared tools cache, else the user's own cache directory, and
+# never inside the working tree; tf_plugin_cache.py names it and fails on any other. In verify/.tools it started cold
+# in every new checkout, and the lock-init test spent 326 s downloading the same providers again. Terraform does not
+# promise a cache is safe to write from two processes at once, so the tests marked `# E2E SERIAL: terraform` run one
+# at a time here (#572, #1005), and each holds TF_CACHE_LOCK while it runs, so a run in another checkout that shares
+# the cache waits its turn. A wait past TF_CACHE_LOCK_WAIT seconds fails the check, naming the lock.
+TF_CACHE="$(python3 "${SCRIPT_DIR}/tf_plugin_cache.py")" || {
+    printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: no usable Terraform provider cache\n' >&2
+    exit 1
+}
+TF_CACHE_LOCK="${TF_CACHE}.lock"
+TF_CACHE_LOCK_WAIT="${TF_CACHE_LOCK_WAIT:-1800}"
+printf 'Terraform provider cache: %s\n' "${TF_CACHE}"
 
 check_job() { # $1: the check's own directory, $2: "offline" or a tier test
     local dir="$1" t="$2"
@@ -131,17 +141,28 @@ check_job() { # $1: the check's own directory, $2: "offline" or a tier test
     # PYTHONUNBUFFERED: a Python test writes each line as it prints it, so a check stopped part way shows how far it got.
     # Into the gate's pipe its output was block-buffered, and when the gate's hour ran out in test_trace_shape_e2e.py its
     # tail held the test's heading and nothing after (#1005).
-    local -a tier_env=(env -u HECATON_BASE_SHA -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
+    local -a tier_env=(env -u HECATON_BASE_SHA -u TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
         -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
         KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}" PYTHONUNBUFFERED=1
         KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
         OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
         AGENTGATEWAY="${TOOLS_BIN}/agentgateway" HELM_CONFIG_HOME="${helm}/config"
         HELM_CACHE_HOME="${helm}/cache" HELM_DATA_HOME="${helm}/data")
-    case "${t}" in
-        *.py) no_cloud_run "${tier_env[@]}" python3 "${t}" ;;
-        *)    no_cloud_run "${tier_env[@]}" bash "${t}" ;;
-    esac
+    local -a run=(python3)
+    [[ "${t}" == *.py ]] || run=(bash)
+    if ! grep -q '^# E2E SERIAL: terraform' "${t}"; then
+        no_cloud_run "${tier_env[@]}" "${run[@]}" "${t}"
+        return
+    fi
+    # check_job runs in a subshell of its own, so the lock is this check's and goes when the subshell ends.
+    local lock_fd
+    exec {lock_fd}>>"${TF_CACHE_LOCK}"
+    if ! flock -w "${TF_CACHE_LOCK_WAIT}" "${lock_fd}"; then
+        printf 'FAIL: %s was held by another run for %ss, so the shared provider cache was never free\n' \
+            "${TF_CACHE_LOCK}" "${TF_CACHE_LOCK_WAIT}"
+        return 1
+    fi
+    no_cloud_run "${tier_env[@]}" "${run[@]}" "${t}"
 }
 
 # The gate runs this in place of the Test command, so main stays gated on the offline suite as well. It goes first in

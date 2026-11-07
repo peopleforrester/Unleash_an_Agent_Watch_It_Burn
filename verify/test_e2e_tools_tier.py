@@ -23,6 +23,7 @@ Some prerequisite is always left missing there, so the run stops before any chec
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import io
 import json
@@ -186,9 +187,10 @@ for t in tier:
         check(f"{t.name} runs terraform, so it carries `# E2E SERIAL: terraform`",
               re.search(r"^# E2E SERIAL: terraform", text, re.M) is not None)
 serial_tests = sorted(t.name for t in tier if re.search(r"^# E2E SERIAL: terraform", t.read_text(), re.M))
-check(f"the four terraform tests are the serial ones ({serial_tests})",
+check(f"the five terraform tests are the serial ones ({serial_tests})",
       serial_tests == ["test_control_plane_app_ports_module.py", "test_iam_policy_structural.py",
-                       "test_lab_platform_operator_entry.py", "test_terraform_lock_init.py"])
+                       "test_lab_platform_operator_entry.py", "test_terraform_lock_init.py",
+                       "test_terraform_plugin_cache_lock.py"])
 
 runner = RUNNER.read_text()
 code = "\n".join(line for line in runner.splitlines() if not line.lstrip().startswith("#"))
@@ -305,11 +307,19 @@ BAD_LOCK = (
 )
 
 
+# The runner keeps the Terraform provider cache outside the checkout and fails on one inside it (#1114). A scratch
+# checkout here is the fixture's whole temp directory, HOME included, so each run names a cache of its own outside it,
+# in a directory removed when this test exits.
+TF_CACHE_HOME = tempfile.TemporaryDirectory(prefix="tier-tf-cache-")
+TF_CACHE_ENV = {"TF_PLUGIN_CACHE_DIR": str(pathlib.Path(TF_CACHE_HOME.name) / "terraform-plugin-cache")}
+
+
 def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> pathlib.Path:
-    """A scratch verify/ holding copies of the scripts and the given lock, with fixtures and a curl log."""
+    """A scratch verify/ holding copies of the scripts and the given lock, with fixtures and a curl log. The runner
+    names its provider cache through tf_plugin_cache.py, so that comes with it."""
     vdir = tmp / "verify"
     vdir.mkdir(parents=True, exist_ok=True)
-    for s in scripts:
+    for s in scripts + ((VERIFY / "tf_plugin_cache.py",) if RUNNER in scripts else ()):
         shutil.copy2(s, vdir / s.name)
     (vdir / "e2e-tools.lock").write_text(lock)
     fx = tmp / "fixtures"
@@ -322,7 +332,7 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
 def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path) -> subprocess.CompletedProcess:
     # TMPDIR is the fixture's own (#909): run-tests.sh and no-cloud.sh mktemp, and on 2026-11-05 run 17593's host /tmp
     # was an unlinked directory (stat Links: 0), so a mktemp falling back to /tmp failed and this test with it.
-    env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+    env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures")}
     return subprocess.run([BASH, str(script)], capture_output=True, text=True, timeout=120, env=env)
 
@@ -474,7 +484,7 @@ with tempfile.TemporaryDirectory() as t:
         (vdir / name).write_text(f"# SUITE: e2e\n# E2E TIER: tools\n{body}")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24,
                              "aws": HOST_CLOUD, "eksctl": HOST_CLOUD})
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), "AWS_PROFILE": "accen-dev",
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV, "AWS_PROFILE": "accen-dev",
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
            "KUBECTL_LOG": str(tmp / "kubectl.log"), "HOST_LOG": str(tmp / "host.log")}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
@@ -521,7 +531,7 @@ with tempfile.TemporaryDirectory() as t:
     host_helm.mkdir(parents=True)
     (host_helm / "repositories.yaml").write_text("repositories:\n- name: cilium\n  url: https://helm.cilium.io\n")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "HELM_LOG": str(tmp / "helm.json"),
            "HELM_CONFIG_HOME": str(host_helm)}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
@@ -567,7 +577,7 @@ def pool_run(tmp: pathlib.Path, extra: dict[str, str]) -> subprocess.CompletedPr
     pair = tmp / "pair"
     shutil.rmtree(pair, ignore_errors=True)
     pair.mkdir()
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair), **extra}
     return subprocess.run([BASH, str(tmp / "verify" / RUNNER.name)], capture_output=True, text=True, timeout=240,
                           env=env)
@@ -615,6 +625,38 @@ with tempfile.TemporaryDirectory() as t:
               and f"E2E_TOOLS_JOBS is '{bad}', not a whole number of 1 or more" in r.stderr
               and "== " not in r.stdout, r.stdout + r.stderr)
 
+print("== a terraform test waits for the shared provider cache's lock, and fails naming it when never free (#1114) ==")
+# The cache now outlives the checkout, so a run in another checkout can share it. Each terraform test holds
+# <cache>.lock while it runs. Here the lock is held from outside, as another run would hold it: with a wait of 1 s the
+# terraform test fails without starting, naming the lock, and a plain test beside it still passes. Released, the same
+# run passes.
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, TIER_LOCK, (FETCH, RUNNER, BROWSERS, VERIFY / "no-cloud.sh", VERIFY / "ensure-submodules.sh"))
+    (vdir / "run-tests.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (vdir / "test_tf_locked.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\n# E2E SERIAL: terraform\n"
+                                            "echo terraform test ran\n")
+    (vdir / "test_plain_beside.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\necho plain test ran\n")
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
+    lock_path = pathlib.Path(TF_CACHE_ENV["TF_PLUGIN_CACHE_DIR"] + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # Held by this process, as flock(1) in the runner takes it, and released when the file closes.
+    with lock_path.open("a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        r = pool_run(tmp, {"TF_CACHE_LOCK_WAIT": "1", "PAIR_POLLS": "1"})
+    locked = block(r.stdout, "test_tf_locked.sh")
+    check(f"with the lock held elsewhere the terraform test fails (exit {r.returncode})",
+          r.returncode == 1 and "  test_tf_locked.sh (exit 1)" in r.stderr, r.stdout + r.stderr)
+    check("it names the lock and the wait, and never starts",
+          f"FAIL: {lock_path} was held by another run for 1s" in locked and "terraform test ran" not in locked, locked)
+    check("the plain test beside it still passes", block(r.stdout, "test_plain_beside.sh") == "plain test ran\n",
+          r.stdout)
+    r = pool_run(tmp, {"TF_CACHE_LOCK_WAIT": "1", "PAIR_POLLS": "1"})
+    check(f"released, the same run passes and the terraform test runs (exit {r.returncode})",
+          r.returncode == 0 and block(r.stdout, "test_tf_locked.sh") == "terraform test ran\n", r.stdout + r.stderr)
+    check("the runner names the cache it used", f"Terraform provider cache: {TF_CACHE_ENV['TF_PLUGIN_CACHE_DIR']}\n"
+          in r.stdout, r.stdout)
+
 print("== stopped by a signal, the runner names what still ran and stops it (#1005) ==")
 # The gate's timeout interrupts the command, then terminates it. The signal here goes to the runner alone, so what
 # the fixture started is stopped by the runner and not by a signal to its whole group.
@@ -629,7 +671,7 @@ with tempfile.TemporaryDirectory() as t:
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
     pair = tmp / "pair"
     pair.mkdir()
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair)}
     proc = subprocess.Popen([BASH, str(vdir / RUNNER.name)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             env=env, start_new_session=True)
@@ -698,7 +740,7 @@ HOST_KUBECTL = '#!/bin/sh\necho "host $*" >>"$KUBECTL_LOG"\nexit 1\n'
 
 
 def run_live(tmp: pathlib.Path, vdir: pathlib.Path) -> subprocess.CompletedProcess:
-    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp),
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
            "KUBECONFIG": "/dev/null", "CONTEXT": "wib-fixture", "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
            "KUBECTL_LOG": str(tmp / "kubectl.log")}
     return subprocess.run([BASH, str(vdir / RUN_E2E.name)], capture_output=True, text=True, timeout=120, env=env)

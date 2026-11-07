@@ -190,7 +190,8 @@ def fixture(tmp: pathlib.Path) -> tuple[pathlib.Path, str]:
     root = tmp / "repo"
     v = root / "verify"
     v.mkdir(parents=True)
-    for name in ("run-tests.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh", "ensure-submodules.sh"):
+    for name in ("run-tests.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh", "ensure-submodules.sh",
+                 "tf_plugin_cache.py"):
         shutil.copy2(VERIFY / name, v / name)
     (v / "fetch-e2e-tools.sh").write_text(FETCH_STUB)
     (v / "playwright_browsers.py").write_text("import sys\nsys.exit(0)\n")
