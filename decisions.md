@@ -28092,3 +28092,12 @@ kitchen reason at least five times (the recipe every time), with `live/replay.py
 guard-proxy half, the sync alone changes nothing a guest sees, since no request carries the header; the Agent CR then
 reads `X-Pantry-Shut` in workshop-mcp's `allowedHeaders` (`kubectl --context watch-it-burn-community -n agent get agent
 workshop-agent -o jsonpath='{.spec.declarative.tools[0].mcpServer.allowedHeaders}'`).
+
+**A tools-tier test broken at the base, fixed here.** The first full run of `bash verify/run-e2e-tools.sh` on this branch
+(at `ec24bb3a`) ran the offline suite green (313 tests) and then the tier, `78 checks ran ... in 43m35s`, with one
+failure: `verify/test_breakout_room_cleanup.py` (#990) died with `AttributeError: '_StandInMCP' object has no attribute
+'get_context'`. #995 (`582d10ec`) made `deploy_app` read the request's X-Witch-Name through `mcp.get_context()`, and
+landed after #990 wrote that test's stand-in, so it fails the same way at the base `cf19a5dc`; this change only moved
+the read into `_request_header`. Its stand-in now raises LookupError from `get_context`, as the other deploy_app tests'
+stand-ins do, and it passes with the pinned tools on PATH. The run before that one was stopped by this run after its
+offline suite failed on `test_public_images.py`, changed above.
