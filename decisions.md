@@ -32555,3 +32555,7 @@ frame (#935)` and `exit=0`. So the deploy shipped #18, and #935's owed live chec
 
 **Not yet run on a cluster.** Nothing here runs on a cluster, and nothing is owed. No code changed, so no test was
 added; no dependency was added.
+
+**Suite results, run 18374.** On `9a647d73`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=470c95ef`, so
+scoped to this decisions.md change, printed `85 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks
+ran (the offline suite and 13 tier tests) in 3m52s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
