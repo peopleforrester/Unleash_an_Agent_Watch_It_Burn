@@ -32149,3 +32149,30 @@ which this change does not take.
 **Live.** No cluster is involved: the three tests read ghcr.io with no credential. Run here, each exited 0
 (`The Joker's entrypoint serves its page on the pinned busybox.`, `Both Jokers are public, at images.lock's pins,
 and are this checkout's page Jokers.`, `Every watch-it-burn tag names the version inside its image.`).
+
+**The next red, and the same cause in two more places.** While this ran, staging's next CI run, 42407284907 at the
+#1073 record commit (job 128507609110), failed three tier tests on the same runner, all on the network:
+`test_image_version_tags.py` on another ghcr.io handshake timeout (the change above covers it),
+`test_kitchen_note_followup.py` on `gh issue view exit 1: Post "https://api.github.com/graphql": net/http: TLS
+handshake timeout`, and `test_terraform_lock_init.py`, whose `terraform init` of `infra/terraform/aws/cluster` could
+not list `hashicorp/time` from registry.terraform.io (`the request failed after 2 attempts ... context deadline
+exceeded`). Both now ask again on what `chart_fetch.is_network_error` (#1028's words for Go's net/http, crypto/tls
+and net failures, a 429 or a 5xx) reads as the network. `verify/gh_comments.py` runs `gh issue view` up to three
+times, 2s and 5s apart, naming each retry on stderr; no token (exit 4), a spent rate limit and any other answer are
+never asked again, and a read broken on every try says `a network error on each of 3 tries`.
+`verify/test_terraform_lock_init.py` runs a root's init again in a new empty directory, so each try is still a fresh
+init, up to three times, 10s and 30s apart, printing `RETRY <root>`; a lock that does not match, or any failure that
+is not the network, fails on the first try as before.
+
+**How the second part is held.** `verify/test_gh_comments.py` adds a stub gh that fails a set number of times with
+the runner's handshake words: one or two failures then the body read ok, three is an error naming the handshake and
+the tries, a 502 is retried, and a 404, a spent rate limit and exit 4 are each run once with no pause. The new offline
+`verify/test_terraform_lock_init_retry.py` runs the real tier test against a stub terraform (`TERRAFORM`, with
+`TF_LOCK_INIT_BACKOFF=0,0`): one registry timeout is retried once and passes, a timeout on every try fails each of
+the five roots after three tries naming them, a checksum mismatch fails each root on its single try with no retry,
+and a clean stub inits each root once. `verify/scope-map.yaml` adds `verify/chart_fetch.py` and
+`verify/.tools/charts` to the six `gh_comments` users that have entries and to `test_terraform_lock_init.py`, and
+gives the new test its entry.
+
+**Run here.** `test_kitchen_note_followup.py` exited 0 through gh with its token, and `test_terraform_lock_init.py`,
+with the pinned terraform v1.15.6, printed `ALL TERRAFORM LOCK-INIT CHECKS GREEN` for all five roots with no retry.

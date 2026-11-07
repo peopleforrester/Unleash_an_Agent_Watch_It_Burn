@@ -233,6 +233,8 @@ reads:
   test_agent_obs_cause_comment.py:
     - decisions.md
     - gitops/otel-collector/values.yaml
+    - verify/.tools/charts
+    - verify/chart_fetch.py
     - verify/gh_comments.py
   test_agent_obs_flow.py:
     - agent
@@ -1585,6 +1587,8 @@ reads:
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
+    - verify/.tools/charts
+    - verify/chart_fetch.py
     - verify/dd_traces.py
     - verify/gh_comments.py
   test_dd_traces.py:
@@ -1739,6 +1743,8 @@ reads:
   test_dispatched_runs_cause_comment.py:
     - AGENTS.md
     - gitops/apps
+    - verify/.tools/charts
+    - verify/chart_fetch.py
     - verify/gh_comments.py
   test_display_masked_prompts_e2e.py:
     - gitops/ai-layer/guard-proxy
@@ -2806,6 +2812,8 @@ reads:
     - decisions.md
     - gitops/apps
     - gitops/otel-collector/values.yaml
+    - verify/.tools/charts
+    - verify/chart_fetch.py
     - verify/gh_comments.py
     - verify/run-e2e-tools.sh
     - verify/test_agent_obs_cause_comment.py
@@ -4757,6 +4765,8 @@ reads:
     - PROGRESS.md
     - PROJECT_STATE.md
     - decisions.md
+    - verify/.tools/charts
+    - verify/chart_fetch.py
     - verify/gh_comments.py
     - verify/run-e2e-tools.sh
   test_proxy_checksum.py:
@@ -5509,6 +5519,8 @@ reads:
   test_support_desk_live.py:
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/ticket_site.py
+    - verify/.tools/charts
+    - verify/chart_fetch.py
     - verify/gh_comments.py
     - verify/support_desk_hosts.py
   test_support_desk_named.py:
@@ -5692,6 +5704,28 @@ reads:
     - infra/terraform/dashboards
     - infra/terraform/dashboards/*.tf
     - infra/terraform/dashboards/.terraform.lock.hcl
+    - verify/.tools/charts
+    - verify/chart_fetch.py
+  test_terraform_lock_init_retry.py:
+    - VERSIONS.lock
+    - infra/org/boundary
+    - infra/org/boundary/*.tf
+    - infra/org/boundary/.terraform.lock.hcl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/audit/*.tf
+    - infra/terraform/aws/audit/.terraform.lock.hcl
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/*.tf
+    - infra/terraform/aws/cluster/.terraform.lock.hcl
+    - infra/terraform/aws/network
+    - infra/terraform/aws/network/*.tf
+    - infra/terraform/aws/network/.terraform.lock.hcl
+    - infra/terraform/dashboards
+    - infra/terraform/dashboards/*.tf
+    - infra/terraform/dashboards/.terraform.lock.hcl
+    - verify/.tools/charts
+    - verify/chart_fetch.py
+    - verify/test_terraform_lock_init.py
   test_tier_swap_live_judges.py:
     - agent
     - gitops/ai-layer/guard-proxy

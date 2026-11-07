@@ -174,6 +174,56 @@ got, _, _ = run_case(0, json.dumps({"body": "x"}), what="body")
 check("read_body without with_title leaves the title empty and asks for the body alone", got.ok and got.title == "",
       str(got))
 
+print("== a read the network broke is asked again; an answer never is (Actions run 42407284907, #1047) ==")
+HANDSHAKE = 'Post "https://api.github.com/graphql": net/http: TLS handshake timeout\n'
+
+
+def flaky_case(drops: int, code: int = 1, err: str = HANDSHAKE, then: str = '{"body": "The note."}'):
+    """read_body with a gh that fails <drops> times with exit <code> and <err>, then answers <then>; the naps taken
+    and how many times gh was run."""
+    naps: list[float] = []
+    with tempfile.TemporaryDirectory() as td:
+        bindir = pathlib.Path(td)
+        (bindir / "err").write_text(err)
+        (bindir / "out").write_text(then)
+        gh = bindir / "gh"
+        gh.write_text("#!/bin/sh\n"
+                      f'n=$({CAT} "{bindir}/n" 2>/dev/null); n=$((n+1)); echo $n > "{bindir}/n"\n'
+                      f'if [ $n -le {drops} ]; then {CAT} "{bindir}/err" >&2; exit {code}; fi\n'
+                      f'{CAT} "{bindir}/out"\n')
+        gh.chmod(0o755)
+        old, old_sleep = os.environ.get("PATH", ""), gh_comments._sleep
+        os.environ["PATH"] = f"{bindir}:/bin:/usr/bin"
+        gh_comments._sleep = naps.append
+        try:
+            got = gh_comments.read_body("owner/repo", 7)
+        finally:
+            os.environ["PATH"], gh_comments._sleep = old, old_sleep
+        runs = int((bindir / "n").read_text())
+    return got, naps, runs
+
+
+tries = len(gh_comments.BACKOFF) + 1
+got, naps, runs = flaky_case(1)
+check("one TLS handshake timeout, then the body", got.ok and got.body == "The note." and runs == 2
+      and naps == [gh_comments.BACKOFF[0]], str((got, naps, runs)))
+got, naps, runs = flaky_case(tries - 1)
+check(f"{tries - 1} broken reads, then the body", got.ok and runs == tries and naps == list(gh_comments.BACKOFF),
+      str((got, naps, runs)))
+got, naps, runs = flaky_case(tries)
+check(f"a read broken on each of {tries} tries is an error naming the handshake and the tries",
+      "TLS handshake timeout" in got.error and f"a network error on each of {tries} tries" in got.error
+      and runs == tries, str((got, runs)))
+got, naps, runs = flaky_case(5, err="gh: Not Found (HTTP 404)\n")
+check("a 404 is asked once, with no nap", "HTTP 404" in got.error and runs == 1 and not naps, str((got, naps, runs)))
+got, naps, runs = flaky_case(5, err="gh: API rate limit exceeded for user ID 1. (HTTP 403)\n")
+check("a spent rate limit is asked once", bool(got.rate_limited) and runs == 1 and not naps, str((got, naps, runs)))
+got, naps, runs = flaky_case(5, code=4, err="To get started with GitHub CLI, please run:  gh auth login\n")
+check("no token is asked once", bool(got.missing) and runs == 1 and not naps, str((got, naps, runs)))
+got, naps, runs = flaky_case(5, err="gh: Bad Gateway (HTTP 502)\n", then='{"body": "x"}')
+check("a 502 is GitHub's network failing, asked again until the tries run out",
+      "HTTP 502" in got.error and runs == tries, str((got, runs)))
+
 print("== the three cause-comment tests read through the helper, and nothing reads anonymously ==")
 for name in CAUSE_TESTS:
     src = (HERE / name).read_text(encoding="utf-8")

@@ -14,6 +14,11 @@ form the promotion gate gets refuses `gh api` while it allows `gh issue view`; d
 view --json comments` reads every comment through GraphQL, so each comes back as {"login", "body", "url"}, and a
 GitHub App's bot is named by its slug, without the "[bot]" the REST API adds.
 
+A read the network broke before GitHub answered (gh's "TLS handshake timeout", a reset, an EOF, a 5xx: the words
+chart_fetch.is_network_error knows) is asked again, up to len(BACKOFF) + 1 times in all, each retry named on stderr. On
+2026-11-07 Tanjiro's CI runner lost one such handshake to api.github.com and test_kitchen_note_followup.py went red on
+it (Actions run 42407284907, #1047). No token, a spent rate limit and any other answer are never asked again.
+
 `read(owner_repo, number)` returns a `Read`. When the read failed, exactly one of its `missing`, `rate_limited` and
 `error` is set, naming what happened; when it did not, `comments` is every comment. `check_read(read, issue, check)`
 turns that into the named checks the tests print, so a spent quota reads as a spent quota and never as "no comment
@@ -26,11 +31,18 @@ import json
 import re
 import shutil
 import subprocess
+import sys
+import time
 from typing import Callable
+
+from chart_fetch import is_network_error
 
 # gh exits 4 when it has no token to send ("To get started with GitHub CLI, please run: gh auth login").
 GH_NO_AUTH_EXIT = 4
 RATE_LIMIT = re.compile(r"rate limit|HTTP 429", re.I)
+# Seconds before each retry of a read the network broke; one more try than there are waits.
+BACKOFF = (2, 5)
+_sleep = time.sleep
 
 
 @dataclasses.dataclass
@@ -67,11 +79,22 @@ def _view(owner_repo: str, number: str | int, field: str, timeout: int) -> tuple
         return None, Read([], missing="no gh on PATH: the issue is read with gh's token, and an anonymous read would "
                                     "share the host's one quota of 60 requests an hour (#863)")
     cmd = [gh, "issue", "view", str(number), "-R", owner_repo, "--json", field]
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return None, Read([], error=f"`gh issue view` did not answer within {timeout}s")
-    said = _last_lines(p.stderr) or _last_lines(p.stdout)
+    tries = len(BACKOFF) + 1
+    for attempt in range(1, tries + 1):
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return None, Read([], error=f"`gh issue view` did not answer within {timeout}s")
+        said = _last_lines(p.stderr) or _last_lines(p.stdout)
+        if p.returncode in (0, GH_NO_AUTH_EXIT) or RATE_LIMIT.search(p.stderr) or RATE_LIMIT.search(p.stdout) \
+                or not is_network_error(p.stderr) or attempt == tries:
+            break
+        wait = BACKOFF[attempt - 1]
+        print(f"  RETRY gh issue view {owner_repo}#{number}: {said} (try {attempt} of {tries}; again in {wait:g}s)",
+              file=sys.stderr, flush=True)
+        _sleep(wait)
+    if p.returncode != 0 and attempt > 1 and is_network_error(p.stderr):
+        said += f" (a network error on each of {attempt} tries)"
     if p.returncode == GH_NO_AUTH_EXIT:
         return None, Read([], missing="gh has no token: run `gh auth login`, or set GH_TOKEN or GITHUB_TOKEN"
                                     + (f" (gh said: {said})" if said else ""))
