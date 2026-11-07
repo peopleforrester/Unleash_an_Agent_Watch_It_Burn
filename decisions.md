@@ -30980,3 +30980,11 @@ the segments table and the Run-through record's Segment 3 row are written from t
 
 **No live check.** This change is to the run-of-show's prose and an offline test; nothing the clusters run reads it,
 so no cluster was read.
+
+**Suite results, run 18244.** On `7eb0d41f`, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18244/e2e-tools.log` printed `334 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with
+`verify/test_seg3_timing.py` among them, then `82 checks ran (the offline suite and 81 tier tests) in 10m12s, 4 at a
+time`, `SOME E2E TOOLS TIER CHECKS FAILED: test_promo_villains_public.py (exit 1)` and `exit=1`. That one check is
+#1070's: lab-platform's promo villain `:v1` tags on ghcr.io serve digests other than the pinned ones (skeletor at
+`7b973b14d4d5...` against the pinned `df82eb53...`). This change touches no image pin. The prose gate printed `prose
+gate: pass`.
