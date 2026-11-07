@@ -24,8 +24,9 @@ criterion can stop holding, and holds that each of those ways fails here.
 What it spends. One model call on the public bot, marked [[wib-probe]] so the room's feed skips it: about half a cent
 of Bedrock, which counts on /cost until the counter is reset (run-of-show, "Reset the community bot"). It creates
 joker-<stage name> in namespace agent and deletes it again. It deletes joker-burritobot only when this run's ask made
-it. Run it before or after the private cluster's probe, never during it: that probe's guardrails-on arms Kyverno on
-this cluster too (#774), which refuses the Joker.
+it. The private cluster's probe's guardrails-on arms Kyverno on this cluster too (#774), which refuses the Joker, so
+the beat runs holding the community cluster's guard lock (verify/guard_lease.py, #1016), which that probe also holds:
+each waits for the other, and after 30 minutes this fails naming the holder, having asked nothing.
 
 Usage: COMMUNITY_CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] python3 verify/test_kubecon_c3_live.py
 """
@@ -41,6 +42,7 @@ from typing import Callable
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 
 # The room's ask since #764, written out so a change back to the desk's old copied ask fails here.
@@ -171,7 +173,11 @@ def main() -> int:
 
     print(f"== the KubeCon probe's Challenge 3 beat on the live public bot ({context}) ==")
     cluster = RecordingCluster("", context, None, os.environ.get("KUBECONFIG") or None, timeout=120.0)
-    run_checks(cluster, check)
+    # The beat lands only with Kyverno off, so it holds the guard lock (#1016): a private probe's guardrails-on, which
+    # holds this cluster's lock too, then waits for it instead of arming Kyverno mid-beat.
+    if not guard_lease.run_held(context, lambda: run_checks(cluster, check), check, "verify/test_kubecon_c3_live.py",
+                                kubeconfig=os.environ.get("KUBECONFIG") or None):
+        return guard_lease.BUSY_EXIT
 
     print()
     if failures:

@@ -9,6 +9,7 @@ sent only after guard-proxy's own input stages say they refuse it, and its trace
 read, before guardrails-on and after it (#843), and both seeds need run_shell's grep in workshop-mcp's audit log."""
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import logging
@@ -16,6 +17,7 @@ import pathlib
 import re
 import sys
 import tempfile
+import types
 import urllib.parse
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -139,7 +141,7 @@ class FakePrivate(st.StageCluster):
 
     def remove_room_joker(self):
         self.joker = False
-        return "removed"
+        return None
 
     def tool_calls_since(self, since):
         return list(self.audit)
@@ -232,6 +234,32 @@ class FakeDatadog:
         return {"data": [{"attributes": {"name": n, "tags": tags}} for n in ["invocation", *self.tools[key]]]}
 
 
+# The cluster's guard lock (#1024) without a cluster: a stand-in hold that records the context it was asked for and
+# whether the seeds' Probe.run ran inside it. verify/test_guard_lease.py tests the lock itself.
+LOCK: dict = {}
+
+
+@contextlib.contextmanager
+def fake_hold(context, kubeconfig=None, profile=None, what="", wait=0.0, **kw):
+    LOCK.update(context=context, what=what, inside=True)
+    try:
+        yield types.SimpleNamespace(lost=None, holder="fake")
+    finally:
+        LOCK["inside"] = False
+
+
+st.guard_lease.hold_switch = fake_hold
+_real_probe_run = st.StageProbe.run
+
+
+def _run_in_lock(self, *a, **k):
+    LOCK["ran_inside"] = LOCK.get("inside")
+    return _real_probe_run(self, *a, **k)
+
+
+st.StageProbe.run = _run_in_lock
+
+
 def run_seed(cluster: FakePrivate, dd: FakeDatadog, out: pathlib.Path) -> int:
     st.StageCluster = lambda *a, **k: cluster  # noqa: E731 - the seed builds its cluster from argv
     st.datadog = lambda profile, region: (dd, "datadoghq.com")  # noqa: E731
@@ -250,6 +278,9 @@ with tempfile.TemporaryDirectory() as tmp:
     keys = [b["key"] for b in saved.get("beats", [])]
     check("it exits 0 and every beat passes", rc == 0 and all(b["verdict"] == kp.PASS for b in saved.get("beats", [])),
           str([(b["key"], b["note"]) for b in saved.get("beats", []) if b["verdict"] != kp.PASS]))
+    check("the seeds and their guards-off run inside the guard lock on --context (#1024)",
+          LOCK.get("ran_inside") is True and LOCK["context"] == "wib-private" and not LOCK["inside"]
+          and LOCK["what"] == f"stage_traces.py seed {HOST}", str(LOCK))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
           keys == ["identity", "start-state", "c1-attack", "c2-attack", "guardrails-on", "armed", "c1-fixed",
                    "c2-fixed", "c3-attack", "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",

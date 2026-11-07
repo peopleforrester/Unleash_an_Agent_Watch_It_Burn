@@ -472,6 +472,23 @@ out, so the reload was not sent again. Read live: both registry-attackme URLs an
 serves exactly the roster", exit 0. Apex main is still `a93679a`. The reload waits on Michael's `railway login` on
 tanjiro-wsl2.
 
+**2026-11-07, #945, live: registry-attackme leaves the router.** The hecaton coordinator reloaded the router from
+netcup at 12:19Z with run 18021's pinned act: apex main `a93679a`'s 31-route table, checksums matched, "Valid
+configuration", Caddy reloaded at 12:19:17Z with no redeploy. Hecaton run 18174 read it at 12:23Z, at staging
+`ae188261`: `registry-attackme.burritobot.co/v2/` and `registry-attackme.agenticburn.com/v2/` answer 404, the router's
+answer for a host it does not carry, where they answered 502 before. `registry.burritobot.co/v2/` answers 200 and its
+tags list prints `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended
+"the router serves exactly the roster", exit 0. #945 is done.
+
+**2026-11-07, #931, live: every criterion read green.** Hecaton run 18184 read the routes at 13:36Z, at staging
+`635bfb9a`. `registry-attackme.burritobot.co`'s tags list answers 404, the router's answer for a host it does not
+carry (`no-such-host-931.burritobot.co` answers the same), so its row is gone: community has no registry, and both
+clusters pull from `registry.burritobot.co`, which is private's. The tags list reads 200 with `busybox-1.38.0` on
+`registry.burritobot.co` and `registry-burritobot-private.burritobot.co`. The support desks the talk uses,
+`support.burritobot.co`, `support-attackme.burritobot.co` and `support-burritobot-private.burritobot.co`, answer 200,
+with HC-666 at `/ticket/HC-666` on attackme's and private's. `./fleet.sh router-check` ended "the router serves exactly
+the roster" and `./fleet.sh wall-check` ended "the wall shows every roster cluster", both exit 0. #931 is done.
+
 **2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
 watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
 (`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.
@@ -1670,6 +1687,27 @@ is merely slow rather than rebuilding:
     admin one, never during it: the admin probe's `guardrails-on` reaches attackme.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
     up in the feed the room sees.
+  - Each run holds the cluster's guard lock (#1024), the Lease `agent/wib-guard-lock`,
+    from before the start state is read until after `guards-off`, and so do
+    `verify/stage_traces.py seed`, `verify/agent_probe.py`, `verify/input-guard.sh`,
+    `verify/beat-02.sh` and `verify/beat-cost.sh`. A second run on the same cluster
+    waits for it, up to 30 minutes (`--lock-wait`), then exits 3 naming the holder;
+    the probe prints `KUBECON PROBE NOT RUN`. `python3 verify/guard_lease.py show
+    --context <context>` prints who holds it. On 2026-11-06 three of five admin runs
+    went red on an output guard another run turned on (#900).
+  - The same lock covers the Kubernetes guardrails (#1016). An admin probe holds it
+    on both clusters, since its `guardrails-on` reaches attackme, and so do
+    `verify/stage_traces.py seed` and `verify/test_recipe_block_live.py`. Every live
+    check that switches a policy holds it on its own cluster: `verify/beat-01.sh`,
+    `verify/c1-exfil-block.sh`, `verify/test_kyverno_cel_live.py` and
+    `verify/test_drift_selfheal_live.py`, and so do the checks that read the
+    guardrails off, `verify/test_kubecon_c3_live.py`,
+    `verify/test_two_hour_flow_live.py` and `verify/test_room_cleanup_live.py`. So
+    the community probe and the admin one take turns on their own.
+    `WIB_GUARD_LEASE_WAIT` sets the wait for the scripts that have no `--lock-wait`.
+    To run `guardrails-on` by hand, wrap it: `python3 verify/guard_lease.py hold
+    --with-peer --context <context> -- <the kubectl exec>`. On 2026-11-06 run
+    17944's Kyverno check read run 17950's switches, eight in an hour.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
     fallback for before the day, not something to find out on stage. The two beats
     that failed on 2026-10-24 for want of a fix, the Kyverno badge (#487) and the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: The gate's E2E command (#572): the offline suite, then every `# E2E TIER: tools` check, run with pinned,
+# ABOUTME: The gate's E2E command (#572): the offline suite and every `# E2E TIER: tools` check, run with pinned,
 # ABOUTME: checksum-verified binaries fetched into verify/.tools. Needs network; never a cluster, CONTEXT or AWS.
 #
 # Usage: bash verify/run-e2e-tools.sh
@@ -17,6 +17,12 @@
 # copy of, are stubbed first on PATH by no-cloud.sh (#865): on a dispatched run the aws on PATH is hecaton's wrapper,
 # which exports the run's live session whatever the environment holds, so unsetting AWS_PROFILE alone would not stop a
 # call reaching the two live clusters. A tier test that calls either one fails, naming the call.
+#
+# Checks run E2E_TOOLS_JOBS at a time (default 4), the offline suite as one of them, each with its output in a log of
+# its own that is printed whole when it ends; one after another they took more than the gate's hour (#1005). The tests
+# marked `# E2E SERIAL: terraform` share the provider cache and run one at a time. Each check's seconds are printed
+# after it and the ten slowest at the end. Stopped by a signal, the runner names each check still running, with its
+# last lines, and stops it.
 #
 # Nothing here skips. A missing prerequisite or a failed fetch exits 1 before any test runs, with every reason.
 set -euo pipefail
@@ -52,10 +58,10 @@ if [[ "${scoped}" -eq 1 && "${#selected[@]}" -eq 0 ]]; then
 fi
 
 missing=()
-# curl, tar, unzip and sha256sum fetch and verify the tools, and xz unpacks weaver's archive; uv brings the Python
+# curl, tar, python3 (zipfile, #1047) and sha256sum fetch and verify the tools, and xz unpacks weaver's archive; uv brings the Python
 # pins; openssl mints the Kyverno test's wrong key; jq runs test_ai_layer_rollout.py's filters; node runs the harnesses.
 tools=(python3 git)
-[[ "${need_tools}" -eq 0 ]] || tools+=(curl tar unzip sha256sum xz uv node jq openssl)
+[[ "${need_tools}" -eq 0 ]] || tools+=(curl tar sha256sum xz uv node jq openssl)
 for tool in "${tools[@]}"; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
@@ -73,6 +79,11 @@ if [[ "${need_tools}" -eq 1 ]] && command -v uv >/dev/null 2>&1 && command -v py
         [[ -n "${pw}" ]] || missing+=("verify/playwright_browsers.py failed without saying why")
     fi
 fi
+# How many checks run at once (#1005), and the bash that can wait on whichever ends first (`wait -n -p`, bash 5.1).
+JOBS="${E2E_TOOLS_JOBS:-4}"
+[[ "${JOBS}" =~ ^[1-9][0-9]*$ ]] || missing+=("E2E_TOOLS_JOBS is '${JOBS}', not a whole number of 1 or more")
+(( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )) \
+    || missing+=("bash ${BASH_VERSION} runs this; the tier needs bash 5.1 or later")
 if [[ "${#missing[@]}" -gt 0 ]]; then
     printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip:\n' >&2
     printf '  - %s\n' "${missing[@]}" >&2
@@ -88,54 +99,72 @@ bash "${SCRIPT_DIR}/ensure-submodules.sh"
 fail=0
 ran=0
 failed_names=()
-
-run_one() { # $1: label, rest: command
-    local label="$1" rc=0
-    shift
-    printf '\n== %s ==\n' "${label}"
-    ran=$((ran + 1))
-    "$@" || rc=$?
-    [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${label} (exit ${rc})"); }
-}
-
-# The gate runs this in place of the Test command, so main stays gated on the offline suite as well.
-run_one "run-tests.sh (the offline suite)" bash "${SCRIPT_DIR}/run-tests.sh"
+timings=()
 
 # The pinned tools come first on PATH, and the six tests that take a path get it, so a tool already on the
 # host is never what a check runs. Ahead of them stand only the aws and eksctl stubs (#865), which shadow no pinned tool.
 # shellcheck source=SCRIPTDIR/no-cloud.sh
 . "${SCRIPT_DIR}/no-cloud.sh"
-NO_CLOUD_DIR="$(mktemp -d)"
-trap 'rm -rf "${NO_CLOUD_DIR}"' EXIT
-no_cloud_setup "${NO_CLOUD_DIR}" aws eksctl
-# Helm reads its repository list, index cache and plugins from the user's home unless told otherwise, and a
-# `helm pull --repo` or `helm template --repo` loads every repository listed there. In run 17641 that home listed a
-# `cilium` repository whose cached index was gone, and every chart fetch in six tier tests failed on it. Each run
-# gets an empty Helm home of its own, removed with the stubs.
-HELM_HOME="${NO_CLOUD_DIR}/helm"
-mkdir -p "${HELM_HOME}/config" "${HELM_HOME}/cache" "${HELM_HOME}/data"
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "${WORK_DIR}"' EXIT
 # The Terraform provider cache outlives each test, so the ~800 MB aws provider downloads once per checkout, not once
-# per test process; the tests run one after another, so nothing writes to it concurrently (#572).
+# per test process. Terraform does not promise a cache is safe to write from two processes at once, so the tests
+# marked `# E2E SERIAL: terraform` run one at a time (#572, #1005).
 TF_CACHE="${SCRIPT_DIR}/.tools/plugin-cache"
 mkdir -p "${TF_CACHE}"
-tier_env=(env -u HECATON_BASE_SHA -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
-    -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
-    KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}"
-    KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
-    OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
-    AGENTGATEWAY="${TOOLS_BIN}/agentgateway" HELM_CONFIG_HOME="${HELM_HOME}/config"
-    HELM_CACHE_HOME="${HELM_HOME}/cache" HELM_DATA_HOME="${HELM_HOME}/data")
+
+check_job() { # $1: the check's own directory, $2: "offline" or a tier test
+    local dir="$1" t="$2"
+    if [[ "${t}" == offline ]]; then
+        bash "${SCRIPT_DIR}/run-tests.sh"
+        return
+    fi
+    # Each check gets aws and eksctl stubs and a call log of its own, so a cloud call is named under the check that
+    # made it while others run beside it (#865).
+    no_cloud_setup "${dir}/no-cloud" aws eksctl
+    # Helm reads its repository list, index cache and plugins from the user's home unless told otherwise, and a
+    # `helm pull --repo` or `helm template --repo` loads every repository listed there. In run 17641 that home listed a
+    # `cilium` repository whose cached index was gone, and every chart fetch in six tier tests failed on it. Each check
+    # gets an empty Helm home of its own, so no two write one index cache, removed when the runner exits.
+    local helm="${dir}/helm"
+    mkdir -p "${helm}/config" "${helm}/cache" "${helm}/data"
+    # PYTHONUNBUFFERED: a Python test writes each line as it prints it, so a check stopped part way shows how far it got.
+    # Into the gate's pipe its output was block-buffered, and when the gate's hour ran out in test_trace_shape_e2e.py its
+    # tail held the test's heading and nothing after (#1005).
+    local -a tier_env=(env -u HECATON_BASE_SHA -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
+        -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
+        KUBECONFIG=/dev/null PATH="${NO_CLOUD_BIN}:${TOOLS_BIN}:${PATH}" TF_PLUGIN_CACHE_DIR="${TF_CACHE}" PYTHONUNBUFFERED=1
+        KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
+        OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib" TTYD="${TOOLS_BIN}/ttyd" CRANE="${TOOLS_BIN}/crane"
+        AGENTGATEWAY="${TOOLS_BIN}/agentgateway" HELM_CONFIG_HOME="${helm}/config"
+        HELM_CACHE_HOME="${helm}/cache" HELM_DATA_HOME="${helm}/data")
+    case "${t}" in
+        *.py) no_cloud_run "${tier_env[@]}" python3 "${t}" ;;
+        *)    no_cloud_run "${tier_env[@]}" bash "${t}" ;;
+    esac
+}
+
+# The gate runs this in place of the Test command, so main stays gated on the offline suite as well. It goes first in
+# the queue, then the terraform tests, which run one at a time, then the rest of the tier.
+queue=(offline)
+serial=("")
+labels=("run-tests.sh (the offline suite)")
 tier=0
 tier_found=0
+later=()
 for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
     [[ -e "${t}" ]] && grep -q '^# E2E TIER: tools' "${t}" || continue
     tier_found=$((tier_found + 1))
     [[ "${scoped}" -eq 0 || -n "${selected[$(basename "${t}")]:-}" ]] || continue
     tier=$((tier + 1))
-    case "${t}" in
-        *.py) run_one "$(basename "${t}")" no_cloud_run "${tier_env[@]}" python3 "${t}" ;;
-        *)    run_one "$(basename "${t}")" no_cloud_run "${tier_env[@]}" bash "${t}" ;;
-    esac
+    if grep -q '^# E2E SERIAL: terraform' "${t}"; then
+        queue+=("${t}"); serial+=(terraform); labels+=("$(basename "${t}")")
+    else
+        later+=("${t}")
+    fi
+done
+for t in "${later[@]}"; do
+    queue+=("${t}"); serial+=(""); labels+=("$(basename "${t}")")
 done
 # A tier that matched nothing would pass having proved nothing.
 if [[ "${tier_found}" -eq 0 ]]; then
@@ -143,9 +172,92 @@ if [[ "${tier_found}" -eq 0 ]]; then
     exit 1
 fi
 
+# Run one after another, the offline suite and the tier took more than the gate's hour on staging 629c53ea (#1005).
+# E2E_TOOLS_JOBS checks run at once, each with its output in a log of its own, printed whole when it ends, so no two
+# checks' lines are mixed.
+declare -A job_index=() job_start=()
+terraform_busy=""
+
+start_job() { # $1: the check's place in the queue
+    local i="$1" dir="${WORK_DIR}/$1"
+    mkdir -p "${dir}"
+    check_job "${dir}" "${queue[$i]}" >"${dir}/log" 2>&1 &
+    job_index[$!]="${i}"
+    job_start[$!]="${SECONDS}"
+    [[ -z "${serial[$i]}" ]] || terraform_busy="$!"
+}
+
+finish_job() { # $1: the check's pid, $2: its exit code
+    local pid="$1" rc="$2" i="${job_index[$1]}" took=$((SECONDS - job_start[$1]))
+    local label="${labels[$i]}"
+    printf '\n== %s ==\n' "${label}"
+    cat "${WORK_DIR}/${i}/log"
+    ran=$((ran + 1))
+    [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${label} (exit ${rc})"); }
+    # Each check's seconds, so a gate that runs out of time shows in its tail where the time went (#1005).
+    printf -- '-- %s took %ds\n' "${label}" "${took}"
+    timings+=("${took} ${label}")
+    [[ "${terraform_busy}" != "${pid}" ]] || terraform_busy=""
+    unset 'job_index[$pid]' 'job_start[$pid]'
+    rm -rf "${WORK_DIR:?}/${i}"
+}
+
+slowest() {
+    [[ "${#timings[@]}" -gt 0 ]] || return 0
+    printf '%s\n' "${timings[@]}" | sort -rn | head -n 10 | awk '{ t = $1; $1 = ""; printf "  %4ds %s\n", t, substr($0, 2) }'
+}
+
+descendants() { # every process under $1, deepest first
+    local child
+    for child in $(ps -o pid= --ppid "$1" 2>/dev/null); do
+        descendants "${child}"
+        printf '%s\n' "${child}"
+    done
+}
+
+# Stopped by a signal (the gate's timeout interrupts, then terminates): name each check still running, how long it
+# had run and the last lines it wrote, then stop it and what it started.
+stopped() {
+    trap - INT TERM
+    local pid i
+    printf '\nThe slowest checks that ended:\n'
+    slowest
+    printf '\nSTOPPED by a signal after %dm%02ds, %d of %d checks ended, these still running:\n' \
+        "$((SECONDS / 60))" "$((SECONDS % 60))" "${ran}" "${#queue[@]}"
+    for pid in "${!job_index[@]}"; do
+        i="${job_index[${pid}]}"
+        printf '  %s, for %ds; its last lines:\n' "${labels[$i]}" "$((SECONDS - job_start[${pid}]))"
+        tail -n 5 "${WORK_DIR}/${i}/log" 2>/dev/null | sed 's/^/      /'
+        kill $(descendants "${pid}") "${pid}" 2>/dev/null || true
+    done
+    [[ "${#failed_names[@]}" -eq 0 ]] || printf 'Failed before the stop:\n%s\n' "$(printf '  %s\n' "${failed_names[@]}")"
+    exit 1
+}
+trap stopped INT TERM
+
+pending=("${!queue[@]}")
+while [[ "${#pending[@]}" -gt 0 || "${#job_index[@]}" -gt 0 ]]; do
+    rest=()
+    for i in "${pending[@]}"; do
+        if [[ "${#job_index[@]}" -lt "${JOBS}" ]] && [[ -z "${serial[$i]}" || -z "${terraform_busy}" ]]; then
+            start_job "${i}"
+        else
+            rest+=("${i}")
+        fi
+    done
+    pending=("${rest[@]}")
+    rc=0
+    wait -n -p done_pid "${!job_index[@]}" || rc=$?
+    finish_job "${done_pid}" "${rc}"
+done
+
 # The time taken, since a run waits on this in the background and sets its limit from it (#796).
-printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds\n' "${ran}" "${tier}" \
-    "$((SECONDS / 60))" "$((SECONDS % 60))"
+printf '\nThe slowest checks:\n'
+slowest
+# The line keeps the shape the suite records in decisions.md quote and test_952_suite_record.py reads; the job count
+# follows it.
+printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds, %d at a time\n' "${ran}" "${tier}" \
+    "$((SECONDS / 60))" "$((SECONDS % 60))" "${JOBS}"
 if [[ "${scoped}" -eq 1 ]]; then
     printf '  scoped to the change since HECATON_BASE_SHA=%s: %d of the %d tier tests; the other %d read nothing it touched\n' \
         "${HECATON_BASE_SHA}" "${tier}" "${tier_found}" "$((tier_found - tier))"

@@ -330,9 +330,10 @@ _entries = {(e.get("mcpServer") or {}).get("name"): e.get("mcpServer") or {} for
 _forwarded = [h.lower() for h in _entries.get("workshop-mcp", {}).get("allowedHeaders") or []]
 check("the Agent's workshop-mcp entry has kagent copy X-Witch-Name from the chat request onto its MCP calls",
       m.WITCH_HEADER in _forwarded, str(_forwarded))
-# #1000 added X-Pantry-Shut beside it; any other header copied from the chat request would be one no tool reads.
-check("and copies no header workshop-mcp does not read (X-Witch-Name, and #1000's X-Pantry-Shut)",
-      set(_forwarded) <= {m.WITCH_HEADER, m.PANTRY_HEADER}, str(_forwarded))
+# #1000 added X-Pantry-Shut beside it, and #885 traceparent, the turn tool_audit.py's turn guard counts calls in;
+# any other header copied from the chat request would be one no tool reads.
+check("and copies no header workshop-mcp does not read (X-Witch-Name, #1000's X-Pantry-Shut, #885's traceparent)",
+      set(_forwarded) <= {m.WITCH_HEADER, m.PANTRY_HEADER, "traceparent"}, str(_forwarded))
 check("the rogue evil-mcp entry is handed no header from the request",
       not _entries.get("evil-mcp", {}).get("allowedHeaders"), str(_entries.get("evil-mcp")))
 AGATHA = "Agatha the Banshee"

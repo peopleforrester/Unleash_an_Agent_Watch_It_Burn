@@ -33,7 +33,10 @@ block can stop covering the card, and holds the git side of the same invariant.
 
 What it spends and changes. One model call on the private bot, marked [[wib-probe]] so the feed skips it, about half a
 cent of Bedrock. guardrails-on switches the community cluster too (#774), so for the minute or two between the two
-switches the public bot is armed: run it before or after the community checks (test_kubecon_c3_live.py), never during.
+switches the public bot is armed. So it holds the guard lock (verify/guard_lease.py, #1016) on both clusters, this
+one and the one its guardrails-switch/guardrails-peer Secret names, from before guardrails-on until after
+guardrails-off: the community checks (test_kubecon_c3_live.py), which hold the community cluster's, wait for it, and
+it waits for them. When another run keeps the lock for 30 minutes it fails naming the holder and switches nothing.
 
 Usage: PRIVATE_CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] python3 verify/test_recipe_block_live.py
 """
@@ -55,6 +58,7 @@ import yaml
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
+import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 
 AGENT_YAML = REPO / "gitops/workshop-agent/agent.yaml"
@@ -312,7 +316,10 @@ def main() -> int:
         return 1
 
     print(f"== #954: KubeArmor blocks the card #951's rule names, on {context} (https://{cluster.host}) ==")
-    run_checks(cluster, check)
+    # Its guardrails-on and guardrails-off switch both KubeCon clusters, so it holds the guard lock on both (#1016).
+    if not guard_lease.run_held(context, lambda: run_checks(cluster, check), check, "verify/test_recipe_block_live.py",
+                                with_peer=True, kubeconfig=os.environ.get("KUBECONFIG") or None):
+        return guard_lease.BUSY_EXIT
     print(f"model calls: {cluster.calls}")
     print()
     if failures:

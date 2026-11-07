@@ -65,10 +65,10 @@ TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
 NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
-# jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter. curl, tar, unzip and sha256sum fetch
-# and verify the pinned tools, and xz unpacks weaver's archive. uv brings the Python pins the checks run on
+# jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter. curl, tar, python3 (whose zipfile reads
+# the zip archives, #1047) and sha256sum fetch and verify the pinned tools, and xz unpacks weaver's archive. uv brings the Python pins the checks run on
 # (playwright, llm-guard, segno, mcp), as in run-e2e-tools.sh, so nothing is installed globally (#441).
-for tool in python3 node corepack jq curl tar unzip sha256sum xz uv; do
+for tool in python3 node corepack jq curl tar sha256sum xz uv; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
 # Backstage runs on Node 24 (packages/backend/Dockerfile is node:24). Yarn comes from corepack, which
@@ -85,7 +85,7 @@ fi
 # gateway version test_agentgateway_tracing_e2e.py runs the gateway ConfigMaps on (#864). The fetch needs the four
 # tools above, so it is only tried once they are there.
 tools_ready=0
-if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1 \
+if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 \
     && command -v sha256sum >/dev/null 2>&1; then
     if bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
         tools_ready=1
@@ -93,7 +93,7 @@ if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1 && command 
         missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not be fetched (fetch-e2e-tools.sh, reasons above)")
     fi
 else
-    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not fetched: fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum")
+    missing+=("the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway were not fetched: fetch-e2e-tools.sh needs curl, tar, python3 and sha256sum")
 fi
 if [[ "${tools_ready}" -eq 1 ]]; then
     # The six tests that take a path get the fetched one, so a tool already on the host is never what runs.

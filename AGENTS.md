@@ -158,13 +158,15 @@ to the fifth (#796).
    comments (`gh issue view <issue> --comments`; hecaton writes "Not merged: run N ended failed (validation)"),
    port the draft as its verdict says, fix what stopped it, and redo only what the verdict or that reason names. A
    LATER line means a later run's work on the issue is already in staging: take from that draft only what it lacks.
-4. **A long command is polled in the foreground.** `bash verify/run-e2e-tools.sh` runs the offline suite and then
-   the tools tier, and on the shared host it takes over 20 minutes, longer on a cold fetch of the pinned tools.
+4. **A long command is polled in the foreground.** `bash verify/run-e2e-tools.sh` runs the offline suite and the
+   tools tier side by side, four checks at a time (`E2E_TOOLS_JOBS`), and prints each check whole when it ends. One
+   after another they took more than the gate's hour on staging 629c53ea (#1005). On the shared host it still takes
+   20 minutes or more, longer on a cold fetch of the pinned tools.
    Hecaton stops a run that prints nothing for 15 minutes as stalled, and nothing the run had not committed
    survives it: the attempt before run 15763 on #205 and two attempts on #520 ended that way. Commit the change
    first. Then start the command in the background with its output in a log, and keep reading the log in the
    foreground (`tail -n 5 <log>` every few minutes) until it ends; never end the turn to wait for its completion
-   notice. The E2E command runs `run-tests.sh` first, so it also answers the Test command.
+   notice. The E2E command runs `run-tests.sh` as one of its checks, so it also answers the Test command.
    The background job's limit is 3600000 ms: run 15816 gave it 20 minutes and it was cut off, and its
    `checks ran` line prints how long it took (22m58s in run 16533). Write the output and the exit code to a log of
    this run's own: `bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`. A bounded foreground wait

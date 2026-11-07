@@ -19,6 +19,7 @@ from collections.abc import Callable, Iterator
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import chart_fetch  # noqa: E402
 from bootstrap_chart import APPS, CHART, REPO, kustomize_images, set_image  # noqa: E402
 from docker_hub import image_fields  # noqa: E402
 
@@ -77,18 +78,14 @@ class Renderer:
         return apps or None
 
     def upstream_chart(self, src: dict) -> pathlib.Path | str:
-        """The app's chart, pulled once into the work directory; on failure, Helm's error."""
+        """The app's chart, from verify/.tools/charts, fetched once with a network error retried (#1028); on failure,
+        Helm's error."""
         key = (src["repoURL"], src["chart"], str(src["targetRevision"]))
         if key not in self.pulled:
-            repo, chart, ver = key
-            dest = self.work / f"{chart}-{len(self.pulled)}"
-            ref = ([f"oci://{repo.removeprefix('oci://').rstrip('/')}/{chart}"] if not repo.startswith("http")
-                   else [chart, "--repo", repo])
-            r = subprocess.run([self.helm, "pull", *ref, "--version", ver, "--untar", "--untardir", str(dest)],
-                               capture_output=True, text=True)
-            if r.returncode:
-                return r.stderr.strip()[:200]
-            self.pulled[key] = dest / chart
+            try:
+                self.pulled[key] = chart_fetch.pull(self.helm, *key)
+            except chart_fetch.ChartFetchError as e:
+                return str(e)
         return self.pulled[key]
 
     def helm_render(self, name: str, app: dict, src: dict, chart: pathlib.Path, n: int) -> list | None:

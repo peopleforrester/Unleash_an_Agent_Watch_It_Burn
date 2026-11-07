@@ -26,6 +26,7 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import chart_fetch  # noqa: E402
 from bootstrap_chart import APPS, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, kustomize_images, set_image  # noqa: E402
 
 DD_ENV = "burritobot-kubecon-na-26"
@@ -68,15 +69,13 @@ def short_image(ref: str) -> str:
 
 def helm(release: str, chart: str, repo: str, version: str, namespace: str, value_files: list[pathlib.Path],
          extra: tuple[str, ...] = ()) -> list:
-    if repo.startswith("oci://") or "ghcr.io" in repo:
-        oci = repo if repo.startswith("oci://") else f"oci://{repo}"
-        ref = ["helm", "template", release, f"{oci.rstrip('/')}/{chart}"]
-    else:
-        ref = ["helm", "template", release, chart, "--repo", repo]
-    cmd = ref + ["--version", version, "-n", namespace] + [a for f in value_files for a in ("-f", str(f))] + list(extra)
+    # The pinned chart comes from verify/.tools/charts, fetched there once with a network error retried (#1028).
+    local = chart_fetch.pull("helm", repo, chart, version)
+    cmd = (["helm", "template", release, str(local), "-n", namespace]
+           + [a for f in value_files for a in ("-f", str(f))] + list(extra))
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"{' '.join(cmd[:4])}: {(r.stderr.strip().splitlines() or ['helm failed'])[-1][:200]}")
+        raise RuntimeError(f"helm template {chart} {version}: {chart_fetch.last_line(r.stderr)[:200]}")
     return load_all(r.stdout)
 
 

@@ -46,6 +46,12 @@ objects before and after, and when they moved it fails naming that. The restore 
 restrict-image-registries takes deny-external-registries' action (the switch sets both together, and this check
 touches only the first), and the C1 NetworkPolicies are there exactly when block-recipe-snoop is.
 
+Since #1016 it holds the cluster's guard lock (verify/guard_lease.py), the Lease agent/wib-guard-lock, from before it
+reads the start state until after the restore. Every live check that switches guardrails or policies takes the same
+lock, and a check that runs the terminal's guardrails-on takes it on both KubeCon clusters, so no switch lands during
+this one. When another run keeps it for 30 minutes (WIB_GUARD_LEASE_WAIT sets the wait), the check fails naming the
+holder and changes nothing. The switch detection above stays, for a switch by something that takes no lock.
+
 beat-01.sh and the C2 badge are not repeated here: run-e2e.sh runs run-all.sh (beat-01) and
 test_kubecon_probe's live probe.
 
@@ -62,9 +68,11 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import ExitStack
 
 import yaml
 
+import guard_lease
 from bootstrap_chart import kyverno_policies, values_path
 from kubecon_probe import C2_CHECK, C2_MANIFEST
 
@@ -224,6 +232,15 @@ if failures:
 RUN = uuid.uuid4().hex[:6]
 RUN_LABEL = f"wib.test/run={RUN}"
 LABELS = {"wib.test/run": RUN}
+# The cluster's guard lock (#1016), from before the start state is read until after the restore.
+locks = ExitStack()
+try:
+    lease = locks.enter_context(guard_lease.hold(CONTEXT, what="verify/test_kyverno_cel_live.py",
+                                                 wait=guard_lease.default_wait()))
+except guard_lease.LeaseBusy as e:
+    check("the cluster's guard lock is free within the wait (no other run is switching guardrails here)", False,
+          f"{e}; nothing was changed")
+    finish()
 original = {p: actions(p) for p in toggled}
 applied_c1 = ""
 # The KubeCon profiles carry the terminal's guardrails switch, which other runs' probes use (see the docstring).
@@ -367,6 +384,9 @@ finally:
     if NS != "agent":
         kubectl("delete", "deployments", "-n", "agent", "-l", RUN_LABEL, "--ignore-not-found", "--wait=false")
     print(f"  cleanup ({RUN_LABEL}): {'done' if r.returncode == 0 else 'FAILED: ' + out(r)}")
+    locks.close()
+    check("the guard lock was held for the whole check (no other run switched guards or guardrails meanwhile)",
+          lease.lost is None, lease.lost or "")
     if SWITCH:
         check("no guardrails switch ran on the cluster while the check ran (steps 4 to 7 read this run's own state)",
               not moved, "another run switched the guardrails: "

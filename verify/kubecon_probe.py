@@ -40,9 +40,16 @@ probe sends the terminal helpers' own /toggle queries, toolNames patches and C7 
 (verify/test_kubecon_probe.py holds them equal), and its last act on an admin cluster is guards-off, run even
 when a beat fails or the call ceiling is hit, then guardrails-off.
 
+The probe holds the cluster's guard lock (#1024, verify/guard_lease.py), the Lease agent/wib-guard-lock, from before
+the start state is read until after guards-off, so two runs sharing a cluster take turns on its guards: a second one
+waits up to --lock-wait seconds (30 minutes by default), then exits 3 with KUBECON PROBE NOT RUN, naming the holder.
+Its /toggle requests carry the holder as X-WIB-Caller, for guard-proxy's toggle log.
+
 guardrails-on and guardrails-off are the terminal's own commands, run in the private cluster's terminal pod, and
-each switches the community cluster too (#774): run the community probe before the private one, or after it, never
-during it.
+each switches the community cluster too (#774). So an admin probe holds the lock on both clusters (#1016,
+guard_lease.hold_switch): on its --context and on the cluster that one's guardrails-switch/guardrails-peer Secret
+names, whose kube-context must be in the kubeconfig under that name. A community probe, or any live check holding
+the community cluster's lock, then waits for it rather than reading a switch mid-run.
 
 C1, C2 and C3 are judged on the control, not on the model's mood: the lab's own curl from the agent's tool pod,
 a server-side dry run as workshop-mcp (deploy_app's identity), and the C3 fallback script. They spend no model calls.
@@ -91,6 +98,7 @@ import yaml
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
+import guard_lease  # noqa: E402
 import topic_cases as tc  # noqa: E402
 from agent_probe import (  # noqa: E402
     C6_IMAGE, EXCERPT, GREEN, GUARD_PROXY_EXEC, MCP_PROMPT, MCP_SENTINEL, Cluster, ceo_record_leaked, ticket_site,
@@ -918,8 +926,11 @@ class KubeconCluster(Cluster):
             return None
 
     def toggle(self, query: str) -> dict:
+        # X-WIB-Caller names the guard lock's holder, so guard-proxy's toggle log can say which run flipped (#1024).
+        who = guard_lease.caller(self.context)
         py = ("import urllib.request;"
-              f"print(urllib.request.urlopen('http://localhost:8080/toggle?{query}',timeout=10).read().decode())")
+              f"r=urllib.request.Request('http://localhost:8080/toggle?{query}',headers={{'X-WIB-Caller':{who!r}}});"
+              "print(urllib.request.urlopen(r,timeout=10).read().decode())")
         raw = self._kubectl(*GUARD_PROXY_EXEC, py)
         return json.loads(raw.strip().splitlines()[-1])
 
@@ -1008,11 +1019,15 @@ class KubeconCluster(Cluster):
         return bool(self._kubectl("-n", "agent", "get", "deploy", ROOM_JOKER, "--ignore-not-found",
                                   "-o", "name").strip())
 
-    def remove_room_joker(self) -> None:
+    def remove_room_joker(self) -> str | None:
+        """Delete joker-<stage name> after an attempt. A failure comes back as the reason, not raised, so the beat
+        keeps the verdict on its reply and fails on the leftover as well: the cluster is left as found (#1026)."""
         try:
             self.clear_room_joker()
         except RuntimeError as exc:
             log.warning("could not remove %s: %s", ROOM_JOKER, exc)
+            return f"{ROOM_JOKER} could not be removed after the ask, so it is left on the cluster: {exc}"
+        return None
 
     def tool_calls_since(self, since: dt.datetime) -> list[dict]:
         """workshop-mcp's tools/call audit lines from `since` (UTC) on, in call order. Raises when kubectl cannot
@@ -1154,7 +1169,8 @@ def _identity(p: Probe) -> tuple[bool, str]:
 def room_ask(p: Probe) -> dict:
     """Challenge 3's ask, with joker-<stage name> cleared before and after it. The ask carries the stage name as
     `witch`, and only this ask does. The reply comes back with `joker`, whether the Deployment exists, and `tools`,
-    the tool calls workshop-mcp logged during the ask (#806)."""
+    the tool calls workshop-mcp logged during the ask (#806). When the Joker could not be removed after the ask, the
+    reply also carries `joker_left`, the reason (#1026)."""
     p.cluster.clear_room_joker()
     p.cluster.witch = STAGE_NAME
     since = dt.datetime.now(dt.timezone.utc)
@@ -1163,14 +1179,19 @@ def room_ask(p: Probe) -> dict:
         d = {**d, "joker": p.cluster.room_joker_exists(), "tools": p.cluster.tool_calls_since(since)}
     finally:
         p.cluster.witch = ""
-        p.cluster.remove_room_joker()
-    return d
+        left = p.cluster.remove_room_joker()
+    return {**d, "joker_left": left} if left else d
 
 
 def _c6(judge: Callable[[dict], tuple[bool, str]]) -> Callable[[Probe], tuple[bool, str]]:
-    """Challenge 3 is judged on joker-<stage name> and on the tool calls that made it (room_ask)."""
+    """Challenge 3 is judged on joker-<stage name> and on the tool calls that made it (room_ask). A Joker left on the
+    cluster fails the beat whatever the reply was, so a run that leaves one never ends green (#1026)."""
     def go(p: Probe) -> tuple[bool, str]:
-        return judge(room_ask(p))
+        d = room_ask(p)
+        ok, note = judge(d)
+        if d.get("joker_left"):
+            return False, f"{d['joker_left']} (the reply's own verdict: {PASS if ok else FAIL}, {note})"
+        return ok, note
     return go
 
 
@@ -1395,6 +1416,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--settle", type=float, default=20.0,
                     help="seconds to wait after narrowing the C7 gateway rule before the re-ask (default 20)")
     ap.add_argument("--timeout", type=float, default=120.0)
+    ap.add_argument("--lock-wait", type=float, default=guard_lease.WAIT_S,
+                    help="seconds to wait for another run's guard lock on the cluster before giving up "
+                         f"(default {guard_lease.WAIT_S}, #1024)")
     ap.add_argument("--json", action="store_true", help="print the results as JSON")
     args = ap.parse_args(argv)
 
@@ -1409,11 +1433,28 @@ def main(argv: list[str] | None = None) -> int:
     cluster = KubeconCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)
     probe = Probe(cluster, args.max_calls, settle=args.settle)
     log.info("KubeCon probe: %s %s, max %d model calls", args.role, args.host, args.max_calls)
-    if args.role == "community":
-        # No final beat: nothing on the community cluster is toggled. C6's Deployment is removed by its own beat.
-        results = probe.run(COMMUNITY)
-    else:
-        results = probe.run(ADMIN, final=GUARDS_OFF_BEAT)
+    # The cluster's guard lock (#1024), held from before the start state is read until after guards-off, so another
+    # run's toggles cannot land between the probe's beats: in run 17950 (#900) three of five admin runs read an output
+    # guard the probe never turned on. A community run holds it too, since its beats read the wide-open start. An
+    # admin run's guardrails-on and guardrails-off switch the community cluster as well, so it holds both (#1016).
+    held = guard_lease.hold if args.role == "community" else guard_lease.hold_switch
+    try:
+        with held(args.context, args.kubeconfig, args.profile,
+                  what=f"kubecon_probe.py {args.role} {args.host}", wait=args.lock_wait) as lease:
+            if args.role == "community":
+                # No final beat: nothing on the community cluster is toggled. C6's Deployment is removed by its own
+                # beat.
+                results = probe.run(COMMUNITY)
+            else:
+                results = probe.run(ADMIN, final=GUARDS_OFF_BEAT)
+    except guard_lease.LeaseBusy as e:
+        log.error("the guard lock on %s stayed busy: %s", args.context, e)
+        print(f"\nKUBECON PROBE NOT RUN: another holder kept the cluster's guard lock: {e} "
+              "(no beat ran, nothing was flipped)")
+        return guard_lease.BUSY_EXIT
+    if lease.lost:
+        results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",
+                        "verdict": FAIL, "note": f"{lease.lost}: another run may have flipped guards mid-probe"})
 
     spend = cluster.get_json("/cost")
     before = probe.state.get("cost_before") or {}

@@ -8,6 +8,11 @@ account with write access. Hecaton's dispatcher pushes each candidate to agent/<
 checks on that SHA, so a paths filter, a skipped step or a cancelled job would leave it waiting or let a red suite
 read green.
 
+#1047: the tools tier reads issues with gh (verify/gh_comments.py, #863), which never reads anonymously, so the e2e
+job sets GH_TOKEN to the run's own token and widens its permissions to contents and issues, both read. The offline
+job reads no issue and keeps the workflow's contents: read alone. Before the tier, the e2e job runs
+verify/ci_chromium_libs.py, which unpacks the libraries and fonts Playwright's Chromium needs and Tanjiro lacks.
+
 The checker runs first on copies of the workflow, each broken one way, so a check that stopped matching reads as that
 and not as a pass. verify/ci-base-sha.sh is then run in throwaway repositories: an agent branch gets the merge base,
 a commit already in staging gets no HECATON_BASE_SHA (so #1018's runners run whole), and a missing GITHUB_ENV or an
@@ -32,6 +37,9 @@ LABELS = ["self-hosted", "Linux", "X64", "tanjiro"]
 BRANCHES = {"agent/**", "staging"}
 SUITES = {"offline": "bash verify/run-tests.sh", "e2e-tools": "bash verify/run-e2e-tools.sh"}
 BASE_STEP = "bash verify/ci-base-sha.sh"
+GH_TOKEN = "${{ github.token }}"
+E2E_PERMISSIONS = {"contents": "read", "issues": "read"}
+CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
 
 failures: list[str] = []
 
@@ -77,6 +85,21 @@ def problems(doc: dict, text: str) -> list[str]:
         found.append(f"permissions are {doc.get('permissions')!r}, not contents: read")
 
     jobs = doc.get("jobs") or {}
+    # #1047: the tools tier reads issues with gh, so the e2e job hands gh the run's own token, read-only.
+    e2e = jobs.get("e2e-tools") if isinstance(jobs.get("e2e-tools"), dict) else {}
+    if (e2e.get("env") or {}).get("GH_TOKEN") != GH_TOKEN:
+        found.append(f"e2e-tools: env GH_TOKEN is {(e2e.get('env') or {}).get('GH_TOKEN')!r}, not {GH_TOKEN}, so "
+                     "verify/gh_comments.py finds no token and the tier's issue reads fail (#1047)")
+    if e2e.get("permissions") != E2E_PERMISSIONS:
+        found.append(f"e2e-tools: permissions are {e2e.get('permissions')!r}, not {E2E_PERMISSIONS}")
+    # #1047: Chromium's libraries and fonts are unpacked for the job before the tier, which needs them.
+    e2e_runs = [str(s.get("run", "")).strip() for s in (e2e.get("steps") or [])]
+    if CHROMIUM_STEP not in e2e_runs:
+        found.append(f"e2e-tools: no step runs `{CHROMIUM_STEP}`, so Chromium cannot start on Tanjiro (#1047)")
+    elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(CHROMIUM_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
+        found.append(f"e2e-tools: `{CHROMIUM_STEP}` runs after the suite")
+    if "permissions" in (jobs.get("offline") or {}):
+        found.append("offline: has its own permissions; it reads nothing beyond the checkout")
     if set(jobs) != set(SUITES):
         found.append(f"jobs are {sorted(jobs)}, not {sorted(SUITES)}")
     for name, job in jobs.items():
@@ -160,6 +183,17 @@ cases = {
     "no base step": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != BASE_STEP]}),
     "an action on a tag": lambda d: d["jobs"]["offline"]["steps"][0].update({"uses": "actions/checkout@v7"}),
+    "no GH_TOKEN on the e2e job": lambda d: d["jobs"]["e2e-tools"].pop("env"),
+    "an empty GH_TOKEN on the e2e job": lambda d: d["jobs"]["e2e-tools"]["env"].update({"GH_TOKEN": ""}),
+    "the e2e job without issues: read": lambda d: d["jobs"]["e2e-tools"]["permissions"].pop("issues"),
+    "issues: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"issues": "write"}),
+    "contents: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"contents": "write"}),
+    "permissions on the offline job": lambda d: d["jobs"]["offline"].update({"permissions": {"issues": "read"}}),
+    "no Chromium libraries step": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != CHROMIUM_STEP]}),
+    "the Chromium libraries step after the suite": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != CHROMIUM_STEP]
+         + [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() == CHROMIUM_STEP]}),
 }
 for what, edit in cases.items():
     got = problems(broken(edit), text)

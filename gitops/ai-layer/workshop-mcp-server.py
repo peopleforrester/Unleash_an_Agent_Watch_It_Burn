@@ -1143,6 +1143,20 @@ async def run_shell(command: str = "") -> str:
     return _shut_reply(shut) if shut and _carries_recipe(out) else out
 
 
+# What the model is told when /bin/sh (dash in the image) could not parse the command (#885). In #644's load replay
+# 254 run_shell calls failed with "/bin/sh: 1: Syntax error: Unterminated quoted string", the agent POSTing the
+# marketing intel as a JSON body nested inside single quotes, and each turn sent the same text again 20 to 30
+# times. dash exits 2 on a parse error and names it "Syntax error" before running anything.
+SHELL_PARSE_HINT = (" The shell could not parse this command, so none of it ran, and the same text fails the same "
+                    "way every time. The usual cause is a quote that is never closed: a ' inside a '...' string ends "
+                    "it. To send JSON, write it to a file first with a quoted here-document (cat > /tmp/body.json "
+                    "<<'EOF', then the JSON, then EOF on its own line) and send the file with curl -d @/tmp/body.json.")
+
+
+def _shell_could_not_parse(returncode: int, out: str) -> bool:
+    return returncode == 2 and re.search(r"^/bin/sh: \d+: Syntax error:", out, re.M) is not None
+
+
 def _run_shell(command: str) -> str:
     if not command.strip():
         return "provide a command to run"
@@ -1153,7 +1167,8 @@ def _run_shell(command: str) -> str:
             # A failed command must READ as failed, or the agent reports success (Whitney, 2026-09-06:
             # BurritoBot said "resent" after the NetworkPolicy had dropped the POST). Raising makes the
             # MCP result an error, so the execute_tool span is marked as an error in the trace too.
-            raise RuntimeError(f"command FAILED with exit code {p.returncode}: {out[:1500].strip() or '(no output)'}")
+            hint = SHELL_PARSE_HINT if _shell_could_not_parse(p.returncode, out) else ""
+            raise RuntimeError(f"command FAILED with exit code {p.returncode}: {out[:1500].strip() or '(no output)'}{hint}")
         return out[:4000] if out.strip() else "(no output; exit code 0)"
     except subprocess.TimeoutExpired:
         raise RuntimeError("command FAILED: it did not complete within 20s. The connection it was waiting on is "

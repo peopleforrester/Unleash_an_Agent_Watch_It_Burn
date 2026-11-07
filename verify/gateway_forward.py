@@ -15,19 +15,20 @@ goes through the same :3002 listener, route and backend as the agent's: the gate
 with its own Pod Identity credentials whoever calls it, and the model in the path is its BEDROCK_NOVA_MODEL.
 What this gives up is the agent-pod hop itself; that chat-path-ingress admits workshop-agent to :3002 is read
 off the live policies by verify/test_llm_bypass_live.py. verify/test_gateway_forward.py runs this against a
-stub kubectl.
+stub kubectl, and the port-forward itself is verify/kube_forward.py's (#998).
 """
 from __future__ import annotations
 
 import json
-import re
-import subprocess
-import threading
+import pathlib
+import sys
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import kube_forward  # noqa: E402
+
 PORT = 3002
-FORWARDING = re.compile(r"Forwarding from 127\.0\.0\.1:(\d+) -> " + str(PORT))
 
 
 def chat(kubectl: list[str], namespace: str, target: str, route: str, model: str,
@@ -38,21 +39,12 @@ def chat(kubectl: list[str], namespace: str, target: str, route: str, model: str
     pod/agentgateway-abc or deploy/agentgateway. Returns (status, reply, error): status is the HTTP code as
     text and reply the body, whole (a 5-token completion with its usage block can pass 400
     characters, and a cut one is not JSON), or ("", "", why) when no request was made."""
-    pf = subprocess.Popen([*kubectl, "-n", namespace, "port-forward", "--address", "127.0.0.1", target, f":{PORT}"],
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    try:
-        # kubectl picks the local port and prints it once the listener is up; read until that line or exit.
-        found: list[str] = []
-        reader = threading.Thread(target=lambda: found.extend(_first_forwarding(pf.stdout)), daemon=True)
-        reader.start()
-        reader.join(timeout=30)
-        if not found:
-            pf.kill()
-            err = pf.stderr.read() if pf.stderr else ""
-            return "", "", f"kubectl port-forward {target} :{PORT} did not come up: {' '.join(err.split())[:400]}"
+    with kube_forward.forward(kubectl, namespace, target, PORT) as (local, err):
+        if err:
+            return "", "", err
         body = json.dumps({"model": model, "max_tokens": 5,
                            "messages": [{"role": "user", "content": "Reply with the single word OK."}]}).encode()
-        req = urllib.request.Request(f"http://127.0.0.1:{found[0]}/{route}/v1/chat/completions", data=body,
+        req = urllib.request.Request(f"http://127.0.0.1:{local}/{route}/v1/chat/completions", data=body,
                                      headers={"content-type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -61,19 +53,3 @@ def chat(kubectl: list[str], namespace: str, target: str, route: str, model: str
             return str(e.code), e.read().decode(), ""
         except OSError as e:
             return "", "", f"the request over the port-forward failed: {e}"
-    finally:
-        if pf.poll() is None:
-            pf.terminate()
-        try:
-            pf.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            pf.kill()
-            pf.wait()
-
-
-def _first_forwarding(stream) -> list[str]:
-    for line in stream:
-        m = FORWARDING.search(line)
-        if m:
-            return [m.group(1)]
-    return []

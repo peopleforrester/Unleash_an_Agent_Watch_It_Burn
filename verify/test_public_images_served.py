@@ -17,6 +17,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import socket
 import sys
 import time
 import types
@@ -74,8 +75,13 @@ def paced() -> None:
 # dropped connection, on the connect, the handshake or the read, is tried again 5 s later, three tries in all. When
 # every try gets no answer, opened() raises Unreachable, which names the registry, and the test fails on that alone,
 # so an unreachable registry never reads as an image that is not served.
-# Any other error (an HTTP status that is not 429, a certificate the host cannot verify, a name that does not
-# resolve), or a fifth 429, still fails at once.
+# The resolver is on that path too (#1029). Run 17937's tier went red on one "[Errno -3] Temporary failure in name
+# resolution" for public.ecr.aws, read as an image that does not pull, and passed 23 of 23 on its own twice. A
+# temporary resolver failure (EAI_AGAIN) is no answer, retried on the same budget. Any other resolver failure (the
+# name is not known, or the resolver failed for good) is not retried, and raises Unreachable at once: the host cannot
+# find the registry, which is no verdict on an image either.
+# Any other error (an HTTP status that is not 429, a certificate the host cannot verify), or a fifth 429, still fails
+# at once.
 REGISTRY = "public.ecr.aws"
 RETRIES_ON_429 = 4
 RETRIES_ON_NO_ANSWER = 2
@@ -87,14 +93,29 @@ OFFICIAL = ("busybox:1.38.0", "alpine:3.23", "httpd:2.4-alpine", "redis:8-alpine
 
 
 class Unreachable(Exception):
-    """Every try at one request got no answer: a verdict on this host's path to the registry, not on an image."""
+    """Every try at one request got no answer, or the registry's name did not resolve: a verdict on this host's
+    path to the registry, not on an image."""
+
+
+def reason_of(e: BaseException) -> BaseException:
+    """What went wrong under urlopen: a URLError's reason from the open, or the error itself, raised bare."""
+    if isinstance(e, urllib.error.URLError) and not isinstance(e, urllib.error.HTTPError):
+        return e.reason if isinstance(e.reason, BaseException) else e
+    return e
+
+
+def unresolved(e: BaseException) -> bool:
+    """The resolver could not give the registry's address, for good: not a temporary failure (EAI_AGAIN)."""
+    reason = reason_of(e)
+    return isinstance(reason, socket.gaierror) and reason.errno != socket.EAI_AGAIN
 
 
 def no_answer(e: BaseException) -> bool:
-    """A timeout or a dropped connection: raised bare from the read, or as a URLError's reason from the open."""
-    if isinstance(e, urllib.error.HTTPError):
-        return False
-    reason = e.reason if isinstance(e, urllib.error.URLError) else e
+    """A timeout, a dropped connection or a temporary resolver failure: raised bare from the read, or as a URLError's
+    reason from the open."""
+    reason = reason_of(e)
+    if isinstance(reason, socket.gaierror):
+        return reason.errno == socket.EAI_AGAIN
     return isinstance(reason, (TimeoutError, ConnectionError))
 
 
@@ -111,6 +132,9 @@ def opened(req: urllib.request.Request) -> bytes:
             wait = e.headers.get("Retry-After", "") if e.headers else ""
             time.sleep(min(int(wait), 30) if wait.isdigit() else 2 ** limited)
         except OSError as e:
+            if unresolved(e):
+                raise Unreachable(f"{REGISTRY}'s name did not resolve on this host, for {req.full_url}: "
+                                  f"{type(e).__name__}: {e}") from e
             if not no_answer(e):
                 raise
             silent += 1

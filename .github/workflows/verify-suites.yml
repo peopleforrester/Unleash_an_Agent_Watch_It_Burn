@@ -74,6 +74,15 @@ jobs:
     runs-on: [self-hosted, Linux, X64, tanjiro]
     # run-e2e-tools.sh runs the offline suite first, then the tier; on netcup it took 36 to 73 minutes.
     timeout-minutes: 150
+    # The tier's cause-comment tests read issues through verify/gh_comments.py, which needs gh with a token and never
+    # reads anonymously (#863). Tanjiro has gh (hecaton deploy/tanjiro/tools.sh) and no login for the runner user, so
+    # the job hands gh this run's own token, with read access to issues added to contents: read (#1047). The token
+    # expires with the job, and gh reads the other public repo's issue (guard-proxy-agenticburn#63) with it too.
+    permissions:
+      contents: read
+      issues: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     concurrency:
       group: verify-suites-e2e-tools-${{ github.ref }}
       cancel-in-progress: false
@@ -111,6 +120,13 @@ jobs:
 
       - name: HECATON_BASE_SHA, the merge base with origin/staging
         run: bash verify/ci-base-sha.sh
+
+      # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),
+      # and the host takes nothing from apt. This unpacks the missing Debian packages under the job's temp directory,
+      # never installing them, and sets LD_LIBRARY_PATH and FONTCONFIG_FILE for the suite; with nothing missing it
+      # writes nothing.
+      - name: Chromium's libraries and fonts, unpacked for this job
+        run: python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"
 
       - name: bash verify/run-e2e-tools.sh
         run: bash verify/run-e2e-tools.sh

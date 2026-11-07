@@ -41,6 +41,16 @@ readonly ARGOCD_MANAGED="argocd-managed-app"   # ArgoCD-managed Deployment in NS
 
 command -v kubectl >/dev/null 2>&1 || { echo "FAIL: kubectl not found on PATH" >&2; exit 1; }
 [[ -x "${TOGGLE}" ]] || { echo "FAIL: missing toggle script: ${TOGGLE}" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found on PATH" >&2; exit 1; }
+
+# Take the cluster's guard lock before the first policy flip (#1016): re-run this script under verify/guard_lease.py's
+# hold, which waits while another run holds the Lease agent/wib-guard-lock on this context, gives up after 30 minutes
+# naming the holder (exit 3, nothing run), and releases it when this script exits, after the cleanup trap has put
+# require-resource-limits and restrict-image-registries back. Under hold, WIB_GUARD_LEASE names the context.
+GUARD_LEASE="${SCRIPT_DIR}/guard_lease.py"
+if ! python3 "${GUARD_LEASE}" held --context "${CONTEXT}"; then
+    exec python3 "${GUARD_LEASE}" hold --context "${CONTEXT}" --what "verify/beat-01.sh" -- bash "${BASH_SOURCE[0]}" "$@"
+fi
 
 fail() { echo "FAIL [beat-01]: $*" >&2; exit 1; }
 step() { echo "==> [beat-01] $*" >&2; }

@@ -19,6 +19,7 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import chart_fetch  # noqa: E402
 from bootstrap_chart import CHART, REPO, values_path  # noqa: E402
 
 HELM = shutil.which("helm")
@@ -58,9 +59,12 @@ ns = app["spec"]["destination"]["namespace"]
 
 with tempfile.TemporaryDirectory() as tmp:
     work = pathlib.Path(tmp)
-    helm("pull", operator["chart"], "--repo", operator["repoURL"], "--version", str(operator["targetRevision"]),
-         "--untar", "--untardir", str(work))
-    upstream = work / operator["chart"]
+    # The pinned operator chart comes from verify/.tools/charts, fetched there once with a network error retried (#1028).
+    try:
+        upstream = chart_fetch.pull(HELM, operator["repoURL"], operator["chart"], str(operator["targetRevision"]))
+    except chart_fetch.ChartFetchError as e:
+        print(f"FAILED: {e}")
+        sys.exit(1)
     op_vals, cfg_vals, hook_vals = work / "operator.yaml", work / "config.yaml", work / "hook.yaml"
     op_vals.write_text(yaml.safe_dump(operator["helm"]["valuesObject"]))
     cfg_vals.write_text(yaml.safe_dump(config["helm"]["valuesObject"]))

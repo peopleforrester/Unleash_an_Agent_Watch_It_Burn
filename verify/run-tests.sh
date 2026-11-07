@@ -68,9 +68,12 @@ run_one() {
     printf '\n== %s ==\n' "${name}"
     ran=$((ran + 1))
     rc=0
+    local started="${SECONDS}"
     no_cloud_run "${interp[@]}" "$1" || rc=$?
     # Any non-zero exit fails, 2 included: bash exits 2 on a syntax or usage error, and that is not a pass.
     [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${name} (exit ${rc})"); }
+    # Each test's seconds, so the E2E command's hour can be read test by test (#1005).
+    printf -- '-- %s took %ds\n' "${name}" "$((SECONDS - started))"
 }
 
 # Both suffixes: the shell checks (fleet naming, exit codes, teardown hooks) are as offline as the Python

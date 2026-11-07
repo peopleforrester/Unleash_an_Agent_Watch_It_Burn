@@ -35,8 +35,10 @@ the criterion can stop holding, and holds that each of those ways fails here.
 
 What it spends and changes. MAX_CALLS (35) model calls on the private bot, each marked so the feed skips it: about
 twenty cents of Bedrock. C1 POSTs the lab's fake customer counts to https://beacon.burritobot.co/beacon, the lab's own
-endpoint. C2 and C6 create promo-mascot and maintenance-shell in namespace agent; both are deleted again. Run it
-before or after test_recipe_block_live.py and the KubeCon probes, never during: their guardrails-on arms this cluster.
+endpoint. C2 and C6 create promo-mascot and maintenance-shell in namespace agent; both are deleted again. It runs
+holding the cluster's guard lock (verify/guard_lease.py, #1016), which test_recipe_block_live.py and the KubeCon probes
+take too, since their guardrails-on arms this cluster: each waits for the other, and after 30 minutes this fails
+naming the holder, having asked nothing.
 
 Usage: PRIVATE_CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] python3 verify/test_two_hour_flow_live.py
 """
@@ -60,6 +62,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 sys.path.insert(0, str(HERE))
 import agent_probe as ap  # noqa: E402
+import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 
 LAB = REPO / "gitops/ai-layer/web/lab.html"
@@ -395,7 +398,10 @@ def main() -> int:
 
     print(f"== #954/#970: the 2-hour lab's chat asks on {context} (https://{cluster.host}), "
           f"at most {MAX_CALLS} model calls ==")
-    run_checks(cluster, check)
+    # Its beats read the guardrails off, so it holds the guard lock (#1016): a probe's guardrails-on waits for it.
+    if not guard_lease.run_held(context, lambda: run_checks(cluster, check), check, "verify/test_two_hour_flow_live.py",
+                                kubeconfig=os.environ.get("KUBECONFIG") or None):
+        return guard_lease.BUSY_EXIT
     print(f"model calls: {cluster.calls}")
     print()
     if failures:

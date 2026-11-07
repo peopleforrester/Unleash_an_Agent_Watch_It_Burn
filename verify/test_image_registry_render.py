@@ -21,6 +21,7 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import chart_fetch  # noqa: E402
 from bootstrap_chart import CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, profiles, values_path  # noqa: E402
 
 failures: list[str] = []
@@ -157,18 +158,14 @@ pulled: dict[tuple[str, str, str], pathlib.Path] = {}
 
 
 def upstream_chart(src: dict) -> pathlib.Path | str:
-    """The app's chart, pulled once into WORK; on failure, Helm's error."""
+    """The app's chart, from verify/.tools/charts, fetched once with a network error retried (#1028); on failure,
+    Helm's error."""
     key = (src["repoURL"], src["chart"], str(src["targetRevision"]))
     if key not in pulled:
-        repo, chart, version = key
-        dest = WORK / f"{chart}-{len(pulled)}"
-        ref = ([f"oci://{repo.removeprefix('oci://').rstrip('/')}/{chart}"] if not repo.startswith("http")
-               else [chart, "--repo", repo])
-        r = subprocess.run([HELM, "pull", *ref, "--version", version, "--untar", "--untardir", str(dest)],
-                           capture_output=True, text=True)
-        if r.returncode:
-            return r.stderr.strip()[:200]
-        pulled[key] = dest / chart
+        try:
+            pulled[key] = chart_fetch.pull(HELM, *key)
+        except chart_fetch.ChartFetchError as e:
+            return str(e)
     return pulled[key]
 
 

@@ -40,6 +40,7 @@ class Read:
     rate_limited: str = ""
     error: str = ""
     body: str = ""
+    title: str = ""
 
     @property
     def ok(self) -> bool:
@@ -99,15 +100,21 @@ def read(owner_repo: str, number: str | int, timeout: int = 90) -> Read:
     return Read(comments)
 
 
-def read_body(owner_repo: str, number: str | int, timeout: int = 90) -> Read:
-    """owner_repo#number's body, read with `gh issue view --json body` (#946), or why not. The body is Read.body."""
-    doc, failed = _view(owner_repo, number, "body", timeout)
+def read_body(owner_repo: str, number: str | int, timeout: int = 90, with_title: bool = False) -> Read:
+    """owner_repo#number's body, read with `gh issue view --json body` (#946), or why not. The body is Read.body.
+    with_title=True asks for `--json title,body` in the same read (#1012), and the title is Read.title."""
+    doc, failed = _view(owner_repo, number, "title,body" if with_title else "body", timeout)
     if failed:
         return failed
     body = doc.get("body") if isinstance(doc, dict) else None
     if not isinstance(body, str):
         return Read([], error=f"gh issue view printed no body: {json.dumps(doc)[:200]!r}")
-    return Read([], body=body)
+    if not with_title:
+        return Read([], body=body)
+    title = doc.get("title")
+    if not isinstance(title, str):
+        return Read([], error=f"gh issue view printed no title: {json.dumps(doc)[:200]!r}")
+    return Read([], body=body, title=title)
 
 
 def check_read(got: Read, issue: str, check: Callable[[str, bool, str], None], what: str = "comments") -> None:

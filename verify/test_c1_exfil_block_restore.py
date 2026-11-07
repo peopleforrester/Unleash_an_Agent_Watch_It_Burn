@@ -44,10 +44,17 @@ def c1_policies() -> list[dict]:
     sys.exit(f"FAIL: no ConfigMap in {RESOURCES} carries c1-network-policy.yaml, the policies the script applies")
 
 
+# The guard lock's calls (#1016) go to verify/fake_lease_kubectl.py, which keeps the Lease; every call, both kinds, is
+# written in order to FAKE_ORDER_LOG, so the test can hold the lock to spanning the script's policy calls.
 FAKE_KUBECTL = r'''#!/usr/bin/env python3
 import json, os, sys, yaml
 state_path, log = os.environ["FAKE_KUBE_STATE"], os.environ["FAKE_KUBE_LOG"]
 args = sys.argv[1:]
+with open(os.environ["FAKE_ORDER_LOG"], "a") as f:
+    f.write(" ".join(args) + "\n")
+line = " ".join(args)
+if " lease " in line or "/leases/" in line or line.endswith((" create -f - -o json", " replace -f - -o json")):
+    os.execvp(sys.executable, [sys.executable, os.environ["FAKE_LEASE_KUBECTL"], *args])
 with open(log, "a") as f:
     f.write(" ".join(args) + "\n")
 if args[:1] != ["--context"] or len(args) < 2:
@@ -118,14 +125,35 @@ def run(before: dict, reply: str) -> tuple[int, dict, dict, str, str]:
         state.write_text(json.dumps(before))
         log = d / "kubectl.log"
         log.touch()
-        env = {**os.environ, "PATH": f"{d / 'bin'}:{os.environ['PATH']}", "FAKE_KUBE_STATE": str(state),
-               "FAKE_KUBE_LOG": str(log), "FAKE_REPLY": reply, "TMPDIR": str(d)}
+        order = d / "order.log"
+        order.touch()
+        env = {**{k: v for k, v in os.environ.items() if k != "WIB_GUARD_LEASE"},
+               "PATH": f"{d / 'bin'}:{os.environ['PATH']}", "FAKE_KUBE_STATE": str(state),
+               "FAKE_KUBE_LOG": str(log), "FAKE_REPLY": reply, "TMPDIR": str(d),
+               "FAKE_ORDER_LOG": str(order), "FAKE_LEASE_STATE": str(d / "lease.json"),
+               "FAKE_LEASE_KUBECTL": str(REPO / "verify/fake_lease_kubectl.py")}
         p = subprocess.run(["bash", str(SCRIPT), "burritobot-test", "ctx-test", "accen-dev"], env=env,
                            capture_output=True, text=True, timeout=120)
         at_chat = json.loads((d / "state.json.at-chat").read_text()) if (d / "state.json.at-chat").exists() else {}
         left = [x for x in d.iterdir() if x.name.startswith("c1.")]
+        lease_left = json.loads((d / "lease.json").read_text())["lease"] if (d / "lease.json").exists() else None
+        LOCK.update(order=order.read_text().splitlines(), lease_left=lease_left)
         return p.returncode, json.loads(state.read_text()), at_chat, log.read_text(), p.stdout + p.stderr + (
             f"\nleft behind: {left}" if left else "")
+
+
+LOCK: dict = {}
+
+
+def check_lock(label: str) -> None:
+    """The guard lock (#1016): the Lease is created before the first policy call and deleted after the last."""
+    calls = LOCK.get("order") or []
+    policy = [i for i, c in enumerate(calls) if " lease " not in c and "/leases/" not in c
+              and not c.endswith((" create -f - -o json", " replace -f - -o json"))]
+    check(f"{label}: the guard lock is taken before the first policy call and released after the restore",
+          bool(policy) and calls[0].endswith(" create -f - -o json") and "delete --raw" in calls[-1]
+          and 0 < policy[0] and policy[-1] < len(calls) - 1, "\n".join(calls))
+    check(f"{label}: the Lease is gone when the script exits", LOCK.get("lease_left") is None, str(LOCK.get("lease_left")))
 
 
 POLICIES = c1_policies()
@@ -149,6 +177,7 @@ check("a policy the check never named is untouched", after.get("NetworkPolicy/ag
     "NetworkPolicy/agent/workshop-agent-ingress"])
 check("nothing is replaced, since nothing was there before", " replace " not in calls, calls)
 check("every kubectl call names the context", all(l.startswith("--context ctx-test ") for l in calls.splitlines()), calls)
+check_lock("attendee")
 
 print("== an armed admin cluster: all six are Argo CD's already, so all six come back as they were ==")
 armed = {**OTHER, **{k: server_copy(p, "argo") for k, p in KEYS.items()}}
@@ -162,6 +191,7 @@ check("each is back to the spec, labels and annotations it had", all(
 check("the same objects, never deleted and recreated", all(
     after[k]["metadata"].get("uid") == armed[k]["metadata"]["uid"] for k in KEYS if k in after))
 check("no delete is sent, since the check created nothing", " delete " not in f" {calls}", calls)
+check_lock("armed")
 
 print("== half and half: the two that were there come back, the four it created go ==")
 had = dict(list(KEYS.items())[:2])
@@ -177,6 +207,7 @@ rc, after, at_chat, calls, out = run(json.loads(json.dumps(armed)), "Done! I hav
 check("the check exits non-zero and says FAIL", rc == 1 and "FAIL" in out, out)
 check("all six are back as they were", all(k in after and after[k]["spec"] == armed[k]["spec"] for k in KEYS))
 check("its temporary files are removed", "left behind" not in out, out)
+check_lock("a failing reply")
 
 if failures:
     print(f"\n{len(failures)} check(s) failed")

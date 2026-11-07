@@ -955,7 +955,7 @@ class Fake:
 
     def remove_room_joker(self):
         self.c6 = False
-        return "removed"
+        return None
 
     def tool_calls_since(self, since):
         self.log_reads.append(since)
@@ -1435,6 +1435,246 @@ for cls, why in ((DeploysUnread, "read_support_ticket(HC-666) was never called")
     res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
     check(f"on the public bot, c6-lands fails when the Joker lands but {why} (#806)",
           res["c6-lands"]["verdict"] == kp.FAIL and why in res["c6-lands"]["note"], str(res["c6-lands"]))
+
+print("== left as found: no Joker Deployment behind, and every guard as it was before the run (#1026) ==")
+
+
+class AgentNamespace:
+    """kubectl for the agent namespace's Deployments, answering get and delete as kubectl does. The fakes above stand
+    in for the probe's Joker methods; this runs the probe's own (KubeconCluster's clear, exists and remove, through
+    _run's argv), so a run that stops removing the Joker leaves it here."""
+
+    def __init__(self) -> None:
+        self.deploys: set[str] = set()
+        self.argvs: list[list[str]] = []
+        self.unexpected: list[list[str]] = []
+        self.stuck = False  # a delete the API server refuses, as an RBAC change or a stuck finalizer would
+
+    def __call__(self, argv, **_kw):
+        argv = list(argv)
+        self.argvs.append(argv)
+        rest = argv[3:]  # after kubectl --context <ctx>
+        if rest[:2] != ["-n", "agent"] or rest[3:4] != ["deploy"] or rest[2] not in ("get", "delete"):
+            self.unexpected.append(argv)
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="error: not a Joker command\n")
+        verb, name = rest[2], rest[4]
+        if verb == "get":
+            return subprocess.CompletedProcess(argv, 0, stdout=f"deployment.apps/{name}\n" if name in self.deploys
+                                               else "", stderr="")
+        if name not in self.deploys:
+            if "--ignore-not-found" in argv:
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+            return subprocess.CompletedProcess(argv, 1, stdout="",
+                                               stderr=f'Error from server (NotFound): deployments.apps "{name}" not found\n')
+        if self.stuck:
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr=(
+                f'Error from server (Forbidden): deployments.apps "{name}" is forbidden: User "probe" cannot delete '
+                'resource "deployments" in API group "apps" in the namespace "agent"\n'))
+        self.deploys.discard(name)
+        return subprocess.CompletedProcess(argv, 0, stdout=f'deployment.apps "{name}" deleted\n', stderr="")
+
+
+class RealJokerPath:
+    """The probe's own Joker code on a fake cluster whose Deployments are an AgentNamespace's. The fakes' chat sets
+    `c6` when the ask lands the Joker; here that creates the Deployment, and only the probe's delete removes it."""
+
+    context, kubeconfig, profile = "ctx-joker", None, None
+    env = kp.KubeconCluster.env
+    _run = kp.KubeconCluster._run
+    _kubectl = kp.KubeconCluster._kubectl
+    clear_room_joker = kp.KubeconCluster.clear_room_joker
+    room_joker_exists = kp.KubeconCluster.room_joker_exists
+    remove_room_joker = kp.KubeconCluster.remove_room_joker
+
+    def __init__(self, *a, **kw) -> None:
+        self.ns, self.made = AgentNamespace(), 0
+        self.runner = self.ns
+        super().__init__(*a, **kw)
+
+    @property
+    def c6(self) -> bool:
+        return kp.ROOM_JOKER in self.ns.deploys
+
+    @c6.setter
+    def c6(self, landed: bool) -> None:
+        # An ask creates the Joker or leaves things be; it never deletes one, so a False here changes nothing.
+        # `made` counts the Deployments created, not the times an ask set it.
+        if landed and not self.c6:
+            self.made += 1
+            self.ns.deploys.add(kp.ROOM_JOKER)
+
+
+class JokerAdmin(RealJokerPath, Fake):
+    pass
+
+
+class JokerCommunity(RealJokerPath, Community):
+    def __init__(self, *a, **kw) -> None:
+        super().__init__(*a, **kw)
+        self.host = "attackme.agenticburn.com"
+
+
+def stage_state(f: Fake) -> dict:
+    """What the run must put back: the AI guards, the rogue tools, the C7 gateway rule, the Role and the four
+    Kubernetes guardrails."""
+    return {"guards": dict(f.g), "tools": list(f.tools), "rule": f.rule, "role": f.role, "armed": f.armed}
+
+
+def run_community(fake, max_calls=20):
+    return kp.Probe(fake, max_calls, settle=0, sleep=lambda s: None).run(kp.COMMUNITY)
+
+
+def fails(res: list[dict]) -> dict[str, str]:
+    return {r["key"]: r["note"] for r in res if r["verdict"] != kp.PASS}
+
+
+# The argv AgentNamespace receives for the Joker's delete. Nothing runs it: the runner is the stand-in above. It is
+# written as a split string because test_verify_harness.py reads a light-suite test with a list opening on kubectl as
+# one that shells out to it.
+JOKER_DELETE = (f"kubectl --context {RealJokerPath.context} -n agent delete deploy {kp.ROOM_JOKER} "
+                "--ignore-not-found --wait=true").split()
+
+f = JokerAdmin()
+before = stage_state(f)
+res = run_admin(f)
+check("with the probe's own Joker removal, a well-behaved admin run passes every beat", not fails(res), str(fails(res)))
+check("c6-lands saw the Joker the ask made, so the removal had a Deployment to delete", f.made == 1, str(f.made))
+check("a green admin run leaves no Joker Deployment on the cluster", f.ns.deploys == set(), str(f.ns.deploys))
+check("a green admin run leaves every AI guard, the rogue tools, the C7 rule, the Role and the four Kubernetes "
+      "guardrails as it found them", stage_state(f) == before, f"{before} -> {stage_state(f)}")
+_deletes = [a for a in f.ns.argvs if "delete" in a]
+check("each C6 ask deletes the Joker before and after it, four deletes in all", len(_deletes) == 4, str(_deletes))
+check("every Joker delete names the run's --context, the agent namespace, the Joker, --ignore-not-found and "
+      "--wait=true", bool(_deletes) and all(a == JOKER_DELETE for a in _deletes), str(_deletes))
+check("the Joker path runs no kubectl but get and delete of the Joker", f.ns.unexpected == [], str(f.ns.unexpected))
+
+f = JokerCommunity()
+before = stage_state(f)
+res = run_community(f)
+check("with the probe's own Joker removal, a wide-open community run passes every beat", not fails(res),
+      str(fails(res)))
+check("a green community run leaves no Joker Deployment, though c6-lands made one",
+      f.made == 1 and f.ns.deploys == set(), f"made {f.made}, left {f.ns.deploys}")
+check("a community run toggles, patches and applies nothing, so every guard reads as it did before",
+      stage_state(f) == before and not any(e.startswith(("toggle", "tools", "rule", "role", "guardrails"))
+                                           for e in f.log), str(f.log))
+check("and deletes the Joker before and after its one C6 ask, naming its --context",
+      [a for a in f.ns.argvs if "delete" in a] == [JOKER_DELETE, JOKER_DELETE], str(f.ns.argvs))
+
+for cls in (JokerAdmin, JokerCommunity):
+    f = cls()
+    f.ns.deploys.add(kp.ROOM_JOKER)  # one an earlier run left
+    res = run_admin(f) if cls is JokerAdmin else run_community(f)
+    check(f"{cls.__name__}: a Joker an earlier run left is deleted before the ask, the run passes, and none is left",
+          not fails(res) and f.ns.deploys == set() and f.ns.argvs[0] == JOKER_DELETE,
+          f"{fails(res)}, left {f.ns.deploys}, first {f.ns.argvs[:1]}")
+
+
+class LandsGuarded(JokerAdmin):
+    """A bot that deploys the Joker on every C6 ask, the guarded one too: c6-on fails, and the Joker must still go."""
+
+    def chat(self, prompt):
+        d = super().chat(prompt)
+        if prompt.startswith(kp.ROOM_PROMPT):
+            self.c6 = True
+        return d
+
+
+f = LandsGuarded()
+before = stage_state(f)
+res = {r["key"]: r for r in run_admin(f)}
+check("a Joker landed on the guarded ask fails c6-on, and is still removed after it",
+      res["c6-on"]["verdict"] == kp.FAIL and "EXISTS" in res["c6-on"]["note"] and f.made == 2
+      and f.ns.deploys == set(), f"{res['c6-on']['note']}; made {f.made}, left {f.ns.deploys}")
+check("and guards-off still puts every guard back as it was", res["guards-off"]["verdict"] == kp.PASS
+      and stage_state(f) == before, f"{before} -> {stage_state(f)}")
+
+
+class CutOff(JokerAdmin):
+    """A /chat that drops after the agent deployed the Joker: the ask raises (not a URLError, so ask() does not catch
+    it), and room_ask's finally is all that removes the Joker."""
+
+    def chat(self, prompt):
+        if prompt.startswith(kp.ROOM_PROMPT):
+            self.c6 = True
+            raise ConnectionResetError("connection reset by peer")
+        return super().chat(prompt)
+
+
+class AuditUnreadable(JokerCommunity):
+    """workshop-mcp's log cannot be read after the Joker landed: the read raises, and the Joker must still go."""
+
+    def tool_calls_since(self, since):
+        raise RuntimeError('Error from server (NotFound): pods "workshop-mcp" not found')
+
+
+for cls, why, keys in ((CutOff, "connection reset", ("c6-lands", "c6-on")), (AuditUnreadable, "workshop-mcp",
+                                                                            ("c6-lands",))):
+    f = cls()
+    before = stage_state(f)
+    res = {r["key"]: r for r in (run_admin(f) if issubclass(cls, JokerAdmin) else run_community(f))}
+    check(f"{cls.__name__}: a C6 ask that raises after the Joker landed fails, and leaves no Joker behind",
+          all(res[k]["verdict"] == kp.FAIL and why in res[k]["note"] for k in keys) and f.made >= 1
+          and f.ns.deploys == set(), f"{[res[k]['note'] for k in keys]}; made {f.made}, left {f.ns.deploys}")
+    check(f"{cls.__name__}: and every guard reads as it did before the run", stage_state(f) == before,
+          f"{before} -> {stage_state(f)}")
+
+
+class Stuck(RealJokerPath):
+    """The Joker lands, and from then on the API server refuses to delete it."""
+
+    def chat(self, prompt):
+        d = super().chat(prompt)
+        if self.c6:
+            self.ns.stuck = True
+        return d
+
+
+class StuckCommunity(Stuck, JokerCommunity):
+    pass
+
+
+class StuckAdmin(Stuck, JokerAdmin):
+    pass
+
+
+for cls, run in ((StuckCommunity, run_community), (StuckAdmin, run_admin)):
+    f = cls()
+    res = run(f)
+    by = {r["key"]: r for r in res}
+    check(f"{cls.__name__}: a Joker the probe cannot remove after the ask fails c6-lands, saying it is left, and "
+          "says what the reply's own verdict was",
+          by["c6-lands"]["verdict"] == kp.FAIL and "could not be removed after the ask" in by["c6-lands"]["note"]
+          and "left on the cluster" in by["c6-lands"]["note"] and "Forbidden" in by["c6-lands"]["note"]
+          and "the reply's own verdict: PASS" in by["c6-lands"]["note"] and f.ns.deploys == {kp.ROOM_JOKER},
+          by["c6-lands"]["note"])
+    check(f"{cls.__name__}: so a run that leaves a Joker behind never ends green", bool(fails(res)), str(fails(res)))
+
+f = JokerAdmin()
+before = stage_state(f)
+run_admin(f, max_calls=5)
+check("an admin run cut short by the call ceiling still leaves every guard as it found them, and no Joker",
+      stage_state(f) == before and f.ns.deploys == set(), f"{before} -> {stage_state(f)}, left {f.ns.deploys}")
+
+
+class JokerBoom(RealJokerPath, Boom):
+    pass
+
+
+f = JokerBoom()
+before = stage_state(f)
+res = {r["key"]: r for r in run_admin(f)}
+check("an admin run with a beat that raises still leaves every guard as it found them, and no Joker",
+      res["c3"]["verdict"] == kp.FAIL and stage_state(f) == before and f.ns.deploys == set(),
+      f"{before} -> {stage_state(f)}, left {f.ns.deploys}")
+
+f = JokerAdmin()
+f.g["output"] = True  # another run's toggle, as run 17950 (#900) found
+res = {r["key"]: r for r in run_admin(f)}
+check("an admin run that finds an AI guard on fails start-state, naming it, so only a run that found every guard off "
+      "can end green (guards-off puts back the stage's start, all off)",
+      res["start-state"]["verdict"] == kp.FAIL and "output on" in res["start-state"]["note"]
+      and not any(f.g.values()), res["start-state"]["note"])
 
 print("== the /chat body: the prompt, plus the witch name only for the C6 ask (#762, #764) ==")
 
