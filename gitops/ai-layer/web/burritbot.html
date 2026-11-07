@@ -650,8 +650,9 @@
   // Asks for the BASE, the first step on the board (#143). It asked for the protein before, which was
   // step 2, so the bot and the menu disagreed about where to start.
   function greet(){bubble("Welcome to BurritoBot, the Hex & Cauldron ordering app. 🧙 Let's build your burrito, starting from the bottom. What base would you like? (Cilantro-Slime Rice, Black-Bog Rice, or Graveyard Greens, or ask me for the full menu.)",'bot');}
-  // Easter egg (#36): when BurritoBot rings up a completed five-step order it says "Free burritos for life";
-  // that surfaces a ring-me-up button in chat, and clicking it sets off a silly celebration.
+  // Easter egg (#36): when BurritoBot rings up a completed five-step order it says "Your order is now complete."
+  // (#1010; it said "Free burritos for life" before). send() spots that sentence in any case, spacing or
+  // punctuation and surfaces a ring-me-up button in chat; clicking it sets off a silly celebration.
   function winBubble(){
     const s=document.getElementById('stream');
     const d=document.createElement('div'); d.className='msg bot';
@@ -704,7 +705,7 @@
       const data=await res.json();
       botReply(data.reply);
       checkMyDeployments();
-      if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();
+      if(/your\s+order\s+is\s+now\s+complete/i.test(data.reply||'')) winBubble();
       const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;
       document.getElementById('tokens').textContent=tokens.toLocaleString();
       document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
