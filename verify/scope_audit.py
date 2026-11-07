@@ -153,8 +153,8 @@ def main(argv: list[str]) -> int:
                 miss.add(f"{k}/ (listed)")
             elif k not in tree.files and k not in tree.submodules:
                 continue
-            elif not any(st.covers(e, k) for e in entries):
-                miss.add(k)
+            elif not any(st.covers(e, k) or st.covers(e, p) for e in entries):
+                miss.add(k)  # a file inside a submodule counts as the submodule, or as itself to a glob
         if overflow:
             miss.add("(inotify's queue overflowed, so some opens were lost; run this test alone)")
         status = "ok" if not miss else f"{len(miss)} missed"

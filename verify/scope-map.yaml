@@ -142,7 +142,6 @@ reads:
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
   test_admin_actions.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -152,14 +151,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -181,12 +174,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_agent_bypass_shapes.py:
-    - '*'
     - CLAUDE.md
     - agent
     - backstage
@@ -195,6 +184,7 @@ reads:
     - gitops/ai-layer
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
@@ -212,7 +202,6 @@ reads:
     - policies/**.y*ml
     - policies/kyverno/restrict-agent-spawned-workloads.yaml
     - security
-    - verify/*
     - verify/bootstrap_chart.py
   test_agent_cloud_credential.py:
     - gitops/ai-layer
@@ -361,7 +350,6 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
   test_attendee_iam_user.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -371,14 +359,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -400,12 +382,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_audience_event.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -420,14 +398,8 @@ reads:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -450,9 +422,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_audience_page_e2e.py:
     - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/web/burritbot.html
@@ -488,12 +457,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/aws/network/terraform.tfstate
@@ -517,13 +481,9 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
   test_backups_floor.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -533,14 +493,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -563,9 +517,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
   test_beat03_c7.py:
@@ -603,6 +554,7 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/apps
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/Chart.yaml
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/*.yaml
@@ -698,13 +650,11 @@ reads:
     - gitops/kubearmor-config/values.yaml
     - images/workshop-mcp/Dockerfile
   test_c3_prompt_copies.py:
-    - '**'
     - challenges/LAB-TEXT.md
     - challenges/PROMPT-CATALOG.md
     - facilitation/kubecon-na-2026/fallback/prompts.yaml
     - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/web/lab.html
-    - verify/**
   test_c3_talon_claim.py:
     - challenges/c3-secret-grep/README.md
     - gitops/ai-layer/web/lab.html
@@ -742,7 +692,6 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
   test_c7_control_comments.py:
-    - CLAUDE.md
     - agent
     - agent/web-terminal
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -784,14 +733,8 @@ reads:
     - images/web-terminal/entrypoint.sh
     - images/workshop-mcp/Dockerfile
     - infra
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -817,11 +760,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/nova_replies.py
     - verify/registry_allowlist.py
     - verify/resource_limits.py
@@ -829,7 +769,6 @@ reads:
     - verify/test_kubecon_probe.py
     - verify/topic_cases.py
   test_c7_gateway_reader.py:
-    - '*'
     - VERSIONS.lock
     - agent/GATEWAY-NOTES.md
     - agent/guard-proxy-reader
@@ -851,14 +790,12 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
     - infra/terraform/aws/cluster/main.tf
-    - verify/*
     - verify/agentgateway_schema.py
     - verify/schemas/agentgateway-v1.7.0-config.json
     - verify/test_agentgateway_config.py
     - verify/test_agentgateway_path.py
     - verify/test_beat3_mcp.py
   test_c7_gateway_toggle.py:
-    - CLAUDE.md
     - agent
     - agent/web-terminal
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -877,14 +814,8 @@ reads:
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -907,9 +838,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_c7_output_guard.py:
     - gitops/ai-layer/resources.yaml
   test_c7_teaching.py:
@@ -967,7 +895,7 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
-    - gitops/bootstrap/values-
+    - gitops/bootstrap/values-*.yaml
     - gitops/workshop-agent/agent.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
@@ -976,7 +904,6 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1017,7 +944,6 @@ reads:
   test_chat_no_desk_link.py:
     - gitops/ai-layer/web/burritbot.html
   test_chat_path_ingress.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
@@ -1030,14 +956,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1060,9 +980,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_chat_saved_coc_e2e.py:
     - gitops/ai-layer/web/burritbot.html
     - verify/chat-saved-harness.js
@@ -1089,7 +1006,6 @@ reads:
     - policies/kyverno/*.yaml
     - policies/kyverno/restrict-agent-spawned-workloads.yaml
   test_cluster_roles.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -1099,14 +1015,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1128,9 +1038,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_collector_act2_redaction.py:
     - gitops
@@ -1157,6 +1064,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
@@ -1188,7 +1096,6 @@ reads:
     - gitops/otel-collector/values.yaml
     - verify/collector_render.py
   test_collector_llmobs_model.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -1202,14 +1109,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1232,9 +1133,6 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/collector_render.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
   test_collector_llmobs_model_e2e.py:
@@ -1251,6 +1149,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/falcosidekick.yaml
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
@@ -1336,6 +1235,7 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/lab.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/templates
@@ -1345,15 +1245,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -1381,9 +1276,6 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_console_service_vhosts.py:
     - CLAUDE.md
     - backstage
@@ -1391,6 +1283,7 @@ reads:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/kustomization.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
@@ -1435,12 +1328,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1463,11 +1351,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_datadog_login_visible.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -1478,14 +1363,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/lab.html
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1507,11 +1386,7 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_datadog_pool_row.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -1521,14 +1396,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1551,17 +1420,12 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_datadog_sandbox_live_logic.py:
-    - '*'
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
-    - verify/*
     - verify/test_datadog_sandbox_live.py
   test_datadog_sandbox_names.py:
     - CLAUDE.md
@@ -1591,7 +1455,6 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1615,7 +1478,6 @@ reads:
     - scripts/reload-routes.sh
     - verify/collector_render.py
     - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/last_trace.py
   test_datadog_secret_fields.py:
     - gitops
@@ -1635,6 +1497,7 @@ reads:
     - CLAUDE.md
     - agent
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - infra/argocd-values.yaml
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
@@ -1686,14 +1549,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1716,9 +1573,6 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - teardown/delivery-cost.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_delivery_cost_estimate.py:
     - CLAUDE.md
     - infra/terraform/aws/cluster
@@ -1772,21 +1626,17 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/workshop-agent/agent.yaml
     - infra/argocd-values.yaml
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
     - infra/setup-instructor-cluster.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -1809,9 +1659,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_deployments_witch_line_e2e.py:
     - gitops/ai-layer
     - gitops/ai-layer/ticket_site.py
@@ -1851,7 +1698,6 @@ reads:
     - transcripts
     - verify/round_shapes.py
   test_down_infra.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -1861,14 +1707,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -1891,9 +1731,6 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - teardown/teardown.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_draft_drift.sh:
     - README.md
     - agent/474-1
@@ -1908,7 +1745,6 @@ reads:
     - gitops/bootstrap/apps/prometheus.yaml
     - verify/draft-drift.sh
   test_drift_report.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -1919,12 +1755,7 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org
     - infra/org/boundary
     - infra/terraform
@@ -1953,9 +1784,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_drift_selfheal_ops.py:
     - agent
     - docs/floor.md
@@ -1968,7 +1796,6 @@ reads:
     - policies/network-policies/**.yaml
     - policies/network-policies/per-namespace/apps-egress-allowlist.yaml
   test_eks_version_pins.py:
-    - CLAUDE.md
     - VERSIONS.lock
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -1982,14 +1809,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2011,9 +1832,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_enforcement_points.py:
     - docs/CHALLENGE-ASSETS.md
     - gitops/ai-layer/web/lab.html
@@ -2036,7 +1854,6 @@ reads:
     - games/eso-s3-exfil/score.sh
     - games/eso-s3-exfil/teardown.sh
   test_failover_drill.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2049,14 +1866,8 @@ reads:
     - gitops/ai-layer/web
     - gitops/ai-layer/web/burritbot.html
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2080,12 +1891,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/.tools/bin/caddy
-    - verify/datadog-orgs.sh
     - verify/failover_drill.py
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_fake_ticket.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2100,14 +1907,8 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2130,9 +1931,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/test_support_desk.py
   test_falco_badge_measured.py:
     - gitops/ai-layer/guard-proxy
@@ -2153,7 +1951,6 @@ reads:
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/platform.html
   test_finale_cap.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -2172,14 +1969,8 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/kubecon.html
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2201,11 +1992,7 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_fleet_apply_failure_exit.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2215,14 +2002,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2244,12 +2025,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_audit_zero.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2259,14 +2036,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2288,9 +2059,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_contract.py:
     - CLAUDE.md
@@ -2311,6 +2079,7 @@ reads:
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/platform.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/*.yaml
     - gitops/bootstrap/templates
@@ -2321,15 +2090,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -2360,12 +2124,8 @@ reads:
     - security
     - teardown/teardown.sh
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/model_pin_check.py
   test_fleet_exit_codes.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2375,14 +2135,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2404,12 +2158,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_import_state.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2419,15 +2169,9 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
     - infra/org/boundary/main.tf
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -2453,12 +2197,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
     - verify/fixtures/import-state/planned-types.txt
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_fleet_monitors.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c3-secret-grep/agent-prompt.txt
@@ -2484,14 +2224,12 @@ reads:
     - gitops/otel-collector/values.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2516,13 +2254,9 @@ reads:
     - verify/agent_obs_flow.py
     - verify/agent_probe.py
     - verify/collector_render.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/topic_cases.py
   test_fleet_pool_reconcile.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2533,14 +2267,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap/apps
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2562,13 +2290,9 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
     - verify/fleet-hygiene.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_routes_publish.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2578,14 +2302,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2607,12 +2325,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_routes_roster.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2623,14 +2337,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2652,12 +2360,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_settle_after_apply.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2667,14 +2371,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2696,12 +2394,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_standbys.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2711,14 +2405,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2740,12 +2428,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_teardown_hooks.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2755,14 +2439,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2784,12 +2462,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_terminal_harvest.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2800,14 +2474,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2830,12 +2498,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_wall_check.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2847,14 +2511,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/kubecon.html
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2876,12 +2534,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_fleet_wall_reset.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2892,14 +2546,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2921,9 +2569,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_forkbomb_defense.py:
     - gitops/bootstrap/apps/falco-talon.yaml
@@ -2935,7 +2580,6 @@ reads:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/lab.html
   test_friendly_hostnames.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -2946,14 +2590,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -2975,9 +2613,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_front_door_cert.sh:
     - infra/dns/set-demo-dns.py
     - infra/front-door-cert.sh
@@ -2987,6 +2622,7 @@ reads:
     - gitops
     - gitops/ai-layer
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
@@ -3019,6 +2655,7 @@ reads:
     - challenges/c1-exfil-s3/fix/egress-waypoint.yaml
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/gateway-api.yaml
     - gitops/bootstrap/apps/istio.yaml
@@ -3044,6 +2681,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/istio.yaml
     - gitops/bootstrap/templates
@@ -3098,7 +2736,6 @@ reads:
     - verify/.tools/bin/crane
     - verify/e2e-tools.lock
   test_gotchas_router_probe.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -3109,14 +2746,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3138,15 +2769,13 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_grafana_host.py:
     - CLAUDE.md
     - gitops
     - gitops/**.yaml
     - gitops/ai-layer/console.conf
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps/prometheus.yaml
     - infra/argocd-values.yaml
     - infra/aws-load-balancer-controller-values.yaml
@@ -3156,8 +2785,6 @@ reads:
     - infra/reload-datadog-consumers.sh
     - infra/terraform/aws/cluster
   test_guard_commands_echo.py:
-    - '*'
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -3174,14 +2801,8 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3203,10 +2824,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/*
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_guard_proxy_go_otel.py:
     - gitops/ai-layer
     - gitops/ai-layer-otel
@@ -3222,6 +2839,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/kyverno-policies.yaml
     - gitops/bootstrap/templates
@@ -3250,7 +2868,6 @@ reads:
     - infra
     - verify/playwright_browsers.py
   test_guardrails_switch.py:
-    - '*'
     - CLAUDE.md
     - agent
     - backstage
@@ -3276,6 +2893,7 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/guardrails-switch.yaml
     - gitops/bootstrap/apps/internal-registry.yaml
@@ -3293,15 +2911,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -3334,16 +2947,11 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - security
-    - verify/*
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
     - verify/registry_allowlist.py
   test_harvest_console_host.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -3353,14 +2961,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3382,12 +2984,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_hostname_tag.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -3397,14 +2995,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3426,9 +3018,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
   test_iam_plan_render_cache.py:
@@ -3468,7 +3057,6 @@ reads:
     - verify
     - verify/iam_plan_render.py
   test_iam_user_sweep.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -3478,14 +3066,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3507,9 +3089,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_image_version_tags.py:
     - '**'
@@ -3636,7 +3215,6 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3659,10 +3237,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_joker_build_digest.py:
@@ -3761,6 +3336,7 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/templates
@@ -3770,15 +3346,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -3806,9 +3377,6 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_kubecon_cost_measured.py:
     - CLAUDE.md
     - agent
@@ -3824,14 +3392,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/*/main.tf
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
@@ -3859,9 +3421,6 @@ reads:
     - teardown/cost-report.sh
     - teardown/delivery-cost-estimate.py
     - teardown/delivery-cost.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_kubecon_dates.py:
     - facilitation/WHITNEY-START-HERE.md
     - facilitation/kubecon-na-2026-run-of-show.md
@@ -3871,7 +3430,6 @@ reads:
     - infra/terraform/fleet/event.sh
     - verify/model_pin_check.py
   test_kubecon_probe.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/02-sanitization/agent-prompt-injection.txt
@@ -3905,14 +3463,8 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - infra
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -3937,11 +3489,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/nova_replies.py
     - verify/registry_allowlist.py
     - verify/resource_limits.py
@@ -3962,6 +3511,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/apps/demo-app-hedgehog.yaml
@@ -4023,6 +3573,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/bootstrap/templates
@@ -4033,15 +3584,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -4078,10 +3624,7 @@ reads:
     - security
     - verify/agent_probe.py
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/test_kyverno_cel_live.py
     - verify/topic_cases.py
   test_kyverno_version_pins.py:
@@ -4101,6 +3644,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/apps/demo-app-hedgehog.yaml
@@ -4149,6 +3693,7 @@ reads:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/lab.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/templates
@@ -4222,6 +3767,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/kagent.yaml
     - gitops/bootstrap/apps/learner-apps-access.yaml
@@ -4287,6 +3833,7 @@ reads:
     - gitops/ai-layer
     - gitops/ai-layer/kustomization.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/templates
@@ -4312,6 +3859,7 @@ reads:
     - gitops/ai-layer
     - gitops/ai-layer/kustomization.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/templates
@@ -4346,6 +3894,7 @@ reads:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/apps/vllm-qwen3.yaml
@@ -4393,6 +3942,7 @@ reads:
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/lab.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
@@ -4405,15 +3955,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -4444,9 +3989,6 @@ reads:
     - security
     - security/**.yaml
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_mcp_vetting_handout.py:
     - docs/mcp-server-vetting-checklist.md
     - facilitation/kubecon-na-2026-run-of-show.md
@@ -4462,6 +4004,7 @@ reads:
     - challenges/LAB-TEXT.md
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/bootstrap/apps/datadog-agent-cr.yaml
@@ -4493,6 +4036,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
@@ -4527,7 +4071,6 @@ reads:
     - facilitation/kubecon-na-2026-run-of-show.md
     - infra/terraform/aws/network/main.tf
   test_night_before_preflight.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -4538,14 +4081,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -4567,9 +4104,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_no_internal_abstractions.py:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/lab.html
@@ -4578,6 +4112,7 @@ reads:
     - backstage
     - gitops
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/kyverno.yaml
     - gitops/bootstrap/templates
@@ -4603,7 +4138,6 @@ reads:
     - security
     - verify/bootstrap_chart.py
   test_offline_suite_no_cloud.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -4613,14 +4147,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -4642,14 +4170,10 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/run-tests.sh
   test_ops_view.py:
     - AGENTS.md
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -4659,7 +4183,6 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
@@ -4667,7 +4190,6 @@ reads:
     - infra/datadog-fleet/monitors.yaml
     - infra/ops-view/ops_view.py
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -4690,9 +4212,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/no_cloud.py
   test_otel_collector_version_pins.py:
@@ -4741,6 +4260,7 @@ reads:
     - gitops/ai-layer/web/platform.html
     - gitops/argocd/values.yaml
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
@@ -4759,15 +4279,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -4795,9 +4310,6 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_party_apps.py:
     - gitops/manifests/demo-app-hedgehog/configmap.yaml
     - gitops/manifests/demo-app-mantis-shrimp/configmap.yaml
@@ -4821,7 +4333,6 @@ reads:
     - verify/pii_scrub_cases.py
     - verify/pii_scrub_live.py
   test_pin_bedrock_profiles.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -4832,14 +4343,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/bootstrap/apps/ai-layer.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -4862,12 +4367,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_plan_policy.py:
-    - '*'
     - '**'
     - infra/org
     - infra/org/boundary
@@ -4877,7 +4378,6 @@ reads:
     - infra/org/pipeline.py
     - infra/org/policy
     - infra/policy/plan
-    - infra/policy/plan/*
     - infra/policy/plan/check-plan.py
     - infra/policy/plan/exceptions.md
     - infra/policy/plan/gates.yaml
@@ -4892,9 +4392,7 @@ reads:
     - infra/terraform/aws/network
     - infra/terraform/aws/network/main.tf
     - infra/terraform/fleet/event.sh
-    - verify/*
   test_platform_floor.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -4904,14 +4402,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -4933,9 +4425,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_playwright_browsers.py:
     - gitops/ai-layer/web/burritbot.html
@@ -4982,12 +4471,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5010,8 +4494,6 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_prior_drafts.sh:
     - README.md
@@ -5126,7 +4608,6 @@ reads:
   test_proxy_guards.py:
     - gitops/ai-layer/guard-proxy
   test_public_images.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5144,14 +4625,8 @@ reads:
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/workshop-agent/agent.yaml
     - images.lock
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5174,9 +4649,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_public_images_retry.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
@@ -5185,7 +4657,6 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
   test_public_pod_cap.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5195,14 +4666,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5224,13 +4689,9 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_readme_current.py:
     - README.md
   test_recipe_block_coverage.py:
-    - CLAUDE.md
     - agent
     - agent/cluster-identity
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -5254,14 +4715,8 @@ reads:
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5285,10 +4740,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/test_recipe_block_live.py
     - verify/topic_cases.py
   test_recipe_persona.py:
@@ -5310,7 +4762,6 @@ reads:
     - infra/terraform/fleet/event.sh
     - verify/model_pin_check.py
   test_repair_agent_tools.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5320,14 +4771,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5349,9 +4794,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_repo_identity.py:
     - .gitmodules
     - AGENTS.md
@@ -5360,7 +4802,6 @@ reads:
     - README.md
     - decisions.md
   test_reset_bot.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c3-secret-grep/agent-prompt.txt
@@ -5378,14 +4819,8 @@ reads:
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5408,10 +4843,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/no-cloud.sh
     - verify/topic_cases.py
   test_room_jokers.py:
@@ -5454,6 +4886,7 @@ reads:
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/grafana-dashboards.yaml
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
@@ -5479,7 +4912,6 @@ reads:
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -5510,16 +4942,12 @@ reads:
     - security
     - verify/bootstrap_chart.py
     - verify/collector_render.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/test_trace_walkthrough_view.py
   test_run_shell_failure.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/otel-collector/values.yaml
   test_scheduled_up.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5529,14 +4957,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5559,9 +4981,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_section0_wording.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web/lab.html
@@ -5592,6 +5011,7 @@ reads:
     - gitops/ai-layer/web/links.html
     - gitops/ai-layer/web/platform.html
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/prometheus.yaml
     - gitops/bootstrap/templates
@@ -5604,15 +5024,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -5640,9 +5055,6 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_service_naming.py:
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/guard-proxy
@@ -5662,7 +5074,6 @@ reads:
     - infra/terraform/aws/network/main.tf
     - verify/node_sg_rules.py
   test_sg_sweep.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5672,14 +5083,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5701,9 +5106,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_sizing_measure.py:
     - backstage
@@ -5714,7 +5116,6 @@ reads:
     - verify/backstage-footprint.sh
     - verify/backstage_footprint.py
   test_stage_traces.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/02-sanitization/agent-prompt-injection.txt
@@ -5748,14 +5149,12 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - infra
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5780,11 +5179,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/nova_replies.py
     - verify/registry_allowlist.py
     - verify/resource_limits.py
@@ -5820,8 +5216,6 @@ reads:
     - gitops/ai-layer/web/display.html
     - gitops/ai-layer/web/display.js
   test_student_aws_creds_namespace.py:
-    - '*'
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -5844,14 +5238,8 @@ reads:
     - gitops/namespaces/namespaces.yaml
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5876,12 +5264,7 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/*
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_student_aws_push.sh:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5891,14 +5274,8 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -5920,9 +5297,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/no-cloud.sh
   test_support_desk.py:
     - gitops/ai-layer/ticket_site.py
@@ -5940,7 +5314,6 @@ reads:
     - gitops/ai-layer/web/kubecon.html
     - verify/support_desk_hosts.py
   test_tagging.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
@@ -5953,15 +5326,9 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
     - infra/TAGGING.md
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
     - infra/shared-vpc/README.md
-    - infra/terraform
     - infra/terraform/README.md
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -5986,14 +5353,10 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - teardown/teardown.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_takeaways.py:
     - facilitation/governance-map.md
     - facilitation/self-assessment.md
   test_terminal_kubeconfig.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -6009,14 +5372,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -6038,11 +5395,7 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_terminal_quiet.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -6060,14 +5413,8 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/Dockerfile
     - images/web-terminal/entrypoint.sh
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -6089,9 +5436,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_terraform_lock_init.py:
     - VERSIONS.lock
     - infra/org/boundary
@@ -6146,7 +5490,6 @@ reads:
     - verify/fetch-e2e-tools.sh
   test_tool_pin.py:
     - CLAUDE.md
-    - docs
     - docs/research/2026-10-24-tool-pin-spike/README.md
     - docs/research/2026-10-24-tool-pin-spike/baseline.json
     - docs/research/2026-10-24-tool-pin-spike/gateway_bind.py
@@ -6162,6 +5505,7 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps/ai-layer.yaml
     - images/tool-pin/Dockerfile
     - images/tool-pin/tool_pin.py
@@ -6241,7 +5585,6 @@ reads:
     - agent/Service/evil-mcp-src
     - agent/Service/lab-bootstrap
     - agent/Service/workshop-agent
-    - docs
     - docs/research/2026-10-24-tool-pin-spike/gateway_bind.py
     - docs/research/2026-10-24-tool-pin-spike/live-check.sh
     - docs/research/2026-10-24-tool-pin-spike/probe.py
@@ -6256,7 +5599,6 @@ reads:
     - gitops/ai-layer/resources.yaml
     - verify/topic_cases.py
   test_topic_guard.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -6283,14 +5625,12 @@ reads:
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -6313,14 +5653,10 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
     - verify/kubecon_probe.py
-    - verify/last_trace.py
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_topic_guard_proxy.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -6337,14 +5673,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -6366,9 +5696,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/topic_cases.py
   test_trace_shape_e2e.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
@@ -6410,6 +5737,7 @@ reads:
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap
+    - gitops/bootstrap/*
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/grafana-dashboards.yaml
     - gitops/bootstrap/templates
@@ -6420,15 +5748,10 @@ reads:
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/deploy-full-idp.sh
     - infra/gp3-storageclass.yaml
     - infra/org/boundary
     - infra/reload-datadog-consumers.sh
-    - infra/terraform
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
@@ -6458,11 +5781,7 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_ttyd_ws_auth.py:
-    - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
@@ -6478,14 +5797,8 @@ reads:
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/workshop-agent/agent.yaml
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -6508,15 +5821,11 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/.tools/bin/ttyd
-    - verify/datadog-orgs.sh
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
     - verify/run-e2e-tools.sh
     - verify/ttyd_ws.py
   test_two_domains.py:
-    - CLAUDE.md
     - agent
     - backstage/catalog
     - backstage/catalog/*.yaml
@@ -6543,14 +5852,8 @@ reads:
     - gitops/ai-layer/web/platform.html
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
-    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet
-    - infra/datadog-fleet/dashboard.yaml
-    - infra/datadog-fleet/fleet_monitors.py
-    - infra/datadog-fleet/leaderboard.yaml
-    - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet
@@ -6572,9 +5875,6 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
-    - verify/datadog-orgs.sh
-    - verify/fleet-walkthrough.sh
-    - verify/last_trace.py
   test_two_hour_flow_live_checks.py:
     - agent
     - agent/cluster-identity
@@ -6675,7 +5975,6 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - infra/org/boundary
-    - infra/terraform
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
     - infra/terraform/fleet

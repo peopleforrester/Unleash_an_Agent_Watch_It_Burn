@@ -148,7 +148,7 @@ class Extraction:
 
 
 def _candidates(raw: str, path_context: bool, here: str, tree: Tree, out: Extraction) -> None:
-    """Resolve one string the source holds against the repo root, verify/ and the file's own directory."""
+    """Resolve one string the source holds against the repo root and the file's own directory (verify/, for a test)."""
     s = raw.strip()
     if not s or "\n" in s or "://" in s or len(s) > 300:
         return
@@ -166,7 +166,9 @@ def _candidates(raw: str, path_context: bool, here: str, tree: Tree, out: Extrac
     single = "/" not in s.rstrip("/")
     head = re.split(r"[*?\[]", s, maxsplit=1)[0]
     static = "/" in head  # a glob with a directory before its first wildcard
-    for base in dict.fromkeys(("", "verify", here)):
+    if not re.search(r"[A-Za-z0-9]", s):
+        return  # all wildcards and dots, like a "*" held in a variable: no path of its own
+    for base in dict.fromkeys(("", here)):
         p = _norm(os.path.join(base, s)) if base else _norm(s)
         if p is None or p == "":
             continue
@@ -746,6 +748,8 @@ def _extract_python(src: str, rel: str, tree: Tree, out: Extraction) -> list[str
 
 
 SHELL_VAR_PREFIX = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/")
+# A variable or an interpolation inside a word, which stands for any value: values-${p}.yaml, values-{p}.yaml.
+PLACEHOLDER = re.compile(r"\$\{[^}\s]*\}|\$[A-Za-z_]\w*|\{[^{}\s]*\}")
 
 
 def _extract_text(src: str, rel: str, tree: Tree, out: Extraction, comment: str) -> None:
@@ -763,8 +767,8 @@ def _extract_text(src: str, rel: str, tree: Tree, out: Extraction, comment: str)
     for m in SHELL_VAR_PREFIX.finditer(body):
         tail = re.match(r"[^\s'\"`;|&()<>]+", body[m.end():])
         if tail:
-            _candidates(tail.group(0), True, here, tree, out)
-    for tok in re.split(r"[\s'\"`;|&()<>=,{}\[\]]+", SHELL_VAR_PREFIX.sub(" ", body)):
+            _candidates(PLACEHOLDER.sub("*", tail.group(0)), True, here, tree, out)
+    for tok in re.split(r"[\s'\"`;|&()<>=,{}\[\]]+", PLACEHOLDER.sub("*", SHELL_VAR_PREFIX.sub(" ", body))):
         if tok and ("/" in tok or re.search(r"\.[A-Za-z0-9]{1,6}$", tok)):
             _candidates(tok, False, here, tree, out)
 
@@ -1018,13 +1022,14 @@ def entry(doc: dict, name: str):
     return None
 
 
-def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str],
-           before: dict | None = None) -> tuple[str, dict[str, list[str]]]:
+def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str], before: dict | None = None,
+           submodules: frozenset[str] | set[str] = frozenset()) -> tuple[str, dict[str, list[str]]]:
     """("full", {path: [why]}) or ("scoped", {test: [why]}) for the suite's tests.
 
     before is the map at the base, read when the change edits the map. A change to its rules (full, unread, bounds), or
     a map the base did not have, runs everything. A change to a test's own entry runs that test: an entry that stops
-    covering a path the change also edits cannot leave its test out, since the test runs for the entry's change."""
+    covering a path the change also edits cannot leave its test out, since the test runs for the entry's change.
+    A changed submodule (its pin moved) counts as read by every glob over the whole tree, which reads its files too."""
     full_why: dict[str, list[str]] = {}
     entry_changed: set[str] = set()
     if MAP_REL in changed:
@@ -1064,7 +1069,8 @@ def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str],
         if name in doc["always"]:
             why.append(f"always: {doc['always'][name]}")
         else:
-            hits = [p for p in changed if any(covers(e, p) for e in doc["reads"].get(name, []))]
+            hits = [p for p in changed if any(covers(e, p) or (p in submodules and not names(e))
+                                              for e in doc["reads"].get(name, []))]
             if hits:
                 why.append("reads " + ", ".join(hits[:5]) + (f" and {len(hits) - 5} more" if len(hits) > 5 else ""))
         if why:
@@ -1080,7 +1086,7 @@ def main(argv: list[str]) -> int:
             return 2
         doc, changed, tests = load_map(), changed_paths(base), discover()
         before = base_map(base) if MAP_REL in changed else None
-        mode, why = select(doc, argv[1], changed, tests, before)
+        mode, why = select(doc, argv[1], changed, tests, before, Tree().submodules)
         err = sys.stderr
         print(f"scope: HECATON_BASE_SHA={base}; the change touches {len(changed)} paths", file=err)
         if mode == "full":

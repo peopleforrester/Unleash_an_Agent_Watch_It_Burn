@@ -93,6 +93,10 @@ mode, why = st.select(doc, "offline", ["gitops/ai-layer/web/display.js"], tests)
 check("a change to display.js runs test_stream.py, which reads it",
       mode == "scoped" and "test_stream.py" in why and why["test_stream.py"] == ["reads gitops/ai-layer/web/display.js"],
       str(why.get("test_stream.py")))
+mode, why = st.select(doc, "offline", ["gitops/ai-layer/guard-proxy"], tests, None, tree.submodules)
+check("a moved submodule pin runs test_stream.py, which reads guard-proxy, and test_docs_current.py, whose glob over "
+      "the tree's Markdown reads the submodule's", mode == "scoped" and "test_stream.py" in why
+      and "test_docs_current.py" in why, str(sorted(why))[:400])
 mode, why = st.select(doc, "offline", ["verify/test_stream.py"], tests)
 check("a changed test runs itself", mode == "scoped" and "the change edits it" in why.get("test_stream.py", []))
 for path, reason in (("verify/run-tests.sh", "full list"), ("verify/run-e2e-tools.sh", "full list"),
