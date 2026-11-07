@@ -28626,3 +28626,25 @@ HECATON_BASE_SHA=333344f5: 75 of the 315 offline tests; the other 240 read nothi
 tier tests; the other 65 read nothing it touched`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`: 9m33s against the
 whole run's 40m32s. Of the 11 tier tests, eight are in always because a line builds a path from a value found at run
 time; bounding those (as bootstrap_chart.py is bounded) is the next saving.
+
+## 2026-11-07 · #1018 · run 18196 · The selector reads each test's source too, so a test the map lacks still runs
+
+**Why run 18091 failed the gate.** Its branch was rebased onto a staging that had gained two tests in #984,
+`test_recipe_pantry_gate.py` and `test_recipe_pantry_gate_e2e.py`, after the branch was cut. The map had no entry for
+either, and `test_scope_tests.py` failed on every test without one, so the gate's `bash verify/run-tests.sh` printed
+`test_scope_tests.py (exit 1)`. Adding the two entries alone would not hold: every run cut before the map reaches
+staging and rebased after it would fail the same way on its own new test, through no fault of its change.
+
+**What changed.** `scope_tests.py select` no longer trusts the map to be current. It reads every test's source with
+the same extractor `write` uses and runs from the committed entry and that reading together (`effective()`). A test
+with no entry gets the reads its source shows, a test whose source now reads more than an entry can name runs always,
+and a verify/ helper more than 30 tests name runs everything even before full lists it. The log names each test the
+map was behind (`test_gamma.py: no entry in the map; read from its source`). `test_scope_tests.py` now fails on the
+map's rules (`structural()`: full, unread and bounds name what the repo has, an always entry says why, no test in two
+lists) and prints the drift (`drift()`) without failing on it; `python3 verify/scope_tests.py check` still exits 1 on
+either. The cost is a reading of all the tests in each select, about 17 seconds. New checks: on the real map with
+test_stream.py's entry deleted and test_two_domains.py's emptied, a change to what each reads still runs it; in the
+fixture repo, a test added without an entry runs in the change that adds it and when its area changes later.
+
+**The map.** `write` added the two #984 tests; `check` prints `0 problems`. `scope_audit.py offline
+test_recipe_pantry_gate.py` and `scope_audit.py tools test_recipe_pantry_gate_e2e.py` each print 0 misses.
