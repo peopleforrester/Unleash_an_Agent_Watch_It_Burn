@@ -32176,3 +32176,11 @@ gives the new test its entry.
 
 **Run here.** `test_kitchen_note_followup.py` exited 0 through gh with its token, and `test_terraform_lock_init.py`,
 with the pinned terraform v1.15.6, printed `ALL TERRAFORM LOCK-INIT CHECKS GREEN` for all five roots with no retry.
+
+**Suite results, run 18340.** On `dcdc2f96`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=7dd369b7` (as the
+gate sets it) and its output in `/var/lib/hecaton/runs/18340/e2e-tools.2.log` printed `91 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then `23 checks ran (the offline suite and 22 tier tests) in 5m04s, 4 at a time`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`; the five tier tests this change edits ran among the 22. The prose gate
+printed `prose gate: pass`. No dependency was added. Other tier tests still read the network with no second try, such
+as `test_gateway_api_crds_upstream.py` (github.com, urlopen) and `test_delivered_tags_github_e2e.py` (`git
+ls-remote`); none of them went red in the three CI runs read here, so they are left as they are.
