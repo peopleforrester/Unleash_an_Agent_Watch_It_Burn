@@ -4168,6 +4168,10 @@ reads:
     - security
     - security/**.yaml
     - verify/bootstrap_chart.py
+  test_marketing_send_route.py:
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
   test_mcp_vetting_handout.py:
     - docs/mcp-server-vetting-checklist.md
     - facilitation/kubecon-na-2026-run-of-show.md

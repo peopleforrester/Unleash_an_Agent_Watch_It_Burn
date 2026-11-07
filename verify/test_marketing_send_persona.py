@@ -48,8 +48,8 @@ if ANCHOR not in sm:
 para = " ".join(sm[sm.index(ANCHOR):].split())
 
 print("== the send is pointed at the seeded file, so it lands (#1002) ==")
-check("the prompt names the curl @file form for the send",
-      "curl -X POST -d @/tmp/burrito-data/marketing.json" in flat)
+check("the prompt names the curl @file form for the send (quiet and failing on an HTTP error since #1093)",
+      "curl -sSf -X POST -d @/tmp/burrito-data/marketing.json" in flat)
 check("it tells the bot to use the @file form, not to paste the JSON itself",
       "never try to paste the JSON into the command yourself" in flat)
 check("it tells the bot not to invent a different file name (the exit-26 failure)",
