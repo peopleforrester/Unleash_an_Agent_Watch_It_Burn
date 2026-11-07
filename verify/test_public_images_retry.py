@@ -1,9 +1,11 @@
 # ABOUTME: Offline check of test_public_images_served.py's retries: its opened() helper is lifted out of the file and
 # ABOUTME: run against a stubbed urlopen and sleep: a 429 or no answer is retried, boundedly, and other errors are not.
+# ABOUTME: A resolver failure is a network failure: a temporary one is retried, any other raises Unreachable (#1029).
 """The tools-tier test reads public.ecr.aws anonymously, whose budget is about one request a second per source
 address. This host runs other runs' suites from the same address, so run 16863 met a 429 on busybox's first manifest
 and went green on a rerun (#844). Run 17813 met one TLS handshake to the token endpoint that timed out, and went green
-on a rerun (#976). The fix retries a 429, and a timeout or dropped connection, each a bounded number of times; when no
+on a rerun (#976). Run 17937 met one temporary failure in name resolution, read as an image that does not pull,
+and passed alone twice (#1029). The fix retries a 429, and a timeout or dropped connection, each a bounded number of times; when no
 try gets an answer it raises Unreachable, naming the registry. This holds that without the network: the helpers are
 taken from the file by name, so what runs here is the code the tier test runs.
 """
@@ -13,6 +15,7 @@ import ast
 import email.message
 import http.client
 import pathlib
+import socket
 import ssl
 import sys
 import urllib.error
@@ -31,8 +34,8 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 # The names this lifts out of the file are checked first, so a rename reads as that and not as a broken check.
-LIFTED = ("REGISTRY", "RETRIES_ON_429", "RETRIES_ON_NO_ANSWER", "NO_ANSWER_WAIT", "Unreachable", "no_answer", "opened",
-          "token")
+LIFTED = ("REGISTRY", "RETRIES_ON_429", "RETRIES_ON_NO_ANSWER", "NO_ANSWER_WAIT", "Unreachable", "reason_of",
+          "unresolved", "no_answer", "opened", "token")
 tree = ast.parse(SRC)
 nodes = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
 nodes.update({t.id: n for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)})
@@ -87,7 +90,7 @@ def run(script: list, call: str = "opened") -> tuple[object, list[float], int]:
     fake_urllib = type("U", (), {})()
     fake_urllib.request = type("R", (), {"urlopen": staticmethod(urlopen), "Request": urllib.request.Request})
     fake_urllib.error = urllib.error
-    ns = {"urllib": fake_urllib, "json": __import__("json"),
+    ns = {"urllib": fake_urllib, "json": __import__("json"), "socket": socket,
           "time": type("T", (), {"sleep": staticmethod(sleeps.append)})}
     for name in LIFTED:
         exec(compile(ast.Module(body=[nodes[name]], type_ignores=[]), str(SRC_PATH), "exec"), ns)
@@ -149,14 +152,45 @@ out, sleeps, n = run([TimeoutError("t"), _err(429), TimeoutError("t"), _err(429)
 check("timeouts and 429s each keep their own budget", out == b"manifest" and n == 5 and sleeps == [5, 2, 5, 4],
       f"{out!r}, {n} calls, {sleeps}")
 
+def resolver(code: int, text: str) -> urllib.error.URLError:
+    """What urlopen raises when getaddrinfo fails: the socket.gaierror as a URLError's reason."""
+    return urllib.error.URLError(socket.gaierror(code, text))
+
+
+print("\n== a resolver failure is a network failure, never an image that is not served (#1029, run 17937) ==")
+blip = resolver(socket.EAI_AGAIN, "Temporary failure in name resolution")
+out, sleeps, n = run([blip, b"manifest"])
+check("one temporary failure in name resolution, then an answer, returns the answer",
+      out == b"manifest" and n == 2 and sleeps == [5], f"{out!r} after {n} calls, {sleeps}")
+out, sleeps, n = run([blip, b'{"token": "t"}'], call="token")
+check("and on the token as well", out == "t" and n == 2 and sleeps == [5], f"{out!r} after {n} calls, {sleeps}")
+out, sleeps, n = run([socket.gaierror(socket.EAI_AGAIN, "Temporary failure in name resolution"), b"manifest"])
+check("a bare temporary resolver failure is retried", out == b"manifest" and n == 2, f"{out!r}, {n} calls")
+out, sleeps, n = run([blip] * 3 + [b"never read"])
+check("three in a row raise Unreachable, after two waits, naming the resolver's error",
+      type(out).__name__ == "Unreachable" and n == 3 and sleeps == [5, 5]
+      and all(w in str(out) for w in ("public.ecr.aws gave no answer to", "on 3 tries",
+                                       "Temporary failure in name resolution")), f"{out!r}, {n} calls, {sleeps}")
+for code, text in ((socket.EAI_NONAME, "Name or service not known"), (socket.EAI_FAIL, "Non-recoverable failure")):
+    no_name = resolver(code, text)
+    out, sleeps, n = run([no_name, b"never read"])
+    check(f"a resolver's {text!r} raises Unreachable at once, with no retry and no wait",
+          type(out).__name__ == "Unreachable" and out.__cause__ is no_name and n == 1 and sleeps == []
+          and all(w in str(out) for w in ("public.ecr.aws's name did not resolve on this host",
+                                           "https://public.ecr.aws/v2/x/manifests/y", text)),
+          f"{out!r}, {n} calls, {sleeps}")
+check("so the per-image checks, which catch URLError, never see a resolver failure",
+      type(out).__name__ == "Unreachable" and not isinstance(out, OSError))
+
 print("\n== what the registry did answer, or the host refused, is not retried ==")
 bad_cert = urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate verify failed"))
 out, sleeps, n = run([bad_cert, b"never read"])
 check("a certificate the host cannot verify fails at once", out is bad_cert and n == 1 and sleeps == [],
       f"{out!r}, {n} calls")
-no_name = urllib.error.URLError(OSError(-2, "Name or service not known"))
-out, sleeps, n = run([no_name, b"never read"])
-check("a name that does not resolve fails at once", out is no_name and n == 1 and sleeps == [], f"{out!r}, {n} calls")
+refused_tls = urllib.error.URLError(ssl.SSLError(1, "wrong version number"))
+out, sleeps, n = run([refused_tls, b"never read"])
+check("a TLS error that is no timeout fails at once", out is refused_tls and n == 1 and sleeps == [],
+      f"{out!r}, {n} calls")
 out, sleeps, n = run([_err(404), b"never read"], call="token")
 check("a 404 on the token fails at once", isinstance(out, urllib.error.HTTPError) and n == 1 and sleeps == [],
       f"{out!r}, {n} calls")
@@ -167,4 +201,5 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("A 429 or no answer from public.ecr.aws is retried, boundedly; an unreachable registry fails naming it.")
+print("A 429, no answer or a temporary resolver failure from public.ecr.aws is retried, boundedly; an unreachable "
+      "or unresolved registry fails naming it.")

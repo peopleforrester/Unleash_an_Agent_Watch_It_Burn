@@ -29503,3 +29503,41 @@ added.
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 8m24s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with the cache full from the hand run above. `test_chart_fetch.py`
 passed in it, and the only `RETRY` lines in the log are its stub's. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1029 · run 18154 · The public-image tier test reads a resolver failure as a network failure: a temporary one is retried
+
+`verify/prior-drafts.sh 1029 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging at `4b63e188`.
+
+**What happened.** Run 17937's tools tier had `verify/test_public_images_served.py` red on one anonymous pull check
+against public.ecr.aws, with "URLError: [Errno -3] Temporary failure in name resolution". Run on its own twice, it
+passed 23 of 23. The registry had said nothing about the image; the host's resolver had failed for a moment, and the
+per-image check, which catches `URLError`, read that as an image that does not pull.
+
+**The decision.** This refines #976's entry, which left "a name that does not resolve" failing at once as before. A
+resolver failure is on the host's path to the registry, so it is never a verdict on an image. A temporary one
+(`socket.gaierror` with errno `EAI_AGAIN`, -3, bare or as a `URLError`'s reason) is no answer: `no_answer()` now
+counts it, and `opened()` tries again 5 s later on the same three-try budget as a timeout, then raises `Unreachable`
+naming the registry, the URL, the tries and the resolver's error. Any other resolver failure (`EAI_NONAME`, the name is
+not known; `EAI_FAIL`, the resolver failed for good) is not retried, since a retry would not change it, and raises
+`Unreachable` at once with "public.ecr.aws's name did not resolve on this host". Either way the test exits 1 through
+its one `unreachable()` exit, "public.ecr.aws is unreachable from this host, and the images not yet read have no
+verdict". A certificate error, another TLS error and any HTTP status but 429 still fail at once. The new helpers are
+`reason_of()`, which takes the cause out from under a `URLError`, and `unresolved()`. No dependency was added.
+
+**The offline half.** `verify/test_public_images_retry.py` lifts the two new helpers out of the file with the others.
+It holds that one temporary resolver failure then an answer returns the answer after one 5 s wait, on a manifest and
+on the token; that a bare `gaierror` is retried; that three in a row raise `Unreachable` after two waits naming
+"Temporary failure in name resolution"; and that "Name or service not known" and "Non-recoverable failure" raise
+`Unreachable` at once, with the resolver's `URLError` as its cause and no wait, and that `Unreachable` is no `OSError`.
+Its old check that an unresolved name fails at once as a `URLError` stubbed the error as a plain `OSError(-2)`, which
+urlopen never raises; it is replaced by a TLS error that is no timeout, still failing at once. Run against staging's
+copy of the tier test, it exits 1 naming `reason_of` and `unresolved` as missing.
+
+**Checked by hand.** In run 18154, `python3 verify/test_public_images_served.py` against public.ecr.aws: the landing
+pin and all seven official images served, on linux/amd64, exit 0, in 14 s. A copy with `REGISTRY` set to
+`public.ecr.invalid` printed "FAILED: public.ecr.invalid is unreachable from this host, and the images not yet read
+have no verdict: public.ecr.invalid's name did not resolve on this host, for https://public.ecr.invalid/token/:
+URLError: <urlopen error [Errno -2] Name or service not known>", exit 1, in 0.3 s.
+
+**Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
