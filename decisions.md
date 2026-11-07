@@ -29589,3 +29589,8 @@ twice in "Which clusters", so the test reads the build phrase itself; and the ru
 well as in the drill's command, so the test reads `--standby <name>`.
 
 **Not yet run on a cluster.** Nothing is owed: the test reads repo text only, and no cluster was touched.
+
+**Suites (run 18158, at `fd720065`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`324 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, test_986_failover_plan_record.py among them) and then the tier: `81 checks ran (the
+offline suite and 80 tier tests) in 10m54s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18158/e2e-tools.log`.
