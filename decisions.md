@@ -30158,3 +30158,8 @@ feed; the bot's `/cost` counter read $1.5504 at 13:01Z and $2.4877 at 13:24Z. No
 was added.
 
 **Not yet run on a cluster.** Nothing is owed: this entry is the live run itself.
+
+**The suites (run 18180, at `bbc95a1a`).** `bash verify/run-e2e-tools.sh` printed `328 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m19s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18180/scratch/e2e-tools.log`). The prose gate printed
+`prose gate: pass`.
