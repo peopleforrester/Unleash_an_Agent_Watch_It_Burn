@@ -4237,6 +4237,18 @@ reads:
     - verify/artifact_cache.py
     - verify/iam_plan_render.py
     - verify/tf_plugin_cache.py
+  test_iam_plan_render_plugin_start.py:
+    - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
+    - infra/org/boundary
+    - infra/org/permissions-boundary.json.tftpl
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/iam_plan_render.py
+    - verify/tf_plugin_cache.py
   test_iam_policy_pipeline.py:
     - infra
     - infra/**.tf
