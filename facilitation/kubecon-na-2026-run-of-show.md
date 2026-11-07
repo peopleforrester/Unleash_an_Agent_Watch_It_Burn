@@ -567,8 +567,8 @@ Distribution on the private cluster, seeded at start with the images the agent m
 run; both clusters' nodes pull it through `registry.burritobot.co`.
 Kyverno also clears what the room left behind (#990): once `deny-external-registries`
 reads Deny, `remove-untrusted-room-workloads` deletes, within a minute, every workload
-BurritoBot deployed for the room that runs an image from any other registry. Tron's
-landing page and any public image the room asked for go; Challenge 3's
+BurritoBot deployed for the room that runs an image from any other registry. The Tron
+game and any public image the room asked for go; Challenge 3's
 maintenance-shell and the room's Jokers, from `registry.burritobot.co`, stay, as does
 everything the platform runs. The deployments page still lists what landed, since it
 is a record of the room's asks. `guardrails-off` stops the sweep.
