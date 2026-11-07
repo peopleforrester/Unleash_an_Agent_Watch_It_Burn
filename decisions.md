@@ -30629,3 +30629,14 @@ deployments page's live test uses it` this run.
 Step 3 is a server-side dry run and the other reads change nothing, so both clusters are as found.
 
 **Not yet run on a cluster.** Nothing for this issue. Step 3's Deny branch stays where #998's entry left it, with #992.
+
+**Suite results, run 18206.** On `1dca93db`, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18206/e2e-tools.log` printed `330 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 10m22s, 4 at a time`, `SOME E2E TOOLS TIER CHECKS FAILED:
+test_promo_villains_public.py (exit 1)` and `exit=1`. That check reads lab-platform's promo villains from ghcr.io, and
+their `:v1` tags no longer serve the digests `verify/promo_villains.py` and lab-platform's
+`deploy/watch-it-burn/images.tsv` both pin: six differed at about 15:30Z and all ten at 15:36Z, and skeletor's tag
+moved between the two reads (`dba85843...`, then `df82eb53...`). A lab-platform `ci` run on its staging branch had
+ended at 15:19Z. Run 18191's tier on this run's base was green on the same check, and this run changes no image pin,
+so the move is lab-platform's, filed as a follow-up. The pins are left as they are, because the test reads a moved tag as
+a new hand-over, not a value to sync. The prose gate printed `prose gate: pass`.
