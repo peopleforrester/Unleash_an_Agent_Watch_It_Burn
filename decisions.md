@@ -29594,3 +29594,49 @@ well as in the drill's command, so the test reads `--standby <name>`.
 OFFLINE RENDER-GATE TESTS GREEN`, test_986_failover_plan_record.py among them) and then the tier: `81 checks ran (the
 offline suite and 80 tier tests) in 10m54s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed
 `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18158/e2e-tools.log`.
+
+## 2026-11-07 · #1027 · run 18163 · The sister baseline check reads the sister's tree over git, not GitHub's REST API
+
+`verify/prior-drafts.sh 1027 origin/staging` printed NONE and the issue had no comments, so this run started from
+staging at `fa2c0572`.
+
+**What happened.** Run 17993's tools tier failed `verify/test_platform_baseline_sister.py` with "FAIL: cannot list
+1-foundation: HTTP Error 403: rate limit exceeded". The test listed each layer of
+peopleforrester/packt-agentic-devops's `solution/platform` with a GET on api.github.com's contents endpoint, sending a
+token only when GITHUB_TOKEN was set. Every run on the host shares one IP, so one anonymous quota of 60 REST requests
+an hour, and other runs had spent it.
+
+**Why not a token.** The issue offered `gh auth token`. On this host gh is a wrapper that runs gh as michael on a
+fixed list of commands: it answers `gh auth token` and `gh auth status` with "REFUSED ... is not a command runs may
+use", and the promotion gate's form of it refuses `gh api` as well (the reason `verify/gh_comments.py` reads with
+`gh issue view`, #863). None of gh's allowed reads lists a directory. So the tier has no token to supply in a run or
+in the gate.
+
+**The decision.** The listing no longer goes through the REST API at all. The new `verify/sister_tree.py` clones the
+one commit at the sister's ref with `git clone --depth 1 --filter=blob:none --no-checkout --single-branch`, which
+fetches the commit and its trees and no file contents, and lists directories with `git ls-tree`. A clone over git's
+smart HTTP is not counted against the REST quota, and the sister is public, so no token is needed and none is read;
+GITHUB_TOKEN is no longer consulted. As the contents API's type "dir" did, only tree entries count: a file or a
+submodule under a layer is not a component. The whole read is one clone where it was four API calls. A clone that
+fails on a network error (a failed name lookup, a refused, reset or timed-out connection, a TLS failure, an early EOF,
+a 429 or a 5xx) is tried again after 2, 5 and 10 s, each retry printed, the same budget as `verify/chart_fetch.py`
+(#1028). Any other failure, a ref or path that is not there or a 403, fails at once with git's own last lines, and
+the test prints "FAIL: cannot read <repo>/<path> at <ref>: ..." and exits 1. The clone runs with
+`GIT_TERMINAL_PROMPT=0` and no credential helper, so a repo that is gone fails rather than waiting on a sign-in. No
+dependency was added.
+
+**The offline half.** `verify/test_sister_tree.py` builds a git repo shaped like the sister, with a README beside the
+layers and a file and a submodule (a 160000 gitlink) under a layer, and a second branch with other layers, and reads it
+over file://. It holds that only directories are listed, that the ref asked is the one read, that a missing ref fails
+at once with no retry and a missing path names `HEAD:<path>`, that two failed name lookups then a clone that works
+read the whole tree after the first two waits, that a 503 on every attempt fails after four clones naming the last
+attempt, that a timed-out clone is retried, which of git's words are a network error and which are not, and that
+neither the sister test nor the helper has a urllib read, an api.github.com URL or a GITHUB_TOKEN in its code. Run
+against staging's copy of the sister test, it exits 1 naming those two source checks. It runs in 0.4 s.
+
+**Checked by hand.** In run 18163, `python3 verify/test_platform_baseline_sister.py` against
+peopleforrester/packt-agentic-devops@main: 1-foundation 20 components, 2-ai-plane 17, 3-self-service 1, all as
+recorded, "The sister snapshot matches peopleforrester/packt-agentic-devops@main.", exit 0. The clone took 1.3 s and
+216 KB.
+
+**Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
