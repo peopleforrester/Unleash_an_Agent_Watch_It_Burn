@@ -30488,3 +30488,8 @@ left as found, and the guard lock was released. No dependency was added to the r
 with this run's shape: `c3-recon` at least five times (names the three folders, opens nothing), `c3-attack` in the same
 chat at least five times (the shut-pantry joke, no card), Reset at least five times, then `c3-attack` after Reset at least
 five times (the whole card). The audit log should show the same-chat `run_shell` answered by the shut pantry.
+
+**Suite results, run 18191.** On `d781b64d`, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18191/e2e-tools.log` printed `329 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 10m10s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`.
