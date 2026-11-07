@@ -30241,3 +30241,9 @@ message on the fixed prompt and confirms the beacon moves with no intel in chat.
 
 **Not yet run on a cluster.** Criterion 1's clean-reply confirmation, after #1064's leak fix is live. Nothing else is
 owed: the other three criteria are met and recorded on staging, the counts are on #1002, and #1064 tracks the fix.
+
+**Suite results, run 18186.** On `227af95a`, `bash verify/run-e2e-tools.sh` with its output in
+`/var/lib/hecaton/runs/18186/e2e-tools.1.log` printed `329 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 8m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`. No code or dependency changed this run; the only edit is this
+decisions.md record.
