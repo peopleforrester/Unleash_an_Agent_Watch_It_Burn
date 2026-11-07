@@ -31170,3 +31170,8 @@ the draft could not know of #1002's two later `agent.yaml` edits, so this entry 
 a cluster" list is now the owed list above, pointed at #1072 and #1073; the KubeCon probe on the community cluster it
 also listed was run by #1059. The draft's line about adding acceptance criteria to #996 and its suite record
 (`0032a561`, 311 offline tests at the draft's base) are dropped: this run's own suite results follow.
+
+**The suites (run 18292, at `e32e3d54`).** `bash verify/run-e2e-tools.sh` printed `335 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, with `test_ticket_persona.py` among them, then `82 checks ran (the offline suite and 81 tier
+tests) in 9m44s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite is the Test command's
+own run (`bash verify/run-tests.sh`). The prose gate printed `prose gate: pass`.
