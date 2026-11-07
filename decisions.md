@@ -29156,3 +29156,9 @@ to paste it.
 once inside the workshop-mcp pod to build the fixture, leaving watch-it-burn-private as found. About 60 Nova Pro
 `converse` calls for the measurement, run through boto3 and PyYAML under `uv run --with` in the run directory only. No
 dependency was added to the repo.
+
+**The suites (run 18126, at `5223b48a`).** `bash verify/run-e2e-tools.sh` printed `318 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `80 checks ran (the offline suite and 79 tier tests) in 9m37s, 4 at a time` and `ALL
+E2E TOOLS TIER CHECKS GREEN`, exit 0. The two new files under `verify/fixtures/c8-credential-audit/` are data for the
+reword children, so no offline test reads them yet. The log is `/var/lib/hecaton/runs/18126/e2e-tools.log`. The prose
+gate printed `prose gate: pass`.
