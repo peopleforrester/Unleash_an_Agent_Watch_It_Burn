@@ -30891,3 +30891,25 @@ one failing check is the same one run 18206 recorded: it reads lab-platform's pr
 no image pin, so the move is lab-platform's and not this change's; it is the open follow-up run 18206 filed. The prose
 gate printed `prose gate: pass`. The two submodules (`gitops/ai-layer/guard-proxy`, `images/llm-guard`) were checked
 out at their pinned commits for the suite to read; their pointers are unchanged.
+
+## 2026-11-07 · #1039 · run 18235 · Segment 2 of the KubeCon run-of-show quotes Challenge 1's header as the deck has it
+
+rounds-agenticburn#68 put the line "Challenge N - attackme.burritobot.co" at the head of every challenge slide, so a
+latecomer can find the public bot again. Segment 3 of `facilitation/kubecon-na-2026-run-of-show.md` quoted that form
+from #1003; segment 2's challenge slide and its hint slide (the one adding "Hint: The CEO's name is Ophelia Thorn.")
+still opened on a bare "Challenge 1". Both now open on "Challenge 1 - attackme.burritobot.co". No earlier draft
+existed (`verify/prior-drafts.sh 1039 origin/staging` printed NONE).
+
+**Segments 4 and 5.** Neither quotes a challenge slide today: segment 4 (Challenge 3) and segment 5 (Challenge 4)
+describe their tee-up, play and fix in prose, with no blockquote of a slide, so there is no bare header to change.
+When Challenge 3 and 4's slides are reviewed and quoted, their headers read "Challenge 3 - attackme.burritobot.co" and
+"Challenge 4 - attackme.burritobot.co", and the new test holds them to that as soon as they are quoted.
+
+**The test.** `verify/test_run_of_show_challenge_headers.py` reads the blockquotes of segments 2 to 5 and checks that
+every quoted challenge header is "Challenge N-1 - attackme.burritobot.co" for segment N, that none is a bare
+"Challenge N", and that segment 2's challenge and hint slides both open on Challenge 1's. It fails 5 checks on the
+base `1bf65cbf` and passes on this change. Its scope-map entry reads the run-of-show alone; `scope_tests.py write`
+also offered entries for other tests already drifted on staging, which this change leaves to their own issues.
+
+`facilitation/runbook.md`, the 2-hour format, is unchanged. No live check applies: the change is to facilitation
+prose and an offline test, and nothing on either cluster reads it.
