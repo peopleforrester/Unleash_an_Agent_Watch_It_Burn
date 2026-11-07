@@ -28612,3 +28612,8 @@ with why, or in bounds through the helper that builds it. AGENTS.md says the sam
 
 **Not yet run on a cluster.** Nothing here touches a cluster. Hecaton's gate scopes its validations once it passes
 `HECATON_BASE_SHA`; CI's ci-base-sha.sh already does (#1020).
+
+**The suites (run 18091), whole.** `bash verify/run-e2e-tools.sh` at 333344f5, with no `HECATON_BASE_SHA`: `315 tests
+ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `77 checks ran (the offline suite and 76 tier tests) in 40m32s`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added: the
+scripts use the standard library, PyYAML and git, which the suite already needs, and inotify through ctypes.
