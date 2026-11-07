@@ -29128,4 +29128,12 @@ and a policy added later would not make it false.
 **Live.** No cluster is involved: the offline test reads two repo files, and the tools-tier test reads GitHub. This
 run touched neither cluster. No dependency was added.
 
+**A red the first suite found, fixed here.** The first `bash verify/run-e2e-tools.sh`, at `d16ac34d`, printed
+`320 tests ran` and failed the offline suite on `test_turn_guard.py` alone: its here-document check wrote
+`/tmp/turn-guard-885-body.json`, and this run's sandbox held a `/tmp` that took no new file (`touch /tmp/x` answered
+"No such file or directory"), so dash printed "cannot create ... Directory nonexistent". The test now writes the body
+in a `tempfile.TemporaryDirectory`, which follows TMPDIR (the worktree's `tmp/hecaton` in a run), and checks the same
+apostrophe through the same here-document. `test_467_live_record.py` and `test_467_live_record_comment_e2e.py` passed
+in that run, and every tier test passed (`81 checks ran (the offline suite and 80 tier tests) in 10m09s`).
+
 **Not yet run on a cluster.** Nothing from this issue.

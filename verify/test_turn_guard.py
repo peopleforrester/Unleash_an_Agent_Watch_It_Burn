@@ -30,6 +30,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 import types
 from contextlib import redirect_stdout
 
@@ -287,8 +288,13 @@ msg = shell("ls")
 check("an ordinary failure with status 2 carries no parse hint", "exit code 2" in msg and "here-document" not in msg, msg)
 msg = shell("mention")
 check("output that only mentions a syntax error is not read as one", "here-document" not in msg, msg)
-body = "/tmp/turn-guard-885-body.json"
-msg = asyncio.run(server.run_shell(f"cat > {body} <<'EOF'\n{{\"classification\": \"Hex & Cauldron's\"}}\nEOF\ncat {body}; rm -f {body}"))
+# The body goes in a scratch directory of the test's own (TMPDIR, else the system's), not a fixed /tmp path: a
+# dispatched run's sandbox can hold a /tmp that takes no new file (run 18131, #1017), and the hint's point is the
+# here-document carrying the apostrophe, not where the file sits.
+with tempfile.TemporaryDirectory(prefix="turn-guard-885-") as scratch:
+    body = str(pathlib.Path(scratch) / "body.json")
+    msg = asyncio.run(server.run_shell(f"cat > '{body}' <<'EOF'\n{{\"classification\": \"Hex & Cauldron's\"}}\nEOF\n"
+                                       f"cat '{body}'"))
 check("the here-document the hint describes does carry an apostrophe through", "Cauldron's" in msg, msg)
 
 print("== #644's 504 recorded turns, through the guard ==")
