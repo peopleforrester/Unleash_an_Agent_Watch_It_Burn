@@ -29541,3 +29541,8 @@ have no verdict: public.ecr.invalid's name did not resolve on this host, for htt
 URLError: <urlopen error [Errno -2] Name or service not known>", exit 1, in 0.3 s.
 
 **Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
+
+**Suite results, run 18154.** `bash verify/run-e2e-tools.sh` on `0638a0ba`: the offline suite printed `323 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `verify/test_public_images_retry.py` among them, then `81 checks ran
+(the offline suite and 80 tier tests) in 8m48s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
+`verify/test_public_images_served.py` passing against public.ecr.aws in 14 s.
