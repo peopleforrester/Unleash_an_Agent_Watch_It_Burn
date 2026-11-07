@@ -1,5 +1,5 @@
-# ABOUTME: A fresh `terraform init -lockfile=readonly` of each committed root (in a clean copy, no cached
-# ABOUTME: .terraform/) succeeds against its committed lock and leaves the lock byte-for-byte unchanged.
+# ABOUTME: A fresh `terraform init -lockfile=readonly` of each committed root (in a clean copy, no .terraform/)
+# ABOUTME: succeeds against its committed lock and leaves it byte-for-byte unchanged; providers come from the cache.
 # SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
@@ -13,15 +13,24 @@
 # what chart_fetch.is_network_error reads as the network is run again, in a new empty directory, up to len(BACKOFF) + 1
 # times; any other failure, a lock that does not match included, fails on the first. TF_LOCK_INIT_BACKOFF (seconds,
 # comma-separated) is for test_terraform_lock_init_retry.py, which runs this against a stub terraform.
+#
+# #1114: the inits took 326 s of the tier, nearly all of it downloading the same providers again. They now share
+# the persistent plugin cache tf_plugin_cache.py names (TF_PLUGIN_CACHE_DIR when set, else outside the checkout), so
+# a warm run downloads nothing. Each init is still fresh: a new directory with no .terraform/ and no module cache,
+# which is what #468 needed. The cache does not weaken the lock: Terraform takes a cached provider only when its h1:
+# checksum is one the lock records, and downloads and verifies it again otherwise. The one switch that loosens that,
+# TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE, is unset here; test_terraform_plugin_cache_lock.py tampers with
+# a cached provider and holds that its bytes never reach an init.
 import os, pathlib, shutil, subprocess, sys, tempfile, time
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 from chart_fetch import is_network_error  # noqa: E402
+import tf_plugin_cache  # noqa: E402
 
 ROOTS = ["infra/terraform/aws/cluster", "infra/terraform/aws/network", "infra/terraform/aws/audit", "infra/org/boundary",
          "infra/terraform/dashboards"]
-# Each root downloads its providers afresh, the aws one ~800 MB: a healthy init fits well inside this bound (#572).
+# A cold cache downloads each root's providers, the aws one ~800 MB: a healthy init fits well inside this bound (#572).
 INIT_TIMEOUT = 600
 BACKOFF = tuple(float(x) for x in (os.environ.get("TF_LOCK_INIT_BACKOFF") or "10,30").split(","))
 failures = []
@@ -40,7 +49,13 @@ if not exe:
 
 env = {**os.environ, "TF_IN_AUTOMATION": "1", "CHECKPOINT_DISABLE": "1"}
 env.pop("TF_DATA_DIR", None)
-env.pop("TF_PLUGIN_CACHE_DIR", None)
+env.pop("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", None)
+try:
+    env["TF_PLUGIN_CACHE_DIR"] = str(tf_plugin_cache.ensure(env))
+except tf_plugin_cache.CacheError as e:
+    print(f"FAIL: {e}", file=sys.stderr)
+    sys.exit(1)
+print(f"provider cache: {env['TF_PLUGIN_CACHE_DIR']}")
 
 
 def fresh_init(src: pathlib.Path) -> tuple[subprocess.CompletedProcess | None, bytes]:
@@ -63,6 +78,7 @@ tries = len(BACKOFF) + 1
 for root in ROOTS:
     src = REPO / root
     print(root)
+    began = time.monotonic()
     for attempt in range(1, tries + 1):
         r, lock = fresh_init(src)
         if r is None or r.returncode == 0 or not is_network_error(r.stdout + r.stderr) or attempt == tries:
@@ -71,6 +87,7 @@ for root in ROOTS:
         print(f"  RETRY {root}: init failed on the network ({' '.join(last)}); try {attempt} of {tries}, "
               f"again in {BACKOFF[attempt - 1]:g}s", flush=True)
         time.sleep(BACKOFF[attempt - 1])
+    print(f"  init took {time.monotonic() - began:.1f}s")
     if r is None:
         check(f"{root}: fresh init finishes within {INIT_TIMEOUT}s", False, "timed out: a provider download stalled")
         continue

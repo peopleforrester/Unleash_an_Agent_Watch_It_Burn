@@ -13,7 +13,9 @@
 #
 # The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
 # removes every untracked and ignored file except verify/.tools, whose downloads fetch-e2e-tools.sh checks against
-# e2e-tools.lock again each run (the Terraform provider cache there is about 800 MB).
+# e2e-tools.lock again each run. The Terraform provider cache, about 2.4 GB, is not in the workspace at all: the
+# e2e-tools job keeps it under the runner's tool cache, which outlives the job, and the lock-init test reads it warm
+# instead of downloading every provider again (#1114).
 #
 # Staging tests only its newest tip (#1113). Hecaton merges into staging every few minutes and the e2e job takes about
 # 45 minutes on Tanjiro's one runner, so queued staging runs fell further behind with each merge. The workflow's own
@@ -96,6 +98,8 @@ jobs:
       issues: read
     env:
       GH_TOKEN: ${{ github.token }}
+      # Outside the workspace, so the clean step never removes it and verify/tf_plugin_cache.py accepts it (#1114).
+      TF_PLUGIN_CACHE_DIR: ${{ runner.tool_cache }}/terraform-plugin-cache
     concurrency:
       group: verify-suites-e2e-tools-${{ github.ref }}
       cancel-in-progress: false

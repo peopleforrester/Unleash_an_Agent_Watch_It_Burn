@@ -125,7 +125,7 @@ TERRAFORM_TIMEOUT = 600
 
 def _plugin_cache() -> str:
     # One provider download per test process, not one per render. The E2E tier sets TF_PLUGIN_CACHE_DIR to a
-    # directory that survives between tests (run-e2e-tools.sh), so the download happens once per checkout.
+    # directory that outlives the checkout (run-e2e-tools.sh, tf_plugin_cache.py, #1114), so it happens once per host.
     # That holds only with TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE set (render() sets it). The renders copy no
     # lockfile, and Terraform 1.4+ ignores the cache for a provider no lockfile records: each init fetched aws (about
     # 840 MB) and cloudinit from releases.hashicorp.com again, four times per test, and a reset connection on one of
