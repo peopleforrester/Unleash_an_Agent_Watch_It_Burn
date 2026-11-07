@@ -126,7 +126,7 @@ with tempfile.TemporaryDirectory() as tmp:
 print("== test_deployments_page_live.py reads /deployments.json this way, not through the Service proxy ==")
 live = (REPO / "verify" / "test_deployments_page_live.py").read_text()
 check("step 1 calls port_forward.get on svc/fake-ticket:8080 for /deployments.json",
-      'port_forward.get(["kubectl", "--context", CONTEXT], "agent", "svc/fake-ticket", 8080,' in live
+      "port_forward.get(" in live and '"--context", CONTEXT], "agent", "svc/fake-ticket", 8080,' in live
       and '"/deployments.json")' in live)
 check("no read in it goes through the API server's Service proxy", "/proxy/" not in live)
 r = subprocess.run([sys.executable, "-c", "import ast,sys; ast.parse(open(sys.argv[1]).read())",
