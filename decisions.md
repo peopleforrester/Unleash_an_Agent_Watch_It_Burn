@@ -29440,3 +29440,50 @@ on a busy peer, a peer missing from the kubeconfig, a loss on either cluster), r
 RBAC check. `verify/fake_lease_kubectl.py` answers the peer Secret's read. `verify/test_c1_exfil_block_restore.py`
 hands its Lease calls to that fake and checks the Lease spans every policy call, in each of its cases.
 `verify/test_stage_traces.py` stands in for hold_switch. No dependency was added.
+## 2026-11-07 · #1028 · run 18149 · a pinned chart is fetched once into verify/.tools/charts, and a network error is retried
+
+**What happened.** In run 17993 the tools tier failed `test_datadog_log_services_render.py` on
+`external-secrets.yaml[external-secrets] renders`: `helm template --repo` got EOF reading
+`https://charts.external-secrets.io/index.yaml`, and the same test passed when run alone right after. Every render of an
+upstream chart in the tier read the chart's repository live, so one upstream blip failed the whole tier.
+`bash verify/prior-drafts.sh 1028 origin/staging` printed NONE, and the issue had no comments.
+
+**What changed.** `verify/chart_fetch.py` holds `pull(helm, repo, chart, version)`. It returns the untarred chart from
+`verify/.tools/charts/<chart>-<version>-<hash>/<chart>`, gitignored with the pinned tools, and fetches it there with
+`helm pull --untar` only when it is not there yet. A fetch untars into a staging directory beside the cache and is
+renamed into place whole, so the four checks the runner runs side by side never read a half-written chart; when two
+fetch one chart at once, the first rename wins and the other drops its copy. A fetch whose Helm error is a network one
+(an EOF, a reset or refused connection, a timeout, a failed name lookup, a 429 or a 5xx) is tried again after 2, 5 and
+10 seconds, four attempts in all, and each retry prints a `RETRY` line naming the chart and Helm's error. Any other
+error (a chart or version not in the repository, a 404, an auth refusal) fails at once in Helm's words, and so does
+the fourth network error, which says it failed on each of the four attempts. Both remedies the issue names are taken:
+the retry rides out the blip, and the cache means the tier's tests that render the same chart fetch it once between
+them, so there are fewer live reads for a blip to land on.
+
+The five places that fetched upstream charts go through it: `test_datadog_log_services_render.py` and
+`test_enforce_floor.py`, which ran `helm template --repo` or an OCI reference and now render the cached chart's
+directory, and `app_render.py` (for `test_no_docker_hub_render.py` and `test_images_lock_render.py`),
+`test_image_registry_render.py` and `test_kubearmor_config_render.py`, which ran `helm pull` into a temp directory of
+their own. The OCI rule is now one: a repoURL without `http://` or `https://` is an OCI registry. Before, two tests
+read OCI as `oci://` or a `ghcr.io` substring and two as anything not starting `http`; every repoURL under
+`gitops/bootstrap/apps` is `https://` or `ghcr.io/...`, so each reads the same as it did.
+
+**What the test reads.** `verify/test_chart_fetch.py` (offline, in `run-tests.sh`) runs `pull()` against a stub helm
+it writes, which fails a set number of times with a set error and logs each call, and records the waits without
+sleeping them. It holds: Helm's network errors told from the rest (nine network lines, four that are not, the
+external-secrets EOF of run 17993 among the first); the HTTP and OCI references; one EOF retried after the first wait,
+with the chart in the cache and no staging directory left; a cached chart read again with Helm not called, and another
+version fetched on its own; a not-found error failing at once, with one call, no wait and an empty cache; four EOFs
+failing after the fourth with each wait in turn, naming the attempts; the `RETRY` line as a tier log prints it and
+`CHART_CACHE` moving the cache; four fetches of one chart at once all getting the one cached copy; and that the five
+callers above use `chart_fetch.pull` and pass neither `--repo` nor `pull` to Helm themselves.
+
+**Live.** No cluster is involved: the change is to how the tier fetches charts. This run touched neither cluster. Run
+by hand with the pinned tools and an empty Helm home before the suites, `test_datadog_log_services_render.py`,
+`test_enforce_floor.py`, `test_image_registry_render.py`, `test_no_docker_hub_render.py`,
+`test_images_lock_render.py` and `test_kubearmor_config_render.py` each exited 0 with no FAIL and no RETRY, the
+Datadog test in 28s against the cache. Its first run, which fetched the charts into the cache, took 48s and failed
+only on `ai-layer.yaml`'s kustomize build, since this worktree's submodules were not checked out until
+`verify/ensure-submodules.sh` ran, as the runner runs it. No dependency was added.
+
+**Not yet run on a cluster.** Nothing from this issue.

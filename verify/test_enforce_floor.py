@@ -12,6 +12,8 @@ import json, pathlib, subprocess, sys, tempfile
 
 import yaml
 
+import chart_fetch
+
 
 def load_all(text):
     """Tolerant loader: charts emit tags the safe loader rejects; only the shape matters here."""
@@ -45,12 +47,13 @@ def helm_render(app):
         extra = []
         for vf in helm.get("valueFiles", []):
             extra += ["-f", str(REPO / vf.replace("$values/", ""))]
-        cmd = ["helm", "template", app["metadata"]["name"], chart, "--repo", repo, "--version", ver,
+        # The pinned chart comes from verify/.tools/charts, fetched there once with a network error retried (#1028).
+        try:
+            local = chart_fetch.pull("helm", repo, chart, ver)
+        except chart_fetch.ChartFetchError as e:
+            return None, str(e)[:300]
+        cmd = ["helm", "template", app["metadata"]["name"], str(local),
                "-n", app["spec"]["destination"].get("namespace", "default"), "-f", str(vals), "--include-crds"] + extra
-        if repo.startswith("oci://") or "ghcr.io" in repo:
-            oci = repo if repo.startswith("oci://") else f"oci://{repo}"
-            cmd = ["helm", "template", app["metadata"]["name"], f"{oci.rstrip('/')}/{chart}", "--version", ver,
-                   "-n", app["spec"]["destination"].get("namespace", "default"), "-f", str(vals)] + extra
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             return None, r.stderr.strip().splitlines()[-1][:160] if r.stderr.strip() else "helm failed"
