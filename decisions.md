@@ -31246,6 +31246,8 @@ sides. `prior-drafts.sh 991 origin/staging` read the draft's drift as edits in p
 - `verify/test_deployments_witch_line_e2e.py` (#995, tools tier) checked a probe's hover text was Docker Hub's redis
   moved to public.ecr.aws; it now checks `redis:8` as written. The first tools-tier run of this rebase failed on it
   alone (`/var/lib/hecaton/runs/18251/e2e-tools.first.log`).
+- The run-of-show's guardrails-switch section, from #990, said "Tron's landing page" is among what the sweep deletes;
+  it now reads "The Tron game". No test reads the phrase.
 
 **Live, run 18251, 2026-11-07.** Both clusters' registry policies read `["Audit"]` (guardrails off) at 16:48Z.
 - `CONTEXT=<each> python3 verify/test_deployments_page_live.py` at 16:47Z passed on both clusters. Run 17981's hang on
