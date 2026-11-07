@@ -32975,3 +32975,8 @@ reads; it changed nothing. This run changes no code, and this entry maps each of
   `WALL_URL=https://prompts.burritobot.co/` each printed 15 PASS, no FAIL, and exit 0.
 
 **Not yet run on a cluster.** Nothing: the wall runs on Railway, outside both clusters, and this run touched neither.
+
+**Suite results, run 18406.** On `840792f3`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=f4bc92c6`, so
+scoped to this decisions.md change, printed `85 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks
+ran (the offline suite and 13 tier tests) in 3m54s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate
+printed `prose gate: pass`. No dependency was added. The logs are in `/var/lib/hecaton/runs/18406/`.
