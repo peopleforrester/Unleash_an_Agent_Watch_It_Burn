@@ -28269,3 +28269,42 @@ set -euo pipefail; for t in gh railway curl sha256sum; do command -v "$t" >/dev/
 RENDER-GATE TESTS GREEN`, `test_public_images.py` among them, then `73 checks ran (the offline suite and 72 tier tests) in 53m46s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18021/e2e-tools.log`). The prose gate printed
 `prose gate: pass`.
+
+## 2026-11-07 · #945 · run 18084 · Run 18021's draft ported to staging; the reload still waits on Railway's sign-in on tanjiro-wsl2
+
+**The port.** `verify/prior-drafts.sh 945 origin/staging` printed START from `origin/agent/945-18021`, which did not
+land because the run ended failed (rebase-conflict). Its four commits were cherry-picked onto staging `01ccd137`. The
+one conflict was `verify/test_public_images.py`: staging's `5a1a0b5b` (#986) had already made the same change, counting
+only a PATCH that is not on a `/scale` subresource as an apply. This port keeps staging's file, so the commit that
+names that fix carries only its decisions.md and run-of-show lines here. The two run 17948 commits and run 18021's
+suite-results commit applied with no conflict.
+
+**Railway on the fleet hosts (03:03Z).** Through the wrapper, `sources-elevated fleet tanjiro-wsl2 railway whoami`
+printed "Unauthorized. Please run `railway login` again." `~/.railway/config.json` on tanjiro-wsl2 was last written
+2025-12-01, so the login it held has expired. `sources-elevated fleet megumi-wsl2 railway whoami` printed
+"ssh: connect to host megumi-wsl2 port 22: Connection timed out". Question 1104's answer quoted the judge's refusal: a
+rerun of the pinned reload before a login can only stop at `railway whoami`. So this run did not send the reload
+again. `reload-routes.sh` stages the table over `railway ssh`, which needs a user login, and that login is a browser
+OAuth consent, which is Michael's own sign-in. The report waits on him for it (class own-login).
+
+**Read live, read only (03:03Z to 03:04Z).** Apex main on GitHub is still `a93679a5ba49accb702feb87e6fcaa65c13480d9`
+(2026-11-06T03:47:37Z).
+
+```
+https://registry-attackme.burritobot.co/v2/ 502
+https://registry-attackme.agenticburn.com/v2/ 502
+https://no-such-host-945.burritobot.co/v2/ 404
+{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}
+  PASS  the router serves attackme.burritobot.co
+  PASS  the router serves burritobot-private.burritobot.co
+router-check: the router serves exactly the roster
+router-check exit=0
+```
+
+Neither cluster and nothing on the router was changed.
+
+**Still owed, once Michael runs `railway login` on tanjiro-wsl2.** The pinned reload in run 18021's entry above, or
+from the apex checkout `scripts/reload-routes.sh routes.map`, then `./fleet.sh router-check` and the two curls,
+recorded here and in the run-of-show's Probe record.
+
+**Not yet run on a cluster.** Nothing: the change is records only. No dependency was added.
