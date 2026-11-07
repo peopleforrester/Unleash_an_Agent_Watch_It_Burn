@@ -29044,3 +29044,11 @@ this run did not run `guardrails-on` to set it to Deny: that switch arms RBAC, K
 cluster every other run shares, and #998's criteria ask only that step 3 runs, which it did on its Audit branch. The
 check is `CONTEXT=watch-it-burn-private python3 verify/test_deployments_page_live.py` after
 `guardrails-on` there, which #992 asks for.
+
+**A race in the tier runner's own test.** The first `bash verify/run-e2e-tools.sh` of this run, at `fc66ae88`, failed
+offline on one check in `verify/test_e2e_tools_tier.py`: `the check that had ended is printed whole before the stop`.
+The runner's stop report listed `test_ends.sh, for 0s; its last lines: ended` as still running. The test sent its
+signal as soon as the sleeper fixture was ready, and nothing made it wait for the runner to have reaped
+`test_ends.sh`, so on a busy host the signal could land first. The test now reads the runner's output as it comes and
+sends the signal only once the sleeper is ready and the runner has printed `-- test_ends.sh took`. Three runs of the
+file after the fix passed. The first log is kept as `/var/lib/hecaton/runs/18118/e2e-tools.first.log`.

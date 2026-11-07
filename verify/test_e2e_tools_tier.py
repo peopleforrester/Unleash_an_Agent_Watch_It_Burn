@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import zipfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -632,17 +633,30 @@ with tempfile.TemporaryDirectory() as t:
            "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair)}
     proc = subprocess.Popen([BASH, str(vdir / RUNNER.name)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             env=env, start_new_session=True)
+    # The signal waits for the runner to have printed test_ends.sh as ended, not only for the sleeper: on a loaded
+    # host the runner had not yet reaped test_ends.sh when the sleeper was ready, and listed it as still running
+    # (run 18118, #998). The runner's output is read as it comes, so its `-- test_ends.sh took` line can be seen.
+    out_lines: list[str] = []
+    err_lines: list[str] = []
+    readers = [threading.Thread(target=lambda s=s, d=d: d.extend(s), daemon=True)
+               for s, d in ((proc.stdout, out_lines), (proc.stderr, err_lines))]
+    for r in readers:
+        r.start()
     polls = 0
-    while not (pair / "ready").exists() and proc.poll() is None and polls < 1200:
+    while (not (pair / "ready").exists() or not any(line.startswith("-- test_ends.sh took") for line in out_lines)) \
+            and proc.poll() is None and polls < 1200:
         subprocess.run(["sleep", "0.1"])
         polls += 1
     ready = (pair / "ready").exists()
     proc.terminate()
     try:
-        stdout, stderr = proc.communicate(timeout=60)
+        proc.wait(timeout=60)
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, 9)
-        stdout, stderr = proc.communicate()
+        proc.wait()
+    for r in readers:
+        r.join(timeout=30)
+    stdout, stderr = "".join(out_lines), "".join(err_lines)
     check("the sleeper reached its sleep before the signal", ready, stdout + stderr)
     check(f"the stopped runner exits 1 (exit {proc.returncode})", proc.returncode == 1, stdout + stderr)
     check("it says it was stopped and names the check still running, with its seconds and last lines",
