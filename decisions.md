@@ -30493,3 +30493,26 @@ five times (the whole card). The audit log should show the same-chat `run_shell`
 `/var/lib/hecaton/runs/18191/e2e-tools.log` printed `329 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 10m10s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1039 · run 18205 · Segment 2 of the KubeCon run-of-show quotes Challenge 1's header as the deck has it, "Challenge 1 - attackme.burritobot.co"
+
+**What changed.** rounds-agenticburn#68 (2026-11-06) put the header line "Challenge N - attackme.burritobot.co" on
+every challenge slide, and #1003 quoted it in segment 3. Segment 2's two quotes, the challenge slide and the hint slide
+that adds "Hint: The CEO's name is Ophelia Thorn.", still opened on a bare "Challenge 1". Both now open on
+"Challenge 1 - attackme.burritobot.co". Nothing else in segment 2 moved, and `facilitation/runbook.md`, the 2-hour
+format, is unchanged, as the issue asks.
+
+**Segments 4 and 5.** Neither quotes a slide header today: segment 4 describes the support desk and HC-666, and
+segment 5 the weather tool, in prose, with no block quote of a Challenge 3 or 4 slide. So there was nothing to change
+there. When Challenge 3 and 4's slides are reviewed and quoted, the new test holds them to the same form.
+
+**The test.** `verify/test_ros_challenge_headers.py` (offline) reads the run-of-show by its `### Segment N:` headings,
+exiting with the anchor's name when one is missing. It requires segment 2's two quoted headers to read
+"Challenge 1 - attackme.burritobot.co", the hint slide's quote to open on it, segment 3's to read Challenge 2's, and
+every quoted "> Challenge N" line in the file to carry " - attackme.burritobot.co". It also shows its pattern catches a
+bare header. Run against the text before this change it printed 3 FAILED. `git grep` over `verify` and `scripts` for
+the old quote found no other test that reads it.
+
+**Prior drafts.** `bash verify/prior-drafts.sh 1039 origin/staging` printed NONE, so nothing earlier was ported.
+
+**Live check.** None owed: the change is to a facilitation document and its offline test, and no cluster serves it.
