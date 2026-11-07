@@ -464,6 +464,14 @@ URLs answer 502, `no-such-host-945.burritobot.co/v2/` answers 404, `registry.bur
 tags list prints `{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended
 "the router serves exactly the roster", exit 0. The reload now waits on a Railway login on tanjiro-wsl2.
 
+**2026-11-07, #945, unchanged.** Hecaton run 18084, 03:03Z to 03:04Z, at staging `01ccd137`. `railway whoami` still
+prints "Unauthorized" on tanjiro-wsl2, whose Railway login was last written 2025-12-01, and megumi-wsl2's ssh timed
+out, so the reload was not sent again. Read live: both registry-attackme URLs answer 502,
+`no-such-host-945.burritobot.co/v2/` answers 404, and the tags list prints
+`{"name":"burritobot/maintenance-shell","tags":["busybox-1.38.0"]}`. `./fleet.sh router-check` ended "the router
+serves exactly the roster", exit 0. Apex main is still `a93679a`. The reload waits on Michael's `railway login` on
+tanjiro-wsl2.
+
 **2026-11-06, the linked-list ask's misses traced to one cause (#889).** Hecaton run 17911, on
 watch-it-burn-community (`attackme.burritobot.co`), from staging `da271aae` with the probe's ToolUse 424 re-send
 (`d283647d`). The cluster ran staging's persona: the workshop-agent Application had synced `52a2ed1a` at 12:49Z.
