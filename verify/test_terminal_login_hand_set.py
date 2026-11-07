@@ -23,6 +23,11 @@ CLAUDE = REPO / "CLAUDE.md"
 FLEET = REPO / "infra" / "terraform" / "fleet" / "fleet.sh"
 PAIR = ("watch-it-burn-community", "watch-it-burn-private")
 
+# fleet.sh is sourced below, so the cloud tools are stubs and the cloud environment is cleared (#859).
+sys.path.insert(0, str(REPO / "verify"))
+import no_cloud  # noqa: E402
+no_cloud.setup()
+
 failures: list[str] = []
 
 
@@ -92,6 +97,12 @@ for fn, first_write in (("bootstrap_terminal_auth", "terminal_creds_for"), ("ter
     g, w = body.find('terminal_login_hand_set "${name}"'), body.find(first_write)
     check(f"{fn} exists in fleet.sh", bool(body))
     check(f"{fn} asks terminal_login_hand_set before {first_write}", 0 <= g < w, f"guard at {g}, {first_write} at {w}")
+
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called the real aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
 
 print(f"\n{'FAIL' if failures else 'PASS'}: {len(failures)} failed")
 sys.exit(1 if failures else 0)

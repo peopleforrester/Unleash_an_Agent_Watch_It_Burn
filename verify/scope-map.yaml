@@ -5623,6 +5623,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
   test_terminal_quiet.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
