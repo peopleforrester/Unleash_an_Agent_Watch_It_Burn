@@ -77,7 +77,7 @@ check("the Lease lasts LEASE_S and was renewed now",
       spec.get("leaseDurationSeconds") == gl.LEASE_S and gl.parse_micro_time(spec.get("renewTime")) == clock.t,
       json.dumps(spec))
 check("every kubectl call names --context ctx-private first",
-      all(c[:3] == ["kubectl", "--context", "ctx-private"] for c in api.calls), str(api.calls))
+      all(c[0] == "kubectl" and c[1:3] == ["--context", "ctx-private"] for c in api.calls), str(api.calls))
 lk.release()
 check("release deletes it with the resourceVersion it read as the precondition",
       api.lease is None and verbs(api)[-2:] == ["get", "delete"] and api.calls[-1][5:7] == [gl.API_PATH, "-f"],
@@ -151,7 +151,7 @@ api2 = fk.FakeLeaseApi()
 other_lease(api2, "killed run pid 3", renewed=clock.t - 1000)
 stale = json.loads(json.dumps(api2.lease))
 other_lease(api2, "the run that won", renewed=clock.t)
-rc, _, err = api2.handle(["kubectl", "--context", "c", "replace", "-f", "-"],
+rc, _, err = api2.handle(["--context", "c", "replace", "-f", "-"],
                          json.dumps({**stale, "spec": {**stale["spec"], "holderIdentity": "loser"}}))
 check("the fake API server refuses a replace on a stale resourceVersion (the race's guarantee)",
       rc == 1 and "Conflict" in err and api2.lease["spec"]["holderIdentity"] == "the run that won", err)
