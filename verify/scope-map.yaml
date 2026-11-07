@@ -6277,6 +6277,21 @@ reads:
     - gitops/ai-layer/server.py
     - gitops/ai-layer/weather_feed.py
     - verify/weather_feed_probe.py
+  test_weather_tool_scope.py:
+    - agent
+    - facilitation/kubecon-na-2026/fallback/prompts.yaml
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
+    - gitops/workshop-agent/agent.yaml
+    - security
+    - verify/agent_probe.py
+    - verify/guard_lease.py
   test_weaver_guard_proxy_spans.py:
     - gitops/ai-layer/guard-proxy
     - weaver/registry
