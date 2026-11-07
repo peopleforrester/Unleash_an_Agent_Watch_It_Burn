@@ -29796,3 +29796,84 @@ Read-only on watch-it-burn-community at the end of the run: the workshop-mcp pod
 `/tmp/burrito-data/marketing.json` (1,123 bytes, readable) and `/usr/bin/curl`, and the served `workshop-agent`
 systemMessage does not yet carry THE MARKETING SEND CHECK, as expected before promotion. Nothing on the cluster was
 changed.
+
+## 2026-11-07 · #1036 · run 18173 · #981's six findings read again in AWS: the four student accounts now hold the boundary and audit roots, the two clusters stay with #979's tanjiro rebuild
+
+**Context.** #1036 is the triage child of #981, the "Fleet drift report" issue, split out by planning run 18053. Its
+siblings are #1035 (the report's boundary-first Config line) and #1037 (the command for the boundary and audit
+applies). `bash verify/prior-drafts.sh 1036 origin/staging` printed NONE. Run 17961's triage of the 2026-11-06 report
+is on `origin/agent/981-17961` (commits f4475518, 9ae15008, ended claim-stale) and in #981's comment
+issuecomment-6690901447; it is the starting point here, and every read below was made again today.
+
+**What differs from run 17961.** Run 17961 read the four student accounts at 2026-11-06T17:05Z as holding no Config
+recorder, no trail, no cluster and no boundary. That is no longer so: all four now hold the recorder, the trail and
+the boundary, applied on tanjiro-wsl2 as nwuser between 22:40Z and 22:45Z on 2026-11-06, a few minutes after hecaton
+posted that run 17961 had not merged. And #979, open when run 17961 wrote, is closed: its change merged into staging
+as `01ccd137` and is in this run's base. Nothing of run 17961's commits is ported here; its drift-report.py change is
+#1035's work and this entry is new text.
+
+**The live reads, aws1-student31 to aws1-student34.** Run on tanjiro-wsl2 through `sudo -n -u michael
+/var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2`, read-only calls only, from 2026-11-07T12:20:07Z to
+12:20:22Z. For each profile `$p`, with `$a` its account from `aws sts get-caller-identity`:
+
+```
+aws configservice describe-configuration-recorders --profile $p --region us-west-2
+aws configservice describe-configuration-recorder-status --profile $p --region us-west-2
+aws cloudtrail describe-trails --profile $p --region us-west-2
+aws eks list-clusters --profile $p --region us-west-2
+aws iam get-policy --profile $p --policy-arn arn:aws:iam::$a:policy/watch-it-burn-permissions-boundary
+```
+
+| account | recorder | recorder status | trail (us-west-2 home, multi-region) | EKS clusters | boundary policy |
+|---|---|---|---|---|---|
+| aws1-student31 (948731545609) | `watch-it-burn` | recording true, lastStatus SUCCESS | `watch-it-burn`, bucket `watch-it-burn-audit-948731545609-us-west-2` | `[]` | v1, created 2026-11-06T22:40:34Z |
+| aws1-student32 (891472436879) | `watch-it-burn` | recording true, lastStatus SUCCESS | `watch-it-burn`, bucket `watch-it-burn-audit-891472436879-us-west-2` | `[]` | v1, created 2026-11-06T22:41:50Z |
+| aws1-student33 (250699659274) | `watch-it-burn` | recording true, lastStatus SUCCESS | `watch-it-burn`, bucket `watch-it-burn-audit-250699659274-us-west-2` | `[]` | v1, created 2026-11-06T22:43:05Z |
+| aws1-student34 (783241407859) | `watch-it-burn` | recording true, lastStatus SUCCESS | `watch-it-burn`, bucket `watch-it-burn-audit-783241407859-us-west-2` | `[]` | v1, created 2026-11-06T22:44:20Z |
+
+`aws sts get-caller-identity` in each printed `arn:aws:iam::<account>:user/nwuser`. CloudTrail `lookup-events` for
+CreatePolicy (us-east-1) and PutConfigurationRecorder (us-west-2), read in aws1-student31 and aws1-student34, names
+nwuser at 2026-11-06T17:40:34-05:00 and 17:40:42-05:00 (student31) and 17:44:20-05:00 and 17:44:28-05:00 (student34).
+On tanjiro, in `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` (still detached at `ec03eb5f`),
+`infra/org/boundary/states/` and `infra/terraform/aws/audit/states/` hold `aws1-student3{1,2,3,4}.tfstate`, each
+with a `.backup`, written between 17:40 and 17:45 local time. That is the boundary-then-audit apply with its settle,
+which leaves the earlier state in the backup.
+
+**accen-dev, read with this run's session (hecaton-run-18173) at 12:20:45Z.** `eks list-clusters` prints
+watch-it-burn-community and watch-it-burn-private in us-west-2 and none in us-east-1 or us-east-2; the recorder
+`watch-it-burn` is recording with lastStatus SUCCESS; the multi-region `watch-it-burn` trail stands; the boundary
+policy exists (created 2026-10-24T16:47:45Z); the lab VPC vpc-0607c27ee51fb233c (10.0.0.0/16,
+`watch-it-burn-lab-vpc`) stands. On tanjiro, `infra/terraform/fleet/states/` is empty and
+`infra/terraform/fleet/import-state.py` is absent, since that checkout predates #979.
+
+**The six findings, routed.**
+
+1. accen-dev, watch-it-burn-community unmanaged: still in AWS. Routed to #979.
+2. accen-dev, watch-it-burn-private unmanaged: still in AWS. Routed to #979.
+3. to 6. aws1-student31, 32, 33 and 34, no Config recorder: cleared in AWS by the boundary-then-audit apply, which
+   has already run. The cron report of 2026-11-07T11:17Z on #981 (issuecomment-6706135290) shows it: `4 finding(s)`
+   became `2 finding(s)`, `0 account(s) without a Config record`, all five Config lines `ok: recorder watch-it-burn
+   is recording`, and Clean states (9) list boundary and audit for each of the four next to audit accen-dev.
+
+**#979 covers the two clusters and accen-dev's Notes, from its body and criteria.** Its title is "Bring
+watch-it-burn-community and watch-it-burn-private into a Terraform state or the unmanaged register, so the daily
+drift report stops listing them". Its body asks, for each cluster, to import it into a cluster-root state or add it
+to `known-unmanaged.yaml`, and says "accen-dev also has no lab VPC state and no boundary state on any machine (see
+the report's Notes), which belongs to the same piece of work". Its first criterion names both clusters; its third is
+"accen-dev's lab VPC state and permissions-boundary state can be rebuilt the same way, so the drift report's Notes
+stop saying neither exists"; its fourth asks for an empty Unmanaged table from `drift-report.py --accounts accen-dev`.
+Run 18049 met them in its own worktree (both clusters imported, not registered, since they were built from
+`infra/terraform/aws/cluster`), and the change merged as `01ccd137`. What is left is the same work on tanjiro-wsl2,
+where the daily report reads its states: #1041 rebuilds accen-dev's five states there with `import-state.py` as
+nwuser, and #1042 applies the cluster root's pending changes. Until #1041 runs, the daily report still lists the two
+clusters and accen-dev's two Notes, as the 2026-11-07 report does.
+
+**What this means for the siblings.** #1037's command for the applies is now moot: the applies it would give have
+run, and its "report run that shows them done" is the 2026-11-07T11:17Z report, whose only findings are #979's two
+clusters. #1035's change still stands on its own: it is the report's line for any account found without a recorder
+and boundary later, though no account reads that way today. The 2026-11-07 report's four "no lab VPC state" Notes
+for the student accounts were in the 2026-11-06 Notes too and are not among the six findings; the KubeCon roster and
+its standbys are in accen-dev, so no student account needs a lab VPC today.
+
+**Record.** This entry and a comment on #981. Nothing on any cluster or account was changed; every call above was a
+describe, list, get or lookup.
