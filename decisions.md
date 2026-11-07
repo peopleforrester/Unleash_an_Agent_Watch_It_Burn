@@ -28993,3 +28993,54 @@ per beat already.
 RENDER-GATE TESTS GREEN`, then `80 checks ran (the offline suite and 79 tier tests) in 10m55s, 4 at a time` and `ALL E2E
 TOOLS TIER CHECKS GREEN`, exit 0, with test_turn_guard.py in the offline suite and test_turn_guard_e2e.py in the tier.
 The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #998 · run 18118 · The deployments page's live test reads /deployments.json over a port-forward; the clusters' node security groups drop the control plane on 8080
+
+**What drops the connection.** The API server's service proxy dials fake-ticket's pod from the EKS control-plane
+ENIs, which carry the cluster root's cluster security group. The pod's IP is in a /28 prefix on its node's ENI, so
+the node security group judges the dial, and that group admits the cluster security group only on 443, 4443, 6443,
+8443, 9443, 10250 and 10251. It admits 8080 only from the load balancer controller's shared group
+(`elbv2.k8s.aws/targetGroupBinding=shared`). Read with this run's session on 2026-11-07:
+- watch-it-burn-community: fake-ticket pod `10.0.24.183` on node `10.0.31.163` (ENI `eni-03be59e5ee6848828`, prefix
+  `10.0.24.176/28`), node group `sg-0b7d2a0cfaed6fecd`, cluster group `sg-04130d5989d5c1ab1`, which reaches the node
+  group on the seven ports above and no other.
+- watch-it-burn-private: fake-ticket pod `10.0.109.213` on node `10.0.90.162` (ENI `eni-0dc91f0d2178e1985`, prefix
+  `10.0.109.208/28`), node group `sg-011fc555e507cfb40`, cluster group `sg-0ca9886f5a9d4f6d3`, the same seven ports.
+- No NetworkPolicy in `agent` selects fake-ticket (the three there select agentgateway, console and workshop-agent),
+  and neither cluster runs Cilium, so nothing else is in the path.
+- `kubectl get --raw /api/v1/namespaces/agent/services/fake-ticket:8080/proxy/deployments.json --request-timeout=15s`
+  printed `context deadline exceeded (Client.Timeout exceeded while awaiting headers)` after 15 s on both, with one
+  ready endpoint each.
+
+The rule that would admit it is #869's `ingress_cluster_8080_workshop_apps` in `infra/terraform/aws/cluster/main.tf`.
+It is in the root, but neither cluster has had the root applied since (#979's entry, "Rules AWS does not hold"), and
+#1042 is that apply. This run adds no rule by hand: the test no longer needs one, and #1042 owns the clusters' state.
+
+**The change.** `verify/kube_forward.py` runs `kubectl port-forward --address 127.0.0.1 <target> :<port>` and makes one
+GET over it. A port-forward goes API server to kubelet on 10250, which the node group admits, and the kubelet opens
+the pod's port from inside the node. Step 1 of `verify/test_deployments_page_live.py` reads `/deployments.json` that
+way from `svc/fake-ticket` :8080 and prints how many deployments it lists. `verify/gateway_forward.py` had the same
+port-forward code for :3002, so its `chat` now opens the port-forward through `kube_forward.forward`, with its
+error text unchanged. `verify/test_kube_forward.py` (offline) runs the helper against a stub kubectl: the argv it
+asks for, the body back whole, a 404, a port-forward that never comes up, a refused context, and no port-forward
+left running. It also reads step 1 of the live test for the `kube_forward.get` call and fails if the live test
+reads fake-ticket through `/proxy/` again; with the old step 1 put back, three of its checks fail.
+`verify/test_gateway_forward.py` passes unchanged. No dependency was added.
+
+**The live run (run 18118, 2026-11-07T08:27Z).** `CONTEXT=<cluster> python3 verify/test_deployments_page_live.py` on
+each, with the change in this worktree:
+- watch-it-burn-community: `PASS  it answers a JSON list over a port-forward to svc/fake-ticket :8080`, `INFO
+  /deployments.json lists 3 deployment(s)`; step 2 passed on `https://deployments-attackme.agenticburn.com/`, 2b
+  passed; step 3: `INFO  restrict-image-registries validationActions here: ["Audit"]` and `PASS  with no Deny, the
+  room's image is admitted (the attack lands)`. Exit 0.
+- watch-it-burn-private: `PASS  it answers a JSON list over a port-forward to svc/fake-ticket :8080`, `INFO
+  /deployments.json lists 0 deployment(s)`; step 2 passed on `https://deployments-burritobot-private.agenticburn.com/`,
+  2b passed; step 3: `INFO  restrict-image-registries validationActions here: ["Audit"]` and `PASS  with no Deny, the
+  room's image is admitted (the attack lands)`. Exit 0.
+Step 3 is a server-side dry run, so nothing was created, and the clusters are as found.
+
+**Not yet run on a cluster.** Step 3's Deny branch. Both clusters read restrict-image-registries at Audit today, and
+this run did not run `guardrails-on` to set it to Deny: that switch arms RBAC, Kyverno, KubeArmor and egress on a
+cluster every other run shares, and #998's criteria ask only that step 3 runs, which it did on its Audit branch. The
+check is `CONTEXT=watch-it-burn-private python3 verify/test_deployments_page_live.py` after
+`guardrails-on` there, which #992 asks for.
