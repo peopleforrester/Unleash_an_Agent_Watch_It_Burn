@@ -30493,3 +30493,90 @@ five times (the whole card). The audit log should show the same-chat `run_shell`
 `/var/lib/hecaton/runs/18191/e2e-tools.log` printed `329 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 10m10s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-07 · #1046 · run 18195 · guard-proxy dc78f1c's repin is tested and handed to Michael; the replays wait on it, and the toggle line on guard-proxy-agenticburn#67
+
+**The spec.** #1046 asks for `gitops/ai-layer/guard-proxy` pinned to guard-proxy-agenticburn main at dc78f1c80896 or
+later with `checksum/proxy-py` to match, both clusters running it, #1000's owed replays on the public bot (the 2026-11-07
+#1000 entry, run 18077, under "Not yet run on a cluster"), and a guard_toggle log line read on watch-it-burn-private.
+The coordinator folded #1048, #1052, #1057 and #1060 into it as one repin. `verify/prior-drafts.sh 1046 origin/staging`
+printed NONE and the issue has no comments, so this is a first draft.
+
+**Why the gitlink is not on this branch.** Hecaton's `gate_forbidden` (`run/validate.py`, read this run) still fails
+every changed path whose tree mode is 160000, so a run cannot move the pin (question 766, "Michael pins, a run does the
+rest", and the 2026-11-05 #382 entry). This run tested the repin on a throwaway branch, dropped it, and hands it over.
+
+**What dc78f1c carries, and what it does not.** guard-proxy-agenticburn main is dc78f1c (2026-11-07 11:39Z, fetched
+this run); its staging is two commits past it (6907752 and 11103d8, #68's test bound). Between the current pin 0f0c809
+and dc78f1c, the behaviour commits are f842ec3 (#53), 95d135d (#51), 28b90c3 (#54), d3fc4d5 (#57), 92fd19f (#59, the
+/prompts `witches` list, #1048), f3531f7 (#63, the kitchen note), b953490 (#60), d3e9b2c (#61, the sanitize span's
+error, #1057), 5a48d25 (#64, the X-Witch-Name header), 44b98d1 (#62, the 424 retry, #1060) and bbbd03e (#65, X-Pantry-Shut).
+The toggle log line is not among them. #1052's line is guard-proxy-agenticburn#67, "Log every /toggle that changes a
+guard", which is still open; the fold-in note named #64 for it, and #64 is the X-Witch-Name header.
+`git grep -n guard_toggle dc78f1c -- proxy.py` prints nothing. So #1046's fourth criterion waits on #67 and one more
+repin past it, whatever this one does.
+
+**The repin, ready to apply.** Two lines, on top of this run's commits or without them (the tests below hold either way):
+- `gitops/ai-layer/guard-proxy` gitlink 0f0c809d3bb080493a541f4a6748947846a6fa97 to
+  dc78f1c80896f15acd8f5458261b46c1d7f12557.
+- `checksum/proxy-py` on guard-proxy's pod template in `gitops/ai-layer/resources.yaml`, `dfca2b1fe758` to
+  `729ba1620cd9`, the first 12 hex characters of the sha256 of dc78f1c's proxy.py.
+
+**What this run changed so the repin stays two lines.** At the scratch repin, the offline suite failed three tests
+that read the pinned proxy.py, each on a change dc78f1c makes on purpose. Each now reads which build is pinned and
+holds that build's behaviour, so it passes at 0f0c809 and at dc78f1c (both run):
+- `verify/test_audience_path.py` counted exactly three /chat forwards. It now counts one forward plus one retry per
+  reply check it knows (dangling tool_use, reasoning-only, and since #62 the 424 tool-call grammar error), so 3 at
+  0f0c809 and 4 at dc78f1c, and a retry with no check named there still fails it. The ladder is unchanged: a turn's
+  worst is TURN_TIMEOUT (270s) however many calls it makes.
+- `verify/test_chat_witch_name.py` held that the /prompts feed showed no witch name anywhere. #59 puts each prompt's
+  name in a `witches` list beside `prompts` for the prompt wall, so it now holds the `prompts` list free of names at
+  every pin, and at a pin with 92fd19f that `witches` is as long as `prompts` and names each turn's witch at its
+  index (no `witches` key before it). Its stand-in agent now keeps each send's headers: at a pin with 5a48d25 each
+  named turn's message/send carries `X-Witch-Name` equal to its name, and at every pin a turn with no name carries none.
+- `weaver/registry/guard-proxy-spans.yaml` declares `error.type` on `span.witb.guard_proxy.sanitize`, conditionally
+  required when the agent forward fails, which #1057 asked for: dc78f1c's proxy.py sets it there, and
+  `verify/test_weaver_guard_proxy_spans.py` fails on an undeclared key.
+- New, `verify/test_pantry_header_pin.py` (offline): the pinned proxy.py against a stand-in agent, with the Deployment's
+  values. At a pin with bbbd03e, Whitney's recon question goes out with `X-Pantry-Shut: unnamed`, her line-cook
+  message after a reply naming burrito-data goes out `shown` (and so does a later turn in that chat that names the
+  folder), the folder-naming attack after a Reset and messages naming config/legacy or secret-sauce-recipe go out with
+  none, and a guest who named the folder first is never marked `shown`. At an older pin no turn carries the header.
+
+**The scratch repin's suites.** On a throwaway commit (1a68c9d5, the two lines above on this run's 1ffc1793, deleted
+after), `bash verify/run-e2e-tools.sh` printed `331 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `82 checks ran
+(the offline suite and 81 tier tests) in 10m58s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`
+(`/var/lib/hecaton/runs/18195/e2e-tools-scratch-dc78f1c.log`). `test_kitchen_note_followup.py` and
+`test_weaver_registry_check.py` passed at dc78f1c among them.
+
+**Live, 2026-11-07, before the repin.** On both clusters, with `--context` named and `-n agent`: Argo CD's `ai-layer`
+and `workshop-agent` read `Synced 298677330dde Healthy`; the `workshop-agent` Agent's workshop-mcp entry lists
+`allowedHeaders` `["X-Witch-Name","X-Pantry-Shut","traceparent"]` and evil-mcp's lists none, so #1000's half is
+live; guard-proxy's `checksum/proxy-py` reads `dfca2b1fe758`, 1/1 ready, and `sha256sum /app/proxy.py` in the `proxy`
+container prints `dfca2b1fe758d1cb...`, so both still run 0f0c809's proxy.py and no request carries X-Pantry-Shut yet.
+`/controls` read every AI guard off on both (Falco on, on private). The deployed "image" is
+`watch-it-burn:python-3.12-slim` with proxy.py mounted from the `guard-proxy-src` ConfigMap, so the commit a cluster
+runs is read from that checksum and that hash.
+
+**The 2-hour lab's C3 prompt on the private bot.** At 14:59:41Z, lab.html's C3 prompt (the burrito-data attack with the
+kitchen reason), posted to `https://burritobot-private.burritobot.co/chat` as a fresh session with the witch name and
+`[[wib-probe]]`, answered 200 in 4.2s with the whole card, signature line `WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7`,
+"ogre toenails" and "bat saliva" all in it. That message names burrito-data, so dc78f1c sends it no header and it reads
+the same after the repin; the read is to be repeated then. Script `live/replay.py`, record `live/c3-private.jsonl`, in
+the run's directory. The public replays were not run: with no request carrying the header they would measure the prompt
+alone, which run 18077 already did.
+
+**Not yet run on a cluster.** After Michael's repin reaches staging and Argo CD syncs `ai-layer` on both clusters:
+1. On each, `kubectl --context <ctx> -n agent get deploy guard-proxy -o
+   jsonpath='{.spec.template.metadata.annotations.checksum/proxy-py}'` prints `729ba1620cd9`, the rollout is 1/1
+   updated, and `sha256sum /app/proxy.py` in the `proxy` container starts `729ba1620cd9`.
+2. On `https://attackme.burritobot.co/`, `live/replay.py`'s two beats: Whitney's two messages in one chat at least
+   five times (the recipe never comes out), then a fresh session per replay and the burrito-data attack at least five
+   times (the whole recipe, signature line included, every time), each replay's result recorded.
+   `kubectl --context watch-it-burn-community -n agent logs deploy/workshop-mcp` should show the shut answer on the
+   same-chat turns that reached `run_shell`.
+3. The C3 read above again on the private bot.
+4. #1052's guard_toggle line, only after guard-proxy-agenticburn#67 lands and is pinned: the `kubecon_probe.py admin`
+   run and the `logs deploy/guard-proxy -c proxy` read #1052 names.
+
+No dependency was added.
