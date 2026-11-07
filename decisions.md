@@ -33308,3 +33308,9 @@ which are every old citation #1095 and #1096 moved. It printed 38 PASS at the ba
 in this change, and the rest of what `write` produced was other tests' existing drift and is not.
 
 **Not yet run on a cluster.** Nothing: the change is an offline test and its record.
+
+**Suite results, run 18433.** On `94d87867`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=0a1e00ca`, so scoped
+to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the new test among them, ending
+`NO GUARDRAIL SLIDE CITATION OF LIVE 29 TO 32 GREEN`), then `15 checks ran (the offline suite and 14 tier tests) in
+3m56s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
+added. The log is `/var/lib/hecaton/runs/18433/e2e-tools.log`.
