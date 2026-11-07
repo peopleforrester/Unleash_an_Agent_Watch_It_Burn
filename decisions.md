@@ -43003,3 +43003,16 @@ read every AI guard off and every infra control off but Falco on private, as fou
 each is Synced and Healthy. The probes' Jokers were removed; community still holds `joker-ichabod-the-werewolf`,
 created at 19:17Z before this run began, which this run did not touch. The cost counters were left where the probes
 and chats moved them, far under the $25 cap. The scripts and logs are in this run's directory. No dependency was added.
+
+**The suites (run 18408).** On this branch at `c75ba97e`, `bash verify/run-e2e-tools.sh` printed `315 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `78 checks ran (the offline suite and 77 tier tests) in 37m45s` with one red:
+`test_promo_villains_public.py`, all ten promo villains serving digests other than this branch's pins. That is #1070:
+staging has since repinned them in `verify/promo_villains.py`, and staging's copy of the test passed. Neither file is
+touched here. So the suite was run again on this branch merged onto `origin/staging` (a `git commit-tree` of `git
+merge-tree`'s clean tree, checked out as a detached worktree in this run's directory, then removed). It printed `341
+tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `82 checks ran (the offline suite and 81 tier tests) in 9m26s, 4
+at a time`, with one red: `test_joker_build_digest.py`, both Jokers built to a digest other than images.lock's
+(`sha256:8cf3af0c...` and `sha256:fb252967...`). Run alone afterwards it passed on staging, on the merged tree and on
+this branch, so it fails only some of the time inside the parallel tier; that is filed as a followup with the output.
+The promo test passed in the merged run and the Joker test in the branch run. The prose gate printed `prose gate:
+pass`.
