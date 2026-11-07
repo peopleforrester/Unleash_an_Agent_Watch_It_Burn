@@ -32633,3 +32633,9 @@ touched, and the terminal login was not read. No dependency was added. The logs 
 (`c6-probe.log`, `flow.log`).
 
 **Not yet run on a cluster.** Nothing: both checks the issue names ran here on the deployed prompt.
+
+**The suites (run 18368, at `01ecdaf3`).** `bash verify/run-e2e-tools.sh`, with no `HECATON_BASE_SHA`, so every test
+ran (log `/var/lib/hecaton/runs/18368/e2e-tools.2.log`): `338 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+with `test_ticket_persona.py` among them, then `82 checks ran (the offline suite and 81 tier tests) in 9m41s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite is the Test command's own run
+(`bash verify/run-tests.sh`). The prose gate printed `prose gate: pass`.
