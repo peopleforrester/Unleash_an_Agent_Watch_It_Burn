@@ -5117,6 +5117,8 @@ reads:
     - verify/bootstrap_chart.py
     - verify/collector_render.py
     - verify/test_trace_walkthrough_view.py
+  test_run_of_show_challenge_headers.py:
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_run_shell_failure.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
