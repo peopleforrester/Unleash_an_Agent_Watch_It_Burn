@@ -29831,3 +29831,20 @@ with the thing it reads struck or flipped: 38 copies, each refused. Two needles 
 their first copies were not refused: the 502 message is two string literals joined by `res.status`, so a message is
 now the whole code line's literals rather than one literal naming the kitchen, and `failures.append(` and
 `sys.exit(1)` each appear twice in the live test, so the test reads the judge loop's own lines.
+
+**Live check (run 18165).** `COMMUNITY_CONTEXT=watch-it-burn-community PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_kubecon_failover_attendee_live.py` ran the removed half on the two clusters, each way, and printed `ALL
+KUBECON FAILOVER ATTENDEE CHECKS PASSED`, exit 0, with all 13 judge checks passing in both directions. Community to
+private: fault at 3.9 s, promoted at 85.3 s, composer back at 86.3 s. Private to community: fault at 3.9 s, promoted
+at 87.0 s, composer back at 88.0 s. In both, the message sent during the outage showed "Hmm, the kitchen isn't
+answering right now (502). Give it a second and send that again.", the composer's placeholder read "BurritoBot
+backend is starting up", and the witch name was the same before, after and after a refresh. The drill changes
+neither cluster; the router is a local Caddy. The log is `/var/lib/hecaton/runs/18165/failover-live.log`.
+
+**Suites (run 18165, at `ffc260d9`).** `bash verify/run-e2e-tools.sh` ran the offline suite (`326 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, test_986_attendee_todo_listed.py among them) and then the tier: `81 checks ran (the
+offline suite and 80 tier tests) in 8m54s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18165/e2e-tools.log`.
+
+**Not yet run on a cluster.** Nothing is owed: the new test reads repo text only, and the live test it ties to ran
+above.
