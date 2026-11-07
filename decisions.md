@@ -31433,3 +31433,9 @@ denial through the bot, once this change is deployed, and the 03-1 shot retaken.
 GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m14s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS
 GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/18251/e2e-tools.log`. The prose gate printed `prose gate: pass`.
 No dependency was added.
+
+**The suites again (run 18251, at `c4995cd0` on staging `0bea0367`).** Staging moved five commits during the first
+green run (#1074, #1040), none in this change's code or tests, so the branch was rebased onto them with no conflict
+and the run-of-show reword above was added. `bash verify/run-e2e-tools.sh`, every test: `334 tests ran`, `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 9m21s, 4 at a time`,
+`ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/18251/e2e-tools.log`.
