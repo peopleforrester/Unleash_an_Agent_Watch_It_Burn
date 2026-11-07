@@ -31570,3 +31570,9 @@ No prior draft (`verify/prior-drafts.sh 1039 origin/staging` printed NONE).
 `<p class="chnum white">Challenge 1 - attackme.burritobot.co</p>`, the second with the Ophelia Thorn hint, as the
 run-of-show now quotes. Challenge 3's two slides and Challenge 4's seven slides carry their own
 "Challenge N - attackme.burritobot.co" header already, so the quotes segments 4 and 5 take on review have their form.
+
+**The suites (run 18310, at `fcf8d931` on staging `7cfc8e84`).** `bash verify/run-e2e-tools.sh`, with no
+`HECATON_BASE_SHA`, so every test ran: the offline suite printed `335 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 11m10s, 4 at a time`, `ALL E2E TOOLS TIER
+CHECKS GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/18310/e2e-tools.log`. The prose gate printed
+`prose gate: pass`. No dependency was added.
