@@ -32921,3 +32921,8 @@ lines on 31, 35, 38 and 41, `resourceNames` on 33, `registry.burritobot.co/` on 
 read or changed.
 
 **Not yet run on a cluster.** Nothing: the change is a test.
+
+**The suites (run 18397, #1111).** `bash verify/run-e2e-tools.sh`, unscoped, with its output in
+`/var/lib/hecaton/runs/18397/e2e-tools.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`82 checks ran (the offline suite and 81 tier tests) in 9m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
+`exit=0`. No dependency was added.
