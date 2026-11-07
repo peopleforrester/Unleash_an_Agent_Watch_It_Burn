@@ -143,8 +143,11 @@ python3 verify/challenge_traces.py --profile accen-dev --out tmp/challenge-trace
 It reads the newest `ml_app:burritobot` trace for each challenge in Whitney's sandbox
 org and judges it against `verify/challenge-trace-shapes.yaml`: one root row, the
 prompt and the reply on it, tokens and cost, the root's duration covering the chat,
-and the challenge's key calls under the root. It prints PASS or FAIL per challenge,
-with the trace's link, and must end `CHALLENGE TRACES GREEN`. Each FAIL is filed as
+and the challenge's key calls under the root. Challenge 2 is played one ask per chat,
+so its `deploy_app` and its `run_shell` are each judged in their own newest chat, and
+a `deploy_app` chat that read HC-666 counts as Challenge 3's (#1109). It prints PASS
+or FAIL per challenge, with the trace's link (one per call for Challenge 2), and must
+end `CHALLENGE TRACES GREEN`. Each FAIL is filed as
 its own issue here, with the link as evidence, unless the line already names an
 open issue. `--tag k8s.cluster.name:burritobot-private` reads only the presenters'
 cluster, `--tag k8s.cluster.name:burritobot-public` only the room's. A `note:` line is
@@ -153,6 +156,7 @@ trace shows them side by side. A run that ends `CHALLENGE TRACES NOT READ` judge
 nothing and is a failure: fix the read it names and run it again. On 2026-11-07,
 with #876's cost fix in, Challenges 1, 3 and 4 passed and Challenge 2 failed: no chat
 on either cluster made both of its calls, since the stage plays them as separate asks.
+Since #1109 each call is judged in its own chat, and all four passed on 2026-11-07.
 
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
@@ -1882,8 +1886,11 @@ is merely slow rather than rebuilding:
   It must end `CHALLENGE TRACES GREEN`: one root row per chat with the prompt and the
   reply on it, tokens and cost, and each challenge's key calls under the root, as
   `verify/challenge-trace-shapes.yaml` writes them down. Each FAIL is filed as its
-  own issue with the trace link it prints, the night before, not on the day. When no
-  chat made both of Challenge 2's calls, its FAIL links the newest trace of each.
+  own issue with the trace link it prints, the night before, not on the day.
+  Challenge 2's `deploy_app` and `run_shell` are each judged in their own newest chat,
+  each with its own link (#1109). A Challenge 2 FAIL reading "no trace ... has
+  deploy_app without read_support_ticket" means no Challenge 2 image deploy was
+  played in the window on the cluster it read; a run-through's deploy makes one.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.

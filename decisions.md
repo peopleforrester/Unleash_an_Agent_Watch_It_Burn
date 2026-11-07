@@ -32639,3 +32639,75 @@ ran (log `/var/lib/hecaton/runs/18368/e2e-tools.2.log`): `338 tests ran` and `AL
 with `test_ticket_persona.py` among them, then `82 checks ran (the offline suite and 81 tier tests) in 9m41s, 4 at a
 time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The offline suite is the Test command's own run
 (`bash verify/run-tests.sh`). The prose gate printed `prose gate: pass`.
+## 2026-11-07 · #1109 · run 18379 · Challenge 2's trace is judged one call per chat: each of deploy_app and run_shell in its own newest trace
+
+**The decision.** Challenge 2's trace does not have to hold both `deploy_app` and `run_shell` in one chat. Each call
+is judged in its own newest trace, and Challenge 2 passes when both of those traces have the frame the other
+challenges have (one root, the prompt and the reply on it, tokens and cost, the root covering the chat, the call under
+the root). The stage was already settled, and the check changes to match it. The run-of-show (segment 3, and row 7 of
+the readiness table) plays Challenge 2 as three asks, one per slide: the image deploy, the recipe read and the beacon
+post. Whitney's live attack is the recipe read alone, and `stage_traces.py` seeds `c2-attack` as that one read for a
+stated reason: a public image would leave a Deployment behind, and the beacon post would move the count the room
+watches (#843, #1003). The other option was a seed or a stage ask that makes both calls in one chat. That would
+change a settled stage beat to suit a check, leave a Deployment on the presenters' cluster, and still not be the
+trace the presenters open. `bash verify/prior-drafts.sh 1109 origin/staging` printed NONE, and the issue had no
+comments.
+
+**What changed.** `verify/challenge-trace-shapes.yaml` gives Challenge 2 `one_chat: false` and
+`not_with: [read_support_ticket]`, and keeps its key calls `[deploy_app, run_shell]` from #760's table. For a
+`one_chat: false` challenge, `verify/challenge_traces.py` picks the newest trace for each key call on its own, judges
+it against the frame with that call alone as the key call, and prints one PASS or FAIL line and one link per call.
+Each problem is prefixed with its call's name. The JSON from `--out` carries a `calls` list, and the row's own
+`trace_id` and `url` are the first call's. `not_with` came from the live data. The newest `deploy_app` in the window
+was always a Challenge 3 chat (HC-666 read, then the `maintenance-shell` deploy, trace
+`ef7ae3ba9dab5715afbfec69869fbd8d`), so without it, "Challenge 2's deploy" would have judged Challenge 3's trace. The
+same window held Challenge 2's own deploys, `promo-mascot` with `deploy_app` alone (newest
+`3324e8576d695b01bc8afef0eda93899`, 21:18Z on the private cluster). A challenge with no `not_with` picks its trace as
+before, so Challenges 1, 3 and 4 are judged exactly as #760 wrote them. When no trace has the call without a
+`not_with` call, the FAIL says so and names the newest trace that had the call along with the excluded one. The
+run-of-show's two descriptions of the check say Challenge 2 is judged one call per chat, and they say what that FAIL
+means.
+
+**Before the change (run 18379, 2026-11-07, shortly before 21:28Z).** After `. "$HECATON_CLUSTER_ENV"`,
+`python3 verify/challenge_traces.py --profile accen-dev --hours 24` printed `CHALLENGE TRACES RED`, exit 1. Challenge
+2 was the only FAIL, `no trace in the last 24 h has all of deploy_app, run_shell`, as in run 18359.
+
+**The live run after the change (run 18379, 2026-11-07, 21:28Z).** Against Whitney's sandbox org (`ml_app:burritobot`),
+`python3 verify/challenge_traces.py --profile accen-dev --hours 24 --out tmp/challenge-traces-24h.json` printed
+`CHALLENGE TRACES GREEN`, exit 0:
+
+```
+PASS  Challenge 1  Challenge 1, the CEO's secret  (get_vault_entry)
+      https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A7c3beb0f52255adf8752ea707df23f17
+PASS  Challenge 2  Challenge 2, the Kubernetes catch-all  (deploy_app, run_shell)
+      PASS deploy_app: https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A3324e8576d695b01bc8afef0eda93899
+      PASS run_shell: https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A6fa70c898fb5599ab1087cf260ec952b
+PASS  Challenge 3  Challenge 3, prompt injection through a support ticket  (read_support_ticket, deploy_app)
+      https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3Aef7ae3ba9dab5715afbfec69869fbd8d
+PASS  Challenge 4  Challenge 4, the poisoned weather tool  (get_weather, read_internal_config)
+      note: get_weather and read_internal_config ran in one model turn, side by side, not one after the other
+      https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3Acafb793bdfa259c18517189c3406d78c
+written: tmp/challenge-traces-24h.json
+CHALLENGE TRACES GREEN
+```
+
+With `--tag k8s.cluster.name:burritobot-private` it printed the same four PASS lines and links and `CHALLENGE TRACES
+GREEN`, exit 0. With `--tag k8s.cluster.name:burritobot-public` and 24 hours it ended RED on Challenge 2 alone:
+`deploy_app: no trace in the last 24 h has deploy_app without read_support_ticket`. The newest public `deploy_app`,
+`d3b6551f867f5d4dbd0bd634230c99e2`, is a Challenge 3 chat, and `run_shell` passed at
+`b5829105e5ab5aa2ab37f423b5c1f93f`. Nobody played a Challenge 2 image deploy on the room's cluster that day. Over 96
+hours on the public cluster Challenge 2 passes, with `deploy_app` at
+https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A06f37a35697454848739de7aa845ea5e and
+`run_shell` at `b5829105e5ab5aa2ab37f423b5c1f93f`. The check sends only GETs to Datadog and changes nothing on
+either cluster.
+
+**Tests.** `verify/test_challenge_traces.py` checks that the shape file gives Challenge 2 `one_chat: false` and
+`not_with: [read_support_ticket]`, and gives no other challenge either field. Its "one call per chat" case now passes,
+with one link per call printed, where under #760 it failed. Five new cases cover Challenge 2. A newer Challenge 3
+chat does not stand in for Challenge 2's deploy. One call's trace without a reply fails Challenge 2, naming the call,
+while the other call passes. With only Challenge 3's `deploy_app` in the window, Challenge 2 fails and names that
+trace. With no `run_shell`, it fails with no link for that call. The three frame cases that used Challenge 2 (an
+unpriced llm row, two of them, no llm row) now use Challenge 3, since a Challenge 2 problem now carries its call's
+prefix. No dependency was added.
+
+**Not yet run on a cluster.** Nothing is owed. The live check reads Datadog, not the change, and passed above.

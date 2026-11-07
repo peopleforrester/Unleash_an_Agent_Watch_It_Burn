@@ -12,9 +12,15 @@ span list (GET /api/v2/llm-obs/v1/spans/events) with the repo's read-only key (i
 Manager entry watch-it-burn/datadog that the KubeCon clusters ship with):
 
 1. every tool row in the window, so it knows which traces hold which calls;
-2. per challenge, the newest trace whose tool rows include all its key calls (--tag narrows to a cluster or a
-   session; every --tag must be on the tool row);
+2. per challenge, the newest trace whose tool rows include all its key calls and none of its not_with calls (--tag
+   narrows to a cluster or a session; every --tag must be on the tool row);
 3. every row of that trace, which is judged against the shape.
+
+A challenge whose shape reads one_chat: false is played one call per chat, so steps 2 and 3 run once per key call:
+each call is judged in its own newest trace, with its own link, and the challenge passes when each of them does.
+Challenge 2 is that (#1109): the stage asks for the villain image, the recipe read and the beacon post separately, and
+the trace the presenters open, c2-attack, is the recipe read alone. Its not_with keeps a deploy_app chat that read
+HC-666, which is Challenge 3's, from standing for Challenge 2's deploy.
 
 Ends CHALLENGE TRACES GREEN (exit 0) when all four pass, RED (exit 1) otherwise, each FAIL with its reasons. When
 the traces cannot be judged it ends CHALLENGE TRACES NOT READ with the reason, also exit 1: Datadog cannot be read,
@@ -229,6 +235,52 @@ def latest_traces(tool_spans: list[dict], tags: list[str]) -> list[tuple[str, se
     return sorted(((t, n, at) for t, (n, at) in traces.items()), key=lambda x: -x[2])
 
 
+def pick(traces: list[tuple[str, set[str], int]], calls: list[str], not_with: list[str]) -> str | None:
+    """The newest trace whose tool rows include every call and none of not_with."""
+    return next((t for t, names, _ in traces if set(calls) <= names and not names & set(not_with)), None)
+
+
+def judge_trace(dd, site: str, ml_app: str, shape: dict, tid: str, hours: int, max_pages: int) -> dict:
+    """Read one trace whole and judge it against the shape."""
+    # The whole trace, every ml_app: a second root in another app is still a second root in the view.
+    spans = list_spans(dd, {"filter[from]": f"now-{hours + 1}h", "filter[to]": "now", "filter[trace_id]": tid},
+                       max_pages)
+    notes: list[str] = []
+    problems = judge(shape, spans, notes)
+    return {"trace_id": tid, "url": trace_url(site, ml_app, tid), "problems": problems, "notes": notes}
+
+
+def check_each(dd, site: str, ml_app: str, shape: dict, traces, hours: int, max_pages: int, row: dict) -> None:
+    """A challenge the stage plays one call per chat (one_chat: false, Challenge 2, #1109): each key call is judged in
+    its own newest trace, and the challenge passes when every one of those does."""
+    not_with = shape.get("not_with") or []
+    row["calls"], row["problems"], row["notes"] = [], [], []
+    for call in shape["key_calls"]:
+        one = {**shape, "key_calls": [call], "ordered": False}
+        if (shape.get("reads") or {}).get("call") != call:
+            one.pop("reads", None)
+        tid = pick(traces, [call], not_with)
+        if tid is None:
+            got = {"call": call, "trace_id": None, "url": None, "notes": [],
+                   "problems": [f"no trace in the last {hours} h has {call}"
+                                + (f" without {', '.join(not_with)}" if not_with else "")]}
+            # Every trace with the call also has a not_with call: name the newest, so it reads as another challenge's.
+            other = next(((t, names) for t, names, _ in traces if call in names), None)
+            if other:
+                got["problems"].append(f"the newest {call} is in trace {other[0]}, which also has "
+                                       f"{', '.join(sorted(set(not_with) & other[1]))}: "
+                                       f"{trace_url(site, ml_app, other[0])}")
+        else:
+            got = {"call": call, **judge_trace(dd, site, ml_app, one, tid, hours, max_pages)}
+        got["verdict"] = "FAIL" if got["problems"] else "PASS"
+        row["calls"].append(got)
+        row["problems"].extend(f"{call}: {p}" for p in got["problems"])
+        row["notes"].extend(f"{call}: {n}" for n in got["notes"])
+    first = next((c for c in row["calls"] if c["trace_id"]), None)
+    if first:
+        row["trace_id"], row["url"] = first["trace_id"], first["url"]
+
+
 def check(dd, site: str, shapes: dict, hours: int, tags: list[str], max_pages: int) -> list[dict]:
     ml_app = shapes["ml_app"]
     window = {"filter[from]": f"now-{hours}h", "filter[to]": "now"}
@@ -237,8 +289,13 @@ def check(dd, site: str, shapes: dict, hours: int, tags: list[str], max_pages: i
     results = []
     for shape in shapes["challenges"]:
         row = {"challenge": shape["id"], "title": shape["title"], "key_calls": shape["key_calls"],
-               "trace_id": None, "url": None, "notes": []}
-        tid = next((t for t, names, _ in traces if set(shape["key_calls"]) <= names), None)
+               "one_chat": shape.get("one_chat", True), "trace_id": None, "url": None, "notes": []}
+        if not row["one_chat"]:
+            check_each(dd, site, ml_app, shape, traces, hours, max_pages, row)
+            row["verdict"] = "FAIL" if row["problems"] else "PASS"
+            results.append(row)
+            continue
+        tid = pick(traces, shape["key_calls"], shape.get("not_with") or [])
         if tid is None:
             # No trace to judge; the newest one with any of the key calls is the evidence to look at, and the newest
             # trace holding each call is named, so a challenge played one call per chat shows as that.
@@ -251,12 +308,9 @@ def check(dd, site: str, shapes: dict, hours: int, tags: list[str], max_pages: i
             if near:
                 row["trace_id"], row["url"] = near, trace_url(site, ml_app, near)
         else:
-            # The whole trace, every ml_app: a second root in another app is still a second root in the view.
-            spans = list_spans(dd, {"filter[from]": f"now-{hours + 1}h", "filter[to]": "now", "filter[trace_id]": tid},
-                               max_pages)
-            row["trace_id"], row["url"] = tid, trace_url(site, ml_app, tid)
-            row["notes"] = []
-            row["problems"] = judge(shape, spans, row["notes"])
+            got = judge_trace(dd, site, ml_app, shape, tid, hours, max_pages)
+            row["trace_id"], row["url"], row["notes"], row["problems"] = (got["trace_id"], got["url"], got["notes"],
+                                                                         got["problems"])
         row["verdict"] = "FAIL" if row["problems"] else "PASS"
         results.append(row)
     return results
@@ -269,7 +323,12 @@ def report(results: list[dict]) -> bool:
             print(f"      - {p}")
         for n in r.get("notes") or []:
             print(f"      note: {n}")
-        print(f"      {r['url'] or 'no trace to link'}")
+        if r.get("calls"):
+            # One link per call, each its own chat (one_chat: false).
+            for c in r["calls"]:
+                print(f"      {c['verdict']} {c['call']}: {c['url'] or 'no trace to link'}")
+        else:
+            print(f"      {r['url'] or 'no trace to link'}")
     return all(r["verdict"] == "PASS" for r in results)
 
 

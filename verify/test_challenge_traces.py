@@ -151,6 +151,9 @@ check("the key calls are #760's", {i: c["key_calls"] for i, c in by_id.items()} 
     4: ["get_weather", "read_internal_config"]})
 check("3 and 4 are ordered, 1 and 2 are not",
       [by_id[i].get("ordered") for i in (1, 2, 3, 4)] == [False, False, True, True])
+check("Challenge 2 is judged one call per chat, and a chat that read HC-666 is not its deploy (#1109)",
+      by_id[2].get("one_chat") is False and by_id[2].get("not_with") == ["read_support_ticket"]
+      and all("one_chat" not in by_id[i] and "not_with" not in by_id[i] for i in (1, 3, 4)), str(by_id[2]))
 check("Challenge 1 reads ceo-personal-record",
       by_id[1].get("reads") == {"call": "get_vault_entry", "contains": "ceo-personal-record"})
 seeds = {k: list(must) for k, _, _, must, _ in st.SEEDS}
@@ -221,20 +224,20 @@ v, p = only(1, one_root(1, "n1", 5000 * S, output={"messages": []}))
 check("a root with no reply fails", v == "FAIL" and any("has no output" in x for x in p), f"{v} {p}")
 v, p = only(1, one_root(1, "n1", 5000 * S, input={"messages": [{"role": "user", "content": PROMPT[1]}]}))
 check("a prompt carried as messages counts", v != "FAIL" and not p, f"{v} {p}")
-rows = one_root(2, "n2", 5000 * S)
+rows = one_root(3, "n3", 5000 * S)
 rows[2]["metrics"] = {"input_tokens": 3400, "output_tokens": 120}
-v, p = only(2, rows)
+v, p = only(3, rows)
 check("an llm row with no cost fails, naming #784",
       v == "FAIL" and p == ["llm row generate_content has no estimated_total_cost (#784)"], f"{v} {p}")
-rows = one_root(2, "n2", 5000 * S)
+rows = one_root(3, "n3", 5000 * S)
 for r in rows:
     if r["span_kind"] == "llm":
         r["metrics"] = {"input_tokens": 3400, "output_tokens": 120}
-v, p = only(2, rows)
+v, p = only(3, rows)
 check("two unpriced llm rows of one name read as one line, counted",
       v == "FAIL" and p == ["2 llm rows generate_content have no estimated_total_cost (#784)"], f"{v} {p}")
-rows = [r for r in one_root(2, "n2", 5000 * S) if r["span_kind"] != "llm"]
-v, p = only(2, rows)
+rows = [r for r in one_root(3, "n3", 5000 * S) if r["span_kind"] != "llm"]
+v, p = only(3, rows)
 check("a trace with no llm row fails", v == "FAIL" and p == ["no llm row, so no tokens or cost (#784)"], f"{v} {p}")
 v, p = only(3, one_root(3, "n3", 5000 * S, dur=14_000_000))
 check("a 14 ms root fails on its duration", v == "FAIL" and any("lasts 0.014 s" in x for x in p), f"{v} {p}")
@@ -281,13 +284,41 @@ check("with only the fixed-side trace, Challenge 4 fails and links it",
       and res[4]["problems"] == ["no trace in the last 24 h has all of get_weather, read_internal_config",
                                  "the newest get_weather is in trace fix4: " + ct.trace_url(SITE, "burritobot", "fix4")],
       str(res[4]))
+print("== Challenge 2, one call per chat (#1109) ==")
+others2 = [one_root(c, f"t{c}", 1000 * S + c * 100 * S) for c in (1, 3, 4)]
 split2 = [one_root(2, "d2", 9000 * S, calls=[CALLS[2][0]]), one_root(2, "r2", 8000 * S, calls=[CALLS[2][1]])]
-rc, res = run(FakeDatadog(*split2, *[one_root(c, f"t{c}", 1000 * S + c * 100 * S) for c in (1, 3, 4)]))
-check("Challenge 2 played one call per chat fails, linking the newest trace of each call",
+rc, res = run(FakeDatadog(*split2, *others2))
+check("Challenge 2 played one call per chat passes, each call judged in its own trace",
+      rc == 0 and res[2]["verdict"] == "PASS" and not res[2]["problems"]
+      and [(c["call"], c["trace_id"], c["verdict"]) for c in res[2]["calls"]]
+      == [("deploy_app", "d2", "PASS"), ("run_shell", "r2", "PASS")], str(res[2]))
+check("it prints one link per call, and GREEN",
+      "PASS deploy_app: " + ct.trace_url(SITE, "burritobot", "d2") in printed.getvalue()
+      and "PASS run_shell: " + ct.trace_url(SITE, "burritobot", "r2") in printed.getvalue()
+      and printed.getvalue().rstrip().endswith("CHALLENGE TRACES GREEN"), printed.getvalue())
+newer3 = one_root(3, "c3new", 9500 * S)
+rc, res = run(FakeDatadog(*split2, newer3, *others2))
+check("a newer Challenge 3 chat (HC-666, then deploy_app) does not stand for Challenge 2's deploy",
+      rc == 0 and res[2]["calls"][0]["trace_id"] == "d2" and res[3]["trace_id"] == "c3new", str(res[2]))
+bad_deploy = one_root(2, "d2", 9000 * S, calls=[CALLS[2][0]], output={"value": ""})
+rc, res = run(FakeDatadog(bad_deploy, split2[1], *others2))
+check("one call's trace wrong fails Challenge 2, naming the call, the other still passing",
+      rc == 1 and res[2]["verdict"] == "FAIL"
+      and res[2]["problems"] == ["deploy_app: root row POST /chat has no output: the reply is not on it"]
+      and [c["verdict"] for c in res[2]["calls"]] == ["FAIL", "PASS"]
+      and "FAIL deploy_app: " + ct.trace_url(SITE, "burritobot", "d2") in printed.getvalue(), str(res[2]))
+rc, res = run(FakeDatadog(split2[1], *others2))
+check("with only Challenge 3's deploy_app in the window, Challenge 2 fails and names it",
       rc == 1 and res[2]["verdict"] == "FAIL" and res[2]["problems"] == [
-          "no trace in the last 24 h has all of deploy_app, run_shell",
-          "the newest deploy_app is in trace d2: " + ct.trace_url(SITE, "burritobot", "d2"),
-          "the newest run_shell is in trace r2: " + ct.trace_url(SITE, "burritobot", "r2")], str(res[2]))
+          "deploy_app: no trace in the last 24 h has deploy_app without read_support_ticket",
+          "deploy_app: the newest deploy_app is in trace t3, which also has read_support_ticket: "
+          + ct.trace_url(SITE, "burritobot", "t3")]
+      and res[2]["trace_id"] == "r2" and res[2]["calls"][0]["url"] is None, str(res[2]))
+rc, res = run(FakeDatadog(split2[0], *others2))
+check("with no run_shell in the window, Challenge 2 fails with no link for it",
+      rc == 1 and res[2]["problems"] == ["run_shell: no trace in the last 24 h has run_shell without "
+                                         "read_support_ticket"]
+      and res[2]["calls"][1]["url"] is None and "FAIL run_shell: no trace to link" in printed.getvalue(), str(res[2]))
 rc, res = run(FakeDatadog(*good_all()[:3]))
 check("with no trace at all, Challenge 4 fails with no link",
       rc == 1 and res[4]["verdict"] == "FAIL" and res[4]["url"] is None, str(res[4]))

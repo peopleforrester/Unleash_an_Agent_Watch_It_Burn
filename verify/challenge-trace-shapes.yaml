@@ -23,7 +23,9 @@
 # live seed run read bare tool names in LLM Observability (decisions.md, 2026-10-31T15:20), and the check takes either.
 #
 # The latest trace for a challenge is the newest trace in the window whose tool rows include every key call, anywhere
-# in the trace. A trace that has the key calls but not under its one root is then judged, and fails. The fixed-side
+# in the trace, and none of its `not_with` calls. A trace that has the key calls but not under its one root is then
+# judged, and fails. A challenge with `one_chat: false` is played one call per chat: each key call is judged in its own
+# newest trace, with its own link, and the challenge passes when every one of those does (#1109). The fixed-side
 # traces #648 seeds (c1-fixed, c3-fixed, c4-fixed) show a different shape on purpose and are not what this file
 # describes: this is each attack's shape.
 
@@ -39,10 +41,13 @@ challenges:
 
   - id: 2
     title: Challenge 2, the Kubernetes catch-all
-    # The villain image deployed, and the shell the recipe read and the beacon post run through. Both in one chat, as
-    # #760's table has it; the stage asks for them one at a time (decisions.md, 2026-11-03 #760).
+    # The villain image deployed, and the shell the recipe read and the beacon post run through. The stage asks for
+    # them one at a time, and the trace the presenters open (c2-attack) is the recipe read alone, so each call is
+    # judged in its own newest chat (#1109). A deploy_app chat that read HC-666 is Challenge 3's, not this one's.
     key_calls: [deploy_app, run_shell]
     ordered: false
+    one_chat: false
+    not_with: [read_support_ticket]
 
   - id: 3
     title: Challenge 3, prompt injection through a support ticket
