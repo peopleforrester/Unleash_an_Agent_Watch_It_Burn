@@ -32926,3 +32926,52 @@ read or changed.
 `/var/lib/hecaton/runs/18397/e2e-tools.log`, printed `339 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 `82 checks ran (the offline suite and 81 tier tests) in 9m57s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`,
 `exit=0`. No dependency was added.
+
+## 2026-11-07 · #924 · run 18406 · The parent issue's six criteria are met by #927, #928, #929 and #930, and the live wall serves all of it
+
+**Where the issue stood.** #924 asked for the prompt wall (`templates/wall.html` in peopleforrester/prompts-agenticburn,
+served at `https://prompts.burritobot.co` and `https://prompts.agenticburn.com`) to stay readable at 500 people. It was
+split into four children: #927 the throttle, #928 the pause and pin, #929 the load test and #930 the answer to its
+question. `bash verify/prior-drafts.sh 924 origin/staging` printed `LANDED origin/agent/924-17645` and `NONE`. Run
+18383, the attempt before this one, ended with no report because its session refused the shell, file edits and web
+reads; it changed nothing. This run changes no code, and this entry maps each of #924's criteria to what meets it.
+
+- *One card every 1.5 s under 17 prompts a second for 5 minutes, with a "+N more" count of what was held back.*
+  prompts-agenticburn#18 put the throttle on the wall, and prompts-agenticburn#21's load test runs 5,100 prompts at 17
+  a second for 300 s, asserting every gap between cards is at least 1500 ms and that "+N more" equals the number held
+  back at every card (the #929 entry of run 18008).
+- *Newest first; held-back prompts counted, not queued.* `test_throttle_shows_only_the_newest_of_each_window_and_counts_the_rest`
+  and the two burst tests in prompts-agenticburn's `test_wall_page.py` fail when the card is the oldest of its window
+  or the rest are queued (the #934 entry of run 17824).
+- *Pause by button and Space, on that screen only, resuming at the newest with no replay.* prompts-agenticburn#22 added
+  `#pausebtn`, the Space handler and `throttle.resume()`, held by
+  `test_pause_freezes_the_page_and_resume_draws_the_newest_with_no_request` and three more tests (the #928 entry of run
+  18004). The pause is state in the page's own script, so it freezes only the screen that pressed it.
+- *Click-to-pin holds one card until it is clicked again.* The same change's `#pinslot` and `unpin()`, held by
+  `test_click_pins_one_card_above_the_stream_and_the_trim_never_takes_it`.
+- *The offline load test, with frame time and memory in decisions.md.* `test_wall_load.py` and `e2e_wall_load.py` in
+  prompts-agenticburn; the run 18008 entry above records frames p50 16.7 ms and p95 16.8 ms in Chromium, JS heap after
+  GC from 1.40 MB to 1.57 MB, and at most 300 cards in the DOM.
+- *The answer on #924.* The #930 entry of run 17651 wrote "What these runs did not cover" in
+  `facilitation/kubecon-na-2026-load-test.md`, and the comment drawn from it is on #924 (issuecomment-6667896678):
+  the spend cap and guard-proxy's `/chat` limits were loaded at 500 sessions; the `/prompts` feed, the wall's SSE
+  fan-out, the cap's refusal and the admin cluster were not.
+
+**Checked live by this run (2026-11-07, read only).** No prompt was sent, so nothing reached the wall.
+
+- `curl https://prompts.burritobot.co/` and `https://prompts.agenticburn.com/` answered 200 with the same page (sha256
+  `581227a9...`). Diffed against `templates/wall.html` on prompts-agenticburn's `main` at `7ad3e95a` (read with
+  `gh api`), it differs only in the two rendered Jinja values (`PINNED = "attackme"`, `RETRY_MS = 3.0 * 1000`), so the
+  wall the room sees is main's page. It carries `const CARD_INTERVAL_MS = 1500;`, `id="more"`, `id="pausebtn"` ("Pause
+  this screen only (Space)"), `togglePause()`, the Space handler, `id="pinslot"` and `unpin()`.
+- On `main`, `test_wall_page.py` holds the eight tests named above, and `test_wall_load.py` and `e2e_wall_load.py` are
+  present.
+- This branch's base, `f4bc92c6`, still pins the wall copy at `6601313a`, so its
+  `python3 verify/test_wall_throttle_upstream_e2e.py` fails on main ("main's page is the pinned copy", then the
+  stub DOM in `verify/wall-clock-harness.js` has no `pausebtn`). #1108's `8dc06aa3` fixed both on staging after this run's base. Run from an
+  export of `origin/staging` (`37a3e0e7`), the same test printed 21 of 21 PASS and "PASS: the wall repo's main adds at
+  most one card per 1.5 s window, and the pinned copy is main's page", exit 0.
+- From the same export, `python3 verify/test_wall_more_count_live.py` and the same with
+  `WALL_URL=https://prompts.burritobot.co/` each printed 15 PASS, no FAIL, and exit 0.
+
+**Not yet run on a cluster.** Nothing: the wall runs on Railway, outside both clusters, and this run touched neither.
