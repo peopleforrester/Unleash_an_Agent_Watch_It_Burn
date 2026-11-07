@@ -33022,3 +33022,9 @@ It should read no `ask_user` among the tools, and no reply that is a scratchpad 
 "The guest is", "I need to recall" or "I should"), with workshop-agent's log showing no `Tool execution started` for
 `ask_user` in that window and guard-proxy's showing no `thinking_only_surfaced`. That is this issue's second criterion,
 and the next run on it runs it.
+
+**Suite results, run 18386.** On `5efb678e`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA` at the run's base
+`5851f621`, its output in `/var/lib/hecaton/runs/18386/e2e-tools.log`, printed `228 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, with `test_ask_user_persona.py` (`ALL ASK_USER PERSONA CHECKS GREEN`) and
+`test_weather_tool_scope.py` among them, then `26 checks ran (the offline suite and 25 tier tests) in 7m05s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`.
