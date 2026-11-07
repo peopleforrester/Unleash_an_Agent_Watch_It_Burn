@@ -199,6 +199,10 @@ The machine is tanjiro-wsl2, with `<repo>` as `/home/michael/repos/talks/Unleash
 2026-11-06). It is the operator machine runs reach: it has terraform, aws with every fleet profile, gh signed in,
 PyYAML and a running cron. megumi-wsl2 does not answer ssh. The states the report plans go there. The line is
 installed there, and the accen-dev audit state was rebuilt there with `import-state.sh` (both 2026-11-06, #955).
+accen-dev's boundary, lab VPC and both KubeCon cluster states were rebuilt there with "Rebuilding a lost state"
+below, by the operator's own AWS identity, `nwuser` (2026-11-07, #1041). The report reads the states of the checkout
+it runs from, so that checkout is moved forward with `git checkout --detach origin/main`, which leaves the
+guard-proxy submodule as it stands; it was at ec03eb5f until then.
 
 `scheduled-drift.sh` supplies the PATH that cron does not have, keeps a dated copy of each report, and
 posts the result to a single open GitHub issue titled "Fleet drift report". It comments if that issue

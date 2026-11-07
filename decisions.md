@@ -31576,3 +31576,98 @@ run-of-show now quotes. Challenge 3's two slides and Challenge 4's seven slides 
 GREEN`, then `82 checks ran (the offline suite and 81 tier tests) in 11m10s, 4 at a time`, `ALL E2E TOOLS TIER
 CHECKS GREEN`, `exit=0`. The log is `/var/lib/hecaton/runs/18310/e2e-tools.log`. The prose gate printed
 `prose gate: pass`. No dependency was added.
+## 2026-11-07 · #1041 · run 18311 · accen-dev's boundary, lab VPC and KubeCon cluster states rebuilt on tanjiro-wsl2 as nwuser; the drift report there reads all five states clean
+
+**Context.** #979 (`import-state.py`) rebuilt these four states in the worktrees of runs 17958 and 18049, which go
+when hecaton retires them. The daily drift report (#955, #981) reads the states of this repo's checkout on
+tanjiro-wsl2, and #1041 asks for them to be rebuilt there by the operator's own AWS identity. #979 is in `main`
+(`origin/main` 18517972 holds `infra/terraform/fleet/import-state.py`). `bash verify/prior-drafts.sh 1041
+origin/staging` printed NONE. Every remote command below ran through
+`sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2 '<command>'`, which runs as the unix
+user michael there; `aws --profile accen-dev sts get-caller-identity` there answers
+`arn:aws:iam::515966504359:user/nwuser`.
+
+**The checkout.** Before: detached at `ec03eb5f91ec4ea4c1c21743da9426e85b264487`, with ` M
+gitops/ai-layer/guard-proxy` its only tracked change. That change is the submodule's checked-out commit, `c2eb4cf2`,
+behind the recorded `0f0c809d` (`git diff --submodule=log` says rewind), with a clean working tree inside it.
+`submodule.recurse` is unset. ec03eb5f is an ancestor of `origin/main`, so no commit is left behind. The command was
+`git fetch -q origin main && git checkout --detach origin/main`, exit 0. After: HEAD 18517972, `git status` still
+shows only ` M gitops/ai-layer/guard-proxy`, `git submodule status` shows `+c2eb4cf2...`, the submodule's HEAD is
+still `c2eb4cf2` with 0 porcelain lines, and `import-state.py` is present. The gitignored states, `.terraform/`
+directories and logs were not touched. `main` was taken rather than `staging`, since it is what hecaton has promoted;
+staging was 7 commits ahead of it, none of them in the drift report or the import script.
+
+**The rebuild, 18:15:21Z to 18:27:49Z, Terraform v1.15.6.** docs/floor.md's "Rebuilding a lost state" commands ran
+in sequence in one background job on tanjiro, its log at
+`infra/terraform/fleet/logs/rebuild-1041-run18311.log` in that checkout (gitignored):
+
+| Step | Exit |
+|---|---|
+| `terraform -chdir=infra/org/boundary init` | 0 |
+| `terraform -chdir=infra/terraform/aws/network init` | 0 |
+| `terraform -chdir=infra/terraform/aws/cluster init` | 0 |
+| `import-state.py boundary accen-dev` | 0, 1 imported, `plan: no changes` |
+| `import-state.py network accen-dev` | 0, 22 imported, `plan: no changes` |
+| `import-state.py cluster accen-dev watch-it-burn-community` | 2, 31 changes still planned |
+| `import-state.py cluster accen-dev watch-it-burn-private` | 2, 41 changes still planned |
+
+`infra/terraform/aws/audit/import-state.sh accen-dev` was not run: `infra/terraform/aws/audit/states/accen-dev.tfstate`
+was already there, from #955's rebuild of 2026-11-06, and the drift report below reads it clean.
+
+Each cluster printed `64 to import, 3 not in AWS, 1 written after the imports, 1 not importable` (the node group's
+`null_resource.validate_cluster_service_cidr`), with the three not in AWS being #869's node rules for 3000 and 8080
+and #906's lab VPC rule on 443, as floor.md says. The one delete/create in each is
+`aws_bedrock_inference_profile.tutor` (description, #882), and none replaces the cluster, the node group or an
+access entry. Run 18049, as `hecaton-run-18049`, saw 33 changes on community and 41 on private. Here community has 31
+and none touches `cluster_creator` or the KMS key. On private, `module.eks.aws_eks_access_entry.this["cluster_creator"]`
+plans `tags_all` only (the `role` tag #636 adds) and `module.eks.module.kms.aws_kms_key.this[0]` plans
+`bypass_policy_lockout_safety_check` only, a setting Terraform keeps and AWS has no copy of. Neither plans a principal
+or a key policy change, which is what a state rebuilt by another identity would show, so these states are the
+operator's own. The states written: `infra/org/boundary/states/accen-dev.tfstate`,
+`infra/terraform/aws/network/terraform.tfstate` (accen-dev is the default account) and
+`infra/terraform/fleet/states/watch-it-burn-{community,private}.tfstate` with their `.account` files.
+
+CloudTrail `lookup-events` for user `nwuser` in accen-dev from 18:14Z to 18:34Z, read with this run's session,
+returned 2,601 events. Five have `readOnly` false, all `sts:GetSessionToken` (18:14:01Z, which is before the job
+started, 18:15:41Z, 18:15:42Z, 18:27:23Z, 18:29:49Z), which issue session credentials and change no resource.
+
+**The drift report there.** `python3 infra/terraform/drift/drift-report.py --accounts accen-dev --region us-west-2`,
+no `--post`, run in that checkout at 18:32Z, its log at `infra/terraform/drift/logs/drift-1041-run18311.log`:
+
+```
+# Fleet drift report, 2026-11-07T18:32Z
+
+Accounts: accen-dev. Region: us-west-2 (Config; clusters also swept in us-east-1, us-east-2). Plan-only: `terraform plan -refresh-only`, nothing applied. Written by `infra/terraform/drift/drift-report.py`; how to read it is in `docs/floor.md`.
+
+**0 finding(s)**: 0 drifted state(s), 0 unmanaged resource(s), 0 account(s) without a Config record.
+
+## Terraform drift
+
+No state has drifted.
+
+## Unmanaged: in the account, in no Terraform state, not in the register
+
+None.
+
+## AWS Config
+
+- accen-dev: ok: recorder watch-it-burn is recording
+
+## Clean states (5)
+
+lab VPC accen-dev, boundary accen-dev, audit accen-dev, cluster watch-it-burn-community, cluster watch-it-burn-private
+
+## Notes
+
+- cluster watch-it-burn-private: no `role` tag in its state (built before #636), so it is planned with its roster.tsv role, admin; its next apply adds the tag
+
+exit=0
+```
+
+So the daily report's next run there should no longer list the two clusters as unmanaged or carry accen-dev's two
+Notes about missing lab VPC and boundary states. The changes still planned on both clusters are #1042's apply.
+
+**In the repo.** docs/floor.md's paragraph on the drift machine now says these four states were rebuilt there by
+`nwuser` on 2026-11-07 and how the checkout is moved forward without touching the guard-proxy submodule. No test
+reads that paragraph (`git grep` of its wording in `verify` and `scripts` finds nothing). No code changed and no
+dependency was added.
