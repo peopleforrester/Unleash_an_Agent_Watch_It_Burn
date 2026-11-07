@@ -29640,3 +29640,8 @@ recorded, "The sister snapshot matches peopleforrester/packt-agentic-devops@main
 216 KB.
 
 **Not yet run on a cluster.** Nothing: the test needs no cluster, and the change touches nothing a cluster runs.
+
+**Suite results, run 18163.** `bash verify/run-e2e-tools.sh` on `90a9aca4`: the offline suite printed `325 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, with `verify/test_sister_tree.py` among them, then `81 checks ran (the
+offline suite and 80 tier tests) in 8m50s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with
+`verify/test_platform_baseline_sister.py` passing against the sister in 2 s.
