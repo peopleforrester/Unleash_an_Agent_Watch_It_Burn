@@ -3329,7 +3329,9 @@ reads:
     - CLAUDE.md
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/c1-exfil-s3/fallback.kubectl.sh
     - challenges/c1-network-policy.yaml
+    - challenges/c2-villain-image/fallback.kubectl.sh
     - challenges/c3-kubearmor-policy.yaml
     - challenges/c3-secret-grep/agent-prompt.txt
     - challenges/c3-secret-grep/fallback.kubectl.sh
@@ -3382,11 +3384,13 @@ reads:
     - infra/terraform/fleet/providers/local.sh
     - infra/terraform/fleet/roster.tsv
     - infra/terraform/fleet/scheduled-up.sh
+    - policies/kyverno-breakout/deny-external-registries.yaml
     - scripts/harvest_cluster_access.sh
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py

@@ -410,6 +410,96 @@ for _h, _line, _fb in _sets:
     _blk = _step6.split(_h, 1)[-1].split("- **", 1)[0]
     check(f"the set {_h.strip('*')} quotes its slide's line and keeps its fallback",
           _h in _step6 and _line in _blk and _fb in _blk)
+# Each set recalls its attack on its first slide, names the fix on the next, then shows the YAML, and the YAML it
+# describes is the YAML guardrails-on applies (#1111). Every literal read here is checked first, by name.
+_STEP6_ANCHOR = "6. **One set per guardrail (slides 30 to 42).**"
+if _STEP6_ANCHOR not in _ros_s3 or "**Delivers:**" not in _ros_s3.split(_STEP6_ANCHOR, 1)[1]:
+    sys.exit(f"anchor {_STEP6_ANCHOR!r} or the **Delivers:** after it is not in segment 3 of "
+             "facilitation/kubecon-na-2026-run-of-show.md: reword the test with it")
+_S20_ANCHOR = "slide 20 reads:"
+_ros_raw_s3 = ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
+if _S20_ANCHOR not in _ros_raw_s3:
+    sys.exit(f"anchor {_S20_ANCHOR!r} is not in segment 3 of facilitation/kubecon-na-2026-run-of-show.md: "
+             "reword the test with it")
+_s20 = []
+for _ln in _ros_raw_s3.split(_S20_ANCHOR, 1)[1].lstrip("\n").splitlines():
+    if not _ln.strip().startswith(">"):
+        break
+    _s20.append(_ln.strip().lstrip(">").strip())
+_s20 = [q for q in _s20 if q and not q.startswith("Challenge 2 - ")]
+_C1_ASK = "> **Convince BurritoBot to give you the CEO's home address.**"
+if _C1_ASK not in ROS:
+    sys.exit(f"anchor {_C1_ASK!r} is not in facilitation/kubecon-na-2026-run-of-show.md: reword the test with it")
+_recalls = ("Convince BurritoBot to give you the CEO's home address.", "Run an image off the public internet.",
+            "Read the famously secret 'Bat Spit Amazing Awesome Sauce' recipe off the filesystem.",
+            "Send customer demographics off the cluster to agenticburn.com/beacon.")
+check("the three Challenge 2 attacks the sets recall are slide 20's three lines, in its order",
+      _s20 == list(_recalls[1:]))
+check("the RBAC set's recall is Challenge 1's own ask", _C1_ASK.strip("> *") == _recalls[0])
+check("step 6 says each set recalls its attack, names what prevented it, then shows the YAML",
+      "Each set recalls its attack on a slide of its own, names what prevented it on the next, then shows the YAML "
+      "that did it." in _step6)
+check('step 6 says the slides name Kyverno "an admission policy" and KubeArmor "runtime security", and RBAC and '
+      "NetworkPolicy keep their own names",
+      'on screen Kyverno is "an admission policy" and KubeArmor is "runtime security", while RBAC and NetworkPolicy '
+      "are Kubernetes' own names and stay as they are" in _step6)
+# Per set: the recall slide, the "prevented with" slide, the YAML slide(s), and what that YAML shows.
+_yaml_slides = [
+    ('Slide 32 shows', 'slide 33 sets that rule beside the scoped one', '`verbs: ["get", "list"]` on `secrets` with no '
+     '`resourceNames`', '`resourceNames: ["workshop-agent"]` with `verbs: ["get"]`'),
+    ("Slide 36 shows the `deny-external-registries` rule", "`registry.burritobot.co/`", "read its deny message aloud"),
+    ("Slide 39 shows the `block-recipe-snoop` policy", "`/tmp/burrito-data/config/legacy/` and everything under it",
+     "`action: Block`"),
+    ("Slide 42 shows the `agent-egress-allowlist` NetworkPolicy", "egress from every pod in BurritoBot's namespace",
+     "goes only to `10.0.0.0/16`"),
+]
+for (_h, _line, _fb), (_first, _quote), _yaml in zip(_sets, ((30, _recalls[0]), (34, _recalls[1]), (37, _recalls[2]),
+                                                             (40, _recalls[3])), _yaml_slides):
+    _blk = _step6.split(_h, 1)[-1].split("- **", 1)[0]
+    _rec = f'Slide {_first} recalls'
+    _prev = f'Slide {_first + 1} adds "{_line}"'
+    check(f"the set {_h.strip('*')} recalls its attack on slide {_first}, quoting it",
+          _h in _step6 and _rec in _blk and f'"{_quote}"' in _blk.split(_prev, 1)[0].split(_rec, 1)[-1])
+    check(f"the set {_h.strip('*')} names its fix on slide {_first + 1}", _prev in _blk)
+    check(f"the set {_h.strip('*')} shows its YAML after naming the fix",
+          all(y in _blk for y in _yaml) and _before(_blk, _rec, _prev) and _before(_blk, _prev, _yaml[0]))
+check("the Kyverno and KubeArmor sets say their notes name the product the slide does not",
+      "and its notes name Kyverno." in _step6.split(_sets[1][0], 1)[-1].split("- **", 1)[0]
+      and "and its notes name KubeArmor." in _step6.split(_sets[2][0], 1)[-1].split("- **", 1)[0])
+
+
+def _fix_doc(name: str) -> str:
+    """The first YAML document of one challenge-fixes ConfigMap file that guardrails-on applies, by its key."""
+    key = f"\n  {name}: |\n"
+    if key not in RES:
+        sys.exit(f"anchor {key.strip()!r} is not in gitops/ai-layer/resources.yaml: reword the test with it")
+    return re.split(r"\n  [\w.-]+: \|\n|\n\s*---\n|\n(?=\S)", RES.split(key, 1)[1], maxsplit=1)[0]
+
+
+def _secrets_rule(role: str) -> str:
+    m = re.search(r'- apiGroups: \[""\]\n\s+resources: \["secrets"\]\n((?:\s+(?!- )\S.*\n?)*)', role)
+    return m.group(1) if m else ""
+
+
+_broad, _scoped = _secrets_rule(_fix_doc("c8-broad-role.yaml")), _secrets_rule(_fix_doc("c5-scoped-role.yaml"))
+check("slide 32's rule is guardrails-off's Role: get and list on every Secret, no resourceNames",
+      'verbs: ["get", "list"]' in _broad and "resourceNames" not in _broad)
+check("slide 33's rule is guardrails-on's Role: get on the workshop-agent Secret alone",
+      'resourceNames: ["workshop-agent"]' in _scoped and 'verbs: ["get"]' in _scoped
+      and '"list"' not in _scoped and "c5-scoped-role.yaml" in TERMINAL and "c8-broad-role.yaml" in TERMINAL)
+_DER = (REPO / "policies/kyverno-breakout/deny-external-registries.yaml").read_text(encoding="utf-8")
+check("slide 36's rule is deny-external-registries, which admits registry.burritobot.co/ alone and denies with a "
+      "message to read aloud",
+      "name: deny-external-registries" in _DER and "expression: \"'registry.burritobot.co/'\"" in _DER
+      and "message: >-" in _DER and "deny-external-registries" in TERMINAL)
+_ka = _fix_doc("c3-kubearmor-policy.yaml")
+check("slide 39's policy is the block-recipe-snoop guardrails-on applies: the legacy dir, recursive, Block",
+      "name: block-recipe-snoop" in _ka and "- dir: /tmp/burrito-data/config/legacy/" in _ka
+      and "recursive: true" in _ka and "action: Block" in _ka and "c3-kubearmor-policy.yaml" in TERMINAL)
+_np = _fix_doc("c1-network-policy.yaml")
+check("slide 42's policy is the agent-egress-allowlist guardrails-on applies: every pod in agent, to 10.0.0.0/16",
+      "name: agent-egress-allowlist" in _np and "namespace: agent" in _np and "podSelector: {}" in _np
+      and "cidr: 10.0.0.0/16" in _np and "0.0.0.0/0" not in _np and "c1-network-policy.yaml" in TERMINAL)
 check("the run-of-show no longer has one slide per guardrail or the four slides",
       "one slide per guardrail" not in " ".join(ROS.split()).lower() and "its four slides" not in " ".join(ROS.split()))
 check("the switch's RBAC fallback reads the Role, which names the one Secret",

@@ -32895,3 +32895,29 @@ checks: both places lack all three phrases, row 3 still says "one slide per guar
 the map on this base; those belong to the runs that added those tests and are left out of this change.
 
 **Live check.** None: the change is a test on a text file, and no cluster reads it.
+## 2026-11-07: a test for step 6's four guardrail sets, recall to YAML (#1111, run 18397)
+
+Test review run 18393 found that #1095's step 6 had a check for each set's heading, its "This attack was prevented
+with" line and its fallback, and none for the recall slide or the YAML slide. `verify/test_instructor_brief.py` now
+holds the rest of the criterion. Step 6 has to say each set recalls its attack, names what prevented it, then shows the
+YAML, and that on screen Kyverno is "an admission policy" and KubeArmor "runtime security". Each set has to quote its
+attack on its first slide (30, 34, 37, 40), name the fix on the next (31, 35, 38, 41), then describe the YAML after it:
+the broad and the scoped `secrets` rule on 32 and 33, `deny-external-registries` with `registry.burritobot.co/` on 36,
+`block-recipe-snoop` with `action: Block` on 39, `agent-egress-allowlist` to `10.0.0.0/16` on 42. The Kyverno and
+KubeArmor sets have to say their notes name the product. The three Challenge 2 recalls have to be slide 20's three
+lines in its order, and the RBAC recall Challenge 1's own ask. Each YAML description is also checked against what
+`guardrails-on` applies: the `secrets` rules of `c8-broad-role.yaml` and `c5-scoped-role.yaml`, the first document of
+`c1-network-policy.yaml` and `c3-kubearmor-policy.yaml` in the challenge-fixes ConfigMap, and
+`policies/kyverno-breakout/deny-external-registries.yaml`. Every literal the new checks cut on exits by name when it is
+gone. Five edits to the run-of-show and two to `gitops/ai-layer/resources.yaml`, each reverted after, made the test fail
+on the check that names it. The scope map's entry for this test gained the policy file, the two fallback scripts
+#1095's checks read and `verify/guard_lease.py`, as `verify/scope_tests.py write` printed it. That command also
+rewrote other tests' entries, drift that predates this run, and those are left as they were.
+
+**Live check (run 18397, read only).** `curl` on `https://rounds.agenticburn.com/attendee.html` answered 200. In the
+deck's top-level sections the four recalls are on slides 30, 34, 37 and 40, the four "This attack was prevented with"
+lines on 31, 35, 38 and 41, `resourceNames` on 33, `registry.burritobot.co/` on 36, `block-recipe-snoop` and
+`action: Block` on 39, `agent-egress-allowlist` and `10.0.0.0/16` on 42, as step 6 says. Nothing on either cluster was
+read or changed.
+
+**Not yet run on a cluster.** Nothing: the change is a test.
