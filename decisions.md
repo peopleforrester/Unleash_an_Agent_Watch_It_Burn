@@ -29057,3 +29057,26 @@ file after the fix passed. The first log is kept as `/var/lib/hecaton/runs/18118
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `79 checks ran (the offline suite and 78 tier tests) in 8m46s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; its log is `/var/lib/hecaton/runs/18118/e2e-tools.log`. The prose
 gate printed `prose gate: pass`.
+
+## 2026-11-07 · #999 · run 18123 · A test holds #889's probe output in decisions.md and the run-of-show's Probe record
+
+Test review run 17942 found that no test checked one criterion of #889: the probe's output recorded in decisions.md
+and in the run-of-show's Probe record. No earlier draft of this issue exists (`verify/prior-drafts.sh 999` printed
+NONE). The issue came with no checklist, so this run added an `## Acceptance criteria` section to its body.
+
+**The test, `verify/test_889_probe_record.py`.** It reads run 17911's probe line from both records, `13:37Z` then
+`11 PASS, 1 FAIL, `KUBECON PROBE RED`, $0.4179 to $0.4879 over 8 model calls`, and requires exactly one such line in
+each, the same seven values in both and the values the probe printed. The decisions.md entry
+("## 2026-11-06 · #889 · run 17911") must name watch-it-burn-community and carry the off-topic note `answered 2 of 3`
+with `(1 of 3 re-sent once after a Bedrock ToolUse 424)`. The run-of-show's #889 entry must sit inside
+`### Probe record`, read to the next heading, and name run 17911, watch-it-burn-community, the linked-list ask
+answered 2 of 3 and its one re-send. A line is also refused when it could not be the probe's own: one FAIL with
+GREEN, or a spend that goes down. The records only mean this while the probe prints those words, so the test checks
+that `verify/kubecon_probe.py` still prints its PASS and FAIL count, its RED and GREEN lines, the spend over model
+calls and the off-topic note. It then runs the verdict against 29 cut copies of the real files (a heading struck, the
+entry moved under the next section, the line doubled, each number changed, the note struck, both records changed
+alike) and each must be refused. Every literal it cuts on is checked first and exits naming the literal and the file.
+No record or doc was changed.
+
+**Live check.** None: the criterion is the text of two files, and the test reads only those and the probe's source.
+It needs no cluster.
