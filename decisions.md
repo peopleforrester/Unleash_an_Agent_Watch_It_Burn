@@ -29498,3 +29498,8 @@ theirs from the cache. The eight tree-walking tests above then each exited 0 wit
 added.
 
 **Not yet run on a cluster.** Nothing from this issue.
+
+**The suites (run 18149, at `890e67d6`).** `bash verify/run-e2e-tools.sh` printed `323 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `81 checks ran (the offline suite and 80 tier tests) in 8m24s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with the cache full from the hand run above. `test_chart_fetch.py`
+passed in it, and the only `RETRY` lines in the log are its stub's. The prose gate printed `prose gate: pass`.
