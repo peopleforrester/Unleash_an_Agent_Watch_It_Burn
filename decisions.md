@@ -29347,3 +29347,8 @@ ended, and its log has no `exit=` line. Run 18147 picked the work up at `f720292
 for one that shells out. The new section's expected delete argv was written that way. Nothing runs it, since
 the runner is `AgentNamespace`, so the argv is now built from a split string with a comment saying why, and the
 check in test_verify_harness.py is unchanged.
+
+**The suites (run 18147, at `c17b059a`).** `bash verify/run-e2e-tools.sh`, logged as
+`/var/lib/hecaton/runs/18147/e2e-tools-2.log`, printed `321 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `81
+checks ran (the offline suite and 80 tier tests) in 10m20s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_kubecon_probe.py`, `test_stage_traces.py` and `test_verify_harness.py` among the offline tests.
