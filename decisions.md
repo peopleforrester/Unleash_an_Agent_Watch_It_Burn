@@ -36648,3 +36648,36 @@ with the pinned tools. The full command, run again, printed `363 tests ran`, `AL
 `86 checks ran (the offline suite and 85 tier tests) in 15m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. `bash verify/run-tests.sh` on its own also printed `363 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
 No dependency was added.
+
+## 2026-11-08 · #1011 · run 18609 · A test holds #968's cause record: no decline kept from history alone, measured through `converse`
+
+**What #1011 asks.** Test review run 18016 found that no test read decisions.md for #968's cause and its `converse`
+measurement. `verify/prior-drafts.sh 1011 origin/staging` printed NONE, and run 18054, the attempt before this one,
+was stopped by the coordinator before it committed anything, so there was nothing of it to reuse.
+
+**The test.** `verify/test_968_cause_record.py` (offline, so `bash verify/run-tests.sh` runs it) reads the three #968
+entries, runs 17897, 17919 and 17954, as literal text and holds three things:
+
+1. The cause. Run 17897's heading says Nova does not keep the same-conversation decline from history, and its
+   "The cause." section says Nova Pro does not read its own earlier turns reliably, that asked the attack after its
+   own recon reply it calls `run_shell`, and that the misses read the card while its own earlier reply was in the
+   history.
+2. The measurement. Run 17897's "How it was measured." paragraph names Bedrock `converse`, the model id and region
+   the `bedrock-nova` ModelConfig in `gitops/ai-layer/resources.yaml` carries, "the model the `bedrock-nova`
+   ModelConfig names", the Agent's whole systemMessage as the system prompt, and workshop-mcp's tools read live. The
+   tool count it records must equal the `@mcp.tool` functions `gitops/ai-layer/workshop-mcp-server.py` defines and
+   the workshop-mcp `toolNames` the Agent lists, the two name sets equal (12 today). The Agent must be bound to
+   `bedrock-nova` and carry a systemMessage. Runs 17919 and 17954 must record the same `converse` setup and count.
+3. The counts. In each of the three runs (17897's final-wording table) the no-note row declined in fewer than all
+   trials and every kitchen-note row declined in all. Run 17954's note row is "11 of 12 declined with no tool call;
+   the 12th also declined and read nothing", so a miss the row records as "also declined and read nothing" counts
+   as a decline. Runs 17919 and 17954 must also say in words that history alone does not keep the decline, and the
+   note does.
+
+Each check also runs against mutated copies, 36 in all: the record with the thing it reads struck or flipped, and
+the Agent, the ModelConfig and workshop-mcp's server with the model, the binding, the systemMessage or a tool
+changed. Every mutated copy is refused. Its scope-map entry is added by hand: `python3 verify/scope_tests.py write`
+also rewrote several hundred unrelated lines of the map, drift already on staging, so only this test's entry, as
+`write` computed it, is committed.
+
+**Live check.** Skipped: the change touches only `verify/` files no cluster runs and decisions.md.

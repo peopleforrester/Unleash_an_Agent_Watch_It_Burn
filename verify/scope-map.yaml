@@ -126,6 +126,12 @@ reads:
     - verify/run-e2e-tools.sh
     - verify/run-tests.sh
     - verify/test_kubecon_prompt_sheet_e2e.py
+  test_968_cause_record.py:
+    - decisions.md
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
   test_a2a_usage_key.py:
     - VERSIONS.lock
     - cost/README.md
