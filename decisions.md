@@ -40575,3 +40575,78 @@ only change.
 decisions.md and printed `ALL OFFLINE RENDER-GATE TESTS GREEN` with `exit=0`
 (`/var/lib/hecaton/runs/18818/scratch/run-tests.log`). A decisions.md change selects no tools-tier test, so
 `run-e2e-tools.sh` was not run. No dependency was added.
+## 2026-11-08 · #1214 · run 18795 · On a phone the chat page gives the conversation the screen: a one-row bar, a one-row card header, a reply read from its first line
+
+**What was wrong.** Michael's screenshot from a Pixel, folded, about 412 CSS px wide, on attackme.burritobot.co. Below
+760px #387 had given the title its own row and the buttons an even row under it, and the chat card's header put the
+tagline and then the witch-name row under its title. Rendered from staging's page (773eea29) at 412x915, the bar was
+81px on two rows (116px at 320px with the private bot's four buttons), the card header 139px (150px at 390px and under),
+the stream capped at #355's 60vh, and after a long reply landed the stream sat at its end: the reply's first line was
+1,498px above the stream's top. The reply showed over 58% of the screen's height in Chromium (Michael read about 40% on
+the phone, whose browser bars take their own share).
+
+**The change, all in `gitops/ai-layer/web/burritbot.html` and all below 760px except the reply scroll.**
+- The bar is one row: the brand without its `· burritobot.co` (now `<small class="dom">`, hidden on a phone), then the
+  buttons at their natural width. Each button's icon and label are now separate spans, with an `aria-label` and
+  `title` naming it. The `hbfit` script (#1047) measures the bar on a phone, and where it runs past its box it adds
+  `.hbicons` and the buttons show their icons alone; where even that overflows, the #1047 half-pixel step-down follows.
+  The fallback follows the measured width rather than a breakpoint, so the public bot's two buttons (event.js hides Terminal and
+  Datadog there, #645, #647) keep their labels at 360px and up, and the private bot's four show icons below 680px.
+  The fit runs again on `DOMContentLoaded`, after the main script has hidden those buttons. Above 760px only a label
+  wider than its own button counts, as before. The issue offered compact buttons or a menu; compact buttons keep each
+  link one tap away and add no menu state.
+- The card header is a grid: the avatar, the title, an ⓘ toggle and Reset on row 1, and the witch line under them,
+  the card's full width. A new inline `<span class="wline">` wraps the witch name, its re-roll button and the
+  deployments link, so the three can be one grid item; on a wider screen an inline span changes nothing. The tagline
+  folds behind ⓘ (`#aboutbtn`, `aria-expanded`, `aria-controls="chatsub"`), which toggles `.open` on the card header.
+  The issue offered one short line or a disclosure; the tagline is the one piece a returning visitor does not need,
+  and the witch name stays on screen. At 390px and up the widest name the vocabulary makes (Wilhelmina the Werewolf,
+  measured) and its button are one line; at 360px and under they wrap to two.
+- The stream's cap below 760px is `max(60vh, calc(100dvh - 232px))`: the screen less the bar, the card header with a
+  wrapped witch line and the composer, so the chat card, composer included, fits on a 320x640 or 360x780 screen and
+  the sticky composer covers none of the stream. A browser without dvh drops the rule and keeps #355's 60vh. Past
+  the stream's end a drag scrolls the page (`overscroll-behavior-y:auto`), since a stream this tall left little
+  page to drag on. 761 to 980px keeps #355's 60vh and #1213's layout.
+- `showReplyStart()` scrolls the stream so a reply's top sits 8px under the stream's top. The browser stops the
+  scroll at the stream's end, so a reply that fits shows exactly as before; only a reply taller than the stream
+  changes, on every screen size, since one is cut off at its top on a laptop as well. Where the page scrolls and the
+  reply's top is above what the screen shows (`visualViewport`, which an open keyboard shrinks), the page scrolls up
+  to it. The ring-me-up button (#1010) now receives the completing reply and shows that reply from its start again.
+
+**Desktop and #1213's band unchanged.** Every element's box, rendered from staging's page and from this one with the
+same pinned witch name, on both bots' host names, at 761x900, 768x1024, 840x900, 884x1000, 980x800, 1000x800,
+1100x800, 1280x800, 1366x600, 1440x900, 1920x1080, 2560x1440 and 3840x2160: 3,900 boxes, 0 differ (the new spans and
+the hidden ⓘ, which have no counterpart, left out). The iPad prompt sheet is `kubecon.html?sheet=1`, which this change
+does not touch.
+
+**Tests.** `verify/test_chat_phone_screen_e2e.py` is new, in the tools tier. It serves the repo page under
+`https://attackme.burritobot.co/` and `https://burritobot-private.burritobot.co/` with every request routed, sets the
+wib_witch cookie to the widest name the page's own vocabulary makes (measured in the witch line's font, so no draw
+decides it, #797), sends a prompt, and answers /chat with a 3,000-character reply that opens "Salt Lake City, Utah".
+At 320x640, 360x780, 390x844 and 412x915 it holds the one-row bar, the one-row card header and the witch line under it,
+the folded tagline and its toggle, the chat card on the screen, the reply's first line inside the stream's visible box
+and on the screen, and the reply over at least 60% of the height. At 840x900 and 1280x800 it holds the labels, the
+shown tagline with no toggle and the 60vh cap, and the reply's first line. On staging's page it failed 76 checks; on
+this change it passes (the reply shows over 72% at 390x844 and 74% at 412x915). `--live` loads the real hosts with
+only /chat answered by the test, so no prompt reaches either bot.
+`verify/test_mobile_titles.py` and `verify/test_mobile_titles_e2e.py` pinned #387's two-row bar and full-width tagline,
+which #1214 replaces, and now pin the one-row bar, the icon fallback and the compact card header; the wide-font copy
+(#1047) now carries 4px of letter-spacing and must fall back to icons at 680px, where the shipped page keeps its
+four labels. `verify/test_order_complete_button_e2e.py` cuts `winBubble(reply)` and holds that the button scrolls to
+the completing reply. `verify/chat-saved-harness.js`'s stub elements gain an empty `getBoundingClientRect`, since
+`send()` now measures the reply.
+
+**Live check (the change touches `gitops/`).** `python3 verify/test_chat_phone_screen_e2e.py --live`, before the fix
+reached the clusters, loaded `https://attackme.burritobot.co/` (community cluster) and
+`https://burritobot-private.burritobot.co/` (private cluster) and failed the same 76 checks with the same numbers as
+staging's page: at 412x915 an 81px bar on two rows, a 139px card header, the reply's first line at y -1498. Nothing on
+either cluster was changed; /chat was answered by the test. Log `/tmp/shot1214/live-before.log`.
+
+**Not yet run on a cluster.** `python3 verify/test_chat_phone_screen_e2e.py --live` and
+`python3 verify/test_chat_pane_overlap_e2e.py --live`, after hecaton promotes this run and Argo CD rolls the console on
+both clusters: each should end `All ... checks passed.` for both hosts.
+
+**The suites (run 18795).** Run once each, all passing: `test_chat_phone_screen_e2e.py`, `test_mobile_titles.py`,
+`test_mobile_titles_e2e.py`, `test_order_complete_button_e2e.py`, `test_chat_saved_coc_e2e.py`, `test_mobile_layout.py`.
+The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation, as the governance asks. No dependency was
+added.
