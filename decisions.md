@@ -36418,3 +36418,27 @@ that file from this host also timed out after 60 seconds. The run scoped to this
 (`HECATON_BASE_SHA=29995f0c`), selected 25 tier tests, those three among them. It printed `198 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN`, `26 checks ran (the offline suite and 25 tier tests) in 12m47s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added to the repo.
+
+## 2026-11-08 · #1186 · run 18628 · The yarn fixture's cold install says `--no-immutable`, so CI's default cannot refuse it
+
+**What was red.** In the tools tier on staging cfe0c45f (GitHub Actions run 42475533973), and on 8c9c4dec before it,
+`verify/test_package_cache_e2e.py` failed its four cold-install checks every time. The job log shows why: yarn
+printed `YN0028: The lockfile would have been modified by this install, which is explicitly forbidden.` Yarn 4 turns
+`enableImmutableInstalls` on by default whenever it detects CI, and the GitHub runner sets `CI`. The cold step is
+the one install meant to write yarn.lock, so yarn asked the registry for the metadata (`['/wib-fixture']`), then
+stopped before it fetched the tarball. The hecaton host sets no `CI`, so the same test passed there.
+
+**The change.** The cold install runs `yarn install --no-immutable`, with a comment naming the CI default. The
+warm and tampered installs already pass `--immutable` themselves, so none of the three installs depends on the
+environment now. `package_cache.node_env()` is unchanged: the Backstage install in run-e2e.sh runs
+`--immutable` on purpose.
+
+**Checked (run 18628).** Before the change, `python3 verify/test_package_cache_e2e.py` passed alone on the host and
+failed with `CI=true` on the same YN0028 as the runner's log. After it, the test passed alone both with and without
+`CI=true` (`All package cache end-to-end checks passed.`). As Michael ruled on the issue (2026-11-08), the whole tools
+tier was not rerun; validation runs the scoped set. In run 42475533973 only two tier checks were red: this test and
+`test_weather_feed_e2e.py`, whose live lookup timed out in the TLS handshake to the weather service (a 502 from
+the feed). That one is external, as are the GitHub 503s on tool fetches, and both belong to #1188. The weaver and
+Gateway API checks the issue body quotes from 5985b8dc passed in that run.
+
+**Live check.** Skipped: the change touches only `verify/test_package_cache_e2e.py`, which no cluster runs, and decisions.md.

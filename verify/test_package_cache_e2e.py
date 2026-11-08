@@ -14,7 +14,7 @@ Python, with a fixture wheel built here and handed to verify/package_cache.py by
 
 Node, with a one-package npm registry on 127.0.0.1 that counts its requests and the yarn release the Backstage app
 commits (images/watch-it-burn-backstage/.yarn/releases), with package_cache.node_env()'s caches:
-  - cold: `yarn install` fetches the package and writes its checksum into yarn.lock;
+  - cold: `yarn install --no-immutable` fetches the package and writes its checksum into yarn.lock;
   - warm: a fresh project with that yarn.lock installs with `--immutable` and makes no request;
   - a cached zip whose bytes changed fails `yarn install --immutable` with YN0018, makes no request, leaves the zip
     as it was and installs nothing.
@@ -242,9 +242,12 @@ def installed(d: pathlib.Path) -> str:
 try:
     print(f"== Node: cold, yarn {YARN.stem.split('-', 1)[1]} fetches the package and records its checksum ==")
     cold = project("node-cold", None)
-    r = yarn(cold)
+    # yarn 4 turns enableImmutableInstalls on whenever CI is set, as on the GitHub runner, and an immutable install
+    # refuses to write yarn.lock (YN0028). This is the step that writes it, so it says so instead of taking the
+    # default from the environment (#1186).
+    r = yarn(cold, "--no-immutable")
     lockfile = (cold / "yarn.lock").read_text()
-    check(f"`yarn install` succeeds (exit {r.returncode})", r.returncode == 0, (r.stdout + r.stderr)[-800:])
+    check(f"`yarn install --no-immutable` succeeds (exit {r.returncode})", r.returncode == 0, (r.stdout + r.stderr)[-800:])
     check(f"it asked the registry for the package and its tarball ({REQUESTS})",
           sorted(REQUESTS) == ["/wib-fixture", "/wib-fixture/-/wib-fixture-1.0.0.tgz"])
     check("yarn.lock records the package's checksum",
