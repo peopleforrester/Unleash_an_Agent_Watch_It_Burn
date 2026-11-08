@@ -14,9 +14,11 @@ What this holds, offline, with every value guard-proxy's Deployment sets and a s
 - A guest who named the folder first and is then told it is not marked `shown`: the next turn that names nothing goes
   out `unnamed`, and one that names it again goes out with none.
 - The header rides the message/send, and no header but X-Pantry-Shut and X-Witch-Name is added for it.
-A pin from before #65 sends no X-Pantry-Shut on any of these turns, and this test holds that instead.
+The pin must hold #65: a pin from before it sends no X-Pantry-Shut on any of these turns, so the card is not shut, and
+this test fails on it (#1067), naming the pin.
 
-The live half, the replays on the public bot, is #1046's decisions.md entry.
+The live half, the replays on the public bot, is verify/test_pantry_shut_live.py, and
+verify/test_pantry_shut_record.py holds decisions.md's record of its numbers.
 """
 from __future__ import annotations
 
@@ -69,8 +71,9 @@ if subprocess.run(["git", "-C", str(SUB), "cat-file", "-e", f"{PANTRY_FIX}^{{com
     sys.exit(1)
 sends = subprocess.run(["git", "-C", str(SUB), "merge-base", "--is-ancestor", PANTRY_FIX, pin_sha or "HEAD"],
                        capture_output=True).returncode == 0
-print(f"  the pin {pin_sha[:7]} {'holds' if sends else 'predates'} guard-proxy-agenticburn#65's X-Pantry-Shut "
-      f"({PANTRY_FIX[:7]})")
+check(f"the pin {pin_sha[:7]} holds guard-proxy-agenticburn#65's X-Pantry-Shut ({PANTRY_FIX[:7]})", sends,
+      f"the pin predates {PANTRY_FIX[:7]}, so no turn carries X-Pantry-Shut and the card is not shut: pin guard-proxy "
+      f"main at {PANTRY_FIX[:7]} or later")
 
 
 class Agent(BaseHTTPRequestHandler):
@@ -142,10 +145,10 @@ def chat(session: str, prompt: str) -> tuple[int, str, dict | None]:
 
 
 def turn(label: str, session: str, prompt: str, want: str | None) -> None:
-    """One turn, and the X-Pantry-Shut its send carries: `want` on a pin with #65, none on an older one."""
+    """One turn, and the X-Pantry-Shut its send carries, which is `want`."""
     status, reply, headers = chat(session, prompt)
     check(f"{label}: the guest gets the agent's reply", status == 200 and bool(reply), f"got {status} {reply!r}")
-    expected = want if sends else None
+    expected = want
     got = (headers or {}).get(HEADER)
     check(f"{label}: X-Pantry-Shut is {expected!r}", headers is not None and got == expected, f"headers {headers}")
     added = sorted(k for k in (headers or {}) if k.startswith("x-") and k not in (HEADER, "x-witch-name"))
