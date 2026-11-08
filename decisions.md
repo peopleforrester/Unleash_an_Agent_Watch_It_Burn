@@ -36275,3 +36275,8 @@ changes when this is promoted. Not yet run on a cluster: the entry above's repea
 1500m, with no hand step.
 
 **Prose.** `python3 verify/prose_gate.py ... origin/staging` printed `prose gate: pass` on the ported tree.
+
+**The suites (run 18583, at `d4706f58`).** `bash verify/run-e2e-tools.sh` printed `361 tests ran`, `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in 10m03s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_vllm_fit_probe.py`, `verify/test_platform_baseline.py` and
+`verify/test_local_inference.py` each pass on their own as well. No dependency was added.
