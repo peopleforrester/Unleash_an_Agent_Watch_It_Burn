@@ -314,6 +314,12 @@ check(signal.getsignal(signal.SIGTERM) == signal.SIG_DFL,
 
 w = FakeWorld()
 w.during["guards-off"] = lambda: os.kill(os.getpid(), signal.SIGINT)
+# The test owns the handler it expects back. A non-interactive shell starts a background job (`cmd &`, how a run
+# keeps the suite's output in a log) with SIGINT ignored, Python then keeps SIG_IGN instead of installing its own
+# handler, and _close puts back what it found; so the check below is pinned to the default handler here rather than
+# read from however the suite was launched (#878, run 18772: the suite failed this check from a background job
+# and passed it in the foreground).
+signal.signal(signal.SIGINT, signal.default_int_handler)
 code, text = go(w)
 check(w.terminals() == [*TALK_ORDER, *ssr.CLOSE] and code == ssr.INTERRUPTED_EXIT and "held" in text,
       "a ^C during guards-off is held until guardrails-off has run too, then ends the run")
