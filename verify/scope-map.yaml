@@ -1917,6 +1917,24 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+  test_desk_ticket_live.py:
+    - agent
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/desk_ticket_live.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
   test_diagram_chip_apps.py:
     - gitops/ai-layer/web/diagram.html
     - gitops/bootstrap/apps
@@ -5269,6 +5287,106 @@ reads:
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/villain-banner.sh
+  test_room_reader.py:
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - policies/kyverno-breakout/remove-untrusted-room-workloads.yaml
+  test_room_reader_rbac.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c6-least-privilege-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/room_reader_rbac.py
+  test_room_reader_rbac_e2e.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c6-least-privilege-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/room_reader_rbac.py
+    - verify/run-e2e-tools.sh
   test_room_view.py:
     - CLAUDE.md
     - agent

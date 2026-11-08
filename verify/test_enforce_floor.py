@@ -120,6 +120,47 @@ for fname, app in apps:
     miss = missing_limits(docs)
     check(f"{fname}: every container has cpu+memory limits" + (f" MISSING {miss}" if miss else ""), not miss)
 
+print("== Helm releases deploy-full-idp.sh installs outside Argo CD ==")
+# Argo CD and the AWS Load Balancer Controller are installed by infra/deploy-full-idp.sh, not by an Application, so
+# the sweep above never renders them. A helm upgrade that changes their pod templates rolls every pod, and on the
+# admin profile, where the policy is Deny, a container without limits fails the upgrade: argo-cd's pre-upgrade
+# redis-secret-init Job did that twice on watch-it-burn-private on 2026-11-02 (#629, #1081).
+import re  # noqa: E402
+
+DEPLOY_SCRIPT = REPO / "infra/deploy-full-idp.sh"
+DEPLOY = DEPLOY_SCRIPT.read_text()
+for release, chart, repo, values, extra in (
+        ("argocd", "argo-cd", "https://argoproj.github.io/argo-helm", "argocd-values.yaml", []),
+        ("aws-load-balancer-controller", "aws-load-balancer-controller", "https://aws.github.io/eks-charts",
+         "aws-load-balancer-controller-values.yaml",
+         # deploy-full-idp.sh derives these per cluster; the chart refuses to render without clusterName.
+         ["--set", "clusterName=watch-it-burn-x", "--set", "region=us-west-2", "--set", "vpcId=vpc-0"])):
+    anchor = f"upgrade --install {release} "
+    m = re.search(rf"helm --kube-context \S+ upgrade --install {release} \S+/{chart} --version (\S+)((?:.*\\\n)*.*)", DEPLOY)
+    check(f"{DEPLOY_SCRIPT.name} installs {chart} with infra/{values} (anchor {anchor!r})",
+          bool(m) and f'"${{SCRIPT_DIR}}/{values}"' in m.group(2))
+    if not m:
+        print(f"        no line in {DEPLOY_SCRIPT} matches 'helm --kube-context ... {anchor}.../{chart} --version'")
+        continue
+    ns_m = re.search(r"-n (\S+)", m.group(2))
+    check(f"{chart}: deploy-full-idp.sh names its namespace", bool(ns_m))
+    if not ns_m:
+        continue
+    try:
+        local = chart_fetch.pull("helm", repo, chart, m.group(1))
+    except chart_fetch.ChartFetchError as e:
+        check(f"{chart} {m.group(1)} is fetched ({str(e)[:300]})", False)
+        continue
+    r = subprocess.run(["helm", "template", release, str(local), "-n", ns_m.group(1),
+                        "-f", str(REPO / "infra" / values)] + extra, capture_output=True, text=True)
+    if r.returncode != 0:
+        check(f"{chart} {m.group(1)} renders ({(r.stderr.strip().splitlines() or ['helm failed'])[-1][:160]})", False)
+        continue
+    docs = load_all(r.stdout)
+    miss = missing_limits(docs)
+    check(f"{chart} {m.group(1)}: every container, hook Jobs included, has cpu+memory limits"
+          + (f" MISSING {miss}" if miss else ""), not miss and any(d.get("kind") in WORKLOADS for d in docs))
+
 print("== every image comes from a registry restrict-image-registries allows ==")
 from registry_allowlist import allowed
 

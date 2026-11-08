@@ -86,6 +86,13 @@ spec:
           # it; the Datadog Agent's own log config names those (gitops/manifests/datadog/datadog-agent.yaml).
           kubearmorConfig:
             enableStdOutAlerts: true
+            # The env on every KubeArmor component, the snitch included, beside each component's own below (#629). It is
+            # also the change that pushes the env into pods an operator already runs: the operator applies a config's
+            # env from an in-place update only when it differs from what it last read (UpdateEnvIfDefinedAndUpdated,
+            # cluster.go at v1.7.4), and on watch-it-burn-private the per-component env below had not changed since the
+            # config was created, so the DaemonSet never got it (hecaton run 15906, 2026-11-02).
+            globalEnv:
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
             # The four mirror/ copies the KubeArmorConfig names (see Images above).
             kubearmorImage:
               image: "{{ .Values.imageRegistry }}/mirror/kubearmor/kubearmor:stable-bf867783eb30"

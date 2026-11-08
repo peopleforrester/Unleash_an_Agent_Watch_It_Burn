@@ -1,0 +1,24 @@
+# ABOUTME: Default CPU and memory limits for every container in the kubearmor namespace, so the pods the KubeArmor
+# ABOUTME: operator builds pass Kyverno's require-resource-limits when it is armed (#629).
+#
+# Why. KubeArmorConfig has no resources field (operator.kubearmor.com/v1 CRD at kubearmor-operator 1.7.4), and the
+# operator (pkg/KubeArmorOperator/internal/controller/cluster.go at v1.7.4) sets none on the DaemonSet, relay,
+# controller or the per-node snitch Jobs it builds. On watch-it-burn-private, where the admin profile arms the policy
+# as Deny, Kyverno refused the operator's new controller ReplicaSet and its snitch Jobs (hecaton run 15906, escalation
+# 699, 2026-11-02), so #662's DD_SERVICE and DD_ENV could never roll into the pods. The LimitRanger admission plugin
+# fills these defaults in before validating admission runs, so the policy sees limits on every container. A container
+# that sets its own, like the operator's Deployment, keeps them.
+#
+# Wave -1: before the operator's Deployment (wave 0), so nothing it creates predates the defaults.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: kubearmor-default-limits
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  limits:
+    - type: Container
+      # A request left unset would default to the limit, so the requests are set small on their own.
+      defaultRequest: { cpu: 50m, memory: 128Mi }
+      default: { cpu: "1", memory: 1Gi }
