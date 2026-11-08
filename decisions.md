@@ -40125,3 +40125,101 @@ and `test_deck_shift_slide_citations.py` found deck hashes and a slide number in
 `verify/scope-map.yaml` gains `verify/guard_lease.py` in `test_kubecon_probe.py`'s entry, by hand: `scope_tests.py
 check` also lists drift already on staging, left as it was. The prose gate printed `prose gate: pass`. No dependency
 was added.
+
+## 2026-11-08 · #1134 · run 18785 · Run 18644's draft ported to staging, its skip-marker fixed, and the hang in guardrails-off found and fixed in the switch's Role
+
+**Why run 18644 did not land.** Hecaton's `skip-markers` gate counts lines matching `exit 2` per file and fails a
+change that adds one. Run 18644 added one in `verify/test_kubecon_probe.py`, in the label of the check that a private
+cluster whose switch does not reach the community context stops the run before any beat. That is the probe refusing
+to run and failing loudly, not a test skipping, but the gate reads the words. The label, the probe's docstring and the
+run 18644 entry above now say "return code 2"; the code still returns 2. The gate's own counter
+(`hecaton/run/skipmarks.py`), run on every file the change touches against base `5fe32e81`, finds no file with more
+markers than before.
+
+**The port.** `bash verify/prior-drafts.sh 1134 origin/staging` named `origin/agent/1134-18644` (4 commits, 101 staging
+commits behind) with six edits in place and a decisions.md append. Cherry-picked. Staging's #1215 (`83a81662`,
+`276cbecd`) had added the one desk and its row cleanup to the probe in the same places: `Probe.desk` sits beside the
+draft's `switcher`, `peers` and `switched`, the community beat list keeps `one-desk` after `wide-open` and gains the
+draft's `guardrails-on` and `armed` before `c6-lands`, and `test_kubecon_c3_live_checks.py` keeps both the
+`/desk-forget` check and the draft's stage-gate check. The scope-map conflict was one where both sides had added
+lines; staging already had `verify/guard_lease.py` in the entry, so the draft's third commit came out empty and was
+dropped. Staging's `688b267d` reworded the run-of-show's segments rows; the draft's second commit had already cut the
+deck hashes from the stage-order anchors, and every anchor is still in its row. Nothing else differs from the draft.
+
+**Live check, watch-it-burn-community, at `a94747f3`.** Both clusters read at the start state with the probe's own
+`measure()` before the run, and neither had a guard lock. Then:
+
+```
+python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community \
+    --switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 600
+guard-lease: holding wib-guard-lock on watch-it-burn-community as 'kubecon_probe.py community ...'
+guard-lease: holding wib-guard-lock on watch-it-burn-private as 'kubecon_probe.py community ...'
+  PASS  [   1] Wide-open start: no guard, no control
+  PASS  [   -] The one support desk: this desk takes the private bot's deploy reports
+  PASS  [   2] Challenge 1: the CEO record leaks (the /kubecon prompt)
+  PASS  [   3] Challenge 2: the villain image is admitted (no admission policy)
+  PASS  [   3] guardrails-on (private terminal): the four Kubernetes guardrails, both clusters
+  PASS  [   3] Armed here too: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked
+              RBAC scoped, Kyverno Deny on both registry policies, KubeArmor Block, egress locked
+removed 1 row(s) of joker-agatha-the-banshee from the one page on watch-it-burn-community
+  PASS  [   4] Challenge 3: HC-666 lands joker-agatha-the-banshee with Kyverno on (a trusted registry)
+              read_support_ticket(HC-666), then deploy_app(joker-agatha-the-banshee): joker-agatha-the-banshee
+              Deployment created, as the wall shows
+  FAIL  [ end] guardrails-off (private terminal): both clusters at the start state
+              guardrails-off could not run: Command '[... 'exec', 'deploy/web-terminal', '-c', 'ttyd', '--', 'bash',
+              '/home/student/guardrails-off']' timed out after 300 seconds; read back at the start state anyway on
+              watch-it-burn-community, watch-it-burn-private
+16 beats: 15 PASS, 1 FAIL
+KUBECON PROBE RED
+```
+
+The other beats passed too (identity, order, the friendly opener, off-topic 3 of 3 with one Bedrock ToolUse 424
+re-sent, the beacon, the recipe read, cost $4.0774 to $4.1622 over 8 model calls, the feed). `c6-lands` ran at the
+four Kubernetes guardrails on with no AI guard on, and the final beat read both clusters back at the start state. It
+is a FAIL only because the terminal's `guardrails-off` never returned, the hang run 18644's first try hit too. Read
+again afterwards with `measure()`: both clusters at the start state (every AI guard off, the rogue tools listed, the
+C7 rule open, Kyverno at Audit on both policies, the shipped Role, no egress policy, no KubeArmor policy), no lock on
+either, and no `joker-agatha-the-banshee`. The one Joker on the community cluster, `joker-ichabod-the-werewolf`, was
+created 2026-11-07T19:17:55Z, before this run, and was left as found.
+
+**The hang's cause.** In the private terminal pod (processes listed by name and PID only, so ttyd's command line,
+which carries the presenter terminal login, was never printed), this run's `bash /home/student/guardrails-off` was
+waiting on `kubectl --kubeconfig /home/student/.kube/peer --context watch-it-burn-community delete --ignore-not-found
+-f /home/student/challenges/c1-network-policy.yaml`, though every policy in that file was already gone from the
+community cluster. A pair from an earlier run, 4 hours old, was stuck on the same command, holding one idle established
+connection to the community API server with its keepalive timer running: a client waiting on the server, not a dead
+network. The peer identity, `system:serviceaccount:guardrails-switch:guardrails-switch`, may get, create, patch and
+delete NetworkPolicies in `agent` but not list or watch them (`kubectl auth can-i watch networkpolicies -n agent --as
+...` printed `no`). `kubectl delete` waits for each object to go; when one still holds a finalizer, and the AWS network
+policy controller puts `networking.k8s.aws/resources` on every NetworkPolicy, it lists and watches the object, and
+client-go's reflector retries a Forbidden list forever. Whether a run hangs depends on whether the controller has
+cleared its finalizer by the time kubectl looks, which is why it is intermittent. Reproduced on watch-it-burn-community
+with a policy that selects no pods and a finalizer of the run's own, held 15 s, deleted as that identity: 12 `403
+Forbidden` lists, and `timeout 60` killed it (rc 124) though the object went at 15 s. The same case in a throwaway
+namespace with a Role of the same verbs: `can-i watch: no`, 12 Forbidden, rc 124 at 60 s. With `list` and `watch`
+added: `can-i watch: yes`, no Forbidden, the delete returned rc 0 at 18 s. A first try that patched the live
+`agent/guardrails-switch` Role was undone by Argo CD's selfHeal before the delete ran (`can-i` stayed `no`), so it tested
+nothing; the Role read back with exactly the rules saved before. The throwaway namespace is deleted.
+
+**The fix.** `gitops/guardrails-switch/guardrails-switch.yaml`'s Role in `agent` grants `list` and `watch` beside
+`delete` on NetworkPolicies and KubeArmor policies, read-only verbs on the two kinds the switch already writes.
+`verify/test_guardrails_switch.py` and `verify/test_guard_switch_both.py` hold the new grant, and
+`test_guardrails_switch.py` gains a check that every kind the switch may delete it may also list and watch. The probe
+is unchanged: its final beat already reads both clusters back when the switch fails. I killed this run's two hung
+processes (PIDs 3312 and 3420; the kubectl needed SIGKILL and is left a zombie under ttyd, as one from an earlier run
+already was). The earlier run's pair (PIDs 1908 and 2015) is not this run's and was left running. The presenter
+terminal login was not read, printed or touched.
+
+**Not yet run on a cluster.** The Role reaches both clusters through Argo CD's `guardrails-switch` Application once
+hecaton promotes this run. Then the community probe above, run again, should end `16 beats: 16 PASS` with
+`guardrails-off` returning; the next run on the issue runs it, and the admin run
+(`python3 verify/kubecon_probe.py admin <host> --context watch-it-burn-private ...`) with it.
+
+**Tests run.** `verify/test_kubecon_probe.py`, `verify/test_kubecon_c3_live_checks.py`, `verify/test_guard_lease.py`,
+`verify/test_guardrails_switch.py`, `verify/test_guard_switch_both.py`, `verify/test_guard_input_both.py`,
+`verify/test_guard_mcp_both.py` and `verify/test_scope_tests.py` pass, as do the neighbours that read the run-of-show's
+Night Before step and the probe (`test_night_before_preflight.py`, `test_stage_switch_night_before.py`,
+`test_live_check_cleanup.py`, `test_progress_entries.py`, `test_ros_segments_table_seg3.py`, `test_467_live_record.py`,
+`test_900_probe_record.py`). The full Test and E2E commands are left to hecaton's validation, which runs the tests that
+read the changed files. `verify/test_kubecon_c3_live.py` is in the hand-run live suite and needs COMMUNITY_CONTEXT;
+the live community run above runs the same `c6-lands`. No dependency was added.

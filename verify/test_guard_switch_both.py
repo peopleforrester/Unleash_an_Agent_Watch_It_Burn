@@ -248,8 +248,8 @@ check("the grant is #774's, with #1148's get on guard-proxy's Service proxy alon
       "name (get, patch, escalate), the two registry policies, KubeArmor policies and NetworkPolicies in agent",
       GRANT == {("agent", "roles", "workshop-agent"): {"get", "patch", "escalate"},
                 ("agent", "services/proxy", "guard-proxy:8080"): {"get"},
-                ("agent", "kubearmorpolicies", "*"): {"get", "create", "patch", "delete"},
-                ("agent", "networkpolicies", "*"): {"get", "create", "patch", "delete"},
+                ("agent", "kubearmorpolicies", "*"): {"get", "list", "watch", "create", "patch", "delete"},
+                ("agent", "networkpolicies", "*"): {"get", "list", "watch", "create", "patch", "delete"},
                 ("", "validatingpolicies", "restrict-image-registries"): {"get", "patch"},
                 ("", "validatingpolicies", "deny-external-registries"): {"get", "patch"}}, str(GRANT))
 for cmd, f in ROLE.items():
