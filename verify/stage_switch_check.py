@@ -3,10 +3,10 @@
 """Judges each stage switch on each KubeCon cluster from guard-proxy's /controls. No cluster access of its own.
 
 The presenters type every stage switch in the private cluster's terminal, and the room plays on the public bot. A
-switch has reached a cluster when every /controls field it owns reads off before it and on after it. The caller (the
-runner #1146 adds) reads https://burritobot-private.burritobot.co/controls and https://attackme.burritobot.co/controls
-before and after each switch and hands the four reads here, keyed by cluster ("private", "community"). Each read may
-be the parsed JSON, its text or bytes, or None for a read that failed.
+switch has reached a cluster when every /controls field it owns reads off before it and on after it. The caller
+(verify/stage_switch_run.py, #1183) reads https://burritobot-private.burritobot.co/controls and
+https://attackme.burritobot.co/controls before and after each switch and hands the four reads here, keyed by cluster
+("private", "community"). Each read may be the parsed JSON, its text or bytes, or None for a read that failed.
 
 The switches, in talk order, and the fields each owns (guard-proxy proxy.py: the `/controls` handler sends
 {"ai": GUARDS, "infra": read_controls(), "host": WIB_PUBLIC_HOST}):
