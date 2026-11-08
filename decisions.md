@@ -39683,3 +39683,45 @@ GREEN`, exit 0. The prose gate printed `prose gate: pass`. No dependency was add
 `/var/lib/hecaton/runs/18753/logs/`. `verify/test_kubecon_c3_live.py`, an E2E-suite test, runs the probe's `c6-lands`
 beat on watch-it-burn-community and so now asks its row off the desk there: it is red until `/desk-forget` is deployed,
 and is the third check for the next run, after promotion.
+## 2026-11-08 · #1213 · run 18743 · The chat page's one-scroll phone layout now covers 761 to 980px, where a Pixel Fold stacked the panes over each other
+
+**What was wrong.** From 761 to 980px the chat page stacked its three panes into one column but kept the desktop's
+viewport-fraction heights: `.menu{max-height:34dvh}`, `.chatcol{height:min(66dvh,620px)}` and `.wrap` as its own
+scroller. #355's block, which makes the page scroll once with every pane at its natural height, began at 760px. Rendered
+in Chromium at 840x900 from staging's page, `.chatcol` ran y 385 to 979 and `.infra` y 497 to 853 (public bot), and
+`.menu .mscroll` and `.wrap` clipped their content. The Fold's CSS width was not measured on the device; the issue
+read about 840 from a 1929px screenshot. The fix covers the whole band, and the test adds 761 and 884 to the sizes the
+issue names so a Fold reading a little off 840 is inside what is checked.
+
+**The change.** #355's block in `gitops/ai-layer/web/burritbot.html` now opens `@media(max-width:980px)`, which is the
+width where the panes first stack, so the layout is the phone one at 761 to 980px too: chat first, menu at full
+height, Backend Insights below, the stream capped at 60vh and the composer sticky. The issue named this option. The old
+980px block is removed, since #355's block sets every property it set. Its fixed heights were the cause. The 760px and
+640px blocks lose the pane heights that #355's block already overrode at those widths (`38vh`, `26dvh`,
+`min(70dvh,560px)`, and `.wrap`'s 10px padding, which 12px overrode). The RESPONSIVE comment named a 1200px band
+that no rule implements; it now names the two bands the CSS has.
+
+**Tests.** `verify/test_chat_pane_overlap_e2e.py` is new, in the tools tier. It serves the repo page under
+`https://attackme.burritobot.co/` and `https://burritobot-private.burritobot.co/`, with every request answered by a
+route and `/controls` reporting the host, so the private page shows its red administrator banner. That pane is about 60px
+taller. At 390x844, 761x900, 768x1024, 840x900, 884x1000 and 980x800 it fails when any two of `.menu`, `.chatcol` and
+`.infra` share area, when a pane, the menu list or `.wrap` clips to a private scroller, or when the panes are not one
+column. At 1280x800 and 1920x1080 it holds the panes side by side and top-aligned with the page not scrolling. On
+staging's page it failed 31 checks (every band size on both pages); on this change it passes. `--live` renders the two
+real hosts instead. `verify/test_mobile_layout.py` finds #355's block at 980px now and adds a check that no block at
+980px or under sizes `.menu`, `.chatcol`, `.infra`, `.wrap` or `.store` to the viewport; run on staging's page with
+#355's block moved to 980px, that check failed and named the four old rules. Its pane keys are selectors (`.infra`),
+since a bare `infra` string reads to `verify/scope_tests.py` as the top-level directory.
+
+**Desktop unchanged.** Every element's bounding box was compared between staging's page and this one at 1000x800,
+1100x800, 1200x800, 1280x800, 1366x600, 1440x900, 1920x1080, 2560x1440 and 3840x2160: 150 elements each, 0 differ.
+
+**Live check (the change touches `gitops/`).** `python3 verify/test_chat_pane_overlap_e2e.py --live`, before the fix
+reached the clusters, rendered `https://attackme.burritobot.co/` (community cluster) and
+`https://burritobot-private.burritobot.co/` (private cluster) and failed the same 31 checks as staging's page: at
+840x900, `.chatcol` y 385 to 979 against `.infra` y 497 to 853 on the public bot and 431 to 853 on the private bot,
+whose administrator banner showed. 390x844 and the two desktop sizes passed on both. Log
+`/tmp/overlap-live-before-18743.log`. Nothing on either cluster was changed.
+
+**Not yet run on a cluster.** `python3 verify/test_chat_pane_overlap_e2e.py --live`, after hecaton promotes this run
+and Argo CD rolls the console on both clusters: it should print `All chat pane overlap checks passed.` for both hosts.
