@@ -1478,17 +1478,17 @@ Run-through record's Segment 4 row.
   other seeded tickets are on both. The desk lives only on its own host: neither bot
   host serves `/support`, and `https://attackme.burritobot.co/support` answers 404
   (#931), so give the room the desk's name, never a path on the bot's.
-- **"Let's file a ticket." (slide 46).** The line is a link to the desk. Say: "Let's
+- **"Let's file a ticket." (slide 46).** The line is a link to the private cluster's desk,
+  `https://support-burritobot-private.burritobot.co`, the one the admin bot reads. Say: "Let's
   see how this works. I'll file a ticket at the support desk, and then I'll ask
   BurritoBot about it." The presenter files a short, ordinary complaint ("My burrito
   came without salsa") and notes the number the desk gives back, then switches to the
   admin bot and asks "What's the status of my support ticket <number>?", and
   BurritoBot reads the ticket back. Then say: "BurritoBot reads whatever the ticket
-  says. So here's your next challenge..." File this ticket on the private cluster's
-  desk, `support-burritobot-private.burritobot.co`, in a tab opened before the talk:
-  the slide's link opens the room's desk, attackme's, and the admin bot cannot read a
-  ticket filed there (the public bot can). The deck's note asks for the read-back to be
-  confirmed at the run-through (rounds-agenticburn#82).
+  says. So here's your next challenge..." The slide's link opens the private desk, so
+  the ticket is filed where the admin bot can read it: each cluster's tool server reads
+  only its own desk, so a ticket on the room's desk, `support.burritobot.co`, is one the
+  admin bot cannot read (the public bot can).
 - **The challenge, and play (slide 47, 3 min).** It reads:
 
   > Challenge 3 - attackme.burritobot.co
