@@ -118,6 +118,48 @@ try:
     check("a 404 is asked once, with no nap", why == "manifest: HTTP 404 Not Found"
           and sum("/manifests/" in u for u in seen) == 1 and not naps, repr((why, seen, naps)))
 
+    print("== a busy answer (429, 502, 503, 504) is asked again like a drop (#1192) ==")
+    check("BUSY is exactly 429, 502, 503 and 504", ghcr_pull.BUSY == {429, 502, 503, 504}, repr(ghcr_pull.BUSY))
+
+    def busy(code: int, times: int):
+        """stub(200, 200), but the first <times> manifest HEADs get <code>, as ghcr.io's blob host answered
+        test_image_version_tags.py with "503: The server is busy." in run 18643."""
+        answer, seen = stub(200, 200)
+        left = [times]
+
+        def urlopen(req, timeout=None):
+            url = req if isinstance(req, str) else req.full_url
+            if "/manifests/" in url and left[0] > 0:
+                left[0] -= 1
+                seen.append(url)
+                raise urllib.error.HTTPError(url, code, "The server is busy.", {}, None)
+            return answer(req, timeout)
+
+        return urlopen, seen
+
+    for code in sorted(ghcr_pull.BUSY):
+        naps.clear()
+        urllib.request.urlopen, seen = busy(code, ghcr_pull.TRIES - 1)
+        got = ghcr_pull.served_digest(REF)
+        check(f"a {code} on every try but the last, then the digest", got == (DIGEST, ""), repr(got))
+        check(f"the {code} HEAD was asked {ghcr_pull.TRIES} times, after {ghcr_pull.TRIES - 1} naps",
+              sum("/manifests/" in u for u in seen) == ghcr_pull.TRIES and len(naps) == ghcr_pull.TRIES - 1,
+              repr((seen, naps)))
+    naps.clear()
+    urllib.request.urlopen, seen = busy(503, ghcr_pull.TRIES)
+    digest, why = ghcr_pull.served_digest(REF)
+    check("a HEAD busy on every try is no digest", digest is None, repr(digest))
+    check("its reason names the manifest step, the 503 and the tries",
+          why == f"manifest: HTTP 503 The server is busy. (after {ghcr_pull.TRIES} tries)", why)
+    check(f"asked {ghcr_pull.TRIES} times in all", sum("/manifests/" in u for u in seen) == ghcr_pull.TRIES, repr(seen))
+    for code in (400, 401, 403, 404, 500):
+        naps.clear()
+        urllib.request.urlopen, seen = busy(code, ghcr_pull.TRIES)
+        digest, why = ghcr_pull.served_digest(REF)
+        check(f"a {code} is not busy: asked once, with no nap",
+              digest is None and why.startswith(f"manifest: HTTP {code} ")
+              and sum("/manifests/" in u for u in seen) == 1 and not naps, repr((why, seen, naps)))
+
     print("== open_url and read_url, the reads the blob-pulling tier tests make, ask a dropped connection again ==")
     naps.clear()
     handshake = urllib.error.URLError(TimeoutError("_ssl.c:1012: The handshake operation timed out"))
@@ -170,6 +212,13 @@ try:
         got = r.read()
     check("open_url asks a timed-out handshake again and hands back the open response",
           got == b"blob" and seen == [120, 120], repr((got, seen)))
+    naps.clear()
+    urllib.request.urlopen, seen = failing([urllib.error.HTTPError(
+        "https://pkg-containers.githubusercontent.com/ghcr1/blobs/sha256:00", 503, "The server is busy.", {}, None)])
+    with ghcr_pull.open_url("https://ghcr.io/v2/x/blobs/sha256:00", timeout=120) as r:
+        got = r.read()
+    check("open_url asks a blob whose redirect answered 503 again (run 18643) and hands back the open response",
+          got == b"blob" and seen == [120, 120] and len(naps) == 1, repr((got, seen, naps)))
 
     class Opener:
         """A no-redirect opener, as the Joker tests build: a blob's 307 is an HTTPError the caller follows."""

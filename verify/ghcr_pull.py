@@ -17,20 +17,30 @@ ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.
 # (#1047). An HTTP answer, a 401 or a 404, is ghcr.io's reply and is never asked again. Later the same day (CI run
 # 42405149040) two TLS handshakes to ghcr.io timed out in test_joker_web_busybox.py and test_image_version_tags.py,
 # which opened it with urlopen of their own; they and test_c6_joker_public.py now read it through open_url or read_url.
+# A busy answer is asked again the same way (#1192): on 2026-11-08 the blob redirect of a ttyd layer in
+# test_image_version_tags.py got "HTTP Error 503: The server is busy." in run 18643's tools tier. BUSY is the set of
+# codes that say the server could not answer now (429, 502, 503, 504), not what the package is; every other HTTP
+# answer, a 307, 401 or 404 included, is still raised at once.
 TRIES = 3
 BACKOFF = 2.0
 _sleep = time.sleep
 DROPPED = (http.client.HTTPException, ConnectionError, TimeoutError)
+BUSY = frozenset({429, 502, 503, 504})
 
 
 def _retried(call):
-    """call(), asked again while the connection drops before an answer; the last drop is raised, an HTTP answer at
-    once."""
+    """call(), asked again while the connection drops before an answer or the server answers busy (BUSY); the last
+    drop or busy answer is raised, any other HTTP answer at once."""
     for attempt in range(1, TRIES + 1):
         try:
             return call()
-        except urllib.error.HTTPError:
-            raise
+        except urllib.error.HTTPError as e:
+            if e.code not in BUSY:
+                raise
+            if attempt == TRIES:
+                e.add_note(f"after {TRIES} tries")
+                raise
+            _sleep(BACKOFF * attempt)
         except (urllib.error.URLError, *DROPPED) as e:
             if attempt == TRIES:
                 e.add_note(f"after {TRIES} tries")
@@ -77,7 +87,8 @@ def served_digest(reference: str) -> tuple[str | None, str]:
     except urllib.error.HTTPError as e:
         if step == "token" and e.code == 401:
             return None, f"token refused, HTTP {e.code} {e.reason}: the package is private or does not exist"
-        return None, f"{step}: HTTP {e.code} {e.reason}"
+        notes = "".join(f" ({n})" for n in getattr(e, "__notes__", []))
+        return None, f"{step}: HTTP {e.code} {e.reason}{notes}"
     except (urllib.error.URLError, *DROPPED, KeyError, ValueError) as e:
         notes = "".join(f" ({n})" for n in getattr(e, "__notes__", []))
         return None, f"{step}: {type(e).__name__}: {e}{notes}"
