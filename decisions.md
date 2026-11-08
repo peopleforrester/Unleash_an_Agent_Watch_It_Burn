@@ -33961,3 +33961,38 @@ is `bash verify/run-tests.sh`), then `32 checks ran (the offline suite and 31 ti
 TIER CHECKS GREEN` and `exit=0`. `verify/test_replay_prompts.py`, `verify/test_public_images.py` and
 `verify/test_instructor_brief.py` were among them and passed. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18483/e2e-tools.log`.
+## 2026-11-08 · #1046 · run 18491 · The guard_toggle line is read on watch-it-burn-private at the 5772a5d pin (#1052's check)
+
+**What was left.** Runs 18195 and 18215 met every #1046 criterion but the fourth: a `guard_toggle` log line read on
+watch-it-burn-private after a verify toggle. dc78f1c could not write it. Michael's c51e1851 (#1079) moved the pin to
+guard-proxy-agenticburn main `5772a5d8d7cb`, which carries 0e7f15b, the toggle log, and `checksum/proxy-py` to
+`ddf97ec452c0`. This run reads that line and changes no file but this one.
+
+**The pin on both clusters (01:40Z).** guard-proxy-agenticburn's main is still `5772a5d8d7cb`, and its proxy.py at that
+commit, read from GitHub, hashes `ddf97ec452c00953...`. On watch-it-burn-community Argo CD's `ai-layer` is Synced at
+`d9be3bc7` and Healthy; on watch-it-burn-private it is Synced at `c51e1851` and Healthy. On both, guard-proxy's
+`checksum/proxy-py` reads `ddf97ec452c0` at generation 17, observed 17, 1 updated and 1 ready, `sha256sum
+/app/proxy.py` in the `proxy` container prints `ddf97ec452c00953c8b741e7891f2636b2fa959b95bd560e7d6cb070aef38ff6`, and
+`grep -c guard_toggle /app/proxy.py` prints 5. So both run 5772a5d's proxy.py.
+
+**The verify toggle on watch-it-burn-private.** `/toggle` read every guard false and `cost_cap_usd` 25.0, and the Lease
+list in `agent` was empty. Under `python3 verify/guard_lease.py hold --context watch-it-burn-private --profile
+accen-dev`, a script in the run directory (`live/toggle.sh`) sent four `/toggle` requests through `kubectl exec` into
+the `proxy` container, each with the holder as `X-WIB-Caller`: a query-less read, `output=on`, `output=off`, and a
+second read. They ran from 01:42:19Z to 01:42:58Z, and the lock was released. `kubectl --context
+watch-it-burn-private -n agent logs deploy/guard-proxy -c proxy --since=10m | grep guard_toggle` printed two lines,
+one per change, and none for the two reads:
+- `01:42:38,007`: `"event": "guard_toggle", "guard": "output", "value": true, "was": false, "peer": "127.0.0.1",
+  "caller": "bash toggle.sh pid 2807258 by hecaton-s7-claude-performantpro@... in 1270196839-1046-18491"`
+- `01:42:47,697`: the same with `"value": false, "was": true`.
+
+Each line names the guard, its new and old value, the peer and the X-WIB-Caller header, as 0e7f15b's record says.
+Left as found: `/toggle` read all guards false and `cost_cap_usd` 25.0 afterwards, and `agent` holds no Lease.
+
+**The other criteria.** Runs 18195 and 18215 met them at dc78f1c (their entries above). 5772a5d is later than
+dc78f1c on guard-proxy main, so criterion 1 ("dc78f1c80896 or later") still holds. Criterion 2 is the hash read above.
+This run did not replay #1000's beats again: between dc78f1c and 5772a5d guard-proxy adds #68's turn deadline, the
+toggle log, #66's test margins and #71's ALWAYS_REDACT, and the proxy.py diff between them, read from GitHub, has no
+line naming the pantry header, so the X-Pantry-Shut path run 18215's replays measured is unchanged.
+
+**Not yet run on a cluster.** Nothing for #1046.
