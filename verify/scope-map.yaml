@@ -2584,6 +2584,53 @@ reads:
     - gitops/bootstrap/apps/loki.yaml
     - gitops/bootstrap/apps/prometheus.yaml
     - verify/draft-drift.sh
+  test_drift_rebuilt_states.py:
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - decisions.md
+    - docs/admin-console.md
+    - docs/floor.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-fleet
+    - infra/org
+    - infra/org/boundary
+    - infra/terraform
+    - infra/terraform/aws/audit
+    - infra/terraform/aws/audit/import-state.sh
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/drift/drift-report.py
+    - infra/terraform/drift/known-unmanaged.yaml
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/import-state.py
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - infra/terraform/fleet/states
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
   test_drift_report.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
