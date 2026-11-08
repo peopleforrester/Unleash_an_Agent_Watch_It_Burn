@@ -19,6 +19,12 @@ Checked here, with a kubectl on PATH that plays two clusters, each with its own 
   * the grant in gitops/guardrails-switch/mcp-switch.yaml is exactly what those calls ask of the peer, by resourceName
     everywhere but pods and pods/log, whose names RBAC cannot know, and the pod patch is held by an admission policy
     to the one annotation; block-argocd-drift lets that identity UPDATE agentgateway-c7-config and nothing else.
+
+The clock is the test's own (#1180, run 18742). guard-mcp-on's wait reads `date +%s` against each write's t0, so on
+the real clock a 2 s bound ran out before the first read whenever the two writes and the peer's calls took 2 s, as on a
+loaded gate host, and "it read again, every 2 s" saw 1 read. A fake `date` answers `+%s` from a file and passes every
+other form to the real one, and a fake `sleep` moves that file on without waiting, so time passes only when the script
+sleeps.
 """
 from __future__ import annotations
 
@@ -26,6 +32,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -51,6 +58,19 @@ ALL = ["get_weather", "read_internal_config", "apply_optimization"]
 ON_RULE = 'mcp.tool.name == "get_weather"'
 TOUCH = "wib.agenticburn.com/c7-rule-at"
 STEP_SECONDS = 300
+REAL_DATE = shutil.which("date")
+if not REAL_DATE:
+    sys.exit("FAILED: no date on PATH, which the fake clock passes its other forms to")
+# date +%s reads the clock file; any other form (the --since-time stamp of a given second) is the real date's.
+FAKE_DATE = f'''#!/usr/bin/env bash
+if [ "$#" -eq 1 ] && [ "$1" = +%s ]; then cat "$CLOCK"; exit 0; fi
+exec {REAL_DATE} "$@"
+'''
+# sleep N moves the clock N seconds on and returns at once.
+FAKE_SLEEP = '''#!/usr/bin/env bash
+case "$1" in ''|*[!0-9]*) echo "fake sleep: whole seconds only, got '$1'" >&2; exit 2 ;; esac
+echo $(( $(cat "$CLOCK") + $1 )) >"$CLOCK"
+'''
 failures: list[str] = []
 
 
@@ -191,13 +211,16 @@ def run(cmd: str, mode: str, here: dict, peer_name: str, peer: dict, args: tuple
         home.mkdir(); fakebin.mkdir()  # noqa: E702
         for name, body in helpers.items():
             (home / name).write_text(body + "\n")
-        (fakebin / "kubectl").write_text(FAKE)
-        (fakebin / "kubectl").chmod(0o755)
+        for tool, body in (("kubectl", FAKE), ("date", FAKE_DATE), ("sleep", FAKE_SLEEP)):
+            (fakebin / tool).write_text(body)
+            (fakebin / tool).chmod(0o755)
+        clock = pathlib.Path(tmp, "clock")
+        clock.write_text("1762580131\n")
         start = json.dumps({"this": here, peer_name: peer})
         calls, state = pathlib.Path(tmp, "calls"), pathlib.Path(tmp, "state")
         state.write_text(start)
         env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}", "CALLS": str(calls),
-               "STATE": str(state), "MODE": mode, "PEER": peer_name}
+               "STATE": str(state), "MODE": mode, "PEER": peer_name, "CLOCK": str(clock)}
         r = timed(["bash", str(home / cmd), *args], env=env)
         ran = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
         shown = [line[2:] for line in (r.stdout + r.stderr).splitlines() if line.startswith("$ ")]
@@ -329,7 +352,7 @@ check("says the restriction is written but not served within the bound, without 
 check("both writes still went through", r["state"]["this"]["config"] == NARROWED
       and evil_of(r["state"][COMMUNITY]) == ["get_weather"])
 polls = len(on_cluster(r, "this", "logs"))
-check("it read again, every 2 s, before giving up", polls >= 2, f"{polls} reads")
+check("it read again, every 2 s, before giving up: once at the write and once 2 s on", polls == 2, f"{polls} reads")
 r = run("guard-mcp-on", "linked", cluster("kubecon-private"), COMMUNITY, cluster("kubecon-community"), ("soon",))
 check("a bound that is not a number of seconds is a usage error that changes nothing",
       r["rc"] == 2 and "Usage: guard-mcp-on [seconds" in r["stdout"] and not r["calls"], r["out"])
