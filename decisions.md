@@ -35272,3 +35272,46 @@ verify/run-tests.sh`), then `85 checks ran (the offline suite and 84 tier tests)
 TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_guard_switch_both.py` was among them and printed `All two-cluster
 switch checks passed.` in 39 s. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18550/e2e-tools.log`.
+
+## 2026-11-08 · #989 · run 18562 · a chart repository Helm says cannot be reached is fetched again, run 17888's line included
+
+**What happened.** In run 17888 (#938) the tools tier went red on `test_enforce_floor.py`: `helm template --repo
+https://charts.external-secrets.io` failed with `Error: looks like "https://charts.external-secrets.io" is not a valid
+chart repository or cannot be reached: Get "https://charts.external-secrets.io/index.yaml"`, cut at 160 characters,
+and the test passed alone right after.
+
+**How this differs from the draft.** Run 17968's draft (`origin/agent/989-17968`, ended claim-stale, so not a gate
+failure) added `verify/helm_fetch.py` with a `run_helm` that ran `helm template --repo` twice. Staging has since moved
+that fetch out of `helm template`: #1028 and #1118 put every upstream chart through `verify/chart_fetch.py`'s `pull()`,
+which serves the tarball from the host artifact cache by its `charts.lock` sum and, on a miss, runs `helm pull` with a
+network error retried up to four attempts (waits of 2, 5 and 10 seconds), each retry printed with Helm's error.
+`test_enforce_floor.py` then renders the local tarball. So `helm_fetch.py` was not ported, and the issue's design is
+made on the current layout instead. `test_chart_fetch.py` already held that a missing chart version fails on the first
+attempt. `helm template` reads the values file and runs once with no retry, so a bad values file fails at once.
+
+**The gap that was left.** `chart_fetch.NETWORK_ERROR` matched causes (EOF, reset, timeout, 5xx and the rest) but not
+Helm's own wrapper. Run 17888's line, as its log kept it, matched none of them, and neither does a wrapper whose cause
+the list lacks, such as `net/http: request canceled`; both failed on the first attempt. The pattern now also matches
+`cannot be reached: Get "`, Helm's wrapper around a GET of index.yaml that net/http could not complete. A 404 comes
+under the same wrapper as `cannot be reached: failed to fetch ... : 404 Not Found`, which does not match, so it is
+still not retried.
+
+**The four attempts.** The issue asks for one more fetch. #1028 settled on four attempts in all for every chart fetch,
+which includes that one, and this change keeps them. When every attempt fails, each earlier error is printed on its
+`RETRY` line in the check's output and the last is the error the render fails with, so a lasting outage still turns
+the check red and names what Helm said each time.
+
+**Its test.** `verify/test_chart_fetch.py` (offline suite, a stub helm) now classifies run 17888's line and a wrapper
+with an unlisted cause as network errors, and the wrapper with a 404 as not one. It holds that run 17888's line once,
+then a pull, asks Helm twice and returns the chart. The stub can now give a different error on each attempt, and a
+repository that stays unreachable is asked exactly four times, with attempts 1 to 3 on their `RETRY` lines and the
+fourth in the returned error. With `chart_fetch.py` as staging had it, 9 of these checks fail; with the change, all
+74 pass.
+
+**Ported from the draft.** Run 17968's second commit (`944f1373`), never landed: `test_c7_gateway_toggle.py` gives
+each toggle 300 seconds (`TOGGLE_LIMIT_SECONDS`) in place of 60, and a toggle that reaches it exits naming itself
+in place of a traceback. On a loaded host each fake kubectl start took 1 to 3 seconds and `guards-off` makes 19 of
+them. Staging had not changed that file since. Run alone here it passed.
+
+**Live check.** None: the change touches only `verify/chart_fetch.py`, `verify/test_chart_fetch.py`,
+`verify/test_c7_gateway_toggle.py` and decisions.md, which no cluster runs.

@@ -11,6 +11,7 @@ It also holds that charts.lock names every chart the repo pins and nothing else,
 line fails here, offline, and not in a render in the tools tier."""
 from __future__ import annotations
 
+import contextlib
 import gzip
 import hashlib
 import io
@@ -44,14 +45,14 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 
 # The stub: each call is a line in $STUB_DIR/calls. It fails while $STUB_DIR/fail holds a count above zero, printing
-# $STUB_DIR/error, and otherwise copies $STUB_DIR/serve/<chart>-<version>.tgz into --destination, named as `helm pull`
+# $STUB_DIR/error.<that count> when there is one, else $STUB_DIR/error, and otherwise copies $STUB_DIR/serve/<chart>-<version>.tgz into --destination, named as `helm pull`
 # names it; with no such fixture it fails as Helm does on a version the repository does not list.
 STUB = """#!/usr/bin/env bash
 echo "$*" >>"$STUB_DIR/calls"
 n=$(cat "$STUB_DIR/fail" 2>/dev/null || echo 0)
 if [ "$n" -gt 0 ]; then
     echo $((n - 1)) >"$STUB_DIR/fail"
-    cat "$STUB_DIR/error" >&2
+    if [ -f "$STUB_DIR/error.$n" ]; then cat "$STUB_DIR/error.$n" >&2; else cat "$STUB_DIR/error" >&2; fi
     exit 1
 fi
 ref="$2"; dir=""; ver=""
@@ -67,6 +68,9 @@ cp "$src" "$dir/$name-$ver.tgz"
 
 EOF_ERROR = ('Error: looks like "https://charts.external-secrets.io" is not a valid chart repository or cannot be '
              'reached: Get "https://charts.external-secrets.io/index.yaml": EOF\n')
+# Run 17888's error as its log kept it (#938, #989): Helm's wrapper for a GET of index.yaml that failed, its cause cut off.
+UNREACHABLE_17888 = ('Error: looks like "https://charts.external-secrets.io" is not a valid chart repository or cannot be '
+                     'reached: Get "https://charts.external-secrets.io/index.yaml"\n')
 NOT_FOUND = 'Error: chart "external-secrets" version "9.9.9" not found in https://charts.external-secrets.io repository\n'
 REPO, CHART, VERSION = "https://charts.external-secrets.io", "external-secrets", "0.19.2"
 
@@ -105,6 +109,12 @@ class Stub:
         (self.dir / "fail").write_text(str(times))
         (self.dir / "error").write_text(error)
 
+    def fail_each(self, errors: list[str]) -> None:
+        """Fail once per error, in order: the stub reads error.<count left>, so the first error is error.<len>."""
+        self.fail(len(errors), "")
+        for left, error in zip(range(len(errors), 0, -1), errors):
+            (self.dir / f"error.{left}").write_text(error)
+
     def calls(self) -> list[str]:
         f = self.dir / "calls"
         return f.read_text().splitlines() if f.exists() else []
@@ -112,6 +122,8 @@ class Stub:
     def reset(self) -> None:
         for name in ("calls", "fail", "error"):
             (self.dir / name).unlink(missing_ok=True)
+        for f in self.dir.glob("error.*"):
+            f.unlink()
 
 
 def write_lock(path: pathlib.Path) -> pathlib.Path:
@@ -140,13 +152,17 @@ def fetch_log(cache: pathlib.Path) -> list[list[str]]:
 
 
 print("== Helm's network errors are told from the rest ==")
-for err in (EOF_ERROR, "Get \"https://x/index.yaml\": unexpected EOF", "read tcp 10.0.0.1:443: connection reset by peer",
+for err in (EOF_ERROR, UNREACHABLE_17888,
+            'Error: looks like "https://x" is not a valid chart repository or cannot be reached: Get "https://x/index.yaml":'
+            ' net/http: request canceled', "Get \"https://x/index.yaml\": unexpected EOF", "read tcp 10.0.0.1:443: connection reset by peer",
             "dial tcp: lookup charts.jetstack.io: no such host", "net/http: TLS handshake timeout",
             "Get \"https://x\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
             "failed to fetch https://x/index.yaml : 503 Service Unavailable",
             "unexpected status from GET request to https://ghcr.io/v2/x: 429 Too Many Requests", "dial tcp: i/o timeout"):
     check(f"a network error: {err.strip()[:90]}", chart_fetch.is_network_error(err))
 for err in (NOT_FOUND, "failed to fetch https://x/index.yaml : 404 Not Found",
+            'Error: looks like "https://x" is not a valid chart repository or cannot be reached: failed to fetch'
+            ' https://x/index.yaml : 404 Not Found',
             "Error: unauthorized: authentication required", "Error: invalid_reference: invalid tag"):
     check(f"not a network error: {err.strip()[:90]}", not chart_fetch.is_network_error(err))
 
@@ -262,6 +278,35 @@ try:
           and "index.yaml\": EOF" in err and f"on each of {chart_fetch.ATTEMPTS} attempts" in err)
     check(f"Helm was asked {chart_fetch.ATTEMPTS} times ({len(stub.calls())})", len(stub.calls()) == chart_fetch.ATTEMPTS)
     check(f"each backoff was waited in turn ({waits})", waits == list(chart_fetch.BACKOFF))
+    check("the cache holds nothing", entries(cache) == [], str(entries(cache)))
+
+    print("== run 17888's line, a repository that cannot be reached, is fetched again and the next answer used (#989) ==")
+    stub.reset()
+    cache, waits = root / "cache17888", []
+    stub.fail(1, UNREACHABLE_17888)
+    got, err = pull(stub, cache, lock, waits)
+    check(f"the chart comes back from the second attempt ({err})",
+          err is None and got is not None and got.read_bytes() == SERVED[VERSION])
+    check(f"Helm was asked twice ({len(stub.calls())})", len(stub.calls()) == 2, str(stub.calls()))
+
+    print("== a repository that stays unreachable fails, and every attempt's error is printed or returned (#989) ==")
+    stub.reset()
+    cache, waits = root / "cache-outage", []
+    causes = [f'Error: looks like "{REPO}" is not a valid chart repository or cannot be reached: Get "{REPO}/index.yaml": '
+              f"cause {i}\n" for i in range(1, chart_fetch.ATTEMPTS + 1)]
+    stub.fail_each(causes)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        got, err = pull(stub, cache, lock, waits)
+    printed = out.getvalue()
+    check("no chart comes back, so the render fails", got is None)
+    check(f"Helm was asked {chart_fetch.ATTEMPTS} times, not once more ({len(stub.calls())})",
+          len(stub.calls()) == chart_fetch.ATTEMPTS, str(stub.calls()))
+    for i in range(1, chart_fetch.ATTEMPTS):
+        check(f"attempt {i}'s error is printed on its RETRY line",
+              f"cause {i} (attempt {i} of {chart_fetch.ATTEMPTS};" in printed, printed)
+    check(f"the last attempt's error is the one returned ({err})",
+          err is not None and f"cause {chart_fetch.ATTEMPTS} (a network error on each of" in err)
     check("the cache holds nothing", entries(cache) == [], str(entries(cache)))
 
     print("== the retry is printed, so a tier log shows the blip it rode out; the root comes from the environment ==")
