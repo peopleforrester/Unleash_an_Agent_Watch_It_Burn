@@ -1306,6 +1306,8 @@ reads:
     - gitops/ai-layer/web/skins.js
     - verify/agent_probe.py
     - verify/guard_lease.py
+  test_c8_persona.py:
+    - gitops/workshop-agent/agent.yaml
   test_c8_pod_secret_mount.py:
     - gitops/ai-layer/resources.yaml
     - policies/floor/minimal-floor.yaml
