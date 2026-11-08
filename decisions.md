@@ -42823,3 +42823,20 @@ Dispatched runs point 6 says.
 
 **Not run.** The two kubecon probes did not run again, for the reason run 18396 gave: run 17949 ran them on these
 names, nothing they read has changed since, and they switch the guardrails on clusters other sessions share.
+## 2026-11-08 · #1045 · run 18803 · A test holds docs/floor.md's state rebuild commands and the tanjiro-wsl2 machine
+
+Test review run 18079 found that nothing read #979's "Rebuilding a lost state" section of docs/floor.md.
+`verify/test_floor_rebuild_state.py` now does, offline. It fails when the section is gone or stops naming the states
+it rebuilds (accen-dev's boundary and lab VPC, watch-it-burn-community and watch-it-burn-private) or that the boundary
+and lab VPC go first. It holds the section's bash block to the script: the `terraform init` loop names exactly the
+roots in import-state.py's `ROOTS`, each with a main.tf, ahead of any import; each `import-state.py` line is run from
+the checkout root as `python3 infra/terraform/fleet/import-state.py`, takes a kind the script has, keeps the script's
+rule that a cluster name comes with `cluster` and only with it, passes no flag the script lacks, and the four
+rebuilds are all there with no cluster ahead of the boundary or lab VPC. In "The daily drift plan" it holds that the
+paragraph after the crontab line says `The machine is tanjiro-wsl2`, gives the checkout
+`/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn`, and says the boundary, lab VPC and both KubeCon cluster
+states were rebuilt there with "Rebuilding a lost state". Ten edits of a copy of the doc, one per rule, each make the
+check fail; the anchors they edit on are checked first.
+
+Tests: `python3 verify/test_floor_rebuild_state.py` passed (12 of 12), and `python3 verify/test_scope_tests.py` with
+the new scope-map entry. No live check: the change adds a test under `verify/` that no cluster runs.
