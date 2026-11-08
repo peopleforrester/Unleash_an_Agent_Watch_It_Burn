@@ -39725,3 +39725,12 @@ whose administrator banner showed. 390x844 and the two desktop sizes passed on b
 
 **Not yet run on a cluster.** `python3 verify/test_chat_pane_overlap_e2e.py --live`, after hecaton promotes this run
 and Argo CD rolls the console on both clusters: it should print `All chat pane overlap checks passed.` for both hosts.
+
+**Suite results (run 18743).** With `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`: `bash
+verify/run-tests.sh` ran 245 of 382 offline tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0 (log
+`/var/lib/hecaton/runs/18743/run-tests.log`). `bash verify/run-e2e-tools.sh` printed `12 checks ran (the offline suite and
+11 tier tests) in 11m40s`, `ALL E2E TOOLS TIER CHECKS GREEN` and exit 0, `test_chat_pane_overlap_e2e.py` among them (log
+`/var/lib/hecaton/runs/18743/e2e-tools.log`). The scoper counts `burritbot.html` as prose, so it did not select
+`test_mobile_titles_e2e.py`, which renders the same page's header and chat title at phone widths; it was run alone,
+`python3 verify/test_mobile_titles_e2e.py`, and printed `All rendered mobile-title checks passed.` The prose gate printed
+`prose gate: pass`. No dependency was added.
