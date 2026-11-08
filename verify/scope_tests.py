@@ -22,14 +22,16 @@ A changed path selects the tests whose reads cover it, and a changed test select
 full, or that no entry covers and unread does not name, runs the whole suite, so nothing is skipped silently. A
 change to the map itself runs the whole suite when it edits full, unread or bounds, and otherwise runs each test
 whose own entry it edits: a test cannot drop a path from its entry in the same change that edits the path and so
-leave itself out, since the edit to its entry runs it.
+leave itself out, since the edit to its entry runs it. For the tools tier a changed prose file (.md, .mdx, .html)
+selects nothing (#1190): a doc-only range runs no tier test and fetches no tool.
 
 `check` holds the map to what extract() reads in each test's source: every path literal, every path built from
 literals, every helper it imports or names, and every glob or directory walk. `select` does not trust the map to be
 current: it reads every test's source the same way and runs from the committed entry and that reading together, so
 a test added or edited without its entry (a run cut before the test landed on staging, then rebased) still runs when
 it should, and the log names each test the map was behind. test_scope_tests.py, which every change runs, fails on
-the map's rules (structural()) and shows its drift (drift()) without failing on it.
+the map's rules (structural()) and on the drift (drift_items()) a change made under the rule (owed(), #1190), since
+the gate's scoped selection is only as good as the map; drift from a commit made before the rule is named.
 """
 from __future__ import annotations
 
@@ -976,35 +978,79 @@ def _shared(doc: dict, tree: Tree, tests: dict[str, str]) -> dict[str, int]:
     return {h: n for h, n in sorted(counts.items()) if n > SHARED_HELPER}
 
 
-def drift(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
-    """Where the committed map is behind the tests' sources: a test with no entry, an entry missing a path its source
-    reads, a shared helper not in full. The selector reads every test's source itself and runs from the union, so drift
-    costs time and skips nothing; `write` brings the map up to date. A run cut from a staging without some test, rebased
-    onto one with it, sees that test's entry missing through no edit of its own (#1018's run 18091), so the suite does
-    not fail on drift."""
+def drift_items(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[tuple[str, str]]:
+    """Where the committed map is behind the tests' sources, each with the repo path whose change put it there: a test
+    with no entry, an entry missing a path its source reads, an entry for a test that is gone (the test's path each
+    time), a shared helper not in full (the helper's path). The selector reads every test's source itself and runs
+    from the union, so drift costs time and skips nothing; `write` brings the map up to date. owed() says which of
+    these test_scope_tests.py fails on (#1190)."""
     bad = []
     tests = discover(verify)
     always, reads = doc["always"], doc["reads"]
     for name in tests:
         if name not in always and name not in reads:
-            bad.append(f"{name} has no entry; run `python3 verify/scope_tests.py write` and review what it adds")
+            bad.append((f"verify/{name}",
+                        f"{name} has no entry; run `python3 verify/scope_tests.py write` and review what it adds"))
     for name in list(always) + list(reads):
         if name not in tests:
-            bad.append(f"{name} is in the map but is not a test either runner runs; remove its entry")
+            bad.append((f"verify/{name}", f"{name} is in the map but is not a test either runner runs; remove its entry"))
     for name in tests:
         if name not in reads:
             continue
         x = extract(f"verify/{name}", tree, doc["bounds"])
         for w in x.unbounded():
-            bad.append(f"{name} reads more than an entry can name ({w}); move it to always with that reason, or "
-                       "bound the file that builds the path in bounds")
+            bad.append((f"verify/{name}", f"{name} reads more than an entry can name ({w}); move it to always with "
+                        "that reason, or bound the file that builds the path in bounds"))
         for p in sorted(x.paths):
             if not any(covers(e, p) for e in reads[name]):
-                bad.append(f"{name} reads {p}, which its entry does not cover")
+                bad.append((f"verify/{name}", f"{name} reads {p}, which its entry does not cover"))
     for helper, n in _shared(doc, tree, tests).items():
         if not any(covers(f, helper) for f in doc["full"]):
-            bad.append(f"{helper} is named by {n} tests, more than {SHARED_HELPER}, so it is shared: list it in full")
+            bad.append((helper, f"{helper} is named by {n} tests, more than {SHARED_HELPER}, so it is shared: list it "
+                        "in full"))
     return bad
+
+
+def drift(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
+    """drift_items() without the paths: every place the map is behind the tests' sources."""
+    return [m for _, m in drift_items(doc, tree, verify)]
+
+
+# The rule that drift fails the suite (#1190), as a commit's own copy of this file carries it. owed() reads it there.
+DRIFT_RULE = "DRIFT_FAILS_SINCE = \"#1190\""
+DRIFT_FAILS_SINCE = "#1190"
+
+
+def _under_rule(path: str, root: pathlib.Path, seen: dict[str, bool]) -> bool:
+    """Whether the last change to path was made under the drift rule: an edit not yet committed, or a commit whose own
+    verify/scope_tests.py carries DRIFT_RULE. A commit with no scope_tests.py came before the map and the rule. A path
+    git cannot place counts as under the rule, so nothing is let off by an unreadable history."""
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    if git("status", "--porcelain", "--", path).stdout.strip():
+        return True
+    last = git("log", "-1", "--format=%H", "--", path)
+    sha = last.stdout.strip()
+    if last.returncode != 0 or not sha:
+        return True
+    if sha not in seen:
+        own = git("show", f"{sha}:verify/scope_tests.py")
+        # A commit that has no scope_tests.py at all came before the map, so before the rule too.
+        seen[sha] = own.returncode == 0 and DRIFT_RULE in own.stdout
+    return seen[sha]
+
+
+def owed(items: list[tuple[str, str]], root: pathlib.Path = REPO) -> tuple[list[str], list[str]]:
+    """Splits drift into what fails the suite and what is only named (#1190). Drift fails on a path last changed under
+    the rule: the change that adds a test or a read commits the map with it. Drift from a commit made before the rule
+    is named, not failed on, until a change touches that path again. Run 18656's gate failed on exactly that: #1015's
+    test_kyverno_counter_fix.py gained a read on staging, from a run cut before the rule, between the run's validation
+    and its rebase, so a check that failed on all drift failed a change that had brought the map current."""
+    seen: dict[str, bool] = {}
+    fails, named = [], []
+    for path, msg in items:
+        (fails if _under_rule(path, root, seen) else named).append(msg)
+    return fails, named
 
 
 def problems(doc: dict, tree: Tree, verify: pathlib.Path = VERIFY) -> list[str]:
@@ -1109,6 +1155,17 @@ def changed_paths(base: str, root: pathlib.Path = REPO) -> list[str]:
 
 MAP_REL = "verify/scope-map.yaml"
 RULES = ("full", "unread", "bounds")  # the map's own rules: a change to one runs everything
+# Public prose, the files hecaton's ai-isms gate reads (prose_gate.PUBLIC_PROSE, which test_e2e_tools_gate_scope.py
+# holds this equal to). For the tools tier a changed prose file selects no tier test and never runs the whole tier
+# (#1190): Michael, 2026-11-08, "If the change warrants it then it goes end-to-end", and a doc-only range (the
+# run-of-show, PROGRESS.md, decisions.md, the /kubecon copy) promotes on the prose gate and the offline tests that read
+# it. The offline suite still selects on prose as on any path.
+PROSE = (".md", ".mdx", ".html")
+
+
+def tier_set_aside(changed: list[str]) -> list[str]:
+    """The changed paths the tools tier does not select on: the prose files."""
+    return [p for p in changed if p.endswith(PROSE)]
 
 
 def base_map(base: str, root: pathlib.Path = REPO) -> dict | None:
@@ -1141,12 +1198,19 @@ def select(doc: dict, suite: str, changed: list[str], tests: dict[str, str], bef
     a map the base did not have, runs everything. A change to a test's own entry runs that test: an entry that stops
     covering a path the change also edits cannot leave its test out, since the test runs for the entry's change.
     A changed submodule (its pin moved) counts as read by every glob over the whole tree, which reads its files too.
-    live is effective()'s map, which selection runs from; doc and before are the committed maps, compared for edits."""
+    live is effective()'s map, which selection runs from; doc and before are the committed maps, compared for edits.
+    For the tools suite the prose files are set aside first (tier_set_aside, #1190): a range of prose alone runs no
+    tier test, the always tests included, and a prose path no entry covers does not run the whole tier."""
     full_why: dict[str, list[str]] = {}
     entry_changed: set[str] = set()
     if not changed:
         # No diff is no change to scope by, not a change that touches nothing (ci-base-sha.sh's reading, #1020).
         return "full", {"HECATON_BASE_SHA": ["the change touches no path, so there is nothing to scope it by"]}
+    if suite == "tools":
+        prose = set(tier_set_aside(changed))
+        changed = [p for p in changed if p not in prose]
+        if not changed:
+            return "scoped", {}
     if MAP_REL in changed:
         if before is None:
             full_why[MAP_REL] = ["the base has no map to compare it with"]
@@ -1212,6 +1276,11 @@ def main(argv: list[str]) -> int:
                   "`python3 verify/scope_tests.py write` brings it up to date:", file=err)
             for n in notes:
                 print(f"  {n}", file=err)
+        prose = tier_set_aside(changed) if argv[1] == "tools" else []
+        if prose:
+            print(f"scope: {len(prose)} of the changed paths are prose ({', '.join(PROSE)}), which selects no tier test "
+                  "(#1190); the prose gate and the offline tests that read them hold them: "
+                  + ", ".join(prose[:5]) + (f" and {len(prose) - 5} more" if len(prose) > 5 else ""), file=err)
         if mode == "full":
             print("scope: running every test, because of:", file=err)
             for p, ws in why.items():

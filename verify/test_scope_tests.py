@@ -2,14 +2,20 @@
 # ABOUTME: and both runners, driven in a fixture repo, run only what a change touches, or everything.
 """Offline. scope_tests.py and the map it reads decide which tests a hecaton validation runs (#1018).
 
-1. The map's rules hold (scope_tests.structural()). Its drift from the tests' sources (a test with no entry, an entry
-   missing a path scope_tests.extract() finds) is printed, not failed on: select() reads every test's source and runs
-   from the union, and a test without an entry, or with an empty one, still runs when what it reads changes. A run cut
-   before a test landed on staging and rebased after sees that test without an entry through no edit of its own.
+1. The map's rules hold (scope_tests.structural()), and the map is current with the tests' sources
+   (scope_tests.drift_items(): no test without an entry, no entry missing a path scope_tests.extract() finds). select()
+   still reads every test's source and runs from the union, so a test the map is behind runs when it should; drift
+   fails here because the gate's scoped selection is only as good as the map (#1190), and it had fallen 112 tests
+   behind (#1189's 2800e073). `python3 verify/scope_tests.py write` brings it current. It fails on the drift a change
+   made under that rule (scope_tests.owed()): a test or helper last changed in a commit whose scope_tests.py carries
+   the rule, or edited and not yet committed. Drift from a commit made before the rule is named, not failed on: run
+   18656's gate failed when a run cut before the rule landed a new read on staging between its validation and its
+   rebase. A fixture repo holds owed()'s split.
 2. The two bounds hold: every file bootstrap_chart.source_files() reads for an Application source in
    gitops/bootstrap/apps, and every values file collector_render.value_files() names, is inside the paths the map
    bounds that helper by.
-3. select() on the real map: a change to decisions.md alone runs its readers and the always tests and leaves the rest;
+3. select() on the real map: a change to decisions.md alone runs its offline readers and the always tests and leaves
+   the rest, and no tier test (#1190); a change to display.js runs its tier tests, not the whole tier;
    a change to a runner, the map, a shared helper, or a path no entry covers runs everything; a changed test runs.
    A change to the map's rules runs everything, and one to a test's entry runs that test.
 4. Both runners, copied into a fixture repo with four fixture tests (an offline and a tier test reading alpha/, the same
@@ -47,15 +53,52 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-print("== the map's rules hold, and its drift from the tests' sources is shown, not failed on ==")
+print("== the map's rules hold, and the map is current with the tests' sources ==")
 tree = st.Tree()
 doc = st.load_map()
 bad = st.structural(doc, tree)
 check("the map's rules (full, unread, bounds, always) name what the repo has, and no test is in two lists", not bad,
       "\n".join(bad))
-behind = st.drift(doc, tree)
-print(f"  NOTE  the map is behind the tests' sources in {len(behind)} places; select reads those from source"
-      + "".join(f"\n        {b}" for b in behind[:20]))
+behind, before_rule = st.owed(st.drift_items(doc, tree))
+check("the map is current with every test's source a change under #1190's rule touched (run `python3 "
+      "verify/scope_tests.py write`, review what it adds and commit it with the change); "
+      f"{len(behind)} places behind", not behind, "\n".join(behind[:40]))
+if before_rule:
+    print(f"  NOTE  {len(before_rule)} places behind, each last changed in a commit made before #1190's rule; the next "
+          "change to that test fails until `write` brings its entry current"
+          + "".join(f"\n        {b}" for b in before_rule[:20]))
+
+with tempfile.TemporaryDirectory() as t:
+    fx = pathlib.Path(t)
+    (fx / "verify").mkdir()
+    def fx_git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(fx), *args], capture_output=True, text=True, check=True)
+    fx_git("init", "-q")
+    fx_git("config", "user.email", "fixture@example.invalid")
+    fx_git("config", "user.name", "fixture")
+    (fx / "verify" / "test_premap.py").write_text("print('before the map')\n")
+    fx_git("add", "-A")
+    fx_git("commit", "-q", "-m", "before scope_tests.py existed")
+    (fx / "verify" / "scope_tests.py").write_text("# before the rule\n")
+    (fx / "verify" / "test_old.py").write_text("print('old')\n")
+    (fx / "verify" / "test_touched.py").write_text("print('touched')\n")
+    (fx / "verify" / "test_dirty.py").write_text("print('dirty')\n")
+    fx_git("add", "-A")
+    fx_git("commit", "-q", "-m", "before the rule")
+    (fx / "verify" / "scope_tests.py").write_text(f"# the rule\n{st.DRIFT_RULE}\n")
+    (fx / "verify" / "test_touched.py").write_text("print('touched again')\n")
+    fx_git("add", "-A")
+    fx_git("commit", "-q", "-m", "under the rule")
+    (fx / "verify" / "test_dirty.py").write_text("print('dirty, not committed')\n")
+    items = [(f"verify/{n}", n) for n in ("test_premap.py", "test_old.py", "test_touched.py", "test_dirty.py", "test_gone.py")]
+    fails, named = st.owed(items, root=fx)
+    check("owed(): drift on a test last committed before the rule, or before scope_tests.py existed, is named, not "
+          "failed on", named == ["test_premap.py", "test_old.py"],
+          f"fails={fails} named={named}")
+    check("owed(): drift on a test committed under the rule, edited and not committed, or git cannot place, fails",
+          fails == ["test_touched.py", "test_dirty.py", "test_gone.py"], f"fails={fails} named={named}")
+check("this scope_tests.py carries the rule owed() reads in each commit's copy",
+      st.DRIFT_RULE in (VERIFY / "scope_tests.py").read_text())
 tests = st.discover()
 check("the map has an entry for nearly every offline and tier test", len(tests) > 300
       and sum(1 for t in tests if t in doc["always"] or t in doc["reads"]) > len(tests) * 0.9, str(len(tests)))
@@ -159,8 +202,12 @@ check("on the committed map, the live map only adds to each entry",
       all(set(doc["reads"][t]) <= set(live["reads"].get(t, [])) or t in live["always"] for t in doc["reads"] if t in tests))
 
 mode, why = st.select(doc, "tools", ["decisions.md"], tests)
-check("the tier is scoped by the same map: a decisions.md change runs a few tier tests, not all of them",
-      mode == "scoped" and 0 < len(why) < sum(1 for s in tests.values() if s == "tools") // 4, str(sorted(why)))
+check("a decisions.md change runs no tier test: the tier sets prose aside (#1190)", mode == "scoped" and not why,
+      str(sorted(why)))
+mode, why = st.select(doc, "tools", ["gitops/ai-layer/web/display.js"], tests)
+check("the tier is scoped by the same map: a display.js change runs its render tests, not the whole tier",
+      mode == "scoped" and "test_display_throttle_e2e.py" in why
+      and len(why) < sum(1 for s in tests.values() if s == "tools") // 2, str(sorted(why)))
 
 print("== both runners, in a fixture repo, run only what the change touches ==")
 FIXTURE_TEST = ('import pathlib, sys\n'

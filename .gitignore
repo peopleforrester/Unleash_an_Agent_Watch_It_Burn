@@ -22,6 +22,8 @@ aws-pool*.csv
 verify/.feedback/
 # The cluster-free E2E tier's pinned binaries, fetched and checksum-verified by verify/fetch-e2e-tools.sh (#572).
 verify/.tools/
+# A failed tools-tier check's log, kept by verify/run-e2e-tools.sh so the one test can be fixed and rerun (#1190).
+verify/.e2e-logs/
 .fleet-hooks-test.*/
 
 # Per-machine Claude Code settings (a remote environment id, not shareable state).
