@@ -11,8 +11,8 @@ The scan reads every file `git ls-files --cached --others --exclude-standard` li
 new file is seen before it is committed, and searches each line with the PATTERNS below: curl, wget, urlopen, the Helm
 verbs that read a repository, a Terraform init, the Python installs of pip and uv, the Node fetches of npm, yarn and
 corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, the setup
-actions a workflow downloads a runtime with, and a get from the host artifact cache (#1117) or a chart pull through
-it, which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
+actions a workflow downloads a runtime with, and a get from the host artifact cache (#1117), a chart pull, an image
+layout or a git mirror through it (#1122), which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
 line that names it, and a line that only names a command (a comment, a message, a regex, a stub) is found too.
 
 The inventory, verify/fetch-inventory.yaml, lists by file the entries that claim those lines. An entry's `match` is a
@@ -72,7 +72,8 @@ PATTERNS = {
     "git-clone": r"\bgit\b.*\bclone\b|\bgit\b.*\bsubmodule\W{1,4}update\b",
     "setup-action": r"uses:\s*(?:actions/setup-\w+|astral-sh/setup-uv)",
     "artifact-cache": r"artifact-cache\.sh\W{1,4}get\b|\$\{CACHE\}\W{1,4}get\b|\bartifact_cache\.get(?:_retrying)?\("
-                      r"|\bchart_fetch\.pull\(",
+                      r"|\bchart_fetch\.pull\(|\bimage_cache\.layout\(|image_cache\.py\W{1,4}layout\b"
+                      r"|\bgit_mirror\.(?:ensure|submodules)\(|git_mirror\.py\W{1,4}(?:ensure|submodules)\b",
 }
 SCAN = re.compile("|".join(f"(?:{p})" for p in PATTERNS.values()))
 FAMILY = {name: re.compile(p) for name, p in PATTERNS.items()}

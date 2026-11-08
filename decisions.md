@@ -38833,3 +38833,85 @@ offline and render tests, not by a live read.
 **Tests (run 18737).** Prose alone (`decisions.md`, `PROGRESS.md`), so by CLAUDE.md's Dispatched runs point 6 the
 scoped `run-tests.sh` and the prose gate ran and `run-e2e-tools.sh` did not. Run 18711's full runs of both, on the code
 this checks, are in its entry above. `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-tests.sh` ran 99 of 382 offline tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0 (log `/var/lib/hecaton/runs/18737/run-tests.log`). `scope_tests.py select tools` printed `running 0 of 86 tools tests`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-08 · #1122 · run 18736 · Pinned images come from an OCI layout and pinned commits from a bare mirror, both in the host artifact cache
+
+**What.** The child of #1115 for the last two pinned kinds in #1116's inventory: container images (2 sites, both
+`test_joker_build_digest.py`'s build of the Jokers on build.sh's `JOKER_BASE`) and git commits (2 sites, both
+`ensure-submodules.sh`'s `git submodule update`). No earlier draft: `verify/prior-drafts.sh 1122 origin/staging`
+printed NONE and the issue had no comments. Clones that read a moving branch stay live checks as the inventory classes
+them: `sister_tree.py`'s shallow clone, which the issue names as an example, is classed `live github` (a branch as it
+stands now), so it is not moved.
+
+**Images: `verify/image_cache.py`.** `layout(ref)` takes a reference ending in `@sha256:<digest>` and returns
+`<root>/oci/sha256/<digest>`, an OCI image layout keyed by the manifest digest. On a miss, under a lock on the digest,
+the manifest and each blob come through `artifact_cache.get_retrying()` by their own SHA-256, so each is checked
+before it is kept, a network error is retried, and each fetch is a fetch-log line. The layout is assembled in a temp
+directory beside its place from hard links to those blobs (a copy where the cache's files refuse a link) and renamed
+into place whole. A hit hashes every blob in the layout again and checks the index names the pinned manifest and
+every blob that manifest needs is there; any mismatch fails naming the file and both sums, the layout is left in
+place, and nothing is fetched. An index takes the requested platform's image only. The registry is read anonymously:
+a 401 that names a `Bearer realm` is answered with that URL's token, and a blob's redirect is followed without it, as `test_joker_web_busybox.py`
+already did.
+
+- `images/villains/build-loopback.sh` asks for `JOKER_BASE`'s layout, pushes it with the pinned crane to its loopback
+  registry as `joker-base/busybox`, fails unless the push lands on the pinned digest, and its crane wrapper sends
+  `JOKER_BASE` there as well as the festival-ops tags. The base's registry is not part of a Joker's digest: both
+  Jokers built on the cached base are images.lock's `0765b359` and `793db299`. `push-jokers.yml` runs the same script
+  with the runner's cache, so CI's build reads the base from it too; `verify/image_cache.py` joins its trigger paths.
+- `test_joker_build_digest.py` asks for the layout first (so a cold cache fills there) and then runs the build with
+  every proxy variable naming a closed loopback port and `NO_PROXY=127.0.0.1,localhost`: a build that reached ghcr.io,
+  or any registry but its own on loopback, fails. Run by hand with the same proxy setting, a plain `crane digest` of
+  a ghcr.io tag failed with `proxyconnect tcp: dial tcp 127.0.0.1:9: connect: connection refused`, and the build
+  printed both pinned digests.
+- `test_joker_web_busybox.py`, which the inventory's line scan did not see (it read ghcr.io through `ghcr_pull`'s
+  `read_url`), reads the same layout. Whether lab-platform's copy answers an anonymous pull stays the live check of
+  `test_c6_joker_public.py`.
+
+**Commits: `verify/git_mirror.py`.** `ensure(url, commit)` returns `<root>/git/<key>.git`, a bare mirror of the URL
+(key: 16 hex digits of the URL's SHA-256 and the repository's name). A hit is a mirror holding the commit: its commit
+object is read and hashed again, because git reads a loose object by its file name without hashing it, and one that
+hashes to anything else fails naming the mirror and both hashes, with no fetch. A miss, under a lock, clones the URL
+bare into a temp directory and renames it into place once it holds the commit, or, for an existing mirror, fetches
+its branches and tags (`--prune`). A commit no branch or tag holds fails naming the URL and the commit, as
+`git submodule update` failed with "not our ref"; the mirror keeps no `refs/pull`.
+
+`submodules(repo)`, which `ensure-submodules.sh` now runs when `git submodule status` prints a `-` or a `+`, checks
+each such submodule out from its mirror: `git submodule init` as before, then `git submodule update` with
+`-c submodule.<name>.url=<mirror>` for that one command, so the clone reads the mirror and the repo's config keeps
+the GitHub URL; the new clone's `origin` is set back to that URL, and an existing clone fetches the mirror's branches
+into its remote-tracking refs first. `submodule-pins-pushed.sh` and `guard-proxy-pin-on-main.sh`, which read those
+refs, pass on the result. The HEAD is read back afterwards and a HEAD that is not the pin fails naming both hashes
+(a `submodule.<name>.update` of `none` leaves it there). A submodule at its pin is not touched: the script returns
+before Python starts, as the scope tests' fixture repos, which copy the script alone, need.
+
+On this worktree, which started with both submodules uninitialised: the first run cloned both mirrors (fetch-log lines
+of 832297 and 159056 bytes) in 3.65 s. Then a clean rerun, a `deinit` of llm-guard, guard-proxy checked out at
+`HEAD~1`, and guard-proxy deinitialised with its git dir removed were each put back at the pin with no fetch-log line
+added. Both pin checks printed `ok`.
+
+**The tests.** `verify/test_image_cache.py` and `verify/test_git_mirror.py` (offline) cover a miss, a hit with the
+source gone or every fetch an assertion, a blob or commit object that does not match (both hashes named, the cache
+entry left in place, the fetch log unchanged), a registry serving other bytes (nothing kept), an index and a platform
+it lacks, a layout missing a blob, a commit on no branch, a checkout that does not land on the pin, the anonymous
+token and the redirect against a server on loopback, and each command line. `test_ensure_submodules.sh` now copies the
+two modules beside the script and points the cache at a scratch directory.
+
+**The inventory.** The scan's artifact-cache family also finds `image_cache.layout(`, `git_mirror.ensure(` and
+`.submodules(`, and the two modules' command lines; `test_fetch_inventory.py` holds a sample of each. `summary` now
+prints container image 7 (7 through the artifact cache) and git commit 2 (2 through the artifact cache). The mirror's
+refresh is a `git fetch`, a family the scan has none of; it is reached only through `ensure()`, whose call sites are
+classed.
+
+**The scope map.** `verify/git_mirror.py` joins `full` beside `ensure-submodules.sh`, which every runner runs. Its
+`git cat-file` and `ls-files` sent every test that follows `ensure-submodules.sh` to `always`, though they read a
+mirror and the gitlinks, not this tree's history. A `bounds` entry now stands in for those guesses as it already did
+for paths built at run time (`scope_tests.py`'s `_own`), and git_mirror.py's bound is `.gitmodules` and the two
+submodule paths; `test_scope_tests.py` holds that the bound matches the tree's submodules and that it keeps
+`test_ensure_submodules.sh` out of `always`. `scope_tests.py write` added the rest.
+
+**Not moved: the Kyverno counter-fix build.** `images/kyverno-counter-fix/build.sh`, which
+`build-kyverno-counter-fix.yml` runs, pulls three `reg.kyverno.io` bases by digest and clones kyverno at a tag. The
+inventory scans only `verify/`, `.github/workflows/` and `scripts/`, so it classes neither; filed as a follow-up.
+
+**No new dependency.** The modules use the standard library, git and the pinned crane.

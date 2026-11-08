@@ -1,6 +1,6 @@
 # ABOUTME: Rebuilds both Jokers with images/villains/build.sh into a throwaway local registry (#775) and holds each digest
 # ABOUTME: to images.lock: the workshop's festival-ops Joker as published, and the breakout's internal-registry Joker.
-# SUITE: e2e (needs the network: ghcr.io serves build.sh's pinned busybox base, lab-platform's copy)
+# SUITE: e2e (needs the network on a cache miss: ghcr.io serves build.sh's pinned busybox base, lab-platform's copy)
 # E2E TIER: tools (no cluster, no AWS: the pinned crane from e2e-tools.lock, its own registry on loopback)
 """Why (#775). Challenge 3 at KubeCon asks for registry.burritobot.co/burritobot/maintenance-shell, which the internal
 registry (gitops/internal-registry/) copies from ghcr.io by digest at every start. Its page differs from the workshop
@@ -20,6 +20,11 @@ pushed anywhere else. .github/workflows/push-jokers.yml builds with the same scr
 scripts/ghcr_version_tag.py, so the build this test holds to the pins is the one the workflow pushes. Then each tag's
 digest is read back and its top layer is opened: the internal Joker carries joker-web-internal's page and joker-web's
 start.sh, and the workshop Joker joker-web's own.
+
+The base (#1122). build.sh's JOKER_BASE comes from the host artifact cache as an OCI layout keyed by its digest
+(verify/image_cache.py), which reads ghcr.io only on a miss. This test asks for the layout first, so a cold cache is
+filled here, and then runs the build with every proxy variable naming a closed port on loopback: a build that reached
+ghcr.io, or any registry but its own on loopback, would fail, so a green build shows the warm path reads none.
 
 Install: none. verify/fetch-e2e-tools.sh fetches crane from e2e-tools.lock, and run-e2e.sh and run-e2e-tools.sh point
 $CRANE at it. Run by hand: CRANE=verify/.tools/bin/crane python3 verify/test_joker_build_digest.py
@@ -72,6 +77,9 @@ def pinned(ref: str) -> str | None:
     return m.group(1) if m else None
 
 
+sys.path.insert(0, str(REPO / "verify"))
+import image_cache  # noqa: E402
+
 spec = importlib.util.spec_from_file_location("ghcr_version_tag", REPO / "scripts/ghcr_version_tag.py")
 gvt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gvt)
@@ -116,10 +124,29 @@ with tempfile.TemporaryDirectory() as t:
         else:
             check(f"crane's registry answers on 127.0.0.1:{port}", False, (tmp / "registry.log").read_text()[-300:])
             finish()
-        print("== build.sh, unchanged, into the loopback registry, through build-loopback.sh ==")
+        print("== build.sh's base, from the host artifact cache ==")
+        base = re.search(r'^JOKER_BASE="([^"]+)"$', BUILD, re.M)
+        check("build.sh pins JOKER_BASE by digest", bool(base) and "@sha256:" in base.group(1))
+        if not base:
+            finish()
+        try:
+            cached = image_cache.layout(base.group(1))
+            check(f"the cache serves JOKER_BASE as an OCI layout keyed by its digest ({cached.name[:12]}...)",
+                  cached.name == base.group(1).rsplit(":", 1)[1])
+        except Exception as err:  # noqa: BLE001 - the check names what failed
+            check("the cache serves JOKER_BASE as an OCI layout keyed by its digest", False, f"{type(err).__name__}: {err}")
+            finish()
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            closed = s.getsockname()[1]
+        dead = f"http://127.0.0.1:{closed}"
+        offline = {**os.environ, "CRANE": crane, "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost",
+                   **{v: dead for v in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")}}
+        print("== build.sh, unchanged, into the loopback registry, through build-loopback.sh, with no registry reachable ==")
         r = subprocess.run(["bash", str(VILLAINS / "build-loopback.sh"), f"127.0.0.1:{port}"],
-                           env={**os.environ, "CRANE": crane}, capture_output=True, text=True, timeout=600)
-        check("build-loopback.sh builds both Jokers (exit 0)", r.returncode == 0, (r.stdout + r.stderr)[-600:])
+                           env=offline, capture_output=True, text=True, timeout=600)
+        check("build-loopback.sh builds both Jokers (exit 0) on the cached base, every proxy a closed port",
+              r.returncode == 0, (r.stdout + r.stderr)[-600:])
         check("build-loopback.sh refuses an address that is not loopback, before building",
               subprocess.run(["bash", str(VILLAINS / "build-loopback.sh"), "ghcr.io"], env={**os.environ, "CRANE": crane},
                              capture_output=True, text=True, timeout=60).returncode == 1)

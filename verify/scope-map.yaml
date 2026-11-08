@@ -7,6 +7,7 @@ full:
   - verify/no-cloud.sh
   - verify/no_cloud.py
   - verify/ensure-submodules.sh
+  - verify/git_mirror.py
   - verify/fetch-e2e-tools.sh
   - verify/e2e-tools.lock
   - verify/artifact-cache.sh
@@ -40,6 +41,12 @@ bounds:
     why: value_files() reads each $values/ file the collector Applications name
     paths:
       - gitops/otel-collector
+  verify/git_mirror.py:
+    why: submodules() reads .gitmodules and each gitlink of this tree; its other git calls read a mirror or a submodule
+    paths:
+      - .gitmodules
+      - gitops/ai-layer/guard-proxy
+      - images/llm-guard
 always:
   test_agent_tools_sync.py: 'verify/test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole; line 576 builds a path under the repo root from a value it finds at run time'
   test_american_english_gate.py: 'line 37 builds a path under the repo root from a value it finds at run time; line 38 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
@@ -71,6 +78,7 @@ always:
   test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole
   test_gateway_notes_files.py: line 33 builds a path under the repo root from a value it finds at run time
   test_genai_semconv_pin.py: 'verify/test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole'
+  test_git_mirror.py: it runs git cat-file, which reads the tree or history as a whole
   test_gitattributes_union.py: it runs git log, ls-files, which reads the tree or history as a whole
   test_guard_lease.py: line 640 builds a path under the repo root from a value it finds at run time
   test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
@@ -624,6 +632,7 @@ reads:
     - gitops/bootstrap/apps/workshop-agent.yaml
     - gitops/workshop-agent/agent.yaml
   test_agent_witch_name.py:
+    - .gitmodules
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
     - challenges/c3-secret-grep/fallback.kubectl.sh
@@ -639,9 +648,13 @@ reads:
     - gitops/bootstrap/apps/workshop-agent.yaml
     - gitops/workshop-agent
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
@@ -788,12 +801,17 @@ reads:
     - verify/playwright_browsers.py
     - verify/python.lock
   test_audience_path.py:
+    - .gitmodules
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
   test_audit_import_state.py:
     - docs/floor.md
     - infra/terraform/aws/audit
@@ -1413,16 +1431,26 @@ reads:
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_chat_coc.py:
+    - .gitmodules
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
   test_chat_coc_e2e.py:
+    - .gitmodules
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/run-e2e-tools.sh
   test_chat_no_desk_link.py:
     - gitops/ai-layer/web/burritbot.html
@@ -2427,10 +2455,15 @@ reads:
     - verify/charts_lock.py
     - verify/gh_comments.py
   test_display_masked_prompts_e2e.py:
+    - .gitmodules
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/web/display.js
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/display-feed-harness.js
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/run-e2e-tools.sh
   test_display_throttle_e2e.py:
     - gitops/ai-layer/web/display.js
@@ -2601,7 +2634,13 @@ reads:
     - gitops/ai-layer/web/skin.js
     - gitops/ai-layer/web/skins.js
   test_ensure_submodules.sh:
+    - .gitmodules
+    - gitops/ai-layer/guard-proxy
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
   test_every_prompt_view.py:
     - gitops/ai-layer/web/brief.html
     - infra/datadog-fleet/dashboard.yaml
@@ -3420,6 +3459,7 @@ reads:
     - infra/dns/set-demo-dns.py
     - infra/front-door-cert.sh
   test_front_door_tls_live_logic.py:
+    - .gitmodules
     - CLAUDE.md
     - backstage
     - gitops
@@ -3429,6 +3469,7 @@ reads:
     - gitops/bootstrap/apps
     - gitops/bootstrap/templates
     - gitops/bootstrap/values.yaml
+    - images/llm-guard
     - infra/argocd-values.yaml
     - infra/aws-load-balancer-controller-values.yaml
     - infra/datadog-cluster-identity.sh
@@ -3440,9 +3481,12 @@ reads:
     - observability-idp
     - policies
     - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/bootstrap_chart.py
     - verify/ensure-submodules.sh
     - verify/front_door_tls_live.py
+    - verify/git_mirror.py
     - verify/run-e2e-tools.sh
   test_gate_commands.py:
     - AGENTS.md
@@ -3582,6 +3626,7 @@ reads:
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
+    - verify/image_cache.py
   test_gotchas_router_probe.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -4135,6 +4180,10 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
+  test_image_cache.py:
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/image_cache.py
   test_image_version_tags.py:
     - '**'
     - .github/workflows/build-web-terminal.yml
@@ -4340,13 +4389,17 @@ reads:
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
+    - verify/image_cache.py
   test_joker_web_busybox.py:
     - images/villains
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/joker-web/www/index.html
     - images/villains/villain-banner.sh
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ghcr_pull.py
+    - verify/image_cache.py
   test_kagent_service_name_collector.py:
     - gitops/bootstrap/apps/otel-collector-attendee.yaml
     - gitops/bootstrap/apps/otel-collector-burn.yaml
@@ -5793,6 +5846,7 @@ reads:
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_progress_entries.py:
+    - .gitmodules
     - CLAUDE.md
     - PROGRESS.md
     - agent
@@ -5908,6 +5962,7 @@ reads:
     - verify/ensure-submodules.sh
     - verify/failover_drill.py
     - verify/fetch-e2e-tools.sh
+    - verify/git_mirror.py
     - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/no-cloud.sh
@@ -7420,10 +7475,15 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/workshop-agent/agent.yaml
   test_tier_swap_live_judges.py:
+    - .gitmodules
     - agent
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
+    - images/llm-guard
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/ensure-submodules.sh
+    - verify/git_mirror.py
     - verify/test_tier_swap_live.py
   test_tool_audit.py:
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh

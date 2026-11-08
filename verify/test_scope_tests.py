@@ -133,6 +133,17 @@ bound = doc["bounds"]["verify/collector_render.py"]["paths"]
 named = [os.path.relpath(f, REPO) for app in cr.PROFILE_APP.values() for f in cr.value_files(app)]
 check("every values file the collector Applications name is inside collector_render.py's bound",
       named and all(any(st.covers(e, f) for e in bound) for f in named), str(named))
+# git_mirror.py (#1122) runs git cat-file on a mirror and ls-files for the gitlinks; its bound names what it reads of
+# this tree, so a test that runs ensure-submodules.sh is not sent to always by those calls, and reads the bound instead.
+bound = doc["bounds"]["verify/git_mirror.py"]["paths"]
+check("git_mirror.py's bound is .gitmodules and every submodule path", sorted(bound)
+      == sorted([".gitmodules", *tree.submodules]), f"{bound} against {sorted(tree.submodules)}")
+unbounded = st.extract("verify/test_ensure_submodules.sh", tree, {})
+bounded = st.extract("verify/test_ensure_submodules.sh", tree, doc["bounds"])
+check("without the bound, git_mirror.py's git reads send a test that follows it to always",
+      any(w.startswith("verify/git_mirror.py: it runs git") for w in unbounded.why_always), str(unbounded.why_always))
+check("with it, they do not, and the test reads .gitmodules and both submodules", not bounded.why_always
+      and set(bound) <= bounded.paths, f"{bounded.why_always} {sorted(bounded.paths)}")
 
 print("== select() on the real map ==")
 mode, why = st.select(doc, "offline", ["decisions.md"], tests)

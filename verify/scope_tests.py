@@ -12,8 +12,8 @@ The map, verify/scope-map.yaml, has five parts:
     full    changed paths that run everything: the runners, this file, and the helpers and config that many tests
             read (every verify/ helper that more than SHARED_HELPER tests import or name must be listed here)
     unread  changed paths that are known and that no test reads beyond those whose own entry names them
-    bounds  helpers that build paths from repo data, each with the paths that bound what it builds and why;
-            test_scope_tests.py holds each bound against the data
+    bounds  helpers that build paths from repo data, or run git on a repository other than this tree's (a mirror, a
+            submodule), each with the paths that bound what it reads and why; test_scope_tests.py holds each bound
     always  tests that run on every scoped run, each with why: they read the whole repo or its git history
     reads   every other test the two runners run, with each repo path it reads. A path covers itself and everything
             under it; one holding * or ? is a glob in which * also crosses /
@@ -874,7 +874,10 @@ def _own(rel: str, tree: Tree, bounds: dict) -> tuple[Extraction, list[str]]:
     else:
         _extract_text(src, rel, tree, out, "#")
     if rel in bounds:
+        # The bound is what the helper reads of this tree, so it stands in for every guess at more: a path built at
+        # run time, or a git read (git_mirror.py's cat-file reads a mirror's object, its ls-files the gitlinks, #1122).
         out.runtime = []
+        out.why_always = []
         out.paths |= set(bounds[rel]["paths"])
     if rel.endswith(".sh"):
         out.paths |= _sourced(rel, tree)

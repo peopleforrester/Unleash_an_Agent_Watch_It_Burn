@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # ABOUTME: ensure-submodules.sh checks out a missing submodule, and moves one checked out at another commit back
 # ABOUTME: to the superproject's pin, so the suites never read a stale proxy.py (#837). Offline: local repos only.
+# Since #1122 the checkout comes from a bare mirror in the host artifact cache (verify/git_mirror.py, which
+# test_git_mirror.py holds case by case); here the cache root is a scratch directory outside every worktree.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+CACHE="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import artifact_cache; print(artifact_cache.scratch_dir("ensure-submodules-test-"))' "${HERE}")"
+trap 'rm -rf "${WORK}" "${CACHE}"' EXIT
+unset HECATON_TOOLS_CACHE ARTIFACT_FETCH_LOG
+export WIB_ARTIFACT_CACHE="${CACHE}"
 # Local file:// submodule clones are refused by default since git 2.38.1; allow them for this process only.
 export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
@@ -23,7 +28,7 @@ NEW="$(git -C "${WORK}/sub" rev-parse HEAD)"
 git init -q -b main "${WORK}/super"
 git -C "${WORK}/super" submodule add -q "${WORK}/sub" guard-proxy
 mkdir "${WORK}/super/verify"
-cp "${HERE}/ensure-submodules.sh" "${WORK}/super/verify/"
+cp "${HERE}/ensure-submodules.sh" "${HERE}/git_mirror.py" "${HERE}/artifact_cache.py" "${WORK}/super/verify/"
 git -C "${WORK}/super" add verify; git -C "${WORK}/super" commit -qm pin
 
 echo "== a submodule checked out at another commit is moved to the pin =="
@@ -38,6 +43,8 @@ git clone -q "${WORK}/super" "${WORK}/fresh"
 check "the fresh clone starts with the submodule uninitialised" "$(git -C "${WORK}/fresh" submodule status | cut -c1)" "-"
 bash "${WORK}/fresh/verify/ensure-submodules.sh" >/dev/null
 check "the submodule is checked out at the pin" "$(git -C "${WORK}/fresh/guard-proxy" rev-parse HEAD)" "${NEW}"
+check "it came from the host cache's mirror, cloned once" "$(wc -l <"${CACHE}/fetch.log" | tr -d ' ')" "1"
+check "its origin is the submodule's own URL" "$(git -C "${WORK}/fresh/guard-proxy" remote get-url origin)" "${WORK}/sub"
 
 echo "== a submodule at its pin is left alone =="
 check "status reads clean" "$(git -C "${WORK}/fresh" submodule status | cut -c1)" " "

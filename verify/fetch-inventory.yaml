@@ -183,12 +183,12 @@ sites:
     class: none
     why: the usage comment
   verify/ensure-submodules.sh:
-  - match: submodule update
-    lines: 2
+  - match: git_mirror\.py
+    lines: 1
     class: pinned
     kind: git-commit
-    pin: .gitmodules (each submodule's URL) and the superproject's gitlinks (its commit)
-    cached: false
+    pin: .gitmodules (each submodule's URL) and the superproject's gitlinks (its commit), checked out from git_mirror.py's bare mirror
+    cached: true
   verify/guard-proxy-pin-on-main.sh:
   - match: .
     lines: 1
@@ -378,6 +378,17 @@ sites:
     lines: 3
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/git_mirror.py:
+  - match: '"clone", "--bare"'
+    lines: 1
+    class: pinned
+    kind: git-commit
+    pin: the commit ensure() is given (ensure-submodules.sh passes each superproject gitlink); the bare mirror's clone, on a miss
+    cached: true
+  - match: .
+    lines: 9
+    class: none
+    why: the docstring, the command-line usage, a message and the fetch log's result text; the one network clone is classed above
   verify/iam_plan_render.py:
   - match: run\("init"
     lines: 1
@@ -389,6 +400,17 @@ sites:
     lines: 1
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/image_cache.py:
+  - match: urlopen|artifact_cache\.get_retrying\(h
+    lines: 3
+    class: pinned
+    kind: container-image
+    pin: the reference's own @sha256 digest (build.sh's JOKER_BASE); each manifest and blob through artifact_cache.get_retrying by its sha256
+    cached: true
+  - match: .
+    lines: 3
+    class: none
+    why: the docstring and the command-line usage; none runs a fetch
   verify/input-guard.sh:
   - match: localhost:8080
     lines: 1
@@ -1044,12 +1066,12 @@ sites:
     lines: 5
     class: loopback
     why: crane's own registry on 127.0.0.1, which the test starts
-  - match: '"CRANE": crane'
-    lines: 2
+  - match: image_cache\.layout\(|"CRANE":\ crane
+    lines: 3
     class: pinned
     kind: container-image
-    pin: images/villains/build.sh (JOKER_BASE, the Jokers' base image by digest, pulled from ghcr.io)
-    cached: false
+    pin: images/villains/build.sh (JOKER_BASE, the Jokers' base by digest, from image_cache.py's OCI layout; ghcr.io only on a miss)
+    cached: true
   - match: .
     lines: 9
     class: none
@@ -1059,10 +1081,12 @@ sites:
     lines: 1
     class: loopback
     why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
-  - match: .
+  - match: image_cache\.layout\(
     lines: 1
-    class: none
-    why: comments, docstrings or messages that name the command; none runs it
+    class: pinned
+    kind: container-image
+    pin: images/villains/build.sh (JOKER_BASE, the busybox base by digest, from image_cache.py's OCI layout; ghcr.io only on a miss)
+    cached: true
   verify/test_kagent_service_name_collector.py:
   - match: urlopen
     lines: 1

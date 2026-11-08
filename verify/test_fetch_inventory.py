@@ -92,6 +92,10 @@ samples = {
     "setup-action": "- uses: actions/" + "setup-node@abc",
     "artifact-cache": 'archive="$(bash verify/artifact' + '-cache.sh get "${sha}" "${url}")"',
 }
+# #1122's two entry points, each in the artifact-cache family: an image layout and a git mirror, by call and by command.
+for line in ("base = image" + "_cache.layout(ref)", 'layout="$(python3 verify/image' + '_cache.py layout "${base}")"',
+             "m = git" + "_mirror.ensure(url, pin)", 'python3 "${REPO_DIR}/verify/git' + '_mirror.py" submodules "${REPO_DIR}"'):
+    check(f"artifact-cache: the scan finds {line!r}", "artifact-cache" in fi.families(line), str(fi.families(line)))
 check("every family has a sample", set(samples) == set(fi.PATTERNS), str(set(fi.PATTERNS) ^ set(samples)))
 for fam, line in samples.items():
     check(f"{fam}: the scan finds {line!r}", bool(fi.SCAN.search(line)) and fam in fi.families(line), str(fi.families(line)))

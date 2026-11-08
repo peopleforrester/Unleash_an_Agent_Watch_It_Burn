@@ -19,6 +19,7 @@ on:
       - 'verify/ci-artifact-cache.sh'
       - 'verify/artifact_cache.py'
       - 'verify/artifact-cache.sh'
+      - 'verify/image_cache.py'
       - '.github/workflows/push-jokers.yml'
       - 'scripts/ghcr_version_tag.py'
 
@@ -51,7 +52,8 @@ jobs:
           echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
           "${RUNNER_TEMP}/bin/crane" version
       # No registry credential is in this step's environment, and build-loopback.sh refuses any address but loopback,
-      # so the build cannot reach ghcr.io.
+      # so the build cannot reach ghcr.io. build.sh's pinned base comes from the runner's artifact cache as an OCI
+      # layout keyed by its digest (verify/image_cache.py, #1122), read from ghcr.io anonymously only on a miss.
       - name: Build both Jokers with build.sh into crane's registry on loopback
         run: |
           nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &

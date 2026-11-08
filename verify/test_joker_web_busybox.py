@@ -1,18 +1,18 @@
 # ABOUTME: Runs C6's Joker entrypoint (#664) and its shell banner (#714) on the busybox the image is built from:
-# ABOUTME: build.sh's pinned JOKER_BASE, from lab-platform's ghcr.io copy by digest. The page must be served, the laugh
-# ABOUTME: logged, SIGTERM obeyed, and the banner shown to an interactive shell only.
-# SUITE: e2e (needs the network: ghcr.io is asked for the pinned busybox)
+# ABOUTME: build.sh's pinned JOKER_BASE, lab-platform's ghcr.io copy, from the host artifact cache by digest. The page
+# ABOUTME: must be served, the laugh logged, SIGTERM obeyed, and the banner shown to an interactive shell only.
+# SUITE: e2e (needs the network on a cache miss: ghcr.io is asked for the pinned busybox)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it, #572)
 #
 # Why. build.sh needs a ghcr.io write credential, so a run cannot push the image and see it serve. What can be
 # checked without them is everything the image adds to its base: start.sh, www/ and the shell banner, run by the
-# base's own busybox (its sh, its httpd), exactly as the layer build.sh appends lays them out. The busybox is fetched by the digest
-# build.sh pins, every blob checked against its sha256, and only bin/busybox is taken from the layer.
+# base's own busybox (its sh, its httpd), exactly as the layer build.sh appends lays them out. The busybox is the digest
+# build.sh pins, served by verify/image_cache.py as an OCI layout in the host artifact cache (#1122): every blob is
+# checked against its sha256, on a hit as on a miss, ghcr.io is read only on a miss, and only bin/busybox is taken from
+# the layer. Whether lab-platform's copy answers an anonymous pull is test_c6_joker_public.py's check, read live.
 from __future__ import annotations
 
-import hashlib
 import io
-import json
 import os
 import pathlib
 import pty
@@ -31,7 +31,8 @@ import urllib.request
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "verify"))
-from ghcr_pull import ACCEPT, read_url  # noqa: E402
+import artifact_cache  # noqa: E402
+import image_cache  # noqa: E402
 
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
 JOKER = REPO / "images/villains/joker-web"
@@ -39,7 +40,6 @@ PAGE = (JOKER / "www/index.html").read_bytes()
 BANNER = REPO / "images/villains/villain-banner.sh"
 LINE = "ACCESS GRANTED... just kidding, you deployed me. Why so trusting about admission control?"
 LAUGH = "HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control?"
-REGISTRY = "https://ghcr.io"
 
 failures: list[str] = []
 
@@ -58,30 +58,6 @@ def finish() -> None:
             print(f"  - {f}")
         raise SystemExit(1)
     print("The Joker's entrypoint serves its page on the pinned busybox.")
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *a, **kw):
-        return None
-
-
-_opener = urllib.request.build_opener(_NoRedirect)
-
-
-def get(repo: str, token: str, path: str, digest: str) -> bytes:
-    """A manifest or blob by digest, checked against it. A blob's redirect is followed without the token."""
-    req = urllib.request.Request(f"{REGISTRY}/v2/{repo}/{path}/{digest}",
-                                 headers={"Authorization": f"Bearer {token}", "Accept": ACCEPT})
-    try:
-        body = read_url(req, timeout=60, opener=_opener)
-    except urllib.error.HTTPError as e:
-        if e.code not in (301, 302, 307, 308):
-            raise
-        body = read_url(e.headers["Location"], timeout=120)
-    got = "sha256:" + hashlib.sha256(body).hexdigest()
-    if got != digest:
-        raise ValueError(f"{path}/{digest} came back as {got}")
-    return body
 
 
 def interactive_sh(bindir: pathlib.Path, env: dict[str, str]) -> str:
@@ -143,22 +119,17 @@ check("build.sh pins JOKER_BASE to lab-platform's ghcr.io busybox copy by digest
 if not m:
     finish()
 repo, base_digest = m.group(1), m.group(2)
+ref = re.search(r'^JOKER_BASE="([^"]+)"', BUILD, re.M).group(1)
 try:
-    # Anonymously, as a node with no pull secret would: the copy is public (lab-platform#353).
-    token = json.loads(read_url(f"https://ghcr.io/token?scope=repository:{repo}:pull"))["token"]
-    manifest = json.loads(get(repo, token, "manifests", base_digest))
-    if "manifests" in manifest:  # an index: build.sh's crane append takes its linux/amd64 image
-        amd64 = next(d["digest"] for d in manifest["manifests"]
-                     if d.get("platform", {}).get("os") == "linux" and d["platform"].get("architecture") == "amd64")
-        manifest = json.loads(get(repo, token, "manifests", amd64))
-    config = json.loads(get(repo, token, "blobs", manifest["config"]["digest"]))
-    layers = manifest.get("layers", [])
-    blobs = [get(repo, token, "blobs", layer["digest"]) for layer in layers]
-except (urllib.error.URLError, OSError, ValueError, KeyError, StopIteration) as e:
-    check(f"ghcr.io serves {repo}@{base_digest} anonymously, every blob matching its digest", False,
+    base = image_cache.image(image_cache.layout(ref))
+    config = base["config"]
+    blobs = [p.read_bytes() for p in base["layers"]]
+except (artifact_cache.ArtifactCacheError, OSError, ValueError, KeyError) as e:
+    check(f"the host artifact cache serves {repo}@{base_digest} as an OCI layout, every blob matching its digest", False,
           f"{type(e).__name__}: {e}")
     finish()
-check(f"ghcr.io serves {repo}@{base_digest[:19]}... anonymously, every blob matching its digest", True)
+check(f"the host artifact cache serves {repo}@{base_digest[:19]}... as an OCI layout, every blob matching its digest",
+      True)
 check("the base is linux/amd64, the nodes' platform", (config.get("os"), config.get("architecture")) == ("linux", "amd64"),
       f"{config.get('os')}/{config.get('architecture')}")
 
