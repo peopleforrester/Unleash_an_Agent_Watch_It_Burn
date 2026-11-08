@@ -34831,3 +34831,41 @@ suite, printed `352 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 added. After this decisions.md entry was appended, `bash verify/run-tests.sh` was re-run on the final commit and
 printed `352 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`; the decisions-reading tests
 (`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`) are among them.
+## 2026-11-08 · #1081 · run 18542 · KubeArmor's default limits, globalEnv DD_ENV and the load balancer controller's limits are in git, and the enforce floor renders the two releases deploy-full-idp.sh installs
+
+**What.** Run 17932's draft for #629 (`717f1fa0` on `origin/agent/629-17932`), the part #1081 names, ported onto
+staging `fe511dc5`:
+- `gitops/kubearmor-config/templates/limitrange.yaml`: LimitRange `kubearmor-default-limits` at sync wave -1, default
+  limits cpu 1 and memory 1Gi, default requests 50m and 128Mi, for every container the operator builds without any.
+- `gitops/bootstrap/apps/kubearmor.yaml`: `globalEnv` DD_ENV=burritobot-kubecon-na-26 on the KubeArmorConfig.
+- `infra/aws-load-balancer-controller-values.yaml`: requests 50m/128Mi, limits 500m/512Mi.
+- `verify/test_enforce_floor.py`: a section that finds the argo-cd and aws-load-balancer-controller lines in
+  `infra/deploy-full-idp.sh`, renders each chart at the version that line pins with the values file it names, and
+  fails on any container, hook Jobs included, without cpu and memory limits.
+- `verify/test_kubearmor_config_tracked.py`: the chart's templates are the config and the LimitRange, the LimitRange
+  gives default cpu and memory limits and requests at a wave below 0, and globalEnv carries DD_ENV.
+
+**What differs from the draft.** Staging moved `test_enforce_floor.py` to `chart_fetch.pull` (#1028, #1118), so the
+new section pulls each chart by its `verify/charts.lock` sum instead of `helm template --repo`; both charts were
+already in the lock. When the deploy line is not found, the check names the anchor and the file. The other four files
+are the draft's hunks as they were; staging had not touched them. `infra/argocd-values.yaml` already gave
+redisSecretInit and every other Argo CD container limits (#858), so it needed no change. The bootstrap chart's
+Application list did not change, so `verify/test_bootstrap_chart.py` did not either. `test_enforce_floor.py` is in the
+scope map's always list and `test_kubearmor_config_tracked.py` already reads `gitops/kubearmor-config`, so
+`verify/scope-map.yaml` is unchanged. With `infra/aws-load-balancer-controller-values.yaml` cut back to its labels,
+the new section failed with `MISSING ['Deployment/aws-load-balancer-controller:aws-load-balancer-controller']`.
+
+**Live check on watch-it-burn-private (read only, nothing changed).** `validatingpolicy require-resource-limits` is
+`["Deny"]`. Every pod in kubearmor (`kubearmor-bpf-containerd`, `kubearmor-controller`, `kubearmor-relay` with
+DD_ENV, `kubearmor-operator` with the label) and in argocd (application-controller, applicationset-controller,
+notifications-controller, redis, repo-server, server, all with the label) runs with burritobot-kubecon-na-26. The
+cluster already had the draft applied by hand: LimitRange `kubearmor-default-limits`, created 2026-11-05T03:34:37Z
+with a `kubectl.kubernetes.io/last-applied-configuration` annotation equal to the template here, the KubeArmorConfig's
+`globalEnv` holding the same DD_ENV, and both aws-load-balancer-controller pods in kube-system running with limits
+500m/512Mi. The kubearmor containers the operator built carry the LimitRange's 1/1Gi. The kubearmor Application read
+Synced Healthy. This change puts what the cluster runs into git.
+
+**Not yet run on a cluster.** After promotion, that Argo CD adopts the hand-applied LimitRange and globalEnv from git
+and the kubearmor Application stays Synced Healthy:
+`kubectl --context watch-it-burn-private -n kubearmor get limitrange kubearmor-default-limits -o yaml` showing an
+`argocd.argoproj.io/tracking-id` annotation, and the pod read above giving the same result.
