@@ -2,7 +2,12 @@
 # ABOUTME: The gate's E2E command (#572): the offline suite and every `# E2E TIER: tools` check, run with pinned,
 # ABOUTME: checksum-verified binaries fetched into verify/.tools. Needs network; never a cluster, CONTEXT or AWS.
 #
-# Usage: bash verify/run-e2e-tools.sh
+# Usage: bash verify/run-e2e-tools.sh                      the offline suite and the tier, scoped by HECATON_BASE_SHA
+#        bash verify/run-e2e-tools.sh test_a.py [test_b.sh]  only the tier tests named, with the tools; no offline suite
+#
+# A failed check's log is kept in verify/.e2e-logs/ (E2E_TOOLS_LOG_DIR), and a failure is printed first, before the
+# timings: the check, its log and the command that reruns it alone (#1190). Fix that one test and rerun that command,
+# never the whole script.
 #
 # Hecaton's promotion gate runs the declared `E2E command:` instead of the `Test command:`, on a host with no
 # attendee cluster, no AWS profile and none of the cluster tools (#543). This is the part of the E2E suite that
@@ -28,13 +33,34 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
+LOG_DIR="${E2E_TOOLS_LOG_DIR:-${SCRIPT_DIR}/.e2e-logs}"
+
+# Tier tests named on the command line run alone (#1190): the way to rerun the one that failed, with the same tools
+# and environment, and no offline suite. Each must be a `# E2E TIER: tools` test in verify/.
+declare -A only=()
+for arg in "$@"; do
+    name="$(basename "${arg}")"
+    if [[ ! -f "${SCRIPT_DIR}/${name}" ]] || ! grep -q '^# E2E TIER: tools' "${SCRIPT_DIR}/${name}"; then
+        printf 'E2E TOOLS TIER CANNOT RUN: %s is not a `# E2E TIER: tools` test in %s\n' "${arg}" "${SCRIPT_DIR}" >&2
+        exit 1
+    fi
+    only["${name}"]=1
+done
 
 # Scoped to the change (#1018), as run-tests.sh is: with HECATON_BASE_SHA set, a tier test runs only when the change
 # touches what it reads (verify/scope-map.yaml), and when none does, the tools are neither checked for nor fetched.
-# Without it every tier test runs. The offline suite below inherits the variable and scopes itself the same way.
+# On the promotion gate hecaton sets it to main's SHA (hecaton#619), so the range is origin/main..tip, and the whole
+# tier runs only when scope_tests.py says FULL for it: the tools lock, the map's rules, a shared harness file, or a
+# path no entry covers. A changed prose file (.md, .mdx, .html) selects no tier test (#1190), so a doc-only range runs
+# the scoped offline suite alone and fetches nothing. Without HECATON_BASE_SHA every tier test runs. The offline suite
+# below inherits the variable and scopes itself the same way.
 scoped=0
 declare -A selected=()
-if [[ -n "${HECATON_BASE_SHA:-}" ]]; then
+if [[ "${#only[@]}" -gt 0 ]]; then
+    scoped=1
+    for t in "${!only[@]}"; do selected["${t}"]=1; done
+    printf 'only the tier tests named: %s\n' "${!only[*]}"
+elif [[ -n "${HECATON_BASE_SHA:-}" ]]; then
     command -v python3 >/dev/null 2>&1 || { printf 'SCOPE FAILED: python3 is not on PATH\n' >&2; exit 1; }
     plan="$(python3 "${SCRIPT_DIR}/scope_tests.py" select tools)" \
         || { printf 'SCOPE FAILED: scope_tests.py could not read the change against HECATON_BASE_SHA=%s\n' \
@@ -117,13 +143,17 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 # `# E2E SERIAL: terraform` run one at a time here (#572, #1005), and each holds TF_CACHE_LOCK while it runs, so a run
 # in another checkout that shares the cache waits its turn. A wait past TF_CACHE_LOCK_WAIT seconds fails the check,
 # naming the lock.
-TF_CACHE="$(python3 "${SCRIPT_DIR}/tf_plugin_cache.py")" || {
-    printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: no usable Terraform provider cache\n' >&2
-    exit 1
-}
+# With no tier test to run, no cache is named either.
+TF_CACHE=""
+if [[ "${need_tools}" -eq 1 ]]; then
+    TF_CACHE="$(python3 "${SCRIPT_DIR}/tf_plugin_cache.py")" || {
+        printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: no usable Terraform provider cache\n' >&2
+        exit 1
+    }
+    printf 'Terraform provider cache: %s\n' "${TF_CACHE}"
+fi
 TF_CACHE_LOCK="${TF_CACHE}.lock"
 TF_CACHE_LOCK_WAIT="${TF_CACHE_LOCK_WAIT:-1800}"
-printf 'Terraform provider cache: %s\n' "${TF_CACHE}"
 
 check_job() { # $1: the check's own directory, $2: "offline" or a tier test
     local dir="$1" t="$2"
@@ -172,6 +202,9 @@ check_job() { # $1: the check's own directory, $2: "offline" or a tier test
 queue=(offline)
 serial=("")
 labels=("run-tests.sh (the offline suite)")
+if [[ "${#only[@]}" -gt 0 ]]; then
+    queue=(); serial=(); labels=()
+fi
 tier=0
 tier_found=0
 later=()
@@ -201,9 +234,53 @@ fi
 declare -A job_index=() job_start=()
 terraform_busy=""
 
+kept_log() { # $1: the check's place in the queue; where its log is kept if it fails
+    if [[ "${queue[$1]}" == offline ]]; then
+        printf '%s/run-tests.sh.log' "${LOG_DIR}"
+    else
+        printf '%s/%s.log' "${LOG_DIR}" "$(basename "${queue[$1]}")"
+    fi
+}
+
+# A failed check (#1190): its log is kept, and it is named at once with that log and the command that reruns it alone.
+# A run that reran the whole script for one failure spent nine minutes a time and fixed nothing (run 18622 on #1186).
+# For the offline suite the command is each failed offline test's own, read from the suite's `SOME TESTS FAILED:` list.
+failed_detail=()
+keep_failed() { # $1: the check's place in the queue, $2: its exit code
+    local i="$1" rc="$2" file t
+    local -a again=()
+    file="$(kept_log "${i}")"
+    mkdir -p "${LOG_DIR}"
+    cp "${WORK_DIR}/${i}/log" "${file}"
+    if [[ "${queue[$i]}" == offline ]]; then
+        while IFS= read -r t; do
+            case "${t}" in
+                *.py) again+=("python3 ${SCRIPT_DIR}/${t}") ;;
+                *.sh) again+=("bash ${SCRIPT_DIR}/${t}") ;;
+            esac
+        done < <(sed -n '/^SOME TESTS FAILED:/,$p' "${file}" | sed -n 's/^  \(test_[^ ]*\) (exit .*/\1/p')
+        [[ "${#again[@]}" -gt 0 ]] || again=("bash ${SCRIPT_DIR}/run-tests.sh")
+    else
+        again=("bash ${SCRIPT_DIR}/run-e2e-tools.sh $(basename "${queue[$i]}")")
+    fi
+    local detail="  ${labels[$i]} (exit ${rc})"$'\n'"    log: ${file}"
+    for t in "${again[@]}"; do
+        detail+=$'\n'"    rerun it alone: ${t}"
+    done
+    failed_detail+=("${detail}")
+    printf '\nFAILED: %s (exit %d); its log: %s\n' "${labels[$i]}" "${rc}" "${file}"
+}
+
+failed_first() { # every failed check, its log and its rerun command, ahead of the timings
+    [[ "${#failed_detail[@]}" -gt 0 ]] || return 0
+    printf '\nFAILED, each with its log; fix it and rerun that one alone, never the whole script:\n'
+    printf '%s\n' "${failed_detail[@]}"
+}
+
 start_job() { # $1: the check's place in the queue
     local i="$1" dir="${WORK_DIR}/$1"
     mkdir -p "${dir}"
+    rm -f "$(kept_log "${i}")"
     check_job "${dir}" "${queue[$i]}" >"${dir}/log" 2>&1 &
     job_index[$!]="${i}"
     job_start[$!]="${SECONDS}"
@@ -213,10 +290,10 @@ start_job() { # $1: the check's place in the queue
 finish_job() { # $1: the check's pid, $2: its exit code
     local pid="$1" rc="$2" i="${job_index[$1]}" took=$((SECONDS - job_start[$1]))
     local label="${labels[$i]}"
+    [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${label} (exit ${rc})"); keep_failed "${i}" "${rc}"; }
     printf '\n== %s ==\n' "${label}"
     cat "${WORK_DIR}/${i}/log"
     ran=$((ran + 1))
-    [[ "${rc}" -eq 0 ]] || { fail=1; failed_names+=("${label} (exit ${rc})"); }
     # Each check's seconds, so a gate that runs out of time shows in its tail where the time went (#1005).
     printf -- '-- %s took %ds\n' "${label}" "${took}"
     timings+=("${took} ${label}")
@@ -243,6 +320,7 @@ descendants() { # every process under $1, deepest first
 stopped() {
     trap - INT TERM
     local pid i
+    failed_first
     printf '\nThe slowest checks that ended:\n'
     slowest
     printf '\nSTOPPED by a signal after %dm%02ds, %d of %d checks ended, these still running:\n' \
@@ -274,14 +352,21 @@ while [[ "${#pending[@]}" -gt 0 || "${#job_index[@]}" -gt 0 ]]; do
     finish_job "${done_pid}" "${rc}"
 done
 
-# The time taken, since a run waits on this in the background and sets its limit from it (#796).
+# A failure first, with its log and the command that reruns it alone (#1190), then the time taken, since a run waits on
+# this in the background and sets its limit from it (#796).
+failed_first
 printf '\nThe slowest checks:\n'
 slowest
 # The line keeps the shape the suite records in decisions.md quote and test_952_suite_record.py reads; the job count
 # follows it.
-printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds, %d at a time\n' "${ran}" "${tier}" \
-    "$((SECONDS / 60))" "$((SECONDS % 60))" "${JOBS}"
-if [[ "${scoped}" -eq 1 ]]; then
+if [[ "${#only[@]}" -gt 0 ]]; then
+    printf '\n%d checks ran (the %d tier tests named, no offline suite) in %dm%02ds, %d at a time\n' "${ran}" "${tier}" \
+        "$((SECONDS / 60))" "$((SECONDS % 60))" "${JOBS}"
+else
+    printf '\n%d checks ran (the offline suite and %d tier tests) in %dm%02ds, %d at a time\n' "${ran}" "${tier}" \
+        "$((SECONDS / 60))" "$((SECONDS % 60))" "${JOBS}"
+fi
+if [[ "${scoped}" -eq 1 && "${#only[@]}" -eq 0 ]]; then
     printf '  scoped to the change since HECATON_BASE_SHA=%s: %d of the %d tier tests; the other %d read nothing it touched\n' \
         "${HECATON_BASE_SHA}" "${tier}" "${tier_found}" "$((tier_found - tier))"
 fi

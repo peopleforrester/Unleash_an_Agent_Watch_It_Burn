@@ -9,7 +9,8 @@
 2. The two bounds hold: every file bootstrap_chart.source_files() reads for an Application source in
    gitops/bootstrap/apps, and every values file collector_render.value_files() names, is inside the paths the map
    bounds that helper by.
-3. select() on the real map: a change to decisions.md alone runs its readers and the always tests and leaves the rest;
+3. select() on the real map: a change to decisions.md alone runs its offline readers and the always tests and leaves
+   the rest, and no tier test (#1190); a change to display.js runs its tier tests, not the whole tier;
    a change to a runner, the map, a shared helper, or a path no entry covers runs everything; a changed test runs.
    A change to the map's rules runs everything, and one to a test's entry runs that test.
 4. Both runners, copied into a fixture repo with four fixture tests (an offline and a tier test reading alpha/, the same
@@ -159,8 +160,12 @@ check("on the committed map, the live map only adds to each entry",
       all(set(doc["reads"][t]) <= set(live["reads"].get(t, [])) or t in live["always"] for t in doc["reads"] if t in tests))
 
 mode, why = st.select(doc, "tools", ["decisions.md"], tests)
-check("the tier is scoped by the same map: a decisions.md change runs a few tier tests, not all of them",
-      mode == "scoped" and 0 < len(why) < sum(1 for s in tests.values() if s == "tools") // 4, str(sorted(why)))
+check("a decisions.md change runs no tier test: the tier sets prose aside (#1190)", mode == "scoped" and not why,
+      str(sorted(why)))
+mode, why = st.select(doc, "tools", ["gitops/ai-layer/web/display.js"], tests)
+check("the tier is scoped by the same map: a display.js change runs its render tests, not the whole tier",
+      mode == "scoped" and "test_display_throttle_e2e.py" in why
+      and len(why) < sum(1 for s in tests.values() if s == "tools") // 2, str(sorted(why)))
 
 print("== both runners, in a fixture repo, run only what the change touches ==")
 FIXTURE_TEST = ('import pathlib, sys\n'

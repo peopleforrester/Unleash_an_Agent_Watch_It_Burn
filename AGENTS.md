@@ -102,6 +102,14 @@ covers runs everything, and without the variable everything runs. A new test nee
 the test's source itself, so the test still runs when it should, and the log and `verify/test_scope_tests.py` name it
 as drift. `python3 verify/scope_audit.py offline` (or `tools`) holds the map against what each test opens as it runs.
 
+The tools tier is run only where the change warrants it (#1190). Michael, 2026-11-08: "If the change warrants it then
+it goes end-to-end." On the promotion gate `HECATON_BASE_SHA` is main's SHA (hecaton#619), so `run-e2e-tools.sh` runs
+the tier tests `scope_tests.py select tools` names for origin/main..tip, and the whole tier only when that selection
+says FULL: the tools lock, the map's rules, a shared harness file, or a path no entry covers. A changed prose file
+(`.md`, `.mdx`, `.html`, the files the ai-isms gate reads) selects no tier test, so a doc-only range (the run-of-show,
+PROGRESS.md, decisions.md, the /kubecon copy) promotes on the scoped offline tests and the prose gate, with no tier
+test run and no tool fetched. `verify/test_e2e_tools_gate_scope.py` drives the runner on each kind of range.
+
 The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluster build, with CONTEXT,
 IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster, and DRIFT_PROFILE and
 ATTENDEE_CLUSTER naming the fleet account and attendee cluster the AWS-plane drift check uses (#205), and
@@ -118,7 +126,8 @@ two clusters that are up and an AWS session for them, it never brings a cluster 
 forbids deploying. Hecaton run 9654 lost its time to the first point below and run 9672 to the second (#633). Runs
 9277 and 15763 lost theirs redoing work an earlier run had done that never reached staging, the third point, and a
 stalled wait on the E2E command is the fourth (#798). Run 15816 lost its time to the fourth as well, and run 9604
-to the fifth (#796).
+to the fifth (#796). Run 18622 lost 45 minutes to the seventh, rerunning the whole tools tier three times for one
+failure (#1190).
 
 1. **A run checks live on the two clusters that are up, and brings none up or down.** Since Michael's ruling of
    2026-11-02 (hecaton#496, #809), every run gets, in its run directory, a 12-hour session for the `accen-dev` AWS
@@ -179,7 +188,9 @@ to the fifth (#796).
    `checks ran` line prints how long it took (22m58s in run 16533). Write the output and the exit code to a log of
    this run's own: `bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`. A bounded foreground wait
    is `timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`, under the shell tool's
-   10-minute foreground limit, run again after each 124 with a `tail -n 5` of the log between. Monitor needs an
+   10-minute foreground limit, run again after each 124 with a `tail -n 5` of the log between. Scope it to the run's
+   change by putting `HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)"` in front of the command: then it
+   runs only the tier tests the change touches, and for a change of prose alone none, with nothing fetched (#1190). Monitor needs an
    approval a run cannot get, so do not reach for it; run 16484 on #796 ended its turn to wait instead and was
    stopped as stalled. Read the verdict from the log: the `checks ran` line, `ALL E2E TOOLS TIER CHECKS GREEN` and
    `exit=0`. Do not watch the job with `pgrep` or `pkill` by script name: other runs on the host run the same
@@ -203,6 +214,13 @@ to the fifth (#796).
    `terminal-password` verb fails on either name, and a bring-up that finds no Secret writes none and fails by
    name. A live check reads the login from that Secret, never from an issue, a commit or a transcript, and never
    prints it. Their standbys (`-bNN`) are not covered by this rule.
+7. **A failed test is fixed and rerun alone, never the whole script.** When `run-e2e-tools.sh` fails, it prints
+   first, ahead of its timings, each failed check with its log, kept under `verify/.e2e-logs/`, and the command that
+   reruns that one test alone: `bash verify/run-e2e-tools.sh <test>` for a tier test, which runs it with the
+   pinned tools and no offline suite, or `python3 verify/<test>` for an offline one. Read the log, fix the cause,
+   and rerun that one command until it passes. Never rerun the whole script to see whether a failure goes away:
+   run 18622 on #1186 did that three times in 45 minutes and fixed nothing (#1190, #1191). A test that fails and then passes on a rerun is broken, not flaky (Tests own their
+   inputs, point 3).
 
 ## Tests own their inputs
 

@@ -61,6 +61,7 @@ always:
   test_drift_floor.py: line 160 builds a path under the repo root from a value it finds at run time
   test_drift_settle.py: it runs git ls-files, which reads the tree or history as a whole; line 139 builds a path under the repo root from a value it finds at run time
   test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole
+  test_e2e_tools_gate_scope.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole; verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_e2e_tools_tier.py: it runs git ls-files, which reads the tree or history as a whole
   test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; line 148 builds a path under the repo root from a value it finds at run time; line 47 builds a path under the repo root from a value it finds at run time
   test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole
