@@ -34776,3 +34776,13 @@ helper and both tests use the standard library, uv, node and the committed yarn 
 
 **Not yet run on a cluster.** Nothing: the change touches verify/, scripts/ and .github/workflows/ only, none of which a
 cluster runs, so no live check.
+
+**Suite results, run 18530.** On `cce097c4`, with no `HECATON_BASE_SHA`, so unscoped, `bash verify/run-e2e-tools.sh`
+printed `353 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which is `bash
+verify/run-tests.sh`), then `85 checks ran (the offline suite and 84 tier tests) in 21m44s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. It ran on the warm cache the measurements above had filled: the host artifact
+cache's fetch log read 158 lines before and after, so the tier's Python environments, its pinned tools, charts and
+Terraform providers made no download, and the only environments built were the two tests' fixtures in their own
+scratch roots. `test_package_cache.py` took 2 s, `test_package_cache_e2e.py` 4 s, `test_injection_classifier.py`
+24 s, `test_input_pii_guard_llm_guard.py` 7 s, `test_topic_classifier.py` 38 s and `test_turn_guard_e2e.py` 9 s. The
+prose gate printed `prose gate: pass`. The log is `/var/lib/hecaton/runs/18530/e2e-tools-1.log`.
