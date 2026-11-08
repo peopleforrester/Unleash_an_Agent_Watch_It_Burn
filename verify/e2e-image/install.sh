@@ -7,7 +7,6 @@
 #                                                               $WIB_E2E_TOOLS/bin/<name> and the row's name, version
 #                                                               and sum to $WIB_E2E_TOOLS/tools.txt
 #   install.sh bin <dir> <name> <sha256> <url> <member>         a runtime binary the lock does not cover (uv)
-#   install.sh tree <dir> <sha256> <url>                        a whole release archive, its top directory stripped (Node)
 #
 # <member> is the archive member that is the binary, or "-" when the URL is the binary itself, as in e2e-tools.lock.
 # Each file is fetched once, here, at build time; a host that runs the image never fetches it (#1188).
@@ -60,19 +59,7 @@ case "${verb}" in
         member_out "${file}" "${url}" "${member}" "${dir}/${name}"
         rm -f "${file}"
         ;;
-    tree)
-        [[ $# -eq 3 ]] || die "tree wants <dir> <sha256> <url>, got: $*"
-        dir="$1" sha="$2" url="$3"
-        mkdir -p "${dir}"
-        file="$(fetch "${url}" "${sha}")"
-        case "${url}" in
-            *.tar.gz) tar -xzf "${file}" -C "${dir}" --strip-components=1 ;;
-            *.tar.xz) tar -xJf "${file}" -C "${dir}" --strip-components=1 ;;
-            *)        die "${url}: tree takes a .tar.gz or .tar.xz" ;;
-        esac || die "could not unpack ${url##*/}"
-        rm -f "${file}"
-        ;;
     *)
-        die "unknown verb '${verb}'; want tool, bin or tree"
+        die "unknown verb '${verb}'; want tool or bin"
         ;;
 esac
