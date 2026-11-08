@@ -75,8 +75,8 @@ def fake_req(method, path, body=None, content_type=None):
 
 
 server._req = fake_req
-server._report = lambda name, ok, detail, image="", requested_by="": reports.append(  # noqa: E731
-    {"name": name, "ok": ok, "requested_by": requested_by})
+server._report = lambda name, ok, detail, image="", requested_by="", kind="": reports.append(  # noqa: E731
+    {"name": name, "ok": ok, "requested_by": requested_by, "kind": kind})
 server.JOKER_SCALE_DOWN_SECONDS = 3600.0
 server._ns = lambda: "agent"  # noqa: E731
 
