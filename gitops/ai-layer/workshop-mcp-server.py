@@ -547,7 +547,7 @@ def _name_room_joker(obj: dict, name: str) -> None:
 # deploy_app applies the image it is given (#991; Michael and Whitney, in person, 2026-11-06). Challenge 2's lesson is
 # the untrusted source: the room gets BurritoBot to deploy an image off the public internet while the guardrails are
 # off, and Kyverno's restrict-image-registries and deny-external-registries refuse it once guardrails-on arms them.
-# Until #991 deploy_app stopped the room first. It pulled six pinned images by name (#773; the list left with #992),
+# Until #991 deploy_app stopped the room first. It pulled a fixed list of pinned images by name (#773, gone with #992),
 # rewrote a Docker Hub official image to its public.ecr.aws copy and refused any other Docker Hub image (#714), and
 # served a manifest that was only an app's name ("Tron") on a pinned nginx (#939), so "deploy Tron" reported success
 # and ran nginx. Now the image the model writes is the image the node pulls, from any registry, Docker Hub included,
