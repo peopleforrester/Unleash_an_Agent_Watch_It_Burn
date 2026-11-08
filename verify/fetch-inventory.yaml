@@ -1,0 +1,1377 @@
+# ABOUTME: Every fetch call site under verify/, .github/workflows/ and scripts/, by file, classed as a pinned artifact,
+# ABOUTME: a live check, a loopback fetch or a line that runs none (#1116, part of #1115). verify/fetch_inventory.py reads it.
+#
+# verify/fetch_inventory.py scans each line of every file git tracks or would track under those three directories
+# for the command families its PATTERNS name, and test_fetch_inventory.py fails, naming the file and line, on a line no
+# entry here claims. An entry's `match` is a regular expression searched in the line; a line belongs to the first entry
+# of its file that matches it, and `lines` is how many lines the entry claims, so a new call site always changes a count.
+#
+#   pinned    kind (tool, terraform-provider, helm-chart, browser, python-package, node-package, container-image,
+#             release-file, cache-fill), pin (the file holding the pin), cached (true when the fetch goes through the
+#             host artifact cache of #1117 today)
+#   live      kind (cluster, lab-endpoint, registry, saas-api, upstream-index, github, public-web), target
+#   loopback  why: a server on 127.0.0.1, or a repository on this host, that the test made itself
+#   none      why: the line names the command and runs none
+#
+# A new fetch: run `python3 verify/fetch_inventory.py draft`, which prints a stub for each unclaimed line, class it and
+# give it the right count. `python3 verify/fetch_inventory.py summary` prints the counts decisions.md's #1115 entry gives.
+sites:
+  .github/workflows/iam-policy.yml:
+  - match: setup-python
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/iam-policy.yml (the action's commit and its python-version)
+    cached: false
+  .github/workflows/plan-policy.yml:
+  - match: setup-python
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/plan-policy.yml (the action's commit and its python-version)
+    cached: false
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  .github/workflows/push-jokers.yml:
+  - match: pinned crane|\^crane|= crane \]|artifact-cache\.sh get
+    lines: 4
+    class: pinned
+    kind: tool
+    pin: verify/e2e-tools.lock (crane's row, fetched through artifact-cache.sh get)
+    cached: true
+  - match: 127\.0\.0\.1:5000/v2/
+    lines: 2
+    class: loopback
+    why: crane's own registry on 127.0.0.1:5000, which the job starts
+  - match: .
+    lines: 4
+    class: none
+    why: 'comments, a step name, and the call that hands scripts/ghcr_version_tag.py a crane: build on loopback, whose fetches are classed there'
+  .github/workflows/verify-suites.yml:
+  - match: setup-uv
+    lines: 2
+    class: pinned
+    kind: tool
+    pin: .github/workflows/verify-suites.yml (the action's commit, which fixes its uv)
+    cached: false
+  - match: uv\svenv\s--python\s3\.13
+    lines: 2
+    class: pinned
+    kind: tool
+    pin: '.github/workflows/verify-suites.yml (--python 3.13: uv fetches a 3.13 build when the runner has none)'
+    cached: false
+  - match: setup-node
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/verify-suites.yml (the action's commit and its node-version)
+    cached: false
+  .github/workflows/weaver-registry-check.yml:
+  - match: artifact-cache
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/weaver-registry-check.yml (WEAVER_SHA256, weaver's archive)
+    cached: true
+  scripts/capture-fallback-screenshots.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  scripts/ghcr_version_tag.py:
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: registry
+    target: ghcr.io, for our own packages' tags, tokens and manifests
+  - match: .
+    lines: 11
+    class: none
+    why: the usage text, docstrings, messages and the crane binary's name; its crane calls read a build on loopback or push
+  scripts/harvest/01-clusters.py:
+  - match: api.datadoghq|urlopen\(req
+    lines: 1
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  scripts/harvest/04-argo-datadog.py:
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  scripts/harvest/05-analyze.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a regex that classes a tool call as a shell command
+  scripts/harvest/06-lab-progress.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  scripts/replay-prompts.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/agent_obs_flow.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/agent_probe.py:
+  - match: localhost:8080|urlopen\(r,
+    lines: 2
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/artifact_cache.py:
+  - match: urlopen
+    lines: 1
+    class: pinned
+    kind: cache-fill
+    pin: the SHA-256 its caller passes, from e2e-tools.lock, charts.lock, python.lock or a .terraform.lock.hcl
+    cached: true
+  - match: .
+    lines: 3
+    class: none
+    why: comments and the usage text
+  verify/artifact-cache.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: the usage comment
+  verify/fetch-e2e-tools.sh:
+  - match: get
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: verify/e2e-tools.lock (each tool's SHA-256)
+    cached: true
+  verify/app_render.py:
+  - match: chart_fetch
+    lines: 1
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  verify/backstage-footprint.sh:
+  - match: curl -fsS
+    lines: 5
+    class: live
+    kind: cluster
+    target: Backstage on a workshop cluster, through a kubectl port-forward on 127.0.0.1
+  - match: .
+    lines: 1
+    class: none
+    why: the tool check's list of commands it needs
+  verify/beat-02.sh:
+  - match: in_cluster_curl curl
+    lines: 2
+    class: live
+    kind: cluster
+    target: the guard-proxy ClusterIP service, from a pod on the cluster
+  - match: .
+    lines: 4
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/beat-cost.sh:
+  - match: in_cluster_curl curl
+    lines: 3
+    class: live
+    kind: cluster
+    target: the guard-proxy ClusterIP service, from a pod on the cluster
+  - match: .
+    lines: 2
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/bedrock_profile_check.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  verify/browser-smoke.py:
+  - match: .
+    lines: 4
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/c1-exfil-block.sh:
+  - match: curl -s --max-time
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/c1-winrate.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  - match: .
+    lines: 1
+    class: none
+    why: a regex over the model's reply
+  verify/chart_fetch.py:
+  - match: \[helm, "pull"|artifact_cache\.get\(
+    lines: 2
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  - match: .
+    lines: 4
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/charts.lock:
+  - match: .
+    lines: 2
+    class: none
+    why: the lock's header comments
+  verify/charts_lock.py:
+  - match: path = chart_fetch\.pull
+    lines: 1
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (`check` pulls every locked chart and checks its sum)
+    cached: true
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: upstream-index
+    target: each chart repository's index.yaml or OCI manifest, read to write charts.lock's sums
+  - match: .
+    lines: 6
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/ci_chromium_libs.py:
+  - match: .
+    lines: 1
+    class: none
+    why: '`playwright install --dry-run` lists where the browsers go and downloads nothing'
+  verify/datadog-orgs.sh:
+  - match: api.datadoghq.com
+    lines: 2
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  verify/datadog-pool-check.sh:
+  - match: curl -s
+    lines: 2
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  verify/desk_ticket_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the support desk's public host on a workshop cluster (/submit)
+  verify/e2e-tools.lock:
+  - match: .
+    lines: 2
+    class: none
+    why: 'the lock''s own text: a comment and crane''s pin row, which the fetches read'
+  verify/fleet-drift-audit.sh:
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  verify/fleet-hygiene.sh:
+  - match: eks-claim
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the provisioning app's /eks-claim route
+  verify/fleet-walkthrough.sh:
+  - match: curl -s
+    lines: 4
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/gateway_forward.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/ghcr_pull.py:
+  - match: else urllib\.request\.urlopen
+    lines: 1
+    class: live
+    kind: registry
+    target: ghcr.io, for our own packages' tags, tokens and manifests
+  - match: .
+    lines: 3
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/iam_plan_render.py:
+  - match: run\("init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: 'the infra/ .terraform.lock.hcl files, whose providers tf_plugin_cache.py serves from the artifact cache''s mirror (#883, #1119)'
+    cached: true
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/input-guard.sh:
+  - match: localhost:8080
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  - match: curl -s
+    lines: 2
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/kube_forward.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  verify/kubecon_probe.py:
+  - match: '"curl", "-s", "-m", "6"'
+    lines: 1
+    class: live
+    kind: cluster
+    target: 'the beacon, from BurritoBot''s tool pod: the egress NetworkPolicy''s own test'
+  - match: urlopen\(r,timeout=10\)
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  - match: .
+    lines: 4
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/load_replay.py:
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/one_root_probe.py:
+  - match: curl -s -m 120
+    lines: 1
+    class: live
+    kind: cluster
+    target: the guard-proxy service, from a pod on the cluster
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  verify/package_cache.py:
+  - match: \["uv",\s"pip",\s"install"|"-m",\s"pip",\s"install"|artifact_cache\.get_retrying
+    lines: 3
+    class: pinned
+    kind: python-package
+    pin: verify/python.lock (installed offline, hash-checked, from the wheels in the artifact cache)
+    cached: true
+  - match: '"uv",\s"pip",\s"compile"|uv\spip\scompile", ienv'
+    lines: 2
+    class: live
+    kind: upstream-index
+    target: PyPI, resolved to write python.lock
+  - match: .
+    lines: 9
+    class: none
+    why: docstrings and comments, and `uv venv` from an interpreter already on the host, which downloads nothing
+  verify/pii_scrub_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  verify/playwright_browsers.py:
+  - match: '"install", \*BROWSERS\]'
+    lines: 1
+    class: pinned
+    kind: browser
+    pin: verify/python.lock (the playwright release, which names its Chromium build)
+    cached: false
+  - match: .
+    lines: 10
+    class: none
+    why: docstrings and messages, and `playwright install --dry-run`, which downloads nothing
+  verify/probe_pod.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/prompts_wall_suite.py:
+  - match: \("uv",\s"run"
+    lines: 1
+    class: pinned
+    kind: python-package
+    pin: prompts-agenticburn's uv.lock (uv checks its hashes; UV_CACHE_DIR is the artifact root's)
+    cached: true
+  - match: .
+    lines: 2
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/python.lock:
+  - match: .
+    lines: 1
+    class: none
+    why: the lock's header comment
+  verify/run-e2e-tools.sh:
+  - match: .
+    lines: 6
+    class: none
+    why: comments and the list of host tools it checks for
+  verify/run-e2e.sh:
+  - match: yarn\sinstall\s--immutable
+    lines: 1
+    class: pinned
+    kind: node-package
+    pin: images/watch-it-burn-backstage/yarn.lock (yarn's cache in the artifact root, package_cache.py node-env)
+    cached: true
+  - match: yarn\splaywright\sinstall
+    lines: 1
+    class: pinned
+    kind: browser
+    pin: images/watch-it-burn-backstage/yarn.lock (the @playwright/test release, which names its Chromium build)
+    cached: false
+  - match: .
+    lines: 6
+    class: none
+    why: comments, the list of host tools it checks for, and messages
+  verify/schemas/README.md:
+  - match: curl -sSL
+    lines: 1
+    class: pinned
+    kind: release-file
+    pin: the v1.7.0 tag in its URL (a person refreshes the schema with it)
+    cached: false
+  verify/scope_audit.py:
+  - match: .
+    lines: 1
+    class: none
+    why: the CRANE variable's path
+  verify/sign-images.sh:
+  - match: curl -sS
+    lines: 2
+    class: live
+    kind: registry
+    target: ghcr.io, for our own packages' tags, tokens and manifests
+  verify/sister_tree.py:
+  - match: '"clone", "--quiet"'
+    lines: 1
+    class: live
+    kind: github
+    target: the sister repo on GitHub, a shallow clone of a branch as it stands now
+  - match: .
+    lines: 4
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/terminal-login-live.sh:
+  - match: curl -ks
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the presenter terminal's public host
+  - match: .
+    lines: 3
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/tf_plugin_cache.py:
+  - match: urlopen|path = artifact_cache\.get\(
+    lines: 2
+    class: pinned
+    kind: terraform-provider
+    pin: 'the infra/ .terraform.lock.hcl files (each provider zip''s zh: SHA-256), filled into the artifact cache'
+    cached: true
+  - match: .
+    lines: 4
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/tool_pin_kubectl_shim.py:
+  - match: .
+    lines: 7
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/version-drift.py:
+  - match: urlopen
+    lines: 3
+    class: live
+    kind: upstream-index
+    target: the upstream chart indexes, GitHub releases and PyPI, read for their newest versions
+  verify/vllm_fit_probe.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  verify/weather_feed_probe.py:
+  - match: with urllib\.request\.urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the bot's weather feed on a workshop cluster
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_adk_model_content_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_admin_actions.sh:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_agent_cloud_credential_live.py:
+  - match: 169\.254\.169\.254
+    lines: 1
+    class: live
+    kind: cluster
+    target: 'the node''s metadata service, from the agent''s pod: the deny''s own test'
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_agent_otlp_logs_collector.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_agentgateway_tracing_e2e.py:
+  - match: urlopen\(urllib
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_always_redact_marketing.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_artifact_cache.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_audience_path.py:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_audience_path_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/test_backups.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_backups_promotion_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: a workshop host's /healthz
+  verify/test_burritobot_cluster_live.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_burritobot_cluster_live_logic.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_c1_dns_exfil.py:
+  - match: .
+    lines: 8
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_c1_exfil_block_restore.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_c6_joker_public.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_c6_villain_endpoint.py:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_c8_teaching.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_challenge_fallbacks.py:
+  - match: .
+    lines: 13
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_chart_fetch.py:
+  - match: .
+    lines: 9
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_chat_span_token_counts.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_chat_turn_cancel.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_chat_witch_name.py:
+  - match: urlopen
+    lines: 3
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_check_tls_shell_probe.sh:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_collector_act2_redaction_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: a tool call's arguments, as text
+  verify/test_collector_config.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_collector_llmobs_model_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_collector_one_root_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: a tool result, as text
+  verify/test_collector_pii_scrub_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_console_no_toggle_live.py:
+  - match: localhost:8080
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/test_control_plane_app_ports_module.py:
+  - match: \[exe, "init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    cached: true
+  - match: .
+    lines: 3
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_datadog_admin_key.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_datadog_no_key_admin.py:
+  - match: .
+    lines: 9
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_datadog_orgs_sandbox.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_datadog_log_services_render.py:
+  - match: chart_fetch
+    lines: 1
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  verify/test_datadog_sandbox_names.py:
+  - match: .
+    lines: 2
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_datadog_service_map.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  verify/test_delivered_tags.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_deployments_page_live.py:
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: lab-endpoint
+    target: the deployments page's public host
+  verify/test_deployments_removed_live.py:
+  - match: urlopen\(req
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the deployments page's public host
+  verify/test_deployments_witch_line_e2e.py:
+  - match: urlopen
+    lines: 3
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_desk_removed_rows.py:
+  - match: urlopen\(req
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: a regex over the desk's source
+  verify/test_desk_ticket_live.py:
+  - match: urlopen
+    lines: 4
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_dns.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_doc_links.py:
+  - match: urlopen
+    lines: 2
+    class: live
+    kind: public-web
+    target: the documentation sites the repo's docs link to
+  verify/test_drift_report.py:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_drift_settle.py:
+  - match: .
+    lines: 2
+    class: none
+    why: the command text fleet.sh prints, held as text
+  verify/test_e2e_toolchain.py:
+  - match: .
+    lines: 6
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_e2e_tools_tier.py:
+  - match: .
+    lines: 20
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_enforce_floor.py:
+  - match: chart_fetch
+    lines: 2
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_ensure_submodules.sh:
+  - match: git clone
+    lines: 1
+    class: loopback
+    why: a clone of a repository the test made in its scratch directory
+  verify/test_fake_ticket.py:
+  - match: urlopen\(url
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: a check on the site's source
+  verify/test_finale_cap.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_fleet_apply_failure_exit.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_pool_reconcile.sh:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_routes_publish.sh:
+  - match: git clone
+    lines: 1
+    class: loopback
+    why: a clone of a repository the test made in its scratch directory
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_fleet_teardown_hooks.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_terminal_harvest.sh:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_wall_check.sh:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_fleet_wall_reset.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_friendly_hostnames.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_gateway_api_crds_upstream.py:
+  - match: urlopen
+    lines: 1
+    class: pinned
+    kind: release-file
+    pin: verify/test_gateway_api_crds_upstream.py (VERSION, the Gateway API release, and the pinned Istio's tag)
+    cached: false
+  verify/test_gh_comments.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_ghcr_pull.py:
+  - match: .
+    lines: 31
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_ghcr_version_tag.py:
+  - match: .
+    lines: 11
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_gotchas_router_probe.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_harvest_console_host.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_input_guard_host.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_image_registry_render.py:
+  - match: chart_fetch
+    lines: 1
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  verify/test_input_pii_guard.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_joker_build_digest.py:
+  - match: '"registry", "serve"|urlopen|"--insecure"'
+    lines: 5
+    class: loopback
+    why: crane's own registry on 127.0.0.1, which the test starts
+  - match: '"CRANE": crane'
+    lines: 2
+    class: pinned
+    kind: container-image
+    pin: images/villains/build.sh (JOKER_BASE, the Jokers' base image by digest, pulled from ghcr.io)
+    cached: false
+  - match: .
+    lines: 9
+    class: none
+    why: docstrings, comments, messages and the CRANE variable's checks
+  verify/test_joker_web_busybox.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_kagent_service_name_collector.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_kubearmor_config_render.py:
+  - match: chart_fetch
+    lines: 1
+    class: pinned
+    kind: helm-chart
+    pin: verify/charts.lock (each chart's tarball SHA-256)
+    cached: true
+  verify/test_kubecon_probe.py:
+  - match: .
+    lines: 10
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_lab_pipeline_collector.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_lab_pipeline_live.py:
+  - match: context=TLS
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the lab pipeline's public intake host
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  verify/test_lab_platform_operator_entry.py:
+  - match: tf\("init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    cached: true
+  verify/test_llm_bypass_live.py:
+  - match: .
+    lines: 2
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, from inside a pod (urlopen or wget)
+  verify/test_marketing_output_scrub.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_marketing_send_persona.py:
+  - match: .
+    lines: 5
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_marketing_send_route.py:
+  - match: .
+    lines: 26
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_mesh_live.py:
+  - match: wget
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  verify/test_mobile_titles_e2e.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_no_docker_hub.py:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_no_docker_hub_render.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a container named wget in a fixture Pod
+  verify/test_otelcol_local.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_package_cache.py:
+  - match: .
+    lines: 13
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_package_cache_e2e.py:
+  - match: .
+    lines: 8
+    class: none
+    why: docstrings and check messages, and a `uv venv` of this interpreter; its installs read a wheelhouse and a registry it serves on 127.0.0.1 from lines the scan does not name
+  verify/test_pantry_header_pin.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_plan_policy_e2e.py:
+  - match: \["init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    cached: true
+  verify/test_playwright_browsers.py:
+  - match: .
+    lines: 12
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_preflight_boundary.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_preflight_model_agreements.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_probe_pod_admission.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_prompt_wall_redaction.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_prompts_wall_suite.py:
+  - match: .
+    lines: 5
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_prompts_wall_suite_e2e.py:
+  - match: .
+    lines: 2
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_public_images.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: the desk on 127.0.0.1, which the test starts, asked under the public host names
+  verify/test_public_images_retry.py:
+  - match: .
+    lines: 10
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_public_images_served.py:
+  - match: urlopen\(req
+    lines: 1
+    class: live
+    kind: registry
+    target: ghcr.io, quay.io and Docker Hub, asked to serve each public image the lab pins
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_reset_bot.sh:
+  - match: .
+    lines: 14
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_room_jokers.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_room_reader.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_run_shell_failure.py:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_scope_tests.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_service_hosts_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the instructor hosts (Argo CD, Grafana) on a workshop cluster
+  verify/test_sister_tree.py:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_storefront_witch_name_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_support_desk.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_support_desk_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the support desk's public host
+  verify/test_terminal_login_live.sh:
+  - match: .
+    lines: 8
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_terraform_lock_init.py:
+  - match: \[exe, "init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    cached: true
+  - match: .
+    lines: 3
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_terraform_mirror_lock.py:
+  - match: \[exe, "init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    cached: true
+  - match: .
+    lines: 3
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_terraform_module_pins.py:
+  - match: .
+    lines: 3
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_terraform_plugin_cache_lock.py:
+  - match: \[exe, "init"
+    lines: 1
+    class: pinned
+    kind: terraform-provider
+    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    cached: true
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_tf_plugin_cache.py:
+  - match: .
+    lines: 10
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_tier_swap_live.py:
+  - match: urlopen
+    lines: 4
+    class: live
+    kind: cluster
+    target: the Kubernetes API and the guard-proxy on a workshop cluster, through a port-forward on 127.0.0.1
+  verify/test_tool_audit.py:
+  - match: .
+    lines: 3
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_tool_audit_live.py:
+  - match: ^\s*(SID=\$\()?curl -s
+    lines: 3
+    class: live
+    kind: cluster
+    target: the MCP server on a workshop cluster, from inside a pod
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: saas-api
+    target: Datadog's API (api.<site>) for the workshop's own orgs
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_tool_failure_status_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 2
+    class: none
+    why: tool calls' arguments and results, as text
+  verify/test_tool_pin_live_check.py:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_topic_guard_proxy.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  verify/test_trace_shape_e2e.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 3
+    class: none
+    why: tool calls' arguments, as text
+  verify/test_ttyd_ws_auth.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: a server on 127.0.0.1 the test starts itself (the proxy, a desk, a collector or a fake upstream)
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_turn_guard.py:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_two_hour_flow_live.py:
+  - match: .
+    lines: 5
+    class: none
+    why: what the trace must carry, as text
+  verify/test_two_hour_flow_live_checks.py:
+  - match: .
+    lines: 5
+    class: none
+    why: what the trace must carry, as text
+  verify/test_verify_harness.py:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_walkthrough_no_state.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_walkthrough_report.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_wall_clock_burst_sister_e2e.py:
+  - match: \["uv",\s"run",\s"--frozen"
+    lines: 1
+    class: pinned
+    kind: python-package
+    pin: the sister repo's uv.lock (uv checks its hashes; UV_CACHE_DIR is the artifact root's)
+    cached: true
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_wall_more_count_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the prompts wall's public host
+  verify/test_weather_feed_upstream_failure.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/test_workflow_artifact_cache.py:
+  - match: .
+    lines: 15
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_workflow_registry_writes.py:
+  - match: .
+    lines: 4
+    class: none
+    why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
