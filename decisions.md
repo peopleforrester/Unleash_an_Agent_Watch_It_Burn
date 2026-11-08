@@ -33726,3 +33726,9 @@ passes and the cases it fails: another ticket read, the word missing from the re
 of another Deployment, a Deployment left behind, a turn that never came back, a ticket that came back with the guard
 on, and a changed guard, policy, Role or Deployment list. Its `verify/scope-map.yaml` entry is the one `scope_tests.py
 write` produced for it; the rest of what `write` produced was other tests' drift and is not in this change.
+
+**Suite results, run 18469.** On `993ec22a`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=dce7c291`, so scoped
+to this change, printed `95 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which is `bash
+verify/run-tests.sh`), the new test among them, then `15 checks ran (the offline suite and 14 tier tests) in 4m21s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added. The
+log is `/var/lib/hecaton/runs/18469/e2e-tools-2.log`.
