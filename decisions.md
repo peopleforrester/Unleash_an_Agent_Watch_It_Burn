@@ -37408,3 +37408,41 @@ Not yet run on a cluster: after Argo CD syncs this change, from the private term
 `guard-input-on` and `guard-mcp-on`, then `guards-off`, with both clusters' `/controls` and the workshop-agent Role read
 before and after; on attackme, a room `deploy_app` Forbidden, HC-666 withheld and the weather ask without
 `read_internal_config`; `guard-mcp-on`'s timing line on both clusters.
+## 2026-11-08 · #1178 · run 18683 · A red private (administrator) banner on the private support desk
+
+**What changed.** Part of #1142. `support.burritobot.co` and the private cluster's
+`support-burritobot-private.burritobot.co` served identical pages. `gitops/ai-layer/ticket_site.py` now reads the
+request's Host on `/`, `/wall` and `/me`, and when it starts with `support-burritobot-private.` (any case, with or
+without a port) the page opens with "This is the private (administrator) support desk." above its heading. The pages
+are rendered server-side, so this is the server-side twin of the chat page's host check (#761), and nothing is baked
+per cluster. console.conf's support server already passes `Host $host`, and it is that server, matched on the same
+name, that answers the private host today, so the desk sees the name the browser sent.
+
+**One helper.** `private_banner(page)` returns the banner markup and its own `<style>`, naming the page it is given,
+so the deployments page child can call `private_banner("deployments page")` with its own host check. `BANNER_STYLE`
+copies the chat page's `.combanner` rule (`gitops/ai-layer/web/burritbot.html`) declaration for declaration.
+`desk_banner(host)` is the desk's host check. `_shell`, `desk()`, `me_page()` and the new `wall_page()` take the
+banner as an optional argument that defaults to empty, so every other Host, `support.burritobot.co` included, and a
+request with no Host get the same bytes as before. `WALL` stays, as `wall_page()` with no banner. The look-up, ticket
+and error pages are out of the issue's scope and carry no banner.
+
+**The test.** `verify/test_support_desk_private_banner.py` runs the real site on localhost and GETs each of `/`,
+`/wall` and `/me` with four private Hosts (the name, with `:443`, in capitals, and the `agenticburn.com` twin), three
+others (`support.burritobot.co`, `support-burritobot-private-x.burritobot.co`, `support-watch-it-burn-private.`) and
+none at all, sent through `http.client` with `skip_host`. On a private Host the sentence is there once, in the
+`.combanner` div, before `<h1>`, and the page with the banner removed equals the plain page; on the others there is no
+sentence and no `combanner`, and the page equals the plain page. It reads the chat page's `.combanner` rule (failing
+by name if that literal is gone) and checks the helper's declarations equal it, plus bold, white, `#C62222`, a
+`#8E1414` border and a nonzero radius. With the `/wall` route put back to the bare `WALL` the test fails on `/wall`'s
+private Hosts. Its scope-map entry is the one `scope_tests.py write` computed; the other drift `write` printed for
+unrelated tests was left out of this change.
+
+**Live check (run 18683, read-only, before the change is on the clusters).** `curl` of `https://support.burritobot.co`
+and `https://support-burritobot-private.burritobot.co` on `/`, `/wall` and `/me` answered 200 on all six, each with
+the `Hex &amp; Cauldron support desk` heading and no banner; `deploy/fake-ticket` in `agent` read 1/1 on both
+watch-it-burn-community and watch-it-burn-private. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs: on watch-it-burn-private,
+`https://support-burritobot-private.burritobot.co/`, `/wall` and `/me` each show the red banner above the heading; on
+watch-it-burn-community, `https://support.burritobot.co/`, `/wall` and `/me` show none. The same `curl` loop as above,
+counting `private (administrator)` per page, is the check.

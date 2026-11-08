@@ -6089,6 +6089,10 @@ reads:
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/web/kubecon.html
     - verify/support_desk_hosts.py
+  test_support_desk_private_banner.py:
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
   test_tagging.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
