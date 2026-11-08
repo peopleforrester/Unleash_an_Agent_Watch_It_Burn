@@ -37066,5 +37066,10 @@ the old limit is gone, for run 17957 and its 72m16s, for the new step, and that 
 
 **Live check: skipped.** The change touches AGENTS.md, decisions.md and a `verify/` test no cluster runs.
 
-**Suites (run 18658).** Point 6 rules that a prose change never runs the tools tier, so this run ran the scoped
-offline suite and the prose gate only.
+**Suites (run 18658, at `82a7b2d5`).** Both runs were scoped to the change from `c43ecf34`, as point 6 asks. The
+change also edits a `verify/` test, and 16 tier tests read AGENTS.md, decisions.md or that test (or run always), so
+the scoped tools tier ran as well. `bash verify/run-tests.sh` printed `102 tests ran` and `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, exit 0. `bash verify/run-e2e-tools.sh` printed `17 checks ran (the offline suite and 16 tier tests) in
+5m59s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_dispatched_runs.py` alone printed
+"All dispatched-run checks passed." The prose gate printed `prose gate: pass`. No dependency was added. The logs are
+`/var/lib/hecaton/runs/18658/run-tests.log` and `e2e-tools.log`.
