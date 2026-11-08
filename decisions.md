@@ -40490,7 +40490,7 @@ directory, not `tmp/`, so the working tree is unchanged.
 **The desk reset**, run once more after both probes and the seed, with the run's session sourced: `bash
 infra/terraform/fleet/fleet.sh desk-reset` printed `desk-reset: watch-it-burn-community (us-west-2), the public desk`,
 `cleared 0 deploy row(s) and 0 filed ticket(s); 0 filed and 4 fixed ticket(s) kept` and `desk-reset: done`, exit 0.
-`desk-reset watch-it-burn-private` refused by name, exit 2, before reaching any cluster.
+`desk-reset watch-it-burn-private` refused by name with return code 2, before reaching any cluster.
 `https://deployments.burritobot.co/deployments.json` read `[]`, `https://support.burritobot.co/ticket?id=HC-666`
 answered 200, and a POST to `https://support.burritobot.co/desk-reset` from outside answered 403. #1215's run 18753
 ran the first clear after promotion, which removed run 18740's five rows.
