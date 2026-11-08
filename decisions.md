@@ -37215,3 +37215,16 @@ mounts ConfigMap `evil-mcp-src-78t5dt5d9d`, and carries Argo CD tracking id `ai-
 That ConfigMap's `server.py` is byte for byte `gitops/ai-layer/server.py` on both (`diff` printed nothing), with
 "region-locked" present and "21C and sunny" absent. No pod on either cluster runs a `REGISTRY/evil-mcp-shim` image, and
 no Argo CD Application on either sources a `challenges/` path. Nothing was changed on either cluster.
+
+**Beat 3's path.** `toggle-mcp-authz-on.sh`, `fallback.curl.sh` and `verify/beat-03.sh` name no file in the deleted
+folder (`git grep` on them finds only the Deployment name), so the change alters nothing they read or call. The
+fallback was not run live: it flips the C7 gateway rule on the stage clusters, and the clusters run the same
+`server.py` before and after this change. The offline tests that drive the fallback and `beat-03.sh` against fakes,
+`test_challenge_fallbacks.py` and `test_beat03_c7.py`, pass on the new reads.
+
+**Suites (run 18663, at `0eb57a3c`).** Scoped to the change from `f6b637b4`, as point 6 asks; the change edits
+`images.lock` and tests that tier tests read, so the scoped tools tier ran. `bash verify/run-e2e-tools.sh` printed
+`139 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for its offline check, then `19 checks ran (the offline suite
+and 18 tier tests) in 6m46s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The five changed tests and
+`test_images_lock.py`, `test_room_view.py` and `test_scope_tests.py` were among those that ran. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18663/e2e-tools.log`.
