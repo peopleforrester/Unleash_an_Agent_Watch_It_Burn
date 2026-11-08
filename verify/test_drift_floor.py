@@ -212,6 +212,40 @@ settle = ("terraform -chdir=infra/terraform/aws/audit apply -refresh-only -auto-
 check("floor.md settles the audit state with a refresh-only apply after the apply", settle in FLOOR)
 check("the audit root's header gives the same settle step", settle in audit)
 
+print("== floor.md explains the no-boundary line and the order of the two roots (#1035, #1231) ==")
+# docs/floor.md wraps the quoted line across Markdown lines, so the doc is compared with its whitespace collapsed.
+FLOOR_FLAT = " ".join(FLOOR.split())
+NO_BOUNDARY = r'\(f"(NO recorder in \{rep\.region\}, and no \{BOUNDARY_POLICY\}: [^"]*)"\s*"([^"]*)"\)'
+m = re.search(NO_BOUNDARY, report_src)
+check("drift-report.py still builds the no-boundary line as an f-string starting 'NO recorder in {rep.region}, and"
+      " no {BOUNDARY_POLICY}: ' (anchor in infra/terraform/drift/drift-report.py)", m is not None)
+policy = re.search(r'^BOUNDARY_POLICY = "([^"]+)"$', report_src, re.M)
+check("drift-report.py names the boundary policy in BOUNDARY_POLICY", policy is not None)
+alone = re.search(r'f"(NO recorder in \{rep\.region\}: [^"]*)"', report_src)
+check("drift-report.py still builds the audit-only line 'NO recorder in {rep.region}: ...'", alone is not None)
+if m and policy:
+    line = (m.group(1) + m.group(2)).replace("{rep.region}", "us-west-2").replace("{BOUNDARY_POLICY}", policy.group(1))
+    check(f"floor.md quotes the line as the report writes it for us-west-2 (`{line}`)", f"`{line}`" in FLOOR_FLAT)
+    b, a = line.find("apply infra/org/boundary"), line.find("then infra/terraform/aws/audit")
+    check("the line names the boundary root before the audit root", 0 <= b < a)
+    check("floor.md says to apply the boundary root first and the audit root after it",
+          f"`{line}`: apply the boundary root first and the audit root after it." in FLOOR_FLAT)
+    check("floor.md says when the line is written: an account with no recorder whose policy is missing",
+          f"For an account with no recorder, the report also asks IAM for `{policy.group(1)}`" in FLOOR_FLAT
+          and "Where the policy is missing the line reads" in FLOOR_FLAT)
+    # Why the order matters: the audit root looks the boundary up by name, so without it the audit apply fails at plan.
+    check("floor.md says why: the audit root looks the policy up by name and fails at plan without it",
+          "The audit root looks that policy up by name, so its apply fails at plan in an account without it."
+          in FLOOR_FLAT)
+    check(f"and the audit root does look {policy.group(1)} up by name, so the order is real",
+          re.search(r'data "aws_iam_policy" "[^"]+" \{\s*name\s*=\s*"' + re.escape(policy.group(1)) + '"', audit)
+          is not None)
+if alone:
+    check("the audit-only line names the audit root and not the boundary root",
+          "infra/terraform/aws/audit" in alone.group(1) and "infra/org/boundary" not in alone.group(1))
+    check("floor.md says that where the policy is there the line names the audit root alone",
+          "Where the policy is there, the line names the audit root alone." in FLOOR_FLAT)
+
 print("== the AWS register is explained, and in floor.md ==")
 reg = yaml.safe_load((REPO / "infra/terraform/drift/known-unmanaged.yaml").read_text(encoding="utf-8"))["entries"]
 register_doc = section("## The unmanaged register")
