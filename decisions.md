@@ -39062,3 +39062,14 @@ Not yet run on a cluster:
   `https://support.burritobot.co`, and `POST https://support.burritobot.co/desk-reset` from outside answers 403.
 - A promotion's `desk-link` on a real standby: no standby is up, and a run brings none up, so `verify/test_fleet_standbys.sh`
   and `verify/test_backups_floor.py` hold it offline until a rehearsal promotes one.
+
+**Suites (run 18740; this paragraph only adds to the entry).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD
+origin/staging)"`, as Dispatched runs point 6 asks. The change touches what tier tests read, so the scoped
+`bash verify/run-e2e-tools.sh` ran at `160f934c`: `40 checks ran (the offline suite and 39 tier tests) in
+12m46s, 4 at a time`, every tier test green, and the offline suite (254 of 383 tests) red on one,
+`test_fetch_inventory.py`: the probe's new in-pod `/healthz` read and the new test's localhost desk were not in
+`verify/fetch-inventory.yaml`. Both were classed (`695d49e3`), and `python3 verify/test_fetch_inventory.py` rerun
+alone printed `All fetch inventory checks passed`, as did the five other offline tests that read the inventory and
+every offline test that reads decisions.md, each run alone. `verify/test_scope_tests.py` printed `ALL PASS`. The prose
+gate printed `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18740/e2e-tools.log`; the
+live logs are under `/var/lib/hecaton/runs/18740/live/`.
