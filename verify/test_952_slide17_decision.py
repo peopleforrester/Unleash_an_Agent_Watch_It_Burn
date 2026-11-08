@@ -40,7 +40,7 @@ CHANGES = "Slide 17 changes"
 NO_ISSUE = "no agent-task issue is filed"
 FOLDER_951 = re.compile(r"folder `([a-z0-9-]+)`")
 FOLDER_952 = re.compile(r"The folder\s+#951 chose is `([a-z0-9-]+)`")
-ATTACK_FOLDER = re.compile(r"in the ([a-z0-9-]+) folder")
+ATTACK_FOLDER = re.compile(r"the ([a-z0-9-]+) folder")
 ISSUE_LINK = re.compile(
     r"https://github\.com/peopleforrester/rounds-agenticburn/issues/\d+|peopleforrester/rounds-agenticburn#\d+")
 
@@ -127,7 +127,7 @@ PARA = PARAS[0]
 for lit in (UNCHANGED, NO_ISSUE, "#951 chose is `burrito-data`"):
     anchor(PARA, lit, "decisions.md #952 slide-17 paragraph")
 anchor(dec_entry(DECISIONS, HEAD_951), "folder `burrito-data`", "decisions.md #951 entry")
-anchor(PROMPTS_TEXT, "in the burrito-data folder", str(PROMPTS_PATH.relative_to(REPO)))
+anchor(PROMPTS_TEXT, "the burrito-data folder", str(PROMPTS_PATH.relative_to(REPO)))
 
 print("== #952's decisions.md entry decides whether the folder name changes slide 17 ==")
 ok, why = verdict(DECISIONS, PROMPTS_TEXT)
@@ -168,7 +168,7 @@ fails("with #951's entry recording another folder, it fails",
       DECISIONS.replace(dec_entry(DECISIONS, HEAD_951),
                         dec_entry(DECISIONS, HEAD_951).replace("folder `burrito-data`", "folder `kitchen-files`"), 1))
 fails("with the c3-attack prompt sending another folder, it fails",
-      DECISIONS, mutated("in the burrito-data folder", "in the kitchen-files folder", PROMPTS_TEXT, PROMPTS_PATH.name))
+      DECISIONS, mutated("the burrito-data folder", "the kitchen-files folder", PROMPTS_TEXT, PROMPTS_PATH.name))
 
 print("== a 'changes' verdict with its issue linked passes, in both link forms ==")
 for link in ("https://github.com/peopleforrester/rounds-agenticburn/issues/123", "peopleforrester/rounds-agenticburn#123"):
