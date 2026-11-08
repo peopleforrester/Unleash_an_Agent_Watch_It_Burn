@@ -550,14 +550,20 @@
       document.getElementById('bb').href='/?cluster='+encodeURIComponent(c);}
   })();
   // The iPad prompt sheet (#689): ?sheet=1 keeps every prompt on this page, in order under its segment's title,
-  // in large type, and hides everything else.
+  // in large type, and hides everything else. Challenge 2's three attacks each get a heading of their own, the
+  // slides' wording, written the same way as a segment's title, before the attack's first prompt (#1103).
   (function(){
     if(!new URLSearchParams(location.search).has('sheet'))return;
     var out=document.getElementById('sheet');
+    var heads={C2:'2A: Run an image off the public internet',C3:'2B: Read the Bat Spit Amazing Awesome Sauce recipe',C1:'2C: Send customer demographics to agenticburn.com/beacon'};
     document.querySelectorAll('main section.seg').forEach(function(sec){
       var ps=sec.querySelectorAll('.prompt');if(!ps.length)return;
       var h=document.createElement('h2');h.textContent=sec.querySelector('h2').textContent.replace(/^SEGMENT \d · \d+ min\s*/,'');out.appendChild(h);
-      ps.forEach(function(p){var e=document.createElement('p');e.textContent=p.textContent.replace(/\s*copy\s*$/,'').trim();out.appendChild(e);});
+      var last=null;
+      ps.forEach(function(p){
+        var b=p.closest('article.beat'),k=b&&b.getAttribute('data-beat');
+        if(k&&heads.hasOwnProperty(k)&&b!==last){last=b;var t=document.createElement('h2');t.textContent=heads[k];out.appendChild(t);}
+        var e=document.createElement('p');e.textContent=p.textContent.replace(/\s*copy\s*$/,'').trim();out.appendChild(e);});
     });
     ['header','main','footer'].forEach(function(t){var e=document.querySelector(t);if(e)e.hidden=true;});
     out.hidden=false;document.title='KubeCon prompts';

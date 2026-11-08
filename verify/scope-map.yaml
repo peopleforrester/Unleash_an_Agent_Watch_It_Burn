@@ -3667,6 +3667,8 @@ reads:
   test_kubecon_prompt_sheet_e2e.py:
     - gitops/ai-layer/web/kubecon.html
     - verify/playwright_browsers.py
+  test_kubecon_sheet_attack_heads.py:
+    - gitops/ai-layer/web/kubecon.html
   test_kyverno_cel_policies.py:
     - CLAUDE.md
     - agent

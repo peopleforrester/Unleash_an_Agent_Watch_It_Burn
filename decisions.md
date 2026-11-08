@@ -33493,3 +33493,44 @@ suite, printed `345 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the ne
 and its row follow the 2026-11-07 deck's Challenge 3`), then `83 checks ran (the offline suite and 82 tier tests) in
 9m36s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added. The log is `/var/lib/hecaton/runs/18442/e2e-tools.log`.
+## 2026-11-08: the /kubecon prompt sheet heads Challenge 2's three attacks 2A, 2B and 2C (#1103, run 18444)
+
+Part of #1063. On the iPad prompt sheet (`/kubecon?sheet=1`, #689) Challenge 2's five prompts ran on under the one
+segment title. The sheet script in `gitops/ai-layer/web/kubecon.html` now carries a map from beat to heading, in the
+slides' wording: `C2` is "2A: Run an image off the public internet", `C3` is "2B: Read the Bat Spit Amazing Awesome
+Sauce recipe" and `C1` is "2C: Send customer demographics to agenticburn.com/beacon". Before a mapped beat's first
+prompt it writes an `h2` with the heading as its text, the same `document.createElement('h2')` and the same
+`#sheet h2` rule as a segment's title, which is what Challenge 1's heading on the sheet is. Segment 3's title,
+"Challenge 2: the Kubernetes catch-all", stays above 2A.
+
+**Why a map in the script and not an attribute on the beats.** Tests such as `verify/test_replay_prompts.py`,
+`verify/test_kubecon_c3_recipe_block.py` and `verify/test_instructor_brief.py` cut kubecon.html on the literal
+`<article class="beat" data-beat="X" data-segment="N">`, and `verify/test_public_images.py` and others on a beat's
+`<h3>`, so an attribute on either would have broken them for no gain. The map touches only the sheet script; no element on the page, Challenge 1's included,
+and no CSS rule changes. No prompt text changes (that is the sibling children of #1063).
+
+**What the sheet shows now.** Rendered in headless Chromium before and after: the whole of `#sheet`'s HTML after the
+change, with the three new `<h2>2A/2B/2C: ...</h2>` taken out, is byte-identical to staging 4e7e9c9d's, so segment 2
+(Challenge 1) and every other segment read exactly as they did.
+
+**The tests.** `verify/test_kubecon_sheet_attack_heads.py` (new, offline, no browser) pins the map's three entries
+and their order, that segment 3 runs C2, C3, C1, that a heading is written with `createElement('h2')` before its
+beat's first prompt and that the sheet script sets no class, style or attribute, that the segment-title and prompt
+lines of the script and the `#sheet h2` and `#sheet p` rules are as they were, and, by building the sheet from the
+page the way the script does, that segment 2's output is the pinned bytes the browser rendered from staging 4e7e9c9d
+and that each heading heads its own beat's prompts and only them. Its self-checks show the model loses the headings
+without the map, puts 2B before 2A when two beats swap, and changes segment 2's bytes when Challenge 1's prompt is
+reworded. Run against staging's kubecon.html it fails on the map and the headings and passes the segment 2 pin.
+`verify/test_kubecon_prompt_sheet_e2e.py` (tools tier, Chromium), which read one `h2` per segment, now expects the
+attack headings in its comparison of the page with the sheet, and checks in the real DOM that 2A, 2B and 2C follow
+Challenge 2's title in order, each over its beat's prompts, that segment 2's HTML is the same pinned bytes, and that
+every sheet heading is a bare `<h2>`. The new test's `verify/scope-map.yaml` entry is the one line
+`scope_tests.py write` produced for it (`gitops/ai-layer/web/kubecon.html`); the rest of what `write` produced was
+other tests' existing drift and is not in this change.
+
+**Live check, run 18444.** Read-only: `GET https://burritobot-private.burritobot.co/kubecon?sheet=1` answered 200 with
+a page byte-identical to staging's kubecon.html, with no heads map in its sheet script. That is the before state.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: open
+https://burritobot-private.burritobot.co/kubecon?sheet=1 and look at Challenge 2's headings, 2A, 2B and 2C each in the
+same bright green type as "Challenge 1: the CEO's secret", above that attack's prompts.
