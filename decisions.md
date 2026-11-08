@@ -35458,4 +35458,11 @@ older `maintenance-shell` Service, from 2026-10-29, stays. The `/prompts` feed w
 counter was left where the runs moved it, $3.48 of the $25 cap, as other runs' live checks leave it. The run-of-show's
 `./fleet.sh reset-bot` before the room opens clears it.
 
-**Live check.** The replays above. Nothing was changed in git except this entry and the load-test doc's results.
+**Scope map.** Run 18117 left #885's two tests without an entry in `verify/scope-map.yaml`, and the E2E log named
+both as drift. This run adds them: test_turn_guard.py with the paths the extractor found, and test_turn_guard_e2e.py
+with what `python3 verify/scope_tests.py check` asked for, plus `gitops/ai-layer/workshop-mcp-server.py`, which the test
+loads in its child process. `scope_tests.py write` would have rewritten 838 lines of other tests' entries, so only
+these two were added. After it, `check` names neither test.
+
+**Live check.** The replays above. Besides the cluster cleanup, this run changed only this entry, the load-test doc's
+results and the two scope-map entries.

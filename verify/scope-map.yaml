@@ -6522,6 +6522,30 @@ reads:
     - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
     - verify/ttyd_ws.py
+  test_turn_guard.py:
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - verify/fixtures/load-replay-2026-11-05-turns.json
+  test_turn_guard_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/workshop-mcp-server.py
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/.tools/bin/agentgateway
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/run-e2e-tools.sh
   test_two_domains.py:
     - agent
     - backstage/catalog
