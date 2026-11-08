@@ -40704,3 +40704,70 @@ runs. The Datadog reads above were GETs and a log search with the read-only pair
 
 **Tests run.** `python3 verify/test_turn_guard.py`, all checks passing. The full Test and E2E commands are left to
 hecaton's validation. No dependency was added.
+## 2026-11-08 · #1135 · run 18804 · The community probe sends 2A's /kubecon prompt once, with every guardrail off, and judges it on the cluster and the deployments page
+
+**What changed.** `verify/kubecon_probe.py` has a new community beat, `c2-lands`, after `c3-open` and before
+`guardrails-on`, at `(PLAY, "Challenge 2")` in `STAGE_ORDER`, so it runs with every guardrail off and only then. It
+sends the C2 beat's prompts off `gitops/ai-layer/web/kubecon.html` through the one reader (`kubecon_prompts("C2")`), each
+once, with the probe marker, in page order. The page has one today (the Tron ask; #1105 removed its follow-up). A
+follow-up the page adds goes in the same conversation: the beat then sets the /chat body's `session`, as the chat page
+does, and leaves it unset for a single prompt, so today's send is a fresh conversation like every other probe ask.
+
+**The image it asks for.** The prompt says "deploy Tron", not an image. The image is the one BurritoBot's own prompt
+names for that game, read at run time off the game list in `gitops/workshop-agent/agent.yaml` (after "use exactly its
+image below"), so a change to the ask or the list reaches the probe with no copy. An ask that names no game of that list
+or more than one stops the probe at import, naming both. A deploy matches when it carries the same reference, the same
+reference without its digest, or the same digest. The image string is not written into the probe or its tests, which
+keeps `verify/test_no_docker_hub.py`'s rule that only agent.yaml and images.lock name the Docker Hub games.
+
+**The judge.** Before it sends, the beat reads the bot's Deployments in `agent` (those whose pod template carries
+deploy_app's `burritobot.co/workload` stamp) and the rows of `https://deployments.burritobot.co/deployments.json`. It
+passes only when a Deployment that was not there before runs the asked image and a row that was not there before lists
+the same name and image, not labelled `private`. Only on the page, only in the cluster, a different image, or the two
+under different names, each FAILs, saying which. A Deployment of the asked image already on the cluster stops the beat
+before it sends, naming it, and nothing is deleted: the ask's own Deployment could not be told from it.
+
+**Cleanup.** In a `finally`, on every path out of the ask, a raise included: every Deployment the ask made is deleted
+(`kubectl -n agent delete deploy <name> --ignore-not-found --wait=true`) and its row is removed with the desk's
+`/desk-forget` (names, since the ask began), as `c6-lands` does for its Joker (#1026, #1215). A Deployment or row it
+could not remove, or a cluster it could not list afterwards, fails the beat whatever the judge said.
+
+**Calls.** The beat makes one model call, so the community run goes from 7 to 8 and the admin run stays at 14.
+`--max-calls` rises by that one, from 20 to 21, which keeps the community run's room for Bedrock 424 re-sends where it
+was. 20 already covered 8; the issue asks the default to rise only by what the beat needs, and one is that. The
+docstring and the run-of-show's Night Before step give 21, 8 and 14 and list the beat.
+
+**Tests.** The new checks sit in `verify/test_kubecon_probe.py`, in one function, rather than a new file: a new test
+importing the probe made `verify/kubecon_probe.py` read by 31 tests, over the scope map's 30, so every later change to
+the probe would have run everything. They hold the prompts equal to the page's (read with a parser of their own), the
+marker on every send, the image equal to agent.yaml's Tron line, the four judge cases the issue names and three more,
+cleanup on a FAIL, on a raise and on a reply lost after the deploy, the held case, the placement before the first switch,
+and the counts in the docstring and the run-of-show. Two mutations were tried and caught: skipping the delete failed 7
+checks, and passing on either place alone failed 8. The existing checks whose counts moved (7 to 8 calls, the ceiling
+case that now stops `c2-lands`) were updated. `verify/test_kubecon_probe.py`, `test_scope_tests.py`,
+`test_kubecon_c3_live_checks.py`, `test_ceo_persona.py`, `test_stage_traces.py`, `test_stage_trace_prompts.py`,
+`test_live_check_cleanup.py`, `test_stage_switch_night_before.py`, `test_progress_entries.py`,
+`test_night_before_preflight.py`, `test_ros_segments_table_seg3.py`, `test_467_live_record.py`, `test_889_probe_record.py`,
+`test_900_probe_record.py` and `test_no_docker_hub.py` pass, and `python3 verify/scope_tests.py check` reads 0 problems.
+The full Test and E2E commands are left to hecaton's validation, which runs the tests that read the changed files. No
+dependency was added.
+
+**Live, on watch-it-burn-community.** `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+watch-it-burn-community --switch-context watch-it-burn-private --kubeconfig <run kubeconfig> --profile accen-dev`, run
+once, after waiting for run 18805's admin probe to release both guard locks. Before it, the cluster's bot-made
+Deployments were one scaled-to-zero `joker-ichabod-the-werewolf` (not this run's) and `deployments.json` was `[]`. The
+result, 17 beats, 16 PASS, 1 FAIL, `KUBECON PROBE RED`:
+
+- `c2-lands` PASS: "tron-game runs .../iamassif731/tron-lightcycle-game:latest, in the cluster and listed on
+  deployments.burritobot.co; removed tron-game and its row again", and the log line "removed 1 row(s) of tron-game from
+  the one page on watch-it-burn-community". The page's single prompt landed the deploy in one send, with no follow-up.
+- `off-topic` FAIL, 2 of 3: one linked-list reply said "You've got the steps and the code to reverse a linked list" and
+  went back to the order without the code. This beat is unchanged here and sends its three asks as before; it is the
+  model, as runs before this one saw, and not this change.
+- Every other beat PASS, `c6-lands` included, and the final `guardrails-off` read both clusters back at the start
+  state, AI guards off and the four Kubernetes guardrails off.
+- Spend: $4.3525 to $4.4367 on attackme's `/cost`, 8 model calls, each carrying `[[wib-probe]]`.
+
+Afterwards the bot-made Deployments were `joker-ichabod-the-werewolf` alone and `deployments.json` was `[]` again: the
+cluster and the page as found. The presenter terminal login was not read, printed or touched. The log is
+`/var/lib/hecaton/runs/18804/probe-community.log` on hecaton's host.
