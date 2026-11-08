@@ -40945,3 +40945,29 @@ text of decisions.md and the root's rule. No dependency was added.
 `python3 verify/test_scope_tests.py` after `python3 verify/scope_tests.py write` added the test's entry (decisions.md,
 main.tf, node_sg_rules.py). The prose gate passes against origin/staging. The full Test and E2E commands are left to
 hecaton's validation.
+## 2026-11-09 · #1066 · run 18845 · a test holds the guard-proxy pin to main at dc78f1c or later and checksum/proxy-py to the pinned build
+
+**The spec.** #1066 asks for a test of #1046's #1048 criterion: `gitops/ai-layer/guard-proxy` is pinned to
+guard-proxy-agenticburn main at dc78f1c80896 or later, and `checksum/proxy-py` matches the pinned build. Test review
+run 18210 found none: `test_pantry_header_pin.py` and `test_chat_witch_name.py` hold whichever build is pinned on
+purpose, and `test_proxy_checksum.py` hashes the checked-out proxy.py, which can sit at another commit than the
+gitlink.
+
+**The test.** `verify/test_guard_proxy_pin_1048.py` reads the gitlink from HEAD and, in the submodule clone that
+`ensure-submodules.sh` checks out from the host mirror, wants the pin reachable from origin/main and dc78f1c an
+ancestor of it (or the pin itself). It wants the guard-proxy Deployment's `checksum/proxy-py` to equal the first 12
+hex of the sha256 of `git show <pin>:proxy.py`, the pinned commit's bytes and not the working tree's. It then runs the
+same verdict on guard-proxy's history: dc78f1c with its own checksum (`729ba1620cd9`) holds; 0f0c809, the pin #1048
+moved off, fails as predating dc78f1c even with its own checksum; the current pin with dc78f1c's checksum, or with
+none, fails on the checksum. Each failure names the fix: the main commit to pin or the value to set.
+
+**Seen failing.** With `checksum/proxy-py` set back to `729ba1620cd9` the checksum check fails naming `ddf97ec452c0`.
+In a scratch clone whose HEAD pins 0f0c809 the pin check fails ("predates dc78f1c80896") and the checksum check fails
+naming `dfca2b1fe758`, 0f0c809's own hash.
+
+**Live check.** None in this run: the change adds a file under `verify/` that no cluster runs, its scope-map line and
+this entry.
+
+**Tests run.** `python3 verify/test_guard_proxy_pin_1048.py` passes on staging's pin 5772a5d8d7cb with
+`checksum/proxy-py` `ddf97ec452c0`. `verify/test_scope_tests.py` and `verify/test_fetch_inventory.py` pass with the
+new file and its map line. The full Test and E2E commands are left to hecaton's validation.
