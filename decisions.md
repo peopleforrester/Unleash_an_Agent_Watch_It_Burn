@@ -37549,3 +37549,13 @@ now check that the seeds read the probe's page through `kp.kubecon_prompt`.
 
 **Live check.** Skipped: the change touches only `verify/` scripts that run from the operator's host, none that a
 cluster runs, and no `/kubecon` prompt.
+
+**The suites (run 18686).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs
+point 6 asks. The first `bash verify/run-e2e-tools.sh`, at `28a9c26d` (log `/var/lib/hecaton/runs/18686/e2e-tools.log`), ran
+its 16 tier tests green, but its offline suite failed one test, `test_kubecon_c3_live_checks.py`: its check "the
+probe going back to the desk's copied ask fails, though the Joker lands" swaps `kp.ROOM_PROMPT` at run time, and
+`room_ask`'s new default had bound the old value when the function was defined. `188caaa9` reads the default when
+the ask is sent. The second run, at `188caaa9` (log `/var/lib/hecaton/runs/18686/e2e-tools-2.log`), printed `120 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_stage_trace_prompts.py` and `test_kubecon_c3_live_checks.py`
+among them, then `20 checks ran (the offline suite and 19 tier tests) in 7m20s, 4 at a time`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
