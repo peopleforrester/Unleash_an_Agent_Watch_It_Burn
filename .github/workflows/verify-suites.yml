@@ -147,7 +147,8 @@ jobs:
       # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),
       # and the host takes nothing from apt. This unpacks the missing Debian packages under the job's temp directory,
       # never installing them, and sets LD_LIBRARY_PATH and FONTCONFIG_FILE for the suite; with nothing missing it
-      # writes nothing.
+      # writes nothing. The browser and each package are pinned by SHA-256 (verify/playwright-browsers.lock,
+      # verify/chromium-libs.lock) and come from the artifact cache set above, so a warm runner downloads none (#1120).
       - name: Chromium's libraries and fonts, unpacked for this job
         run: python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"
 

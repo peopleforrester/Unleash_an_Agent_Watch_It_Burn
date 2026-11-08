@@ -12,6 +12,7 @@ full:
   - verify/artifact-cache.sh
   - verify/artifact_cache.py
   - verify/playwright_browsers.py
+  - verify/playwright-browsers.lock
   - verify/bootstrap_chart.py
   - .gitmodules
 unread:
@@ -1103,6 +1104,14 @@ reads:
     - gitops/ai-layer
   test_check_tls_shell_probe.sh:
     - infra/terraform/fleet/check-tls.sh
+  test_ci_chromium_libs.py:
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/chromium-libs.lock
+    - verify/chromium_libs_lock.py
+    - verify/ci_chromium_libs.py
+    - verify/playwright-browsers.lock
+    - verify/playwright_browsers.py
   test_cloud_credential_probe_admission.py:
     - gitops/ai-layer/resources.yaml
     - policies/floor/minimal-floor.yaml
@@ -4773,9 +4782,15 @@ reads:
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
   test_playwright_browsers.py:
+    - .github/workflows
+    - .github/workflows/*.yml
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - scripts
+    - scripts/*
     - verify
+    - verify/artifact_cache.py
+    - verify/playwright-browsers.lock
     - verify/playwright_browsers.py
     - verify/test_*.py
     - verify/test_mobile_titles_e2e.py

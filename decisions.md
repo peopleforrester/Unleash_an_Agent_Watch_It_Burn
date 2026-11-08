@@ -34505,3 +34505,81 @@ was re-run on the final commit `16457a18` and printed `350 tests ran` and `ALL O
 `exit=0` (log `/var/lib/hecaton/runs/18504/run-tests-final.log`); the decisions-reading tests
 (`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`, `test_952_suite_record.py`)
 are among them.
+
+## 2026-11-08 · #1120 · run 18529 · The pinned Playwright Chromium and its Debian libraries come from the host artifact cache by their SHA-256
+
+**What changed.** Part of #1115. `verify/playwright_browsers.py` no longer runs `playwright install`, and
+`verify/ci_chromium_libs.py` no longer runs apt. Each archive and each package is pinned by SHA-256 in a checked-in
+lock and taken from the host artifact cache #1117 built (`verify/artifact_cache.py`), which re-checks the sum on every
+hit, goes to the network only on a miss, and fails on a mismatch without fetching again. `prior-drafts.sh 1120
+origin/staging` printed NONE, and the issue's comments name no commits, so this starts from staging `50cadee3`.
+
+**The browsers.** `verify/playwright-browsers.lock` names the Playwright pin (1.64.1) and, for each archive the dry run
+lists for `install chromium` on linux x86_64, its install directory, the zip's SHA-256 and its CDN URL: `chromium-1248`,
+`chromium_headless_shell-1248` and `ffmpeg-1013`. Playwright's CDN publishes no sum, so `python3
+verify/playwright_browsers.py lock` downloads each zip, hashes it, writes the lock and leaves the zip in the cache. A
+missing browser is now unpacked from the cached zip into a temp directory beside its install location, with each
+member's mode and its symlinks kept and any member that would land outside refused; INSTALLATION_COMPLETE is written
+last, as Playwright does, and the directory is renamed into place under an `flock` on the browsers directory, so two
+tests at once unpack it once. A location without the marker is an unfinished unpack and is replaced. The check that
+`run-e2e-tools.sh` runs first now also fails, by name, a listed browser the lock does not pin or pins at another URL,
+installed or not, so a Playwright bump without a new lock fails before any test. Unpacked from the cache, the three
+directories hold the same files as Playwright's own install in `/var/lib/hecaton/ms-playwright` (`diff -rq`), apart from
+`DEPENDENCIES_VALIDATED` and Chromium's `extensions` directory, which Chromium writes at launch, and the headless shell
+launched from them (`launched: ok 156.0.8078.4`). Playwright's `.links` file for browser cleanup is not written: this
+host sets `PLAYWRIGHT_SKIP_BROWSER_GC=1`, and nothing on Tanjiro's runner runs that cleanup.
+
+**The libraries.** `verify/chromium-libs.lock` pins 54 Debian 13 amd64 packages, each with its version, the SHA-256
+Debian's Packages index gives its .deb, a snapshot.debian.org URL and its depends. `verify/chromium_libs_lock.py write`
+reads trixie, trixie-updates and trixie-security at snapshot `20261107T000000Z`: each InRelease is checked with gpgv
+against `/usr/share/keyrings/debian-archive-keyring.gpg`, and each `main/binary-amd64/Packages.xz` comes through the
+cache by the sum that signed InRelease gives it. From the roots (the soname table's packages and the four font
+packages) it follows Pre-Depends and Depends, not Recommends, and leaves out the base system: Priority required and
+Essential packages and what they need. That base came to the 78 packages a bare `debian:trixie` image holds, exactly,
+once a virtual name met by a package already in the set (awk, by mawk) was no longer resolved to the first provider by
+name (gawk). The 54 are exactly what `apt-get -s --no-install-recommends install` of the same roots picks in that image.
+snapshot.debian.org keeps every version it has seen, so a pin does not go missing when Debian moves past it, as
+deb.debian.org's pool does at a point release; the cost is that a security update reaches the job only when the lock is
+written again. At run time `ci_chromium_libs.py` checks the host is Debian trixie amd64, reads `dpkg-query` for what the
+host has installed and provides, resolves the wanted packages through the lock's depends (a group is met by any
+alternative the host has, else its first pinned one), takes each .deb from the cache and unpacks it with `dpkg-deb -x`.
+A package the lock does not pin, a host of another release or architecture, or a .deb that does not match fails by
+name. A version constraint in a depends is not kept, since the lock and the host come from one release.
+
+**Live check, this run.** In a bare `docker.io/library/debian:trixie` container under rootless podman, as this host's
+user (`--userns=keep-id`), with uv-managed Python 3.13.16 and uv mounted read-only, the host's `/etc/ssl` mounted for
+its certificates (the bare image has none, and the first attempt failed every HTTPS fetch on that), an empty
+`WIB_ARTIFACT_CACHE` and an empty `PLAYWRIGHT_BROWSERS_PATH`: `ci_chromium_libs.py` installed the three browsers from the
+cache, found the 21 libraries missing and no fonts, unpacked 54 packages, and the shell rendered its page, in 89 s with
+57 fetch-log lines (3 zips, 54 .debs, all `ok`). A second run on the same cache with a new browsers directory and a new
+job directory did the same in 13 s and left the fetch log at 57 lines, so a warm cache fetched no browser or package.
+With that run's LD_LIBRARY_PATH and FONTCONFIG_FILE, the four Playwright tests Tanjiro failed under #1047 passed in the
+container (`FALLBACK DECK GREEN`, `All rendered guardrails-heading checks passed.`, `The iPad prompt sheet carries every
+/kubecon prompt, in order.`, `All rendered mobile-title checks passed.`), the fallback deck with PyYAML 6.0.3 as the
+workflow's venv has it, and the fetch log stayed at 57. On this host, which has every library and fonts, the
+prerequisite check `python3 verify/playwright_browsers.py` exited 0.
+
+**Tests.** `verify/test_playwright_browsers.py` now serves fixture zips from a file server on 127.0.0.1 with a lock of
+its own and a cache root outside every worktree. It covers a miss (each zip asked for once, one `ok` fetch-log line
+each, modes and a symlink kept, no temp directory left), a hit (a fresh browsers directory with the server stopped:
+no request, the log unchanged), a cached zip that no longer matches (named with both sums, no request, no browser), a
+download that does not match, a URL or directory the lock does not pin, a lock for another Playwright, a malformed or
+missing lock, a member that would escape, an unfinished location replaced, and that no script, test or workflow runs
+`playwright install`. `verify/test_ci_chromium_libs.py` drops the apt checks and adds the dpkg-query parsing, the
+resolver, the writer's closure and base on a fixture Packages index, the checked-in lock (closed, every root pinned,
+at the snapshot, in the writer's form, and every package reached from a bare host), and unpack's miss, hit and
+mismatch with fixture .debs it builds with `dpkg-deb --build`. With the cache bypassed in `install()`, 9 checks of the
+browser test fail; with the host's packages ignored in `resolve()`, the libraries test fails. `verify/test_e2e_tools_tier.py`
+gives its scratch checkouts a lock pinning its fixture listing. In `verify/scope-map.yaml`, `playwright-browsers.lock`
+joins `full` beside `playwright_browsers.py`, `test_ci_chromium_libs.py` gets the entry `scope_tests.py write` produced
+(it had none), and `test_playwright_browsers.py`'s entry gains what `write` found plus the lock and the cache helper.
+The rest of what `write` produced was other tests' existing drift and is not in this change.
+
+**Not yet run on a cluster.** Nothing here runs on a cluster: the change touches only `verify/` and a workflow comment,
+which no cluster runs, so no live cluster check applies. What only Tanjiro shows is the verify-suites e2e tools job on
+the promoted commit, whose `Chromium's libraries and fonts, unpacked for this job` step fills
+`$RUNNER_TOOL_CACHE/wib-artifacts` on its first run and, on the next, should add no `cdn.playwright.dev` or
+`snapshot.debian.org` line to that cache's `fetch.log`.
+
+No dependency was added: the writer uses gpgv, dpkg and the Debian keyring the host has, and the runtime uses dpkg-query
+and dpkg-deb, which every Debian host has.

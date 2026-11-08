@@ -17,7 +17,8 @@ caught too. A good lock installs every binary, a second run downloads nothing, a
 on the same cache (#1004); a cached file that no longer matches fails by name and is not fetched again, and a missing
 artifact or a checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
 failed fetch or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing
-from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
+from a directory this user cannot write (#658), with `uv` stubbed to list them and a lock of its own pinning
+them (#1120).
 
 run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
 the gate's binaries, otelcol-contrib included since #654 and ttyd since #770. Its scratch copy is run with a fixture lock of the seven tools: the fetched kubectl, not one
@@ -380,10 +381,14 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
     vdir = tmp / "verify"
     vdir.mkdir(parents=True, exist_ok=True)
     helpers = ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py") if RUNNER in scripts else ()) + \
-        ((VERIFY / "artifact-cache.sh", VERIFY / "artifact_cache.py") if FETCH in scripts else ())
+        ((VERIFY / "artifact-cache.sh", VERIFY / "artifact_cache.py") if FETCH in scripts else ()) + \
+        ((VERIFY / "artifact_cache.py",) if BROWSERS in scripts else ())
     for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
     (vdir / "e2e-tools.lock").write_text(lock)
+    if BROWSERS in scripts:
+        # playwright_browsers.py fails a listed browser its lock does not pin (#1120); this pins uv_listing()'s two.
+        (vdir / "playwright-browsers.lock").write_text(BROWSER_LOCK)
     return vdir
 
 
@@ -528,12 +533,16 @@ NODE22 = '#!/bin/sh\ncase "$1" in -p) echo 22 ;; --version) echo v22.11.0 ;; esa
 PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n", "xz": "#!/bin/sh\nexit 0\n"}
 
 
+LISTED_DIRS = ("chromium-9", "ffmpeg-9")
+BROWSER_LOCK = ("playwright " + re.search(r'^PLAYWRIGHT = "playwright==([^"]+)"$', BROWSERS.read_text(), re.M).group(1)
+                + "\n" + "".join(f"{d} {'0' * 64} https://fixture.invalid/{d}\n" for d in LISTED_DIRS))
+
+
 def uv_listing(browsers: pathlib.Path, installed: bool) -> str:
     """A uv whose `playwright install --dry-run chromium` lists two browsers under browsers, installed or not."""
     browsers.mkdir(parents=True, exist_ok=True)
     listing = ""
-    for name, d in (("Chrome for Testing 1 (playwright chromium v9)", "chromium-9"),
-                    ("FFmpeg (playwright ffmpeg v9)", "ffmpeg-9")):
+    for name, d in zip(("Chrome for Testing 1 (playwright chromium v9)", "FFmpeg (playwright ffmpeg v9)"), LISTED_DIRS):
         if installed:
             (browsers / d).mkdir(exist_ok=True)
             (browsers / d / "INSTALLATION_COMPLETE").touch()

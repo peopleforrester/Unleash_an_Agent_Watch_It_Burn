@@ -1,5 +1,5 @@
 # ABOUTME: Gives the e2e tools job on Tanjiro the shared libraries Playwright's Chromium needs and the host lacks (#1047):
-# ABOUTME: the missing Debian packages are unpacked into a job directory, never installed, and LD_LIBRARY_PATH names them.
+# ABOUTME: the missing Debian packages, pinned in chromium-libs.lock, come from the host artifact cache and are unpacked.
 """Usage: GITHUB_ENV=<file> python3 verify/ci_chromium_libs.py <directory>
 
 Why (#1047). The tools tier's Playwright tests launch the Chrome Headless Shell that verify/playwright_browsers.py
@@ -7,10 +7,16 @@ pins. On Tanjiro's runner it would not start: "error while loading shared librar
 42372183956 at staging ae188261). A bare Debian 13 lacks 21 of the libraries it links against: NSS, GLib, ATK, D-Bus,
 the X client libraries, GBM, xkbcommon and ALSA. Tanjiro takes nothing from apt by hecaton or a run; its OS packages
 belong to infrastructure-end-device-management (hecaton's docs/conventions/fleet-host-boundary.md). So this script
-installs nothing. It asks apt, as the runner's own user and with package lists of its own, which packages would
-bring the missing libraries in, downloads exactly those, unpacks each with `dpkg-deb -x` under <directory>, and writes
-LD_LIBRARY_PATH into $GITHUB_ENV so the steps after it load them. apt resolves against the host's installed packages,
-so nothing the host already has is unpacked, and no host library is shadowed.
+installs nothing. It maps each missing library to its package, follows their depends through chromium-libs.lock,
+skipping every package the host's dpkg database has installed or provided, unpacks each package reached with
+`dpkg-deb -x` under <directory>, and writes LD_LIBRARY_PATH into $GITHUB_ENV so the steps after it load them. Nothing
+the host already has is unpacked, and no host library is shadowed.
+
+Where the packages come from (#1120). Each is pinned in chromium-libs.lock by the SHA-256 Debian's signed Packages
+index gives its .deb, at a snapshot.debian.org URL (chromium_libs_lock.py writes the lock). Each .deb comes from the
+host artifact cache (artifact_cache.py, #1117), which re-checks the sum on every hit and goes to the network only on a
+miss, so a host downloads each package once across every job. Until #1120 the script ran `apt-get update` and `apt-get
+download` on every job; it no longer runs apt at all.
 
 With every library found the shell still stops on its first text when fontconfig has no fonts. So a host with no
 /etc/fonts/fonts.conf or no font file gets fontconfig-config and a few font packages unpacked the same way, and
@@ -21,7 +27,9 @@ Where the host already has every library and a font, the script writes nothing: 
 step does no work.
 
 Nothing here falls back. No GITHUB_ENV, a browser the pinned Playwright does not list, a missing library this table
-does not name, a failed apt step, or a library `ldd` still cannot find afterwards exits 1, naming which.
+does not name, a host that is not the lock's Debian release and architecture, a package the lock does not pin, a
+cached or downloaded .deb that does not match its sum, or a library `ldd` still cannot find afterwards exits 1, naming
+which.
 """
 from __future__ import annotations
 
@@ -32,6 +40,9 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import artifact_cache  # noqa: E402
+import chromium_libs_lock  # noqa: E402
+from chromium_libs_lock import parse_depends  # noqa: E402
 from playwright_browsers import BROWSERS, PLAYWRIGHT, TIMEOUT, UV, ensure, listing  # noqa: E402
 
 # The headless shell Playwright's chromium.launch() starts, within its install location.
@@ -39,7 +50,7 @@ SHELL_ENTRY = "chromium-headless-shell"
 SHELL_BINARY = pathlib.Path("chrome-headless-shell-linux64") / "chrome-headless-shell"
 
 # Every library chrome-headless-shell v1248 links against that a bare debian:trixie lacks (ldd in the container, run
-# 18178), and the Debian 13 package that ships it. apt brings in what these packages depend on.
+# 18178), and the Debian 13 package that ships it. resolve() brings in what these packages depend on.
 SONAME_PACKAGE = {
     "libasound.so.2": "libasound2t64",
     "libatk-1.0.so.0": "libatk1.0-0t64",
@@ -74,7 +85,6 @@ FONT_PACKAGES = ["fontconfig-config", "fonts-dejavu-core", "fonts-liberation", "
 POSTINST_LINKS = ["10-hinting-slight.conf", "70-no-bitmaps-except-emoji.conf"]
 FONT_SUFFIXES = {".ttf", ".otf", ".ttc", ".pfb", ".pcf", ".woff", ".woff2"}
 NOT_FOUND = re.compile(r"^\s*(\S+)\s+=>\s+not found\s*$", re.M)
-INST = re.compile(r"^Inst (\S+) ", re.M)
 
 
 class Failed(Exception):
@@ -93,11 +103,6 @@ def packages_for(sonames: list[str]) -> list[str]:
         raise Failed(f"ldd finds no {', '.join(unknown)}, and SONAME_PACKAGE in {__file__} names no package for "
                      f"{'it' if len(unknown) == 1 else 'them'}")
     return sorted({SONAME_PACKAGE[s] for s in sonames})
-
-
-def to_unpack(simulation: str) -> list[str]:
-    """The packages `apt-get -s install` would install: the ones asked for and what they need that the host lacks."""
-    return list(dict.fromkeys(INST.findall(simulation)))
 
 
 def library_path(root: pathlib.Path, existing: str) -> str:
@@ -151,8 +156,9 @@ def main(argv: list[str]) -> int:
             return 0
         wanted = sorted(set(packages_for(missing)) | (set(FONT_PACKAGES) if need_fonts else set()))
         print(f"ci_chromium_libs: {binary} lacks {', '.join(missing) or 'no library'}"
-              f"{'; the host has no fonts' if need_fonts else ''}; asking apt for {', '.join(wanted)}")
-        pkgs = unpack(wanted, root, unpacked)
+              f"{'; the host has no fonts' if need_fonts else ''}; resolving {', '.join(wanted)} "
+              f"against {chromium_libs_lock.LOCK.name}")
+        pkgs = unpack(wanted, unpacked)
         env: dict[str, str] = {}
         if missing:
             env["LD_LIBRARY_PATH"] = library_path(unpacked, os.environ.get("LD_LIBRARY_PATH", ""))
@@ -172,28 +178,73 @@ def main(argv: list[str]) -> int:
     return 0
 
 
-def unpack(wanted: list[str], root: pathlib.Path, unpacked: pathlib.Path) -> list[str]:
-    """Downloads what `apt-get -s install wanted` would install and unpacks each under unpacked. Returns them."""
-    apt_dir, debs = root / "apt", root / "debs"
-    for d in (apt_dir / "lists" / "partial", apt_dir / "cache" / "archives" / "partial", apt_dir / "sources.list.d",
-              debs, unpacked):
-        d.mkdir(parents=True, exist_ok=True)
-    # apt's own state for this job: its lists and cache under <directory>, no lock on the host's, and Debian's own
-    # archive as the only source, so a repository the host adds (Docker's, Tailscale's) cannot fail the update. The
-    # host's installed packages are read as they are, so apt picks only what the host lacks.
-    sources = apt_dir / "sources.list.d" / "debian.sources"
-    sources.write_text(debian_sources(codename()))
-    opts = ["-o", f"Dir::State::Lists={apt_dir / 'lists'}", "-o", f"Dir::Cache={apt_dir / 'cache'}",
-            "-o", "Dir::Etc::SourceList=/dev/null", "-o", f"Dir::Etc::SourceParts={sources.parent}",
-            "-o", "Debug::NoLocking=1"]
-    run(["apt-get", *opts, "-q", "update"], "apt-get update into the job's own lists")
-    pkgs = to_unpack(run(["apt-get", *opts, "-s", "--no-install-recommends", "install", *wanted],
-                         "apt-get -s install"))
+def host_packages(dpkg_query: str) -> set[str]:
+    """The names the host's dpkg database has installed, and the virtual names those provide, from
+    `dpkg-query -W -f '${Package}\\t${db:Status-Status}\\t${Provides}\\n'`."""
+    have: set[str] = set()
+    for line in dpkg_query.splitlines():
+        name, status, provides = (line.split("\t") + ["", ""])[:3]
+        if name and status == "installed":
+            have.add(name.split(":", 1)[0])
+            have.update(g[0] for g in parse_depends(provides))
+    return have
+
+
+def resolve(wanted: list[str], packages: dict[str, chromium_libs_lock.Package], have: set[str]) -> list[str]:
+    """The pinned packages to unpack: each wanted one the host lacks, and, through their depends, every package they
+    need that the host neither has nor provides. A group of alternatives is satisfied by any one the host has or that
+    is already to be unpacked; otherwise its first pinned alternative is taken. A package the lock does not pin
+    fails, naming it."""
+    order: list[str] = []
+    queue = list(wanted)
+    while queue:
+        name = queue.pop(0)
+        if name in have or name in order:
+            continue
+        if name not in packages:
+            raise Failed(f"the host has no {name}, and {chromium_libs_lock.LOCK.name} pins no {name}; "
+                         "`python3 verify/chromium_libs_lock.py write` rewrites the lock")
+        order.append(name)
+        for group in packages[name].depends:
+            if any(a in have or a in order for a in group):
+                continue
+            pick = next((a for a in group if a in packages), None)
+            if pick is None:
+                raise Failed(f"{name} depends on {' | '.join(group)}; the host has none of them and "
+                             f"{chromium_libs_lock.LOCK.name} pins none")
+            queue.append(pick)
+    return order
+
+
+def unpack(wanted: list[str], unpacked: pathlib.Path,
+           lock_path: pathlib.Path = chromium_libs_lock.LOCK, os_release: pathlib.Path = pathlib.Path("/etc/os-release"),
+           dpkg_query: str | None = None, arch: str | None = None, **cache_kw) -> list[str]:
+    """Unpacks, under unpacked, each pinned package resolve() picks for wanted, from the host artifact cache by its
+    sum. Returns them. dpkg_query and arch are the host's own unless given."""
+    try:
+        lock = chromium_libs_lock.read(lock_path)
+    except chromium_libs_lock.LockError as e:
+        raise Failed(str(e))
+    suite = codename(os_release)
+    if suite != lock.suite:
+        raise Failed(f"this host runs Debian {suite}, and {lock_path.name} pins {lock.suite}'s packages")
+    arch = run(["dpkg", "--print-architecture"], "dpkg --print-architecture").strip() if arch is None else arch
+    if arch != lock.arch:
+        raise Failed(f"this host is {arch}, and {lock_path.name} pins {lock.arch} packages")
+    if dpkg_query is None:
+        dpkg_query = run(["dpkg-query", "-W", "-f", "${Package}\t${db:Status-Status}\t${Provides}\n"],
+                         "dpkg-query")
+    pkgs = resolve(wanted, lock.packages, host_packages(dpkg_query))
     if not pkgs:
-        raise Failed(f"apt-get -s install {' '.join(wanted)} would install nothing, yet the shell lacks them")
-    run(["apt-get", *opts, "-q", "download", *pkgs], "apt-get download", cwd=debs)
-    for deb in sorted(debs.glob("*.deb")):
-        run(["dpkg-deb", "-x", str(deb), str(unpacked)], f"dpkg-deb -x {deb.name}")
+        raise Failed(f"the host has every one of {', '.join(wanted)} installed, yet the shell lacks them")
+    unpacked.mkdir(parents=True, exist_ok=True)
+    for name in pkgs:
+        p = lock.packages[name]
+        try:
+            deb = artifact_cache.get_retrying(p.sha256, p.url, **cache_kw)
+        except artifact_cache.ArtifactCacheError as e:
+            raise Failed(f"{name} {p.version}: {e}")
+        run(["dpkg-deb", "-x", str(deb), str(unpacked)], f"dpkg-deb -x {name} {p.version}")
     return pkgs
 
 
@@ -204,14 +255,6 @@ def codename(os_release: pathlib.Path = pathlib.Path("/etc/os-release")) -> str:
         raise Failed(f"{os_release} names ID={fields.get('ID')!r} VERSION_CODENAME={fields.get('VERSION_CODENAME')!r}; "
                      "the packages this unpacks are Debian's")
     return fields["VERSION_CODENAME"]
-
-
-def debian_sources(suite: str) -> str:
-    """deb822 sources for Debian's main archive, its updates and its security archive, signed by Debian's keyring."""
-    keyring = "/usr/share/keyrings/debian-archive-keyring.gpg"
-    return (f"Types: deb\nURIs: http://deb.debian.org/debian\nSuites: {suite} {suite}-updates\nComponents: main\n"
-            f"Signed-By: {keyring}\n\nTypes: deb\nURIs: http://deb.debian.org/debian-security\n"
-            f"Suites: {suite}-security\nComponents: main\nSigned-By: {keyring}\n")
 
 
 def host_has_fonts(etc: pathlib.Path = pathlib.Path("/etc/fonts"),
