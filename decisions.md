@@ -37073,3 +37073,22 @@ TESTS GREEN`, exit 0. `bash verify/run-e2e-tools.sh` printed `17 checks ran (the
 5m59s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_dispatched_runs.py` alone printed
 "All dispatched-run checks passed." The prose gate printed `prose gate: pass`. No dependency was added. The logs are
 `/var/lib/hecaton/runs/18658/run-tests.log` and `e2e-tools.log`.
+
+## 2026-11-08 · #1196 · Segments 4 and 5 and /kubecon moved to the 154-slide deck, by hand
+
+Worked by hand on Michael's order ("Work 1196 yourself"); hecaton held it. rounds-agenticburn#112 and #118 were both
+closed, and the built deck on rounds main `f73c102` has 154 slides at the issue table's "Now" numbers, so nothing
+differed from the table. Every diagram note was read from that `attendee.html` and is pinned in
+`verify/test_ros_seg4_flow.py`'s DIAGRAM_NOTES.
+
+Judgment calls. `#/55`'s second paragraph is now a "Then say" said every time, as the deck has it; before, it was
+said only when a polite ticket came up. Segment 6 and the Night Before section cited no slide at or above `#/56`, so they
+are unchanged. The timing sentences that sent the totals to a run-through row are dropped, per Michael's ruling of
+the same day that run-throughs are his and Whitney's to arrange.
+
+Timing: segment 4's notes are 730 words (about 4 min 50 s at 150 wpm); segment 5's are 744 (about 5 min, 407 on the
+diagrams). Both segments, and so the 30-minute talk, run over once play, attacks, traces and commands are added.
+
+The live check: `/kubecon` on the private cluster served the #1141 blocks on 2026-11-08 after promotion. Not yet run
+on a cluster: load `/kubecon` on both clusters after Argo CD syncs this commit and confirm the `#/64` and `#/98` ranges
+show.
