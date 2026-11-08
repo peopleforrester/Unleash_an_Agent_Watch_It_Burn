@@ -33375,3 +33375,11 @@ tickets" and HC-666, HC-7688 and HC-7702 in the source, `GET /lookup?number=HC-6
 number by both the admin bot and the public bot; a ticket an attendee writes in HC-666's style gets BurritoBot to
 deploy; HC-666 still lands; `guard-agency-on` and `guard-input-on` still stop both. The run-of-show's segment 4 is
 #1076's to rewrite.
+
+**Suite results, run 18436.** On `ba6df929`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=0366ecf3`, so
+scoped to this change, printed `211 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which
+is `bash verify/run-tests.sh`), then `35 checks ran (the offline suite and 34 tier tests) in 7m46s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`. `verify/test_support_desk_live.py` was among them and passed against both clusters'
+desks as deployed today; it reads the desk's heading on `/` and HC-666 on `/ticket/HC-666`, so the change keeps it
+green once it rolls out. The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18436/e2e-tools.log`.
