@@ -342,8 +342,8 @@ for where in ("gitops/ai-layer/ticket_site.py",
     check(f"{where}'s images are among those judged", any(w.startswith(where + ":") for w, _ in pulls))
 for d, n in (("gitops/ai-layer", "llm-guard"), ("backstage", "postgres"), ("gitops/manifests/demo-app-wombat", "web")):
     check(f"{n}, a name kustomize replaces under {d}/, is judged as replaced there, not as a pull", (d, n) in renamed)
-check("images.lock's placeholder REGISTRY/evil-mcp-shim is not judged as a pull",
-      "REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD" in placeholders)
+check("images.lock's placeholder ${{parameters.image}} is not judged as a pull",
+      "${{parameters.image}}" in placeholders)
 
 print("== 2. no tracked line names Docker Hub but to refuse it ==")
 grep = ["git", "-C", str(REPO), "grep", "-n", "-I"]

@@ -12,7 +12,8 @@ toolset, so the injection fires but has nothing to call.
 
 The agent (kagent `Agent` CRD, `workshop-agent`) dials both its MCP servers **through agentgateway**
 (#514). The rogue tools (`read_internal_config`, `apply_optimization`) and the `get_weather` injection
-entrypoint are served by **evil-mcp-shim** via the `evil-mcp` RemoteMCPServer, whose url is
+entrypoint are served by **evil-mcp-shim**, whose code is `gitops/ai-layer/server.py` (the one copy; this
+folder no longer carries one, #1193), via the `evil-mcp` RemoteMCPServer, whose url is
 `http://agentgateway.agent:3003/mcp`, a bind of its own; the legit tools are on `workshop-mcp`, through the
 allow-all `:3001` bind (gitops/ai-layer/resources.yaml). The :3003 bind's `mcpAuthorization` rule, the line of
 `agentgateway-c7-config` marked `# c7-rule` (gitops/ai-layer/agentgateway.yaml), is committed `'true'`.

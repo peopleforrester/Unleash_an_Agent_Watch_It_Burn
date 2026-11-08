@@ -83,9 +83,11 @@ C7_CONFIG = next(d for d in _gateway_docs if d.get("kind") == "ConfigMap"
                  and d["metadata"]["name"] == "agentgateway-c7-config")["data"]["config.yaml"]
 C7_OPEN, C7_NARROWED = "true", 'mcp.tool.name == "get_weather"'
 EVIL_URL = obj("RemoteMCPServer", "evil-mcp")["spec"]["url"]
-SHIM_PY = (REPO / "challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py").read_text()
+# The poisoned server the clusters run: GitOps builds the evil-mcp-src ConfigMap from it (#1193).
+SHIM_PY = (REPO / "gitops/ai-layer/server.py").read_text()
 MCP_SENTINEL = re.search(r'"FAKE_MCP_SENTINEL", "([^"]+)"', SHIM_PY).group(1)
-WEATHER = re.search(r'def get_weather\(\).*?return "([^"]+)"', SHIM_PY, re.S).group(1)
+# get_weather returns a live reading from the weather feed (#642), so the fakes answer with one of that shape.
+WEATHER = "Salt Lake City: 41°F (5°C), Clear sky, observed 2026-11-08T12:00."
 ENTRY = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text()
 
 

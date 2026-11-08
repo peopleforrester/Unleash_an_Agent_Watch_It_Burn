@@ -178,7 +178,7 @@ check("its companion finds the /chat traces that did reach the tool",
 prompt = (REPO / "challenges/03-bad-mcp-excessive-agency/agent-prompt.txt").read_text(encoding="utf-8")
 check("the C7 prompt says 'weather tool'", "weather tool" in prompt)
 check("the lab's C7 prompt says it too", "weather tool" in (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8"))
-shim = (REPO / "challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py").read_text(encoding="utf-8")
+shim = (REPO / "gitops/ai-layer/server.py").read_text(encoding="utf-8")
 check("the rogue tool is named read_internal_config", "def read_internal_config(" in shim)
 
 print("== the run-of-show names the surface and the URL ==")

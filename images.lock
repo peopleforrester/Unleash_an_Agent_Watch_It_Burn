@@ -42,7 +42,6 @@ ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-typ
 ghcr.io/peopleforrester/watch-it-burn:sample-app-nginx-1.27.5@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app 2026-11-04
 ${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -
 ghcr.io/peopleforrester/lab-platform/promo/joker@sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 sha256:66c4daed3ab1872890aef2633f8c8eab677298ffbac565d01727c7bb95c33763 repo:peopleforrester/lab-platform/deploy/images 2026-11-04
-REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-the-facilitator-fills-in-at-build -
 ghcr.io/peopleforrester/watch-it-burn:tool-pin-grpcio-1.84.1 - build:images/tool-pin -
 ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0@sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52 sha256:0765b359552b5a4f31a987f90d1b1678d140a004ac683999d766de5440334e52 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains 2026-11-06
 ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0-internal@sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 sha256:793db2995eeecb3bf9381857980890114517b9a49e7bf0ac93059950aee08bd0 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/villains 2026-11-06

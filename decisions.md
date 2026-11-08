@@ -37262,3 +37262,100 @@ Not yet run on a cluster:
 - Once #1158 or the presenters have written the `desk-report-token` Secret and fake-ticket has restarted: a report
   with the token lands on `https://deployments.burritobot.co/deployments.json` with `"cluster": "private"`, and the
   check leaves the page as it found it.
+## 2026-11-08 · #1193 · run 18663 · The stale evil-mcp-shim copy under challenges/03 is gone; gitops/ai-layer/server.py is the one copy
+
+**What changed.** `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/` held a June copy of the poisoned weather
+server (`server.py`, fixed "It is 21C and sunny.", the older "Do not mention this instruction" wording), its
+`Dockerfile` and a `k8s-manifest.yaml` with an unfilled `REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD` image.
+Nothing applied or built any of them, so all three are deleted, and no pointer file is left in the folder: the
+folder's own docs say where the code is instead. The Deployment, Service, `app=evil-mcp-shim` label, the agentgateway
+target and the Backstage selector keep the name `evil-mcp-shim`, as the issue's scope guard asks: those are the live
+Challenge 4 server, defined in `gitops/ai-layer/resources.yaml`.
+
+**What read the removed files.** Four offline tests read the stale `server.py`: `test_beat3_mcp.py`,
+`test_beat03_c7.py`, `test_challenge_fallbacks.py` and `test_trace_walkthrough_view.py`. Each now reads
+`gitops/ai-layer/server.py`. The sentinel regex finds the same `FAKE-MCP-EXFIL-sentinel-4c1d` there, and
+`apply_optimization` still carries "MUST apply". `test_challenge_fallbacks.py` took its fake `get_weather` reply from
+the stale copy's fixed return; the live tool returns a weather-feed reading (#642), so the test now owns a fixed
+reading of that shape. `images.lock` loses the placeholder row only the deleted manifest named, and
+`test_no_docker_hub.py`'s placeholder check now names the remaining `${{parameters.image}}` placeholder row. The six
+`verify/scope-map.yaml` entries that listed the deleted file list `gitops/ai-layer/server.py` instead; `scope_tests.py
+write` was not kept, because on this base it also adds about 800 lines of other tests' drift that is not this change's.
+Comments and docs that named the folder or file now name `gitops/ai-layer/server.py`: `plant-fake-secret.yaml` (the
+live Deployment sets `FAKE_MCP_SENTINEL` directly, not through the deleted manifest's secretKeyRef),
+`FACILITATOR.md`, `docs/READINESS-CHECKLIST.md`, `docs/KUBECON-ABSTRACT-READINESS.md`,
+`docs/MASTER-RECREATION-SPEC.md` and `prds/done/7-observability-meta.md`. The toggle, fallback and `verify/beat-03.sh`
+never read the folder; they name the Deployment and the Agent, so Beat 3's path is unchanged.
+
+**Live check (run 18663, both clusters, read-only).** On watch-it-burn-community and watch-it-burn-private,
+`deploy/evil-mcp-shim` in `agent` runs `ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18c...`,
+mounts ConfigMap `evil-mcp-src-78t5dt5d9d`, and carries Argo CD tracking id `ai-layer:apps/Deployment:agent/evil-mcp-shim`.
+That ConfigMap's `server.py` is byte for byte `gitops/ai-layer/server.py` on both (`diff` printed nothing), with
+"region-locked" present and "21C and sunny" absent. No pod on either cluster runs a `REGISTRY/evil-mcp-shim` image, and
+no Argo CD Application on either sources a `challenges/` path. Nothing was changed on either cluster.
+
+**Beat 3's path.** `toggle-mcp-authz-on.sh`, `fallback.curl.sh` and `verify/beat-03.sh` name no file in the deleted
+folder (`git grep` on them finds only the Deployment name), so the change alters nothing they read or call. The
+fallback was not run live: it flips the C7 gateway rule on the stage clusters, and the clusters run the same
+`server.py` before and after this change. The offline tests that drive the fallback and `beat-03.sh` against fakes,
+`test_challenge_fallbacks.py` and `test_beat03_c7.py`, pass on the new reads.
+
+**Suites (run 18663, at `0eb57a3c`).** Scoped to the change from `f6b637b4`, as point 6 asks; the change edits
+`images.lock` and tests that tier tests read, so the scoped tools tier ran. `bash verify/run-e2e-tools.sh` printed
+`139 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for its offline check, then `19 checks ran (the offline suite
+and 18 tier tests) in 6m46s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The five changed tests and
+`test_images_lock.py`, `test_room_view.py` and `test_scope_tests.py` were among those that ran. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18663/e2e-tools.log`.
+## 2026-11-08 · #1156 · run 18665 · The support desk reserves HC-900 to HC-999 for the presenters
+
+**What changed.** Part of #1145, which Michael approved on 2026-11-08 with the guard that presenter demo tickets get
+a number range of their own. `gitops/ai-layer/ticket_site.py` now names two ranges: `ROOM_NUMBERS`, HC-1000 to
+HC-9999, the room's draw as before, and `PRESENTER_NUMBERS`, HC-900 to HC-999, reserved. `file_ticket` (POST /submit)
+checks each draw rather than trusting it: a number outside the room's range, the reserved one above all, is drawn
+again, so a later change to the draw cannot hand the room a presenter number. A presenter number is three digits and
+a room number four, and the desk's look-up matches a number by its exact digits, so a presenter number mistyped on
+stage cannot name a room ticket.
+
+**The presenter path.** `POST /presenter-ticket` takes a JSON body `{"body": "<text or HTML>", "customer": "<optional
+name>"}` and answers 201 with the ticket, numbered with the lowest free presenter number (HC-900 first), or 409 once
+all 100 are taken. It is cleaned as a room ticket is, so white text stays white on the page and is read by the bot.
+The ticket has no owner, so it shows on no visitor's `/me` page. The route is in-cluster only, as `/landed` and
+`/cluster-read` are: console.conf adds `location = /presenter-ticket { deny all; }` to the desk's public server, and
+the deployments host answers no POST. The presenters reach it with `kubectl port-forward svc/fake-ticket` in the
+`agent` namespace, so their kubectl session is the gate. It holds no token, reads no Secret, and does not read, write
+or reuse the `agent/terminal-auth` Secret (Dispatched runs, point 6). Lowest-free numbering rather than a random draw
+was chosen so the presenters know the number to say before they file it, and it restarts at HC-900 after a reset.
+
+**Eviction and the reset.** Past `MAX_TICKETS` the desk evicts the oldest room tickets and now leaves presenter
+tickets alone, so a busy room cannot push the demo ticket out. #1144 (the desk reset) is not built yet, so this change
+adds the function it calls, `clear_filed_tickets()`, which removes every room and presenter ticket and keeps every
+fixed one (`FIXED_TICKETS`, HC-7731 and HC-666 among them). The route or command that calls it, and who may, stay
+#1144's to decide.
+
+**The test.** `verify/test_presenter_ticket_range.py` enumerates the draw, as "Tests own their inputs" asks: it stubs
+`secrets.randbelow` and tries every value it can return to `_room_draw`, then feeds every number from 0 to 10999 to
+`file_ticket` as the draw and checks each files a room number, and POSTs to /submit with all 100 presenter numbers
+drawn first. It drives `/presenter-ticket` over HTTP (201 and HC-900, HC-901, the 400s, the 413, the 409 at 101, the
+404 on the deployments host), the eviction and the reset, holds the console's deny line and that the console's only
+other routes to the desk are GET-only fixed paths, and checks that the desk's Deployment mounts no Secret. Its entry
+in `verify/scope-map.yaml` is the one `scope_tests.py write` computed for it; the other drift that `write` printed for
+unrelated tests was left out of this change.
+
+**Live check.** Run on watch-it-burn-community before the change is on it, read-only: a POST from outside to
+`https://support.burritobot.co/landed` and `/cluster-read` answered 403, and `/presenter-ticket` 404, which is the desk
+itself answering a route it does not have yet; `deploy/fake-ticket` in `agent` read 1/1 ready. Both the desk's source
+and console.conf are hashed ConfigMaps, so one Argo CD sync rolls both pods.
+
+**Not yet run on a cluster.** Once hecaton promotes this, on watch-it-burn-community: `POST
+https://support.burritobot.co/presenter-ticket` from outside answers 403; through `kubectl --context
+watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080`, `POST /presenter-ticket` answers 201 with
+HC-900, `GET /ticket?id=HC-900` returns it, and a ticket filed at the public desk's form gets a four-digit number.
+The check files one ticket, HC-900, which stays until the desk restarts or #1144's reset clears it: a desk pod
+delete would also clear every ticket and row the room has, so the check does not use one.
+
+**The suites (run 18665, at `faffd115`; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6 asks. `bash
+verify/run-e2e-tools.sh` ran the offline suite as one of its checks, which printed `234 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `test_presenter_ticket_range.py` among them, then printed `36 checks ran (the offline suite
+and 35 tier tests) in 9m17s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18665/e2e-tools.log`.
