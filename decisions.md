@@ -37243,6 +37243,14 @@ kubecon-private. `bootstrap_chart.py` gains `for_desk_remote_reports`, and `for_
 with its own. `test_bootstrap_chart.py` and `test_kubecon_community_gate.py` follow the new guard and value. The
 scope map has the new test's entry.
 
+`verify/bootstrap_chart.py` is on the scope map's full list, so `verify/scope_tests.py select` returned FULL for this
+change, and the E2E command ran everything: `HECATON_BASE_SHA=99a4bbbe bash verify/run-e2e-tools.sh` printed
+`86 checks ran (the offline suite and 85 tier tests) in 11m40s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0` (log: /var/lib/hecaton/runs/18670/e2e-tools.log). The offline suite inside it, which is the Test command,
+was green with it. `scope_tests.py write` also rewrote about 850 lines of other tests' entries, drift that was already
+on staging (`scope_tests.py check` names 558 problems on staging and 557 here); only the new test's entry is
+committed, and the rest is left to a run that owns the map.
+
 **Live check.** The change touches `gitops/`, so it owes one. Before it, read on watch-it-burn-community only, changing
 nothing: the ai-layer Application was Synced and Healthy at 99a4bbbe, fake-ticket had no env and one ready replica,
 there is no `desk-report-token` Secret, `POST https://support.burritobot.co/remote-landed` answered 404 (the desk's
