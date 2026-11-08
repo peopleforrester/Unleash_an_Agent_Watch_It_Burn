@@ -37537,3 +37537,13 @@ check and reach the fetch; no node on PATH names no major), `verify/test_e2e_too
 `verify/test_verify_harness.py`. Against the old runner, the tier test's three new or changed Node checks fail.
 
 No live check: the change touches `verify/` files no cluster runs and the CI workflow, nothing the clusters run.
+
+**Suite results, run 18690.** On `01835bfe`, with Node 26.12.0 first on PATH and `HECATON_BASE_SHA` set to the merge
+base, which `verify/scope_tests.py` read as FULL because the change touches both runners, `bash
+verify/run-e2e-tools.sh` printed `370 tests ran` for the offline suite, then `86 checks ran (the offline suite and 85
+tier tests) in 13m02s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The node tests ran on Node 26
+among them (`test_party_refresh_rate.py`, `test_wall_throttle_e2e.py`, `test_display_throttle_e2e.py`,
+`test_order_complete_button_e2e.py` and the rest). The prose gate printed `prose gate: pass`. The log is
+`/var/lib/hecaton/runs/18690/e2e-tools.log`.
+
+Not yet run: the CI e2e job on Node 26 runs when hecaton pushes this branch, and its verdict is that check's.
