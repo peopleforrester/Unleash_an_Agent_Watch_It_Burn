@@ -39515,3 +39515,75 @@ since a removal is not the custodian's `netcup` verb's to run.
 2. The link fills in the query, and the list shows the root's INPUT in CONTENT. The API settled what the spans carry
    (run 17415); only the page shows how it lays them out, and the thread rules out the browser route.
 3. The `generate_content` rows' preview shows the system prompt. Same limit as 2.
+## 2026-11-08 · #792 · run 18770 · Every prompt is saved in Whitney's org as LLM Observability view 4805197, through the saved-view store whose schema Datadog's own validation named
+
+**Where the issue stood.** `bash verify/prior-drafts.sh 792 origin/staging` printed START from `origin/agent/792-17512`,
+one decisions.md commit (`113a408c`) recording that `sources-elevated` refused the `netcup` verb as the custodian
+tier's. It is cherry-picked above as `c6783108`, both entries kept. Its escalation is now moot: the `write-app-key`
+field of `watch-it-burn/datadog` (accen-dev, us-west-2), which #489's entry of today used, is the unscoped key from
+Michael's user, and this run reads it with its own session. The key was passed per command as
+`WIB_FLEET_MONITORS_APP_KEY` and never printed.
+
+**The browser route, tried first.** `sources-elevated browser tanjiro-wsl2 read` of the brief's link exited 3 with
+`NEEDS-MICHAEL login app.datadoghq.com: the page is a sign-in page (https://app.datadoghq.com/account/login)`: his
+Chrome on Tanjiro has no Datadog session. A `fleet` listing found no `~/secrets/datadog/` on tanjiro-wsl2, and
+megumi-wsl2 timed out on ssh.
+
+**What the store is.** With the write key, `--list` of run 17464's script read `/api/v1/logs/views` as nine logs
+views and no LLM Observability view, so that script would have written nothing. The store takes `?type=`: `type=rum`
+answered 4 views and `type=audit` 8, while every unknown name answered an empty list, so a GET cannot name the
+type. POSTs that could not create, each with a field the server rejects before it writes, then read the create
+schema off Datadog's 400s, in its order of checks:
+
+- a `{"logs_view": ...}` wrapper is answered `Required parameter 'name' is missing`, so the body is the bare object;
+- `'search' should be string`, `'options' should be object`, `'facets' should be array`;
+- `Value of parameter 'type' should be any of these [...]`, a list of 60-odd names with `llmobs` among them;
+- `timerange` admits `interval` alone (`'interval' should be number`; `interval_ms`, the listing's own key, and
+  `live`, `live_span`, `from`, `to`, `start`, `end` are "Additional properties");
+- `Value of parameter 'page' should be any of these [...]`, 109 pages with `llm_obs_explorer` and `llm_obs_overview`.
+
+None of these probes created a view: each listing after them still read 9 logs, 4 RUM, 8 audit and 0 llmobs views.
+
+**The script, rewritten.** `infra/datadog-room/every_prompt_view.py` no longer copies a template. It lists
+`?type=llmobs` alone, and keeps the earlier contract: Every prompt with the brief's query present means OK and nothing
+written; a view of that name with another query is not edited; otherwise it POSTs the one body
+`{"name": "Every prompt", "type": "llmobs", "page": "llm_obs_explorer", "search": <the brief's query>, "timerange":
+{"interval": 3600000}, "options": {}, "facets": [], "tags": []}` and passes only when the listing read after it has the
+view. The window is a live Past 1 Hour: the session is 30 minutes (2026-11-12 20:50Z to 21:20Z), so the view holds
+every prompt the room sends in it and not the night before's rehearsal. The run of show's room tab stays on Past 15
+Minutes, as its Night Before step says, and Every prompt is a view of its own. `verify/test_every_prompt_view.py` (33 checks)
+holds the body to the schema above through a fake store that validates in Datadog's order, and the README says the same.
+
+**Live, 2026-11-08.**
+- 21:31:03Z `--list`: `instructor org: Datadog (datadoghq.com)`, `0 LLM Observability saved view(s)`, `--apply would: create`.
+- 21:31:07Z `--apply`: `SAVED: 'Every prompt', id 4805197: 'Every prompt' [type=llmobs, page=llm_obs_explorer, query
+  'ml_app:burritobot k8s.cluster.name:burritobot-public'], read back after the create`.
+- 21:31:11Z `--list` again, the reload: `1 LLM Observability saved view(s)`, view 4805197 as above, `--apply would: present`.
+- 21:31:28Z `GET /api/v1/logs/views/4805197` answered 200: name `Every prompt`, search
+  `ml_app:burritobot k8s.cluster.name:burritobot-public`, type `llmobs`, page `llm_obs_explorer`, timerange
+  `{"interval": 3600000}`, author Michael's user. The logs (ids 32 to 44, 1219, 1220), RUM (1259 to 1262) and audit
+  (1234 to 1241) views were the same ids as before, none with a `modified_at`.
+
+The view's link is `https://app.datadoghq.com/llm/traces?saved-view-id=4805197`, the Log Explorer's link form; that it
+opens the view in Agent Observability is not checked yet.
+
+**What the query lists, through the API.** `GET /api/v2/llm-obs/v1/spans/events` with the brief's query as
+`filter[query]` over the last 24 hours, read pair, answered 50 spans. Its root spans are `POST` (span kind agent),
+each tagged `k8s.cluster.name:burritobot-public`, with the user's own words as input: the newest at 19:58:34Z was
+"What's the status of my support ticket HC-666?" with the probe marker, and at 19:57:58Z a chat about "Ophelia Thorn".
+So the query selects the Community bot's turns with the prompt on the root, as run 17415 read for one trace. Nothing
+the org showed contradicts the brief, so the brief and `verify/test_instructor_brief.py` are unchanged.
+
+**Nothing else in the org changed (#629).** The one write was the POST that created view 4805197, named Every prompt,
+selecting BurritoBot's own spans. No PUT, PATCH or DELETE was sent.
+
+**Not yet run on a cluster,** named again (the page itself, which needs a Datadog session in a browser):
+1. The view's link and the brief's link opened in Agent Observability: the search bar fills in with the query, and
+   the list shows the root's INPUT in CONTENT. Run with `sources-elevated browser tanjiro-wsl2 read` and `screenshot`
+   on `https://app.datadoghq.com/llm/traces?saved-view-id=4805197` once Michael's Chrome there is signed in to
+   Whitney's org; the brief's own rehearsal note has the presenters do the same, signed in, before the session.
+2. The `generate_content` rows' preview shows the system prompt. The API settled what the spans carry (run 17415);
+   only the page shows the preview. Same limit as 1.
+
+**Live check.** This change touches `infra/datadog-room/` and `verify/`, which no cluster runs; the Datadog org was
+checked live as above.
