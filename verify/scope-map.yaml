@@ -1908,6 +1908,24 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
+  test_desk_ticket_live.py:
+    - agent
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/brief.html
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/desk_ticket_live.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
   test_diagram_chip_apps.py:
     - gitops/ai-layer/web/diagram.html
     - gitops/bootstrap/apps
