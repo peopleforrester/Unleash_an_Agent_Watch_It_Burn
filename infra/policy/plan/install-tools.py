@@ -5,24 +5,33 @@
 # Nothing is installed system-wide and nothing is taken from PATH: the point of a pinned toolchain is that
 # the check means the same thing on a laptop, on the netcup runner and in the e2e suite. A download whose
 # sha256 does not match the pin is a hard failure, never a retry against a different URL.
+#
+# Each binary's archive comes from the host artifact cache by its pinned sha256 (verify/artifact_cache.py, #1117):
+# WIB_ARTIFACT_CACHE in CI (verify/ci-artifact-cache.sh, #1123), else the per-user default. A hit is hashed again
+# before use and a miss is fetched once and checked before it is kept, so a second install on the host downloads none.
 import hashlib
 import io
 import os
 import subprocess
 import sys
 import tarfile
-import urllib.request
 import zipfile
 from pathlib import Path
 
 import yaml
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent.parent.parent / "verify"))
+import artifact_cache  # noqa: E402
 
 
 def fetch(url: str, sha256: str) -> bytes:
-    with urllib.request.urlopen(url, timeout=300) as resp:
-        data = resp.read()
+    try:
+        path = artifact_cache.get_retrying(sha256, url)
+    except artifact_cache.ArtifactCacheError as e:
+        sys.exit(f"ARTIFACT CACHE FAILED for {url}: {e}")
+    data = path.read_bytes()
+    # get_retrying() has checked the file; this check is on the bytes actually unpacked, in case it changed since.
     got = hashlib.sha256(data).hexdigest()
     if got != sha256:
         sys.exit(f"CHECKSUM MISMATCH for {url}\n  pinned {sha256}\n  got    {got}")

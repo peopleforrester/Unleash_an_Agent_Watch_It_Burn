@@ -35791,3 +35791,64 @@ old `_px` call. The query is unchanged, so the check now reads it from the `_bot
 printed `86 checks ran (the offline suite and 85 tier tests) in 12m40s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
 and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18563/e2e-tools-2.log`.
+## 2026-11-08 · #1123 · run 18569 · Every workflow job that fetches a pinned artifact reads the runner's cache outside the workspace
+
+**What was there.** `verify-suites.yml` set `WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts` inline in both jobs,
+and its clean step ran `git clean -ffdx -e verify/.tools/`, sparing the workspace's tool directory. `iam-policy.yml`
+and `plan-policy.yml` put the cache under `$RUNNER_TEMP`, which the runner empties before each job. `push-jokers.yml`
+fetched crane with `curl` into `$RUNNER_TEMP`, past the cache, and `weaver-registry-check.yml` fetched weaver with
+`curl` into the workspace itself. `infra/policy/plan/install-tools.py` downloaded its four pinned binaries on every run.
+
+**The change.** One script, `verify/ci-artifact-cache.sh`, is the only thing that names the cache in CI. Each of the
+six jobs that fetch a pinned artifact (`verify-suites.yml` offline and e2e-tools, `iam-policy.yml`, `plan-policy.yml`,
+`push-jokers.yml`, `weaver-registry-check.yml`) runs it after checkout and before its first fetch. It writes
+`WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts` to `$GITHUB_ENV` and creates the directory. Before that it fails,
+naming the cause, when `RUNNER_TOOL_CACHE`, `GITHUB_ENV` or `GITHUB_WORKSPACE` is unset, when the tool cache is not an
+absolute path, when the resolved path (symlinks included, before anything is created) lies inside the workspace, and
+when `artifact_cache.py root` resolves it to anything else (a root inside a git checkout, or a `HECATON_TOOLS_CACHE`
+that would take precedence). `RUNNER_TOOL_CACHE` is a runner-level variable: a self-hosted runner sets it to
+`<runner>/_work/_tool`, shared by every job that runner takes, and the runner's `.env` can move it; GitHub-hosted
+runners set `/opt/hostedtoolcache`. So the one step serves the tanjiro and megumi runners and the hosted ones without
+naming any of them. Tanjiro's green e2e job of 2026-11-08 (Actions run 42439374357, job 128605100938) shows the layout:
+its workspace was `/srv/gha-agent/Unleash_an_Agent_Watch_It_Burn/_work/Unleash_an_Agent_Watch_It_Burn/Unleash_an_Agent_Watch_It_Burn`
+and setup-node found Node in `/srv/gha-agent/Unleash_an_Agent_Watch_It_Burn/_work/_tool`, so the cache is
+`.../_work/_tool/wib-artifacts`, beside the workspace and outside it. The repo's runner list names only
+`tanjiro-Unleash_an_Agent_Watch_It_Burn` today; megumi-wsl2 has no runner registered for this repo, and when one is,
+the same step runs on it unchanged.
+
+- Both clean steps in `verify-suites.yml` are now a bare `git clean -ffdx` (and the submodule clean), so
+  `verify/.tools`, its binaries and any old `.tools/dl` go with everything else git does not track.
+  `fetch-e2e-tools.sh` extracts the binaries again each run from the cache, as it already did.
+- `iam-policy.yml` and `plan-policy.yml` drop their inline `$RUNNER_TEMP` settings for the step.
+- `push-jokers.yml` takes crane's archive from `bash verify/artifact-cache.sh get "${sha}" "${url}"`, by
+  `e2e-tools.lock`'s SHA-256, and unpacks it under `$RUNNER_TEMP`.
+- `weaver-registry-check.yml` takes weaver's archive the same way, by `WEAVER_SHA256` (the lock's weaver row has the
+  same sum, so the tools tier and this job share one cache entry), and unpacks it under `$RUNNER_TEMP`, not the
+  workspace.
+- `install-tools.py` reads each binary through `artifact_cache.get_retrying()` and checks the bytes it unpacks again.
+  Its pip install of Checkov is left as it was; a package install outside verify/ is #1124's to find.
+- Each workflow's `paths` filter gains the scripts it now runs.
+
+**Its test.** `verify/test_workflow_artifact_cache.py` (offline suite) classes every job of every workflow as fetching a
+pinned artifact or not, so a new job fails until it is classed, and a job classed as fetching nothing that runs a fetch
+fails. A fetching job must run the cache step once, bare, after checkout and before its first fetch. No workflow, job or
+step sets `WIB_ARTIFACT_CACHE` or `HECATON_TOOLS_CACHE` any other way, no cache variable names the workspace, no curl or
+wget reaches anything but loopback, every archive is unpacked under `$RUNNER_TEMP`, no `git clean` spares a path, and a
+self-hosted job cleans its workspace after checkout. The checker runs first on 22 copies of the workflows, each broken
+one way (the cache step missing, late, doubled or behind an `if`; the cache set by hand in the workspace or under
+`$RUNNER_TEMP`; `-e verify/.tools/` back on the clean step; crane fetched with curl; weaver unpacked in the workspace;
+an unclassed job), and each fails. The script then runs in throwaway runner layouts: Tanjiro's, a megumi-like one under
+a home directory, and GitHub-hosted's. In each, a job writes the expected line and a fetch lands in the cache by its
+SHA-256. The workflow's own clean step then removes verify/.tools, and a job in a second workspace on the same runner
+gets the same path and the artifact with its source gone and no new fetch-log line. Nine wrong setups each fail by
+name with nothing written to `GITHUB_ENV`, and a refused path inside the workspace is never created.
+`test_package_cache.py`, `test_tf_plugin_cache.py` and `test_ghcr_version_tag.py` read the old inline lines and
+`sha256sum -c -`, and now look for the script step and the cache call. The scope map gains the new test's entry and
+nothing else: `scope_tests.py write` also rewrote about 900 lines for other tests' drift on staging, which this change
+leaves to them.
+
+**Live check.** None: the change touches `.github/workflows/`, `verify/`, `infra/policy/plan/install-tools.py` and
+decisions.md, which no cluster runs.
+
+**Not yet run on a runner.** The workflows run once hecaton pushes this branch: verify-suites.yml's two jobs on Tanjiro
+are the first to take the cache step. The GitHub-hosted workflows run on their next matching push to staging.

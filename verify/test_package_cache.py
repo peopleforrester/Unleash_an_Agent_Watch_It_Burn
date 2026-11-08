@@ -377,11 +377,10 @@ for wf in sorted((REPO / ".github/workflows").glob("*.yml")):
         if "package_cache.py install" not in joined:
             continue
         at = next(i for i, r in enumerate(runs) if "package_cache.py install" in r)
-        root_set = next((i for i, r in enumerate(runs) if re.search(r'WIB_ARTIFACT_CACHE="?\$RUNNER_(TEMP|TOOL_CACHE)/', r)),
+        root_set = next((i for i, r in enumerate(runs) if r.strip() == "bash verify/ci-artifact-cache.sh"),
                         None)
-        check(f"{wf.name} {job_name}: WIB_ARTIFACT_CACHE is set under the runner before the install",
-              root_set is not None and (root_set < at or (root_set == at and runs[at].find("WIB_ARTIFACT_CACHE")
-                                                          < runs[at].find("package_cache.py install"))))
+        check(f"{wf.name} {job_name}: WIB_ARTIFACT_CACHE is set by verify/ci-artifact-cache.sh before the install (#1123)",
+              root_set is not None and root_set < at)
         check(f"{wf.name} {job_name}: it installs the pyyaml environment",
               re.search(r"package_cache\.py install pyyaml --python \S", joined) is not None)
         uses_uv = any("setup-uv" in (s.get("uses") or "") for s in job.get("steps") or [])
