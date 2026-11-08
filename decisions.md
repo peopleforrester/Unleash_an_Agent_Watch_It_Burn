@@ -34022,3 +34022,10 @@ by design (`gitops/ai-layer/components/no-kubecon-brief`, #909). Nothing was cha
 **Not yet run on a cluster.** Once hecaton promotes this change and Argo CD syncs it: look at the `/kubecon` page and
 its `?sheet=1` sheet on the clusters, on `https://burritobot-private.burritobot.co/kubecon` (the new hand-off, row 4
 and segment 4, and the sheet's segment 4 prompt as before), with `https://attackme.burritobot.co/kubecon` still 404.
+
+**Suite results, run 18478.** On `539e9e70`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so the whole
+suite, printed `350 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the new test among them, ending `The
+/kubecon page's segment 4 and its row follow the run-of-show's segment 4, slides 44 to 64 (#1100).`), then `84 checks
+ran (the offline suite and 83 tier tests) in 8m45s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; the tier's
+`verify/test_kubecon_prompt_sheet_e2e.py` rendered the `?sheet=1` sheet with every prompt in order. The prose gate
+printed `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18478/e2e-tools.log`.
