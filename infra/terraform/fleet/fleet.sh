@@ -672,6 +672,7 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
     monitors [--apply|--check] [--session START/END] [--notify @handle]
     monitors --data --cluster NAME [--cluster NAME ...]
     monitors --board --cluster NAME [--cluster NAME ...]
+    monitors --apply --board-only | --check --board-only
                       The continuous version of 'verify' (#267): the fleet monitors and the fleet
                       dashboard in the INSTRUCTOR Datadog org, from infra/datadog-fleet/. Dry run by
                       default; --apply validates every monitor with Datadog before writing any;
@@ -681,6 +682,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       blank cell for a named cluster (#862). Run --apply once per event, after the
                       Datadog pool is loaded, with the session window in UTC, --data after one /chat
                       on each cluster, and --board after walking a cluster through challenges 1 to 6.
+                      --board-only writes or compares the challenge leaderboard alone, no monitor,
+                      fleet dashboard or downtime (#489).
     ops [terms...] [--watch S] [--json]
                       The shared ops view (#308): per cluster, who claimed it (provisioning), whether its
                       console answers (apex table + /cost) and which challenges it has done (the
