@@ -40509,3 +40509,66 @@ Not yet run on a cluster:
 
 **Tests.** This entry is the only change. No test was written or changed, so none was run here; hecaton's validation
 runs the offline tests that read decisions.md. The prose gate was run on this entry. No dependency was added.
+
+## 2026-11-09 · #1037 · run 18818 · The boundary and audit applies for aws1-student31 to 34 as one command: already run on 2026-11-06, and the report that shows them done is the 2026-11-07T11:17Z daily report
+
+**Context.** #1037 was split from #981 (the "Fleet drift report" issue) by planning run 18053. It asks for the
+boundary root (`infra/org/boundary`) and then the audit root (`infra/terraform/aws/audit`) to be applied in
+aws1-student31 to aws1-student34, each into `states/<profile>.tfstate` on tanjiro-wsl2, as one command a higher tier
+runs, with each root's refresh-only settle, ending on `drift-report.py` for the four accounts. Run 17961 drafted that
+command as an escalation on #981. `bash verify/prior-drafts.sh 1037 origin/staging` printed NONE, and #1037 has no
+comments.
+
+**What this run found: the applies have already run.** Run 17961's escalation was carried out by hand on tanjiro-wsl2
+on 2026-11-06, between 22:40Z and 22:45Z, as runs 18173 and 18188 (#1036) recorded from CloudTrail. This run read it
+again, read-only, through `sudo -n -u michael /var/lib/hecaton/cli/sources-elevated fleet tanjiro-wsl2`, at about
+2026-11-08T23:02Z:
+
+| account | `describe-configuration-recorder-status` | `iam get-policy` watch-it-burn-permissions-boundary | boundary state, audit state on tanjiro (local time, UTC-5) |
+|---|---|---|---|
+| aws1-student31 (948731545609) | `watch-it-burn`, recording true, SUCCESS | v1, created 2026-11-06T22:40:34Z | both, with `.backup`, 17:40 and 17:41 |
+| aws1-student32 (891472436879) | `watch-it-burn`, recording true, SUCCESS | v1, created 2026-11-06T22:41:50Z | both, with `.backup`, 17:41 and 17:43 |
+| aws1-student33 (250699659274) | `watch-it-burn`, recording true, SUCCESS | v1, created 2026-11-06T22:43:05Z | both, with `.backup`, 17:43 and 17:44 |
+| aws1-student34 (783241407859) | `watch-it-burn`, recording true, SUCCESS | v1, created 2026-11-06T22:44:20Z | both, with `.backup`, 17:44 and 17:45 |
+
+The state files are `infra/org/boundary/states/<profile>.tfstate` and `infra/terraform/aws/audit/states/<profile>.tfstate`
+in `/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn` on tanjiro-wsl2. Each `.backup` beside a state is the
+one the refresh-only settle leaves, so the settle ran too.
+
+**The report run that shows it done.** The daily report of 2026-11-07T11:17Z, posted on #981 as issuecomment-6706135290.
+It prints `2 finding(s)`: 0 drifted states, 0 accounts without a Config record, and the two unmanaged clusters
+watch-it-burn-community and watch-it-burn-private, #979's work, as the only findings. Its AWS Config section reads
+`ok: recorder watch-it-burn is recording` for all five accounts, and its Clean states list boundary and audit for each
+of the four. Since #979 and #1041 landed, the next day's report (2026-11-08T11:17Z, issuecomment-6720815364) prints
+`0 finding(s)`, the five `ok` lines and 13 clean states. Each of the four keeps one Note, no lab VPC state, which is
+not a finding: no cluster is built in those accounts.
+
+**The command, for the record and for an account found later in the same shape.** One line, run on tanjiro-wsl2 by a
+tier that can write there. It reads all four accounts first and stops, before any apply, on an account that already
+has a Config recorder, the permissions boundary or either state file. It then applies the boundary root and then the
+audit root in each account into `states/<profile>.tfstate` under that root, follows each apply with its refresh-only
+settle apply (docs/floor.md, "Settling a fresh state") and a `terraform plan -refresh-only -detailed-exitcode` that
+fails on anything left to settle, and ends on `drift-report.py` for the four accounts. Its cost is the audit root's,
+a few cents a day per account. `bash -n` passes on it.
+
+```bash
+cd /home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn && . infra/terraform/fleet/event.sh && set -euo pipefail && ACCTS="aws1-student31 aws1-student32 aws1-student33 aws1-student34" && for p in $ACCTS; do a=$(aws sts get-caller-identity --profile "$p" --region us-west-2 --query Account --output text); [ "$(aws configservice describe-configuration-recorders --profile "$p" --region us-west-2 --query 'length(ConfigurationRecorders)' --output text)" = 0 ] || { echo "STOP: $p already has a Config recorder"; exit 1; }; if aws iam get-policy --profile "$p" --policy-arn "arn:aws:iam::$a:policy/watch-it-burn-permissions-boundary" >/dev/null 2>&1; then echo "STOP: $p already has watch-it-burn-permissions-boundary"; exit 1; fi; for r in infra/org/boundary infra/terraform/aws/audit; do [ ! -s "$r/states/$p.tfstate" ] || { echo "STOP: $r/states/$p.tfstate already exists"; exit 1; }; done; done && for r in infra/org/boundary infra/terraform/aws/audit; do terraform -chdir=$r init -input=false; done && for p in $ACCTS; do for r in infra/org/boundary infra/terraform/aws/audit; do V=(-input=false -state=states/$p.tfstate -var profile=$p -var event="$WIB_EVENT" -var region=us-west-2); terraform -chdir=$r apply -auto-approve "${V[@]}"; terraform -chdir=$r apply -refresh-only -auto-approve "${V[@]}"; terraform -chdir=$r plan -refresh-only -detailed-exitcode "${V[@]}"; done; done && python3 infra/terraform/drift/drift-report.py --accounts aws1-student31,aws1-student32,aws1-student33,aws1-student34 --region us-west-2
+```
+
+Run today, it stops at its first read: `STOP: aws1-student31 already has a Config recorder`. That is the guard doing its
+job, and the reason this run does not escalate it to be run again. Its last step, run alone after the applies, prints
+`0 finding(s)` for the four accounts, the four `ok` lines, boundary and audit clean in each, and the four lab VPC
+Notes. The two clusters are in accen-dev, so they appear only in the full daily report, which also covers it.
+
+**What differs from run 17961's draft.** The draft was in that run's report escalation, not on any branch, so it is
+written again here on the current layout: the same order (boundary, then audit), the same stop on a recorder or the
+boundary, plus a stop on an existing state file, and the refresh-only plan after each settle that the issue asks for.
+
+**Escalated.** Only the comment on #981 that records this, since a run writes no issue comment itself. Nothing is
+escalated to run on tanjiro-wsl2, because the applies have run.
+
+**Live check.** The reads above, all read-only. No file in the repo that a cluster runs is changed; this entry is the
+only change.
+
+**Tests run.** `python3 verify/prose_gate.py` on this entry. No test reads decisions.md's new text, so no other test is
+run, and the full Test and E2E commands are left to hecaton's validation. No dependency was added.
