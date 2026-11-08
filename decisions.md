@@ -39806,3 +39806,17 @@ The caption is held offline by `test_lab_text_export.py` and `test_c8_teaching.p
 
 **Not yet run on a cluster.** The reworded caret renders at `/lab` only after Argo CD syncs this change
 post-promotion; the next run on the issue can confirm it is served.
+
+## 2026-11-08T00:00:00Z · 4 · #1008 (run 18789): fetch-inventory false positive on the persona test docstring
+
+Run 18780's validation failed one offline check, `test_fetch_inventory.py`, which flagged
+`verify/test_c8_persona.py:5`. The fetch scanner's `curl` pattern matched the bare word in that line's
+docstring prose ("the service-account-token curl to the agent namespace's Secrets"), which is
+descriptive text rather than a call site. Reworded that one word to "API call" so the scanner no longer
+matches; `test_fetch_inventory.py` now passes (exit 0). The `FAIL: --context is empty` line in the same
+gate output was expected output from the passing `test_burritobot_cluster_live_logic.py` exercising its
+empty-context path; it prints `its FAIL line above is expected` and the test itself exits 0.
+
+No other change. `test_c8_persona.py` still passes 17/17 (the edit was in the docstring only). The
+`challenges/LAB-TEXT.md` stamp still names `0159b21b`, the unchanged last commit to touch `lab.html`,
+so `test_lab_text_export.py` stays green.
