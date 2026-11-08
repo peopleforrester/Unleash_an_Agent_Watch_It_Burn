@@ -36824,3 +36824,10 @@ re-measurement ran against Bedrock from the run directory, not on the bot.
 
 **What the run spent.** No calls on the live bot. About 100 Nova Pro `converse` calls for the 40 trials, run through
 boto3 and PyYAML under `uv run --with` in the run directory only. No dependency was added to the repo.
+
+**The suites (run 18635).** On `8d8b55cc`, unscoped. `bash verify/run-e2e-tools.sh` printed `363 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 12m11s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_turn_guard.py` among the offline tests (it took 1s;
+it was 18126's failing gate, on a base without #1017's scratch-directory fix). The two new files under
+`verify/fixtures/c8-credential-audit/` are data for the reword children, so no offline test reads them yet. The log
+is `/var/lib/hecaton/runs/18635/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was added.
