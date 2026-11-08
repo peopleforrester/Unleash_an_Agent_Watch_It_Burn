@@ -34950,3 +34950,12 @@ can-i list statefulsets --as=system:serviceaccount:agent:workshop-mcp` answers y
 `guard-agency-on`; the workshop-mcp pod's log reads `cluster reads posted to the desk`; and a room Deployment the
 DeletingPolicy deletes after guardrails-on reads "removed at <time>" on /deployments.json within about a minute. The
 end-to-end live test is #1051's.
+
+**Suite results, run 18537.** On `1c938283`, `bash verify/run-tests.sh` unscoped printed `355 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, with `exit=0`. `bash verify/run-e2e-tools.sh` with
+`HECATON_BASE_SHA=0226411753de` printed `40 checks ran (the offline suite and 39 tier tests) in 12m34s`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_room_reader_rbac_e2e.py` was among them and passed. The selector
+named the two RBAC tests' map entries as missing `verify/room_reader_rbac.py`, which was untracked when `write` ran.
+`98363c6c` adds it to both entries, after which `scope_tests.py select tools` names no drift for them and
+`verify/test_scope_tests.py` passes. No dependency was added. The logs are `/var/lib/hecaton/runs/18537/run-tests.log`
+and `/var/lib/hecaton/runs/18537/e2e-tools.log`.
