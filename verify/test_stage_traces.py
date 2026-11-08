@@ -633,21 +633,12 @@ e = Elsewhere()
 rc, lines = run_pii(e)
 check("pii on a context that is not the named cluster exits 1 and asks nothing", rc == 1 and not e.asked, str(lines))
 
-print("== the Challenge 2 prompt is read off the /kubecon page ==")
-with tempfile.TemporaryDirectory() as tmp:
-    page = pathlib.Path(tmp, "kubecon.html")
-    page.write_text('<article class="beat" data-beat="C2"><div class="prompt">x<button></button></div></article>')
-    try:
-        st.kubecon_prompt("C3", page)
-        raised = ""
-    except RuntimeError as e:
-        raised = str(e)
-    check("a page with no C3 beat raises, naming the anchor and the file",
-          'data-beat="C3"' in raised and "kubecon.html" in raised, raised)
-    page.write_text('<article class="beat" data-beat="C3">\n  <div class="prompt" onclick="cp(this)">Read &amp; tell\n'
-                    '   me  back.<button class="cp">copy</button></div></article>')
-    check("a beat's first prompt comes back unescaped, whitespace collapsed",
-          st.kubecon_prompt("C3", page) == "Read & tell me back.", st.kubecon_prompt("C3", page))
+print("== the seeds read /kubecon through the probe's one reader (#1137) ==")
+check("stage_traces keeps no reader of its own", not hasattr(st, "kubecon_prompt")
+      and "def kubecon_prompt" not in pathlib.Path(st.__file__).read_text(encoding="utf-8"))
+check("...and reads the probe's page", st.KUBECON_PAGE == kp.KUBECON_PAGE, str(st.KUBECON_PAGE))
+check("Challenge 2's prompt is the C3 beat's last, through kp.kubecon_prompt",
+      st.RECIPE_PROMPT == kp.kubecon_prompt("C3", -1) == kp.kubecon_prompts("C3")[-1], st.RECIPE_PROMPT)
 
 print("== it refuses what it must not touch ==")
 check("no --context: status 2", st.main(["seed", HOST, "--profile", "accen-dev"]) == 2)
