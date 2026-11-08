@@ -35466,3 +35466,8 @@ these two were added. After it, `check` names neither test.
 
 **Live check.** The replays above. Besides the cluster cleanup, this run changed only this entry, the load-test doc's
 results and the two scope-map entries.
+
+**The suites (run 18561, at `1c690ab2`).** `bash verify/run-e2e-tools.sh`, unscoped, printed `358 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 12m36s, 4 at a time`, `ALL
+E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with test_turn_guard.py offline and test_turn_guard_e2e.py in the tier. At
+`d40f7e29`, before the scope-map entries, it was green too (86 checks in 11m32s). No dependency was added.
