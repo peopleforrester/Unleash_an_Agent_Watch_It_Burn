@@ -38122,3 +38122,10 @@ their `<h1>` and no `combanner`, which is the page before this change on both cl
 **Not yet run on a cluster.** The look after promotion: `curl -s https://deployments-burritobot-private.burritobot.co/`
 and its `/mine?witch=<slug>` carry "This is the private (administrator) deployments page." in the `.combanner` div,
 and `https://deployments.burritobot.co/` and its `/mine` carry no `combanner`.
+
+**The suites (run 18712).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs
+point 6 asks. `bash verify/run-e2e-tools.sh` at `33290e43` (log `/var/lib/hecaton/runs/18712/e2e-tools.log`) printed
+`236 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_deployments_private_banner.py`,
+`test_support_desk_private_banner.py` and `test_public_images.py` among them, then `33 checks ran (the offline suite
+and 32 tier tests) in 9m26s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added.
