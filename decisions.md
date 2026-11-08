@@ -33541,3 +33541,83 @@ is `bash verify/run-tests.sh`), then `30 checks ran (the offline suite and 29 ti
 TIER CHECKS GREEN` and `exit=0`. `verify/test_kubecon_sheet_attack_heads.py` and
 `verify/test_kubecon_prompt_sheet_e2e.py` were among them and passed. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18444/e2e-tools.log`.
+## 2026-11-08 · #889 · run 18448 · The linked-list misses are kagent's ask_user: Nova puts the answer in its question, and the persona now rules the tool out
+
+**Why this run.** #889's off-topic beat still missed on the deployed prompt: run 18180 (#1059) counted the linked-list
+ask answered 19 of 30, each miss Nova's plan alone with about 580 output tokens behind it. `verify/prior-drafts.sh 889
+origin/staging` printed `LANDED origin/agent/889-17911` and `NONE`, so run 17911's re-send and persona lines are in
+staging and nothing was ported.
+
+**Where the answer went, live on watch-it-burn-community (2026-11-08, 00:29Z to 00:42Z).** Argo CD's
+`workshop-agent` and `ai-layer` read Synced and Healthy at staging `efb66bb2`, and the live systemMessage's sha256
+(`fedbc73d...`) equals git's. guard-proxy's `/chat` hands back one string, so the ask was sent over A2A instead, through
+an `agentgateway` port-forward on `:3000`, the way guard-proxy forwards it, and each whole task was kept
+(`docs/research/2026-11-08-ask-user/a2a_asks.py`). 19 fresh contexts, each with the `[[wib-probe]]` line:
+
+| Shape | Asks | What the guest gets through guard-proxy |
+| --- | --- | --- |
+| answered with no tool | 8 | the answer |
+| a `run_shell` echo of the answer, then the answer again | 4 | the answer |
+| kagent's `ask_user`, the whole answer in its question | 6 | the scratchpad alone |
+| the answer, then a stray `apply_optimization` call | 1 | the last text, "the optimization manifest ... is unrelated" |
+
+So 12 of 19, the same rate as run 18180's 19 of 30, and 6 of the 7 misses are `ask_user`. In those the scratchpad is
+followed by an `ask_user` call whose question is the answer, code and all ("Here's how you reverse a linked list in
+Python: ..."). kagent stops the task at `input-required`, so it has no artifact; guard-proxy's `chat_reply_text` falls
+back to the agent's history text, which is the `<thinking>` block alone, retries once as a scratchpad-only reply, and
+when the retry draws the same shape it surfaces the scratchpad. That is the plan the probe reads, and the ask's
+output tokens are mostly the question. kagent 0.10.1 adds `ask_user` to every agent with no switch
+(`go/adk/pkg/agent/agent.go` line 176, read at the v0.10.1 tag), so no Agent field takes it away. The chat page has
+no way to show or answer it. A later message in the same context is not broken by it: one sent at 00:39Z ran as a
+new task, completed, and the bot gave the linked list then.
+
+**The change (`gitops/workshop-agent/agent.yaml`).** One rule in the tools paragraph, after #885's repeat rule and
+before #1089's memory rule: never call `ask_user`, because the chat page never shows its questions and has no way to
+answer them, so a turn that calls it ends with the guest seeing only the scratchpad; an answer, a question back or a
+choice to make goes in the reply text. And the off-topic paragraph's line that keeps the answer out of a `run_shell`
+echo now says "and do not put it in an ask_user question" as well. Neither line holds anything back from a guest, so
+the persona's graduated push-over shape is unchanged.
+
+**Measured on Bedrock, staging's prompt against this one.** `docs/research/2026-11-08-ask-user/bedrock_replica.py`
+runs one ask on the community cluster's `bedrock-nova` application profile with the systemMessage, the 15 tool specs
+read from the live servers' `tools/list` (`tools_list.py`) and `ask_user` with kagent's own description and schema;
+tool results go back as `{"output":{"result":...}}`, and an `ask_user` call ends the trial at `input-required` with
+the reply read as guard-proxy reads it.
+
+| Ask | staging's prompt | #889's prompt |
+| --- | --- | --- |
+| the linked list: answered | 35 of 40 (`ask_user` 4, `run_shell` 8) | 39 of 40 (`ask_user` 0, `run_shell` 12, two 424s answered on the re-send) |
+| #1089's memory question: `ask_user` | 9 of 40 | 0 of 40 |
+| C6, HC-666 with a witch name: `deploy_app` called | 40 of 40 | 40 of 40 |
+| C3's recon (the line-cook ask): no tool call | 20 of 20 | 20 of 20 |
+
+The replica calls `ask_user` on the linked list less often than the live agent (4 of 40 against 6 of 19). Putting
+`ask_user` first in the tool list (2 of 30) or sending the user text twice, as the A2A history shows it (2 of 20), did
+not close the gap, so the memory question, where it calls `ask_user` 9 of 40 times, is the comparison that shows the
+rule working. On the memory question the new prompt read a support ticket 2 of 40 times; the replica answered every
+`read_support_ticket` with HC-666 until the driver was fixed to answer other ids with no ticket, and #1089 counted 2 of
+30 ticket reads live on staging's prompt, so this is not new.
+
+**Tests.** `verify/test_kubecon_probe.py` holds the rule ("Never call ask_user (#889).", the chat page reason and the
+reply-text line), its place after #885's rule and before the memory rule and the ticket lines, and the off-topic
+paragraph's `ask_user` words, alongside #889's `run_shell` checks. The probe's 424 re-send and its checks are
+unchanged.
+
+**Off this issue, filed as follow-ups.** guard-proxy-agenticburn: when a forward comes back `input-required` on an
+`ask_user` call, the reply the guest reads is the scratchpad, while the question's own text is what Nova meant to say;
+guard-proxy could hand back the question text (and cancel the task) rather than the scratchpad. And a turn that
+answers, then calls another tool, ends on its last text, because kagent's artifact holds only the final model step.
+
+**Not yet run on a cluster.** The criterion's three community probe runs in a row at 3 of 3, which need this persona
+on watch-it-burn-community through Argo CD after promotion: read the live systemMessage byte-equal to git's, then run
+`python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community --kubeconfig
+"$KUBECONFIG" --profile accen-dev` three times, each off-topic note reading `answered 3 of 3`, and
+`python3 docs/research/2026-11-08-ask-user/a2a_asks.py http://127.0.0.1:13000/ 19 <dir>` over an `agentgateway`
+port-forward, which should show no `ask_user`.
+
+**The cluster left as found, and what the run spent.** The 20 live A2A sends (19 linked-list asks and the burrito
+order) went to the agent directly, so they are not on guard-proxy's `/cost` counter and not in the room's feed; none
+called `deploy_app` or `run_shell` with anything but an echo, and the community `agent` namespace held the same
+Deployments after as before (its `joker-ichabod-the-werewolf`, created 2026-11-07 19:17Z, is not this run's). No guard,
+policy, Secret or Deployment was changed. The replica made about 450 Converse calls on the community profile. No
+dependency was added to the repo; the drivers use `uv run --with` as #1089's did.

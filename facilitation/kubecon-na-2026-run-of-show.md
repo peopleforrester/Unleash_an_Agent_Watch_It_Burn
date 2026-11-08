@@ -536,6 +536,16 @@ and 2 still called `run_shell`. The two recipe asks called `run_shell` 5 of 5 ea
 
 Not yet run: three community probe runs in a row once watch-it-burn-community has synced the new persona.
 
+**2026-11-08, the linked-list misses are kagent's ask_user (#889).** Hecaton run 18448, on watch-it-burn-community,
+at staging `efb66bb2` (workshop-agent Synced, the live systemMessage byte-equal to git's), 00:29Z to 00:42Z. The ask
+went over A2A through an `agentgateway` port-forward, as guard-proxy forwards it, with each whole task kept: 19 fresh
+contexts, 12 answered. Six misses were Nova calling kagent's built-in `ask_user` with the whole answer as its question;
+the task stops at `input-required`, and guard-proxy's reply is the scratchpad alone, the plan the probe has been
+reading. The seventh answered and then called `apply_optimization`, so the reply was its last text. The persona now
+rules `ask_user` out. On Bedrock with the live tools and kagent's `ask_user`, the linked list went from 35 of 40 to 39
+of 40 answered and the memory question's `ask_user` from 9 of 40 to 0 of 40, with C6's HC-666 at 40 of 40 and C3's
+recon at 20 of 20 with no tool on both prompts. No probe was run: the three in a row wait for this persona to sync.
+
 **2026-11-06, the BanTopics paraphrase through the storefront (#900).** Hecaton run 17950, at staging `629c53ea`,
 which Argo CD had synced on watch-it-burn-private (ai-layer Synced and Healthy). llm-guard ran lab-platform's
 `llm-guard:v1` at `46b3d202`, Ready 1/1, with `checksum/scanners-yml` `61a7adb9a48a`, the sha256 of the live
