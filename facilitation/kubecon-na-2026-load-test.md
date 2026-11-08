@@ -88,12 +88,36 @@ These are the limits, measured on 2026-11-05 with #450's change live, from one a
   `task_cancel` of the agent's task with state `canceled`, and no `task_cancel_failed`. The two traces
   looked up in Datadog APM (`988bfbb5...`, `caa8a7c7...`) are there with guard-proxy's `chat` span, the agent's
   `invoke_agent` span and its `run_shell` spans. Since #885 workshop-mcp refuses a turn's third identical tool call
-  and every call after its twentieth, keyed on the turn's trace id (`gitops/ai-layer/tool_audit.py`). The replay
-  that should show none of these 502s runs once that change is on attackme.
+  and every call after its twentieth, keyed on the turn's trace id (`gitops/ai-layer/tool_audit.py`). With that
+  change on attackme the 150-session replay of 2026-11-08 (below) had no 502s, and no call ran more than twice
+  in a turn.
 - **Nothing in front of the console failed.** No turn came back without guard-proxy's or nginx's body, so the
   public host's Caddy and Railway's edge answered every turn. The first run's 11 unexplained 502s did not recur.
 - **Served latency stays phone-friendly.** p50 4 to 5 s and p95 9 to 14 s at both sizes. The slowest served turn
   took 40 s.
+
+### Run B after #885, 2026-11-08 04:52 UTC, 150 sessions (run 202611080452)
+
+attackme.burritobot.co, from hecaton's host, with #885's turn guard synced. The Portland harvest is not on that host,
+so the prompts were rebuilt from Datadog's record of the two 2026-11-05 runs: the 190 served turns of 164 sessions,
+in one file per session (decisions.md, 2026-11-08 · #885). 450 turns in 151 s.
+
+| | Turns |
+|---|---|
+| Served | 311 |
+| Refused by nginx per conversation (`wib_chat_session`) | 0 |
+| Refused by guard-proxy per session (10 a minute) | 0 |
+| Refused by guard-proxy per cluster (150 a minute) | 139 |
+| HTTP 502, guard-proxy at `PROXY_TIMEOUT` | 0 |
+
+- Latency of served turns: p50 4.1 s, p95 9.1 s, p99 12.2 s, max 15.3 s.
+- Cost $2.99 by `/cost` ($0.4957 before, $3.4826 after), $0.0096 per served turn.
+- `LOAD REPLAY GREEN`.
+- workshop-mcp ran 146 tool calls in 121 turns, at most 4 in a turn. It refused one, a `deploy_app` sent a third
+  time after its manifest had failed to parse twice, and that turn ended 2 s later.
+- A run just before it sent only the 20 prompts of the 8 sessions that timed out on 2026-11-05, as 48 turns over
+  16 sessions (run 202611080449): all 48 served, the slowest in 5.1 s, and no turn made more than 2 tool calls.
+- The bot deployed 4 Deployments over the two runs, deleted after them.
 
 ### Run A again, 2026-11-05 06:35 UTC, 500 sessions, after #450 (run 202611050635)
 

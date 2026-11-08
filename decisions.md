@@ -35412,3 +35412,50 @@ entry, since neither runner runs a `# SUITE: e2e` test without a tools tier; `py
 proposed entries for other runs' tests only, which are left out. No dependency was added. The logs are
 `/var/lib/hecaton/runs/18559/live-community-2.log`, `/var/lib/hecaton/runs/18559/run-tests.log` and
 `/var/lib/hecaton/runs/18559/e2e-tools.log`.
+
+## 2026-11-08 · #885 · run 18561 · The 150-user load replay on attackme ends with 0 PROXY_TIMEOUT 502s, and the turn guard refuses a live repeat
+
+This run is the live check the #885 entry above left owed. Run 18117's change reached both clusters through Argo CD
+(staging `2fc247bd`, synced at `3c630161`): `kubectl --context <ctx> -n agent get agent workshop-agent` read
+workshop-mcp `allowedHeaders ["X-Witch-Name","X-Pantry-Shut","traceparent"]` and none on evil-mcp on
+watch-it-burn-community and watch-it-burn-private. attackme's `/controls` read every AI guard off, as in an open room.
+
+**The prompts.** The Portland harvest that the issue's command names (`.harvest/devopsdays-portland/prompts`) is
+gitignored and is not on hecaton's host; scripts/harvest built it from the Portland clusters' own Datadog orgs, which
+are gone. So this run rebuilt the prompts from Datadog's record of #644's two replays of that harvest on 2026-11-05
+(06:30Z to 07:40Z, the community cluster's org, the key in `watch-it-burn/datadog`, the same key as the cluster's
+`datadog-secret`). guard-proxy's `chat` spans carrying `[[wib-probe]]` held 199 served turns, 13 of them at 120 s,
+which are exactly #644's 13 timeouts. Joined to the `POST` spans' `session.id` on trace id, 190 of them fall in 164
+`wib-load-` sessions. Each session became one prompts file in the harvest's shape, the marker stripped, under
+`.harvest/load-replay-2026-11-05/prompts` (gitignored, kept out of git as the harvest is). A second set,
+`.harvest/load-replay-2026-11-05-loops/prompts`, holds only the 8 sessions whose turns timed out (20 prompts).
+
+**Run L, the loop prompts (run 202611080449).** `python3 verify/load_replay.py attackme.burritobot.co --yes --users 16
+--harvest .harvest/load-replay-2026-11-05-loops/prompts` sent 48 turns over 16 sessions in 139.4 s: served 48, `502 0`,
+max latency 5.11 s, $0.4685 by `/cost`, `LOAD REPLAY GREEN`, exit 0. workshop-mcp logged 24 tool calls in 19 turns, at
+most 2 in a turn, and refused none: on these prompts the model no longer loops at all.
+
+**Run B again, 150 sessions (run 202611080452).** `python3 verify/load_replay.py attackme.burritobot.co --yes --users 150
+--harvest .harvest/load-replay-2026-11-05/prompts` printed `sent 450 of 450 planned turns over 150 sessions`,
+`outcomes: served 311, cluster_limit 139`, `errors: 502 0, 504 0, 429 0, other HTTP 0, timeout 0, transport 0, empty
+reply 0`, served latency p50 4.10 s, p95 9.13 s, max 15.34 s, `/cost` $0.4957 before and $3.4826 after, and `LOAD
+REPLAY GREEN`, exit 0. On 2026-11-05 the same size ended with 5 PROXY_TIMEOUT 502s and a slowest served turn of 26.1 s.
+workshop-mcp logged 146 tool calls in 121 turns: 100 turns made one call, 18 two, 2 three and 1 four, and no call ran
+more than twice in a turn. The guard refused one: at 04:52:56Z a `deploy_app` whose manifest had failed to parse
+twice in that turn ("could not parse it as JSON or YAML") came in a third time unchanged. workshop-mcp refused it
+without running it, and the turn ended about 2 s later, 9 s after it began.
+
+**The turn on the audit lines.** Every `tool_invocation` line from both runs carries a `turn`, and each one is the
+trace id agentgateway logged on that turn's A2A requests from guard-proxy (src 10.0.55.167, the guard-proxy pod):
+19 of 19 turns in run L and 121 of 121 in run B. So kagent forwards the header, which the #885 entry could only infer
+from source.
+
+**Left as found.** The replayed attacks had the bot deploy four Deployments in `agent` (`promo-mascot`,
+`maintenance-shell`, `loyalty-rewards`, `festival-promo`), each created by field manager workshop-mcp during the runs.
+They were deleted. A listing of `agent`'s deployments, services, configmaps and pods taken before run L then matched
+the namespace by uid again, except `wib-1051-internal-054546`, a Deployment this run never named, which was gone. The
+older `maintenance-shell` Service, from 2026-10-29, stays. The `/prompts` feed was empty before and after. The cost
+counter was left where the runs moved it, $3.48 of the $25 cap, as other runs' live checks leave it. The run-of-show's
+`./fleet.sh reset-bot` before the room opens clears it.
+
+**Live check.** The replays above. Nothing was changed in git except this entry and the load-test doc's results.
