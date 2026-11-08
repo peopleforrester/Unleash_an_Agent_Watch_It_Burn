@@ -33,6 +33,7 @@ desk:
 # profile until a line here names it, and a name with no file fails the render.
 apps:
   - ai-layer-otel
+  - egress-waypoint
   - ai-layer
   - backstage
   - cert-manager

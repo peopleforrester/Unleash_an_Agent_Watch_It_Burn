@@ -115,19 +115,22 @@ stage 1 cluster, egress open, on the bare burn profile, which gains no Istio and
 attendee and admin clusters, which run Istio ambient, so B is built once, on the mesh. A later breakout profile
 that wants the full fix on its community cluster makes that choice in its own issue.
 
-**The config, landed (#727).** `challenges/c1-exfil-s3/fix/` holds B over C as config, with
-`verify/test_c1_dns_exfil_fix.py` covering it offline. `resolver-lockdown.yaml` is floor C: a CoreDNS Corefile whose
-`.` block carries no catch-all `forward`, so it serves in-cluster names and forwards only `amazonaws.com` and
-`open-meteo.com` to the VPC resolver. Every other name, the collector's zone under `agenticburn.com` included, finds
-no upstream and comes back SERVFAIL without leaving the cluster. `egress-waypoint.yaml` is option B: an Istio ambient
-egress waypoint, a `ServiceEntry` for C7's two Open-Meteo hosts, and an `AuthorizationPolicy` that admits only those
-hosts. `agent-egress-fqdn.yaml` makes the waypoint the one workload granted a public 443 and shuts the weather feed's
-direct door, leaving the stage 2 L3/L4 allowlist and the DNS allow in place. The build settled the two items the
-decision left open: Bedrock keeps its in-VPC `10.0.0.0/16:443` allow and does not pass through the waypoint, and the
-proxy allowlist is the two Open-Meteo hosts. The config has run on no cluster. Build-time items owed before it is
-applied live are in that directory's `README.md`: the Istio version that supports the ambient egress pattern (the
-1.30.4 pin against the 1.31 samples, which may need the upgrade #860 left open), the Gateway API CRDs, the waypoint
-pod label, and pinning the resolver lock through the `coredns` addon so it is not reverted.
+**The build, as built (#861).** The fix is option B on the Istio ambient mesh, as question 1077 (#860) settled, and it
+is not a standalone proxy. Three platform pieces run on the attendee, admin, full, local-inference and kubecon-private
+profiles. The `agent-dns` app (`gitops/agent-dns`) is a CoreDNS resolver of its own in `agent`, the floor C of the #724
+decision: it answers the cluster names, the Bedrock runtime name and `open-meteo.com` through kube-dns, sends every other
+name to the VPC resolver, and a Kyverno MutatingPolicy points every new `agent` pod at it. The `egress-waypoint` app
+(`gitops/egress-waypoint`) is the forced egress proxy, an Istio ambient egress waypoint with a `ServiceEntry` for C7's two
+Open-Meteo hosts and an `AuthorizationPolicy` that admits only those hosts by TLS SNI (`connection.sni`, since the waypoint
+does not read `operation.hosts` on TLS, #959). The weather feed is enrolled in the ambient mesh, so ztunnel steers its
+Open-Meteo connections to the waypoint, and its own policy allows only the HBONE port to the waypoint. The student's fix is
+the `challenge-fixes` key `c1-dns-lock.yaml`: it narrows `agent-allow-dns` to agent-dns alone, which may reach kube-dns and
+nothing else, and carries the feed's and the waypoint's armed rules. Stage 2 keeps DNS open and the feed's direct 443, so
+the attack path stays as it was, and the burn and community clusters, which carry no Istio, keep it too. Bedrock keeps its
+in-VPC `10.0.0.0/16:443` allow and does not pass through the waypoint, and the Pod Identity allow stays. The first draft of
+#861 (run 17193) built a standalone CONNECT proxy in a plain Deployment, on the premise that the pinned Istio did not
+support the pattern. #959 showed that it does, so the draft's proxy was replaced; decisions.md records what differs.
+The live check is in decisions.md under #861.
 
 ## Build pieces and cost
 

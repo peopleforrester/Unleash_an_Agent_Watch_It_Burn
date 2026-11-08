@@ -1,0 +1,83 @@
+# ABOUTME: The forced egress proxy for the agent namespace (#861, option B of the #724 decision), built as an Istio
+# ABOUTME: ambient egress waypoint that admits only the weather feed's two Open-Meteo hosts, matched by TLS SNI.
+#
+# WHY A WAYPOINT, NOT A STANDALONE PROXY
+# Question 1077 (#860, decisions.md 2026-11-05) settled that option B is built on the Istio ambient layer of the
+# attendee, admin, full, local-inference and kubecon-private profiles, and "is not rebuilt without the mesh". The
+# pattern is live on the pinned Istio 1.30.4: #959 (decisions.md 2026-11-06) applied these three objects to
+# watch-it-burn-private in a scratch namespace, and ztunnel steered each ServiceEntry host to the waypoint, which
+# admitted the two Open-Meteo hosts (HTTP 200) and refused example.com. The burn and community clusters carry no Istio
+# and run no waypoint; their weather feed keeps its direct 443 path (stage 2, challenges/c1-network-policy.yaml).
+#
+# WHAT IT DOES
+# - The Gateway is the waypoint. istiod runs it as a Deployment in `agent`; its pods carry the Gateway API label
+#   gateway.networking.k8s.io/gateway-name=egress-waypoint, which agent-allow-egress-waypoint selects.
+# - The ServiceEntry names the two hosts and routes them through the waypoint. Only an ambient-enrolled pod's traffic
+#   to them is steered there. The weather feed is enrolled (resources.yaml, istio.io/dataplane-mode: ambient).
+# - The AuthorizationPolicy admits only TLS on 443 whose SNI is one of the two hosts. `operation.hosts` is an
+#   HTTP-only field and this traffic is TLS the waypoint does not terminate, so a rule on it never matches (#959).
+#   Any other host steered here is refused.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: egress-waypoint
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+    # A waypoint that handles traffic addressed to services (the ServiceEntry below), not to pods.
+    istio.io/waypoint-for: service
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+    - name: mesh
+      port: 15008
+      protocol: HBONE
+---
+# The only external hosts the weather feed may reach: C7's two Open-Meteo endpoints (weather_feed.py calls exactly
+# these). Routed through the waypoint by the use-waypoint label.
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: open-meteo-egress
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+    istio.io/use-waypoint: egress-waypoint
+spec:
+  hosts:
+    - api.open-meteo.com
+    - geocoding-api.open-meteo.com
+  ports:
+    - number: 443
+      name: https
+      protocol: TLS
+  resolution: DNS
+  location: MESH_EXTERNAL
+---
+# Allowlist on the waypoint: admit only TLS on 443 whose SNI is one of the two Open-Meteo hosts. Because an ALLOW policy
+# is attached to the waypoint, every connection it does not match is refused, so an external host steered here (a
+# label-encoded name, an attacker's webhook) is denied.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: egress-waypoint-allowlist
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: egress-waypoint
+  action: ALLOW
+  rules:
+    - to:
+        - operation:
+            ports:
+              - "443"
+      when:
+        - key: connection.sni
+          values:
+            - api.open-meteo.com
+            - geocoding-api.open-meteo.com

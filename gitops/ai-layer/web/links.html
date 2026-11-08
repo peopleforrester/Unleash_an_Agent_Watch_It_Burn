@@ -100,7 +100,7 @@
      cmd:'kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml', auth:'No UI.'},
     {nm:'Falco', p:2, ns:'security', desc:'Detect, after the fact. Falco sees it and raises an alert, which also reaches Datadog as an event. Detection, not prevention. Falco Talon, which acts on an alert, runs on instructor clusters only.',
      cmd:'kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=40', auth:'No UI.'},
-    {nm:'Istio (ambient)', p:2, ns:'istio-system', desc:'Ambient mesh: ztunnel and the CNI. It carries the console-to-guard-proxy hop as mutual TLS; no other pod is enrolled.',
+    {nm:'Istio (ambient)', p:2, ns:'istio-system', desc:'Ambient mesh: ztunnel and the CNI. It carries the console-to-guard-proxy hop, and the weather feed to its egress waypoint, as mutual TLS; no other pod is enrolled.',
      cmd:'kubectl -n istio-system get pods', auth:'No UI.'},
 
     // WAVE 3 - observability

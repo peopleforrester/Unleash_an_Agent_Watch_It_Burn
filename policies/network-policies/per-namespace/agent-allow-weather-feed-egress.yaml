@@ -1,11 +1,16 @@
-# ABOUTME: Lets the weather feed, and only it, reach Open-Meteo on 443 from the default-deny agent namespace.
-# ABOUTME: C7's get_weather returns a real reading through it (#642); the MCP servers stay locked down.
+# ABOUTME: The weather feed's only way out is the egress waypoint (#861): C7's get_weather reaches Open-Meteo through
+# ABOUTME: the waypoint's SNI allowlist, and the feed keeps no direct path to the internet.
 #
-# Open-Meteo's addresses are not fixed, and a NetworkPolicy cannot name a host, so the rule is TCP 443 to
-# anywhere for this one pod. What keeps that narrow is the pod: weather_feed.py builds its own two URLs from a
-# city name and answers four fields. The Kyverno egressLabels list carries its label, so the agent cannot
-# create a pod that wears it. The same policy ships in the C1 fix (challenge-fixes), so a student who locks
-# egress down keeps the weather.
+# Until #861 this allowed the feed TCP 443 to anywhere, because a NetworkPolicy cannot name Open-Meteo's hosts. Now the
+# feed is enrolled in the Istio ambient mesh (resources.yaml), so ztunnel carries its connections to the two Open-Meteo
+# hosts to the egress waypoint (gitops/egress-waypoint), and the waypoint's AuthorizationPolicy admits those two hosts
+# by TLS SNI. This policy lets the feed open the one connection it needs: HBONE on 15008 to the waypoint. Its DNS goes
+# to agent-dns, which agent-allow-intra-namespace already admits.
+#
+# This is the admin profile's armed state, and the same document as the feed's rule in c1-dns-lock.yaml in the
+# challenge-fixes ConfigMap. The stage 2 policy (c1-network-policy.yaml) keeps the feed's direct 443 on the burn and
+# community clusters, which run no waypoint (question 1077). The policy keeps its name, so applying it replaces that
+# 443 version in place: kubectl apply cannot delete a policy, and NetworkPolicies only add allows.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -16,4 +21,5 @@ spec:
     matchLabels: { app.kubernetes.io/name: weather-feed }
   policyTypes: [Egress]
   egress:
-    - ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ podSelector: { matchLabels: { gateway.networking.k8s.io/gateway-name: egress-waypoint } } }]
+      ports: [{ protocol: TCP, port: 15008 }]

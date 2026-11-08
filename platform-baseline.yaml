@@ -449,6 +449,23 @@ components:
 
   # ---------------------------------------------------------------- this platform only
 
+  - name: agent-dns
+    sister: []
+    status: local
+    apps: [agent-dns.yaml]
+    why: >
+      The agent namespace's own resolver and the Kyverno rule that points agent pods at it, so Challenge 1's DNS
+      lock can confine their lookups to the lab's zones (#861). Attendee, admin and full.
+
+  - name: egress-waypoint
+    sister: []
+    status: local
+    apps: [egress-waypoint.yaml]
+    why: >
+      The one way out of the agent namespace on 443: an Istio ambient egress waypoint that opens tunnels only to the
+      weather feed's Open-Meteo hosts, matched by TLS SNI (#861, option B of #724, built on the mesh per question 1077).
+      Attendee, admin, full, local-inference and kubecon-private, the mesh profiles; not burn.
+
   - name: ai-layer-otel
     sister: []
     status: local

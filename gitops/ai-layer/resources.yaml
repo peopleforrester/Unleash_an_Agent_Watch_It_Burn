@@ -753,11 +753,13 @@ spec:
   selector: { app: evil-mcp-shim }
   ports: [{ name: mcp, port: 8000, targetPort: mcp }]
 ---
-# The weather feed (#642). get_weather on evil-mcp-shim returns a REAL reading, which it asks for here. This
-# is the only pod in the agent namespace allowed out to the internet (agent-allow-weather-feed-egress, TCP 443),
-# and all it does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps
-# Challenge 1's egress lock-down true for every pod that can run a tool. Its label is on the Kyverno
-# egressLabels list, so the agent cannot mint a pod that borrows this egress.
+# The weather feed (#642). get_weather on evil-mcp-shim returns a REAL reading, which it asks for here. All it
+# does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps Challenge 1's
+# egress lock-down true for every pod that can run a tool. Its label is on the Kyverno egressLabels list, so the agent
+# cannot mint a pod that wears it. On the mesh profiles the feed is enrolled in the Istio ambient mesh (#861), so the
+# egress waypoint (gitops/egress-waypoint) carries its two Open-Meteo hosts, and the feed's only path out is the
+# waypoint. On the burn and community clusters, which carry no Istio, the label does nothing and the feed keeps its
+# direct path (decisions.md, #861, question 1077).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -767,7 +769,9 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: weather-feed } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: weather-feed, tags.datadoghq.com/service: burritobot-weather-feed, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
+    # istio.io/dataplane-mode: ambient enrols this pod in the mesh, so ztunnel steers its Open-Meteo connections to the
+    # egress waypoint (#861). It is the third pod in agent that is enrolled; question 947 chose the first two.
+    metadata: { labels: { app.kubernetes.io/name: weather-feed, tags.datadoghq.com/service: burritobot-weather-feed, tags.datadoghq.com/env: burritobot-kubecon-na-26, istio.io/dataplane-mode: ambient } }
     spec:
       automountServiceAccountToken: false # it needs no cluster API, so it holds no token
       enableServiceLinks: false # no injected <SERVICE>_PORT=tcp://... variables to collide with its own settings
@@ -1146,6 +1150,8 @@ data:
         - to: [{ ipBlock: { cidr: 169.254.170.23/32 } }] # the EKS Pod Identity agent
           ports: [{ protocol: TCP, port: 80 }]
     ---
+    # DNS stays open here: every pod may ask the cluster DNS and the VPC resolver, which relay any name. That is
+    # the door stage 2b uses; c1-dns-lock.yaml replaces this policy to shut it.
     apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy
     metadata:
@@ -1156,6 +1162,10 @@ data:
       policyTypes: [Egress]
       egress:
         - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
+        - to: [{ ipBlock: { cidr: 169.254.169.253/32 } }]  # the VPC resolver, where agent-dns sends non-lab names
           ports:
             - { protocol: UDP, port: 53 }
             - { protocol: TCP, port: 53 }
@@ -1196,8 +1206,10 @@ data:
       egress:
         - to: [{ podSelector: {} }]
     ---
+    ---
     # Keeps C7's live weather working once egress is locked down (#642): the weather feed alone may reach
-    # Open-Meteo on 443. It is a fixed lookup service, not a route out for the agent.
+    # Open-Meteo on 443. It is a fixed lookup service, not a route out for the agent. The fix (c1-dns-lock.yaml) replaces
+    # this rule with the feed's rule to the egress waypoint, which admits only the two Open-Meteo hosts (#861).
     apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy
     metadata:
@@ -1209,6 +1221,104 @@ data:
       policyTypes: [Egress]
       egress:
         - ports: [{ protocol: TCP, port: 443 }]
+
+    ---
+    # The egress waypoint's allows (#861). Stage 2 carries them as well as the fix: the weather feed is enrolled in the
+    # mesh, so its Open-Meteo connections reach the waypoint, and the waypoint's own 443 must be open for them to
+    # answer while stage 2 holds the beacon. The waypoint's AuthorizationPolicy admits only the two Open-Meteo hosts.
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-egress-waypoint
+      namespace: agent
+      labels:
+        app.kubernetes.io/part-of: watch-it-burn-idp
+    spec:
+      podSelector:
+        matchLabels: { gateway.networking.k8s.io/gateway-name: egress-waypoint }
+      policyTypes: [Egress]
+      egress:
+        - ports: [{ protocol: TCP, port: 443 }]
+        - to:
+            - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+              podSelector: { matchLabels: { k8s-app: kube-dns } }
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
+        - to:
+            - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: istio-system } }
+          ports: [{ protocol: TCP, port: 15012 }]
+  c1-dns-lock.yaml: |
+    # Challenge 1, stage 2b fix: lock DNS to the lab's own resolver, and send the weather feed through the egress
+    # waypoint (#861). Apply it on top of c1-network-policy.yaml. Its three documents are the admin profile's armed
+    # policies (policies/network-policies/per-namespace: agent-allow-dns, agent-allow-weather-feed-egress and
+    # agent-allow-egress-waypoint), and verify/test_egress_lock.py holds them equal. agent-allow-dns admits only agent-dns
+    # to a DNS server, and only the cluster DNS, so agent-dns answers the lab's names (cluster.local and the Bedrock
+    # endpoint) and sends every other name to the VPC resolver, which no policy allows any more: a name carrying data
+    # stops inside the cluster. The feed's rule replaces the direct 443 of stage 2 with the waypoint, which admits only the
+    # two Open-Meteo hosts. For the attendee, admin and full clusters, which run agent-dns and the egress waypoint; on a
+    # cluster without them this would cut every lookup and every Open-Meteo reading.
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-dns
+      namespace: agent
+      labels:
+        app.kubernetes.io/part-of: watch-it-burn-idp
+    spec:
+      podSelector:
+        matchLabels: { app.kubernetes.io/name: agent-dns }
+      policyTypes:
+        - Egress
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+              podSelector:
+                matchLabels:
+                  k8s-app: kube-dns
+          ports:
+            - protocol: UDP
+              port: 53
+            - protocol: TCP
+              port: 53
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-weather-feed-egress
+      namespace: agent
+    spec:
+      podSelector:
+        matchLabels: { app.kubernetes.io/name: weather-feed }
+      policyTypes: [Egress]
+      egress:
+        - to: [{ podSelector: { matchLabels: { gateway.networking.k8s.io/gateway-name: egress-waypoint } } }]
+          ports: [{ protocol: TCP, port: 15008 }]
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-egress-waypoint
+      namespace: agent
+      labels:
+        app.kubernetes.io/part-of: watch-it-burn-idp
+    spec:
+      podSelector:
+        matchLabels: { gateway.networking.k8s.io/gateway-name: egress-waypoint }
+      policyTypes: [Egress]
+      egress:
+        - ports: [{ protocol: TCP, port: 443 }]
+        - to:
+            - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+              podSelector: { matchLabels: { k8s-app: kube-dns } }
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
+        - to:
+            - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: istio-system } }
+          ports: [{ protocol: TCP, port: 15012 }]
   c3-kubearmor-policy.yaml: |
     # Challenge 3 fix: block reads of the recipe file inline, in the kernel, for the agent's tool pod.
     apiVersion: security.kubearmor.com/v1

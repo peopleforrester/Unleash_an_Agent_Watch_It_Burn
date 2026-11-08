@@ -286,8 +286,8 @@ metadata:
   name: weather-feed
   title: Weather feed
   description: >-
-    Where evil-mcp's get_weather gets a real reading from Open-Meteo. The one pod in the agent namespace
-    allowed out to the internet, so no pod that runs a tool needs that egress.
+    Where evil-mcp's get_weather gets a real reading from Open-Meteo, through the egress waypoint, so no pod that
+    runs a tool needs a path to the internet.
   annotations:
     backstage.io/kubernetes-label-selector: app.kubernetes.io/name=weather-feed
     backstage.io/kubernetes-namespace: agent

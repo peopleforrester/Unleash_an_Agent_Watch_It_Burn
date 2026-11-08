@@ -1,0 +1,35 @@
+# ABOUTME: Argo CD Application for the agent namespace's own resolver and the rule that points agent pods at it
+# ABOUTME: (#861, floor C of the #724 decision). On the 2-hour workshop's profiles: attendee, admin and full.
+#
+# Wave -3: after Kyverno (-5) and its policies (-4), so the MutatingPolicy's CRD exists, and before ai-layer (3) and
+# workshop-agent (4), so every agent pod is created already pointed at agent-dns. The KubeCon and burn profiles do
+# not list it, so their agent pods stay on the cluster DNS and the DNS lock (c1-dns-lock.yaml) is not for them.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agent-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/agent-dns
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

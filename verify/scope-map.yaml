@@ -546,6 +546,14 @@ reads:
     - policies/cluster-network-policies/*.yaml
     - policies/network-policies/per-namespace
     - policies/network-policies/per-namespace/agent-*.yaml
+  test_agent_dns_mutation.py:
+    - agent
+    - agent/agent-dns
+    - agent/egress-waypoint
+    - agent/elsewhere
+    - gitops/agent-dns/agent-dns-resolver.yaml
+    - gitops/agent-dns/resolver.yaml
+    - gitops/ai-layer/resources.yaml
   test_agent_hitl.py:
     - gitops/workshop-agent/agent.yaml
   test_agent_obs_cause_comment.py:
@@ -1026,12 +1034,6 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
     - images/workshop-mcp/Dockerfile
-  test_c1_dns_exfil_fix.py:
-    - challenges/c1-exfil-s3/fix/agent-egress-fqdn.yaml
-    - challenges/c1-exfil-s3/fix/egress-waypoint.yaml
-    - challenges/c1-exfil-s3/fix/resolver-lockdown.yaml
-    - gitops/ai-layer/weather_feed.py
-    - policies/network-policies/per-namespace/agent-egress-allowlist.yaml
   test_c1_exfil_block_restore.py:
     - agent
     - gitops/ai-layer/resources.yaml
@@ -2589,6 +2591,22 @@ reads:
     - policies/network-policies
     - policies/network-policies/**.yaml
     - policies/network-policies/per-namespace/apps-egress-allowlist.yaml
+  test_egress_lock.py:
+    - agent
+    - gitops/agent-dns
+    - gitops/agent-dns/*.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/weather_feed.py
+    - gitops/bootstrap
+    - gitops/bootstrap/apps/egress-waypoint.yaml
+    - gitops/bootstrap/values-*.yaml
+    - gitops/egress-waypoint
+    - gitops/egress-waypoint/egress-waypoint.yaml
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network/main.tf
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - policies/network-policies/per-namespace
+    - policies/network-policies/per-namespace/agent-*.yaml
   test_eks_version_pins.py:
     - VERSIONS.lock
     - agent
@@ -3499,7 +3517,6 @@ reads:
   test_gateway_api_crds.py:
     - CLAUDE.md
     - backstage
-    - challenges/c1-exfil-s3/fix/egress-waypoint.yaml
     - gitops
     - gitops/bootstrap
     - gitops/bootstrap/*

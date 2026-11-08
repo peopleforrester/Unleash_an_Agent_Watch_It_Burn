@@ -1,0 +1,67 @@
+# ABOUTME: Points every new pod in namespace agent at the agent-dns resolver (#861): dnsPolicy None, nameserver
+# ABOUTME: 172.20.0.53, the cluster search path. Only agent-dns and the egress waypoint keep the cluster DNS.
+#
+# Why a mutation. The DNS lock narrows agent-allow-dns to agent-dns alone, so a pod still asking kube-dns would lose
+# every lookup the moment the fix lands. The pods come from many places (Argo CD's Deployments, the kagent
+# controller's workshop-agent, the PreSync hooks, a workload the agent deploys), and kagent's Agent resource has no
+# dnsConfig field, so one admission rule sets it for all of them instead of a field in each template.
+#
+# The two pods it skips resolve through kube-dns on purpose: agent-dns forwards the lab's zones there, and the egress
+# waypoint, which Istio runs, resolves the Open-Meteo names its ServiceEntry names. Both labels are on the Kyverno
+# egressLabels list (restrict-agent-spawned-workloads), so the agent cannot create a pod that wears one to keep the
+# cluster DNS. The waypoint's own path is agent-allow-egress-waypoint's DNS allow, which only it holds.
+#
+# The search path is the one ClusterFirst writes in this namespace, less the node's own domain, which is not a lab
+# zone. failurePolicy Ignore: with Kyverno down a new pod keeps ClusterFirst, and under the lock that pod cannot
+# resolve at all, so a missed mutation fails closed for exfiltration instead of open.
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: agent-dns-resolver
+  annotations:
+    policies.kyverno.io/title: Agent DNS Resolver
+    policies.kyverno.io/category: Workshop / Challenge 1
+    policies.kyverno.io/description: >-
+      Every pod created in namespace agent resolves names through agent-dns (172.20.0.53), the resolver that
+      Challenge 1's DNS lock confines to the lab's zones. agent-dns and the egress waypoint are left on the cluster DNS.
+spec:
+  failurePolicy: Ignore
+  evaluation:
+    admission:
+      enabled: true
+    mutateExisting:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - agent
+  matchConditions:
+    - name: not-the-resolver-or-the-waypoint
+      expression: >-
+        !(has(object.metadata.labels) && (
+          ('app.kubernetes.io/name' in object.metadata.labels && object.metadata.labels['app.kubernetes.io/name'] == 'agent-dns') ||
+          ('gateway.networking.k8s.io/gateway-name' in object.metadata.labels &&
+           object.metadata.labels['gateway.networking.k8s.io/gateway-name'] == 'egress-waypoint')))
+  mutations:
+    # A JSON patch, not an ApplyConfiguration: dnsConfig's three lists are atomic, which an ApplyConfiguration may
+    # not set (the Kyverno CLI says so). "add" on /spec/dnsConfig replaces the whole object, which is the intent; each
+    # list is its own patch because CEL types a map literal by one value type.
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          [
+            JSONPatch{op: "add", path: "/spec/dnsPolicy", value: "None"},
+            JSONPatch{op: "add", path: "/spec/dnsConfig", value: dyn({})},
+            JSONPatch{op: "add", path: "/spec/dnsConfig/nameservers", value: ["172.20.0.53"]},
+            JSONPatch{op: "add", path: "/spec/dnsConfig/searches",
+                      value: ["agent.svc.cluster.local", "svc.cluster.local", "cluster.local"]},
+            JSONPatch{op: "add", path: "/spec/dnsConfig/options", value: [{"name": "ndots", "value": "5"}]}
+          ]

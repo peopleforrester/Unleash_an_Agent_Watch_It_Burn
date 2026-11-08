@@ -1,0 +1,5 @@
+# ABOUTME: The egress waypoint's manifests (#861), synced by gitops/bootstrap/apps/egress-waypoint.yaml on the mesh profiles.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - egress-waypoint.yaml

@@ -3,7 +3,7 @@
 """Why this exists (#959).
 
 The C1 stage-2b fix (#727) builds its forced egress proxy as an Istio ambient egress waypoint, a Gateway of class
-istio-waypoint (challenges/c1-exfil-s3/fix/egress-waypoint.yaml). On 2026-11-06 watch-it-burn-private had no
+istio-waypoint (gitops/egress-waypoint/egress-waypoint.yaml, #861). On 2026-11-06 watch-it-burn-private had no
 gateway.networking.k8s.io CRD, so the waypoint could not be applied. This holds the install offline:
 
 - gitops/gateway-api/standard-install.yaml is the v1.5.1 release asset, byte for byte (its SHA-256 is the digest GitHub
@@ -33,7 +33,7 @@ SHA256 = "751002b3b91a87f7ae3bd2517c79a47a8d7ed6702901808a1cf9bd97d284f9b8"
 ISTIO_GATEWAY_API = {"1.30.4": VERSION}
 CRDS = ["backendtlspolicies", "gatewayclasses", "gateways", "grpcroutes", "httproutes", "listenersets",
         "referencegrants", "tlsroutes"]
-FIX = REPO / "challenges/c1-exfil-s3/fix/egress-waypoint.yaml"
+FIX = REPO / "gitops/egress-waypoint/egress-waypoint.yaml"
 
 failures: list[str] = []
 

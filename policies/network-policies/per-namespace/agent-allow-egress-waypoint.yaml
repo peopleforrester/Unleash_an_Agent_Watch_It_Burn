@@ -1,0 +1,33 @@
+# ABOUTME: The egress waypoint's own allows (#861): public 443 for the two Open-Meteo hosts its AuthorizationPolicy
+# ABOUTME: admits, plus the DNS and istiod paths it needs to run. It is the one agent-namespace pod with public 443.
+#
+# The waypoint is an Istio-managed Deployment that the Gateway in gitops/egress-waypoint creates; its pods carry the
+# Gateway API label gateway.networking.k8s.io/gateway-name=egress-waypoint, which the Kyverno egressLabels list reserves,
+# so the agent cannot create a pod that wears it. Its 443 is not open to every name: the AuthorizationPolicy refuses any
+# connection whose TLS SNI is not one of the two Open-Meteo hosts, so this L3/L4 allow is safe only with that L7 rule.
+#
+# DNS: the waypoint is left on the cluster DNS (agent-dns-resolver.yaml exempts it), because its ServiceEntry hosts
+# resolve through kube-dns. The agent cannot reach that path: the only pods that may reach kube-dns are agent-dns and
+# this waypoint, and the waypoint routes only the ServiceEntry hosts. istiod's xDS port is 15012 in istio-system.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-egress-waypoint
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  podSelector:
+    matchLabels: { gateway.networking.k8s.io/gateway-name: egress-waypoint }
+  policyTypes: [Egress]
+  egress:
+    - ports: [{ protocol: TCP, port: 443 }]
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: istio-system } }
+      ports: [{ protocol: TCP, port: 15012 }]

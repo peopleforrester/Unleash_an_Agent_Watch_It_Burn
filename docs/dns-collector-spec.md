@@ -75,7 +75,7 @@ Clear the records, the counter and the reassembly between rehearsal runs, as the
   Community cluster, or an attendee cluster before the student applies the control, both the beacon POST and the
   DNS query land. With the stage 2 egress policy applied, the beacon count holds still while the DNS view keeps
   filling: the room sees an enforced, green NetworkPolicy and the data leaving anyway, through the one door the
-  policy cannot match. Once the FQDN-aware control in `challenges/c1-exfil-s3/fix/` is applied, the DNS view
+  policy cannot match. Once the FQDN-aware control (the `challenge-fixes` key `c1-dns-lock.yaml`, #861) is applied, the DNS view
   stops moving too. The collector is what makes that whole arc visible on the projector.
 - **The tool side is already built** and covered offline (`challenges/c1-exfil-s3/dns-exfil.py`,
   `verify/test_c1_dns_exfil.py`); it adds no encoder and no new binary. How the lookups are produced inside the

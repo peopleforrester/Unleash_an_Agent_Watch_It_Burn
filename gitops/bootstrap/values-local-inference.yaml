@@ -22,6 +22,8 @@
 # profile until a line here names it, and a name with no file fails the render.
 apps:
   - ai-layer-otel
+  - agent-dns
+  - egress-waypoint
   - ai-layer
   - backstage
   - cert-manager

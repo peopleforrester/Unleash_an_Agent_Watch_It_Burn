@@ -2,7 +2,7 @@
 # ABOUTME: release's standard-install.yaml, byte for byte; the gateway-api Application syncs this directory.
 #
 # Why. The C1 stage-2b fix (#727) builds its forced egress proxy as an Istio ambient egress waypoint, a Gateway of
-# class istio-waypoint (challenges/c1-exfil-s3/fix/egress-waypoint.yaml). A Gateway needs gateway.networking.k8s.io,
+# class istio-waypoint (gitops/egress-waypoint/egress-waypoint.yaml, #861). A Gateway needs gateway.networking.k8s.io,
 # and on 2026-11-06 watch-it-burn-private had none, so the waypoint could not be applied there. istiod creates the
 # istio, istio-remote and istio-waypoint GatewayClasses itself once these CRDs exist.
 #

@@ -1,5 +1,24 @@
-# ABOUTME: Allow DNS resolution from the agent namespace to kube-dns.
-# ABOUTME: Required so the agent can resolve Bedrock, the collector, and in-cluster service names.
+# ABOUTME: The DNS lock (#861, floor C of the #724 decision): only the agent-dns resolver may reach a DNS server, and
+# ABOUTME: only kube-dns, so a name outside the lab's zones has no way out of the agent namespace.
+#
+# Until #861 this allowed UDP and TCP 53 to all of kube-system for every agent pod. kube-dns relays any name it is
+# asked for, and a NetworkPolicy cannot read a query name, so the marketing data left inside one with the stage 2
+# policy enforced (challenges/c1-exfil-s3/dns-exfil.py, stage 2b). Now:
+#
+# - every agent pod asks agent-dns (gitops/agent-dns: the agent-dns-resolver MutatingPolicy sets each pod's
+#   resolv.conf to 172.20.0.53), which agent-allow-intra-namespace already lets it reach;
+# - agent-dns answers cluster.local and the Bedrock runtime endpoint through kube-dns, which this policy allows;
+# - agent-dns sends every other name to the VPC resolver, 169.254.169.253, which no policy here allows, so that
+#   path is shut and the name gets SERVFAIL inside the cluster;
+# - no other agent pod may reach kube-dns or any resolver directly, so a hand-built query has nowhere to go.
+#
+# The egress waypoint, the one pod outside agent-dns that resolves public names (its two Open-Meteo hosts), has its
+# own DNS allow in agent-allow-egress-waypoint.yaml. The policy keeps its name so that applying it replaces the open
+# stage 2 version in place: kubectl apply cannot delete a policy, and NetworkPolicies only add allows.
+#
+# This is the admin profile's armed state. The same document is in c1-dns-lock.yaml in the challenge-fixes ConfigMap,
+# which a student applies (verify/test_egress_lock.py holds the two equal). It needs gitops/agent-dns,
+# which the attendee, admin and full profiles list; on a profile without it this policy would cut every lookup.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -8,13 +27,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
-  # Scoped to the kagent agent pod (see agent-egress-allowlist.yaml); the MCP servers are not locked down.
-  # Namespace-wide, matching agent-egress-allowlist. Once ANY Egress policy selects a pod, that pod is
-  # default-deny-egress, so widening the allowlist to the namespace (issue #108) means every pod in it
-  # needs these baseline allows too. Leaving this scoped to workshop-agent would have cut DNS and
-  # intra-namespace traffic for the MCP servers the moment the deny widened, turning a security fix into
-  # an outage.
-  podSelector: {}
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: agent-dns }
   policyTypes:
     - Egress
   egress:
@@ -22,6 +36,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - protocol: UDP
           port: 53

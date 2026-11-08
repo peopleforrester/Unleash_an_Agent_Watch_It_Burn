@@ -1,13 +1,15 @@
-# ABOUTME: Render gate for what the Istio ambient mesh carries (#471): the console and guard-proxy are enrolled and
-# ABOUTME: nothing else is, no Ingress rule refuses their mesh traffic, and the pages say exactly that.
+# ABOUTME: Render gate for what the Istio ambient mesh carries (#471, #861): the console, guard-proxy and the weather
+# ABOUTME: feed are enrolled and nothing else is, no Ingress rule refuses their mesh traffic, and the pages say so.
 """Why this exists (#238, #471).
 
 For months the mesh enrolled nothing while the tour said it "encrypts all traffic between containers inside
 the cluster, automatically". #482 made the tour admit that, and on #471 Michael chose to keep Istio and
 enroll an application in it (question 947). The console and guard-proxy pods are enrolled: that hop carries
-every chat message, and neither pod sits behind an Ingress NetworkPolicy. These checks hold that state:
+every chat message, and neither pod sits behind an Ingress NetworkPolicy. The weather feed joined them in #861: its
+Open-Meteo connections are steered to the egress waypoint, which admits only the two Open-Meteo hosts by SNI. These
+checks hold that state:
 
-- exactly those two pod templates carry the ambient label, and no namespace does;
+- exactly those three pod templates carry the ambient label, and no namespace does;
 - no Ingress NetworkPolicy selects an enrolled pod without admitting HBONE port 15008, which is how mesh
   traffic arrives (agentgateway and workshop-agent are behind port-exact rules, so they stay out);
 - agent's PeerAuthentication is PERMISSIVE, because the console is an ip-target NLB that the room reaches
@@ -30,7 +32,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 EVALUATION = "docs/research/2026-10-24-istio-ambient-evaluation.md"
 LABEL = "istio.io/dataplane-mode"
 RESOURCES = "gitops/ai-layer/resources.yaml"
-ENROLLED = ("console", "guard-proxy")  # Deployment names in RESOURCES (#471, question 947)
+ENROLLED = ("console", "guard-proxy", "weather-feed")  # Deployment names in RESOURCES (#471, question 947; #861)
 HBONE = 15008
 
 failures: list[str] = []
@@ -81,7 +83,7 @@ for d in AI:
     labels = d.get("spec", {}).get("template", {}).get("metadata", {}).get("labels") or {}
     if LABEL in labels:
         enrolled_labels[d["metadata"]["name"]] = labels
-check("the console and guard-proxy pod templates, and only they, are enrolled",
+check("the console, guard-proxy and weather-feed pod templates, and only they, are enrolled (#861)",
       sorted(enrolled_labels) == sorted(ENROLLED)
       and all(v[LABEL] == "ambient" for v in enrolled_labels.values()), f"{enrolled_labels}")
 ns_docs = docs("gitops/namespaces/namespaces.yaml")

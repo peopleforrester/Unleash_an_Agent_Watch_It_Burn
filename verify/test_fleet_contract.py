@@ -219,29 +219,30 @@ check("the run-of-show no longer claims 43 apps", "43 ArgoCD apps" not in _docs 
 # 32 when every profile but burn gained cluster-network-policies, the agent namespace's IMDS deny (#203), and 37 and
 # 33 when every profile gained workshop-agent, the Agent's own Application (#707), and 38 and 34 when every
 # profile but burn gained backstage (#244), and the attendee 35 when it alone gained learner-apps-access (#874), and
-# 39 and 36 when every profile with Istio gained gateway-api, the Gateway API CRDs a waypoint needs (#959).
-check("the run-of-show states the 39 (instructor) and 36 (attendee)",
-      "39 Argo CD apps" in _docs and "36 on an attendee cluster" in _docs)
+# 39 and 36 when every profile with Istio gained gateway-api, the Gateway API CRDs a waypoint needs (#959), and 41 and
+# 38 when attendee, admin and full gained agent-dns and the egress waypoint (#861).
+check("the run-of-show states the 41 (instructor) and 38 (attendee)",
+      "41 Argo CD apps" in _docs and "38 on an attendee cluster" in _docs)
 _lab = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 _platform = (REPO / "gitops/ai-layer/web/platform.html").read_text(encoding="utf-8")
 # Whitney (2026-09-06): the count is not lab copy. It lives on the platform page, which is the catalogue.
 check("the platform page states the measured count and the lab page states none",
-      "36 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
+      "38 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
 # The glance paragraph heads the compiled design Doc and said "about 39" with Talon and Tempo long after
 # #475 and #478 took them off the attendee profile (#551).
 _glance = (REPO / "docs/DESIGN-GLANCE.md").read_text(encoding="utf-8")
-# Counted from the manifests, so the stated 35 cannot outlive a change to the attendee selection: every
+# Counted from the manifests, so the stated 38 (36 until agent-dns and egress-waypoint, #861) cannot outlive a change to the attendee selection: every
 # Application document in the gitops/bootstrap/apps files values-attendee.yaml lists, plus the root itself.
 sys.path.insert(0, str(REPO / "verify"))
 from bootstrap_chart import APPS, app_names  # noqa: E402
 _attendee = set(app_names("attendee"))
 _attendee_apps = 1 + sum(len(re.findall(r"(?m)^kind: Application$", (APPS / f"{n}.yaml").read_text(encoding="utf-8")))
                          for n in _attendee)
-check(f"the attendee profile renders 36 Applications, the root included ({_attendee_apps} found)",
-      _attendee_apps == 36)
+check(f"the attendee profile renders 38 Applications, the root included ({_attendee_apps} found)",
+      _attendee_apps == 38)
 check("the attendee profile leaves out tempo and falco-talon", not {"tempo", "falco-talon"} & _attendee)
-check("the design glance states 36 attendee applications and puts Talon and Tempo on instructor clusters only",
-      "36 applications on the attendee profile" in _glance and "about 39" not in _glance
+check("the design glance states 38 attendee applications and puts Talon and Tempo on instructor clusters only",
+      "38 applications on the attendee profile" in _glance and "about 39" not in _glance
       and "Falco with Talon" not in _glance and "Talon and Tempo run on instructor clusters only" in _glance)
 
 print("== teardown ordering and safety ==")
