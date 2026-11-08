@@ -104,6 +104,7 @@ delivered session, and before any run that should open on an empty wall, from
 ./fleet.sh reset-bot watch-it-burn-community watch-it-burn-private
 ./fleet.sh wall-reset
 ./fleet.sh wall-check --empty
+./fleet.sh desk-reset
 ```
 
 Then run `guards-off` on the private cluster's terminal, as above. `wall-reset`
@@ -2480,6 +2481,19 @@ is merely slow rather than rebuilding:
   either cluster's feed still holds a prompt and names the `reset-bot` to run. If the
   wall gets a prompt after this, run the three again on the day, before the room
   arrives ("Run-through record" above).
+- [ ] **Clear the one deployments page, after the seeds and the probe (#1144, #1159).**
+  Both bots deploy onto one page, `deployments.burritobot.co`, the community cluster's
+  desk (#1145): the probe's Jokers, the seeds' `c3-attack` Joker (labelled `private`)
+  and every rehearsal deploy stay on it until the desk is cleared. From
+  `infra/terraform/fleet/`: `./fleet.sh desk-reset`. It clears every row on the one
+  page, both clusters' alike, on the cluster holding attackme (a promoted standby once
+  `backups.py` has promoted one), and keeps every ticket; `--tickets` also clears the
+  filed ones, the room's and the presenters' `HC-9xx`, and the fixed tickets, HC-666
+  among them, always stay. It runs inside the desk's own pod, the one place the desk
+  answers a reset, so nobody on the public internet can clear the page. It must end
+  `deployments.burritobot.co lists no deploy`, and
+  `curl -s https://deployments.burritobot.co/deployments.json` then reads `[]`. It
+  refuses the private cluster by name: its bot reads and reports on the public desk.
 
 ## Rollback on the day
 
