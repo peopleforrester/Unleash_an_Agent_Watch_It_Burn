@@ -37847,3 +37847,10 @@ followup in the run report.
 
 **Live check.** Skipped: the change touches only the run-of-show, a `verify/` test no cluster runs, PROGRESS.md and
 this file.
+
+**The suites (run 18716).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, at `28d68555`. The
+scoped `bash verify/run-e2e-tools.sh` (log `/var/lib/hecaton/runs/18716/e2e-tools.log`), which runs the scoped
+`run-tests.sh` as one of its checks, printed `131 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline
+suite, then `16 checks ran (the offline suite and 15 tier tests) in 5m08s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS
+GREEN` and `exit=0`. `verify/test_deck_shift_slide_citations.py` and `verify/test_stage_trace_slides.py` were among
+them. The prose gate exited 0 on the three changed prose files. No dependency was added.
