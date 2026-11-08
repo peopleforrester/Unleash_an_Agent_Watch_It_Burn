@@ -439,6 +439,11 @@ sites:
     class: live
     kind: cluster
     target: a service on a workshop cluster, reached from inside a pod with kubectl exec
+  - match: urlopen\(u\.rstrip
+    lines: 1
+    class: live
+    kind: cluster
+    target: 'the bot''s desk, TICKET_SITE_URL''s /healthz (desk-relay or fake-ticket), from BurritoBot''s tool pod with kubectl exec (#1159)'
   - match: urlopen
     lines: 2
     class: live
@@ -604,6 +609,11 @@ sites:
     lines: 1
     class: loopback
     why: the desk and desk-relay servers on 127.0.0.1, which the test starts
+  verify/test_one_desk_tools.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: the support desk's own server on 127.0.0.1, which the test starts
   verify/tf_plugin_cache.py:
   - match: urlopen|path = artifact_cache\.get\(
     lines: 2
