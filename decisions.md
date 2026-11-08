@@ -38629,3 +38629,69 @@ rule run 18721 left.
 15 tier tests) in 4m27s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
 `prose gate: pass`. `python3 verify/scope_tests.py write` added the new fixture to `test_stage_trace_slides.py`'s
 entry; the drift it printed for unrelated tests was left out. No dependency was added.
+
+## 2026-11-08 · #1116 · run 18734 · #1115's cold baseline is complete: the CI e2e tools job measured on a new runner's empty cache
+
+**What.** Runs 18664 and 18729 left one number of #1116 open: the CI e2e tools job on a cold workspace. Their
+escalation asked for the runner's cache on tanjiro-wsl2 to be moved aside and a branch pushed. Question 1131's answer
+sent the act back to the run. This run did not need it, and could not have done the first half: the three runners of
+this repo on tanjiro run as `gha-agent`, and their caches (`/srv/gha-agent/<runner>/_work/_tool/wib-artifacts`, mode
+755, owned by `gha-agent`) cannot be written by the `michael` account the fleet route runs as, so a `mv` there fails
+whatever the wrapper allows. The cold job already exists in the record. Runners `-2` and `-3` were registered on
+2026-11-08 at about 15:32Z, each with its own empty tool cache, and each one's first e2e tools job filled its
+artifact cache from nothing. Each cache keeps a fetch log (time, URL, SHA-256, bytes, status), which this run read
+through `sources-elevated fleet tanjiro-wsl2 cat ...`, and the job logs were read with `gh api .../actions/jobs/<id>/logs`.
+Nothing was pushed, no job was started and nothing on tanjiro was changed.
+
+**The cold CI job.** Job 128789299953, run 42499618780 (`agent/1157-18670`, `bdfc653c`), on runner
+`tanjiro-...-3`, 16:27:57Z to 16:34:14Z. `ci-base-sha.sh` set the merge base `70c0575f`, and the change touched a path
+that widens the scope, so the job printed `scope: running every test` and `87 checks ran (the offline suite and 86
+tier tests) in 6m02s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`. That is the unscoped tier, cold, in 6m02s of
+tier time and 6m17s of job wall time.
+
+- Through the artifact cache, from runner `-3`'s fetch log, 16:28:04Z to 16:31:05Z: 157 downloads, 1527.2 MB
+  (1,527,162,213 bytes), every one `ok`. By kind: 11 E2E tools (443.2 MB, the `e2e-tools.lock` rows with the Terraform
+  binary among them), 8 Terraform provider zips (599.1 MB), 20 chart tarballs (3.4 MB) and 118 Python wheels
+  (481.5 MB, among them the CPU torch wheel at 196.3 MB). The one line before them is the PyYAML wheel (0.8 MB), which
+  the offline job of staging run 42495662016 fetched on the same runner at 15:36:30Z. The runner's `sha256` store
+  holds 1,527,963,839 bytes, which is those 158 downloads exactly, so the log is the cache's whole fill.
+- Outside the cache, from the job log: the Node 26.13.0 tarball that setup-node acquired (63.3 MB, the release
+  asset's size; the runner's `_tool/node` was made by this job at 16:28:02Z), the two Debian packages
+  (`libnspr4`, `libnss3`) `ci_chromium_libs.py` unpacks under the job's temp directory, which every job fetches again
+  and whose bytes nothing logs, and the three action repositories (checkout, setup-uv, setup-node) the runner
+  downloads at every job start.
+- Warm in that job, so not in its numbers: uv 0.13.7 (put in `_tool/uv` by the 15:36Z offline job), Playwright's
+  browsers (681 MB) and the two Hugging Face models (1.4 GB), which sit in `gha-agent`'s own `~/.cache`, shared by
+  all three runners and filled on 2026-11-07 at 08:53Z, and the submodules, cloned into the workspace by an earlier
+  job. Their cold cost is the host run's below.
+
+**A second cold job, scoped.** Job 128779889553, run 42496506810 (staging `71e09346`, scoped to `75fb65a8`), runner
+`-2`'s first e2e tools job, 15:46:33Z to 15:51:17Z, ran `35 checks (the offline suite and 34 tier tests) in 4m25s`
+(4m44s of job time). It made the same 157 downloads, 1527.9 MB: 11 tools, 8 providers, 20 charts and 118 wheels.
+A scoped job selecting 34 of 86 tier tests fetched as much as the unscoped one, which is what the later children of
+#1115 have to remove.
+
+**The cold baseline, both halves, for the last child of #1115 to compare against.**
+
+| | wall time | pinned downloads through the cache | outside the cache |
+|---|---|---|---|
+| Tools tier, netcup, `f6b637b4` (run 18664) | 86 checks in 11m14s | 128, 1516.7 MB | Playwright 681 MB, two models 1.43 GB, two submodules 1.3 MB |
+| CI e2e tools job, tanjiro `-3`, `bdfc653c` | 87 checks in 6m02s, job 6m17s | 157, 1527.2 MB (158 and 1528.0 MB with the offline job's PyYAML) | Node 63.3 MB, two Chromium library packages, three actions |
+
+The two counts differ in the wheels (89 against 118): `bdfc653c` is about two hours of staging later than
+`f6b637b4`, and its `python.lock` had more of them. The tool, provider and chart downloads are the same artifacts
+and the same bytes in both.
+
+**The classification by kind**, unchanged on this run's base `30b6b26f`: `python3 verify/fetch_inventory.py check`
+printed `fetch inventory: every call site classed`, and `summary` printed 732 call sites in 209 files. Pinned, 51
+sites in 32 files: tool 18 (10 through the artifact cache), Helm chart 9 (9), Terraform provider 9 (9), Python package
+5 (5), git commit 2 (0), browser 2 (0), release file 2 (0), container image 2 (0), cache fill 1 (1), Node package 1 (1).
+Live, 96 sites in 54 files: cluster 38, lab endpoint 32, SaaS API 11, registry 6, upstream index 6, public web 2,
+GitHub 1. Loopback, 61 sites in 40 files. None, 524 sites in 133 files.
+
+**Evidence kept.** The three runners' fetch logs and the two cold jobs' logs are in
+`/var/lib/hecaton/runs/18734/cold-ci/`.
+
+**Live check: skipped.** The change is this decisions.md entry alone; the tanjiro reads were reads.
+
+**No new dependency.**
