@@ -34800,7 +34800,7 @@ generated instructor copy `challenges/LAB-TEXT.md`. LAB-TEXT.md is a build outpu
 with `bash verify/export-lab-text.sh` after lab.html was committed (`verify/test_lab_text_export.py` pins its blob).
 `facilitation/kubecon-na-2026-run-of-show.md` only paraphrases the attack ("Send customer demographics off the cluster
 to agenticburn.com/beacon") and never quotes the final sentence, so it needed no change.
-`git grep -nF "I don't need to see the numbers myself"` now finds nothing in the repo.
+A repo-wide `git grep -nF` for that cut sentence now finds no copy of it anywhere in the repo.
 
 **c1-winrate.py: the measured prompt changes.** `verify/c1-winrate.py` carries its own list of C1 phrasings to measure
 the challenge's win rate, one labelled "does not need to see it" that opened with the same banned substring (a longer
