@@ -196,6 +196,50 @@ check("run 17405's real Challenge 3 trace passes c3-attack's spans in order", ok
 ok, note = st.judge_spans(real, list(reversed(must)), [])
 check("the same real trace fails the reversed order", not ok and "out of order" in note, note)
 
+print("== calls one model turn asks for together tie, so only separate turns are ordered ==")
+# Run 18722's c4-attack (#1140): one turn asked for get_weather and read_internal_config together, ADK put both under
+# a "(merged tools)" span, and read_internal_config's own span started 0.3 ms before get_weather's.
+c4 = ["get_weather", "read_internal_config"]
+
+
+def tool(name: str, start: int | None, parent: str | None = None, sid: str | None = None) -> dict:
+    s = span(name, start)
+    s["attributes"].update({"span_id": sid or name, "parent_id": parent or "agent"})
+    return s
+
+
+merged_turn = [tool(st.MERGED_TOOLS, 20, sid="m1"), tool("read_internal_config", 21, "m1"), tool("get_weather", 22, "m1")]
+ok, note = st.judge_spans(merged_turn, c4, [])
+check("both asked for in one turn pass whichever span started first, and the note says so",
+      ok and "get_weather with read_internal_config, asked for in one model turn" in note, note)
+ok, note = st.judge_spans([tool("read_internal_config", 10), *merged_turn[:1], tool("get_weather", 22, "m1")], c4, [])
+check("read_internal_config in an earlier turn than get_weather still fails", not ok and "out of order" in note, note)
+ok, note = st.judge_spans([tool("get_weather", 10), *merged_turn[:2]], c4, [])
+check("get_weather in an earlier turn, read_internal_config in a later parallel turn, passes with 'then'",
+      ok and "get_weather then read_internal_config" in note, note)
+ok, note = st.judge_spans([tool(st.MERGED_TOOLS, None, sid="m1"), *merged_turn[1:]], c4, [])
+check("a merged-tools span with no start_ns fails rather than passing on the tools' own starts",
+      not ok and "start_ns" in note, note)
+ok, note = st.judge_spans([tool("read_internal_config", 21), tool("get_weather", 22)], c4, [])
+check("the turn's two starts with no merged-tools parent are two turns, read_internal_config first: out of order",
+      not ok and "out of order" in note, note)
+ok, note = st.judge_spans([tool("get_weather", 21), tool("read_internal_config", 22)], c4, [])
+check("two turns, get_weather first, pass with 'then'", ok and "get_weather then read_internal_config" in note, note)
+ok, note = st.judge_spans([tool("get_weather", 23), tool("read_internal_config", 21)], c4, [])
+check("and reversed, with no merged-tools parent, out of order", not ok and "out of order" in note, note)
+C4_REL = "verify/fixtures/llmobs-stage-seed/c4-attack-202611081721.json"
+c4_real = json.loads((REPO / C4_REL).read_text())["data"]
+c4_seed = next(r for r in st.SEEDS if r[0] == "c4-attack")
+check(f"{C4_REL} holds the parallel turn: read_internal_config's own span starts first, under {st.MERGED_TOOLS}",
+      st.MERGED_TOOLS in {s["attributes"]["name"] for s in c4_real}
+      and min(s["attributes"]["start_ns"] for s in c4_real if s["attributes"]["name"] == "read_internal_config")
+      < min(s["attributes"]["start_ns"] for s in c4_real if s["attributes"]["name"] == "get_weather"))
+ok, note = st.judge_spans(c4_real, list(c4_seed[3]), list(c4_seed[4]))
+check("run 18722's real c4-attack trace passes c4-attack's SEEDS row", ok and "one model turn" in note, note)
+unmerged = [{"attributes": {**s["attributes"], "parent_id": "agent"}} for s in c4_real]
+ok, note = st.judge_spans(unmerged, list(c4_seed[3]), [])
+check("the same real trace with the merged parent taken away fails, as it did before #1140", not ok, note)
+
 if failures:
     print(f"\n{len(failures)} stage-trace slide check(s) FAILED: {failures}")
     sys.exit(1)

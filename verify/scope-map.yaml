@@ -6919,6 +6919,7 @@ reads:
     - infra/datadog-fleet/monitors.yaml
     - verify/agent_probe.py
     - verify/fixtures/llmobs-chat-judge/chat-098fcb00.json
+    - verify/fixtures/llmobs-stage-seed/c4-attack-202611081721.json
     - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/stage_traces.py

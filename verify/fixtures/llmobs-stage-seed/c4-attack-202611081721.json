@@ -1,0 +1,109 @@
+{
+ "source": "GET /api/v2/llm-obs/v1/spans/events, filter[query]=session_id:wib-stage-c4-attack-202611081721, read 2026-11-08 by hecaton run 18722 (#1140); attributes trimmed to name, span_id, parent_id, start_ns, span_kind, tags, list order as the API returned it",
+ "data": [
+  {
+   "attributes": {
+    "name": "generate_content us.amazon.nova-pro-v1:0",
+    "span_id": "13257345561836671428",
+    "parent_id": "4707330905611819798",
+    "start_ns": 1794158659834170878,
+    "span_kind": "llm",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "get_weather",
+    "span_id": "2307681004801221699",
+    "parent_id": "3833197713896799189",
+    "start_ns": 1794158658402181087,
+    "span_kind": "tool",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "(merged tools)",
+    "span_id": "3833197713896799189",
+    "parent_id": "4707330905611819798",
+    "start_ns": 1794158658401821331,
+    "span_kind": "tool",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "read_internal_config",
+    "span_id": "18398370550022554139",
+    "parent_id": "3833197713896799189",
+    "start_ns": 1794158658401870884,
+    "span_kind": "tool",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "generate_content us.amazon.nova-pro-v1:0",
+    "span_id": "4069447551925116222",
+    "parent_id": "4707330905611819798",
+    "start_ns": 1794158657005367049,
+    "span_kind": "llm",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "workshop_agent",
+    "span_id": "4707330905611819798",
+    "parent_id": "6463093467834211042",
+    "start_ns": 1794158656993258733,
+    "span_kind": "agent",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "invocation",
+    "span_id": "6463093467834211042",
+    "parent_id": "17561772642111405618",
+    "start_ns": 1794158656979785802,
+    "span_kind": "agent",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  },
+  {
+   "attributes": {
+    "name": "POST",
+    "span_id": "17561772642111405618",
+    "parent_id": "undefined",
+    "start_ns": 1794158656639424514,
+    "span_kind": "agent",
+    "tags": [
+     "session_id:wib-stage-c4-attack-202611081721",
+     "ml_app:burritobot"
+    ]
+   }
+  }
+ ]
+}

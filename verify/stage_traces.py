@@ -439,21 +439,30 @@ def spans_for(dd, session: str, hours: int = 48) -> list[dict]:
             if f"session_id:{session}" in (s.get("attributes", {}).get("tags") or [])]
 
 
+# The span ADK puts tool calls under when one model turn asks for several at once (run 18722's c4-attack: get_weather
+# and read_internal_config from one turn, their own spans starting 0.3 ms apart in either order).
+MERGED_TOOLS = "(merged tools)"
+
+
 def first_starts(spans: list[dict], names: list[str]) -> dict[str, int | None]:
-    """When each named tool span first starts, in start_ns (the field the spans API sets on every span; run 17405's
-    fixture, verify/fixtures/llmobs-chat-judge/, has it). None when a span of that name carries no start_ns."""
+    """When each named tool span's model turn first starts, in start_ns (the field the spans API sets on every span;
+    run 17405's fixture, verify/fixtures/llmobs-chat-judge/, has it). A call made in parallel with others in one turn
+    sits under a MERGED_TOOLS span and takes that span's start, so calls from one turn tie and only separate turns
+    are ordered. None when a span of that name, or its MERGED_TOOLS parent, carries no start_ns."""
+    merged = {a.get("span_id"): a.get("start_ns") for a in ((s.get("attributes") or {}) for s in spans)
+              if a.get("name") == MERGED_TOOLS and a.get("span_id")}
     out: dict[str, int | None] = {}
     for n in names:
-        starts = [(s.get("attributes") or {}).get("start_ns") for s in spans
-                  if (s.get("attributes") or {}).get("name") == n]
+        starts = [merged.get(a.get("parent_id"), None) if a.get("parent_id") in merged else a.get("start_ns")
+                  for a in ((s.get("attributes") or {}) for s in spans) if a.get("name") == n]
         out[n] = None if any(t is None for t in starts) else min(starts)
     return out
 
 
 def judge_spans(spans: list[dict], must: list[str], must_not: list[str]) -> tuple[bool, str]:
     """The seed's trace against its SEEDS row: every `must` span there, in `must`'s order (each one's first span
-    starting after the one before it, #1138), and no `must_not` span. The API lists spans newest first, so the order
-    is read off start_ns, never off the list."""
+    starting after the one before it, #1138, or asked for in the same model turn), and no `must_not` span. The API
+    lists spans newest first, so the order is read off start_ns, never off the list."""
     names = {(s.get("attributes") or {}).get("name") for s in spans}
     missing = [n for n in must if n not in names]
     extra = [n for n in must_not if n in names]
@@ -466,11 +475,16 @@ def judge_spans(spans: list[dict], must: list[str], must_not: list[str]) -> tupl
         unstamped = [n for n, t in starts.items() if t is None]
         if unstamped:
             return False, f"{len(spans)} spans; {unstamped} carry no start_ns, so the order cannot be read"
-        seen = sorted(must, key=lambda n: starts[n])
+        seen = sorted(must, key=lambda n: starts[n])  # stable: calls from one turn keep must's order
         if seen != list(must):
             return False, f"{len(spans)} spans; out of order: the trace has {' then '.join(seen)}"
-    then = " then " if len(must) > 1 else ", "
-    return True, f"{len(spans)} spans, with {then.join(must)}" + (f" and no {', '.join(must_not)}" if must_not else "")
+        joined = must[0] + "".join((" with " if starts[b] == starts[a] else " then ") + b
+                                   for a, b in zip(must, must[1:]))
+        if " with " in joined:
+            joined += ", asked for in one model turn"
+    else:
+        joined = ", ".join(must)
+    return True, f"{len(spans)} spans, with {joined}" + (f" and no {', '.join(must_not)}" if must_not else "")
 
 
 def search_apm(dd, query: str, hours: int = 48, limit: int = 100) -> list[dict]:
