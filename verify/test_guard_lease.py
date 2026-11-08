@@ -8,6 +8,7 @@ on PATH for the CLI and the shell scripts. The clock is a counter the fake sleep
 from __future__ import annotations
 
 import contextlib
+import functools
 import io
 import json
 import os
@@ -548,6 +549,75 @@ lost_one = gl.SwitchHold([gl.GuardLease("wib-community", runner=fleet.run), gl.G
 lost_one.leases[1].lost = "the lock was lost: held by 'x'"
 check("a SwitchHold reports a loss on either cluster, naming it",
       lost_one.lost == "wib-private: the lock was lost: held by 'x'", str(lost_one.lost))
+
+# --- #1053: the probe's second hold, through the real hold_switch -----------------------------------------------------
+print("== #1053: the admin KubeCon probe holds the community cluster's lock too, or runs no beat ==")
+PRIV, COMM = "watch-it-burn-private", "watch-it-burn-community"
+
+
+class Unreadable(fk.FakeLeaseApi):
+    """A cluster whose guardrails-peer Secret the caller may not read, so the switch's reach is unknown."""
+
+    def handle(self, argv, stdin):
+        if list(argv[3:]) == fk.PEER_GET:
+            return 1, "", 'Error from server (Forbidden): secrets "guardrails-peer" is forbidden\n'
+        return super().handle(argv, stdin)
+
+
+def probe_through(fleet: Fleet, argv: list[str]) -> tuple[int, dict, str]:
+    """kp.main with the real hold_switch over one fake API server per context and its beats stood in for: its return
+    code, what each cluster's Lease named while the beats ran (empty when none ran), and what it printed."""
+    during: dict = {}
+
+    def beats(self, plan, final=None):
+        during.update({c: (a.lease or {}).get("spec", {}).get("holderIdentity") for c, a in fleet.apis.items()})
+        during["peers"] = [c.context for c in self.peers]
+        return []
+    saved = (kp.guard_lease.hold_switch, kp.Probe.run, kp.KubeconCluster.get_json)
+    kp.guard_lease.hold_switch = functools.partial(saved[0], runner=fleet.run, log=lambda m: None)
+    kp.Probe.run, kp.KubeconCluster.get_json = beats, lambda self, path: None
+    try:
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            rc = kp.main(argv)
+    finally:
+        kp.guard_lease.hold_switch, kp.Probe.run, kp.KubeconCluster.get_json = saved
+    return rc, during, out.getvalue()
+
+
+def kubecon_fleet(private: fk.FakeLeaseApi | None = None, community: bool = True) -> Fleet:
+    fleet = Fleet(watch_it_burn_private=private or fk.FakeLeaseApi(peer=COMM))
+    if community:
+        fleet.apis[COMM] = fk.FakeLeaseApi(peer=PRIV)
+    return fleet
+
+
+ADMIN = ["admin", "burritobot-private.burritobot.co", "--context", PRIV, "--kubeconfig", "/tmp/k", "--lock-wait", "0"]
+fleet = kubecon_fleet()
+rc, during, said = probe_through(fleet, ADMIN)
+check("the admin probe runs its beats holding the lock on the community cluster and the private one, one holder on both",
+      rc == 0 and during.get(COMM) and during.get(COMM) == during.get(PRIV)
+      and during[COMM].startswith("kubecon_probe.py admin burritobot-private.burritobot.co"), f"{rc} {during} {said}")
+check("it takes the community lock first, then the private one, and releases both after",
+      creates(fleet) == [COMM, PRIV] and all(a.lease is None for a in fleet.apis.values()), str(fleet.order))
+check("its final beat reads the community cluster back, the one it holds the second lock on",
+      during.get("peers") == [COMM], str(during))
+fleet = kubecon_fleet()
+rc, during, said = probe_through(fleet, ["community", "attackme.burritobot.co", "--context", COMM, "--switch-context",
+                                         PRIV, "--lock-wait", "0"])
+check("a community probe takes the same order, community then private, so two probes cannot each hold one",
+      rc == 0 and creates(fleet) == [COMM, PRIV] and during.get(COMM) == during.get(PRIV)
+      and during[COMM].startswith("kubecon_probe.py community"), f"{rc} {fleet.order} {during}")
+fleet = kubecon_fleet(community=False)
+rc, during, said = probe_through(fleet, ADMIN)
+check("an admin probe whose kubeconfig has no context for the community cluster runs no beat, exits 2 with KUBECON "
+      "PROBE NOT RUN naming it, and leaves no Lease on the private cluster",
+      rc == 2 and not during and "KUBECON PROBE NOT RUN" in said and f"context named {COMM}" in said
+      and fleet.apis[PRIV].lease is None and creates(fleet) == [], f"{rc} {during} {said} {fleet.order}")
+fleet = kubecon_fleet(private=Unreadable(peer=COMM))
+rc, during, said = probe_through(fleet, ADMIN)
+check("an admin probe that cannot read the private cluster's guardrails-peer Secret runs no beat and takes no lock",
+      rc == 2 and not during and "KUBECON PROBE NOT RUN" in said and "guardrails-peer" in said
+      and creates(fleet) == [], f"{rc} {during} {said} {fleet.order}")
 
 print("== run_held: a live check's body runs only inside the lock ==")
 api = fk.FakeLeaseApi()

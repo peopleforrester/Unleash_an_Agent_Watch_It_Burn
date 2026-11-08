@@ -20,6 +20,7 @@ import sys
 import tempfile
 import types
 import urllib.parse
+from typing import Callable
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -271,6 +272,7 @@ def fake_hold(context, kubeconfig=None, profile=None, what="", wait=0.0, **kw):
         LOCK["inside"] = False
 
 
+_real_hold_switch = st.guard_lease.hold_switch
 st.guard_lease.hold_switch = fake_hold
 _real_probe_run = st.StageProbe.run
 
@@ -729,6 +731,72 @@ with tempfile.TemporaryDirectory() as tmp:
     c3 = [b for b in json.loads(out.read_text())["beats"] if b["key"] in ("c3-attack", "c3-fixed")]
     check("a private cluster with no guardrails peer fails both, saying the row is not removed",
           rc == 1 and all(b["verdict"] == kp.FAIL and "no desk cluster is known" in b["note"] for b in c3), str(c3))
+
+print("== #1053: the seeds hold the lock on the community cluster too, or run nothing ==")
+import fake_lease_kubectl as fk  # noqa: E402
+
+
+def lease_fleet(*contexts: str) -> tuple[dict, Callable, list[str]]:
+    """One fake API server per context the kubeconfig has; wib-private's guardrails-peer Secret names wib-community.
+    Returns the APIs, a runner with subprocess.run's shape, and the contexts each Lease create went to, in order."""
+    apis = {c: fk.FakeLeaseApi(peer="wib-community" if c == "wib-private" else "wib-private") for c in contexts}
+    creates: list[str] = []
+
+    def run(argv, input=None, **kw):
+        if argv[2] not in apis:
+            return types.SimpleNamespace(returncode=1, stdout="", stderr=f'error: context "{argv[2]}" does not exist\n')
+        if argv[3:6] == ["create", "-f", "-"]:
+            creates.append(argv[2])
+        return apis[argv[2]].run(argv, input=input, **kw)
+    return apis, run, creates
+
+
+def seed_through(apis: dict, run: Callable, cluster: FakePrivate, out: pathlib.Path) -> tuple[int, dict, list[str]]:
+    """A seed under the real hold_switch over `apis`: its return code, what each cluster's Lease named once the locks
+    were held (empty when they never were), and what the seed logged."""
+    inside: dict = {}
+
+    @contextlib.contextmanager
+    def real_switch(context, kubeconfig=None, profile=None, what="", wait=0.0, **kw):
+        with _real_hold_switch(context, kubeconfig, profile, what=what, wait=wait, runner=run,
+                               log=lambda m: None) as sw:
+            inside.update({c: (a.lease or {}).get("spec", {}).get("holderIdentity") for c, a in apis.items()})
+            LOCK.update(context=context, what=what, inside=True)
+            try:
+                yield sw
+            finally:
+                LOCK["inside"] = False
+    st.guard_lease.hold_switch = real_switch
+    LOCK.clear()
+    h = Lines()
+    st.log.addHandler(h)
+    try:
+        return run_seed(cluster, FakeDatadog(), out), inside, h.lines
+    finally:
+        st.log.removeHandler(h)
+        st.guard_lease.hold_switch = fake_hold
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    out = pathlib.Path(tmp, "stage-traces.json")
+    apis, run, creates = lease_fleet("wib-private", "wib-community")
+    rc, inside, _ = seed_through(apis, run, FakePrivate(), out)
+    check("the seeds run holding the lock on wib-community and on wib-private, one holder on both",
+          rc == 0 and LOCK.get("ran_inside") is True and set(inside) == {"wib-community", "wib-private"}
+          and len(set(inside.values())) == 1 and str(inside["wib-private"]).startswith(f"stage_traces.py seed {HOST}"),
+          f"{rc} {inside} {LOCK}")
+    check("the community lock is taken first, then the private one, and both are released after",
+          creates == ["wib-community", "wib-private"] and all(a.lease is None for a in apis.values()),
+          f"{creates} {[(c, a.lease) for c, a in apis.items()]}")
+    apis, run, creates = lease_fleet("wib-private")
+    f = FakePrivate()
+    rc, inside, lines = seed_through(apis, run, f, out)
+    said = " ".join(lines)
+    check("a kubeconfig with no context for the community cluster: status 2 before any read or flip, SEEDED NOT RUN "
+          "naming wib-community, and no Lease left on wib-private",
+          rc == 2 and not f.log and not f.sent and not inside and "SEEDED NOT RUN" in said
+          and "context named wib-community" in said and apis["wib-private"].lease is None,
+          f"{rc} {f.log} {inside} {said[-400:]}")
 
 print("== it refuses what it must not touch ==")
 check("no --context: status 2", st.main(["seed", HOST, "--profile", "accen-dev"]) == 2)

@@ -7205,6 +7205,7 @@ reads:
     - verify/agent_probe.py
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
+    - verify/fake_lease_kubectl.py
     - verify/guard_lease.py
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
