@@ -36702,3 +36702,9 @@ PROGRESS.md and this file (Dispatched runs, point 1).
 list, so `HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)" bash verify/run-e2e-tools.sh` ran everything and
 printed `364 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in
 13m01s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+
+**The doc-only range on this repo (run 18637, `2899e98a..dcee7ce4`).** The records commit changes only AGENTS.md,
+PROGRESS.md and decisions.md. `HECATON_BASE_SHA=2899e98a bash verify/run-e2e-tools.sh` printed `3 of the changed paths
+are prose`, `running 0 of 85 tools tests`, `the tools are neither checked for nor fetched`, no fetch and no Terraform
+cache line, `running 96 of 364 offline tests`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `1 checks ran (the offline suite
+and 0 tier tests) in 5m10s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
