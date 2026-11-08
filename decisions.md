@@ -39683,3 +39683,59 @@ GREEN`, exit 0. The prose gate printed `prose gate: pass`. No dependency was add
 `/var/lib/hecaton/runs/18753/logs/`. `verify/test_kubecon_c3_live.py`, an E2E-suite test, runs the probe's `c6-lands`
 beat on watch-it-burn-community and so now asks its row off the desk there: it is red until `/desk-forget` is deployed,
 and is the third check for the next run, after promotion.
+## 2026-11-08 · #861 · run 18778 · Option B is built on the mesh: agent-dns, the egress waypoint and the enrolled weather feed, with the DNS lock in c1-dns-lock.yaml
+
+**What #861 asked.** Four build items from the #724 decision (question 1009, `2ab82eca`) and an owed live check. The items: drop the agent namespace's direct 443 and 53 so that the proxy is the only path out, and narrow `agent-allow-dns.yaml` from all of kube-system to the locked resolver; put the Open-Meteo hosts that C7's weather feed reaches on the proxy's allowlist; settle whether Bedrock goes through the proxy; and confirm that Istio 1.30.4 supports the ambient waypoint egress pattern. The owed live check is that the stage 2 policy holds the beacon while the DNS collector records stage 2b, that the chosen control leaves the collector with nothing new for the same request, and that Bedrock and in-cluster resolution still work.
+
+**Decision.** The forced egress proxy is an Istio ambient egress waypoint on the mesh profiles, not a standalone Deployment. This is what question 1077 (#860, 2026-11-05) settled, and #959 (2026-11-06) checked on the pinned Istio 1.30.4 that the pattern works when the waypoint's policy matches the TLS SNI. No Istio upgrade is needed.
+
+**What was built.**
+
+- `gitops/agent-dns` (Argo CD app `agent-dns`, wave -3): CoreDNS 1.14.7 in `agent`, on Service address 172.20.0.53. It forwards `cluster.local`, `bedrock-runtime.us-west-2.amazonaws.com` and `open-meteo.com` to kube-dns, and every other name to the VPC resolver, 169.254.169.253. The Kyverno MutatingPolicy `agent-dns-resolver` points each new `agent` pod at it. The waypoint and agent-dns keep the cluster DNS, and the Kyverno egressLabels list reserves their labels.
+- `gitops/egress-waypoint` (app `egress-waypoint`, wave -2): the Gateway `egress-waypoint` (class `istio-waypoint`, HBONE on 15008), the ServiceEntry `open-meteo-egress` for `api.open-meteo.com` and `geocoding-api.open-meteo.com`, which routes them through the waypoint, and the AuthorizationPolicy `egress-waypoint-allowlist`, which admits TLS on 443 only when `connection.sni` is one of those two hosts.
+- The weather feed is enrolled in the ambient mesh (`istio.io/dataplane-mode: ambient` on its pod template), so ztunnel steers its Open-Meteo connections to the waypoint. Its armed policy `agent-allow-weather-feed-egress` allows only HBONE on 15008 to the waypoint.
+- `agent-allow-egress-waypoint`: the waypoint's own allows, 443, DNS to kube-dns, and 15012 to istiod in `istio-system`. The Kyverno egressLabels list reserves the waypoint's Gateway label, so the agent cannot wear it.
+- The `challenge-fixes` key `c1-dns-lock.yaml` (the student's fix) carries the armed trio: `agent-allow-dns` narrowed to agent-dns alone, the feed's rule and the waypoint's allows. The admin profile's armed set is the same three documents, and `verify/test_egress_lock.py` holds them equal.
+- Stage 2, the `c1-network-policy.yaml` key, keeps the feed's direct 443 and the open DNS, which is the path stage 2b uses. It also carries the waypoint's allow, so the feed still answers while stage 2 holds the beacon.
+- Profiles: `agent-dns` on attendee, admin, full and local-inference, not on the KubeCon or burn profiles. `egress-waypoint` on those four and on kubecon-private, which carry Istio. The `egressProxy` flag is gone.
+
+**The four items, as built.**
+
+1. Direct egress and DNS. In the fixed set, only the waypoint has a route to the internet on 443, and the waypoint admits only the two Open-Meteo hosts by SNI. The weather feed has no route to the internet. `agent-allow-dns` now admits only agent-dns, and agent-dns reaches only kube-dns. Offline, `verify/test_egress_lock.py` checks each of these from the policy files. Live, the tool pod could not reach kube-dns or the VPC resolver under the lock.
+2. Open-Meteo allowlist. The ServiceEntry and the AuthorizationPolicy name exactly the two hosts that `gitops/ai-layer/weather_feed.py` calls. `verify/test_egress_lock.py` checks that set against the source.
+3. Bedrock. Settled: Bedrock keeps the in-VPC `10.0.0.0/16:443` allow and does not pass through the waypoint. Its endpoint is a PrivateLink interface in the VPC, so the path needs no public hop, and a waypoint in front of it would add a hop to every model call. The Pod Identity allow at `169.254.170.23:80` stays.
+4. Istio 1.30.4. The pattern is supported on the pin, as #959 found on watch-it-burn-private on 2026-11-06: the waypoint admits the two hosts only when the AuthorizationPolicy matches `connection.sni`, and `operation.hosts` never matches this TLS traffic. The upstream egress page is written against the 1.31 samples, so this entry rests on the live check, not on that page.
+
+**What differs from the draft (run 17193, branch `origin/agent/861-17193`, not on staging).** The draft built a standalone CONNECT proxy, `gitops/egress-proxy`, in a plain Deployment. It recorded that Istio 1.30.4 documents no ambient egress and that the private cluster had no Gateway API CRDs. Both premises are superseded: #959 installed the CRDs on every mesh profile and checked the waypoint live on 1.30.4, and #860 says the proxy is not rebuilt without the mesh. So the standalone proxy, its Service, its app and its policies are removed. Other changes from the draft:
+
+- agent-dns forwards `open-meteo.com` to kube-dns. The feed resolves its own host names through agent-dns, and the lock cuts agent-dns off from the VPC resolver, so the draft's resolver had no route for them.
+- Stage 2 carries the waypoint's allow. In the first live run, a waypoint with no public 443 allow under stage 2 broke the feed's Open-Meteo reading, so the allow moved into stage 2 as well as the fix.
+- The feed's own policy names the waypoint on 15008, not the proxy on 3128.
+- The staging fix directory `challenges/c1-exfil-s3/fix/` (#727, #959) is removed. Its waypoint is now `gitops/egress-waypoint`, its floor C is agent-dns with the lock in `c1-dns-lock.yaml`, and `verify/test_c1_dns_exfil_fix.py` is replaced by `verify/test_egress_lock.py`. `resolver-lockdown.yaml` changed the kube-dns Corefile for the whole cluster, which the lock now makes unnecessary.
+- The public copy now names three pods in the mesh, where it named two (`lab.html`, `links.html`), and the Application counts follow the new apps: attendee 36 to 38, and the instructor (admin) profile 39 to 41, in the platform page, the design glance, the run-of-show and the Fleet test.
+
+**Who decided.** No new ruling was made. The record settles the shape: #724 chose option B, #860 settled that it is built on the mesh, and #959 checked the pattern. One consequence goes to the knowledge repo as a followup: enrolling the weather feed makes three pods in `agent` enrolled. Question 947 chose two, the console and guard-proxy, and #959 named the feed's enrolment as owed to #861. The community cluster keeps its direct weather path, as question 1077 has it, and the burn profile still carries no Istio.
+
+**Live check (owed, built with the fix).** `CONTEXT=watch-it-burn-private python3 verify/test_c1_dns_lock_live.py`, run twice on watch-it-burn-private. The first run passed 21 checks and failed one: from the feed, Open-Meteo under stage 2 failed with a TLS EOF, because the waypoint had no public 443 allow until the fix was applied. The fix was to carry that allow in stage 2 as well (the beacon comes from the tool pods, not the waypoint, so the hold is unchanged). The second run, after that change, passed 22 of 22 checks. Its log is `/var/lib/hecaton/runs/18778/scratch/live-c1-dns-lock-2.log`. All the checks run from pods in a scratch namespace, `c1-dns-lock-check-<pid>`, which the check deletes:
+
+- Stage 2 holds the beacon. A direct HTTPS request from the tool pod to agenticburn.com fails. A never-seen name under example.com gets an authoritative NXDOMAIN or NODATA, so the query left the cluster. This is the stand-in for the DNS collector's record, which #726 has not built.
+- Under the lock, that kind of name gets no answer, example.com does not resolve, and a query sent straight to kube-dns (172.20.0.10) or to 169.254.169.253 goes unanswered. The same stage-2b query therefore leaves the collector with nothing new.
+- Bedrock's runtime name resolves to a 10.x address and answers HTTPS. kubernetes.default resolves to a 172.20.x address.
+- Open-Meteo answers 200 from the feed pod through the waypoint, both under stage 2 and under the lock. The beacon's host is refused by the waypoint at the SNI, with a scratch ServiceEntry steering it there.
+- The resolver logged the name it refused.
+
+The check deleted its namespace and MutatingPolicy, and confirmed that both are gone. Nothing in `agent` changed, and the presenter terminal login was not read or written.
+
+**Not yet run on a cluster.**
+
+- The DNS collector's own record of stage 2b, and its silence under the lock. That needs #726's collector, and #728 owns the full beat's live run. The NXDOMAIN answer above stands in for it.
+- The armed set on an attendee or admin cluster. `agent-dns` and `egress-waypoint` sync after promotion, and the feed's enrolment takes effect when Argo CD restarts it. Then `kubectl -n agent get pods -L istio.io/dataplane-mode` should show three enrolled pods, and `verify/test_weather_feed_e2e.py` with a get_weather turn checks the weather through the waypoint.
+- The guardrails-on refresh on watch-it-burn-private applies the stage 2 file, which now carries the waypoint's allow, so the private cluster's weather picks up the change at that step.
+
+**Checks.**
+
+- Offline, each test this change wrote or changed, once: `verify/test_egress_lock.py` (73 checks), `test_weather_feed.py`, `test_mesh_enrollment.py`, `test_gateway_api_crds.py`, `test_c1_exfil_block_restore.py`, `test_bootstrap_chart.py`, `test_fleet_contract.py`, `test_agent_bypass_shapes.py`, `test_guardrails_switch.py` and `test_scope_tests.py`. All passed. `test_fleet_contract.py` needed the guard-proxy submodule, which this worktree had not initialised.
+- Tools tier: `test_agent_dns_mutation.py`, run through the Kyverno CLI v1.19.1 that the pinned tools name. It applies the policy to a real pod spec and checks the nameserver, the search path and the waypoint and resolver exemptions.
+- Prose gate, `verify/prose_gate.py` against staging: pass.
+- The scoped offline suite was started and stopped. `verify/scope-map.yaml` has no entry for `platform-baseline.yaml`, which the runner reads as "no entry covers it" and so runs every test. I stopped it at about 21,000 log lines, so it is not a result. The gap is a followup: `test_platform_baseline.py` runs on every scoped run and reads that file, but the map's rule for it is for the map's owner to decide.
+- Tests that read the shared files this change touches (`gitops/ai-layer/resources.yaml`, the values files) but that this change did not write are left to validation, as the rules say.
