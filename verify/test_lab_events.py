@@ -128,6 +128,13 @@ stmts = {g["context"]: g["statements"] for g in CFG["processors"]["transform/lab
 check("the resource is reset to burritobot-lab",
       'keep_keys(attributes, ["service.name"])' in stmts["resource"]
       and 'set(attributes["service.name"], "burritobot-lab")' in stmts["resource"])
+# The reset drops the env the apps set, so the resource processor, after the contract, puts it back (#629).
+env_attr = [a for a in CFG["processors"]["resource"]["attributes"] if a["key"] == "deployment.environment.name"]
+check("the resource processor inserts env burritobot-kubecon-na-26 without overriding an app's own",
+      env_attr == [{"key": "deployment.environment.name", "value": "burritobot-kubecon-na-26", "action": "insert"}])
+check("both lab pipelines run the resource processor after the contract",
+      procs.index("resource") > procs.index("transform/lab_contract")
+      and "resource" in PIPES["metrics/lab"]["processors"])
 keep = next((s for s in stmts["span"] if s.startswith("keep_keys(")), "")
 KEPT = set(re.findall(r'"([a-z_.]+)"', keep))
 check(f"the collector keep-list equals what the page sends {sorted(SENT_KEYS)}", KEPT == SENT_KEYS)

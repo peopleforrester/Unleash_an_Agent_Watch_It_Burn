@@ -9,7 +9,8 @@ bot acts on is never in front of the person who asked, which is the point: conte
 whoever wrote it.
 
 The tickets are fixed and in-memory. The site makes no outbound call, so it needs no egress policy and no
-ServiceAccount token. An unknown id is a 404; nothing is invented.
+ServiceAccount token. An unknown id is a 404; nothing is invented. What the cluster still runs reaches it the same way:
+a reader that holds a token posts its read here (POST /cluster-read, #1049), and the desk never asks the cluster.
 """
 from __future__ import annotations
 
@@ -274,18 +275,71 @@ def plain_refusal(detail: str) -> str:
     return f"Refused by the cluster (HTTP {code.group(1)})." if code else "Refused by the cluster."
 
 
-def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> dict:
+def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "", kind: str = "") -> dict:
     # The witch is the name deploy_app says the person gave (#773), taken only when the vocabulary makes it, as the
     # cookie is; a Joker's own name still says whose it is when the model passed none.
     witch = name_from_display(requested_by) or (name_from_slug(name.removeprefix("joker-"))
                                                 if name.startswith("joker-") else None) or ""
-    row = {"name": name[:63], "who": who_deployed(name, witch), "witch": witch, "image": str(image)[:300],
-           "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
-           "at": time.strftime("%H:%M:%S"), "ts": time.time()}
+    # kind is the one deploy_app created (#1049), so a cluster read of that kind can say the row's app is gone. A row
+    # with no kind (a report from before #1049) is covered by no read and is never marked removed.
+    row = {"name": name[:63], "kind": str(kind)[:63], "who": who_deployed(name, witch), "witch": witch,
+           "image": str(image)[:300], "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
+           "at": time.strftime("%H:%M:%S"), "ts": time.time(), "removed_at": "", "removed_ts": None}
     with _lock:
         LANDINGS.insert(0, row)
         del LANDINGS[1000:]
     return row
+
+
+# --- what the cluster still runs (#1049) --------------------------------------------------------------------------
+# Since #990 the DeletingPolicy remove-untrusted-room-workloads deletes, within a minute of guardrails-on arming
+# Kyverno, each room workload from outside registry.burritobot.co. The desk holds no token and calls no cluster API, so
+# it learns that from a reader that does hold one (#1050's): one report per read, POST /cluster-read, in-cluster only
+# (console.conf refuses it from outside, as it does /landed). A report is
+#   {"taken_at": <epoch seconds the read was taken>, "ok": <whether every list in it succeeded>,
+#    "kinds": {"<Kind>": [<the names of that kind in the agent namespace>], ...}}
+# and the kinds it covers are exactly the keys of "kinds". A row is marked removed only when the report succeeded,
+# covers the row's kind, was taken after the row landed, and does not list the row's name. A failed report, an earlier
+# one, or one for another kind changes nothing, and a removed row is never unmarked: the same name landing again is a
+# new row. No row is dropped; the page greys a removed one (decisions.md, #1049).
+MAX_READ_BODY = 512 * 1024
+
+
+class BadReport(ValueError):
+    """A report the desk cannot read, answered 400 and never applied."""
+
+
+def parse_cluster_read(d) -> tuple[float, bool, dict[str, set[str]]]:
+    if not isinstance(d, dict):
+        raise BadReport("the report must be a JSON object")
+    taken_at, ok, kinds = d.get("taken_at"), d.get("ok"), d.get("kinds", {})
+    if isinstance(taken_at, bool) or not isinstance(taken_at, (int, float)) or not 0 < taken_at < 1e11:
+        raise BadReport("taken_at must be the read's time in epoch seconds")
+    if not isinstance(ok, bool):
+        raise BadReport("ok must be true or false")
+    if not isinstance(kinds, dict) or not all(isinstance(k, str) and k and isinstance(v, list)
+                                              and all(isinstance(n, str) for n in v) for k, v in kinds.items()):
+        raise BadReport("kinds must map each kind the read covered to the list of names of that kind")
+    if ok and not kinds:
+        raise BadReport("a successful read covers at least one kind")
+    # A row's name is kept to 63 characters, so a listed name is compared the same way.
+    return float(taken_at), ok, {k: {n[:63] for n in v} for k, v in kinds.items()}
+
+
+def record_cluster_read(d) -> dict:
+    """Apply one cluster read report to the landed rows; the names it marked removed, newest row first."""
+    taken_at, ok, kinds = parse_cluster_read(d)
+    marked: list[str] = []
+    if not ok:
+        return {"applied": False, "marked": marked}
+    removed_at = time.strftime("%H:%M:%S", time.localtime(taken_at))
+    with _lock:
+        for r in LANDINGS:
+            if (r["ok"] and not r.get("removed_at") and r.get("kind") in kinds and r["ts"] < taken_at
+                    and r["name"] not in kinds[r["kind"]]):
+                r["removed_at"], r["removed_ts"] = removed_at, taken_at
+                marked.append(r["name"])
+    return {"applied": True, "marked": marked}
 
 
 # --- deployments.burritobot.co (#773) ----------------------------------------------------------------------------
@@ -293,7 +347,7 @@ def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_
 # image as the short name's hover text: what the room deployed in Challenge 2, projected and on phones. The witch name
 # is the one the chat request itself carried (workshop-mcp's _request_witch); a deploy with no browser behind it, a
 # probe or a scripted test, reads "Someone deployed ...". A refusal is not shown: the room learns that from the bot's
-# reply.
+# reply. A row whose app the cluster has since deleted stays, greyed, and reads "..., removed at <time>" (#1049).
 # The page names no Joker and links to nothing on the desk, so it gives away no later challenge. The console serves it
 # at deployments-<cluster> and deployments.burritobot.co (console.conf), and /deployments.json on the chat page's own
 # host, so the chat page can show "see your deployments" once the visitor's first one lands.
@@ -312,14 +366,15 @@ def deployments(witch_slug: str = "") -> list[dict]:
     if witch_slug:
         rows = [r for r in rows if r.get("witch") and slug(r["witch"]) == witch_slug]
     # app is what the line names: the image's short name, or the resource's own name for one that runs no image.
-    return [{"name": r["name"], "image": r.get("image", ""), "app": image_label(r.get("image", "")) or r["name"],
-             "witch": r.get("witch", ""), "at": r["at"]} for r in rows[:200]]
+    return [{"name": r["name"], "kind": r.get("kind", ""), "image": r.get("image", ""),
+             "app": image_label(r.get("image", "")) or r["name"], "witch": r.get("witch", ""), "at": r["at"],
+             "removed_at": r.get("removed_at", "")} for r in rows[:200]]
 
 
 _DEPLOY_STYLE = ("body{font:22px/1.45 system-ui,sans-serif;max-width:60rem;margin:5vh auto;padding:0 1.25rem;"
                  "color:#1c1330;background:#ffffff}h1{font-size:1.6rem;margin:0 0 .3rem}.meta{color:#6b5f80;"
                  "font-size:.8em}ul{list-style:none;padding:0}li{border-bottom:1px solid #e6def3;padding:.55rem 0}"
-                 "b{color:#6a2bd9}code{font-size:.85em}")
+                 "b{color:#6a2bd9}code{font-size:.85em}li.removed,li.removed b{color:#9b93a8}")
 _DEPLOY_SCRIPT = """<script>
 const WITCH=%s;
 async function tick(){try{const r=await fetch('/deployments.json'+(WITCH?'?witch='+encodeURIComponent(WITCH):''),
@@ -329,7 +384,9 @@ return;}
 ul.replaceChildren(...rows.map(x=>{const li=document.createElement('li');const b=document.createElement('b');
 b.textContent=x.witch||'Someone';li.appendChild(b);li.appendChild(document.createTextNode(' deployed '));
 const c=document.createElement('code');c.textContent=x.app;if(x.image){c.title=x.image;}li.appendChild(c);
-li.appendChild(document.createTextNode(' at '+x.at));return li;}));}catch(e){}}
+li.appendChild(document.createTextNode(' at '+x.at));
+if(x.removed_at){li.className='removed';li.appendChild(document.createTextNode(', removed at '+x.removed_at));}
+return li;}));}catch(e){}}
 tick();setInterval(tick,3000);
 </script>"""
 
@@ -437,6 +494,7 @@ def me_page(name: str) -> str:
     jokers = [r for r in LANDINGS if r["name"] == f"joker-{slug(name)}" or r.get("witch") == name]
     rows = "".join(f"<li>{'landed' if r['ok'] else 'refused'} at {r['at']}: <code>{html.escape(r['name'])}</code>"
                    f"{' (' + html.escape(r['detail']) + ')' if r['detail'] else ''}"
+                   f"{' &middot; removed at ' + html.escape(r['removed_at']) if r.get('removed_at') else ''}"
                    f"{' &middot; scaled to zero after 5 minutes' if r['ok'] and time.time() - r['ts'] > SCALE_DOWN_SECONDS else ''}"
                    "</li>" for r in jokers) or "<li>Nothing deployed for you yet.</li>"
     return _shell("Your desk", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
@@ -561,9 +619,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._page(render([one], f"Ticket {one['id']}"))
 
-    def _read(self) -> bytes | None:
+    def _read(self, limit: int = MAX_BODY * 3) -> bytes | None:
         n = int(self.headers.get("Content-Length") or 0)
-        if n > MAX_BODY * 3:
+        if n > limit:
             self._page(_shell("Too long", "<p>That ticket is too long.</p>"), 413)
             return None
         return self.rfile.read(n)
@@ -573,7 +631,8 @@ class Handler(BaseHTTPRequestHandler):
         if DEPLOYMENTS_HOST.match((self.headers.get("Host") or "").lower()):
             self._send(404, {"error": "not found"})   # the deployments page takes no tickets and no reports
             return
-        raw = self._read()
+        # A cluster read lists every name of each kind, so it may be longer than a ticket.
+        raw = self._read(MAX_READ_BODY if url.path == "/cluster-read" else MAX_BODY * 3)
         if raw is None:
             return
         if url.path == "/submit":
@@ -598,7 +657,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {"error": "name is required"})
                 return
             self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or ""),
-                                           str(d.get("image") or ""), str(d.get("requested_by") or "")))
+                                           str(d.get("image") or ""), str(d.get("requested_by") or ""),
+                                           str(d.get("kind") or "")))
+        elif url.path == "/cluster-read":
+            # In-cluster only, as /landed is: the console refuses it from outside (console.conf). #1050's reader posts here.
+            try:
+                self._send(200, record_cluster_read(json.loads(raw or b"{}")))
+            except (ValueError, TypeError) as e:   # BadReport is a ValueError, as a JSON decode error is
+                self._send(400, {"error": str(e) if isinstance(e, BadReport) else "the report must be JSON"})
         else:
             self._send(404, {"error": "not found"})
 

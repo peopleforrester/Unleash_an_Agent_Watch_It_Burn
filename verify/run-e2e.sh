@@ -169,8 +169,15 @@ run_one "backstage-footprint.sh (SAMPLES=1)" \
 
 # CI is unset on purpose: with CI set, playwright.config.ts starts no web servers and expects one to be
 # running already on :7007. Chained with && because set -e does not apply inside a `|| rc=$?` call.
+# The install reads yarn.lock, which records a checksum for every package, and yarn's global cache and corepack's
+# home are in the host artifact cache, outside every worktree, with a checksum mismatch thrown (package_cache.py
+# node-env, #1121): a warm host installs with no package download, and a cached zip whose bytes changed fails the
+# install with YN0018 instead of being fetched again.
 backstage_e2e() {
+    local node_env
+    node_env="$(python3 "${SCRIPT_DIR}/package_cache.py" node-env)" || return 1
     ( cd "${BACKSTAGE_DIR}" && unset CI \
+        && while IFS='=' read -r k v; do export "${k}=${v}"; done <<<"${node_env}" \
         && corepack yarn install --immutable \
         && corepack yarn playwright install chromium \
         && corepack yarn test:e2e )

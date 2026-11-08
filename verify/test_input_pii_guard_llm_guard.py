@@ -13,8 +13,8 @@ caught here, not on the private cluster:
 - the four kinds `pii` sends, and the stage's c3-pii prompt, are refused with risk 1.0, and the prompt is not rewritten;
 - a plain order, every probe prompt, every topic case and every support-desk ticket pass.
 
-Needs uv, and network on the first run: uv fetches llm-guard 0.3.16 and torch 2.14.0+cpu, the same environment
-test_injection_classifier.py uses. The Regex scanner loads no model. A missing tool or no network is a failure,
+Needs uv, and network on a cold host: verify/package_cache.py serves the llm-guard 0.3.16 and torch 2.14.0+cpu
+wheels verify/python.lock pins, the same environment test_injection_classifier.py uses (#1121). The Regex scanner loads no model. A missing tool or no network is a failure,
 never a skip.
 """
 from __future__ import annotations
@@ -29,6 +29,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
 import stage_traces as st  # noqa: E402
 import topic_cases as tc  # noqa: E402
@@ -70,10 +71,7 @@ for c in cases:
 print("RESULT " + json.dumps(out))
 """
 
-cmd = ["uv", "run", "--no-project", "--python", "3.12",
-       "--index", "https://download.pytorch.org/whl/cpu", "--index-strategy", "unsafe-best-match",
-       "--with", "torch==2.14.0+cpu", "--with", f"llm-guard[onnxruntime]=={LLM_GUARD}",
-       "python", "-I", "-c", CHILD, json.dumps(params),
+cmd = [*package_cache.run_cmd("llm-guard"), "python", "-I", "-c", CHILD, json.dumps(params),
        json.dumps([{k: c[k] for k in ("name", "text", "want")} for c in cases])]
 print(f"== Regex over {len(cases)} texts ==")
 r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)

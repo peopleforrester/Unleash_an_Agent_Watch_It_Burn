@@ -89,7 +89,7 @@ sys.stdout.buffer.write(ans.read_bytes())
 import json, os, pathlib, sys
 step = sys.argv[2] if len(sys.argv) > 2 else ""
 pathlib.Path({str(self.uv_log)!r}).open("a").write(json.dumps(
-    {{"cwd": os.getcwd(), "args": sys.argv[1:], "env": sorted(os.environ)}}) + "\\n")
+    {{"cwd": os.getcwd(), "args": sys.argv[1:], "env": sorted(os.environ), "uv_cache": os.environ.get("UV_CACHE_DIR")}}) + "\\n")
 fail = pathlib.Path("fail_step")
 if fail.exists() and fail.read_text().strip() == step:
     print(f"stub uv: {{step}} failed")
@@ -164,7 +164,11 @@ with tempfile.TemporaryDirectory() as td:
     check("passed() holds when both exit 0", wall.passed(steps), str(steps))
     env = set(calls[0]["env"]) if calls else set()
     check("the caller's CONTEXT and FEED_URL do not reach the suite", not env & {"CONTEXT", "FEED_URL"}, str(env))
-    check("PATH and the caller's UV_CACHE_DIR do", {"PATH", "UV_CACHE_DIR"} <= env, str(env))
+    check("PATH and UV_CACHE_DIR do", {"PATH", "UV_CACHE_DIR"} <= env, str(env))
+    want_cache = wall.package_cache.installer_env()["UV_CACHE_DIR"]
+    check(f"UV_CACHE_DIR is the uv cache in the host artifact cache, not the caller's (#1121): {want_cache}",
+          bool(calls) and calls[0].get("uv_cache") == want_cache and want_cache != str(root / "c"),
+          str(calls[0].get("uv_cache") if calls else None))
 
 for step_name, ran in (("ruff", 1), ("pytest", 2)):
     print(f"== a tree whose {step_name} step fails ==")
@@ -233,8 +237,12 @@ def run_e2e(trees: dict[str, tuple[str, dict[str, str]]]) -> tuple[int, str, Stu
     s = Stubs(root)
     for ref, (sha, tree) in trees.items():
         s.publish(ref, sha, tree)
+    # The suite's uv cache is the host artifact cache's (#1121), whose root must be outside every worktree, and TMPDIR
+    # (so td) is inside this one on a hecaton run.
+    cache = str(wall.package_cache.artifact_cache.scratch_dir("wib-wall-cache-"))
+    RUN_DIRS.append(cache)
     p = subprocess.run([sys.executable, str(E2E)], capture_output=True, text=True, timeout=120,
-                       env={"PATH": str(s.bin), "HOME": td, "TMPDIR": td})
+                       env={"PATH": str(s.bin), "HOME": td, "TMPDIR": td, "WIB_ARTIFACT_CACHE": cache})
     return p.returncode, p.stdout + p.stderr, s, root
 
 

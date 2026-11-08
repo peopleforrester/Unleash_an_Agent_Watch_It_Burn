@@ -24,11 +24,16 @@ import re
 import subprocess
 import sys
 
-PLAYWRIGHT = "playwright==1.64.1"
-UV = ["uv", "run", "--no-project", "--with", PLAYWRIGHT]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
+
+PLAYWRIGHT = package_cache.ENVS["playwright"].requires[0]
+# The prefix that runs a program from the pinned playwright environment: verify/package_cache.py installs it from the
+# host artifact cache, hash-checked and offline, the first time, and re-checks the cached wheels on every call (#1121).
+UV = package_cache.run_cmd("playwright")
 BROWSERS = ["chromium"]
 MARKER = "INSTALLATION_COMPLETE"
-# The first run brings playwright in through uv, which is a download.
+# The first run on a cold host fetches the pinned wheels into the artifact cache, which is a download.
 TIMEOUT = 300
 
 

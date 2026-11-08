@@ -9,10 +9,11 @@
    out is what a phone would get. With the event set it must be the survey URL exactly, with no cluster
    or user. Without it, it must be the workshop's /quick form carrying both. On the public bot's hosts the
    Terminal button (#645) and the Datadog button (#647) are hidden; elsewhere both stay.
-2. scripts/audience-qr.py --check re-renders the QR from event.js with segno 1.6.6 (through `uv run`, so
-   nothing is installed globally) and fails if the committed SVG differs by one byte.
+2. scripts/audience-qr.py --check re-renders the QR from event.js with segno 1.6.6 (the package cache's segno
+   environment, so nothing is installed globally) and fails if the committed SVG differs by one byte.
 
-Needs node and uv, and network on the first uv run to fetch segno. A missing tool is a failure.
+Needs node and uv, and network on a cold host to fetch the locked segno wheel into the host artifact cache (#1121).
+A missing tool is a failure.
 """
 from __future__ import annotations
 
@@ -21,6 +22,8 @@ import pathlib
 import shutil
 import subprocess
 import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 WEB = REPO / "gitops/ai-layer/web"
@@ -124,7 +127,7 @@ check("hiding the Terminal alone leaves the Datadog button, so each knob is its 
           "datadogHidden": False})
 
 print("== the committed QR is exactly segno's rendering of publicUrl ==")
-r = subprocess.run(["uv", "run", "--no-project", "--with", "segno==1.6.6", "python", "-I",
+r = subprocess.run([*package_cache.run_cmd("segno"), "python", "-I",
                     str(REPO / "scripts/audience-qr.py"), "--check"], capture_output=True, text=True, cwd="/")
 check("scripts/audience-qr.py --check passes", r.returncode == 0, (r.stdout + r.stderr).strip()[-400:])
 

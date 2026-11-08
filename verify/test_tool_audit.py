@@ -31,6 +31,8 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
+sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 
 failures: list[str] = []
 
@@ -224,12 +226,16 @@ check("it runs the shim image the workshop-mcp Deployment names, read off the cl
 check("it no longer uses kubectl run or curlimages/curl, which Deny refuses on that profile",
       re.search(r'kubectl\(\s*"run"', LIVE) is None and "curlimages" not in LIVE)
 
-print("== the live check runs on the image's mcp pin through uv, never a global install (#441) ==")
+print("== the live check runs on the image's mcp pin from the package cache, never a global install (#441, #1121) ==")
 py = re.search(r"^FROM \S*python[:-](\d+\.\d+)", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"), re.M)
-check("it re-runs itself under uv run --with mcp==<the Dockerfile pin>",
-      'os.execvpe("uv", ["uv", "run", "--no-project"' in LIVE and '"--with", f"mcp=={want}"' in LIVE)
-check(f"on the workshop-mcp image's Python ({py.group(1) if py else '?'})",
-      bool(py) and f'"--python", "{py.group(1)}"' in LIVE)
+pin = re.search(r"'mcp==([0-9.]+)'", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"))
+pkg_mcp = package_cache.ENVS["mcp"]
+check("it re-runs itself in the package cache's mcp environment",
+      'cmd = [*package_cache.run_cmd("mcp"), "python", "-I", __file__]' in LIVE and "os.execve(cmd[0], cmd," in LIVE)
+check(f"that environment pins the Dockerfile's mcp ({pin.group(1) if pin else '?'}; it asks {pkg_mcp.requires})",
+      bool(pin) and f"mcp=={pin.group(1)}" in pkg_mcp.requires)
+check(f"on the workshop-mcp image's Python ({py.group(1) if py else '?'}; the environment is on {pkg_mcp.python})",
+      bool(py) and pkg_mcp.python == py.group(1))
 check("the re-run is marked so it does not re-run itself", 'WIB_TOOL_AUDIT_UV' in LIVE)
 
 print()

@@ -23,8 +23,8 @@ page twice: as shipped, and as a copy whose header buttons carry 1px of letter-s
 than any font the host could pick. That copy must still pass every check, with its buttons at one size below 11px, so
 the fit is shown to work on the widest fonts, not only on the ones this host happens to have.
 
-Needs uv and network on the first run: the playwright pinned in verify/playwright_browsers.py comes in through
-`uv run`, and `playwright install chromium` fetches a browser only when one is missing, because it locks the browsers
+Needs uv and network on a cold host: the playwright pinned in verify/python.lock comes from the host artifact cache
+through verify/package_cache.py (#1121), and `playwright install chromium` fetches a browser only when one is missing, because it locks the browsers
 directory even when nothing is (#658). A missing tool, a browser that cannot be installed or a failed browser launch
 is a failure.
 """

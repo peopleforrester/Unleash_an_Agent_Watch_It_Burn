@@ -78,6 +78,11 @@ if ! "${KUBECTL[@]}" "${AS[@]}" -n "${NS}" create deployment "${WORKLOAD}" --ima
     fail "non-compliant workload was NOT admitted in Audit mode (§2 before-state broken)"
 fi
 echo "    PASS: workload admitted in Audit" >&2
+# Its logs carry the sandbox env and a burritobot- service (#629). create deployment cannot set pod labels, so they are
+# patched on the pod template while the policy is Audit, which admits an update to a workload already in violation.
+"${KUBECTL[@]}" "${AS[@]}" -n "${NS}" patch deployment "${WORKLOAD}" --type merge \
+    -p '{"spec":{"template":{"metadata":{"labels":{"tags.datadoghq.com/service":"burritobot-beat1-sample-web","tags.datadoghq.com/env":"burritobot-kubecon-na-26"}}}}}' \
+    >/dev/null || fail "could not label the sample workload for Datadog"
 "${KUBECTL[@]}" "${AS[@]}" -n "${NS}" delete deployment "${WORKLOAD}" --ignore-not-found >/dev/null 2>&1 || true
 
 # ---- Toggle: Audit -> Enforce -------------------------------------------------------------

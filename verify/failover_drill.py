@@ -3,7 +3,7 @@
 # ABOUTME: own Watcher promoting a standby, and headless Chromium on attackme.burritobot.co that never reloads the page.
 """One failover drill, from the attendee's side of the router.
 
-    uv run --no-project --with playwright==1.64.1 python verify/failover_drill.py \
+    python3 verify/package_cache.py run playwright -- python verify/failover_drill.py \
         --primary watch-it-burn-community --standby watch-it-burn-private --caddy verify/.tools/bin/caddy --out drill.json
 
 What is real, and what stands in:

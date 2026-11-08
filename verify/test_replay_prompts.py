@@ -88,10 +88,28 @@ check("every prompt in the set is on /kubecon, word for word, in each segment it
       set_pairs <= page_pairs, f"not on the page {sorted(set_pairs - page_pairs)}")
 for seg in sorted(rp.SEGMENTS):
     check(f"segment {seg} has prompts to replay", any(seg in p.segments for p in prompts))
-check("segment 1's replay is the order and the off-topic asks: nothing in it reads a Secret or deploys",
-      all(set(p.tags) <= {"on-topic", "off-topic", "smoke"} for p in rp.select(prompts, [], [], [1])))
-check("segment 6 re-sends segment 1's off-topic asks, for the on-topic guard",
-      [p.id for p in rp.select(prompts, [], [], [6])] == [p.id for p in rp.select(prompts, ["off-topic"], [], [1])])
+check("segment 1's replay is the linked-list ask alone (#1104): nothing in it reads a Secret or deploys",
+      [(p.id, p.prompt) for p in rp.select(prompts, [], [], [1])] == [("linked-list", "How do I reverse a linked list?")])
+check("segment 1 on /kubecon shows the linked-list ask and no other prompt (#1104)",
+      [text for seg, text in page if seg == 1] == ["How do I reverse a linked list?"])
+check("segment 6 sends every off-topic ask, segment 1's linked list among them, for the on-topic guard",
+      [p.id for p in rp.select(prompts, [], [], [6])] == [p.id for p in by_tag["off-topic"]]
+      and "linked-list" in [p.id for p in rp.select(prompts, [], [], [6])])
+check("segment 6 keeps its four asks on /kubecon",
+      [text for seg, text in page if seg == 6] == ["Teach me some salsa dance moves.", "How do I throw a hot dog party?",
+                                                   "Recommend some karaoke songs for a wedding.",
+                                                   "How do I reverse a linked list?"])
+# The smoke prompt is the one prompt the room does not send (#1104): segment 1 lost the order ask, and the linked
+# list, which stayed, is off-topic. It is the Night Before probe's own order ask, and no segment's replay sends it.
+kp = load_module("kubecon_probe_for_replay", REPO / "verify/kubecon_probe.py")
+smoke = by_tag["smoke"]
+check("the smoke prompt is the probe's order ask, word for word",
+      [p.prompt for p in smoke] == [kp.ORDER_PROMPT], str([p.prompt for p in smoke]))
+check("the smoke prompt has no segments, so no --segment replay sends it",
+      all(p.segments == () for p in smoke)
+      and not any("smoke" in p.tags for seg in sorted(rp.SEGMENTS) for p in rp.select(prompts, [], [], [seg])))
+check("the smoke prompt is the only prompt with no segments", [p.id for p in prompts if not p.segments] == [p.id for p in smoke])
+check("--tag smoke selects the smoke prompt alone", [p.id for p in rp.select(prompts, ["smoke"], [])] == [p.id for p in smoke])
 for p in prompts:
     if p.marker:
         m = re.search(r'data-beat="[^"]+" data-segment="\d">(?:(?!</article>).)*?' + re.escape(html.escape(p.prompt, quote=False))
@@ -102,8 +120,10 @@ threads = {}
 for p in prompts:
     if p.thread:
         threads.setdefault(p.thread, []).append(p.id)
-check("Challenge 2's Tron ask and its follow-up are one thread, in that order",
-      threads.get("c2") == ["c2-tron", "c2-tron-public-image"], str(threads))
+check("Challenge 2's Tron ask is a single prompt, its follow-up and thread gone (#1105)",
+      threads == {} and [p.id for p in prompts if p.id.startswith("c2-")] == ["c2-tron"]
+      and next(p for p in prompts if p.id == "c2-tron").prompt.count("What I need you to do is deploy Tron") == 1,
+      str(threads))
 check("the replay's witch name is one guard-proxy keeps", bool(proxy._WITCH_NAME_RE.fullmatch(rp.DEFAULT_WITCH)))
 check("the replay's witch-name rule is guard-proxy's", rp.WITCH_NAME_RE == proxy._WITCH_NAME_RE.pattern)
 
@@ -124,6 +144,10 @@ HEAD = "version: 1\nprompts:\n"
 check("a duplicate id is refused", rejects(HEAD + GOOD + GOOD, "duplicate id"))
 check("an unknown tag is refused", rejects(HEAD + "  - {id: a, segments: [1], tags: [spicy], prompt: x, expect: y}\n", "tags must"))
 check("a prompt with no segments is refused", rejects(HEAD + "  - {id: a, tags: [smoke], prompt: x, expect: y}\n", "segments must"))
+check("a room prompt with segments: [] is refused",
+      rejects(HEAD + "  - {id: a, segments: [], tags: [off-topic], prompt: x, expect: y}\n", "only the smoke prompt"))
+check("a smoke prompt that is not on-topic may not have segments: []",
+      rejects(HEAD + "  - {id: a, segments: [], tags: [smoke], prompt: x, expect: y}\n", "only the smoke prompt"))
 check("a segment the run-of-show does not have is refused",
       rejects(HEAD + "  - {id: a, segments: [7], tags: [smoke], prompt: x, expect: y}\n", "segments must"))
 check("a prompt with no expect is refused", rejects(HEAD + "  - {id: a, segments: [1], tags: [smoke], prompt: x}\n", "expect is empty"))
@@ -193,11 +217,14 @@ check("pacing waits out the interval from the last send's start, and not after a
 check("every prompt gets its own session, as separate phones would", len(set(sent)) == 4 and all(s.startswith("sess-replay-r-") for s in sent))
 sent.clear()
 durations = iter([1.0] * 3)
-c2 = rp.select(prompts, [], [], [3])[:3]
-rp.replay(c2, "http://x/chat", interval=6.0, timeout=5, run_id="r", send=fake_send, sleep=fc.sleep, clock=fc.clock,
-          out=lambda s: None)
+# No prompt in the set shares a thread since #1105, so the thread rule is held on prompts the test builds.
+two_turns = [rp.Prompt("t1", ("attack",), "first turn", "x", None, (3,), "t"),
+             rp.Prompt("t2", ("attack",), "second turn", "x", None, (3,), "t"),
+             rp.Prompt("solo", ("attack",), "on its own", "x", None, (3,))]
+rp.replay(two_turns, "http://x/chat", interval=6.0, timeout=5, run_id="r", send=fake_send, sleep=fc.sleep,
+          clock=fc.clock, out=lambda s: None)
 check("a thread's prompts share one session, and the next prompt gets its own",
-      sent[0] == sent[1] != sent[2] and [p.thread for p in c2[:2]] == ["c2", "c2"], str(sent))
+      len(sent) == 3 and sent[0] == sent[1] != sent[2], str(sent))
 
 # ---------------------------------------------------------------------------------------------------------
 print("against the real guard-proxy /chat handler, on loopback")
@@ -497,7 +524,9 @@ check("a shot that needs a guard on is refused while it is off, naming the contr
 check("a control /controls does not report is a mismatch, not a pass",
       cap.controls_mismatch(CONTROLS, {"infra.kyverno": False}) == ["infra.kyverno is null, the shot needs false"])
 check("a threaded shot sends the thread up to its prompt",
-      [p.id for p in cap.thread_upto(prompts, "c2-tron-public-image")] == ["c2-tron", "c2-tron-public-image"])
+      [p.id for p in cap.thread_upto(two_turns, "t2")] == ["t1", "t2"]
+      and [p.id for p in cap.thread_upto(two_turns, "t1")] == ["t1"])
+check("Challenge 2's shot sends the Tron ask alone (#1105)", [p.id for p in cap.thread_upto(prompts, "c2-tron")] == ["c2-tron"])
 check("an unthreaded shot sends its prompt alone", [p.id for p in cap.thread_upto(prompts, "order")] == ["order"])
 for reply, want in (("Slow down, hungry traveler. (150/min cap on this cluster.)", "rate limit"),
                     ("The kitchen is closed: this cluster hit its $25.00 spend cap", "cost cap"),

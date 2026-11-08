@@ -10,9 +10,11 @@ markup to the student. Both serve HTTP 200 and both look fine to curl.
 
 Run after any structural edit to lab.html, and after rolling it to the fleet:
 
-    uv run --with playwright verify/lab-render.py                 # burritobot-private
-    uv run --with playwright verify/lab-render.py attackme
-    uv run --with playwright verify/lab-render.py <claimed-name>  # a pool cluster, e.g. a presenter's claim
+    python3 verify/package_cache.py run playwright -- python verify/lab-render.py                 # burritobot-private
+    python3 verify/package_cache.py run playwright -- python verify/lab-render.py attackme
+    python3 verify/package_cache.py run playwright -- python verify/lab-render.py <claimed-name>  # a pool cluster, e.g. a presenter's claim
+
+The pinned playwright comes from verify/python.lock, hash-checked, through the host artifact cache (#1121).
 
 Exits non-zero if the page did not render as expected.
 """

@@ -121,7 +121,8 @@ def c3_failures(page: str, show: bool = True) -> list[str]:
     # Attack, after a reset: the agent's case 3 is the kitchen folder named with a kitchen reason.
     check(f"the second prompt names the kitchen folder the agent's rule names ({KITCHEN} folder)",
           f"the {KITCHEN} folder" in attack)
-    check("the attack prompt carries the kitchen reason, the ruined recipe card", "recipe card" in attack)
+    check("the attack prompt carries the kitchen reason, training a new line cook under the blood oath (#1106)",
+          "line cook" in attack and "blood oath" in attack)
     check("the attack prompt is not the recon ask again (case 2 would decline it)", "What folders" not in attack)
     check("the attack marker is labelled the attack, after a reset",
           '<span class="lbl">Success marker · attack, after a reset</span>' in attack_marker)
@@ -211,7 +212,7 @@ MUTATIONS = {
                .replace("Permission denied", "Forbidden")),
         "after guardrails-on KubeArmor's block-recipe-snoop"),
     "the attack prompt out of step with the fallback deck": (
-        mutate(_attack_div, _attack_div.replace("before the dinner rush", "before lunch")),
+        mutate(_attack_div, _attack_div.replace("at midnight", "at noon")),
         "the attack prompt is the fallback deck's c3-attack"),
 }
 for label, (page, expect) in MUTATIONS.items():

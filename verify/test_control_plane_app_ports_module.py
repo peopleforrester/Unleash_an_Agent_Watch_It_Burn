@@ -1,6 +1,6 @@
 # ABOUTME: Tools-tier gate for #869: the pinned terraform-aws-eks module reads the root's node rules the way the
 # ABOUTME: root means them, so 8080 and 3000 open from the security group the control-plane ENIs carry.
-# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
+# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io for the module and a cold cache)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 """Why this is not the offline test. Terraform converts a module input to its declared object type and drops any
@@ -27,6 +27,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import node_sg_rules as nsr  # noqa: E402
+import tf_plugin_cache  # noqa: E402
 
 INIT_TIMEOUT = 600
 PINNED_MINOR = "21.29."
@@ -55,6 +56,12 @@ except nsr.AnchorMissing as e:
 env = {**os.environ, "TF_IN_AUTOMATION": "1", "CHECKPOINT_DISABLE": "1"}
 env.pop("TF_DATA_DIR", None)
 src = nsr.CLUSTER_TF.parent
+# The providers come from the host artifact cache's mirror, never a download (tf_plugin_cache.py, #1119).
+try:
+    env = tf_plugin_cache.terraform_env(env, [src / ".terraform.lock.hcl"])
+except tf_plugin_cache.CacheError as e:
+    print(f"FAIL: {e}", file=sys.stderr)
+    sys.exit(1)
 
 with tempfile.TemporaryDirectory(prefix="tf-node-rules-") as tmp:
     work = pathlib.Path(tmp)

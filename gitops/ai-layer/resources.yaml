@@ -67,7 +67,44 @@ subjects:
   - kind: ServiceAccount
     name: workshop-mcp
 ---
-# --- Inference behind the gateway (issue #394) ------------------------------------------------------
+# workshop-mcp's cluster reader (#1050, gitops/ai-layer/workshop-mcp-server.py, read_room_workloads): about every 30 s
+# it lists the room's workload kinds in agent and posts the names to the desk, which greys a row whose app is gone
+# (#1049). The kinds are exactly the ones remove-untrusted-room-workloads deletes
+# (policies/kyverno-breakout/remove-untrusted-room-workloads.yaml), and the verb is list alone: no get, no watch, nothing
+# that writes. It is its own Role and its own binding, to workshop-mcp alone (agent-sa holds no token and keeps only
+# workshop-agent), because every guardrail and challenge fix replaces the workshop-agent Role's rules whole: a list
+# grant written into that Role would have to be in each of its five versions, and a Role a student writes for
+# Challenge 8 would drop it. Argo CD's ignoreDifferences covers only workshop-agent's rules, so selfHeal keeps this
+# one as written. verify/test_room_reader_rbac.py (offline) and verify/test_room_reader_rbac_e2e.py (tools tier) hold
+# that under each of those Roles this account lists every kind the reader reports.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-mcp-room-reader
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-mcp-room-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-mcp-room-reader
+subjects:
+  - kind: ServiceAccount
+    name: workshop-mcp
+---
+# --- Inference behind the gateway (issue #394)------------------------------------------------------
 # These two are the toggle. Both speak OpenAI to kagent and differ only in which backend agentgateway
 # routes to, so switching a cluster between a hosted model and a local one is a change to the Agent's
 # `modelConfig:` field and nothing else. No Agent rewrite, no challenge rewrite.
@@ -503,7 +540,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "729ba1620cd9"
+        checksum/proxy-py: "ddf97ec452c0"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
@@ -849,6 +886,7 @@ spec:
       # (secrets get/list, pods, configmaps/services/deployments). The MCP tools call the in-cluster API with
       # this SA's token; this is the genuine excessive-agency surface (get_vault_entry reads the REAL planted
       # Secret, etc.). Not agent-sa, because agent-sa holds Bedrock credentials and run_shell is a shell (#553).
+      # The same token runs the cluster reader (#1050), under workshop-mcp-room-reader, a list-only Role of its own.
       serviceAccountName: workshop-mcp
       containers:
         - name: shim
@@ -1319,7 +1357,10 @@ data:
       ttlSecondsAfterFinished: 900
       template:
         metadata:
-          labels: { app.kubernetes.io/name: cloud-credential-probe }
+          # The tags.datadoghq.com labels file this pod's logs under BurritoBot's service and env in Datadog.
+          labels: { app.kubernetes.io/name: cloud-credential-probe,
+                    tags.datadoghq.com/service: burritobot-cloud-credential-probe,
+                    tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         spec:
           serviceAccountName: agent-sa
           # No Kubernetes token in this pod, as in BurritoBot's. The AWS credential still arrives: it is a
@@ -1507,7 +1548,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: console
-  labels: { app.kubernetes.io/name: console }
+  # The env and service on the Deployment itself, not only on its pods: kubernetes_state.deployment.* takes its
+  # tags from the Deployment's labels, so without them the fleet's console query scoped to the env reads blank
+  # (read live 2026-11-08, #1082), while workshop-agent, which kagent labels both ways, answers.
+  labels: { app.kubernetes.io/name: console, tags.datadoghq.com/service: burritobot-console, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
 spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: console } }

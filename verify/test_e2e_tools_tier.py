@@ -7,11 +7,15 @@
 binaries in verify/e2e-tools.lock, which verify/fetch-e2e-tools.sh downloads into verify/.tools and checks
 against the lock's SHA-256 before use.
 
-The fetch is run here for real, in a scratch copy of the scripts, with `curl` stubbed to serve fixture
-archives and log each call, and `uname` and `sha256sum` stubbed so the run does not depend on the host. Zip
-members are read with python3's zipfile since #1047, and `unzip` is a stub that logs any call and fails, so a fetch
-that reaches for it again is caught on a host that has one. A good lock installs every binary, a second run downloads nothing, and a missing artifact or a
-checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
+The fetch is run here for real, in a scratch copy of the scripts, against a file server on 127.0.0.1 that serves
+fixture archives and counts each request, with `uname` stubbed so the run does not depend on the host. Since #1118 the
+fetch takes every download from the host artifact cache (artifact-cache.sh) by its SHA-256, so each run here names a
+cache root of its own, outside every worktree, and the cache's fetch log is read back. Zip members are read with
+python3's zipfile since #1047, and `unzip` is a stub that logs any call and fails, so a fetch that reaches for it again
+is caught on a host that has one; `curl` is a stub that logs any call and fails, so a fetch that bypasses the cache is
+caught too. A good lock installs every binary, a second run downloads nothing, and so does a run from a fresh worktree
+on the same cache (#1004); a cached file that no longer matches fails by name and is not fetched again, and a missing
+artifact or a checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
 failed fetch or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing
 from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
 
@@ -25,6 +29,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import hashlib
+import http.server
 import io
 import json
 import os
@@ -40,6 +45,10 @@ import zipfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 VERIFY = REPO / "verify"
+sys.path.insert(0, str(VERIFY))
+import artifact_cache  # noqa: E402
+import tf_plugin_cache  # noqa: E402
+
 LOCK = VERIFY / "e2e-tools.lock"
 FETCH = VERIFY / "fetch-e2e-tools.sh"
 RUNNER = VERIFY / "run-e2e-tools.sh"
@@ -155,7 +164,11 @@ check("conftest is the version test_iam_policy_structural.py demands",
 print("== the tools land in a directory git ignores ==")
 fetch_text = FETCH.read_text()
 check("fetch-e2e-tools.sh installs into verify/.tools", 'TOOLS_DIR="${SCRIPT_DIR}/.tools"' in fetch_text)
-for path in ("verify/.tools/bin/kyverno", "verify/.tools/dl/terraform_1.15.6_linux_amd64.zip"):
+fetch_code = "\n".join(ln for ln in fetch_text.splitlines() if not ln.lstrip().startswith("#"))
+check("fetch-e2e-tools.sh takes each download from the artifact cache by its sum, and downloads nothing itself (#1118)",
+      'bash "${CACHE}" get "${want}" "${url}"' in fetch_code
+      and not re.search(r"\b(curl|wget|urlopen)\b", fetch_code), fetch_code)
+for path in ("verify/.tools/bin/kyverno", "verify/.tools/.fetch-err.abc123"):
     ignored = subprocess.run(["git", "-C", str(REPO), "check-ignore", "-q", path], capture_output=True)
     check(f"git ignores {path}", ignored.returncode == 0)
 tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "verify/.tools"], capture_output=True, text=True).stdout
@@ -187,9 +200,10 @@ for t in tier:
         check(f"{t.name} runs terraform, so it carries `# E2E SERIAL: terraform`",
               re.search(r"^# E2E SERIAL: terraform", text, re.M) is not None)
 serial_tests = sorted(t.name for t in tier if re.search(r"^# E2E SERIAL: terraform", t.read_text(), re.M))
-check(f"the five terraform tests are the serial ones ({serial_tests})",
+check(f"the six terraform tests are the serial ones ({serial_tests})",
       serial_tests == ["test_control_plane_app_ports_module.py", "test_iam_policy_structural.py",
                        "test_lab_platform_operator_entry.py", "test_terraform_lock_init.py",
+                       "test_terraform_mirror_lock.py",
                        "test_terraform_plugin_cache_lock.py"])
 
 runner = RUNNER.read_text()
@@ -214,21 +228,13 @@ check("run-e2e-tools.sh runs each tier test through no_cloud_run",
 
 print("== a fetch is checked against the lock, and fails loudly ==")
 
+# A tripwire: since #1118 every download goes through the artifact cache, so the fetch must never call curl itself.
 STUB_CURL = f"""#!{PY}
-import os, shutil, sys
-args = sys.argv[1:]
-with open(os.environ["CURL_LOG"], "a") as f:
-    f.write(" ".join(args) + "\\n")
-out, url = args[args.index("-o") + 1], args[-1]
-src = os.path.join(os.environ["FIXTURES"], url.rsplit("/", 1)[-1])
-if not url.startswith("https://fixture.invalid/") or not os.path.isfile(src):
-    sys.stderr.write("curl: (22) The requested URL returned error: 404\\n")
-    sys.exit(22)
-shutil.copyfile(src, out)
-"""
-STUB_SHA = f"""#!{PY}
-import hashlib, sys
-print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() + "  " + sys.argv[1])
+import os, sys
+with open(os.path.join(os.environ["HOME"], "curl.log"), "a") as f:
+    f.write(" ".join(sys.argv[1:]) + "\\n")
+sys.stderr.write("curl: the fetch reached for curl and not the artifact cache (#1118)\\n")
+sys.exit(22)
 """
 # A tripwire, not a stand-in: Tanjiro's CI runner has no unzip (#1047), so the fetch must never call one.
 STUB_UNZIP = f"""#!{PY}
@@ -243,7 +249,7 @@ STUB_UNAME = '#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\
 
 def make_stubs(bindir: pathlib.Path, extra: dict[str, str] | None = None) -> None:
     bindir.mkdir(parents=True, exist_ok=True)
-    stubs = {"curl": STUB_CURL, "sha256sum": STUB_SHA, "unzip": STUB_UNZIP, "uname": STUB_UNAME, **(extra or {})}
+    stubs = {"curl": STUB_CURL, "unzip": STUB_UNZIP, "uname": STUB_UNAME, **(extra or {})}
     for name, body in stubs.items():
         p = bindir / name
         p.write_text(body)
@@ -286,54 +292,120 @@ FIXTURES = {
     "epsilon-x86_64-unknown-linux-gnu.tar.xz": txz("epsilon-x86_64-unknown-linux-gnu/epsilon",
                                                    b"#!/bin/sh\necho epsilon\n"),
 }
+
+
+class FixtureServer:
+    """Serves FIXTURES at /<name> on 127.0.0.1 and logs each request's path; anything else is a 404."""
+
+    def __init__(self):
+        self.paths: list[str] = []
+        self.lock = threading.Lock()
+        srv = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                with srv.lock:
+                    srv.paths.append(self.path)
+                body = FIXTURES.get(self.path.lstrip("/"))
+                if body is None:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_):
+                pass
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.httpd.daemon_threads = True
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def requests(self) -> int:
+        with self.lock:
+            return len(self.paths)
+
+
+SERVER = FixtureServer()
+URL = SERVER.base
 # run-e2e.sh's seven tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
 SEVEN = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "ttyd")
 for _tool in SEVEN:
     FIXTURES[f"{_tool}-linux-amd64"] = (
         b'#!/bin/sh\necho "fetched $*" >>"$KUBECTL_LOG"\nexit 1\n' if _tool == "kubectl" else b"#!/bin/sh\nexit 0\n")
-SEVEN_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} https://fixture.invalid/{t}-linux-amd64 -\n"
+SEVEN_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} {URL}/{t}-linux-amd64 -\n"
                      for t in SEVEN)
 GOOD_LOCK = (
     "# fixture lock\n"
-    f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
-    f"beta  v2 {sha(FIXTURES['beta_linux_amd64.zip'])} https://fixture.invalid/beta_linux_amd64.zip beta\n"
-    f"gamma v3 {sha(FIXTURES['gamma-linux-amd64'])} https://fixture.invalid/gamma-linux-amd64 -\n"
+    f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} {URL}/alpha-linux_x86_64.tar.gz pkg/alpha\n"
+    f"beta  v2 {sha(FIXTURES['beta_linux_amd64.zip'])} {URL}/beta_linux_amd64.zip beta\n"
+    f"gamma v3 {sha(FIXTURES['gamma-linux-amd64'])} {URL}/gamma-linux-amd64 -\n"
     f"epsilon v5 {sha(FIXTURES['epsilon-x86_64-unknown-linux-gnu.tar.xz'])} "
-    "https://fixture.invalid/epsilon-x86_64-unknown-linux-gnu.tar.xz epsilon-x86_64-unknown-linux-gnu/epsilon\n"
+    f"{URL}/epsilon-x86_64-unknown-linux-gnu.tar.xz epsilon-x86_64-unknown-linux-gnu/epsilon\n"
 )
 BAD_LOCK = (
-    f"alpha v1 {'0' * 64} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
-    f"delta v4 {'1' * 64} https://fixture.invalid/delta-linux-amd64 -\n"
+    f"alpha v1 {'0' * 64} {URL}/alpha-linux_x86_64.tar.gz pkg/alpha\n"
+    f"delta v4 {'1' * 64} {URL}/delta-linux-amd64 -\n"
 )
 
 
-# The runner keeps the Terraform provider cache outside the checkout and fails on one inside it (#1114). A scratch
-# checkout here is the fixture's whole temp directory, HOME included, so each run names a cache of its own outside it,
-# in a directory removed when this test exits.
-TF_CACHE_HOME = tempfile.TemporaryDirectory(prefix="tier-tf-cache-")
-TF_CACHE_ENV = {"TF_PLUGIN_CACHE_DIR": str(pathlib.Path(TF_CACHE_HOME.name) / "terraform-plugin-cache")}
+# The runner keeps the Terraform plugin cache in the host artifact cache, outside every worktree, and fails on one
+# inside it (#1114, #1119). A scratch checkout here is the fixture's whole temp directory, HOME included, and TMPDIR
+# can sit inside this worktree, so each run names an artifact root of its own outside both, in a directory removed
+# when this test exits.
+TF_CACHE_HOME = tf_plugin_cache.scratch("tier-tf-cache-")
+TF_CACHE_ENV = {"WIB_ARTIFACT_CACHE": str(pathlib.Path(TF_CACHE_HOME.name) / "artifacts")}
+TF_PLUGIN_CACHE = str((pathlib.Path(TF_CACHE_HOME.name) / "artifacts" / tf_plugin_cache.PLUGIN_SUBDIR).resolve())
+# The fetch takes its downloads from the host artifact cache too (#1118). The fetch-only cases below give each scratch
+# checkout a cache root of its own under one directory outside every worktree, removed when this test ends, so each
+# can count what its runs cached; the runner cases keep TF_CACHE_ENV's root, which the plugin-cache checks read, and
+# take only a fetch log of their own. The fetch log sits in the checkout either way.
+CACHE_BASE = artifact_cache.scratch_dir("tier-artifact-cache-")
+
+
+def fetch_log_env(tmp: pathlib.Path) -> dict[str, str]:
+    return {"ARTIFACT_FETCH_LOG": str(tmp / "fetch.log")}
+
+
+def fetch_env(tmp: pathlib.Path, cache: pathlib.Path | None = None) -> dict[str, str]:
+    return {"WIB_ARTIFACT_CACHE": str(cache or CACHE_BASE / tmp.name), **fetch_log_env(tmp)}
 
 
 def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> pathlib.Path:
-    """A scratch verify/ holding copies of the scripts and the given lock, with fixtures and a curl log. The runner
-    names its provider cache through tf_plugin_cache.py, so that comes with it."""
+    """A scratch verify/ holding copies of the scripts and the given lock. The runner names its provider cache through
+    tf_plugin_cache.py, which reads the root through artifact_cache.py, and the fetch takes its downloads through
+    artifact-cache.sh, so those come with them."""
     vdir = tmp / "verify"
     vdir.mkdir(parents=True, exist_ok=True)
-    for s in scripts + ((VERIFY / "tf_plugin_cache.py",) if RUNNER in scripts else ()):
+    helpers = ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py") if RUNNER in scripts else ()) + \
+        ((VERIFY / "artifact-cache.sh", VERIFY / "artifact_cache.py") if FETCH in scripts else ())
+    for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
+    if BROWSERS in scripts:
+        # playwright_browsers.py runs playwright through package_cache.py's `run playwright --` prefix (#1121). The
+        # stand-in makes that prefix the stubbed `uv` alone, which answers the dry run, so no environment is built.
+        (vdir / "package_cache.py").write_text(STUB_PACKAGE_CACHE)
     (vdir / "e2e-tools.lock").write_text(lock)
-    fx = tmp / "fixtures"
-    fx.mkdir(exist_ok=True)
-    for name, data in FIXTURES.items():
-        (fx / name).write_bytes(data)
     return vdir
 
 
-def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path) -> subprocess.CompletedProcess:
+STUB_PACKAGE_CACHE = """import types
+ENVS = {"playwright": types.SimpleNamespace(requires=("playwright==1.64.1",))}
+
+
+def run_cmd(env, root=None):
+    return ["uv"]
+"""
+
+
+def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path,
+        cache: pathlib.Path | None = None) -> subprocess.CompletedProcess:
     # TMPDIR is the fixture's own (#909): run-tests.sh and no-cloud.sh mktemp, and on 2026-11-05 run 17593's host /tmp
     # was an unlinked directory (stat Links: 0), so a mktemp falling back to /tmp failed and this test with it.
     env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures")}
+           **fetch_env(tmp, cache)}
     return subprocess.run([BASH, str(script)], capture_output=True, text=True, timeout=120, env=env)
 
 
@@ -346,14 +418,31 @@ def block(out: str, label: str) -> str:
 
 
 def curl_calls(tmp: pathlib.Path) -> list[str]:
-    log = tmp / "curl.log"
-    return log.read_text().splitlines() if log.exists() else []
+    """Every network fetch the scratch checkout's runs made: the artifact cache's fetch-log lines, then any call to the
+    curl tripwire, which a fetch that bypassed the cache would make."""
+    out = []
+    for name in ("fetch.log", "curl.log"):
+        log = tmp / name
+        out += log.read_text().splitlines() if log.exists() else []
+    return out
 
 
-with tempfile.TemporaryDirectory() as t:
+def cached(tmp: pathlib.Path) -> list[str]:
+    """The files in the scratch checkout's cache root, but the per-sum lock files: no temp or unverified file."""
+    d = CACHE_BASE / tmp.name / "sha256"
+    return sorted(p.name for p in d.iterdir() if not p.name.endswith(".lock")) if d.is_dir() else []
+
+
+GOOD_FILES = ("alpha-linux_x86_64.tar.gz", "beta_linux_amd64.zip", "gamma-linux-amd64",
+              "epsilon-x86_64-unknown-linux-gnu.tar.xz")
+with tempfile.TemporaryDirectory() as t, tempfile.TemporaryDirectory() as t2:
     tmp = pathlib.Path(t)
     vdir = scratch(tmp, GOOD_LOCK, (FETCH,))
     make_stubs(tmp / "bin")
+    # A worktree that ran the fetch before #1118 holds its own copy of every download here; the fetch removes it.
+    (vdir / ".tools" / "dl").mkdir(parents=True)
+    (vdir / ".tools" / "dl" / "terraform_1.15.6_linux_amd64.zip").write_bytes(b"an old per-worktree copy")
+    served = SERVER.requests()
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
     check(f"a lock whose artifacts match installs every tool (exit {r.returncode})", r.returncode == 0,
           r.stdout + r.stderr)
@@ -362,18 +451,47 @@ with tempfile.TemporaryDirectory() as t:
         b = vdir / ".tools" / "bin" / name
         check(f"{name} is in .tools/bin, executable, holding the archive's member",
               b.is_file() and os.access(b, os.X_OK) and body in b.read_bytes())
-    check("each artifact was downloaded once", len(curl_calls(tmp)) == 4, str(curl_calls(tmp)))
+    check("each artifact was downloaded once, through the cache", len(curl_calls(tmp)) == 4
+          and SERVER.requests() - served == 4 and all(ln.endswith("\tok") for ln in curl_calls(tmp)),
+          str(curl_calls(tmp)))
+    check("the cache holds each download once, under its sum, and nothing unverified",
+          cached(tmp) == sorted(sha(FIXTURES[f]) for f in GOOD_FILES), str(cached(tmp)))
+    check("the worktree keeps no copy of any download: the old .tools/dl is gone (#1004)",
+          not (vdir / ".tools" / "dl").exists() and sorted(p.name for p in (vdir / ".tools").iterdir()) == ["bin"],
+          str(list((vdir / ".tools").iterdir())))
     check("the zip artifact was read without unzip, which Tanjiro's runner lacks (#1047)",
           not (tmp / "unzip.log").exists(), (tmp / "unzip.log").read_text() if (tmp / "unzip.log").exists() else "")
-    first = len(curl_calls(tmp))
+    first, served = len(curl_calls(tmp)), SERVER.requests()
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check(f"a second run reuses the verified downloads and fetches nothing (exit {r.returncode})",
-          r.returncode == 0 and len(curl_calls(tmp)) == first, str(curl_calls(tmp)[first:]))
-    (vdir / ".tools" / "dl" / "gamma-linux-amd64").write_bytes(b"tampered")
+    check(f"a second run takes every download from the cache and fetches nothing (exit {r.returncode})",
+          r.returncode == 0 and len(curl_calls(tmp)) == first and SERVER.requests() == served,
+          str(curl_calls(tmp)[first:]))
+
+    # A fresh worktree on the same host: a scratch checkout of its own, with no .tools, on the same cache root.
+    tmp2 = pathlib.Path(t2)
+    vdir2 = scratch(tmp2, GOOD_LOCK, (FETCH,))
+    make_stubs(tmp2 / "bin")
+    r = run(vdir2 / FETCH.name, tmp2, tmp2 / "bin", cache=CACHE_BASE / tmp.name)
+    check(f"a run from a fresh worktree on the same cache installs every tool (exit {r.returncode})",
+          r.returncode == 0 and all(os.access(vdir2 / ".tools" / "bin" / n, os.X_OK)
+                                    for n in ("alpha", "beta", "gamma", "epsilon")), r.stdout + r.stderr)
+    check("and makes no network fetch for any lock entry (#1004, #1118)",
+          SERVER.requests() == served and curl_calls(tmp2) == [], str(curl_calls(tmp2)))
+
+    gamma = artifact_cache.path_for(sha(FIXTURES["gamma-linux-amd64"]), CACHE_BASE / tmp.name)
+    gamma.write_bytes(b"tampered")
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
-    check("a cached download that no longer matches is fetched again",
-          r.returncode == 0 and curl_calls(tmp)[first:] and "gamma-linux-amd64" in curl_calls(tmp)[-1]
-          and b"echo gamma" in (vdir / ".tools" / "bin" / "gamma").read_bytes(), r.stdout + r.stderr)
+    check(f"a cached download that no longer matches fails the fetch (exit {r.returncode})",
+          r.returncode == 1 and "E2E TOOLS FETCH FAILED; this is a failure, not a skip" in r.stderr, r.stderr)
+    check("naming the tool, the cached file and both sums",
+          f"gamma v3: cache hit {gamma} does not match its pin: expected SHA-256 {sha(FIXTURES['gamma-linux-amd64'])}, "
+          f"got {sha(b'tampered')}" in r.stderr, r.stderr)
+    check("and it is never used, nor fetched again over: no request, and the file is left for a person to look at",
+          SERVER.requests() == served and len(curl_calls(tmp)) == first and gamma.read_bytes() == b"tampered",
+          str(curl_calls(tmp)[first:]))
+    check("the tool's old binary is removed, and the others are still installed",
+          not (vdir / ".tools" / "bin" / "gamma").exists()
+          and all((vdir / ".tools" / "bin" / n).is_file() for n in ("alpha", "beta", "epsilon")))
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
@@ -384,13 +502,29 @@ with tempfile.TemporaryDirectory() as t:
     check("it says the fetch failed, as a failure and not a skip",
           "E2E TOOLS FETCH FAILED; this is a failure, not a skip" in r.stderr, r.stderr)
     check("it names the mismatch with the expected and the downloaded SHA-256",
-          f"alpha v1: SHA-256 mismatch for https://fixture.invalid/alpha-linux_x86_64.tar.gz: expected {'0' * 64}, "
+          f"alpha v1: download of {URL}/alpha-linux_x86_64.tar.gz does not match its pin: expected SHA-256 {'0' * 64}, "
           f"got {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])}" in r.stderr, r.stderr)
     check("it names the artifact it could not download",
-          "delta v4: download failed: https://fixture.invalid/delta-linux-amd64" in r.stderr, r.stderr)
+          f"delta v4: fetch of {URL}/delta-linux-amd64 for SHA-256 {'1' * 64} failed: HTTP Error 404" in r.stderr,
+          r.stderr)
+    check("a 404 is asked once, not retried", sum(ln.count("\terror ") for ln in curl_calls(tmp)) == 1,
+          str(curl_calls(tmp)))
     check("no binary is installed from a failed fetch",
           not (vdir / ".tools" / "bin" / "alpha").exists() and not (vdir / ".tools" / "bin" / "delta").exists())
-    check("no unverified download is kept", not any((vdir / ".tools" / "dl").iterdir()))
+    check("no unverified download is kept, in the cache or the worktree",
+          cached(tmp) == [] and not (vdir / ".tools" / "dl").exists(), str(cached(tmp)))
+
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, GOOD_LOCK, (FETCH,))
+    make_stubs(tmp / "bin")
+    inside = tmp / "repo" / "cache"
+    (tmp / "repo" / ".git").mkdir(parents=True)
+    r = run(vdir / FETCH.name, tmp, tmp / "bin", cache=inside)
+    check(f"a cache root inside a git worktree fails the fetch before any download, naming it (exit {r.returncode})",
+          r.returncode == 1 and "E2E TOOLS FETCH FAILED: no usable artifact cache: " in r.stderr
+          and f"{inside} (from WIB_ARTIFACT_CACHE) is inside the git worktree {tmp / 'repo'}" in r.stderr
+          and not curl_calls(tmp), r.stderr)
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
@@ -429,7 +563,7 @@ with tempfile.TemporaryDirectory() as t:
     check("it says the tier cannot run, as a failure and not a skip",
           "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: the pinned tools could not be fetched"
           in r.stderr, r.stderr)
-    check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
+    check("the fetch's own reasons are shown", "delta v4: fetch of " in r.stderr, r.stderr)
     check("no test ran", "== " not in r.stdout, r.stdout)
 
 with tempfile.TemporaryDirectory() as t:
@@ -466,7 +600,7 @@ print("== a tier test that calls aws or eksctl fails, and the pinned tools still
 # The whole runner, in a scratch verify/ whose tier is four fixture tests. The host's aws and eksctl here log as
 # "host" and stand in for hecaton's wrapper, which carries the run's live session: if one is ever reached, the
 # runner's stub was not first on PATH. AWS_PROFILE is set as a dispatched run has it.
-TIER_LOCK = f"kubectl v9 {sha(FIXTURES['kubectl-linux-amd64'])} https://fixture.invalid/kubectl-linux-amd64 -\n"
+TIER_LOCK = f"kubectl v9 {sha(FIXTURES['kubectl-linux-amd64'])} {URL}/kubectl-linux-amd64 -\n"
 TIER_TESTS = {
     "test_calls_aws.sh": "aws sts get-caller-identity >/dev/null 2>&1 || true\nexit 0\n",
     "test_calls_eksctl.sh": "eksctl utils write-kubeconfig --cluster watch-it-burn-private\n",
@@ -485,7 +619,7 @@ with tempfile.TemporaryDirectory() as t:
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24,
                              "aws": HOST_CLOUD, "eksctl": HOST_CLOUD})
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV, "AWS_PROFILE": "accen-dev",
-           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
+           **fetch_log_env(tmp),
            "KUBECTL_LOG": str(tmp / "kubectl.log"), "HOST_LOG": str(tmp / "host.log")}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
@@ -532,7 +666,7 @@ with tempfile.TemporaryDirectory() as t:
     (host_helm / "repositories.yaml").write_text("repositories:\n- name: cilium\n  url: https://helm.cilium.io\n")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "HELM_LOG": str(tmp / "helm.json"),
+           **fetch_log_env(tmp), "HELM_LOG": str(tmp / "helm.json"),
            "HELM_CONFIG_HOME": str(host_helm)}
     r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
@@ -578,7 +712,7 @@ def pool_run(tmp: pathlib.Path, extra: dict[str, str]) -> subprocess.CompletedPr
     shutil.rmtree(pair, ignore_errors=True)
     pair.mkdir()
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair), **extra}
+           **fetch_log_env(tmp), "PAIR_DIR": str(pair), **extra}
     return subprocess.run([BASH, str(tmp / "verify" / RUNNER.name)], capture_output=True, text=True, timeout=240,
                           env=env)
 
@@ -638,7 +772,7 @@ with tempfile.TemporaryDirectory() as t:
                                             "echo terraform test ran\n")
     (vdir / "test_plain_beside.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\necho plain test ran\n")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
-    lock_path = pathlib.Path(TF_CACHE_ENV["TF_PLUGIN_CACHE_DIR"] + ".lock")
+    lock_path = pathlib.Path(TF_PLUGIN_CACHE + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     # Held by this process, as flock(1) in the runner takes it, and released when the file closes.
     with lock_path.open("a") as held:
@@ -654,7 +788,7 @@ with tempfile.TemporaryDirectory() as t:
     r = pool_run(tmp, {"TF_CACHE_LOCK_WAIT": "1", "PAIR_POLLS": "1"})
     check(f"released, the same run passes and the terraform test runs (exit {r.returncode})",
           r.returncode == 0 and block(r.stdout, "test_tf_locked.sh") == "terraform test ran\n", r.stdout + r.stderr)
-    check("the runner names the cache it used", f"Terraform provider cache: {TF_CACHE_ENV['TF_PLUGIN_CACHE_DIR']}\n"
+    check("the runner names the cache it used", f"Terraform provider cache: {TF_PLUGIN_CACHE}\n"
           in r.stdout, r.stdout)
 
 print("== stopped by a signal, the runner names what still ran and stops it (#1005) ==")
@@ -672,7 +806,7 @@ with tempfile.TemporaryDirectory() as t:
     pair = tmp / "pair"
     pair.mkdir()
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"), "PAIR_DIR": str(pair)}
+           **fetch_log_env(tmp), "PAIR_DIR": str(pair)}
     proc = subprocess.Popen([BASH, str(vdir / RUNNER.name)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             env=env, start_new_session=True)
     # The signal waits for the runner to have printed test_ends.sh as ended, not only for the sleeper: on a loaded
@@ -741,7 +875,7 @@ HOST_KUBECTL = '#!/bin/sh\necho "host $*" >>"$KUBECTL_LOG"\nexit 1\n'
 
 def run_live(tmp: pathlib.Path, vdir: pathlib.Path) -> subprocess.CompletedProcess:
     env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV,
-           "KUBECONFIG": "/dev/null", "CONTEXT": "wib-fixture", "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
+           "KUBECONFIG": "/dev/null", "CONTEXT": "wib-fixture", **fetch_env(tmp),
            "KUBECTL_LOG": str(tmp / "kubectl.log")}
     return subprocess.run([BASH, str(vdir / RUN_E2E.name)], capture_output=True, text=True, timeout=120, env=env)
 
@@ -783,12 +917,14 @@ with tempfile.TemporaryDirectory() as t:
           "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib, ttyd, crane, weaver and agentgateway could not "
           "be fetched" in r.stderr,
           r.stderr)
-    check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
+    check("the fetch's own reasons are shown", "delta v4: fetch of " in r.stderr, r.stderr)
     check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))
 
 if failures:
+    shutil.rmtree(CACHE_BASE, ignore_errors=True)
     print(f"\nFAILED: {len(failures)} check(s)")
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
+shutil.rmtree(CACHE_BASE, ignore_errors=True)
 print("\nAll E2E tools tier checks passed.")

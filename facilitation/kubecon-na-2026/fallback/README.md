@@ -25,10 +25,12 @@ the case where the room's input, or the whole network, is gone.
 
 `prompts.yaml` is what the room types in each segment: every room prompt on
 `/kubecon` (`gitops/ai-layer/web/kubecon.html`), word for word, under the segment the
-page shows it in. Segment 1 is the order and the four off-topic asks; segments 2 to
-5 are each challenge's ask; segment 6 re-sends the off-topic asks for the on-topic
-guard. Each prompt says what should land on screen. The offline suite fails if the
-set and the page drift apart.
+page shows it in. Segment 1 is the linked-list ask; segments 2 to 5 are each
+challenge's ask; segment 6 sends the four off-topic asks, the linked list among them,
+for the on-topic guard. The one prompt not on the page is the smoke prompt, the
+order (`segments: []`), which the E2E check sends with `--tag smoke` and no
+`--segment` picks (#1104). Each prompt says what should land on screen. The offline
+suite fails if the set and the page drift apart.
 
 ```bash
 # from the repo root, on the presenter laptop, on the phone hotspot
@@ -46,8 +48,9 @@ as a phone: the console's nginx `/chat`, then guard-proxy `/chat`, with the
 storefront's body (the prompt, a session and a witch name) and its
 `X-BurritoBot-Session` header. So the replayed prompts climb the cost counter and
 show on the prompt wall like typed ones. Each prompt is its own conversation, as
-separate phones would be, except where prompts share a `thread`: Challenge 2's Tron
-ask and its follow-up are one conversation.
+separate phones would be, except where prompts share a `thread`, which sends them as
+one conversation. No prompt shares one today: Challenge 2's Tron ask has been a single
+prompt since #1105.
 
 - **The target is required.** A replay that guessed could spend the room's prompts on
   the wrong cluster.
@@ -127,7 +130,7 @@ python3 scripts/check-fallback-assets.py      # the deck and every screenshot in
 ```
 
 The first is the one rehearsal of the replay that the run-of-show's Night Before step
-asks for; it costs five Bedrock calls. The second exits 1 if any shot the deck lists is
+asks for; it costs one Bedrock call. The second exits 1 if any shot the deck lists is
 missing, empty, or not a PNG.
 
 `bash verify/run-tests.sh` covers the replay offline: it drives the real guard-proxy

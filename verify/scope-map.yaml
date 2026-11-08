@@ -9,6 +9,10 @@ full:
   - verify/ensure-submodules.sh
   - verify/fetch-e2e-tools.sh
   - verify/e2e-tools.lock
+  - verify/artifact-cache.sh
+  - verify/artifact_cache.py
+  - verify/package_cache.py
+  - verify/python.lock
   - verify/playwright_browsers.py
   - verify/bootstrap_chart.py
   - .gitmodules
@@ -43,6 +47,7 @@ always:
   test_bootstrap_chart_render.py: line 377 builds a path under the repo root from a value it finds at run time
   test_c6_villain_endpoint.py: it runs git ls-files, which reads the tree or history as a whole
   test_challenge_fallbacks.py: line 189 builds a path under the repo root from a value it finds at run time
+  test_chart_fetch.py: 'verify/app_render.py: line 119 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 95 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 107 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 92 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 95 builds a path under the repo root from a value it finds at run time; verify/test_datadog_log_services_render.py: line 102 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 106 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 151 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 49 builds a path under the repo root from a value it finds at run time; verify/test_image_registry_render.py: line 185 builds a path under the repo root from a value it finds at run time; verify/test_image_registry_render.py: line 202 builds a path under the repo root from a value it finds at run time; verify/test_image_registry_render.py: line 184 builds a path under the repo root from a value it finds at run time; verify/test_kubearmor_config_render.py: line 76 builds a path under the repo root from a value it finds at run time'
   test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_turn_cancel.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_witch_name.py: it runs git ls-tree, which reads the tree or history as a whole
@@ -50,6 +55,7 @@ always:
   test_compile_design_doc.py: 'line 44 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
   test_datadog_log_services_render.py: line 108 builds a path under the repo root from a value it finds at run time; line 93 builds a path under the repo root from a value it finds at run time; line 96 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
+  test_deck_shift_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 118 builds a path under the repo root from a value it finds at run time; line 114 builds a path under the repo root from a value it finds at run time
   test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole; line 146 builds a path under the repo root from a value it finds at run time
   test_dispatched_runs.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_drift_floor.py: line 160 builds a path under the repo root from a value it finds at run time
@@ -90,6 +96,7 @@ always:
   test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole
   test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
   test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
+  test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
   test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time
   test_platform_baseline_sister.py: 'verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
@@ -103,6 +110,7 @@ always:
   test_terminal_login_request.py: 'verify/test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole'
   test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 70 builds a path under the repo root from a value it finds at run time
   test_tests_own_inputs.py: it runs git grep, which reads the tree or history as a whole
+  test_tf_plugin_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: line 70 builds a path under the repo root from a value it finds at run time'
   test_verify_harness.py: 'verify/test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 148 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 47 builds a path under the repo root from a value it finds at run time'
 reads:
   test_948_live_check_owed.py:
@@ -237,6 +245,8 @@ reads:
     - gitops/otel-collector/values.yaml
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/gh_comments.py
   test_agent_obs_flow.py:
     - agent
@@ -1296,6 +1306,7 @@ reads:
     - gitops/otel-collector/values-burn.yaml
     - gitops/otel-collector/values.yaml
     - verify/collector_render.py
+    - verify/dd_purge_public.py
     - verify/pii_scrub_cases.py
   test_collector_pii_scrub_e2e.py:
     - gitops/ai-layer/resources.yaml
@@ -1414,11 +1425,16 @@ reads:
     - verify/node_sg_rules.py
   test_control_plane_app_ports_module.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/*.tf
     - infra/terraform/aws/cluster/.terraform.lock.hcl
     - infra/terraform/aws/cluster/main.tf
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/node_sg_rules.py
+    - verify/tf_plugin_cache.py
   test_cost_counter.py:
     - gitops/ai-layer/guard-proxy
   test_cost_tier_matches_model.py:
@@ -1500,6 +1516,94 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_datadog_no_key_admin.py:
+    - CLAUDE.md
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - infra/org/boundary
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform
+    - infra/terraform/**.tf
+    - infra/terraform/*.terraform/**/*.tf
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/dashboards/main.tf
+    - infra/terraform/fleet
+    - infra/terraform/fleet/**.py
+    - infra/terraform/fleet/**.sh
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/datadog-orgs.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+  test_datadog_orgs_sandbox.sh:
+    - CLAUDE.md
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/datadog-orgs.sh
+    - verify/no-cloud.sh
   test_datadog_pool_row.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -1544,9 +1648,18 @@ reads:
   test_datadog_sandbox_names.py:
     - CLAUDE.md
     - agent
+    - backstage
+    - backstage/k8s/backstage.yaml
+    - challenges/01-cncf-wall
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
     - docs/admin-console.md
+    - docs/research/2026-10-24-tool-pin-spike
+    - docs/research/2026-10-24-tool-pin-spike/gateway_bind.py
+    - docs/research/2026-10-24-tool-pin-spike/live-check.sh
+    - docs/research/2026-10-24-tool-pin-spike/probe.py
+    - docs/research/2026-10-24-tool-pin-spike/requirements.txt
+    - docs/research/2026-10-24-tool-pin-spike/tool-pin.yaml
     - gitops
     - gitops/**.yaml
     - gitops/ai-layer
@@ -1560,6 +1673,7 @@ reads:
     - gitops/manifests/datadog/datadog-agent.yaml
     - gitops/otel-collector
     - gitops/workshop-agent/agent.yaml
+    - images/tool-pin/tool_pin.py
     - infra
     - infra/*values*.yaml
     - infra/datadog-cluster-identity.sh
@@ -1586,13 +1700,17 @@ reads:
     - infra/terraform/fleet/providers/local.sh
     - infra/terraform/fleet/roster.tsv
     - infra/terraform/fleet/scheduled-up.sh
+    - policies
     - scripts/harvest_cluster_access.sh
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/beat-01.sh
     - verify/collector_render.py
     - verify/datadog-orgs.sh
+    - verify/guard_lease.py
     - verify/last_trace.py
+    - verify/probe_pod.py
   test_datadog_secret_fields.py:
     - gitops
     - gitops/**.yaml
@@ -1629,8 +1747,16 @@ reads:
     - infra/datadog-fleet/monitors.yaml
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/dd_traces.py
     - verify/gh_comments.py
+  test_dd_purge_public.py:
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/dd_purge_public.py
   test_dd_traces.py:
     - agent
     - infra/datadog-fleet/dashboard.yaml
@@ -1776,6 +1902,12 @@ reads:
   test_deployments_witch_line_e2e.py:
     - gitops/ai-layer
     - gitops/ai-layer/ticket_site.py
+  test_desk_removed_rows.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
   test_desk_ticket_live.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
@@ -1803,6 +1935,8 @@ reads:
     - gitops/apps
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/gh_comments.py
   test_display_masked_prompts_e2e.py:
     - gitops/ai-layer/guard-proxy
@@ -2386,6 +2520,7 @@ reads:
     - infra/org/boundary
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
+    - infra/terraform/dashboards/fleet-analytics.json
     - infra/terraform/fleet
     - infra/terraform/fleet/backups.py
     - infra/terraform/fleet/backups.tsv
@@ -2408,6 +2543,7 @@ reads:
     - verify/agent_obs_flow.py
     - verify/agent_probe.py
     - verify/collector_render.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_fleet_pool_reconcile.sh:
@@ -2872,6 +3008,8 @@ reads:
     - gitops/otel-collector/values.yaml
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/gh_comments.py
     - verify/run-e2e-tools.sh
     - verify/test_agent_obs_cause_comment.py
@@ -3189,11 +3327,16 @@ reads:
     - verify/no_cloud.py
   test_iam_plan_render_cache.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org/boundary
     - infra/org/permissions-boundary.json.tftpl
     - infra/terraform/aws/audit
     - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/iam_plan_render.py
+    - verify/tf_plugin_cache.py
   test_iam_policy_pipeline.py:
     - infra
     - infra/**.tf
@@ -3212,6 +3355,8 @@ reads:
     - infra/terraform/aws/cluster/main.tf
   test_iam_policy_structural.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org
     - infra/org/boundary
     - infra/org/effect-tests.yaml
@@ -3685,6 +3830,10 @@ reads:
   test_kubecon_prompt_sheet_e2e.py:
     - gitops/ai-layer/web/kubecon.html
     - verify/playwright_browsers.py
+  test_kubecon_seg4_flow.py:
+    - challenges/02-sanitization/fallback.curl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/web/kubecon.html
   test_kubecon_sheet_attack_heads.py:
     - gitops/ai-layer/web/kubecon.html
   test_kyverno_cel_policies.py:
@@ -3933,12 +4082,17 @@ reads:
     - verify/collector_render.py
     - verify/lab-events-harness.js
   test_lab_platform_operator_entry.py:
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/*.tf
     - infra/terraform/aws/cluster/.terraform.lock.hcl
     - infra/terraform/aws/cluster/main.tf
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fixtures/lab_platform_operator_entry.tftest.hcl
+    - verify/tf_plugin_cache.py
   test_lab_progress_harvest.py:
     - challenges
     - scripts/harvest/06-lab-progress.py
@@ -4463,6 +4617,11 @@ reads:
     - verify/otelcol_local.py
     - verify/test_collector_act2_redaction_e2e.py
     - verify/test_trace_shape_e2e.py
+  test_package_cache_e2e.py:
+    - images/watch-it-burn-backstage/.yarn/releases
+    - images/watch-it-burn-backstage/.yarn/releases/yarn-4.*.cjs
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
   test_party_app_hosts.py:
     - CLAUDE.md
     - agent
@@ -4835,6 +4994,8 @@ reads:
     - decisions.md
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/gh_comments.py
     - verify/run-e2e-tools.sh
   test_proxy_checksum.py:
@@ -5111,6 +5272,106 @@ reads:
     - images/villains/build.sh
     - images/villains/joker-web
     - images/villains/villain-banner.sh
+  test_room_reader.py:
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - policies/kyverno-breakout/remove-untrusted-room-workloads.yaml
+  test_room_reader_rbac.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c6-least-privilege-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/room_reader_rbac.py
+  test_room_reader_rbac_e2e.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c6-least-privilege-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/room_reader_rbac.py
+    - verify/run-e2e-tools.sh
   test_room_view.py:
     - CLAUDE.md
     - agent
@@ -5593,6 +5854,8 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - verify/.tools/charts
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/gh_comments.py
     - verify/support_desk_hosts.py
   test_support_desk_lookup.py:
@@ -5763,6 +6026,8 @@ reads:
     - scripts/reload-routes.sh
   test_terraform_lock_init.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org/boundary
     - infra/org/boundary/*.tf
     - infra/org/boundary/.terraform.lock.hcl
@@ -5779,10 +6044,16 @@ reads:
     - infra/terraform/dashboards/*.tf
     - infra/terraform/dashboards/.terraform.lock.hcl
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/tf_plugin_cache.py
   test_terraform_lock_init_retry.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org/boundary
     - infra/org/boundary/*.tf
     - infra/org/boundary/.terraform.lock.hcl
@@ -5799,40 +6070,31 @@ reads:
     - infra/terraform/dashboards/*.tf
     - infra/terraform/dashboards/.terraform.lock.hcl
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/test_terraform_lock_init.py
+    - verify/tf_plugin_cache.py
+  test_terraform_mirror_lock.py:
+    - infra
+    - infra/**/.terraform.lock.hcl
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
     - verify/tf_plugin_cache.py
   test_terraform_plugin_cache_lock.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster/.terraform.lock.hcl
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
-  test_tf_plugin_cache.py:
-    - .github/workflows/verify-suites.yml
-    - VERSIONS.lock
-    - infra/org/boundary
-    - infra/org/boundary/*.tf
-    - infra/org/boundary/.terraform.lock.hcl
-    - infra/terraform/aws/audit
-    - infra/terraform/aws/audit/*.tf
-    - infra/terraform/aws/audit/.terraform.lock.hcl
-    - infra/terraform/aws/cluster
-    - infra/terraform/aws/cluster/*.tf
-    - infra/terraform/aws/cluster/.terraform.lock.hcl
-    - infra/terraform/aws/network
-    - infra/terraform/aws/network/*.tf
-    - infra/terraform/aws/network/.terraform.lock.hcl
-    - infra/terraform/dashboards
-    - infra/terraform/dashboards/*.tf
-    - infra/terraform/dashboards/.terraform.lock.hcl
-    - verify/.tools
-    - verify/.tools/charts
-    - verify/.tools/plugin-cache
-    - verify/.tools/plugin-cache-test-1114
-    - verify/chart_fetch.py
-    - verify/run-e2e-tools.sh
-    - verify/test_terraform_lock_init.py
-    - verify/test_terraform_plugin_cache_lock.py
+    - verify/charts.lock
+    - verify/charts_lock.py
     - verify/tf_plugin_cache.py
   test_tier_swap_live_judges.py:
     - agent

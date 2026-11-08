@@ -87,8 +87,8 @@ for profile in collector_render.PROFILE_APP:
     check(f"the {profile} collector's k8s.cluster.name reads cluster-identity/{KEY}", cref.get("key") == KEY, str(cref))
 
 monitors = yaml.safe_load((REPO / "infra/datadog-fleet/monitors.yaml").read_text())
-check("the fleet monitors filter on kube_cluster_name:burritobot-*",
-      monitors.get("cluster_filter") == "kube_cluster_name:burritobot-*")
+check("the fleet monitors and dashboards scope to env:burritobot-kubecon-na-26, not a cluster name",
+      monitors.get("env_filter") == "env:burritobot-kubecon-na-26")
 check("datadog-orgs.sh expects the sandbox org by default (its name is Datadog)",
       'PREFIX="${WIB_DD_POOL_PREFIX:-Datadog}"' in (REPO / "verify/datadog-orgs.sh").read_text())
 check("last_trace.py queries kube_cluster_name:burritobot-*",
@@ -156,6 +156,91 @@ for comp, want in (("nodeAgent", "burritobot-datadog-agent"), ("clusterAgent", "
     labels = (override.get(comp) or {}).get("labels") or {}
     check(f"the DatadogAgent's {comp} pods carry service={want} env={DD_ENV}",
           labels.get("tags.datadoghq.com/service") == want and labels.get("tags.datadoghq.com/env") == DD_ENV)
+
+print("== Backstage's own service field does not replace its burritobot- service (#629, #1080) ==")
+# Backstage logs JSON with a service field (backstage, rootHttpRouter), which Datadog took over the pod's tag on
+# 2026-11-02 (#629). The pod's log config renames that key before the Agent ships the line.
+import json  # noqa: E402
+import re  # noqa: E402
+
+bs = next(d for d in yaml.safe_load_all((REPO / "backstage/k8s/backstage.yaml").read_text()) if d and d.get("kind") == "Deployment")
+bs_meta = bs["spec"]["template"]["metadata"]
+try:
+    bs_logs = json.loads((bs_meta.get("annotations") or {}).get("ad.datadoghq.com/backstage.logs", ""))
+except ValueError:
+    bs_logs = []
+bs_rule = next((r for c in bs_logs for r in c.get("log_processing_rules") or [] if r.get("type") == "mask_sequences"), {})
+line = '{"level":"info","message":"listening","service":"rootHttpRouter","timestamp":"2026-11-02T07:00:00Z"}'
+renamed = re.sub(bs_rule.get("pattern", "^$"), bs_rule.get("replace_placeholder", ""), line) if bs_rule else line
+check("the annotation names the Deployment's own container, backstage",
+      [c["name"] for c in bs["spec"]["template"]["spec"]["containers"]] == ["backstage"])
+check("the backstage container's log config names service burritobot-backstage",
+      [c.get("service") for c in bs_logs] == ["burritobot-backstage"])
+check("its rule renames Backstage's service key to backstage_service, and keeps the value",
+      json.loads(renamed).get("backstage_service") == "rootHttpRouter" and "service" not in json.loads(renamed))
+check("the pod labels still name burritobot-backstage and the env",
+      (bs_meta.get("labels") or {}).get("tags.datadoghq.com/service") == "burritobot-backstage"
+      and (bs_meta.get("labels") or {}).get("tags.datadoghq.com/env") == DD_ENV)
+
+print("== the collector inserts the env on any resource that arrives without one, the lab markers included (#1080) ==")
+# transform/lab_contract resets a lab marker's resource to service.name alone, so the env the apps set is gone by
+# the time the resource processor runs. insert, not upsert: an app's own env stands.
+for profile in collector_render.PROFILE_APP:
+    ccfg = collector_render.collector_config(profile, True)
+    attrs = [a for a in ccfg["processors"].get("resource", {}).get("attributes", [])
+             if a.get("key") == "deployment.environment.name"]
+    check(f"the {profile} collector's resource processor inserts deployment.environment.name={DD_ENV}",
+          attrs == [{"key": "deployment.environment.name", "value": DD_ENV, "action": "insert"}], str(attrs))
+    lab = {n: p["processors"] for n, p in ccfg["service"]["pipelines"].items() if n.endswith("/lab")}
+    # metrics/lab carries no contract of its own: its input is the spans traces/lab already policed.
+    check(f"the {profile} collector's lab pipelines {sorted(lab)} run it, after transform/lab_contract where it runs",
+          bool(lab) and "transform/lab_contract" in lab.get("traces/lab", [])
+          and all("resource" in p and ("transform/lab_contract" not in p
+                                       or p.index("resource") > p.index("transform/lab_contract")) for p in lab.values()),
+          str(lab))
+
+print("== the tool-pin spike's pods, which run in the agent namespace of both clusters, carry the sandbox tags (#629) ==")
+# docs/research/2026-10-24-tool-pin-spike runs one-shot pods (a probe and a curl ask) and a Deployment in agent. Without
+# these tags their logs were filed under the image name (curl, watch-it-burn) and no env, outside BurritoBot (2026-11-05).
+spike = REPO / "docs/research/2026-10-24-tool-pin-spike"
+live_check = (spike / "live-check.sh").read_text(encoding="utf-8")
+check("the probe pod is labelled into burritobot-tool-pin-probe with the env",
+      "tags.datadoghq.com/service=burritobot-tool-pin-probe,tags.datadoghq.com/env=burritobot-kubecon-na-26" in live_check)
+check("the ask pod is labelled into burritobot-tool-pin-ask with the env",
+      "tags.datadoghq.com/service=burritobot-tool-pin-ask,tags.datadoghq.com/env=burritobot-kubecon-na-26" in live_check)
+check("every kubectl run in the spike's live check carries the env label",
+      live_check.count(" run \"tool-pin-") == live_check.count("tags.datadoghq.com/env=burritobot-kubecon-na-26") > 0)
+pin_docs = [d for d in yaml.safe_load_all((spike / "tool-pin.yaml").read_text(encoding="utf-8")) if d and d.get("kind") == "Deployment"]
+tmpl = (pin_docs[0]["spec"]["template"]["metadata"]["labels"] if pin_docs else {})
+check("the tool-pin Deployment's pods carry service burritobot-tool-pin and the env",
+      tmpl.get("tags.datadoghq.com/service") == "burritobot-tool-pin" and tmpl.get("tags.datadoghq.com/env") == DD_ENV, str(tmpl))
+
+print("== Beat 1's sample workload carries the sandbox tags (#629) ==")
+beat = (REPO / "verify/beat-01.sh").read_text(encoding="utf-8")
+check("beat-01's sample workload is labelled into burritobot-beat1-sample-web with the env, and a failed label stops the beat",
+      '"tags.datadoghq.com/service":"burritobot-beat1-sample-web","tags.datadoghq.com/env":"burritobot-kubecon-na-26"' in beat
+      and "could not label the sample workload for Datadog" in beat)
+
+print("== the one-shot pods live checks run (verify/probe_pod.py) carry the sandbox tags (#629) ==")
+# verify/one_root_probe.py and verify/test_tool_audit_live.py run these in agent on both clusters. Untagged, their logs
+# reached the org as service watch-it-burn, the image's short name, with no env (oneroot-* pods, 2026-11-05).
+import probe_pod  # noqa: E402
+probe_labels = probe_pod.shell_pod("oneroot-abc123", "agent", "ghcr.io/x/watch-it-burn:t", "true")["metadata"].get("labels", {})
+check("a probe pod logs under service burritobot-live-probe with the env",
+      probe_labels.get("tags.datadoghq.com/service") == "burritobot-live-probe"
+      and probe_labels.get("tags.datadoghq.com/env") == DD_ENV, str(probe_labels))
+
+print("== the lab's cloud-credential-probe Job, which the app-profile-effect Jobs were copied from, carries the tags (#1080) ==")
+# Run 17336 (#562) ran app-profile-effect-agent and -tutor in agent on both clusters, Jobs modelled on this one, and
+# their logs reached the sandbox org as service watch-it-burn with no env (hecaton run 17338, 2026-11-05). No file
+# holds those Jobs; this template is what a copy starts from, and what Challenge 8 and its live test apply.
+fixes = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text())
+             if d and d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "challenge-fixes")
+ccp = yaml.safe_load(fixes["data"]["cloud-credential-probe.yaml"])
+ccp_labels = ccp["spec"]["template"]["metadata"].get("labels") or {}
+check("the cloud-credential-probe Job's pod logs under service burritobot-cloud-credential-probe with the env",
+      ccp_labels.get("tags.datadoghq.com/service") == "burritobot-cloud-credential-probe"
+      and ccp_labels.get("tags.datadoghq.com/env") == DD_ENV, str(ccp_labels))
 
 print()
 if failures:

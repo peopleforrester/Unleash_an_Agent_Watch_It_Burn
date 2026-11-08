@@ -40,13 +40,13 @@ def check(name: str, cond: bool) -> None:
 defs = fm.load_monitors()
 dash = fm.load_dashboard()
 mons = {m["key"]: m for m in defs["monitors"]}
-FILTER = defs["cluster_filter"]
+FILTER = defs["env_filter"]
 
 print("== the definitions are well-formed ==")
 check("monitors.yaml validates clean", fm.validate_monitors(defs) == [])
 check("dashboard.yaml validates clean", fm.validate_dashboard(dash, FILTER) == [])
-check("the cluster filter is the fleet's own name prefix",
-      FILTER == "kube_cluster_name:burritobot-*")
+# Whitney, 2026-11-01: scope BurritoBot's views to its env, not to a cluster name (#629).
+check("the scope is BurritoBot's env in the sandbox org", FILTER == "env:burritobot-kubecon-na-26")
 fleet_src = (REPO / "infra/terraform/fleet/fleet.sh").read_text()
 check("fleet.sh names every cluster watch-it-burn-<something>",
       re.search(r'NAME_PREFIX="?\$\{NAME_PREFIX:-watch-it-burn-|NAME_PREFIX="watch-it-burn-', fleet_src) is not None)
@@ -78,8 +78,8 @@ for k in ("node-not-ready", "guard-proxy-erroring"):
 check("only the two trace monitors are session-scoped",
       sorted(k for k, m in mons.items() if m.get("session")) == ["agent-obs-silent", "no-traces"])
 ao = mons.get("agent-obs-silent", {})
-check("Agent Observability silent (#810): ml_obs.trace under ml_app:burritobot, no data for 10 minutes",
-      ao.get("query", "").startswith("sum(last_10m):sum:ml_obs.trace{ml_app:burritobot}.as_count()")
+check("Agent Observability silent (#810): ml_obs.trace under ml_app:burritobot and the sandbox env, no data for 10 minutes",
+      ao.get("query", "").startswith("sum(last_10m):sum:ml_obs.trace{ml_app:burritobot,env:burritobot-kubecon-na-26}.as_count()")
       and ao.get("options", {}).get("notify_no_data") is True and ao["options"].get("no_data_timeframe") == 10)
 check("agent-obs-silent fires when the count drops below 1", ao.get("query", "").rstrip().endswith("< 1"))
 check("agent-obs-silent is the only org-wide monitor, and the only one on an ml_obs metric",
@@ -105,6 +105,25 @@ for m in defs["monitors"] + [{"query": q["query"]} for w in dash["widgets"]
         check(f"namespace in '{m['query'][:60]}...' is agent", "kube_namespace:agent" in m["query"])
 check(f"every watched Deployment exists ({sorted(watched)})", watched <= deployments | agents)
 check("workshop-agent is the kagent Agent (kagent runs it as a Deployment of that name)", "workshop-agent" in agents)
+# kubernetes_state.deployment.* takes its tags from the Deployment's own labels, not its pods': the console
+# Deployment labelled only its pods, and the env-scoped console query read blank live on 2026-11-08 (#1082).
+# kagent puts the Agent's spec.declarative.deployment.labels on the Deployment it makes and its pods (read live).
+ENV_VALUE = FILTER.split(":", 1)[1]
+ksm = set()
+for m in defs["monitors"] + [{"query": q["query"]} for w in dash["widgets"]
+                              for r in w["definition"].get("requests", []) for q in r.get("queries", [])]:
+    if "kubernetes_state.deployment." in m["query"]:
+        ksm |= set(re.findall(r"kube_deployment:([a-z0-9-]+)", m["query"]))
+check("the kubernetes_state Deployments are console and workshop-agent", ksm == {"console", "workshop-agent"})
+for name in sorted(ksm):
+    d = next((d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == name), None)
+    if d is not None:
+        labels = d["metadata"].get("labels") or {}
+    else:
+        a = next((a for a in docs if a.get("kind") == "Agent" and a["metadata"]["name"] == name), {})
+        labels = ((a.get("spec") or {}).get("declarative") or {}).get("deployment", {}).get("labels") or {}
+    check(f"the {name} Deployment itself carries tags.datadoghq.com/env={ENV_VALUE}, so its kubernetes_state series do",
+          labels.get("tags.datadoghq.com/env") == ENV_VALUE)
 
 print("== the metrics they read are ones this repo produces ==")
 agent_cr = (REPO / "gitops/manifests/datadog/datadog-agent.yaml").read_text()
@@ -151,8 +170,21 @@ def broken(**over):
     d = json.loads(json.dumps(defs))
     d["monitors"][1].update(over)
     return fm.validate_monitors(d)
-check("an unfiltered query", any("not filtered" in p for p in broken(query="max(last_5m):max:x{*} by {kube_cluster_name} < 1")))
-check("an ungrouped query", any("not grouped" in p for p in broken(query="max(last_5m):max:x{kube_cluster_name:burritobot-*} < 1")))
+check("an unscoped query", any("not scoped" in p for p in broken(query="max(last_5m):max:x{*} by {kube_cluster_name} < 1")))
+check("an ungrouped query", any("not grouped" in p for p in broken(query="max(last_5m):max:x{env:burritobot-kubecon-na-26} < 1")))
+check("a query fenced to a cluster name as well as the env",
+      any("filters on a cluster name" in p for p in broken(
+          query="max(last_5m):max:x{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public} by {kube_cluster_name} < 1")))
+for bad_scope in ("kube_cluster_name:burritobot-*", "env:burritobot-*", "", "env:a,kube_cluster_name:b"):
+    d = json.loads(json.dumps(defs))
+    d["env_filter"] = bad_scope
+    check(f"a scope that is not one env is refused ({bad_scope!r})", any("is not one env" in p for p in fm.validate_monitors(d)))
+fenced = json.loads(json.dumps(dash))
+q0 = next(q for w in fenced["widgets"] for r in w["definition"].get("requests") or [] for q in r.get("queries") or []
+          if q.get("data_source", "metrics") == "metrics")
+q0["query"] = q0["query"].replace("{env:burritobot-kubecon-na-26", "{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public")
+check("a dashboard query fenced to a cluster name is refused",
+      any("filters on a cluster name" in p for p in fm.validate_dashboard(fenced, FILTER)))
 check("a threshold that disagrees with the query", any("!=" in p for p in broken(options={"thresholds": {"critical": 3}})))
 check("a message that does not name the cluster", any("name the cluster" in p for p in broken(message="down")))
 check("a duplicate key", any("duplicate" in p for p in broken(key="cluster-silent")))
@@ -191,6 +223,12 @@ check("the org-wide monitor's threshold is still held to its query",
 bad_dash = json.loads(json.dumps(dash))
 bad_dash["widgets"][-1]["definition"]["requests"][0]["formulas"] = [{"formula": "nope"}]
 check("a dashboard formula naming no query", fm.validate_dashboard(bad_dash, FILTER) != [])
+check("a dashboard titled outside 'Watch It Burn: ' is refused, since the title is how the loader finds its own (#1082)",
+      any("does not start with" in p for p in fm.validate_dashboard({**dash, "title": "Choose Your Own Adventure"}, FILTER)))
+check("every repo dashboard is titled under the prefix", all(d["title"].startswith(fm.TITLE_PREFIX) for _, d in fm.load_dashboards()))
+check("a monitor named outside '[WIB fleet] ' is refused (#1082)",
+      any("name does not start with" in p for p in broken(name="Race leaderboard stalled")))
+check("every repo monitor is named under the prefix", all(m["name"].startswith(fm.NAME_PREFIX) for m in mons.values()))
 
 print("== rendering ==")
 r = fm.render_monitor(mons["no-traces"], ["@oncall@example.test"])
@@ -206,15 +244,27 @@ check("the org-wide monitor renders without a cluster line, as a session monitor
 
 print("== planning ==")
 rendered = {k: fm.render_monitor(m, []) for k, m in mons.items()}
-existing = [{"id": 11, "tags": [fm.MANAGED_TAG, "wib-monitor:cluster-silent"]},
-            {"id": 12, "tags": [fm.MANAGED_TAG, "wib-monitor:cluster-silent"]},
-            {"id": 13, "tags": [fm.MANAGED_TAG, "wib-monitor:retired-one"]},
-            {"id": 14, "tags": [fm.MANAGED_TAG]}]
+OURS_NAME = "[WIB fleet] Cluster stopped reporting"
+existing = [{"id": 11, "name": OURS_NAME, "tags": [fm.MANAGED_TAG, "wib-monitor:cluster-silent"]},
+            {"id": 12, "name": OURS_NAME, "tags": [fm.MANAGED_TAG, "wib-monitor:cluster-silent"]},
+            {"id": 13, "name": "[WIB fleet] A retired one", "tags": [fm.MANAGED_TAG, "wib-monitor:retired-one"]},
+            {"id": 14, "name": OURS_NAME, "tags": [fm.MANAGED_TAG]},
+            # Whitney's sandbox org holds other people's monitors (#1082): another title is never ours, even with
+            # our tags on it, and our key tag without the managed tag is not ours either.
+            {"id": 15, "name": "commit-story: no commits analysed", "tags": [fm.MANAGED_TAG, "wib-monitor:cluster-silent"]},
+            {"id": 16, "name": "content-manager: queue stuck", "tags": [fm.MANAGED_TAG, "wib-monitor:retired-two"]},
+            {"id": 17, "name": OURS_NAME, "tags": ["wib-monitor:retired-three"]},
+            {"id": 18, "tags": [fm.MANAGED_TAG, "wib-monitor:retired-four"]}]
 pl = {(a, k, i) for a, k, i, _ in fm.plan_monitors(rendered, existing)}
 check("an existing key is updated in place", ("update", "cluster-silent", 11) in pl)
 check("a duplicate of a key is deleted", ("delete", "cluster-silent", 12) in pl)
 check("a key that left the file is deleted", ("delete", "retired-one", 13) in pl)
 check("a monitor without a key tag is never touched", not any(i == 14 for _, _, i in pl))
+for i, why in ((15, "another title with our tags and a live key"), (16, "another title with our tags and a retired key"),
+               (17, "our name and key tag without the managed tag"), (18, "our tags and no name")):
+    check(f"a monitor with {why} is never edited or deleted (#1082)", not any(j == i for _, _, j in pl))
+check("owned() needs the managed tag, a key tag and the [WIB fleet] name", [fm.owned(m) for m in existing]
+      == [True, True, True, False, False, False, False, False])
 check("a new key is created", ("create", "console-unavailable", None) in pl)
 
 print("== the session window ==")
@@ -237,6 +287,10 @@ for bad in ("2026-09-08T16:00/2026-09-08T19:30", "2026-09-08T19:30Z/2026-09-08T1
         check(f"--session '{bad}' is refused", False)
     except ValueError:
         check(f"--session '{bad}' is refused", True)
+
+
+# The repo's own dashboard titles; the fake numbers only these, so a listing can hold other people's too (#1082).
+OUR_TITLES = {d["title"] for _, d in fm.load_dashboards()}
 
 
 class FakeOrg:
@@ -318,7 +372,7 @@ class FakeOrg:
         if p == "/api/v1/dashboard" and method == "GET":
             return 200, {"dashboards": self.dashboards}
         if p == "/api/v1/dashboard" and method == "POST":
-            did = ["abc-def-ghi", "lea-der-brd"][len(self.dashboards)]
+            did = ["abc-def-ghi", "lea-der-brd"][sum(1 for d in self.dashboards if d["title"] in OUR_TITLES)]
             self.dashboards.append({"id": did, "title": data["title"], "url": f"/dashboard/{did}/fleet"})
             self.bodies[did] = data
             return 200, self.dashboards[-1]
@@ -476,10 +530,10 @@ check("the monitors that fire on a rising count are the ones with a signal",
       and sorted(signals) == ["guard-proxy-erroring", "node-not-ready"])
 check("node-not-ready's signal is its metric without the status filter",
       fm.query_text(signals.get("node-not-ready", {"query": ""})) ==
-      "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready} by {kube_cluster_name}")
+      "max:kubernetes_state.node.by_condition{env:burritobot-kubecon-na-26,condition:ready} by {kube_cluster_name}")
 check("guard-proxy-erroring's signal is its log search without status:error",
       fm.query_text(signals.get("guard-proxy-erroring", {})) ==
-      "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy")
+      "env:burritobot-kubecon-na-26 kube_namespace:agent kube_deployment:guard-proxy")
 check("no repo-only signal leaks into the API body",
       all("signal" not in fm.render_monitor(m, []) for m in mons.values()))
 
@@ -586,7 +640,7 @@ org = FakeOrg()
 rc, text = run(["--data"], org, env={}, keys=keys_unread)
 check("--data without a --cluster exits 1 and calls nothing", rc == 1 and "--cluster" in text and org.calls == [])
 rc, text = run(["--data", "--cluster", "watch-it-burn-community"], org, env={}, keys=keys_unread)
-check("a --cluster outside the queries' filter is refused", rc == 1 and "could never fill" in text and org.calls == [])
+check("a --cluster that is not a burritobot- name is refused", rc == 1 and "could never fill" in text and org.calls == [])
 rc, text = run(["--check", "--cluster", CLUSTERS[0]], org, env={})
 check("--cluster without --data is refused", rc == 1 and "only means something with --data" in text)
 
@@ -744,13 +798,13 @@ def broken_signal(key, **over):
 check("a monitor that fires on a rising count without a signal is refused",
       any("give it a signal" in p for p in broken_signal("node-not-ready", signal=None)))
 check("a signal on another metric is refused", any("not the monitor's metric" in p for p in broken_signal(
-      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.count{kube_cluster_name:burritobot-*} by {kube_cluster_name}"})))
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.count{env:burritobot-kubecon-na-26} by {kube_cluster_name}"})))
 check("a signal filtering on a tag the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
-      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:memorypressure} by {kube_cluster_name}"})))
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{env:burritobot-kubecon-na-26,condition:memorypressure} by {kube_cluster_name}"})))
 check("an ungrouped signal is refused", any("signal is not grouped" in p for p in broken_signal(
-      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready}"})))
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{env:burritobot-kubecon-na-26,condition:ready}"})))
 check("a logs signal searching a term the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
-      "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "search": {"query": "kube_cluster_name:burritobot-* kube_deployment:console"}})))
+      "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "search": {"query": "env:burritobot-kubecon-na-26 kube_deployment:console"}})))
 check("a signal window that is not <n>m, <n>h or <n>d is refused", any("signal window '7 days'" in p for p in broken_signal(
       "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "window": "7 days"})))
 check("a signal on a monitor that fires on absence is refused",
@@ -800,6 +854,115 @@ for i, spec in enumerate(applies):
         kick = dt.datetime.fromisoformat(start_m.group(1).replace("Z", "+00:00"))
         check(f"apply {i + 1}'s window is the 30-minute slot from the stated start",
               window == (kick, kick + dt.timedelta(minutes=30)))
+
+print("== the shared sandbox org: other people's monitors and dashboards are never edited or deleted (#1082) ==")
+# Whitney's sandbox org also holds Viktor's KubeCon race dashboard and the content-manager and commit-story
+# dashboards and monitors. The fake's monitor listing ignores the tag filter, as a listing that returns more would.
+VIKTOR = {"id": "vik-tor-run", "title": "Choose Your Own Adventure: Inference - race", "url": "/dashboard/vik-tor-run/race"}
+COMMIT = {"id": "com-mit-sty", "title": "commit-story", "url": "/dashboard/com-mit-sty/commit-story"}
+NEAR = {"id": "nea-rly-our", "title": "Watch It Burn: fleet (Viktor's copy)", "url": "/dashboard/nea-rly-our/copy"}
+theirs = [
+    {"id": 901, "name": "commit-story: no commits analysed", "type": "metric alert", "query": "avg(last_5m):a{*} < 1",
+     "tags": ["team:commit-story"]},
+    {"id": 902, "name": "content-manager: queue stuck", "type": "metric alert", "query": "avg(last_5m):b{*} > 9",
+     "tags": [fm.MANAGED_TAG, "wib-monitor:cluster-silent"]},
+    {"id": 903, "name": "Inference race: GPU idle", "type": "metric alert", "query": "avg(last_5m):c{*} < 1",
+     "tags": [fm.MANAGED_TAG, "wib-monitor:retired-race"]},
+]
+before = copy.deepcopy(theirs)
+org = FakeOrg(monitors=copy.deepcopy(theirs), dashboards=[dict(VIKTOR), dict(COMMIT), dict(NEAR)])
+org.bodies.update({d["id"]: {"title": d["title"], "widgets": [{"definition": {"type": "note"}}]}
+                   for d in (VIKTOR, COMMIT, NEAR)})
+foreign_bodies = copy.deepcopy(org.bodies)
+for n in (1, 2):
+    rc, text = run(["--apply", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], org)
+    check(f"apply {n} into the shared org exits 0", rc == 0)
+foreign_ids = {str(m["id"]) for m in theirs} | {d["id"] for d in (VIKTOR, COMMIT, NEAR)}
+touched = [(m, p) for m, p in org.writes() if p.rsplit("/", 1)[-1] in foreign_ids]
+check("no PUT or DELETE reached another person's monitor or dashboard", touched == [])
+check("their three monitors are still there, unchanged", [org.monitors.get(m["id"]) for m in theirs] == before)
+check("their three dashboards' bodies are unchanged",
+      all(org.bodies[i] == foreign_bodies[i] for i in ("vik-tor-run", "com-mit-sty", "nea-rly-our")))
+check("ours are seven monitors and two dashboards of our own beside theirs",
+      len([m for m in org.monitors.values() if fm.owned(m)]) == 7 and len(org.dashboards) == 5
+      and {d["title"] for d in org.dashboards} >= {dash["title"], fm.load_dashboard(fm.LEADERBOARD_FILE)["title"]})
+rc, text = run(["--check"], org, env={})
+check("--check passes and names none of theirs as EXTRA",
+      rc == 0 and "EXTRA" not in text and "retired-race" not in text and "content-manager" not in text)
+try:
+    fm.apply(fm.Datadog("datadoghq.com", "A", "B", http=org), defs, [("viktor", {**VIKTOR, "widgets": []})], [], None,
+             dt.datetime(2026, 9, 8, 12, 0, tzinfo=dt.timezone.utc), say=lambda *_: None)
+    refused = False
+except ValueError:
+    refused = True
+check("apply refuses to write a dashboard whose title is not one of ours, before any write",
+      refused and org.bodies["vik-tor-run"] == foreign_bodies["vik-tor-run"])
+
+print("== every write the loader can make is a monitor, a dashboard or a downtime; no key, user or role (#1082) ==")
+# Every mode once, against the shared org above, then the paths: a write to an API or application key, a user, a
+# role, a service account or the org would be outside this list.
+WRITE_OK = re.compile(r"^(POST|PUT|DELETE) /api/v1/(monitor(/\d+|/validate)?|dashboard(/[a-z0-9-]+)?)$"
+                      r"|^(POST|DELETE) /api/v2/downtime(/[A-Za-z0-9-]+)?$|^POST /api/v2/query/scalar$")
+READ_OK = re.compile(r"^GET /api/v(1/(monitor|dashboard(/[a-z0-9-]+)?)|2/(current_user|downtime))$")
+for argv in (["--check"], ["--data", "--cluster", "burritobot-public"], ["--board", "--cluster", "burritobot-public"]):
+    run(argv, org, env={})
+odd = sorted({f"{m} {p}" for m, p, _ in org.calls}
+             - {f"{m} {p}" for m, p, _ in org.calls if WRITE_OK.match(f"{m} {p}") or READ_OK.match(f"{m} {p}")})
+check(f"every call in apply, check, data and board is a monitor, dashboard, downtime, scalar query or current_user read {odd}",
+      odd == [])
+dry = FakeOrg()
+check("the dry run makes no call at all", run([], dry)[0] == 0 and dry.calls == [])
+# The source sweep over fleet.sh and everything it runs is verify/test_datadog_no_key_admin.py.
+
+print("== every query in the four files is scoped to the env (#1082) ==")
+# monitors.yaml, dashboard.yaml and leaderboard.yaml go through the loader's own validation above; this sweep reads
+# every "query" string in them and in the Terraform fleet-analytics dashboard, nested groups and signals included.
+SCOPED = re.compile(r'(^|[{,("\s])' + re.escape(FILTER) + r'($|[},)\s"])')
+
+
+def every_query(o) -> list[str]:
+    """Every data query; a manage_status widget's query is a monitor search, held to our tag below instead."""
+    if isinstance(o, dict):
+        if o.get("type") == "manage_status":
+            return []
+        return [v for k, v in o.items() if k == "query" and isinstance(v, str)] + \
+            [q for k, v in o.items() if k != "query" for q in every_query(v)]
+    return [q for v in o for q in every_query(v)] if isinstance(o, list) else []
+
+
+def unscoped(o) -> list[str]:
+    return [q for q in every_query(o) if not SCOPED.search(q)]
+
+
+ANALYTICS = REPO / "infra/terraform/dashboards/fleet-analytics.json"
+FOUR = {"monitors.yaml": defs, "dashboard.yaml": dash, "leaderboard.yaml": fm.load_dashboard(fm.LEADERBOARD_FILE),
+        "fleet-analytics.json": json.loads(ANALYTICS.read_text())}
+for fname, obj in FOUR.items():
+    qs = every_query(obj)
+    check(f"{fname}: every one of its {len(qs)} queries is scoped to {FILTER}", qs and unscoped(obj) == [])
+    check(f"{fname}: none filters on a cluster name", not any("kube_cluster_name:" in q for q in qs))
+for fname, obj in FOUR.items():
+    bad = copy.deepcopy(obj)
+    first = next(q for q in every_query(bad))
+    def strip(o):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if k == "query" and v == first:
+                    o[k] = v.replace(FILTER + ",", "").replace(FILTER + " ", "").replace("," + FILTER, "").replace(FILTER, "*")
+                    return True
+                if strip(v):
+                    return True
+        elif isinstance(o, list):
+            return any(strip(v) for v in o)
+        return False
+    strip(bad)
+    check(f"{fname}: a query with the env taken out is caught", len(unscoped(bad)) == 1)
+status = [w["definition"] for w in dash["widgets"] if w["definition"].get("type") == "manage_status"]
+check("the fleet alerts widget lists only our monitors, by the managed tag",
+      len(status) == 1 and status[0].get("query") == f'tag:"{fm.MANAGED_TAG}"')
+check("a negated env is not a scope", unscoped({"query": f"sum:x{{!{FILTER}}}"}) != []
+      and unscoped({"query": f"-{FILTER} kube_namespace:agent"}) != [])
+check("another env is not the scope", unscoped({"query": "sum:x{env:burritobot-kubecon-na-26-old}"}) != [])
 
 print("== fleet.sh is the way in ==")
 check("fleet.sh has a monitors verb", re.search(r"^\s+monitors\) exec python3 .*fleet_monitors\.py", fleet_src, re.M) is not None)

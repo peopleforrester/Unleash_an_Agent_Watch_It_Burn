@@ -839,6 +839,10 @@ alone, and the gateway reloads it with no restart (#496).
 
 ## The segments, in order (30 minutes)
 
+Slide numbers in this file count from 1, the title slide being slide 1; the deck's URL
+hash counts from 0 and is one less, so slide 44 is `#/43` at
+`https://rounds.agenticburn.com`.
+
 Four challenges, numbered in the order shown, Challenge 1 to 4 (2026-10-29 planning
 call, `facilitation/kubecon-na-2026-planning-2026-10-29.md`, #687). C5, C6 and C7
 survive only as internal ids: the probe's beat names, the fallback scripts and the
@@ -2112,12 +2116,12 @@ is merely slow rather than rebuilding:
   and how it is made: `facilitation/kubecon-na-2026/fallback/README.md`.
   - The replay, once, over the phone hotspot rather than the hotel network:
     `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1`.
-    It sends segment 1's prompts from `facilitation/kubecon-na-2026/fallback/prompts.yaml`
-    (the order and the four off-topic asks, five model calls, nothing that deploys
-    or reads a Secret), paced under guard-proxy's 150-a-minute window, and stops at
-    the first prompt that does not land. Every line should end `ok`, then `DONE: 5 of 5
-    delivered`; read the replies against each prompt's `expect`. Run it before the
-    community bot's last `reset-bot`, so its five turns are off the counter.
+    It sends segment 1's prompt from `facilitation/kubecon-na-2026/fallback/prompts.yaml`
+    (the linked-list ask, one model call, nothing that deploys or reads a Secret),
+    paced under guard-proxy's 150-a-minute window, and stops at the first prompt that
+    does not land. The line should end `ok`, then `DONE: 1 of 1 delivered`; read the
+    reply against the prompt's `expect`. Run it before the community bot's last
+    `reset-bot`, so its turn is off the counter.
   - The deck and every screenshot it lists are in place:
     `python3 scripts/check-fallback-assets.py`, which ends `recorded fallback ready`
     and exits 1 if any shot is missing, empty or not a PNG.
@@ -2258,15 +2262,20 @@ hosts at peak, down to 1 within three hours).
 - The Datadog pool secret is deliberately not destroyed by `down all`; use
   `fleet.sh reap-secrets` only when the pool itself is finished with.
 - Purge the room's data from Whitney's sandbox org, as promised on the planning call
-  (#647): every `burritobot-public` trace, whatever the scrub caught. Signed in to
-  her org, find the room's traces under `kube_cluster_name:burritobot-public` for the
-  session window, and from the build days before it the spans of service
-  `wib-pii-scrub-check` (ml_app of the same name), which the live scrub check
-  `verify/test_collector_pii_scrub_live.py` sends. Delete their LLM Observability spans by trace id through
-  `POST /api/v2/llm-obs/deletion/data/llmobs` (in preview, so confirm the call on the
-  day). APM spans have no delete-by-query, so ask Datadog support to remove them or
-  let retention expire them. Then post on #647 what was deleted and what is left to
-  retention.
+  (#647): every `burritobot-public` trace, whatever the scrub caught. No sign-in to
+  her org is needed. With the accen-dev session,
+  `python3 verify/dd_purge_public.py --profile accen-dev --from 2026-10-28` lists every
+  LLM Observability span under `k8s.cluster.name:burritobot-public` since the first
+  build day: the room's bot, and the spans of service `wib-pii-scrub-check` (ml_app of
+  the same name) that the live scrub check `verify/test_collector_pii_scrub_live.py`
+  sends. Run it again with `--apply` to delete them by trace id through
+  `POST /api/v2/llm-obs/deletion/data/llmobs`, with the `write-app-key` in
+  `watch-it-burn/datadog` (run 18508 deleted the check's four spans that way on
+  2026-11-08), then with `--verify` a few minutes later, which exits 1 while any is
+  left; a second `--apply` sends only what is left. APM spans under
+  `kube_cluster_name:burritobot-public` have no delete API (the script prints their
+  count), so ask Datadog support to remove them or let retention expire them. Then
+  post on #647 what was deleted and what is left to retention.
 - Record the real spend once the fleet is down, with `teardown/delivery-cost.py
   --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
   and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`
@@ -2307,7 +2316,9 @@ number and says who settled it and when, so references to it elsewhere still lan
    and once more for the shot on the community bot, called `deploy_app` five times
    with "Tron", and all five deployed nginx. Since #991 a bare name is refused, saying
    to send the image, and BurritoBot's prompt names the Tron game's exact image, so
-   the shot is owed again on the bot that runs #991.
+   the shot is owed again on the bot that runs #991. Since #1105 the Tron ask is one
+   prompt, with no follow-up and no ticket number, and the shot sends it alone
+   (`c2-tron` in `fallback/prompts.yaml`).
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet

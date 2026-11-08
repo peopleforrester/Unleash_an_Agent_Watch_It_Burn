@@ -147,8 +147,12 @@ pod = applied["spec"]["template"]
 check("its pod's hostname is the Deployment's name, under the jokers Service",
       pod["spec"].get("hostname") == f"joker-{SLUG}" and pod["spec"].get("subdomain") == m.ROOM_JOKER_SERVICE == "jokers",
       str(pod["spec"]))
+check("a room Joker's logs carry the sandbox env and a burritobot-deployed- service (#629)",
+      pod["metadata"]["labels"].get("tags.datadoghq.com/env") == "burritobot-kubecon-na-26"
+      and pod["metadata"]["labels"].get("tags.datadoghq.com/service") == f"burritobot-deployed-joker-{SLUG}",
+      str(pod["metadata"]["labels"]))
 check("and it is labeled into that Service, beside the model's own label and the workload label",
-      pod["metadata"]["labels"] == {"app": f"joker-{SLUG}", m.WORKLOAD_LABEL: f"joker-{SLUG}", m.ROOM_JOKER_LABEL: "true"},
+      pod["metadata"]["labels"] == {"app": f"joker-{SLUG}", m.ROOM_JOKER_LABEL: "true", **m.stamp_labels(f"joker-{SLUG}")},
       str(pod["metadata"]))
 check("with no public host the reply names no address", "https://" not in reply, reply)
 m.PUBLIC_HOST = "attackme.agenticburn.com"

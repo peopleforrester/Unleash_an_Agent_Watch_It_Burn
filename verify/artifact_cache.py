@@ -23,22 +23,29 @@ get(sha256, url) returns <root>/sha256/<sha256>:
 
 A hit needs only read access, so a read-only store serves hits; a miss there fails on the write, naming the path.
 
+get_retrying() is get() with a miss whose fetch the network broke (a timeout, a reset or refused connection, a failed
+name lookup, an HTTP 408, 429 or 5xx) asked again after each wait in BACKOFF, each retry printed to stderr; curl's
+--retry 3 did that for fetch-e2e-tools.sh before #1118. A mismatch, a 404 and every other error fail at once.
+
 Command line (verify/artifact-cache.sh runs this):
   artifact-cache.sh root               print the resolved root
-  artifact-cache.sh get <sha256> <url> print the path of the verified file, fetching it on a miss
+  artifact-cache.sh get <sha256> <url> print the path of the verified file, fetching it on a miss (get_retrying)
 Any failure prints one line starting ARTIFACT CACHE FAILED to stderr and exits 1."""
 from __future__ import annotations
 
 import datetime
 import fcntl
 import hashlib
+import http.client
 import os
 import pathlib
 import re
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import BinaryIO
 
 ROOT_VARS = ("HECATON_TOOLS_CACHE", "WIB_ARTIFACT_CACHE")
@@ -47,6 +54,8 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 CHUNK = 1 << 20
 # Seconds a connect or a read may stall before the fetch fails; a slow but moving download is not cut off.
 TIMEOUT = 60
+# Seconds get_retrying() waits before each retry of a miss the network broke; one more attempt than there are waits.
+BACKOFF = (2, 5, 10)
 
 # A fetcher writes the bytes at url to the open file it is given.
 Fetcher = Callable[[str, BinaryIO], None]
@@ -193,13 +202,58 @@ def get(sha256: str, url: str, *, root: pathlib.Path | None = None, fetch: Fetch
         os.close(lock_fd)
 
 
+def transient(e: BaseException | None) -> bool:
+    """A fetch error the network caused, which a later attempt may not meet: an HTTP 408, 429 or 5xx, or a failure
+    below HTTP (a timeout, a reset or refused connection, a failed name lookup, a body cut short)."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code in (408, 429) or e.code >= 500
+    return isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException))
+
+
+def get_retrying(sha256: str, url: str, *, backoff: Sequence[float] = BACKOFF,
+                 sleep: Callable[[float], None] = time.sleep, **kw) -> pathlib.Path:
+    """get(), with a fetch the network broke tried again after each wait in backoff; every attempt is its own line in
+    the fetch log. A mismatch, an HTTP 404 and any other error fail on the first attempt."""
+    attempts = len(backoff) + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            return get(sha256, url, **kw)
+        except ArtifactCacheError as e:
+            if attempt == attempts or isinstance(e, ArtifactMismatch) or not transient(e.__cause__):
+                raise
+            wait = backoff[attempt - 1]
+            print(f"  RETRY {url}: {e.__cause__} (attempt {attempt} of {attempts}; again in {wait:g}s)",
+                  file=sys.stderr, flush=True)
+            sleep(wait)
+    raise AssertionError("unreachable")
+
+
+def scratch_dir(prefix: str) -> pathlib.Path:
+    """A new temp directory outside every git worktree, for a test's cache root: the first of TMPDIR, /tmp, /var/tmp
+    and /dev/shm that is outside one and takes a new directory. Hecaton points TMPDIR inside the run's worktree, where
+    resolve_root() rightly refuses a root, and in run 18422 the dispatcher's private /tmp and /var/tmp were deleted
+    while the run was going (findmnt read both as `//deleted`), so a mkdir there failed with ENOENT though the path was
+    still a directory. With none usable it raises, naming each one and why."""
+    why = []
+    for cand in dict.fromkeys(map(pathlib.Path, (tempfile.gettempdir(), "/tmp", "/var/tmp", "/dev/shm"))):
+        tree = worktree_of(cand)
+        if tree is not None:
+            why.append(f"{cand} is inside the git worktree {tree}")
+            continue
+        try:
+            return pathlib.Path(tempfile.mkdtemp(prefix=prefix, dir=cand))
+        except OSError as e:
+            why.append(f"{cand}: {e}")
+    raise ArtifactCacheError("no temp directory outside a git worktree takes a new directory: " + "; ".join(why))
+
+
 def main(argv: list[str]) -> int:
     try:
         if argv == ["root"]:
             print(resolve_root())
             return 0
         if len(argv) == 3 and argv[0] == "get":
-            print(get(argv[1], argv[2]))
+            print(get_retrying(argv[1], argv[2]))
             return 0
         raise ArtifactCacheError("usage: artifact-cache.sh root | artifact-cache.sh get <sha256> <url>")
     except ArtifactCacheError as e:

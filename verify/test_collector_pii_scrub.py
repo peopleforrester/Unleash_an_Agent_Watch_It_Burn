@@ -131,8 +131,15 @@ check("the run-of-show has a Teardown section", bool(teardown))
 purge = next((b for b in teardown.split("\n- ") if "Purge" in b), "")
 check("a Teardown step purges the room's data", bool(purge), teardown[:200])
 for need in ("#647", "burritobot-public", "kube_cluster_name:burritobot-public",
-             "/api/v2/llm-obs/deletion/data/llmobs", "retention"):
+             "/api/v2/llm-obs/deletion/data/llmobs", "retention", "verify/dd_purge_public.py", "--apply",
+             "--verify", "wib-pii-scrub-check"):
     check(f"the purge step names {need}", need in purge)
+script = REPO / "verify" / "dd_purge_public.py"
+check("the script the purge step names is in the repo", script.is_file())
+if script.is_file():
+    src = script.read_text()
+    check("it deletes through the endpoint the step names", '"/api/v2/llm-obs/deletion/data/llmobs"' in src)
+    check("it lists the cluster the step names", 'CLUSTER = "burritobot-public"' in src)
 
 print()
 if failures:
