@@ -8276,6 +8276,9 @@ reads:
     - verify/playwright_browsers.py
     - verify/python.lock
     - verify/weather_feed_probe.py
+  test_weather_feed_probe.py:
+    - gitops/ai-layer/weather_feed.py
+    - verify/weather_feed_probe.py
   test_weather_feed_upstream_failure.py:
     - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/server.py
