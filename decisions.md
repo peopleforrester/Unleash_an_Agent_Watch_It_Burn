@@ -35471,3 +35471,97 @@ results and the two scope-map entries.
 OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 12m36s, 4 at a time`, `ALL
 E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with test_turn_guard.py offline and test_turn_guard_e2e.py in the tier. At
 `d40f7e29`, before the scope-map entries, it was green too (86 checks in 11m32s). No dependency was added.
+## 2026-11-08 · #1083 · run 18568 · The cluster-side burritobot check and the sandbox check's key check
+
+**What was found.** `verify/prior-drafts.sh 1083 origin/staging` found no draft of #1083's own. #629's draft
+`origin/agent/629-17932` holds the work this issue ports. Of its commits, 717f1fa0 adds check 5 and the cluster check,
+and a94e2517 adds envFrom to it. `verify/test_datadog_sandbox_live.py` and its logic test are unchanged on staging
+since that draft's base `b4180a8f`, so check 5's diff applied cleanly. The two cluster files are new. The draft's other
+changes (the views, the labels, KubeArmor) are not part of this issue and are not ported here.
+
+**What changed, and how it differs from the draft.**
+- `verify/test_burritobot_cluster_live.py` is ported from a94e2517. It reads `datadog-secret`'s api-key in datadog,
+  monitoring and security against watch-it-burn/datadog's, finds no `datadog-admin-secret` and no stray key variable,
+  and checks that every container of every Running pod logs under a burritobot service and
+  `env:burritobot-kubecon-na-26`. It reads the env list, envFrom ConfigMaps and Secrets, pod labels and the pod's log
+  annotation, and explicit env overrides envFrom. Three changes from the draft. The context comes from `--context`,
+  which can be given more than once. With none given, the test reads COMMUNITY_CONTEXT and PRIVATE_CONTEXT, the two
+  KubeCon contexts `run-e2e.sh` already requires. It never falls back to the current-context, and it no longer reads
+  CONTEXT, which in `run-e2e.sh` names an attendee cluster. envFrom now honours a reference's `prefix`, so a prefixed
+  `DD_SERVICE` no longer counts as `DD_SERVICE`. A reference with no name, one that cannot be read, or a Secret value
+  that is not base64 now goes into the failing container's line instead of being dropped silently. It also prints how
+  many containers and pods it judged.
+- `verify/test_burritobot_cluster_live_logic.py` covers a tagged pod, an untagged one, a ConfigMap-fed container and a
+  Secret-fed one. On envFrom it covers a ConfigMap missing DD_ENV or DD_SERVICE, an unreadable ConfigMap, an
+  unreadable Secret, a reference with no name, a prefix that moves the names, a later Secret overriding the ConfigMap,
+  a Secret value that is not base64, and a container's own env overriding envFrom. It also covers a mismatched key in
+  monitoring's `datadog-secret` and the choice of contexts. It has 52 checks.
+- Check 5 of `verify/test_datadog_sandbox_live.py` is ported from 717f1fa0, with one change. The draft compared
+  watch-it-burn/datadog's key with the org key by its last four characters, and another key can share those. A live
+  read showed that `GET /api/v2/api_keys/<id>` returns the key's whole value to the secret's application key, so the
+  check now compares the whole value, in the process and never printed. A record with no value fails. The logic test
+  adds a different key with the same last four characters, a record with no value, and three keys named burritobot
+  that differ only in case and spaces. It keeps zero keys, two keys, another key and a stale or unused key.
+- `verify/scope-map.yaml` gets one new entry, `test_burritobot_cluster_live_logic.py`, taken from
+  `scope_tests.py write`, plus `infra/datadog-fleet/fleet_monitors.py`, which the live module imports. The write also
+  rewrote about thirty other tests' entries that staging had let drift. Those are left out, so this change stays its
+  own size.
+
+**Live check, run 18568, 2026-11-08 05:12 UTC.** Both tests are read-only and nothing on either cluster was changed.
+`python3 verify/test_burritobot_cluster_live.py --context watch-it-burn-community --context watch-it-burn-private`
+(exit 0) printed, for each cluster:
+
+```
+== 1. datadog-secret holds watch-it-burn/datadog's api-key on <context> ==
+  PASS  datadog/datadog-secret's api-key is the burritobot key
+  PASS  monitoring/datadog-secret's api-key is the burritobot key
+  PASS  security/datadog-secret's api-key is the burritobot key
+== 2. no second key: no admin secret, and every key variable reads datadog-secret ==
+  PASS  no datadog-admin-secret in datadog
+  PASS  no datadog-admin-secret in monitoring
+  PASS  no datadog-admin-secret in agent
+  PASS  the cluster has Running pods to read
+  PASS  every Datadog API key variable reads datadog-secret's api-key
+== 3. every running container logs under a burritobot service and the env ==
+  PASS  the DatadogAgent carries file-based log configs
+  read 72 container(s) in 57 Running pod(s)        (community; private read 94 in 74)
+  PASS  every container's logs carry a burritobot service and env:burritobot-kubecon-na-26
+```
+
+and closed `all 2 cluster(s) passed (#629, #1083).` `python3 verify/test_datadog_sandbox_live.py` (exit 0) reads the
+org that both clusters ship to. It printed:
+
+```
+== Whitney's sandbox org: Datadog (datadoghq.com), keys from watch-it-burn/datadog as accen-dev in us-west-2 ==
+== 1. the Agents report under distinct burritobot- cluster names (datadog.agent.running) ==
+  PASS  Agent: burritobot-public reports in the last 60 minutes
+  PASS  Agent: burritobot-private reports in the last 60 minutes
+  PASS  Agent: every group carries env:burritobot-kubecon-na-26
+== 2. every log from the clusters (Logs aggregate, kube_cluster_name:burritobot-*) ==
+  PASS  logs: burritobot-public reports in the last 60 minutes
+  PASS  logs: burritobot-private reports in the last 60 minutes
+  PASS  logs: every group carries env:burritobot-kubecon-na-26
+  PASS  logs: every group's service is burritobot or burritobot-<name>
+== 3. every span from the clusters (traces.span.metrics.calls, counted before sampling) ==
+  PASS  spans: burritobot-public reports in the last 60 minutes
+  PASS  spans: burritobot-private reports in the last 60 minutes
+  PASS  spans: every group carries env:burritobot-kubecon-na-26
+  PASS  spans: every group's service is burritobot or burritobot-<name>
+== 4. LLM Observability files the interactions under ml_app burritobot (ml_obs.trace) ==
+  PASS  ml_obs.trace reports under env:burritobot-kubecon-na-26 as ml_app burritobot
+  PASS  no other ml_app reports under env:burritobot-kubecon-na-26
+== 5. the clusters' key is the org's one API key named burritobot (GET /api/v2/api_keys) ==
+  PASS  exactly one API key in the org is named burritobot
+  PASS  watch-it-burn/datadog's api-key is that key (GET /api/v2/api_keys/<id>, the whole value)
+  PASS  Datadog saw the burritobot key used in the last 24 hours
+
+Both KubeCon clusters ship under Whitney's sandbox rules (#629).
+```
+
+The org holds one key whose name contains burritobot, `BurritoBot`. No workload failed either check, so nothing is
+left to another child of #629.
+
+**Not yet run on a cluster.** Nothing: both live tests ran from this branch, and they read the clusters and do not
+change them.
+
+No dependency was added.

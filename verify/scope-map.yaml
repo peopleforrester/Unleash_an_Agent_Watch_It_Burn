@@ -656,6 +656,14 @@ reads:
     - verify/agent_probe.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
+  test_burritobot_cluster_live_logic.py:
+    - agent
+    - backstage
+    - gitops/manifests/datadog/datadog-agent.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - security
+    - security/datadog-secret
+    - verify/test_burritobot_cluster_live.py
   test_c1_dns_exfil.py:
     - challenges/c1-exfil-s3/dns-exfil.py
     - gitops/ai-layer/tool_audit.py

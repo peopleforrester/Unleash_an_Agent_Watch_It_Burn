@@ -1,5 +1,5 @@
-# ABOUTME: Live check of #629's done-when list in Whitney's Datadog sandbox org: both KubeCon clusters' metrics, logs
-# ABOUTME: and spans carry env:burritobot-kubecon-na-26 and a burritobot service, under distinct cluster names. Read-only.
+# ABOUTME: Live check of #629's done-when list in Whitney's Datadog sandbox org: metrics, logs and spans carry the env
+# ABOUTME: and a burritobot service under distinct cluster names, and the key is the org's one named burritobot. Read-only.
 # SUITE: e2e (needs AWS access to watch-it-burn/datadog, and both KubeCon clusters shipping with a recent /chat)
 """The live half of #629. The offline half is test_datadog_sandbox_names.py (the manifests set the names) and
 test_datadog_sandbox_live_logic.py (this file judges a payload the way it should).
@@ -16,6 +16,13 @@ Whitney's rules for her sandbox org, and what each check below reads, over the l
    the spans an indexed-span search would miss. Each group must have a burritobot service and the env.
 4. ml_app. LLM Observability's `ml_obs.trace` carries ml_app and env (docs.datadoghq.com/llm_observability/
    monitoring/metrics, read 2026-10-30). Under the env it must report, and only as ml_app burritobot.
+5. The dedicated key. Whitney asked for a new API key named burritobot, used for nothing else. An API key cannot be
+   scoped or tagged, so the org side of that is: exactly one key in the org is named burritobot, it is the key in
+   watch-it-burn/datadog (the whole value, from the key's own record, GET /api/v2/api_keys/<id>, since the list
+   gives only the last four characters), and Datadog saw it used within KEY_USED_HOURS. The list is
+   GET /api/v2/api_keys, which needs the api_keys_read permission (Key Management API reference, read 2026-11-02);
+   when the secret's read-only application key lacks it, WIB_FLEET_MONITORS_APP_KEY, Michael's own key, reads it.
+   The cluster side, that both clusters ship with that key and no other, is test_burritobot_cluster_live.py.
 
 "A burritobot service" is burritobot- followed by a name, or the root service, plain burritobot: Datadog takes the
 LLM Observability ml_app from the root span's service, so that one stays unhyphenated (question 868, decisions.md).
@@ -43,6 +50,10 @@ ML_APP = "burritobot"
 CLUSTERS = ("burritobot-public", "burritobot-private")
 OURS = "kube_cluster_name:burritobot-*"
 MISSING = "(none)"
+KEY_NAME = "burritobot"
+# date_last_used is the newest use Datadog records; the Key Management reference does not say how often it is
+# refreshed, so this allows a day rather than the metric window.
+KEY_USED_HOURS = 24
 
 
 def ours(service: str) -> bool:
@@ -75,8 +86,31 @@ def log_groups(dd, minutes: int) -> list[dict]:
             .get("data", {}).get("buckets", [])]
 
 
-def run(dd, minutes: int = 60, now: int | None = None, say=print) -> list[str]:
-    """Every rule as a check; returns the names of the ones that failed."""
+def api_keys(dd, name: str) -> list[dict]:
+    """Every API key whose name contains `name`, as Datadog's list filter matches it, all pages."""
+    from urllib.parse import urlencode
+    out, page = [], 0
+    while True:
+        data = dd.call("GET", "/api/v2/api_keys?" + urlencode({"filter": name, "page[size]": 100, "page[number]": page}))
+        rows = data.get("data", [])
+        out.extend(rows)
+        if len(rows) < 100:
+            return out
+        page += 1
+
+
+def used_at(stamp: str | None) -> int | None:
+    """An API key's date_last_used as epoch seconds, or None when Datadog has none."""
+    import datetime as dt
+    if not stamp:
+        return None
+    return int(dt.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp())
+
+
+def run(dd, minutes: int = 60, now: int | None = None, say=print, api_key: str = "", keys_dd=None) -> list[str]:
+    """Every rule as a check; returns the names of the ones that failed. api_key is watch-it-burn/datadog's, compared
+    in this process with the org key's whole value and never printed; keys_dd reads the keys when dd's application
+    key may not (main)."""
     now = int(time.time()) if now is None else now
     failures: list[str] = []
 
@@ -117,6 +151,28 @@ def run(dd, minutes: int = 60, now: int | None = None, say=print) -> list[str]:
         dd, f"sum:ml_obs.trace{{env:{DD_ENV}}} by {{ml_app}}.as_count()", minutes, now)})
     check(f"ml_obs.trace reports under env:{DD_ENV} as ml_app {ML_APP}", ML_APP in apps)
     check(f"no other ml_app reports under env:{DD_ENV}", apps in ([], [ML_APP]), [f"ml_app:{a}" for a in apps])
+
+    say(f"== 5. the clusters' key is the org's one API key named {KEY_NAME} (GET /api/v2/api_keys) ==")
+    keys = keys_dd or dd
+    rows = [k for k in api_keys(keys, KEY_NAME)
+            if str(k.get("attributes", {}).get("name", "")).strip().lower() == KEY_NAME]
+    named = [k.get("attributes", {}) for k in rows]
+    check(f"exactly one API key in the org is named {KEY_NAME}", len(named) == 1,
+          [f"name {k.get('name')!r} last4 {k.get('last4')}" for k in named])
+    key = named[0] if len(named) == 1 else {}
+    # The list gives only the last four characters, which another key can share; the key's own record carries the
+    # whole value. It is compared in this process and never printed.
+    full = ""
+    if len(rows) == 1 and rows[0].get("id"):
+        full = (keys.call("GET", f"/api/v2/api_keys/{rows[0]['id']}").get("data", {}).get("attributes", {})
+                .get("key") or "")
+    check(f"watch-it-burn/datadog's api-key is that key (GET /api/v2/api_keys/<id>, the whole value)",
+          bool(api_key) and bool(full) and full == api_key,
+          ([f"the {KEY_NAME} key ends {key.get('last4')}"] + ([] if full else ["and its record carries no key value"]))
+          if key else [])
+    last = used_at(key.get("date_last_used"))
+    check(f"Datadog saw the {KEY_NAME} key used in the last {KEY_USED_HOURS} hours",
+          last is not None and now - last <= KEY_USED_HOURS * 3600, [f"date_last_used {key.get('date_last_used')}"])
     return failures
 
 
@@ -127,8 +183,10 @@ def main() -> int:
     try:
         api, app, site = fm.read_keys(profile, region)
         dd = fm.Datadog(site, api, app)
+        owner_app = os.environ.get(fm.APP_KEY_ENV, "")
+        keys_dd = fm.Datadog(site, api, owner_app) if owner_app else dd
         print(f"== Whitney's sandbox org: {fm.org_name(dd)} ({site}), keys from {fm.SECRET_ID} as {profile} in {region} ==")
-        failures = run(dd, minutes)
+        failures = run(dd, minutes, api_key=api, keys_dd=keys_dd)
     except (RuntimeError, OSError, ValueError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
