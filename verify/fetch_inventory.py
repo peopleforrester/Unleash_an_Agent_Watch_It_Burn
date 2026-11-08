@@ -28,6 +28,12 @@ fails. Each entry has a `class`:
               `why` says which
     none      a line that names a fetch command and runs none: a comment, a message, a regex, a stub; `why` says which
 
+Drift on a file (a call site no entry claims, a count that is off, an entry for a file with no call site) fails when
+the file was last changed under the rule: an edit not yet committed, or a commit whose own copy of this module carries
+DRIFT_RULE. Drift on a file last changed before the inventory existed is named, not failed on, until a change touches
+that file again, as scope_tests.owed() does for the scope map (#1190): a run cut before the inventory that lands a call
+site on staging mid-gate cannot fail another run's change. A malformed entry always fails.
+
 The inventory, this file and its test are left out of the scan: they are the scan's own definition, and each names
 every command it looks for. None of them fetches anything.
 """
@@ -80,6 +86,13 @@ CLASSES = {
 PINNED_KINDS = ("tool", "terraform-provider", "helm-chart", "browser", "python-package", "node-package",
                 "container-image", "git-commit", "release-file", "cache-fill")
 LIVE_KINDS = ("cluster", "lab-endpoint", "registry", "saas-api", "upstream-index", "github", "public-web")
+
+# Drift on a file fails once the file was last changed under this rule; owed() reads it in each commit's copy of this
+# module. Run 18664's gate failed on drift it had not made: 45 commits landed on staging between its base and its gate,
+# from runs cut before the inventory existed, and added call sites to files it had listed (#1116).
+DRIFT_RULE = "DRIFT_FAILS_SINCE = \"#1116\""
+DRIFT_FAILS_SINCE = "#1116"
+FIX_HINT = "run `python3 verify/fetch_inventory.py draft`, class each line and commit the inventory with the change"
 
 
 def tracked(root: pathlib.Path | None = None) -> list[str]:
@@ -154,19 +167,20 @@ def entry_problems(rel: str, i: int, e) -> list[str]:
 
 
 def assign(sites: dict, hits: list[tuple[str, int, str]]):
-    """(problems, claimed) where claimed maps (file, entry index) to the hits that entry claims."""
-    problems: list[str] = []
+    """(problems, claimed). Each problem is (file, drift, message): drift is True when the file's lines changed under an
+    entry that was right for them, False when the entry itself is malformed. claimed maps (file, entry index) to the
+    hits that entry claims."""
+    problems: list[tuple[str, bool, str]] = []
     claimed: dict[tuple[str, int], list[tuple[int, str]]] = collections.defaultdict(list)
     compiled: dict[str, list] = {}
     for rel, entries in sites.items():
         if not isinstance(entries, list) or not entries:
-            problems.append(f"{rel}: its entry in the inventory is not a list of entries")
+            problems.append((rel, False, f"{rel}: its entry in the inventory is not a list of entries"))
             compiled[rel] = []
             continue
         compiled[rel] = []
         for i, e in enumerate(entries):
-            bad = entry_problems(rel, i, e)
-            problems += bad
+            problems += [(rel, False, b) for b in entry_problems(rel, i, e)]
             ok = isinstance(e, dict) and isinstance(e.get("match"), str) and e["match"]
             try:
                 rx = re.compile(e["match"]) if ok else None
@@ -177,7 +191,8 @@ def assign(sites: dict, hits: list[tuple[str, int, str]]):
         i = next((i for i, rx in enumerate(compiled.get(rel, [])) if rx is not None and rx.search(line)), None)
         if i is None:
             why = "no entry for this file" if rel not in sites else "no entry of this file matches it"
-            problems.append(f"{rel}:{n}: a fetch call site missing from the inventory ({why}): {line.strip()[:160]}")
+            problems.append((rel, True, f"{rel}:{n}: a fetch call site missing from the inventory ({why}): "
+                                        f"{line.strip()[:160]}"))
         else:
             claimed[(rel, i)].append((n, line))
     seen = {rel for rel, _, _ in hits}
@@ -185,7 +200,7 @@ def assign(sites: dict, hits: list[tuple[str, int, str]]):
         if not isinstance(entries, list):
             continue
         if rel not in seen:
-            problems.append(f"{rel}: the inventory lists it, but the scan finds no fetch call site there")
+            problems.append((rel, True, f"{rel}: the inventory lists it, but the scan finds no fetch call site there"))
             continue
         for i, e in enumerate(entries):
             if not isinstance(e, dict):
@@ -194,20 +209,65 @@ def assign(sites: dict, hits: list[tuple[str, int, str]]):
             want = e.get("lines")
             if isinstance(want, int) and len(got) != want:
                 at = ", ".join(f"{rel}:{n}" for n, _ in got) or "none"
-                problems.append(f"{rel}: entry {i + 1} (match {e.get('match')!r}) claims {len(got)} lines, the "
-                                f"inventory says {want}; it claims {at}")
+                problems.append((rel, True, f"{rel}: entry {i + 1} (match {e.get('match')!r}) claims {len(got)} "
+                                            f"lines, the inventory says {want}; it claims {at}"))
             if not isinstance(e.get("class"), str) or e["class"] not in CLASSES:
                 for n, _ in got:
-                    problems.append(f"{rel}:{n}: a fetch call site with no classification")
+                    problems.append((rel, False, f"{rel}:{n}: a fetch call site with no classification"))
     return problems, claimed
+
+
+def _under_rule(rel: str, root: pathlib.Path, seen: dict[str, bool]) -> bool:
+    """Whether the last change to rel was made under the drift rule: an edit not yet committed, or a commit whose own
+    verify/fetch_inventory.py carries DRIFT_RULE. A commit with no fetch_inventory.py came before the inventory. A path
+    git cannot place counts as under the rule, so nothing is let off by an unreadable history."""
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    status = git("status", "--porcelain", "--", rel)
+    if status.returncode != 0 or status.stdout.strip():
+        return True
+    last = git("log", "-1", "--format=%H", "--", rel)
+    sha = last.stdout.strip()
+    if last.returncode != 0 or not sha:
+        return True
+    if sha not in seen:
+        own = git("show", f"{sha}:verify/fetch_inventory.py")
+        seen[sha] = own.returncode == 0 and DRIFT_RULE in own.stdout
+    return seen[sha]
+
+
+def owed(problems: list[tuple[str, bool, str]], root: pathlib.Path | None = None) -> tuple[list[str], list[str]]:
+    """(fails, named). A malformed entry always fails: the inventory is this change's own. Drift on a file fails when
+    the file was last changed under the rule, so the change that adds a call site classes it in the same commit. Drift
+    on a file last changed in a commit made before the inventory existed is named, not failed on, until a change
+    touches that file again: another run's older commit landing on staging mid-gate cannot fail this one."""
+    root = root or REPO
+    seen: dict[str, bool] = {}
+    under: dict[str, bool] = {}
+    fails, named = [], []
+    for rel, drift, msg in problems:
+        if drift and rel not in under:
+            under[rel] = _under_rule(rel, root, seen)
+        (fails if not drift or under[rel] else named).append(msg)
+    return fails, named
+
+
+def check_split(root: pathlib.Path | None = None, inventory: pathlib.Path | None = None,
+                files: list[str] | None = None) -> tuple[list[str], list[str]]:
+    """(fails, named): check()'s problems split by owed()."""
+    root = root or REPO
+    sites = load(inventory or root / INVENTORY_REL)
+    problems, _ = assign(sites, scan(root, files))
+    return owed(problems, root)
 
 
 def check(root: pathlib.Path | None = None, inventory: pathlib.Path | None = None,
           files: list[str] | None = None) -> list[str]:
+    """Every problem, drift from before the rule included."""
     root = root or REPO
     sites = load(inventory or root / INVENTORY_REL)
     problems, _ = assign(sites, scan(root, files))
-    return problems
+    return [msg for _, _, msg in problems]
 
 
 def summary(root: pathlib.Path | None = None, inventory: pathlib.Path | None = None) -> dict:
@@ -229,7 +289,7 @@ def summary(root: pathlib.Path | None = None, inventory: pathlib.Path | None = N
             if cls == "pinned":
                 cached[(kind, e.get("cached") is True)] += 1
             files[cls].add(rel)
-    return {"problems": problems, "by_kind": by_kind, "by_family": by_family, "cached": cached, "files": files,
+    return {"problems": [msg for _, _, msg in problems], "by_kind": by_kind, "by_family": by_family, "cached": cached, "files": files,
             "total": sum(len(g) for g in claimed.values())}
 
 
@@ -239,7 +299,7 @@ def draft(root: pathlib.Path | None = None, inventory: pathlib.Path | None = Non
     sites = load(inventory) if inventory.exists() else {}
     problems, _ = assign(sites, scan(root))
     out = collections.defaultdict(list)
-    for p in problems:
+    for _, _, p in problems:
         m = re.match(r"(.+?):(\d+): a fetch call site missing", p)
         if m:
             out[m.group(1)].append(p.split("): ", 1)[1])
@@ -254,11 +314,14 @@ def draft(root: pathlib.Path | None = None, inventory: pathlib.Path | None = Non
 
 def main(argv: list[str]) -> int:
     if argv == ["check"]:
-        problems = check()
-        for p in problems:
+        fails, named = check_split()
+        for p in fails:
             print(f"  FAIL  {p}")
-        print(f"fetch inventory: {len(problems)} problems" if problems else "fetch inventory: every call site classed")
-        return 1 if problems else 0
+        for p in named:
+            print(f"  NOTE  {p} (last changed before the inventory's rule; named, not failed on)")
+        print(f"fetch inventory: {len(fails)} problems; {FIX_HINT}" if fails
+              else "fetch inventory: every call site classed")
+        return 1 if fails else 0
     if argv == ["summary"]:
         s = summary()
         print(f"{s['total']} call sites in {len(set().union(*s['files'].values()))} files")

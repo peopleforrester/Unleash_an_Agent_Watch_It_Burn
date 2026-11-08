@@ -44,9 +44,16 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 CU, UO, HE, CR, GC = "cu" + "rl", "url" + "open", "he" + "lm", "cr" + "ane", "git " + "clone"
 
 print("== the repo: every call site the scan finds is listed and classified ==")
-problems = fi.check()
-check(f"verify/fetch-inventory.yaml accounts for every call site ({len(problems)} problems)", not problems,
+problems, before_rule = fi.check_split()
+check(f"verify/fetch-inventory.yaml accounts for every call site a change under the rule touched ({len(problems)} "
+      f"problems; {fi.FIX_HINT})", not problems,
       "\n        ".join(problems[:40]) + (f"\n        and {len(problems) - 40} more" if len(problems) > 40 else ""))
+if before_rule:
+    print(f"  NOTE  {len(before_rule)} places behind, each in a file last changed in a commit made before the "
+          "inventory's rule; the next change to the file brings its entry current:"
+          + "".join(f"\n        {b}" for b in before_rule[:20]))
+check("this fetch_inventory.py carries the rule owed() reads in each commit's copy",
+      fi.DRIFT_RULE in (VERIFY / "fetch_inventory.py").read_text())
 s = fi.summary()
 counted = sum(sum(c.values()) for c in s["by_kind"].values())
 check(f"the summary counts each of the {s['total']} sites once, by class and kind", counted == s["total"] > 0,
@@ -178,6 +185,43 @@ check("an entry whose count is not 1 or more fails", any("has no `lines` count o
 got = scratch(BASE, GOOD.replace(f"match: '{CU} -s'", "match: '('", 1))
 check("an entry whose match is not a regular expression fails, naming it",
       any("has a match that is not a regular expression" in p for p in got), str(got))
+
+print("== the drift rule: drift from a commit made before the inventory is named, not failed on ==")
+with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR") or None) as td:
+    root = pathlib.Path(td)
+
+    def g(*args: str) -> None:
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True,
+                       capture_output=True)
+    g("init", "-q")
+    for rel, text in BASE.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    (root / "verify" / "old.sh").write_text(f"{CU} -s https://lab.test/old\n")
+    g("add", "-A")
+    g("commit", "-q", "-m", "before fetch_inventory.py existed")
+    (root / "verify" / "fetch_inventory.py").write_text(f"# the rule\n{fi.DRIFT_RULE}\n")
+    (root / "verify" / "ruled.sh").write_text(f"{CU} -s https://lab.test/ruled\n")
+    g("add", "-A")
+    g("commit", "-q", "-m", "under the rule")
+    (root / "inv.yaml").write_text(GOOD)
+    fails, named = fi.check_split(root, root / "inv.yaml",
+                                  ["verify/probe.sh", "scripts/read.py", "verify/old.sh", "verify/ruled.sh"])
+    check("drift on a file last committed before fetch_inventory.py existed is named, not failed on",
+          any(p.startswith("verify/old.sh:1:") for p in named) and not any(p.startswith("verify/old.sh") for p in fails),
+          f"fails {fails}, named {named}")
+    check("drift on a file last committed under the rule fails",
+          any(p.startswith("verify/ruled.sh:1:") for p in fails), f"fails {fails}")
+    (root / "verify" / "old.sh").write_text(f"{CU} -s https://lab.test/old\n# touched\n")
+    fails, named = fi.check_split(root, root / "inv.yaml", ["verify/probe.sh", "scripts/read.py", "verify/old.sh"])
+    check("and the same file, edited and not yet committed, fails", any(p.startswith("verify/old.sh:1:") for p in fails),
+          f"fails {fails}")
+    bad = GOOD.replace("class: live", "class: maybe", 1)
+    (root / "inv.yaml").write_text(bad)
+    g("checkout", "-q", "--", "verify/old.sh")
+    fails, named = fi.check_split(root, root / "inv.yaml", ["verify/probe.sh", "scripts/read.py"])
+    check("a malformed entry fails whenever its file was last changed",
+          any("has no classification" in p for p in fails), f"fails {fails}")
 
 print()
 if failures:

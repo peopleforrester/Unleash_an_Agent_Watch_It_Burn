@@ -13,9 +13,33 @@
 #   loopback  why: a server on 127.0.0.1, or a repository on this host, that the test made itself
 #   none      why: the line names the command and runs none
 #
+# Drift on a file fails once the file was last changed under the inventory's rule; drift on a file last changed in a
+# commit made before the inventory existed is named, not failed on, until a change touches that file again.
+#
 # A new fetch: run `python3 verify/fetch_inventory.py draft`, which prints a stub for each unclaimed line, class it and
 # give it the right count. `python3 verify/fetch_inventory.py summary` prints the counts decisions.md's #1115 entry gives.
 sites:
+  .github/workflows/build-kyverno-counter-fix.yml:
+  - match: setup-go
+    lines: 1
+    class: pinned
+    kind: tool
+    pin: .github/workflows/build-kyverno-counter-fix.yml (its go-version, and build.sh's GOTOOLCHAIN=go1.26.6)
+    cached: false
+  - match: pinned crane|\^crane|= crane \]|artifact-cache\.sh get
+    lines: 4
+    class: pinned
+    kind: tool
+    pin: verify/e2e-tools.lock (crane's row, fetched through artifact-cache.sh get)
+    cached: true
+  - match: 127\.0\.0\.1:5000/v2/
+    lines: 2
+    class: loopback
+    why: crane's own registry on 127.0.0.1:5000, which the job starts
+  - match: .
+    lines: 2
+    class: none
+    why: 'a step name, and the call that hands scripts/ghcr_version_tag.py a crane: build on loopback, whose fetches are classed there'
   .github/workflows/iam-policy.yml:
   - match: setup-python
     lines: 1
@@ -170,6 +194,12 @@ sites:
     lines: 1
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/stage_switch_run.py:
+  - match: /controls
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: each KubeCon cluster's guard-proxy /controls, read before and after the stage switch
   verify/submodule-pins-pushed.sh:
   - match: .
     lines: 2
@@ -486,7 +516,7 @@ sites:
     pin: images/watch-it-burn-backstage/yarn.lock (the @playwright/test release, which names its Chromium build)
     cached: false
   - match: .
-    lines: 6
+    lines: 7
     class: none
     why: comments, the list of host tools it checks for, and messages
   verify/schemas/README.md:
@@ -527,6 +557,31 @@ sites:
     lines: 3
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/test_desk_remote_reports.py:
+  - match: urlopen
+    lines: 2
+    class: loopback
+    why: the support desk's own server on 127.0.0.1, which the test starts
+  verify/test_e2e_tools_gate_scope.py:
+  - match: .
+    lines: 2
+    class: none
+    why: a docstring, and the list of host tools the test stubs; nothing leaves the host
+  verify/test_kyverno_counter_fix.py:
+  - match: .
+    lines: 5
+    class: none
+    why: checks on build.sh's and the workflow's text that name crane; nothing leaves the host
+  verify/test_presenter_ticket_range.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: the support desk's own server on 127.0.0.1, which the test starts
+  verify/test_public_desk.py:
+  - match: urlopen
+    lines: 1
+    class: loopback
+    why: the desk and desk-relay servers on 127.0.0.1, which the test starts
   verify/tf_plugin_cache.py:
   - match: urlopen|path = artifact_cache\.get\(
     lines: 2
@@ -853,7 +908,7 @@ sites:
     why: the command text fleet.sh prints, held as text
   verify/test_e2e_toolchain.py:
   - match: .
-    lines: 6
+    lines: 7
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_e2e_tools_tier.py:
@@ -1393,7 +1448,7 @@ sites:
     why: comments, docstrings or messages that name the command; none runs it
   verify/test_workflow_artifact_cache.py:
   - match: .
-    lines: 15
+    lines: 16
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_workflow_registry_writes.py:
