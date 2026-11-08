@@ -388,7 +388,6 @@ reads:
     - agent/GATEWAY-NOTES.md
     - challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
-    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
     - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
     - docs/KUBECON-ABSTRACT-READINESS.md
@@ -397,6 +396,7 @@ reads:
     - docs/research/2026-10-24-agentgateway-evaluation.md
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
     - gitops/workshop-agent/agent.yaml
     - verify/test_beat3_mcp.py
   test_agentgateway_tracing_e2e.py:
@@ -603,16 +603,16 @@ reads:
     - challenges/03-.../BUILD-SPIKE.md
     - challenges/03-bad-mcp-excessive-agency
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
-    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
     - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - gitops/ai-layer/server.py
     - verify
     - verify/beat-03.sh
   test_beat3_mcp.py:
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
-    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
     - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - gitops/ai-layer/server.py
   test_bedrock_profile_check.py:
     - gitops/ai-layer/resources.yaml
     - gitops/workshop-agent/agent.yaml
@@ -883,7 +883,6 @@ reads:
     - agent/guard-proxy-reader
     - challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
-    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
     - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
     - decisions.md
@@ -897,6 +896,7 @@ reads:
     - docs/research/2026-10-24-agentgateway-evaluation.md
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
     - gitops/workshop-agent/agent.yaml
     - infra/terraform/aws/cluster/main.tf
     - verify/agentgateway_schema.py
@@ -5547,7 +5547,6 @@ reads:
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/03-bad-mcp-excessive-agency/agent-prompt.txt
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
-    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
     - challenges/c5-scoped-role.yaml
@@ -5564,6 +5563,7 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/active-skin.js
@@ -6528,7 +6528,6 @@ reads:
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/03-bad-mcp-excessive-agency/agent-prompt.txt
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
-    - challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
     - challenges/c5-scoped-role.yaml
@@ -6545,6 +6544,7 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/server.py
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/active-skin.js

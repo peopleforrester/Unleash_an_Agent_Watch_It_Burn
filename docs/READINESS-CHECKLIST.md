@@ -49,7 +49,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 | ~~C4 old~~ | ~~Fork bomb~~ | retired as a beat (#114): Nova refuses it in chat. PID-cap defence still deployed, terminal-only | | | n/a |
 | C5 | Output guard | ✅ `challenges/02-sanitization/agent-prompt-exfil.txt` | ✅ `toggle-output-guard-on.sh` | ✅ `fallback.curl.sh output` | ✅ |
 | C6 | Input guard | ✅ `agent-prompt-injection.txt` | ✅ `toggle-input-guard-on.sh` + `toggle-input-classifier-on.sh` | ✅ `fallback.curl.sh input` | ✅ |
-| C7 | Rogue MCP | ✅ `challenges/03-bad-mcp-excessive-agency/agent-prompt.txt` | ✅ `toggle-mcp-authz-on.sh` (kagent `toolNames` on the `evil-mcp` entry: ON = `[get_weather]`) + `evil-mcp-shim/` | ✅ `fallback.curl.sh` | ✅ (toggle verified live 2026-06-26, `FACILITATOR.md`) |
+| C7 | Rogue MCP | ✅ `challenges/03-bad-mcp-excessive-agency/agent-prompt.txt` | ✅ `toggle-mcp-authz-on.sh` (kagent `toolNames` on the `evil-mcp` entry: ON = `[get_weather]`) + the poisoned server `gitops/ai-layer/server.py` | ✅ `fallback.curl.sh` | ✅ (toggle verified live 2026-06-26, `FACILITATOR.md`) |
 
 ## 5. AI layer
 - ✅ kagent (ADK) agent on Bedrock Sonnet 4.6; live-verified end to end.

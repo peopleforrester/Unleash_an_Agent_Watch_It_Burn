@@ -26,7 +26,8 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 BEAT03 = REPO / "verify/beat-03.sh"
 BEAT_DIR = "challenges/03-bad-mcp-excessive-agency"
 FALLBACK_SRC = (REPO / BEAT_DIR / "fallback.curl.sh").read_text()
-SHIM_PY = (REPO / BEAT_DIR / "evil-mcp-shim/server.py").read_text()
+# The poisoned server the clusters run: GitOps builds the evil-mcp-src ConfigMap from it (#1193).
+SHIM_PY = (REPO / "gitops/ai-layer/server.py").read_text()
 SENTINEL = re.search(r'"FAKE_MCP_SENTINEL", "([^"]+)"', SHIM_PY).group(1)
 # An attendee's cluster: lab-bootstrap's profile is not admin, so C7 there is evil-mcp's toolNames list.
 WORKSHOP = "arn:aws:eks:us-west-2:000000000000:cluster/watch-it-burn-attendee-07"

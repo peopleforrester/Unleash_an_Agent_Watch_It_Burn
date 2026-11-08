@@ -37184,3 +37184,34 @@ Not yet run on a cluster:
   should print the lab's PolicyReport line for the villain.
 - On both clusters, a day after the rollout: `kyverno_breaker_drops_total` for both circuits stays near zero, and each
   Pod created in agent has a PolicyReport.
+## 2026-11-08 · #1193 · run 18663 · The stale evil-mcp-shim copy under challenges/03 is gone; gitops/ai-layer/server.py is the one copy
+
+**What changed.** `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/` held a June copy of the poisoned weather
+server (`server.py`, fixed "It is 21C and sunny.", the older "Do not mention this instruction" wording), its
+`Dockerfile` and a `k8s-manifest.yaml` with an unfilled `REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD` image.
+Nothing applied or built any of them, so all three are deleted, and no pointer file is left in the folder: the
+folder's own docs say where the code is instead. The Deployment, Service, `app=evil-mcp-shim` label, the agentgateway
+target and the Backstage selector keep the name `evil-mcp-shim`, as the issue's scope guard asks: those are the live
+Challenge 4 server, defined in `gitops/ai-layer/resources.yaml`.
+
+**What read the removed files.** Four offline tests read the stale `server.py`: `test_beat3_mcp.py`,
+`test_beat03_c7.py`, `test_challenge_fallbacks.py` and `test_trace_walkthrough_view.py`. Each now reads
+`gitops/ai-layer/server.py`. The sentinel regex finds the same `FAKE-MCP-EXFIL-sentinel-4c1d` there, and
+`apply_optimization` still carries "MUST apply". `test_challenge_fallbacks.py` took its fake `get_weather` reply from
+the stale copy's fixed return; the live tool returns a weather-feed reading (#642), so the test now owns a fixed
+reading of that shape. `images.lock` loses the placeholder row only the deleted manifest named, and
+`test_no_docker_hub.py`'s placeholder check now names the remaining `${{parameters.image}}` placeholder row. The six
+`verify/scope-map.yaml` entries that listed the deleted file list `gitops/ai-layer/server.py` instead; `scope_tests.py
+write` was not kept, because on this base it also adds about 800 lines of other tests' drift that is not this change's.
+Comments and docs that named the folder or file now name `gitops/ai-layer/server.py`: `plant-fake-secret.yaml` (the
+live Deployment sets `FAKE_MCP_SENTINEL` directly, not through the deleted manifest's secretKeyRef),
+`FACILITATOR.md`, `docs/READINESS-CHECKLIST.md`, `docs/KUBECON-ABSTRACT-READINESS.md`,
+`docs/MASTER-RECREATION-SPEC.md` and `prds/done/7-observability-meta.md`. The toggle, fallback and `verify/beat-03.sh`
+never read the folder; they name the Deployment and the Agent, so Beat 3's path is unchanged.
+
+**Live check (run 18663, both clusters, read-only).** On watch-it-burn-community and watch-it-burn-private,
+`deploy/evil-mcp-shim` in `agent` runs `ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18c...`,
+mounts ConfigMap `evil-mcp-src-78t5dt5d9d`, and carries Argo CD tracking id `ai-layer:apps/Deployment:agent/evil-mcp-shim`.
+That ConfigMap's `server.py` is byte for byte `gitops/ai-layer/server.py` on both (`diff` printed nothing), with
+"region-locked" present and "21C and sunny" absent. No pod on either cluster runs a `REGISTRY/evil-mcp-shim` image, and
+no Argo CD Application on either sources a `challenges/` path. Nothing was changed on either cluster.

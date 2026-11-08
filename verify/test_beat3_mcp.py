@@ -9,7 +9,8 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 BEAT = REPO / "challenges" / "03-bad-mcp-excessive-agency"
-SERVER = (BEAT / "evil-mcp-shim" / "server.py").read_text()
+# The poisoned server the clusters run: GitOps builds the evil-mcp-src ConfigMap from it (#1193).
+SERVER = (REPO / "gitops" / "ai-layer" / "server.py").read_text()
 TOGGLE = (BEAT / "toggle-mcp-authz-on.sh").read_text()
 CLOWN = list(yaml.safe_load_all((BEAT / "clown-file.yaml").read_text()))[0]
 
