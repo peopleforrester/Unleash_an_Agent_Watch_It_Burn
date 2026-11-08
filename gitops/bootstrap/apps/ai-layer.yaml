@@ -38,6 +38,13 @@ spec:
       # {{- if not .Values.console.kubeconBrief }}
       components:
         - components/no-kubecon-brief
+      # The public desk both KubeCon clusters report deploys to (#1157). With desk.remoteReports true, kubecon-community's
+      # value and no other profile's, the desk-remote-reports component adds the token-only /remote-landed route to the
+      # support host and the cluster label to each deployments row. It sits inside the community guard because only a
+      # community cluster's desk is the public one; apps.yaml fails a profile that sets it with console.kubeconBrief true.
+      # {{- if .Values.desk.remoteReports }}
+        - components/desk-remote-reports
+      # {{- end }}
       # {{- end }}
       # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
       # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which

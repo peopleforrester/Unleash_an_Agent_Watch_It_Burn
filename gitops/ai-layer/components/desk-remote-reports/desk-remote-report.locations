@@ -1,0 +1,17 @@
+# ABOUTME: The public desk's one route for the other KubeCon cluster's deploy reports (#1157), included into
+# ABOUTME: console.conf's support-desk server by the desk-remote-reports component and on no other profile.
+#
+# The admin cluster's deploy_app posts here, at https://support.burritobot.co/remote-landed, with the token in
+# X-Desk-Report-Token. POST only and small, as /landed's reports are. A request without the header is refused here,
+# before it reaches the desk; the desk then compares the header with DESK_REPORT_TOKEN and records the report only on
+# a match (ticket_site.py, remote_report_allowed). In-cluster /landed stays refused from outside (console.conf).
+location = /remote-landed {
+  limit_except POST { deny all; }
+  client_max_body_size 4k;
+  if ($http_x_desk_report_token = "") { return 401; }
+  set $wib_c6_desk_remote http://fake-ticket.agent.svc.cluster.local:8080;
+  proxy_pass $wib_c6_desk_remote;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_read_timeout 10s;
+}

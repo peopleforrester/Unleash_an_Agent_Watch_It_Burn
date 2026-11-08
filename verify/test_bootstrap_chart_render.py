@@ -26,7 +26,7 @@ from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, 
                              FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO, LAB_PLATFORM_GHCR, REPO_URL, REVISION,
                              UNARMED_IF, all_profiles, app_names, c7_control, for_c7_control, for_guardrails,
                              for_kubecon_brief, kubecon_brief, profiles, values_path, kustomize_images,
-                             without_front_door)
+                             without_front_door, DESK_REMOTE_COMPONENT, desk_remote_reports, for_desk_remote_reports)
 
 failures: list[str] = []
 
@@ -80,7 +80,7 @@ for profile in all_profiles():
     want = []
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
-        raw = for_kubecon_brief(raw, kubecon_brief(profile))
+        raw = for_kubecon_brief(for_desk_remote_reports(raw, desk_remote_reports(profile)), kubecon_brief(profile))
         raw = without_front_door(for_guardrails(raw, "Audit")).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
@@ -181,9 +181,9 @@ def ai_layer_for(profile: str) -> dict:
         if r.returncode == 0 else {}
 
 
-def console_src_built(components: list[str]) -> tuple[dict, str, str]:
-    """The console-src ConfigMap and the name the console Deployment mounts, as Argo CD builds gitops/ai-layer with
-    these kustomize.components: it adds them to the app's own kustomization (`kustomize edit add component`)."""
+def ai_layer_built(components: list[str]) -> tuple[list[dict], str]:
+    """gitops/ai-layer as Argo CD builds it with these kustomize.components: it adds them to the app's own
+    kustomization (`kustomize edit add component`). The objects, and kustomize's error when it fails."""
     (REPO / "tmp").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
         app = pathlib.Path(d) / "ai-layer"
@@ -194,8 +194,15 @@ def console_src_built(components: list[str]) -> tuple[dict, str, str]:
             (app / "kustomization.yaml").write_text(yaml.safe_dump(kust, sort_keys=False), encoding="utf-8")
         k = subprocess.run([KUBECTL, "kustomize", str(app)], capture_output=True, text=True)
     if k.returncode != 0:
-        return {}, "", k.stderr.strip()[:300]
-    docs = [x for x in yaml.safe_load_all(k.stdout) if x]
+        return [], k.stderr.strip()[:300]
+    return [x for x in yaml.safe_load_all(k.stdout) if x], ""
+
+
+def console_src_built(components: list[str]) -> tuple[dict, str, str]:
+    """The console-src ConfigMap and the name the console Deployment mounts, built with these kustomize.components."""
+    docs, err = ai_layer_built(components)
+    if err:
+        return {}, "", err
     cm = next((x for x in docs if x.get("kind") == "ConfigMap" and x["metadata"]["name"].startswith("console-src-")), {})
     dep = next((x for x in docs if x.get("kind") == "Deployment" and x["metadata"]["name"] == "console"), {})
     mounted = [v["configMap"]["name"] for v in (dep.get("spec") or {}).get("template", {}).get("spec", {}).get("volumes", [])
@@ -206,8 +213,8 @@ def console_src_built(components: list[str]) -> tuple[dict, str, str]:
 built = {}
 for profile, served in (("kubecon-community", False), ("kubecon-private", True), ("burn", False), ("admin", True)):
     comps = ((ai_layer_for(profile).get("spec") or {}).get("source") or {}).get("kustomize", {}).get("components") or []
-    check(f"{profile}: ai-layer renders {'no components' if served else 'the no-kubecon-brief component'}",
-          comps == ([] if served else ["components/no-kubecon-brief"]), str(comps))
+    want = [] if served else ["components/no-kubecon-brief"] + ([DESK_REMOTE_COMPONENT] if profile == "kubecon-community" else [])
+    check(f"{profile}: ai-layer renders the components {want}", comps == want, str(comps))
     if not KUBECTL:
         continue
     cm, mounted, err = console_src_built(comps)
@@ -229,9 +236,46 @@ if len(built) == 4 and all(built.values()):
 r = render("-f", str(values_path("kubecon-private")), "--set", f"revision={COMMIT}", "--set", "console.kubeconBrief=no")
 check("a console.kubeconBrief that is not a bool: the render fails, naming it (#909)", r.returncode != 0
       and "console.kubeconBrief is whether this cluster's console serves /kubecon" in r.stderr, r.stderr.strip()[:200])
-for guard in ("console.kubeconBrief", "{{"):
+for guard in ("console.kubeconBrief", "desk.remoteReports", "{{"):
     check(f"no rendered kubecon-community ai-layer keeps {guard!r}",
           guard not in yaml.safe_dump(ai_layer_for("kubecon-community")))
+
+print("== the public desk's remote reports, kubecon-community alone (#1157) ==")
+r = render("-f", str(values_path("kubecon-community")), "--set", f"revision={COMMIT}", "--set", "desk.remoteReports=yes")
+check("a desk.remoteReports that is not a bool: the render fails, naming it", r.returncode != 0
+      and "desk.remoteReports is whether this cluster's desk takes" in r.stderr, r.stderr.strip()[:200])
+r = render("-f", str(values_path("kubecon-private")), "--set", f"revision={COMMIT}", "--set", "desk.remoteReports=true")
+check("desk.remoteReports on a profile that serves /kubecon (the private cluster): the render fails, naming it",
+      r.returncode != 0 and "desk.remoteReports is for the public desk" in r.stderr, r.stderr.strip()[:200])
+LOCATIONS_FILE = REPO / "gitops/ai-layer/components/desk-remote-reports/desk-remote-report.locations"
+for profile in ("kubecon-community", "burn", "attendee", "kubecon-private"):
+    comps = ((ai_layer_for(profile).get("spec") or {}).get("source") or {}).get("kustomize", {}).get("components") or []
+    on = profile == "kubecon-community"
+    if not KUBECTL:
+        continue
+    docs, err = ai_layer_built(comps)
+    conf = next((x for x in docs if x.get("kind") == "ConfigMap" and x["metadata"]["name"].startswith("console-conf-")), {})
+    console = next((x for x in docs if x.get("kind") == "Deployment" and x["metadata"]["name"] == "console"), {})
+    site = next((x for x in docs if x.get("kind") == "Deployment" and x["metadata"]["name"] == "fake-ticket"), {})
+    mounts = [v["configMap"]["name"] for v in (console.get("spec") or {}).get("template", {}).get("spec", {})
+              .get("volumes", []) if (v.get("configMap") or {}).get("name", "").startswith("console-conf")]
+    env = {e["name"]: e for c in (site.get("spec") or {}).get("template", {}).get("spec", {}).get("containers", [])
+           for e in c.get("env") or []}
+    check(f"{profile}: kustomize builds it, and console-conf is "
+          f"{'default.conf and desk-remote-report.locations' if on else 'default.conf alone'}",
+          bool(conf) and sorted(conf["data"]) == (["default.conf", "desk-remote-report.locations"] if on
+                                                  else ["default.conf"]), err or str(sorted((conf or {}).get("data", {}))))
+    check(f"{profile}: the console mounts that console-conf by its hashed name", bool(conf) and mounts == [conf["metadata"]["name"]],
+          str(mounts))
+    if on and conf:
+        check(f"{profile}: the locations file is the component's", conf["data"]["desk-remote-report.locations"]
+              == LOCATIONS_FILE.read_text(encoding="utf-8"))
+    want_env = {"DESK_CLUSTER", "DESK_REMOTE_CLUSTER", "DESK_REPORT_TOKEN"} if on else set()
+    check(f"{profile}: fake-ticket's env is {sorted(want_env) or 'empty'}", set(env) == want_env, str(sorted(env)))
+    if on:
+        ref = (env.get("DESK_REPORT_TOKEN", {}).get("valueFrom") or {}).get("secretKeyRef") or {}
+        check(f"{profile}: the token is the desk-report-token Secret's token key, optional",
+              ref == {"name": "desk-report-token", "key": "token", "optional": True}, str(ref))
 
 print("== the guardrails, armed by lab-platform's arm parameter (#638, lab-platform#310) ==")
 ARMING = ("--set", f"{ARM_PARAMETER}={ARM_VALUE}")

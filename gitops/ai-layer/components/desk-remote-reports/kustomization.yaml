@@ -1,0 +1,42 @@
+# ABOUTME: Makes this cluster's desk the public one both KubeCon clusters report deploys to (#1157, part of #1145): a
+# ABOUTME: token-only /remote-landed route on the support host, and a cluster label on every deployments row.
+#
+# The ai-layer Application adds it on a profile whose values set desk.remoteReports true, which only kubecon-community
+# does: its desk is deployments.burritobot.co, which the room and the presenters share. Every other profile, the 2-hour
+# workshop's included, renders without it, so its console has no remote-report route and its desk no token or label.
+#
+# Two changes, both through generated or patched objects, so kustomize rehashes and the pods roll onto them:
+#   console-conf gains desk-remote-report.locations, the file console.conf's support-desk server includes (a glob that
+#     matches nothing without this component). It holds the /remote-landed route, POST only, refused without the
+#     X-Desk-Report-Token header.
+#   fake-ticket gets DESK_REPORT_TOKEN from the desk-report-token Secret's token key, optional so a cluster without the
+#     Secret still starts: its desk then answers /remote-landed with its plain 404 and takes no remote report. It also
+#     gets the two labels, community for its own rows and private for rows that came with the token.
+# Nothing here writes the Secret. The admin cluster's side, which sends the same token, is #1158.
+# verify/test_desk_remote_reports.py holds it, and verify/test_bootstrap_chart_render.py builds it with kustomize.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+  - name: console-conf
+    behavior: merge
+    files:
+      - desk-remote-report.locations
+patches:
+  - target:
+      kind: Deployment
+      name: fake-ticket
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fake-ticket
+      spec:
+        template:
+          spec:
+            containers:
+              - name: site
+                env:
+                  - { name: DESK_CLUSTER, value: community }
+                  - { name: DESK_REMOTE_CLUSTER, value: private }
+                  - name: DESK_REPORT_TOKEN
+                    valueFrom: { secretKeyRef: { name: desk-report-token, key: token, optional: true } }

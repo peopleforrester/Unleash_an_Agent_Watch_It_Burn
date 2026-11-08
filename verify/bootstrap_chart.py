@@ -72,10 +72,33 @@ def kubecon_brief(profile: str) -> bool:
 
 
 def for_kubecon_brief(raw: str, serve: bool) -> str:
-    """An app file as the chart renders it at this console.kubeconBrief: the withholding block left out on true."""
+    """An app file as the chart renders it at this console.kubeconBrief: the withholding block left out on true, with
+    the desk-remote-reports block nested in it (#1157)."""
     if not serve:
         return raw
+    raw = for_desk_remote_reports(raw, False)
     return re.sub(" " + re.escape(KUBECON_WITHHELD_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
+# The public desk (#1157): values.yaml's desk.remoteReports, false unless a profile's values file says true, which only
+# kubecon-community does. ai-layer.yaml holds its block inside the /kubecon withholding block above, rendered on true,
+# which adds the desk-remote-reports component: the token-only /remote-landed route and each row's cluster label.
+DESK_REMOTE_IF = "{{- if .Values.desk.remoteReports }}"
+DESK_REMOTE_END = "{{- end }}"
+DESK_REMOTE_COMPONENT = "components/desk-remote-reports"
+
+
+def desk_remote_reports(profile: str) -> bool:
+    """Whether a profile's desk takes the other cluster's reports: its values file's desk.remoteReports, else values.yaml's."""
+    shared = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) or {}
+    return (values(profile).get("desk") or {}).get("remoteReports", shared["desk"]["remoteReports"])
+
+
+def for_desk_remote_reports(raw: str, on: bool) -> str:
+    """An app file as the chart renders it at this desk.remoteReports: the desk-remote-reports block left out on false."""
+    if on:
+        return raw
+    return re.sub(" " + re.escape(DESK_REMOTE_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
 
 
 # The guardrails' action (#638, lab-platform#310): values.yaml's guardrails.validationAction, Audit unless lab-platform's

@@ -41,3 +41,9 @@ guardrails:
 # no-kubecon-brief component, which takes the file out, so the room's /kubecon is a 404. The private cluster keeps it.
 console:
   kubeconBrief: true
+# Whether this cluster's desk is the public one both KubeCon clusters report deploys to (#1157, part of #1145). true has
+# the ai-layer Application add the desk-remote-reports component: the console's support host gains /remote-landed,
+# which records a report only with the token from the desk-report-token Secret, and each deployments row names its
+# cluster. Only kubecon-community sets it; every other profile, the 2-hour workshop's included, keeps the desk as it was.
+desk:
+  remoteReports: false

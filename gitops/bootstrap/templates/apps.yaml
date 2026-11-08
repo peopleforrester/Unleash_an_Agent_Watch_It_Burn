@@ -22,6 +22,12 @@ ABOUTME: source takes .Values.revision and every lab-platform image .Values.imag
 {{- if not (kindIs "bool" .Values.console.kubeconBrief) }}
 {{- fail (printf "console.kubeconBrief is whether this cluster's console serves /kubecon: true, or false on a community profile (got %v)" .Values.console.kubeconBrief) }}
 {{- end }}
+{{- if not (kindIs "bool" .Values.desk.remoteReports) }}
+{{- fail (printf "desk.remoteReports is whether this cluster's desk takes the other KubeCon cluster's deploy reports: true, or false (got %v)" .Values.desk.remoteReports) }}
+{{- end }}
+{{- if and .Values.desk.remoteReports .Values.console.kubeconBrief }}
+{{- fail "desk.remoteReports is for the public desk, a community profile's: set it only where console.kubeconBrief is false" }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}
