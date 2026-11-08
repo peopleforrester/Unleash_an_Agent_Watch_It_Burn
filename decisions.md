@@ -43448,3 +43448,39 @@ zero`. It needs #1239's token route, and it is that issue's third criterion as w
 so the room does not wait on it. Nothing in the repo was changed apart from this entry.
 
 **Tests run.** None besides the prose gate: the change is this entry alone.
+
+## 2026-11-09 · #1044 · run 18831 · A test holds #979's last criterion: the drift report, run with the rebuilt states, is clean, and decisions.md records it
+
+**What was asked.** Test review run 18079 found that no test checked #979's criterion that
+`drift-report.py --accounts accen-dev --region us-west-2`, run with the rebuilt states, has an empty Unmanaged table
+and reads every rebuilt state as clean, with its output recorded here. `bash verify/prior-drafts.sh 1044 origin/staging`
+printed NONE and the issue had no comments, so this is a first draft.
+
+**The test.** `verify/test_drift_rebuilt_states.py`, offline. One checker, `judge`, reads a report and its exit code
+and names each way it falls short: an exit other than 0, an INCOMPLETE section, a findings line other than 0 findings,
+an Unmanaged section other than `None.`, a drift section other than `No state has drifted.`, a rebuilt state missing
+from Clean states, or a clean count that is not its list. The rebuilt states are the five #979 rebuilt in accen-dev:
+`lab VPC accen-dev`, `boundary accen-dev`, `audit accen-dev`, `cluster watch-it-burn-community` and
+`cluster watch-it-burn-private`. The checker is first run on seven broken copies of a good report, one fault each,
+and must fail every one. Then two halves:
+- *The record.* It splits this file into entries at dated `## ` headings only, since the quoted report has `## `
+  lines of its own, and takes #979's two entries. Run 18049's fenced block must begin with the exact command and pass
+  the checker, and its entry must say each state was rebuilt by its script (`import-state.py boundary`, `network`,
+  `cluster accen-dev <name>` for both, and the audit root's `import-state.sh`).
+- *The run.* A scratch tree holds the five states, each at the path its rebuild script writes: the test loads
+  `import-state.py` and takes `network_state`, `ROOTS["boundary"]` and `STATE_DIR` from it, and reads the audit
+  script's `STATE` line, so a script that moved its state would move the test's too. watch-it-burn-private's state
+  carries no role tag, as the live one does. Shims for aws and terraform on a sealed PATH stand for an accen-dev
+  holding what those states manage and nothing else, and the real `drift-report.py` runs with the criterion's flags.
+  It must pass the checker, list exactly the five as clean, and agree with the recorded run on exit, findings,
+  Unmanaged, drift and clean states. With private's state removed the cluster comes out unmanaged and exit 2; with
+  community's plan showing drift, exit 2; with the boundary state removed it is not clean; the checker fails on each,
+  and the run is green again once they are put back.
+
+**Its run.** `python3 verify/test_drift_rebuilt_states.py`: `All rebuilt-state drift checks passed.`, exit 0. Its
+entry in `verify/scope-map.yaml` is the one `python3 verify/scope_tests.py write` added, and
+`python3 verify/test_scope_tests.py` printed `ALL PASS`. No dependency was added.
+
+**No live check.** The change is a test under `verify/` that no cluster runs and this entry, so by the 2026-11-07
+ruling (#1062) it skips the live check. The live output it holds is run 18049's, and #1041's entry records the same
+report clean on tanjiro-wsl2.
