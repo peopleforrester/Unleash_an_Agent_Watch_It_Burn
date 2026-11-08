@@ -38,7 +38,9 @@ Kyverno admission armed first: both registry policies at Deny, before the router
 deploy onto it the off-registry image that may have taken the cluster before it down. RBAC, KubeArmor and egress
 stay as the standby's start state has them, for `guardrails-on`. After the router takes the new table, the new holder
 is linked with the other role's holder (fleet.sh guardrails-link), so `guardrails-on` from either terminal reaches
-the pair that serves the room now. The 2-hour workshop's profiles have nothing to arm, and nothing is armed there.
+the pair that serves the room now, and given the one support desk (fleet.sh desk-link, #1159): the same
+desk-report-token on both, so the private bot, which reads support.burritobot.co through its desk-relay wherever the
+router sends that name, lands its deploys on attackme's holder's deployments page. The 2-hour workshop's profiles have nothing to arm, and nothing is armed there.
 
 Every kubectl call is made with an isolated kubeconfig and an explicit --context, and every aws call with an
 explicit AWS_PROFILE and --region (AGENTS.md, kube-context safety).
@@ -304,7 +306,8 @@ def arm_floor(c: Cluster, account: str) -> tuple[bool, str]:
     return True, "Kyverno admission at Deny (" + ", ".join(FLOOR_POLICIES) + ")"
 
 
-# How long a link may hold the watcher: two kubeconfigs, two token reads and two Secret writes, normally seconds.
+# How long each link step may hold the watcher: two kubeconfigs, two token reads and two Secret writes, normally
+# seconds; desk-link also restarts a community desk that had no token, which a fresh standby's has not.
 LINK_TIMEOUT = 180
 
 
@@ -315,14 +318,31 @@ def link_step(community: Cluster, admin: Cluster) -> tuple[dict, list[str]]:
             [str(FLEET), "guardrails-link", f"{community.name}@{community.region}", f"{admin.name}@{admin.region}"])
 
 
+def desk_link_step(community: Cluster, admin: Cluster) -> tuple[dict, list[str]]:
+    """The fleet.sh run that gives the pair serving the room now its one support desk (#1145, #1159): the same
+    desk-report-token on both, so the private bot's deploys land on the public deployments page, wherever attackme is.
+    The private bot's desk-relay already reads support.burritobot.co, which the router sends to attackme's holder."""
+    return ({}, [str(FLEET), "desk-link", f"{community.name}@{community.region}", f"{admin.name}@{admin.region}"])
+
+
+def link_steps(community: Cluster, admin: Cluster) -> list[tuple[dict, list[str]]]:
+    """Every fleet.sh run a new KubeCon pair needs, in order: the guardrails switch, then the one desk."""
+    return [link_step(community, admin), desk_link_step(community, admin)]
+
+
 def link_pair(community: Cluster, admin: Cluster, timeout: float = LINK_TIMEOUT) -> tuple[bool, str]:
-    e, cmd = link_step(community, admin)
-    try:
-        r = subprocess.run(cmd, env={**run_env(), **e}, cwd=HERE, capture_output=True, text=True, timeout=timeout)
-    except (subprocess.TimeoutExpired, OSError) as ex:
-        return False, type(ex).__name__
-    last = (r.stderr.strip().splitlines() or [""])[-1]
-    return r.returncode == 0, last[-300:]
+    """Run each link step; both run even when the first fails, since each is a link of its own. True only when both
+    did, with the last line of each that failed."""
+    whys = []
+    for e, cmd in link_steps(community, admin):
+        try:
+            r = subprocess.run(cmd, env={**run_env(), **e}, cwd=HERE, capture_output=True, text=True, timeout=timeout)
+        except (subprocess.TimeoutExpired, OSError) as ex:
+            whys.append(f"{cmd[1]}: {type(ex).__name__}")
+            continue
+        if r.returncode != 0:
+            whys.append(f"{cmd[1]}: " + (r.stderr.strip().splitlines() or [""])[-1][-300:])
+    return not whys, "; ".join(whys)
 
 
 # --- promotion -------------------------------------------------------------------------------------------------
@@ -523,9 +543,9 @@ class Watcher:
             ok, why = self.link(community, admin)
         except Exception as e:  # noqa: BLE001 - the promotion has happened; a failed link is logged, not raised
             ok, why = False, f"{type(e).__name__}: {e}"
-        log(f"{role}: guardrails switch {'LINKED' if ok else 'NOT linked'}: {community.name} <-> {admin.name}"
-            + ("" if ok else f" ({why}); run 'fleet.sh guardrails-link {community.name}@{community.region} "
-                              f"{admin.name}@{admin.region}' by hand"))
+        pair = f"{community.name}@{community.region} {admin.name}@{admin.region}"
+        log(f"{role}: guardrails switch and desk {'LINKED' if ok else 'NOT linked'}: {community.name} <-> {admin.name}"
+            + ("" if ok else f" ({why}); run 'fleet.sh guardrails-link {pair}' and 'fleet.sh desk-link {pair}' by hand"))
         return ok
 
 

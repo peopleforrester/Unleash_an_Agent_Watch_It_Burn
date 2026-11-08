@@ -774,6 +774,15 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       community cluster's desk, deployments.burritobot.co. Keeps the community cluster's token when
                       it has one; else writes a new one and restarts its fake-ticket, which clears the desk. Never
                       prints the token. Defaults as guardrails-link; 'instructors up' runs it after that.
+    desk-reset [--tickets] [<community>[@<region>]]
+                      Clear the KubeCon pair's one deployments page (#1144, #1159): every deploy row on the public
+                      desk, both clusters' alike, so deployments.burritobot.co and the wall start empty. Filed tickets
+                      stay unless --tickets, which also clears every filed ticket, the room's and the presenters'
+                      HC-9xx; the fixed tickets, HC-666 among them, always stay. Runs inside the desk's own pod (the
+                      desk answers the reset only on its loopback) on the cluster holding attackme: the promoted
+                      standby when backups.py has promoted one, else watch-it-burn-community. Refuses any other
+                      cluster, the private one included, whose bot reads and reports on the public desk. Restarts
+                      nothing and touches no Secret.
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -5354,6 +5363,75 @@ cmd_desk_link() {
     log "desk-link: linked; the private bot's deploys show on ${an}'s deployments page, labelled private"
 }
 
+# The desk reset (#1144, #1159). The KubeCon pair has one desk and one deployments page (#1145): the community cluster's
+# fake-ticket, which the router serves as support.burritobot.co and deployments.burritobot.co. So the reset clears that
+# desk alone, wherever attackme is: the promoted community standby (promoted.tsv) when there is one, else
+# watch-it-burn-community. The desk answers POST /desk-reset only from its own pod's loopback, so the reset runs in the
+# desk's pod with kubectl exec; nothing outside the cluster API reaches it, and the console refuses the path.
+readonly DESK_RESET_PATH="/desk-reset"
+is_public_desk_name() { [[ "$1" =~ ^watch-it-burn-community(-b[0-9][0-9])?$ ]]; }
+# The cluster holding the public desk now, as <name>@<region>. ALWAYS exits 0.
+public_desk_holder() {
+    local h r
+    h="$(promoted_holder community)"
+    if [[ -n "${h}" ]] && is_public_desk_name "${h}"; then
+        r="$(standby_region "${h}")"
+        printf '%s@%s' "${h}" "${r:-${WIB_REGION}}"
+    else
+        printf 'watch-it-burn-community@%s' "${WIB_REGION}"
+    fi
+    return 0
+}
+
+# desk-reset [--tickets] [<community>[@<region>]]: clear the one deployments page; with --tickets, the filed tickets too.
+cmd_desk_reset() {
+    local tickets=false target="" acct="${WIB_DEFAULT_ACCOUNT}" arg
+    for arg in "$@"; do
+        case "${arg}" in
+            --tickets) tickets=true ;;
+            -*) log "usage: desk-reset [--tickets] [<community>[@<region>]]"; return 2 ;;
+            *) [[ -z "${target}" ]] || { log "usage: desk-reset [--tickets] [<community>[@<region>]]"; return 2; }
+               target="${arg}" ;;
+        esac
+    done
+    [[ -n "${target}" ]] || target="$(public_desk_holder)"
+    local name="${target%@*}" region="${WIB_REGION}" kcfg ctx out rc=0
+    [[ "${target}" == *@* ]] && region="${target#*@}"
+    if ! is_public_desk_name "${name}"; then
+        log "desk-reset: REFUSING ${name}: the one desk is the KubeCon community cluster's (watch-it-burn-community, or"
+        log "  the -bNN standby holding attackme); every KubeCon bot reads and reports there, so it is the only page to clear"
+        return 2
+    fi
+    log "desk-reset: ${name} (${region}), the public desk: every deploy row$([[ "${tickets}" == true ]] && printf ' and every filed ticket'), fixed tickets kept"
+    kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
+    if ! ctx="$(WIB_REGION="${region}" admin_kubeconfig "${name}" "${acct}" "${kcfg}")"; then
+        rm -f "${kcfg}"; log "desk-reset: NOT reset; ${name} could not be reached"; return 1
+    fi
+    out="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" -n agent exec deploy/fake-ticket -c site -- \
+        python3 -c 'import json, sys, urllib.request
+r = urllib.request.Request("http://127.0.0.1:8080" + sys.argv[1], method="POST",
+                           data=json.dumps({"tickets": sys.argv[2] == "true"}).encode(),
+                           headers={"Content-Type": "application/json"})
+print(urllib.request.urlopen(r, timeout=20).read().decode())' "${DESK_RESET_PATH}" "${tickets}" 2>&1)" || rc=$?
+    rm -f "${kcfg}"
+    if [[ "${rc}" -ne 0 ]]; then
+        log "desk-reset: NOT reset; the desk's pod answered: $(tail -n 1 <<<"${out}")"
+        [[ "${out}" == *"HTTP Error 404"* ]] && log "  its fake-ticket-src predates /desk-reset: let Argo CD sync the ai-layer first"
+        return 1
+    fi
+    local json rows_cleared tickets_cleared rows_left filed_left fixed_kept
+    json="$(tail -n 1 <<<"${out}")"
+    rows_cleared="$(_json_field "${json}" rows_cleared)"; tickets_cleared="$(_json_field "${json}" tickets_cleared)"
+    rows_left="$(_json_field "${json}" rows_left)"; filed_left="$(_json_field "${json}" filed_left)"
+    fixed_kept="$(_json_field "${json}" fixed_kept)"
+    if [[ "${rows_left}" != "0" || ( "${tickets}" == true && "${filed_left}" != "0" ) ]]; then
+        log "desk-reset: NOT reset; the desk still reads ${rows_left:-?} row(s) and ${filed_left:-?} filed ticket(s): ${json}"
+        return 1
+    fi
+    log "  cleared ${rows_cleared} deploy row(s) and ${tickets_cleared} filed ticket(s); ${filed_left} filed and ${fixed_kept} fixed ticket(s) kept"
+    log "desk-reset: done; deployments.burritobot.co lists no deploy, the room's or the presenters'"
+}
+
 # One field of a JSON object, empty when absent.
 _json_field() { python3 -c 'import json, sys; v = json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2" 2>/dev/null; }
 
@@ -5727,6 +5805,7 @@ main() {
         reset-bot) cmd_reset_bot "$@" ;;
         guardrails-link) cmd_guardrails_link "$@" ;;
         desk-link) cmd_desk_link "$@" ;;
+        desk-reset) cmd_desk_reset "$@" ;;
         terminal-password) cmd_terminal_password "$@" ;;
         serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;

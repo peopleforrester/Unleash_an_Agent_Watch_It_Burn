@@ -128,6 +128,64 @@ src="$(sed -n '/^_provision_spec_fleet() {/,/^}/p' "${FLEET}")"
 check "_provision_spec_fleet skips routes under WIB_NO_ROUTES" \
   'grep -q "\-z \"\${WIB_NO_ROUTES:-}\" ]]; then" <<<"${src}" && grep -B2 "cmd_routes ||" <<<"${src}" | grep -q WIB_NO_ROUTES'
 
+echo "== a standby taking a KubeCon role uses the one support desk (#1159) =="
+# The one desk (#1145) is attackme's holder's fake-ticket. The private bot reads it through desk-relay at
+# support.burritobot.co, which the router sends wherever attackme is, so a standby needs the pair's desk-report-token:
+# the watcher's link runs desk-link on the new pair, after guardrails-link.
+links="$(cd "$(dirname "${FLEET}")" && python3 -c '
+import sys; sys.path.insert(0, ".")
+import backups as b
+pools = b.load_pools(b.pathlib.Path("roster.tsv"), b.pathlib.Path("backups.tsv"), "us-west-2")
+for com, adm in ((pools["community"][1], pools["admin"][0]), (pools["community"][0], pools["admin"][1])):
+    print(" | ".join(" ".join(cmd[1:]) for _, cmd in b.link_steps(com, adm)))' 2>&1)"
+check "a community standby's promotion links the guardrails switch, then the one desk, on the new pair" \
+  'grep -qx "guardrails-link watch-it-burn-community-b01@us-east-2 watch-it-burn-private@us-west-2 | desk-link watch-it-burn-community-b01@us-east-2 watch-it-burn-private@us-west-2" <<<"${links}"'
+check "and so does a private standby's, with attackme's roster cluster" \
+  'grep -q "| desk-link watch-it-burn-community@us-west-2 watch-it-burn-private-b01@" <<<"${links}"'
+# desk-reset against a sourced fleet.sh: each kubeconfig fetch is recorded as "<cluster> <region>", each kubectl call
+# by its argv, and the desk's pod answers the reset as the real desk does once it has cleared.
+desk_reset() {
+    : >"${T}/fetches"; : >"${T}/kubectl"
+    ( cd "$(dirname "${FLEET}")" && WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" bash -c '
+        source "'"${FLEET}"'" >/dev/null 2>&1
+        provider_write_kubeconfig() { printf "%s %s\n" "$1" "${WIB_REGION}" >>"'"${T}"'/fetches"
+            printf "current-context: arn:aws:eks:%s:1:cluster/%s\n" "${WIB_REGION}" "$1" >"$2"; }
+        kubectl() {
+            if [[ "$*" == "config current-context" ]]; then sed -n "s/^current-context: //p" "${KUBECONFIG}"; return; fi
+            printf "%s\n" "$*" >>"'"${T}"'/kubectl"
+            local filed=2 cleared=0; [[ "${@: -1}" == true ]] && { filed=0; cleared=2; }
+            printf "{\"rows_cleared\": 3, \"tickets_cleared\": %s, \"rows_left\": %s, \"filed_left\": %s, \"fixed_kept\": 8}\n" \
+                "${cleared}" "${ROWS_LEFT:-0}" "${filed}"; }
+        cmd_desk_reset "$@"' desk-reset "$@" 2>&1; echo "rc=$?" )
+}
+fixture; rm -f "${T}/states/promoted.tsv"
+out="$(desk_reset)"
+check "desk-reset, with no promotion, clears watch-it-burn-community's desk in the fleet's region" \
+  '[[ "${out}" == *rc=0* ]] && [[ "$(cat "${T}/fetches")" == "watch-it-burn-community us-west-2" ]]'
+check "inside the desk's own pod, on its loopback route, keeping the filed tickets" \
+  'grep -q -- "--context arn:aws:eks:us-west-2:1:cluster/watch-it-burn-community -n agent exec deploy/fake-ticket -c site -- python3 -c" "${T}/kubectl" &&
+   grep -q "127.0.0.1:8080" "${T}/kubectl" && grep -q "/desk-reset false$" "${T}/kubectl"'
+printf 'community\twatch-it-burn-community-b01\n' >"${T}/states/promoted.tsv"
+out="$(desk_reset --tickets)"
+check "once a standby holds attackme, desk-reset clears the standby's desk, in its own region" \
+  '[[ "${out}" == *rc=0* ]] && [[ "$(cat "${T}/fetches")" == "watch-it-burn-community-b01 us-east-2" ]]'
+check "and --tickets clears the filed tickets there too" 'grep -q "/desk-reset true$" "${T}/kubectl" &&
+  [[ "${out}" == *"cleared 3 deploy row(s) and 2 filed ticket(s); 0 filed and 8 fixed ticket(s) kept"* ]]'
+out="$(ROWS_LEFT=1 desk_reset)"
+check "a desk that still lists a row after the reset fails, saying what it read" \
+  '[[ "${out}" == *rc=1* && "${out}" == *"NOT reset; the desk still reads 1 row(s)"* ]]'
+printf 'admin\twatch-it-burn-private-b01\n' >"${T}/states/promoted.tsv"
+out="$(desk_reset)"
+check "a private standby holding burritobot-private leaves the desk on attackme's roster cluster" \
+  '[[ "${out}" == *rc=0* ]] && [[ "$(cat "${T}/fetches")" == "watch-it-burn-community us-west-2" ]]'
+for priv in watch-it-burn-private watch-it-burn-private-b01 watch-it-burn-031; do
+    out="$(desk_reset "${priv}")"
+    check "desk-reset refuses ${priv}: the public desk is the only one it clears" \
+      '[[ "${out}" == *rc=2* && "${out}" == *"REFUSING ${priv}"* ]] && [[ ! -s "${T}/fetches" && ! -s "${T}/kubectl" ]]'
+done
+check "no desk-reset call names the presenter terminal login (#1074)" '! grep -q terminal-auth "${T}/kubectl"'
+rm -f "${T}/states/promoted.tsv"
+
 echo "== offline means offline =="
 check "no check above called aws, kubectl, eksctl, terraform or helm" 'no_cloud_clean'
 

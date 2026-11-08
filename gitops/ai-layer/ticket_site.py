@@ -312,6 +312,38 @@ def clear_filed_tickets() -> int:
 LANDINGS: list[dict] = []
 SCALE_DOWN_SECONDS = int(os.environ.get("JOKER_SCALE_DOWN_SECONDS", "300"))
 
+# --- the desk reset (#1144, #1159) --------------------------------------------------------------------------------
+# After a practice run the deployments page still lists every practice deploy, the presenters' own and, on the KubeCon
+# pair's one desk, the private bot's too (#1145). POST /desk-reset clears every row, so the page and the wall start
+# empty; with {"tickets": true} it also clears every filed ticket, the room's and the presenters' reserved-range ones
+# (clear_filed_tickets), and it always keeps the fixed tickets, HC-666 among them. Tickets stay by default: they are
+# invisible to the room, and clearing them is the presenters' choice.
+# It answers only a request from this pod's own loopback that came through no proxy: `kubectl exec` into the desk's pod
+# (fleet.sh desk-reset) or a `kubectl port-forward` to it, so the kubectl session is the gate. Every other caller,
+# the console's proxy and any pod in the cluster (the bot's tool pod included), reaches the desk on its pod address,
+# and is refused with a 403 that changes nothing. console.conf also refuses the path on the desk's public server, and
+# the deployments host answers no POST. It holds no token and touches no Secret.
+DESK_RESET_PATH = "/desk-reset"
+LOOPBACK = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+
+def reset_allowed(client: str, forwarded: str | None) -> bool:
+    """Whether a desk reset may run: only from this pod's loopback, and never through a proxy that names a client."""
+    return client in LOOPBACK and not (forwarded or "").strip()
+
+
+def reset_desk(tickets: bool = False) -> dict:
+    """Clear every deploy row, and every filed ticket too when `tickets`; what it cleared and what is left."""
+    with _lock:
+        rows = len(LANDINGS)
+        LANDINGS.clear()
+    filed = clear_filed_tickets() if tickets else 0
+    with _lock:
+        left = sum(1 for k in TICKETS if k not in FIXED_TICKETS)
+        return {"rows_cleared": rows, "tickets_cleared": filed, "rows_left": len(LANDINGS), "filed_left": left,
+                "fixed_kept": sum(1 for k in TICKETS if k in FIXED_TICKETS)}
+
+
 # --- reports from the other cluster (#1157, part of #1145) --------------------------------------------------------
 # On the KubeCon pair one deployments page shows both clusters' deploys, so the public desk also takes the admin
 # cluster's reports. Those arrive from outside, through the console's /remote-landed, which only the
@@ -840,6 +872,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(409, {"error": str(e)})
                 return
             self._send(201, self._ticket_json(t))
+        elif url.path == DESK_RESET_PATH:
+            # The desk reset (#1144, #1159): this pod's own loopback only, so only a kubectl session reaches it.
+            if not reset_allowed(self.client_address[0], self.headers.get("X-Forwarded-For")):
+                self._send(403, {"error": "the desk reset answers only inside the desk's own pod (fleet.sh desk-reset)"})
+                return
+            try:
+                d = json.loads(raw or b"{}")
+                if not isinstance(d, dict) or not isinstance(d.get("tickets", False), bool):
+                    raise TypeError
+            except (ValueError, TypeError):
+                self._send(400, {"error": 'the body is {} or {"tickets": true|false}'})
+                return
+            self._send(200, reset_desk(d.get("tickets", False)))
         elif url.path == "/cluster-read":
             # In-cluster only, as /landed is: the console refuses it from outside (console.conf). #1050's reader posts here.
             try:

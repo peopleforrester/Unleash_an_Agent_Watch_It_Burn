@@ -105,6 +105,8 @@ LINKS = T / "links.jsonl"
 FLEET_STUB = T / "fleet.sh"
 FLEET_STUB.write_text("#!/usr/bin/env bash\n"
                       f'[[ -f "{T}/link_fails" ]] && {{ echo "guardrails-link: NOT linked both ways" >&2; exit 1; }}\n'
+                      f'[[ -f "{T}/desk_link_fails" && "$1" == desk-link ]] && '
+                      f'{{ echo "desk-link: NOT linked; the private bot\'s deploys do not reach it" >&2; exit 1; }}\n'
                       f'python3 -c \'import json, os, sys; print(json.dumps({{"argv": sys.argv[1:], '
                       f'"tries": os.environ.get("WIB_LINK_TOKEN_TRIES", "")}}))\' "$@" >>"{LINKS}"\n')
 os.chmod(FLEET_STUB, 0o755)
@@ -201,11 +203,14 @@ try:
           all("--kubeconfig" in a and ("--context" in a or a[-2:] == ["config", "current-context"]) for a in kc))
     check("every aws call carries the fleet profile", all(c["profile"] == "accen-dev" for c in map(
         json.loads, CALLS.read_text().splitlines()) if c["tool"] == "aws"))
-    check("the new holder is linked with the private bot's cluster, community first",
+    check("the new holder is linked with the private bot's cluster, community first: the guardrails switch, then the "
+          "one support desk (#1159)",
           [l["argv"] for l in links()] == [["guardrails-link", "watch-it-burn-community-b01@us-east-2",
+                                             "watch-it-burn-private@us-west-2"],
+                                            ["desk-link", "watch-it-burn-community-b01@us-east-2",
                                              "watch-it-burn-private@us-west-2"]], str(links()))
     check("with three token reads at most, so the watcher is not held for fleet.sh's thirty",
-          [l["tries"] for l in links()] == ["3"])
+          [l["tries"] for l in links()] == ["3", ""])
     ev = events()[-1]
     check("the event log records the floor and the link", ev["promoted"] == "watch-it-burn-community-b01"
           and ev["armed"] is True and ev["linked"] is True, str(ev))
@@ -260,6 +265,21 @@ try:
     check("b01 holds attackme, armed", routed("attackme.agenticburn.com") == "lb-watch-it-burn-community-b01:443"
           and events()[-1]["armed"] is True)
     check("and the event log records the link failed", events()[-1]["linked"] is False, str(events()[-1]))
+    (T / "link_fails").unlink()
+
+    print("== a desk link that fails alone is a failed link too (#1159) ==")
+    w = fresh(KUBECON)
+    (T / "desk_link_fails").touch()
+    n = len(links())
+    down.add("lb-watch-it-burn-community")
+    for _ in range(3):
+        w.tick()
+    check("b01 holds attackme, and the guardrails switch was still linked",
+          routed("attackme.agenticburn.com") == "lb-watch-it-burn-community-b01:443"
+          and [l["argv"][0] for l in links()[n:]] == ["guardrails-link"], str(links()[n:]))
+    check("but the event log records the link failed, since the private bot's deploys miss the one page",
+          events()[-1]["linked"] is False, str(events()[-1]))
+    (T / "desk_link_fails").unlink()
 
     print("== the 2-hour workshop: the burn and admin profiles, nothing armed and nothing linked ==")
     w = fresh({"community": "burn", "admin": "admin"})
@@ -312,6 +332,10 @@ check("and fleet.sh's instructors up skips the pair link when WIB_NO_LINK is set
 check("the link step is fleet.sh guardrails-link with each cluster's region",
       b.link_step(pools["community"][3], pools["admin"][0])[1][1:]
       == ["guardrails-link", f"{pools['community'][3].name}@us-west-2", "watch-it-burn-private@us-west-2"])
+check("then fleet.sh desk-link on the same pair, so the new pair shares the one desk (#1159)",
+      [c[1:] for _, c in b.link_steps(pools["community"][3], pools["admin"][0])]
+      == [["guardrails-link", f"{pools['community'][3].name}@us-west-2", "watch-it-burn-private@us-west-2"],
+          ["desk-link", f"{pools['community'][3].name}@us-west-2", "watch-it-burn-private@us-west-2"]])
 
 print()
 print("== offline means offline ==")
