@@ -41,8 +41,9 @@ SEG4, SEG5, SEG6, ROW4, ROW5 = "### Segment 4:", "### Segment 5:", "### Segment 
 # Since #1141, segment 5 and its row cite rounds-agenticburn#102's Challenge 4 by hash (#/62 to #/72), so the cut
 # runs from segment 4 to segment 6 and drops rows 4 and 5.
 # The tests that hold segment 4's slides to the 2026-11-07 deck, and so quote its numbers: the run-of-show's (#1098)
-# and the /kubecon page's (#1100).
-SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py"}
+# and the /kubecon page's (#1100); and the one that holds the stage-trace seeds to the notes of the slides that open
+# Challenge 3's and Challenge 4's traces, #/48 and #/68 (#1138).
+SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
 HASH_FROM = 43      # #/43 is slide 44
 

@@ -96,7 +96,7 @@ PRESENTER_CLUSTER = "burritobot-private"
 # challenge tab, the order Whitney saves the views in; seed_beats sends them in stage order (c1-fixed after the switch).
 # The spans are what Whitney points at, so a seed whose reply passed but whose trace lacks them is red. The must spans
 # are in the order the trace shows them, and judge_spans holds the trace to that order (#1138): each attack seed's are
-# what its slide's notes say the trace shows (#/11, #/26, #/48, #/68), and verify/test_stage_trace_slides.py holds them.
+# what its slide's notes say the trace shows, and verify/test_stage_trace_slides.py holds them to those notes.
 SEEDS = (
     ("c1-attack", "Challenge 1", "the CEO's record read through the shipped Role", ("get_vault_entry",), ()),
     ("c1-fixed", "Challenge 1", "the same ask after guardrails-on: the scoped Role makes the read Forbidden",
