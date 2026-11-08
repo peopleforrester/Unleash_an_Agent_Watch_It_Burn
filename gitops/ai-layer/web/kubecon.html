@@ -69,6 +69,10 @@
   #sheet{max-width:900px;margin:0 auto;padding:22px}
   #sheet h2{font-size:26px;color:var(--seg);margin:28px 0 10px}
   #sheet p{font-size:26px;line-height:1.45;margin:0 0 18px;padding:14px 16px;background:var(--card);border-radius:12px}
+  /* The private (administrator) banner (#1181), the chat page's .combanner look (#761, burritbot.html): bold white
+     on red, not the page accent, because its one job is to say which cluster this tab is on. */
+  .combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:#C62222;
+             border:1px solid #8E1414;border-radius:10px;padding:10px 12px;margin:0 0 10px}
 </style>
 </head>
 <body>
@@ -86,6 +90,7 @@
 </header>
 
 <main>
+  <div id="privatebanner" class="combanner" hidden>This is the private (administrator) KubeCon page.</div>
   <table class="glance">
     <tr><th>#</th><th>Min</th><th>Who</th><th>Beat</th><th>Private toggle</th></tr>
     <tr><td>1</td><td>3</td><td>M</td><td>Opening, QR, prompt wall up</td><td>none</td></tr>
@@ -585,6 +590,14 @@
     });
     ['header','main','footer'].forEach(function(t){var e=document.querySelector(t);if(e)e.hidden=true;});
     out.hidden=false;document.title='KubeCon prompts';
+  })();
+  // The private (administrator) banner (#1181). This page ships to every cluster, so, as on the chat page (#761),
+  // the host decides at load time: the private bot's host (burritobot-private.) shows it, and the public bot
+  // (attackme.), the community cluster and every other host keep it hidden. It sits in <main>, which the prompt
+  // sheet hides, so the sheet stays the prompts and nothing else (#689).
+  (function(){
+    var ban=document.getElementById('privatebanner');
+    if(ban){ban.hidden=!/^burritobot-private\./.test(location.hostname);}
   })();
 </script>
 </body>
