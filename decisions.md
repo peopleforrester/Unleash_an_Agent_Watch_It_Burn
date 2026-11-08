@@ -33341,3 +33341,9 @@ the one `scope_tests.py write` produced for it (the run-of-show and the two poli
 produced was other tests' existing drift and is not in this change. `verify/test_instructor_brief.py` is unchanged.
 
 **Not yet run on a cluster.** No cluster is involved: the test reads repo text, and the issue asks for no live check.
+
+**Suite results, run 18434.** On `dd315451`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=0a1e00ca`, so
+scoped to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `15 checks ran (the
+offline suite and 14 tier tests) in 4m34s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `python3
+verify/scope_audit.py offline` read the new test's entry as `ok`. The prose gate printed `prose gate: pass`. No
+dependency was added. The log is `/var/lib/hecaton/runs/18434/e2e-tools.log`.
