@@ -74,13 +74,25 @@ missing=()
 # the zip archives, #1047) and sha256sum fetch and verify the pinned tools, and xz unpacks weaver's archive. uv brings the Python pins the checks run on
 # (playwright, llm-guard, segno, mcp), as in run-e2e-tools.sh, so nothing is installed globally (#441).
 for tool in python3 node corepack jq curl tar sha256sum xz uv; do
-    command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
+    if command -v "${tool}" >/dev/null 2>&1; then
+        continue
+    elif [[ "${tool}" == node ]]; then
+        missing+=("node is not on PATH; install the current Node.js release (nodejs.org)")
+    elif [[ "${tool}" == corepack ]]; then
+        missing+=("corepack is not on PATH; Node.js no longer bundles it from 25 on, so install it with npm install -g corepack")
+    else
+        missing+=("${tool} is not on PATH")
+    fi
 done
-# Backstage runs on Node 24 (packages/backend/Dockerfile is node:24). Yarn comes from corepack, which
-# runs the yarn 4 the Backstage package.json pins (packageManager, .yarnrc.yml yarnPath), so no global
-# yarn is needed. A yarn on PATH is not used.
-if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
-    missing+=("node $(node --version) is on PATH; the Backstage suite needs Node 24")
+# The suite runs on the Node on PATH, 24 or later, as run-e2e-tools.sh does (#1200). The Backstage image is node:24
+# (packages/backend/Dockerfile), and the app installs, type-checks and builds on Node 26 too (decisions.md, #1200).
+# Yarn comes from corepack, which runs the yarn 4 the Backstage package.json pins (packageManager, .yarnrc.yml
+# yarnPath), so no global yarn is needed. A yarn on PATH is not used.
+if command -v node >/dev/null 2>&1; then
+    node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+    if ! [[ "${node_major}" =~ ^[0-9]+$ ]] || (( node_major < 24 )); then
+        missing+=("node $(node --version 2>/dev/null) is on PATH; the Backstage suite needs Node 24 or later")
+    fi
 fi
 # The pinned tools: the kyverno CLI test_kyverno_cel_policies.py evaluates the policies with, the conftest and
 # terraform the IAM policy pipeline (#207) renders and checks the roots with, the kubectl and helm every render and

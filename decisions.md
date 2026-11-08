@@ -37507,3 +37507,33 @@ suite and 34 tier tests) in 10m18s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GRE
 `test_kubecon_community_gate.py`, `test_kubecon_seg4_flow.py` and `test_scope_tests.py` were among those that ran.
 The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18681/e2e-tools.log`.
+
+## 2026-11-08 · #1200 · run 18690 · The tools tier runs on the Node on PATH, 24 or later
+
+Michael, 2026-11-08: "Run it with 26. Who says we need 24?" The exact-24 check in `verify/run-e2e-tools.sh` came from
+#572's run of 2026-10-25, which pinned the node test scripts to the Node of that day. His scope comment on the issue
+allowed either "26" or ">= 24" if the run checked that 24 works too.
+
+Decided: both runners refuse only a Node major below 24, so the tier runs on the Node on PATH. An exact 26 would have
+failed the tier on this dispatch host, whose `node` on PATH is `/var/lib/hecaton/cli/node`, Node 24.22.0, and 24 is the
+oldest Node those scripts have been run on. A major that does not read as a number is refused too. With no node on
+PATH, the tier now names the current Node.js release (nodejs.org) as what to install, naming no major. CI's e2e job installs Node 26 with `actions/setup-node` (`node-version: '26'`), and
+`verify/test_verify_suites_workflow.py` now fails a workflow whose e2e job has no setup-node step, installs a major
+below 24, or installs it after the suite.
+
+`verify/run-e2e.sh` moves with it, as the scope comment asked. Before moving it, the Backstage app was checked on
+Node 26.12.0 (`/var/lib/hecaton/toolchain/node/26`) in a scratch copy, with the committed yarn 4.13.0 release:
+`yarn install --immutable`, `yarn tsc` and `yarn workspace backend build` all exited 0, the native modules
+(better-sqlite3, @swc/core, esbuild and the rest) built with no failed build step, and `better-sqlite3` opened an
+in-memory database under Node 26. The Backstage `engines` ("22 || 24") and the image's node:24 base are left alone:
+they are Backstage's support policy and the image's own pin, and nothing on the clusters changes. Node 25 and later no
+longer bundle corepack (Node 26.12.0's `bin/` has only node, npm and npx), so `run-e2e.sh`'s missing line for corepack
+now says to install it with `npm install -g corepack`.
+
+There is no package.json, `.nvmrc` or lock for the node scripts under `verify/`; their only pins were the two
+runner checks and CI's setup-node, all three moved here. The tests that pinned 24 move with them:
+`verify/test_e2e_tools_tier.py` (Node 22 still refused, now as "Node 24 or later"; Node 24 and Node 26 both pass the
+check and reach the fetch; no node on PATH names no major), `verify/test_e2e_toolchain.py` and
+`verify/test_verify_harness.py`. Against the old runner, the tier test's three new or changed Node checks fail.
+
+No live check: the change touches `verify/` files no cluster runs and the CI workflow, nothing the clusters run.

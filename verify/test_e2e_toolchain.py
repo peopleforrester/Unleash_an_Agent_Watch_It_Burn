@@ -1,9 +1,10 @@
-# ABOUTME: The E2E gate's toolchain (#440, #524): Node 24 and the yarn 4 the Backstage app pins through corepack,
+# ABOUTME: The E2E gate's toolchain (#440, #524, #1200): Node 24 or later and the yarn 4 the Backstage app pins through corepack,
 # ABOUTME: and run-e2e.sh runs to its prerequisite check and fails loudly, never skips, when something is missing.
 """Holds what #440 made true about the machine the E2E gate runs on, offline.
 
 #440 gave the dispatch machine Node 24 with corepack and no global yarn. `verify/run-e2e.sh` requires `node` and
-`corepack`, fails unless Node's major is 24, and runs `corepack yarn` in the Backstage app. That only gives yarn 4
+`corepack`, fails on a Node major below 24 (exactly 24 until #1200, which let it run on the Node on PATH, 26 included),
+and runs `corepack yarn` in the Backstage app. That only gives yarn 4
 while two pins hold: `"packageManager": "yarn@4.x"` in the Backstage `package.json`, which corepack reads, and
 `yarnPath` in `.yarnrc.yml`, which must name the same release, committed to the repo. Drop either, or let them
 disagree, and `corepack yarn` runs some other yarn, or none. Nothing under verify/ checked either pin.
@@ -12,7 +13,7 @@ The other half of #440 was running `run-e2e.sh` once. That run is in decisions.m
 prerequisite check, Node and yarn no longer among the missing. A past run cannot be tested, so this runs the
 script itself in an empty toolchain made up for it, and checks the behaviour that run relied on. With nothing on
 PATH it exits 1 and lists node, corepack and CONTEXT as missing. With a Node 22 on PATH it names the version
-it found. With Node 24 and corepack on PATH neither is listed, and it still exits 1 on what remains. Every
+it found. With Node 24 or Node 26 and corepack on PATH neither is listed, and it still exits 1 on what remains. Every
 case stops in the prerequisite check, before anything runs: CONTEXT is unset, so no kubectl is ever called.
 
 Since #585 run-e2e.sh fetches kyverno, conftest, terraform, kubectl and helm itself, since #654 otelcol-contrib
@@ -70,12 +71,12 @@ check("run-e2e.sh runs corepack yarn inside the Backstage app, where corepack re
       'BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"' in rune2e
       and 'cd "${BACKSTAGE_DIR}"' in rune2e and "corepack yarn install --immutable" in rune2e)
 
-print("== Node 24: the gate's Node is the Backstage image's ==")
-gate_major = re.search(r"""process\.versions\.node\.split\("\."\)\[0\]'\)" != "(\d+)" ]]""", rune2e)
+print("== Node 24 or later: the gate's floor is the Backstage image's Node ==")
+gate_major = re.search(r"\(\( node_major < (\d+) \)\)", rune2e)
 gate_major = gate_major.group(1) if gate_major else ""
-check(f"run-e2e.sh requires Node 24 ({gate_major or 'no Node check found'})", gate_major == "24")
+check(f"run-e2e.sh refuses only a Node below 24 ({gate_major or 'no Node check found'})", gate_major == "24")
 image = re.search(r"^FROM \S*/node:(\d+)\b", (BACKSTAGE / "packages/backend/Dockerfile").read_text(), re.M)
-check(f"the Backstage image runs the Node major the gate requires (node:{image.group(1) if image else '?'})",
+check(f"the Backstage image runs the gate's floor Node major (node:{image.group(1) if image else '?'})",
       bool(image) and image.group(1) == gate_major)
 engines = package.get("engines", {}).get("node", "")
 check(f"package.json engines accept Node {gate_major or '?'} ({engines!r})",
@@ -123,16 +124,23 @@ check("it never asks for unzip, which Tanjiro's CI runner lacks; python3 reads t
 
 old = run_e2e({"node": node_stub("22.11.0"), "corepack": "exit 0"})
 check(f"with Node 22 on PATH it exits 1 (exit {old.returncode})", old.returncode == 1)
-check("it names the Node it found and the Node 24 it needs",
-      "node v22.11.0 is on PATH; the Backstage suite needs Node 24" in old.stderr)
+check("it names the Node it found and the floor it needs",
+      "node v22.11.0 is on PATH; the Backstage suite needs Node 24 or later" in old.stderr)
+check("with no node on PATH it says to install the current Node.js release, naming no major",
+      "  - node is not on PATH; install the current Node.js release (nodejs.org)\n" in bare.stderr
+      and not re.search(r"Node(\.js)? \d", bare.stderr.split("node is not on PATH", 1)[1].split("\n", 1)[0]))
+check("with no corepack it says how to install it, since Node 25 and later do not bundle it",
+      "corepack is not on PATH; Node.js no longer bundles it from 25 on, so install it with npm install -g corepack"
+      in bare.stderr)
 
-ready = run_e2e({"node": node_stub("24.22.0"), "corepack": "exit 0"})
-check(f"with Node 24 and corepack on PATH it still exits 1 on the rest (exit {ready.returncode})",
-      ready.returncode == 1 and CANNOT_RUN in ready.stderr)
-check("Node 24 and corepack are not listed as missing",
-      "node is not on PATH" not in ready.stderr and "corepack is not on PATH" not in ready.stderr
-      and "needs Node 24" not in ready.stderr)
-check("no global yarn is asked for", "yarn" not in ready.stderr)
+for full in ("24.22.0", "26.12.0"):
+    ready = run_e2e({"node": node_stub(full), "corepack": "exit 0"})
+    check(f"with Node {full} and corepack on PATH it still exits 1 on the rest (exit {ready.returncode})",
+          ready.returncode == 1 and CANNOT_RUN in ready.stderr)
+    check(f"Node {full} and corepack are not listed as missing",
+          "node is not on PATH" not in ready.stderr and "corepack is not on PATH" not in ready.stderr
+          and "needs Node" not in ready.stderr)
+    check(f"no global yarn is asked for (Node {full})", "yarn" not in ready.stderr)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

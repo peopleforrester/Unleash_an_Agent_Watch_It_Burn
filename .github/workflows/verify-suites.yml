@@ -147,10 +147,11 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
-      # The node harnesses run on Node 24, which run-e2e-tools.sh checks before any test (#440).
+      # The node harnesses run on the Node on PATH, 24 or later, which run-e2e-tools.sh checks before any test; the job
+      # installs the current major, 26 (#1200).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
-          node-version: '24'
+          node-version: '26'
           package-manager-cache: false
 
       - name: HECATON_BASE_SHA, the merge base with origin/staging, or the tip before this push

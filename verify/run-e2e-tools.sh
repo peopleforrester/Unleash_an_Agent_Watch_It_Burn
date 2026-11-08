@@ -64,11 +64,21 @@ missing=()
 tools=(python3 git)
 [[ "${need_tools}" -eq 0 ]] || tools+=(curl tar sha256sum xz uv node jq openssl flock)
 for tool in "${tools[@]}"; do
-    command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
+    if command -v "${tool}" >/dev/null 2>&1; then
+        continue
+    elif [[ "${tool}" == node ]]; then
+        missing+=("node is not on PATH; install the current Node.js release (nodejs.org) for the node harnesses")
+    else
+        missing+=("${tool} is not on PATH")
+    fi
 done
-# The same Node major as run-e2e.sh and the Backstage image (#440).
-if [[ "${need_tools}" -eq 1 ]] && command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
-    missing+=("node $(node --version) is on PATH; the node harnesses run on Node 24")
+# The node harnesses run on the Node on PATH (#1200). Node 24 is the oldest they have been run on (#572) and 26 the
+# newest, so only a major below 24 is refused; CI installs the current one.
+if [[ "${need_tools}" -eq 1 ]] && command -v node >/dev/null 2>&1; then
+    node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+    if ! [[ "${node_major}" =~ ^[0-9]+$ ]] || (( node_major < 24 )); then
+        missing+=("node $(node --version 2>/dev/null) is on PATH; the node harnesses run on Node 24 or later")
+    fi
 fi
 # The Playwright tests' browsers, checked once (#658). `playwright install` locks the browsers directory even when
 # nothing is missing, and where that directory is not writable it retries for about 8 minutes per test before it fails.
