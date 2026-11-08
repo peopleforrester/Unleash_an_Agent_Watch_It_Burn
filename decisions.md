@@ -38701,3 +38701,55 @@ verify/run-tests.sh` printed `scope: running 98 of 382 offline tests`, `98 tests
 GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18734/run-tests-scoped.log`). `scope_tests.py select tools` printed
 `running 0 of 86 tools tests`, since the change is prose alone, so `run-e2e-tools.sh` was not run.
 `verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` The prose gate printed `prose gate: pass`.
+## 2026-11-08 · #1171 · run 18735 · #869's node rules for 8080 and 3000 put on both KubeCon clusters by hand; guard-input-on now switches both
+
+**The spec.** #1171: the guard-proxy Service proxy that `guard-input-on` and `guard-input-off` use for the peer
+cluster (#1148) timed out on both KubeCon clusters, since neither node group admits the control plane on 8080. #1042,
+the full apply of the cluster root, puts #869's rule there but also rolls the node and makes some 30 other changes,
+and its state lives on tanjiro-wsl2. The issue asks for that apply before the KubeCon run, or for just these node
+rules first. This run did the second. `bash verify/prior-drafts.sh 1171 origin/staging` printed NONE and the issue
+had no comments.
+
+**What changed in AWS (2026-11-08T19:04:33Z, accen-dev, us-west-2).** Before each write, the run checked that the
+cluster's `resourcesVpcConfig.securityGroupIds[0]` was the source group and that the target group is tagged
+`<cluster>-node`. Then one `aws ec2 authorize-security-group-ingress` per cluster added the two rules
+`node_security_group_additional_rules` in `infra/terraform/aws/cluster/main.tf` declares, tcp from the module's
+cluster security group, with the root's descriptions word for word:
+
+| Cluster | Node group | Source | 8080 rule | 3000 rule |
+|---|---|---|---|---|
+| watch-it-burn-community | sg-0b7d2a0cfaed6fecd | sg-04130d5989d5c1ab1 | sgr-0853effac30a230b6 | sgr-0a2a5ed2bb32f0da5 |
+| watch-it-burn-private | sg-011fc555e507cfb40 | sg-0ca9886f5a9d4f6d3 | sgr-0a8d43044c6551142 | sgr-0dcac2db4eb8dcd57 |
+
+The 3000 rule (Grafana) went on with the 8080 one, since #869 added the two together and the issue names "these two
+node rules". Nothing else changed: no node rolled, no other rule was touched. These rules stay; the issue asks for
+them to be there for the room.
+
+**The Terraform state.** The clusters' states on tanjiro-wsl2 (#1041) were rebuilt before these rules existed, so
+they do not hold them, and #1042's apply would fail trying to create rules AWS already has. `docs/floor.md`'s
+"Rebuilding a lost state" now says so and gives the two `terraform import` commands to run first, with the ids in
+the form `import-state.py` builds (`<node-sg>_ingress_tcp_8080_8080_<cluster-sg>`). For #1042 those are
+`sg-0b7d2a0cfaed6fecd_ingress_tcp_8080_8080_sg-04130d5989d5c1ab1` and `..._3000_3000_...` on community, and
+`sg-011fc555e507cfb40_ingress_tcp_8080_8080_sg-0ca9886f5a9d4f6d3` and `..._3000_3000_...` on private. The import
+matcher keys on the exact port range, so the load balancer controller's 8080-8443 rule on the same groups is not a
+candidate. The drift report plans refresh-only, so it still reads both states clean.
+
+**Live check, before.** At 19:03:35Z, `kubectl --context <c> get --raw
+/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/guards --request-timeout=20s` printed `Unable to connect to
+the server: context deadline exceeded (Client.Timeout exceeded while awaiting headers)` on both clusters.
+
+**Live check, after.** The same GET at 19:04:56Z, read again with `-v=6`: `status="200 OK" milliseconds=3218` on
+community and `status="200 OK" milliseconds=2957` on private, each body `{"input_blocklist": false,
+"input_classifier": false, "output": false, "budget": false, "topic": false}`. Then, with the guard lock free on both,
+`python3 verify/guard_lease.py hold --with-peer --context watch-it-burn-private --profile accen-dev -- kubectl
+--context watch-it-burn-private -n agent exec deploy/web-terminal -c ttyd -- bash /home/student/guard-input-on`
+printed its four `$` lines, the last the peer's Service proxy `/toggle`, then `Switched on both clusters: this one
+and watch-it-burn-community.` and exit 0. Both `/guards` then read `input_blocklist` and `input_classifier` true and
+the other three false. `guard-input-off`, the same way, printed the same line and exit 0, and both `/guards` read all
+five false, as they did before. The lock was released on both. The log is
+`/var/lib/hecaton/runs/18735/guard-input-live.log`.
+
+**Left on the clusters.** The four rules above, on purpose. The guards read as found.
+
+**Not yet run on a cluster.** Nothing this change needs: the rules are in AWS now, and the repo change is prose.
+`guard-input-on` from the community terminal toward private, and #1132's stage switch check, were not run here.

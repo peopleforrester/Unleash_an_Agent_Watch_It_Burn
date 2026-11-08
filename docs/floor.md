@@ -261,10 +261,25 @@ identity, a hecaton run's role for one, plans both as changed, and a copy of tha
 to the operator machine.
 
 Exit 2 is what the KubeCon clusters give, and none of their changes replaces the cluster, its node group or
-an access entry. Three security group rules the cluster root has committed since 2026-10-28 are on neither
-cluster: #869's node rules for 8080 and 3000, and #906's lab VPC rule to the API on 443 (#906's fix was made
-by hand as a rule from the other cluster's nodes). AWS does not hold them, so they are not imported, and the
-plan creates them. The rest is configuration committed after the build: the launch template's user data
+an access entry. Three security group rules the cluster root has committed since 2026-10-28 were on neither
+cluster when the states were rebuilt: #869's node rules for 8080 and 3000, and #906's lab VPC rule to the API
+on 443 (#906's fix was made by hand as a rule from the other cluster's nodes). AWS did not hold them, so they
+were not imported, and the plan creates them. On 2026-11-08 #1171 put #869's two rules on both clusters by
+hand, with the root's own descriptions, so the Service proxy reaches guard-proxy on 8080 before the KubeCon
+run. The states rebuilt before that still lack them, and an apply that creates a rule AWS already holds fails
+as a duplicate. So before the next apply of either cluster, import the two rules into its state:
+
+    terraform -chdir=infra/terraform/aws/cluster import \
+      'module.eks.aws_security_group_rule.node["ingress_cluster_8080_workshop_apps"]' \
+      <node-sg>_ingress_tcp_8080_8080_<cluster-sg>
+    terraform -chdir=infra/terraform/aws/cluster import \
+      'module.eks.aws_security_group_rule.node["ingress_cluster_3000_grafana"]' \
+      <node-sg>_ingress_tcp_3000_3000_<cluster-sg>
+
+with the same `-state` and `-var` arguments as the plan, where `<node-sg>` is the group named
+`<cluster>-node` and `<cluster-sg>` the group `aws eks describe-cluster` lists under
+`resourcesVpcConfig.securityGroupIds`. A state rebuilt after 2026-11-08 imports them itself. The rest is
+configuration committed after the build: the launch template's user data
 (#714 removed the containerd registry part, so the next apply rolls the node), the agent and tutor
 policies (#203 dropped the `bedrock:Converse` actions), the tutor's inference profile, replaced for #882's
 model, and on watch-it-burn-private the `role` tag on every resource. Then there are settings Terraform keeps
