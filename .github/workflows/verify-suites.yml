@@ -8,8 +8,8 @@
 # leaves the tanjiro label, or if either job stops running its suite.
 #
 # Each job computes HECATON_BASE_SHA, the merge base of the pushed commit and origin/staging, with
-# verify/ci-base-sha.sh, so the runners scoped by #1018 run only what the push touched. A push already in staging
-# leaves it unset and runs everything.
+# verify/ci-base-sha.sh, so the runners scoped by #1018 run only what the push touched. A push to staging scopes by
+# the tip before the push, github.event.before (#1189); a new branch or a force push leaves it unset and runs everything.
 #
 # The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
 # removes every untracked and ignored file, verify/.tools included, whose binaries fetch-e2e-tools.sh extracts again
@@ -89,7 +89,9 @@ jobs:
           "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
-      - name: HECATON_BASE_SHA, the merge base with origin/staging
+      - name: HECATON_BASE_SHA, the merge base with origin/staging, or the tip before this push
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
         run: bash verify/ci-base-sha.sh
 
       - name: bash verify/run-tests.sh
@@ -151,7 +153,9 @@ jobs:
           node-version: '24'
           package-manager-cache: false
 
-      - name: HECATON_BASE_SHA, the merge base with origin/staging
+      - name: HECATON_BASE_SHA, the merge base with origin/staging, or the tip before this push
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
         run: bash verify/ci-base-sha.sh
 
       # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),

@@ -44,6 +44,8 @@ LABELS = ["self-hosted", "Linux", "X64", "tanjiro"]
 BRANCHES = {"agent/**", "staging"}
 SUITES = {"offline": "bash verify/run-tests.sh", "e2e-tools": "bash verify/run-e2e-tools.sh"}
 BASE_STEP = "bash verify/ci-base-sha.sh"
+# The tip before the push, which scopes a push to staging (#1189).
+BASE_ENV = {"PUSH_BEFORE": "${{ github.event.before }}"}
 GH_TOKEN = "${{ github.token }}"
 E2E_PERMISSIONS = {"contents": "read", "issues": "read"}
 CHROMIUM_STEP = 'python3 verify/ci_chromium_libs.py "$RUNNER_TEMP/chromium-libs"'
@@ -239,8 +241,10 @@ def problems(doc: dict, text: str) -> list[str]:
         for s in steps:
             if str(s.get("run", "")).strip() in (want, BASE_STEP):
                 for key in ("if", "continue-on-error", "env", "working-directory", "shell"):
-                    if key in s:
+                    if key in s and not (key == "env" and s["run"].strip() == BASE_STEP):
                         found.append(f"{name}: the step `{s['run'].strip()}` has `{key}`")
+            if str(s.get("run", "")).strip() == BASE_STEP and (s.get("env") or {}) != BASE_ENV:
+                found.append(f"{name}: the step `{BASE_STEP}` does not get env {BASE_ENV} (#1189)")
             uses = str(s.get("uses") or "")
             if uses and not re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", uses):
                 found.append(f"{name}: `{uses}` is not pinned to a commit SHA")
@@ -302,6 +306,8 @@ cases = {
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != BASE_STEP]}),
     "an action on a tag": lambda d: d["jobs"]["offline"]["steps"][0].update({"uses": "actions/checkout@v7"}),
     "no GH_TOKEN on the e2e job": lambda d: d["jobs"]["e2e-tools"].pop("env"),
+    "no PUSH_BEFORE on the offline job's base step (#1189)": lambda d: next(
+        st for st in d["jobs"]["offline"]["steps"] if str(st.get("run", "")).strip() == BASE_STEP).pop("env"),
     "an empty GH_TOKEN on the e2e job": lambda d: d["jobs"]["e2e-tools"]["env"].update({"GH_TOKEN": ""}),
     "the e2e job without issues: read": lambda d: d["jobs"]["e2e-tools"]["permissions"].pop("issues"),
     "issues: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"issues": "write"}),
@@ -348,8 +354,10 @@ def commit(cwd: Path, name: str) -> str:
     return git(cwd, "rev-parse", "HEAD")
 
 
-def base_sha(cwd: Path, env_file: Path | None) -> tuple[int, str, str]:
-    env = {k: v for k, v in os.environ.items() if k != "GITHUB_ENV"}
+def base_sha(cwd: Path, env_file: Path | None, before: str | None = None) -> tuple[int, str, str]:
+    env = {k: v for k, v in os.environ.items() if k not in ("GITHUB_ENV", "PUSH_BEFORE")}
+    if before is not None:
+        env["PUSH_BEFORE"] = before
     env.update({"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"})
     if env_file is not None:
         env["GITHUB_ENV"] = str(env_file)
@@ -381,8 +389,19 @@ with tempfile.TemporaryDirectory() as tmp:
 
     git(work, "checkout", "-q", "--detach", "origin/staging")
     rc, out, env = base_sha(work, t / "env2")
-    check("a commit already in staging leaves HECATON_BASE_SHA unset, so the suites run whole",
+    check("a commit already in staging with no PUSH_BEFORE leaves HECATON_BASE_SHA unset, so the suites run whole",
           rc == 0 and env == "" and "left unset" in out, f"exit {rc}, wrote {env!r}: {out}")
+
+    # A push to staging (#1189): the tip before the push scopes it.
+    d_tip = git(work, "rev-parse", "HEAD")
+    rc, out, env = base_sha(work, t / "env5", fork)
+    check("a push to staging gets HECATON_BASE_SHA, the tip before the push (#1189)",
+          rc == 0 and env == f"HECATON_BASE_SHA={fork}\n", f"exit {rc}, wrote {env!r}: {out}")
+    for label, before in (("all zeros, a new branch", "0" * 40), ("the commit itself", d_tip),
+                          ("not in the history", "1" * 40), ("not an ancestor, a force push", git(work, "rev-parse", "agent/1020-1"))):
+        rc, out, env = base_sha(work, t / f"env-{label[:3]}", before)
+        check(f"a PUSH_BEFORE that is {label} leaves HECATON_BASE_SHA unset", rc == 0 and env == "" and "left unset" in out,
+              f"exit {rc}, wrote {env!r}: {out}")
 
     git(work, "checkout", "-q", "agent/1020-1")
     rc, out, _ = base_sha(work, None)
