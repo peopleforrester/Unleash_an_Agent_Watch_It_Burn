@@ -38094,3 +38094,31 @@ tools tests`, `the tools are neither checked for nor fetched`, no fetch and no T
 offline tests`, `1 checks ran (the offline suite and 0 tier tests) in 3m40s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The log is `/var/lib/hecaton/runs/18710/e2e-doconly.log`.
 
+## 2026-11-08 · #1179 · run 18712 · A red private (administrator) banner on the private deployments page
+
+**The change.** `gitops/ai-layer/ticket_site.py` gains `PRIVATE_DEPLOYMENTS_HOST` (`^deployments-burritobot-private\.`)
+and `deployments_banner(host)`, which returns `private_banner("deployments page")`, the helper #1178 added for the
+support desk, on that Host and the empty string on any other. `_deploy_page`, `deployments_page` and `mine_page` take
+the banner as an argument and put it before the page's `<h1>`, and `_deployments_get` reads the Host once per request
+and hands it to `/` and `/mine`. With no banner each page is byte for byte what it was, so `deployments.burritobot.co`,
+the community cluster's `deployments-<label>` Host and `/deployments.json` (on any host, the chat page's own included)
+render as before. The Host rule is its own regex rather than a widened `PRIVATE_DESK_HOST`, so the desk's banner and
+this one each name their own page and neither Host gets the other's.
+
+**The test.** `verify/test_deployments_private_banner.py` (offline) runs the real site on localhost and drives `/`,
+`/mine?witch=<slug>`, `/mine` with only the cookie and `/mine` with no name. On the private Host, with a port and in
+capitals, each view shows the sentence once in the `.combanner` div with the desk's `BANNER_STYLE`, before the `<h1>`,
+and with the banner taken out is the public page. On `deployments.burritobot.co`, the community Host, two lookalikes
+and with no Host it shows no banner, and on each deployments Host it is the page as it was. `/deployments.json` is the
+same JSON on every Host, and the private desk keeps its own sentence. Leaving the banner out of the `/mine` call failed
+36 checks. Its `verify/scope-map.yaml` entry is the one `scope_tests.py write` computed for it; the other drift `write`
+printed for unrelated tests was left out. The first scoped `run-tests.sh` failed `test_deck_shift_slide_citations.py`
+on this change's comments, which cited the deck's slide hashes; they now say "both linked from the deck".
+
+**Live check.** Before promotion, on 2026-11-08, `https://deployments.burritobot.co/` and
+`https://deployments-burritobot-private.burritobot.co/`, each with `/mine?witch=edgar-the-kelpie`, all answered 200 with
+their `<h1>` and no `combanner`, which is the page before this change on both clusters.
+
+**Not yet run on a cluster.** The look after promotion: `curl -s https://deployments-burritobot-private.burritobot.co/`
+and its `/mine?witch=<slug>` carry "This is the private (administrator) deployments page." in the `.combanner` div,
+and `https://deployments.burritobot.co/` and its `/mine` carry no `combanner`.
