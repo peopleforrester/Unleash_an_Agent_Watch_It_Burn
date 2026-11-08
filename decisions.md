@@ -40790,3 +40790,39 @@ Run alone after the fix, `test_fetch_inventory.py`, `test_verify_harness.py`, `t
 `test_scope_tests.py` pass. The "--context is empty" line in the gate's output is not a failing test's: the gate named
 only the two above. The probe and its live result are unchanged from run 18804's entry, so no live check was run
 again; this run touched only `verify/` files no cluster runs and decisions.md.
+## 2026-11-08 · #1019 · run 18797 · An offline test holds that weather_feed_probe.py imports with nothing started
+
+#982 (run 17965) moved the weather feed e2e test's request helper and failure-line formatter into
+`verify/weather_feed_probe.py`, whose ABOUTME says importing it starts nothing, and left the check of that to "the next
+child's offline test". #983's `test_weather_feed_upstream_failure.py` calls `request` and `failure_line` against a
+loopback feed, but no test held the import itself or the formatter's other branches. Test review run 18038 found the
+gap. No earlier draft existed (`verify/prior-drafts.sh 1019 origin/staging` printed NONE).
+
+`verify/test_weather_feed_probe.py` now holds four things, offline, with no port opened:
+
+1. Every top-level statement of the probe is a docstring, an import, a def, a class or an assignment with no call in
+   it (read from its AST, class bodies and default values included), and it has no `__main__` entry point.
+2. The probe is loaded with `socket.socket`, `create_connection`, `getaddrinfo`, `gethostbyname`, `urlopen`,
+   `subprocess.Popen` and `Thread.start` replaced by guards that record and raise. The load records none, starts no
+   thread, and imports no file from this repo: not `gitops/ai-layer/weather_feed.py`, and not `http.server`.
+3. With the guards on, `failure_line` and `error_field` are held to their exact text for a 502 with the feed's
+   `error` field (`HTTP 502 (expected 200) after 0.03 s; error: ...`, the line run 18038 printed by hand), no HTTP
+   answer, an unexpected 200 with no `error` field, a list body, an empty and a padded text body, a non-string error,
+   errors of 300 and 301 characters, and a passed-in limit.
+4. `request` is called with only `urlopen` stubbed and the socket guards still on: a 200, a 502 with JSON, a 502 with
+   HTML, a refused connection and a timeout. Each makes exactly one call with the url and timeout given, does not
+   raise, and returns the status, the body and a non-negative elapsed time.
+
+Each literal the test reads in the probe is checked to be there first. I appended five lines to the probe in turn to
+confirm the test fails when the criterion stops holding: a top-level `urlopen`, a thread start, a `create_connection`
+and a load of the weather feed each failed it (the first three on the AST check and the guard, the feed load on the
+AST check), and a call-free assignment passed. The probe was restored after each.
+The probe is unchanged, so its ABOUTME's "its offline check" now names this test and the e2e tier test is not selected.
+
+**Live check:** skipped; the change touches only files under `verify/` that no cluster runs.
+
+**Tests.** `python3 verify/test_weather_feed_probe.py`: 45 PASS, exit 0. `python3 verify/scope_tests.py write` added
+its entry (it reads `verify/weather_feed_probe.py` and `gitops/ai-layer/weather_feed.py`); `scope_tests.py check`: 0
+problems; `test_scope_tests.py` scoped to the change: ALL PASS. The scoped selection for this change is 81 offline tests
+and 10 tools tests, most of them `always` entries. As the run's governance says, it runs only the tests it wrote or
+changed and leaves the scoped `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` to hecaton's validation.
