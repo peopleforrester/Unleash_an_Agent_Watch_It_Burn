@@ -35174,3 +35174,29 @@ would show it still deploying. The talk is built that way, and this change leave
 printed `122 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `16 checks ran (the offline suite and 15
 tier tests) in 6m45s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18551/e2e-tools.log`.
+## 2026-11-08 · #897 · run 18555 · The four llm-guard rows are in netcup's archive; the 2048 game's row takes the date the archive already has
+
+**What the archive holds.** `verify/prior-drafts.sh 897 origin/staging` printed NONE: run 17795's draft is in staging.
+Read through sources on 2026-11-08, `~/repos/private/image-archive/manifest.tsv` has 84 lines (66 dated 2026-11-04,
+9 dated 2026-11-05, 9 dated 2026-11-06), and `save-Unleash_an_Agent_Watch_It_Burn-2026-11-06.log` ends "83 images, 0
+failed". That is the third save, which ran as michael on netcup on 2026-11-06 and which run 17809 recorded under #603.
+It SAVED the four rows this issue names: the deployed `llm-guard` row at lab-platform#341's rebuild (`46b3d202`, the
+digest #895 moved it to from cpu.5), llm-guard-0.3.16-cpu.4 (`3322db6a`), llm-guard-0.3.16-cpu.5 (`4c66fd0f`) and
+llm-guard-model-zeroshot-8e7e5af5 (`c01ca964`). `repo-ls` shows each line's tarball in the archive, and run 17809
+already copied 2026-11-06 into each row's saved column, so the save this issue asks for is done and nothing in those
+rows changes here.
+
+**The judge.** With `verify/images_saved.py`'s `lock_rows`, `owes_save`, `saved_digest` and `manifest_lines` run on
+staging's images.lock against that manifest, all four rows are dated 2026-11-06 and have a manifest line at their
+current digest whose file is listed in the archive. This run cannot hash the tarballs, because sources returns a file
+as text; that part of `python3 verify/test_images_saved.py` stays michael's on netcup.
+
+**The 2048 game.** The same judge read four rows as unsaved, Challenge 2's games that #991 added after the third save.
+One of them, `public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c4...`, is the ref and digest the first save
+already holds (manifest line dated 2026-11-04, tarball listed, and the 2026-11-06 log prints it as HAVE). As runs
+17350 and 17393 did, this run copied that date onto the row, and the images.lock header now says so. Tron, Infinite
+Mario and Tetris stay `-` until the next save, which this run files as a follow-up. After the edit, 77 rows owe a
+copy and 3 are unsaved. `verify/test_images_lock.py`, `verify/test_public_images.py` and
+`verify/test_images_saved_judge.py` each exit 0.
+
+**Live check.** None: the change touches only images.lock and decisions.md, which no cluster runs.

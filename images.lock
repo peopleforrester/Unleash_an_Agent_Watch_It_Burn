@@ -32,7 +32,9 @@
 # after both: both Jokers, re-pinned (#714), the three llm-guard-cpu-offline rows (#719), the node and debian rows,
 # which #714 moved to lab-platform#353's ghcr.io copies, and llm-guard at lab-platform#341's rebuild (#895); run 17809
 # copied those dates the same way. Every row that owes a copy was saved at its current digest, until #991 added
-# Challenge 2's four games below on 2026-11-06, whose saved column is - until the next save.
+# Challenge 2's four games below on 2026-11-06. The 2048 game's row is the image the first save already holds, at the
+# same ref and digest, so run 18555 copied its 2026-11-04 date (#897); Tron, Infinite Mario and Tetris read - until
+# the next save.
 # verify/test_images_lock.py holds every reference to a row here.
 ghcr.io/peopleforrester/lab-platform/mirror/library/node:24.22.2-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280 upstream:https://github.com/nodejs/docker-node 2026-11-06
 ghcr.io/peopleforrester/lab-platform/mirror/library/debian:bookworm-slim-a3bba7dc7dbc@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e upstream:https://github.com/debuerreotype/docker-debian-artifacts 2026-11-06
@@ -85,7 +87,7 @@ ghcr.io/peopleforrester/lab-platform/llm-guard:v1 sha256:6cdbf3a2272d1bc5e9ed0fb
 # once saved, is the only copy. Docker Hub serves Tron and Tetris. verify/test_public_images.py holds these rows to the
 # prompt, and verify/test_public_images_served.py (tools tier) reads each from its registry.
 docker.io/iamassif731/tron-lightcycle-game:latest@sha256:610c7c0e6aa86a280b08a753efca90443b9dd7ca4e45d207ef276952f5470f22 sha256:610c7c0e6aa86a280b08a753efca90443b9dd7ca4e45d207ef276952f5470f22 none -
-public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 none -
+public.ecr.aws/l6m2t8p7/docker-2048:latest@sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 sha256:338a89c44a060734afb446950fbbcd804a005daf7af38def7c496967fa4ab965 none 2026-11-04
 quay.io/kenmoini/infinite-mario:2a94aae@sha256:146c00f5aad055a7b8ed3a2771551a0accb9cf611a3f8963e45d01c57d8754d2 sha256:146c00f5aad055a7b8ed3a2771551a0accb9cf611a3f8963e45d01c57d8754d2 upstream:https://github.com/kenmoini/mariohtml5 -
 docker.io/bsord/tetris:0.5.5@sha256:2ffffd2f8834dd13734654eeec142aedbd95e6880e52d692a9e59fd9aa2f9634 sha256:2ffffd2f8834dd13734654eeec142aedbd95e6880e52d692a9e59fd9aa2f9634 upstream:https://github.com/bsord/tetris -
 # Chart renders (#603): the images Argo CD hands a cluster from the Helm charts and kustomize builds of
