@@ -36343,7 +36343,7 @@ TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_weather_feed_e2e.py` and `test
 
 **Scope map.** `python3 verify/scope_tests.py check` names `test_weather_feed_upstream_failure.py` among 18 tests
 with no entry in `verify/scope-map.yaml`. `scope_tests.py write` rewrote about 980 lines across many entries (each
-test that imports `package_cache` since #1121 gains its reads), so it is left to its own change and filed through
-this run's report. The selector still reads the test's own source, so the test runs when it should.
+test that imports `package_cache` since #1121 gains its reads), so it is left to its own change: #1170, open,
+which brings the map back in line with what `write` finds. The selector still reads the test's own source, so the test runs when it should.
 
 **Live check.** Skipped: this run changes only decisions.md.
