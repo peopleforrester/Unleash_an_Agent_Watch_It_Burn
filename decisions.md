@@ -34831,3 +34831,79 @@ suite, printed `352 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
 added. After this decisions.md entry was appended, `bash verify/run-tests.sh` was re-run on the final commit and
 printed `352 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`; the decisions-reading tests
 (`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`) are among them.
+
+## 2026-11-08: workshop-mcp reads the room's workloads every 30 s and posts each read to the desk, under a list-only Role of its own (#1050, run 18537)
+
+**Which pod reads.** #1049 built the desk's half of #1022: POST /cluster-read marks a landed row `removed_at` from a
+report of what the agent namespace still runs. The desk holds no token, so the reader runs in workshop-mcp, which
+already holds one for deploy_app and the reaper. The console was the issue's other choice; it is nginx and holds no
+token either, so it would have needed a new process and a new ServiceAccount. `gitops/ai-layer/workshop-mcp-server.py`
+starts `start_cluster_reader()` beside `_seed_local_data()` before it serves MCP. A daemon thread calls
+`read_room_workloads()` about every `CLUSTER_READ_SECONDS` (30), posts the result to `TICKET_SITE_URL/cluster-read`,
+and writes a line to the pod's log only when what happens changes.
+
+**What it reads.** `ROOM_READ_KINDS` is exactly the kinds remove-untrusted-room-workloads deletes: Deployment,
+StatefulSet, DaemonSet, ReplicaSet, Job, CronJob and Pod, each named as deploy_app records the row's kind. Each list is
+in the pod's own namespace, asks for `PartialObjectMetadataList` (names only, not whole pod specs), and is read 500 at a
+time, following `continue` to the last page. `taken_at` is the time before the first list, less two seconds: the desk
+marks a row only when the read was taken after the row landed, by the desk's clock in another pod, so the margin keeps
+a few milliseconds of skew from passing an older read as a later one. The cost is that a row landing in those two
+seconds is marked one read later.
+
+**A read is all or nothing.** The desk's report reads `ok` as "every list in it succeeded" (#1049), so any list that
+does not come back as a 200 list fails the whole read: a 403, a list that hangs past `CLUSTER_READ_TIMEOUT` (10 s), an
+API server that does not answer, a body that is not JSON, a list of another kind, a list with no `items`, or an item
+with no name. The reader then stops listing and posts `{"ok": false, "kinds": {}, "failed": "<kind>: <why>"}`, which
+the desk takes and applies to no row. It never posts a failed list as a kind with no names. A kind this account cannot
+list is in no successful report, because a 403 on it fails the read. The other reading, a partial success that drops
+the failed kind, would have kept rows of the other kinds moving under a lasting 403. It was not taken because the
+issue's criterion says a failed list produces no successful report, and with the grant below a lasting 403 means the
+platform is broken, which a stopped page shows better than a half-working one.
+
+**The grant.** Every guardrail and challenge fix replaces the workshop-agent Role's rules whole: guardrails-on/off and
+guard-rbac-on/off apply `c5-scoped-role.yaml` and `c8-broad-role.yaml`, guard-agency-on/off apply
+`c6-least-privilege-role.yaml` and `c5-scoped-role.yaml`, and Challenge 8's fix and reset apply `c8-scoped-role.yaml`
+and `c8-broad-role.yaml`. None of them lists StatefulSets, DaemonSets, ReplicaSets, Jobs or CronJobs. Writing the
+grant into each would mean five copies kept in step, and a Role a student writes for Challenge 8 would drop it. So
+`gitops/ai-layer/resources.yaml` adds a Role `workshop-mcp-room-reader`, with list on those seven kinds and no other
+verb or resource, and a RoleBinding to the workshop-mcp ServiceAccount alone. agent-sa, which holds no token, is not
+bound to it, so Challenge 8's `kubectl auth can-i --list --as=...agent-sa` reads as before. Argo CD's ai-layer
+ignoreDifferences covers only workshop-agent's rules, so selfHeal keeps the new Role and binding as written. The
+widening is read-only: run_shell, a shell in this pod, can now list those kinds' metadata and whole objects through
+the token, as it already could pods and Deployments. No Secret is reachable through it.
+
+**The tests.** `verify/test_room_reader.py` (offline) runs the real reader against a stand-in API server over HTTP, which
+checks the bearer token and answers each list as PartialObjectMetadataList, and the real `ticket_site.py`. A whole read
+covers all seven kinds with their names, follows pages and reads `"items": null` as empty. A 403 on Deployments and on
+Pods, a list that hangs past the timeout, an API server that is down, and five kinds of bad 200 each post a failed read
+that covers no kind, and the desk marks no row on it although no list named the row. A whole read that omits a
+Deployment and a Pod greys both rows and keeps a listed one. With the real margin, a row that has just landed is left
+for the next read. The loop posts once each interval and stops when told. `verify/test_room_reader_rbac.py` (offline)
+and `verify/test_room_reader_rbac_e2e.py` (tools tier, on the pinned helm's root render and the pinned kubectl's
+kustomize render of gitops/ai-layer) share `verify/room_reader_rbac.py`. It takes the shipped workshop-agent Role and
+every workshop-agent Role in challenge-fixes, checks that every role file the terminal and the lab apply is one of
+them, and under each, with every other Role bound to workshop-mcp beside it, evaluates list on every kind the reader
+reports. The tools-tier test reads the kinds from the rendered workshop-mcp-src ConfigMap's server.py and checks that
+the pod runs as workshop-mcp with its token mounted. Taking the reader's binding out fails the check, and so does a
+reader Role that grants more than list. `verify/scope-map.yaml` gets entries for the three new tests only; `python3
+verify/scope_tests.py write` also proposed entries for other runs' tests, which are left out of this change.
+
+**Live check, run 18537.** This touches `gitops/`, so it was checked read-only on both clusters before the change syncs.
+On watch-it-burn-community and watch-it-burn-private, `kubectl --context <c> -n agent auth can-i list <kind>
+--as=system:serviceaccount:agent:workshop-mcp` answered yes for deployments and pods and no for statefulsets,
+daemonsets, replicasets, jobs and cronjobs: today's grant would fail every read, which is why the Role is needed. Both
+clusters hold the shipped broad workshop-agent Role, and agent holds the Roles guard-proxy-reader, guardrails-switch
+and workshop-agent. The reader's own `read_room_workloads()` was then run from this host against each cluster's API
+server through `kubectl proxy` (the proxy's credentials, not workshop-mcp's token, and nothing posted). Its first try
+sent a dummy bearer token, which the proxy passed through: the API server answered 401 and the reader returned a
+failed read, `Deployment: HTTP 401: Unauthorized`. With that header dropped, community answered `ok` in 1.29 s with 12
+Deployments, 99 ReplicaSets, 2 Jobs, 13 Pods and no StatefulSet, DaemonSet or CronJob, and private answered `ok` in
+3.62 s with 11 Deployments, 95 ReplicaSets, 2 Jobs and 13 Pods. Read again at 3 names a page, each returned the same
+names, so the API server takes the metadata-only Accept header and the reader follows its `continue` tokens. Nothing
+changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: `kubectl --context <c> -n agent auth
+can-i list statefulsets --as=system:serviceaccount:agent:workshop-mcp` answers yes, also after `guardrails-on` and
+`guard-agency-on`; the workshop-mcp pod's log reads `cluster reads posted to the desk`; and a room Deployment the
+DeletingPolicy deletes after guardrails-on reads "removed at <time>" on /deployments.json within about a minute. The
+end-to-end live test is #1051's.
