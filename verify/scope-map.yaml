@@ -1427,6 +1427,18 @@ reads:
   test_chat_no_desk_link.py:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+  test_chat_pane_overlap_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_chat_path_ingress.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
