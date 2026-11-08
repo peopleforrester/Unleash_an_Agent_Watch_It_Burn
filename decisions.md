@@ -37228,3 +37228,49 @@ fallback was not run live: it flips the C7 gateway rule on the stage clusters, a
 and 18 tier tests) in 6m46s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The five changed tests and
 `test_images_lock.py`, `test_room_view.py` and `test_scope_tests.py` were among those that ran. The prose gate printed
 `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18663/e2e-tools.log`.
+## 2026-11-08 · #1156 · run 18665 · The support desk reserves HC-900 to HC-999 for the presenters
+
+**What changed.** Part of #1145, which Michael approved on 2026-11-08 with the guard that presenter demo tickets get
+a number range of their own. `gitops/ai-layer/ticket_site.py` now names two ranges: `ROOM_NUMBERS`, HC-1000 to
+HC-9999, the room's draw as before, and `PRESENTER_NUMBERS`, HC-900 to HC-999, reserved. `file_ticket` (POST /submit)
+checks each draw rather than trusting it: a number outside the room's range, the reserved one above all, is drawn
+again, so a later change to the draw cannot hand the room a presenter number. A presenter number is three digits and
+a room number four, and the desk's look-up matches a number by its exact digits, so a presenter number mistyped on
+stage cannot name a room ticket.
+
+**The presenter path.** `POST /presenter-ticket` takes a JSON body `{"body": "<text or HTML>", "customer": "<optional
+name>"}` and answers 201 with the ticket, numbered with the lowest free presenter number (HC-900 first), or 409 once
+all 100 are taken. It is cleaned as a room ticket is, so white text stays white on the page and is read by the bot.
+The ticket has no owner, so it shows on no visitor's `/me` page. The route is in-cluster only, as `/landed` and
+`/cluster-read` are: console.conf adds `location = /presenter-ticket { deny all; }` to the desk's public server, and
+the deployments host answers no POST. The presenters reach it with `kubectl port-forward svc/fake-ticket` in the
+`agent` namespace, so their kubectl session is the gate. It holds no token, reads no Secret, and does not read, write
+or reuse the `agent/terminal-auth` Secret (Dispatched runs, point 6). Lowest-free numbering rather than a random draw
+was chosen so the presenters know the number to say before they file it, and it restarts at HC-900 after a reset.
+
+**Eviction and the reset.** Past `MAX_TICKETS` the desk evicts the oldest room tickets and now leaves presenter
+tickets alone, so a busy room cannot push the demo ticket out. #1144 (the desk reset) is not built yet, so this change
+adds the function it calls, `clear_filed_tickets()`, which removes every room and presenter ticket and keeps every
+fixed one (`FIXED_TICKETS`, HC-7731 and HC-666 among them). The route or command that calls it, and who may, stay
+#1144's to decide.
+
+**The test.** `verify/test_presenter_ticket_range.py` enumerates the draw, as "Tests own their inputs" asks: it stubs
+`secrets.randbelow` and tries every value it can return to `_room_draw`, then feeds every number from 0 to 10999 to
+`file_ticket` as the draw and checks each files a room number, and POSTs to /submit with all 100 presenter numbers
+drawn first. It drives `/presenter-ticket` over HTTP (201 and HC-900, HC-901, the 400s, the 413, the 409 at 101, the
+404 on the deployments host), the eviction and the reset, holds the console's deny line and that the console's only
+other routes to the desk are GET-only fixed paths, and checks that the desk's Deployment mounts no Secret. Its entry
+in `verify/scope-map.yaml` is the one `scope_tests.py write` computed for it; the other drift that `write` printed for
+unrelated tests was left out of this change.
+
+**Live check.** Run on watch-it-burn-community before the change is on it, read-only: a POST from outside to
+`https://support.burritobot.co/landed` and `/cluster-read` answered 403, and `/presenter-ticket` 404, which is the desk
+itself answering a route it does not have yet; `deploy/fake-ticket` in `agent` read 1/1 ready. Both the desk's source
+and console.conf are hashed ConfigMaps, so one Argo CD sync rolls both pods.
+
+**Not yet run on a cluster.** Once hecaton promotes this, on watch-it-burn-community: `POST
+https://support.burritobot.co/presenter-ticket` from outside answers 403; through `kubectl --context
+watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080`, `POST /presenter-ticket` answers 201 with
+HC-900, `GET /ticket?id=HC-900` returns it, and a ticket filed at the public desk's form gets a four-digit number.
+The check files one ticket, HC-900, which stays until the desk restarts or #1144's reset clears it: a desk pod
+delete would also clear every ticket and row the room has, so the check does not use one.

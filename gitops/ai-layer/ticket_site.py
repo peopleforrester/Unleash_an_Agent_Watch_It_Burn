@@ -11,6 +11,22 @@ whoever wrote it.
 The tickets are fixed and in-memory. The site makes no outbound call, so it needs no egress policy and no
 ServiceAccount token. An unknown id is a 404; nothing is invented. What the cluster still runs reaches it the same way:
 a reader that holds a token posts its read here (POST /cluster-read, #1049), and the desk never asks the cluster.
+
+Ticket numbers (#1156, part of #1145). A ticket the room files (POST /submit) is drawn from ROOM_NUMBERS, HC-1000 to
+HC-9999, and never takes a number in PRESENTER_NUMBERS, HC-900 to HC-999, whatever the draw returns: file_ticket draws
+again on any number outside the room's range. The reserved range is the presenters' alone, so a number said on stage
+is three digits and a room ticket is four, and a mistyped presenter number cannot name a room ticket and run its
+injection on the admin bot. The presenters file with POST /presenter-ticket, a JSON body {"body": "<the ticket's
+text or HTML>", "customer": "<optional name>"}, answered 201 with the ticket, numbered with the lowest free number in
+the range (HC-900 first), or 409 once all 100 are taken. The route is in-cluster only, as /landed is: console.conf
+refuses it on the desk's public server, and the deployments host answers no POST. A presenter reaches it through the
+cluster API, for example
+    kubectl --context <cluster> -n agent port-forward svc/fake-ticket 18080:8080
+    curl -s -X POST localhost:18080/presenter-ticket -H 'Content-Type: application/json' -d '{"body": "..."}'
+It holds no token and reads no Secret: the kubectl session is the only gate, and nothing here touches the presenter
+terminal login (the agent/terminal-auth Secret). Room tickets are evicted oldest first past MAX_TICKETS; presenter
+tickets are not, so a busy room cannot push the demo ticket out. clear_filed_tickets(), which the desk reset (#1144)
+calls, clears both kinds and keeps every fixed ticket (FIXED_TICKETS: HC-7731, HC-666 and the rest).
 """
 from __future__ import annotations
 
@@ -220,19 +236,74 @@ def clean(raw: str) -> tuple[str, str]:
     return c.result()
 
 
+# The two ranges (#1156, the module docstring): the room's draw and the presenters' reserved numbers never overlap.
+ROOM_NUMBERS = range(1000, 10000)
+PRESENTER_NUMBERS = range(900, 1000)
+SUBMITTED_SUBJECT = "submitted at the support desk"
+PRESENTER_CUSTOMER = "Walk-in customer"
+
+
+def ticket_number(tid: str) -> int | None:
+    """The number an HC-<n> id carries, or None for any other shape."""
+    m = re.fullmatch(r"HC-(\d+)", tid)
+    return int(m.group(1)) if m else None
+
+
+def is_presenter_ticket(tid: str) -> bool:
+    n = ticket_number(tid)
+    return n is not None and n in PRESENTER_NUMBERS
+
+
+def _room_draw() -> int:
+    return ROOM_NUMBERS.start + secrets.randbelow(len(ROOM_NUMBERS))
+
+
 def file_ticket(raw: str, owner: str) -> dict:
     shown, text = clean(raw)
     with _lock:
         while True:
-            tid = f"HC-{secrets.randbelow(9000) + 1000}"
+            n = _room_draw()
+            # The draw is checked, not trusted: a number outside the room's range, the reserved one above all, is
+            # drawn again, so no change to the draw can hand the room a presenter number.
+            if n not in ROOM_NUMBERS or n in PRESENTER_NUMBERS:
+                continue
+            tid = f"HC-{n}"
             if tid not in TICKETS and find(tid) is None:
                 break
         if len(TICKETS) >= MAX_TICKETS:
-            for old in [k for k in TICKETS if k not in FIXED_TICKETS][:500]:
+            for old in [k for k in TICKETS if k not in FIXED_TICKETS and not is_presenter_ticket(k)][:500]:
                 TICKETS.pop(old, None)
-        TICKETS[tid] = {"id": tid, "subject": "submitted at the support desk", "status": "open",
+        TICKETS[tid] = {"id": tid, "subject": SUBMITTED_SUBJECT, "status": "open",
                         "customer": owner, "body": text, "html": shown, "owner": slug(owner)}
     return TICKETS[tid]
+
+
+class RangeFull(Exception):
+    """Every presenter number is taken; the desk reset frees them."""
+
+
+def file_presenter_ticket(raw: str, customer: str = "") -> dict:
+    """A presenter's ticket, numbered with the lowest free number in PRESENTER_NUMBERS. No owner, so it shows on no
+    visitor's /me page; it opens by its number like any other ticket."""
+    shown, text = clean(raw)
+    who = " ".join(str(customer or "").split())[:80] or PRESENTER_CUSTOMER
+    with _lock:
+        free = [n for n in PRESENTER_NUMBERS if f"HC-{n}" not in TICKETS and find(f"HC-{n}") is None]
+        if not free:
+            raise RangeFull(f"every presenter number HC-{PRESENTER_NUMBERS[0]} to HC-{PRESENTER_NUMBERS[-1]} is taken")
+        tid = f"HC-{free[0]}"
+        TICKETS[tid] = {"id": tid, "subject": SUBMITTED_SUBJECT, "status": "open",
+                        "customer": who, "body": text, "html": shown}
+    return TICKETS[tid]
+
+
+def clear_filed_tickets() -> int:
+    """Remove every filed ticket, the room's and the presenters', and keep each fixed one; how many it removed."""
+    with _lock:
+        gone = [k for k in TICKETS if k not in FIXED_TICKETS]
+        for k in gone:
+            TICKETS.pop(k, None)
+    return len(gone)
 
 
 # --- what the bot deployed (#685) --------------------------------------------------------------------------------
@@ -659,6 +730,29 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or ""),
                                            str(d.get("image") or ""), str(d.get("requested_by") or ""),
                                            str(d.get("kind") or "")))
+        elif url.path == "/presenter-ticket":
+            # In-cluster only, as /landed is: the console refuses it from outside (console.conf). The presenters file
+            # their demo tickets here, numbered in PRESENTER_NUMBERS (#1156, the module docstring).
+            try:
+                d = json.loads(raw or b"{}")
+                body = d["body"]
+                if not isinstance(body, str) or not isinstance(d.get("customer", ""), str):
+                    raise TypeError
+            except (ValueError, KeyError, TypeError):
+                self._send(400, {"error": "a JSON object with the ticket's text as body is required"})
+                return
+            if len(body) > MAX_BODY:
+                self._send(413, {"error": "that ticket is too long"})
+                return
+            if not clean(body)[1].strip():
+                self._send(400, {"error": "the ticket has no text"})
+                return
+            try:
+                t = file_presenter_ticket(body, d.get("customer", ""))
+            except RangeFull as e:
+                self._send(409, {"error": str(e)})
+                return
+            self._send(201, self._ticket_json(t))
         elif url.path == "/cluster-read":
             # In-cluster only, as /landed is: the console refuses it from outside (console.conf). #1050's reader posts here.
             try:

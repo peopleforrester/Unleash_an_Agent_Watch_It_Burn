@@ -5048,6 +5048,10 @@ reads:
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
     - verify/no-cloud.sh
+  test_presenter_ticket_range.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
   test_prior_drafts.sh:
     - README.md
     - agent/60
