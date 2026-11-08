@@ -3236,6 +3236,55 @@ reads:
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
     - verify/no_cloud.py
+  test_guard_mcp_both.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/*
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/bootstrap
+    - gitops/bootstrap/apps/guardrails-switch.yaml
+    - gitops/bootstrap/values*.yaml
+    - gitops/guardrails-switch
+    - gitops/guardrails-switch/mcp-switch.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/web-terminal/entrypoint.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - policies/kyverno/block-argocd-drift.yaml
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
   test_guard_proxy_go_otel.py:
     - gitops/ai-layer
     - gitops/ai-layer-otel

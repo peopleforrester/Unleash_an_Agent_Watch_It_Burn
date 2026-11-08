@@ -92,6 +92,16 @@ spec:
         object.?kind.orValue('') == 'ConfigMap' &&
         object.?metadata.?namespace.orValue('') == 'agent' &&
         object.?metadata.?name.orValue('') == 'agentgateway-c7-config')
+    # The same rule line, written from the other KubeCon cluster (#1149): its guard-mcp-on / guard-mcp-off run here as
+    # the guardrails-switch ServiceAccount, the identity the guardrails-peer Secret carries (gitops/guardrails-switch/).
+    # The same one ConfigMap, UPDATE alone, and only that identity.
+    - name: not-guardrails-switch-c7-rule
+      expression: >-
+        !(request.userInfo.username == 'system:serviceaccount:guardrails-switch:guardrails-switch' &&
+        request.operation == 'UPDATE' &&
+        object.?kind.orValue('') == 'ConfigMap' &&
+        object.?metadata.?namespace.orValue('') == 'agent' &&
+        object.?metadata.?name.orValue('') == 'agentgateway-c7-config')
     # Built-in controllers and kubelet must keep the managed object healthy (kube-system service
     # accounts, nodes), and cluster admins can always intervene to fix things (system:masters).
     - name: not-system-or-admin
