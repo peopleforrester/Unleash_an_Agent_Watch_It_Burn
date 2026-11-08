@@ -259,6 +259,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -315,6 +316,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/bootstrap/apps/workshop-agent.yaml
     - gitops/workshop-agent
@@ -629,6 +631,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -648,6 +651,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -936,6 +940,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -1846,6 +1851,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
@@ -1926,6 +1932,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -3725,6 +3732,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -5062,6 +5070,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/skin.js
@@ -5839,6 +5848,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -6666,6 +6676,7 @@ reads:
     - gitops/ai-layer/web/brief.html
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
     - gitops/ai-layer/web/lab-events.js
     - gitops/ai-layer/web/lab.html
     - gitops/ai-layer/web/skin.js
