@@ -39186,3 +39186,51 @@ Not yet run on a cluster:
 `238 tests ran` for the offline suite, then `12 checks ran (the offline suite and 11 tier tests) in 11m55s, 4 at a
 time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_guard_mcp_both.py`, `test_lab_private_banner.py`,
 `test_lab_private_banner_e2e.py` and `verify/test_scope_tests.py` were among them. The prose gate passed.
+
+## 2026-11-08 · #870 · run 18768 · A timed-out /chat turn's root reads error in APM and in Agent Observability; the collector needs no fix
+
+**The spec.** #870 asks, once guard-proxy carries guard-proxy-agenticburn#53 (f842ec3, which marks the /chat root and
+chat spans as errors when a failed forward answers 502), for one turn that runs past `PROXY_TIMEOUT` on attackme
+(watch-it-burn-community), and a read of its POST /chat root in Datadog APM and of its root in Agent Observability.
+If APM reads error and Agent Observability reads ok, the collector's Agent Observability copy drops the root's status
+and needs its own fix. Before f842ec3, trace 39650c741689e7a7ce8f992660b2a24d (APM, env burritobot-kubecon-na-26) and
+Agent Observability trace 4d1090dc79e250aab8709ad05a7e83e2 read ok on both roots.
+
+**Why run 17439's record is ported here.** Run 17439 did the live check on 2026-11-05 and reported done, but it ended
+failed (validation) on the `tests` gate, so its commits (52bbf535, 6f9b7315) never reached staging and this file has
+no entry for it. Its report on the issue (comment 6658007218) carries the evidence, quoted below. This run is a doc
+lane run: it edits this file in place and runs no git command, so `verify/prior-drafts.sh` was not run and the
+draft's own text was not read; the entry is rebuilt from the report. It also had no cluster session (no
+`HECATON_CLUSTER_ENV`, and `sources eks-session` is refused to it), so it ran no live check of its own.
+
+**Run 17439's check (2026-11-05, watch-it-burn-community).** The clusters then ran pin 0f0c809, which predates
+f842ec3, and a run cannot move a submodule pin. So it ran guard-proxy-agenticburn main's proxy.py (d3fc4d5, which
+contains f842ec3, sha256 prefix `e66685f983fc`) in a temporary pod copied from the live guard-proxy Deployment's
+template, with `PROXY_TIMEOUT` 1 and a readiness probe that always fails, so the Service never sent visitors to it.
+One POST /chat (session `sess-check870-1793879628`) answered HTTP 502 after 1.26 s and logged that the 1 s forward
+deadline (`PROXY_TIMEOUT`) passed.
+- APM trace cd34510692488aa4078bc98053c8f488: the POST /chat root reads status error, http 502, `otel.status_code`
+  Error; the chat and agent.forward spans read error too.
+- Agent Observability trace 83b0932cdac55b4abf2d07ee922252c2 (`otel.trace_id` cf054e30408f85552d4c7f932d78212d, the
+  #783 derived id): the POST root, `trace_root:1`, reads status error, `otel.status_code:error`, http 502.
+- So the collector's Agent Observability copy keeps the root's status, and it needs no fix. The pod and its
+  ConfigMap were deleted after; guard-proxy stayed at generation 13 with `checksum/proxy-py` `dfca2b1fe758`, and
+  `ai-layer` read Synced Healthy.
+
+**The deployed pin now carries the same code.** Since then Michael's `e9aa982e` pinned dc78f1c and `c51e1851` (#1079)
+pinned 5772a5d8d7cb, both later than f842ec3 on guard-proxy-agenticburn main. `gitops/ai-layer/resources.yaml` here
+carries `checksum/proxy-py` `ddf97ec452c0`, and the 2026-11-08 #1046 entry (run 18491) read that hash in the `proxy`
+container on both clusters. This run fetched proxy.py at 5772a5d8d7cb from GitHub; its sha256 is
+`ddf97ec452c00953c8b741e7891f2636b2fa959b95bd560e7d6cb070aef38ff6`, the deployed file. In it, `Handler._send` sets
+`StatusCode.ERROR` on the POST server span for any answer of 500 or more (guard-proxy-agenticburn#54), and the /chat
+forward's failure path, when the call is not the optional retry, sets the chat span to error and answers 502 (#53).
+A turn that `TURN_TIMEOUT` cuts off answers 502 through the same `_send`, so its root reads error as well. A failed
+optional reasoning-only retry still answers 200 and leaves the root ok, as the issue says it should.
+
+**Not yet run on a cluster.** A timed-out turn served by the deployed 5772a5d pod itself has not been read in
+Datadog. The collector path is the one run 17439 read, so this would only confirm what is already shown. The next
+`/chat` that logs `forward_error` or `turn_timeout` on watch-it-burn-community should show its POST /chat root as
+error in APM and in Agent Observability.
+
+**Tests.** This entry changes no code and no test. The prose gate is the only check that reads it; validation runs
+it after this report.
