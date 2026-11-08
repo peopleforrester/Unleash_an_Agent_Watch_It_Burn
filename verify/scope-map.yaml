@@ -5303,6 +5303,7 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/room_reader_rbac.py
   test_room_reader_rbac_e2e.py:
     - agent
     - agent/terminal-auth
@@ -5351,6 +5352,7 @@ reads:
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
+    - verify/room_reader_rbac.py
     - verify/run-e2e-tools.sh
   test_room_view.py:
     - CLAUDE.md
