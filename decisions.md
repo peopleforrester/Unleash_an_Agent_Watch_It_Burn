@@ -33621,3 +33621,9 @@ called `deploy_app` or `run_shell` with anything but an echo, and the community 
 Deployments after as before (its `joker-ichabod-the-werewolf`, created 2026-11-07 19:17Z, is not this run's). No guard,
 policy, Secret or Deployment was changed. The replica made about 450 Converse calls on the community profile. No
 dependency was added to the repo; the drivers use `uv run --with` as #1089's did.
+
+**Suite results, run 18448.** On `cd1bbf6b`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=efb66bb2`, as the
+gate sets it, printed `239 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `27 checks ran (the offline suite
+and 26 tier tests) in 7m13s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate:
+pass`. `scope_tests.py write` was run and its rewrite of other tests' entries left out, since this change adds no
+test. The log is `/var/lib/hecaton/runs/18448/e2e-tools.log`.
