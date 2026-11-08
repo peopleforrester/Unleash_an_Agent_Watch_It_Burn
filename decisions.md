@@ -35169,3 +35169,8 @@ segment 4 now says, and the Role stops that one with both on.
 **Not yet run on a cluster.** The room's retry on the public bot after the two commands: both change the private cluster
 alone (#1098), so `python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community`
 would show it still deploying. The talk is built that way, and this change leaves it so.
+
+**Suite results, run 18551.** On `ac7549b8`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=dce7c291`
+printed `122 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `16 checks ran (the offline suite and 15
+tier tests) in 6m45s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18551/e2e-tools.log`.
