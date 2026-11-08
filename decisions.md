@@ -36337,6 +36337,9 @@ checks red, each on a GitHub download: the Datadog Terraform provider zip (`test
 `test_terraform_lock_init.py`), Gateway API's `standard-install.yaml`, the falco-talon, falcosidekick, falco and
 datadog-operator chart tarballs, and weaver's semantic-conventions fetch. Both weather tests passed in it.
 githubstatus.com read `Partially Degraded Service`, incident "Increase in timeouts for some unauthenticated users".
+Once release downloads answered 200 again, the third (`e2e-tools.3.log`) printed `361 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 17m42s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_weather_feed_e2e.py` and `test_weather_feed_upstream_failure.py` passing.
 
 **Scope map.** `python3 verify/scope_tests.py check` names `test_weather_feed_upstream_failure.py` among 18 tests
 with no entry in `verify/scope-map.yaml`. `scope_tests.py write` rewrote about 980 lines across many entries (each
