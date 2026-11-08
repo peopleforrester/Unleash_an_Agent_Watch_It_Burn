@@ -44180,3 +44180,56 @@ marker was left as it is: no record quotes it, and a quote of `environ.get(...)`
 Run: `python3 verify/test_poisoned_server_one_copy.py` passed on the committed tree, decisions.md included. With the
 old copy restored from 5d9b836d^ it failed again (exit 1), naming the copy, and the copy was removed. The scoped
 `run-tests.sh` (base 6b518555) is what found the cause; it is left to validation to run again on this commit.
+## 2026-11-09 · #1032 · run 18817 · The weather feed is enrolled in the Istio ambient mesh; workshop-mcp and workshop-agent are not
+
+**What changed.** Run 17960's draft for #980, commits f03c638a and 80e165b0 on `origin/agent/980-17960`, is ported to
+staging. `bash verify/prior-drafts.sh 980 origin/staging` named six drift lines, all edits in place. f03c638a
+cherry-picked with no conflict (now dd12d239), and each staging commit the drift named was reread against it:
+2e4aa9de (vLLM's CPU request), c6f13d16 and 10ede4a3 (lab.html's Challenge 8 caret and private banner) and
+5d9b836d (the stale shim copy) touch nothing the draft claims. The weather feed's one caller is still evil-mcp-shim
+(`server.py`'s `WEATHER_FEED_URL`), and the shim's container is still `shim`, which `test_mesh_live.py`'s new exec
+names. 80e165b0 was not cherry-picked: LAB-TEXT.md was regenerated with `bash verify/export-lab-text.sh` from the
+ported lab.html (af504037), since staging re-exported it since. The draft's later #980 commits (the waypoint's
+istiod port, its live record and suite results) are not part of this issue and were left out.
+
+- `gitops/ai-layer/resources.yaml`: the weather-feed pod template carries `istio.io/dataplane-mode: ambient`, with a
+  comment on why a third pod joins the two that question 947 (#471) settled on, and the guard-proxy comment no
+  longer says only two pods.
+- `verify/test_mesh_enrollment.py`: the enrolled set is console, guard-proxy and weather-feed, and the HBONE 15008
+  Ingress scan also reads `challenges/c1-exfil-s3/fix/*.yaml`, with a check that it found the fix's NetworkPolicies.
+  No Ingress NetworkPolicy in agent selects the weather feed. The tour check needs "weather feed" and refuses
+  "Only those two pods".
+- `verify/test_mesh_live.py`: the same three, plus a check that evil-mcp-shim, outside the mesh, still reaches the
+  weather feed's `/healthz`.
+- lab.html's Istio bullet names the weather feed; LAB-TEXT.md is regenerated from it.
+- The fix README and `egress-waypoint.yaml` no longer list enrolment as owed; both record the 2026-11-06 scratch
+  check from run 17960 instead. The PeerAuthentication comments, the Istio evaluation note, STACK-WALKTHROUGH,
+  MASTER-RECREATION-SPEC, BUILD-PLAN and `test_mesh.py`'s comment are updated with it.
+
+**workshop-mcp and workshop-agent are not enrolled.** The stage-2 allowlist gives neither a public address, so the
+C1 stage-2b fix has nothing to steer for them. Enrolling one would hand it the egress waypoint's route to
+Open-Meteo, which it does not have today. workshop-agent also sits behind `chat-path-ingress.yaml`'s port-exact
+Ingress rule, which mesh traffic on HBONE 15008 would not pass. resources.yaml and the fix README say the same.
+
+**Live check, watch-it-burn-private, 2026-11-08 23:02 UTC.** Before: the weather-feed pod
+`weather-feed-6885d9cb66-8sdt9` carried no mesh label, and `/healthz` and `/current?city=Atlanta`, called from
+evil-mcp-shim, answered 200. The running pod was then labelled `istio.io/dataplane-mode=ambient` by hand (the pod,
+not the Deployment): its `ambient.istio.io/redirection` annotation read `enabled`, both calls still answered 200
+(Atlanta, 17.6 C, clear sky), and ztunnel logged the shim's plain-text call as an inbound `connection complete`
+on 8080 to `weather-feed-6885d9cb66-8sdt9` and the feed's two Open-Meteo calls as outbound on 443. So under
+PERMISSIVE an unenrolled caller still reaches the enrolled feed, and before the fix is applied the feed's calls go
+out directly as before. The label was removed; the annotation cleared, both calls answered 200, and the pod was
+the same one, Running, 0 restarts. The cluster was left as found. agent on private has no default-deny egress
+policy today, so this did not exercise the stage-2 policies; run 17960's scratch namespace did.
+
+`CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` then failed 2 checks, the two that need the
+promoted template ("weather-feed-... carries istio.io/dataplane-mode=ambient" and "... was redirected by
+istio-cni"), and passed the rest, the new evil-mcp-shim check and ztunnel's console-to-guard-proxy line with both
+SPIFFE identities included.
+
+**Not yet run on a cluster.** `CONTEXT=watch-it-burn-private python3 verify/test_mesh_live.py` once Argo CD syncs
+the promoted resources.yaml; the next run on #980 runs it.
+
+**Tests run.** `test_mesh_enrollment.py`, `test_mesh.py`, `test_lab_text_export.py`, `test_c1_dns_exfil_fix.py`,
+`test_gateway_api_crds.py`, `test_467_live_record.py` and `test_agent_bypass_shapes.py`, all exit 0. The scoped Test
+and E2E commands are left to hecaton's validation. No dependency was added.
