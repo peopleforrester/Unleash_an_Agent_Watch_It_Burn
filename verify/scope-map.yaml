@@ -113,6 +113,7 @@ always:
   test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
   test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
   test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
+  test_pantry_shut_record.py: 'verify/test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole'
   test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time
   test_platform_baseline_sister.py: 'verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
