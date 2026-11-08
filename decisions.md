@@ -33996,3 +33996,8 @@ toggle log, #66's test margins and #71's ALWAYS_REDACT, and the proxy.py diff be
 line naming the pantry header, so the X-Pantry-Shut path run 18215's replays measured is unchanged.
 
 **Not yet run on a cluster.** Nothing for #1046.
+
+**Suite results, run 18491.** On `7f6cc919`, scoped by `HECATON_BASE_SHA=d9be3bc7`, `bash verify/run-e2e-tools.sh`
+printed `90 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks ran (the offline suite and 13 tier
+tests) in 3m51s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18491/e2e-tools.log`). The
+prose gate printed `prose gate: pass`.
