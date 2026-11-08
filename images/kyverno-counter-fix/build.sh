@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: Builds Kyverno v1.19.1's admission and reports controllers with upstream's breaker fix (kyverno#17085) laid
-# ABOUTME: over upstream's own images, reproducibly, into a loopback registry; the workflow copies the pinned digests out.
+# ABOUTME: Builds Kyverno v1.19.1's admission, reports and background controllers with upstream's breaker fix
+# ABOUTME: (kyverno#17085) over upstream's images, reproducibly, into a loopback registry; CI copies the pinned digests.
 #
 # Usage: CRANE=<crane 0.22.1> bash images/kyverno-counter-fix/build.sh <127.0.0.1:port>
 #
@@ -12,12 +12,15 @@
 # no Pod created in agent after the controllers' first minutes had a PolicyReport. Upstream fixed it on main in
 # 7c7042fb (kyverno#17085, 2026-09-10): the counter lists again and starts a new watcher. No release carries it but
 # v1.20.0-rc.1; release-1.19 and v1.19.2 do not. pr17085.patch is that commit, byte for byte as GitHub serves it.
+# The background controller runs the same counter for the reports of mutate-existing and generate rules, so it is
+# rebuilt too, although no policy here has such a rule yet.
 #
 # What is built. The source is the v1.19.1 tag at the commit the running controllers log (40ec788d), with the patch
-# applied. Only the two binaries whose breaker it fixes are rebuilt: kyverno (the admission controller) and
-# reports-controller. Each goes in as one layer at /ko-app/<name> on top of upstream's linux/amd64 image of the same
-# release, pinned by the index digests images.lock records for v1.19.1, so the entrypoint, user, environment and
-# kodata are upstream's. The nodes are AL2023_x86_64 (infra/terraform/aws/cluster/main.tf), so amd64 only.
+# applied. Only the three binaries that gate reports on that breaker are rebuilt: kyverno (the admission controller),
+# reports-controller and background-controller. Each goes in as one layer at /ko-app/<name> on top of upstream's
+# linux/amd64 image of the same release, pinned by the index digests images.lock records for v1.19.1, so the
+# entrypoint, user, environment and kodata are upstream's. The nodes are AL2023_x86_64
+# (infra/terraform/aws/cluster/main.tf), so amd64 only.
 #
 # Reproducible, so the digests are pinned before the first push (no run may write to ghcr.io), as the Jokers' are:
 # the Go toolchain is fixed by GOTOOLCHAIN (go.mod's go1.26.6, fetched and checksummed by the go command), the build
@@ -37,14 +40,16 @@ KYVERNO_COMMIT="40ec788d48bb28d83dbf85538e962a59db9d45c6"
 GO_TOOLCHAIN="go1.26.6"
 PATCH_SHA256="254ebcfc83c11f74ec7bb0d43cef33dd1010340521f902e2634c3014946a7523"
 BUILD_VERSION="v1.19.1-pr17085"
-BINS=(kyverno reports-controller)
+BINS=(kyverno reports-controller background-controller)
 declare -A BASE=(
   [kyverno]="reg.kyverno.io/kyverno/kyverno:v1.19.1@sha256:b31d8511ae5fd6010e2a01ea72ebae08eb82fa51d91af14a1d9fe989949b4edb"
   [reports-controller]="reg.kyverno.io/kyverno/reports-controller:v1.19.1@sha256:c0eee97b9b44a0dd35805d56b358fa52548480f79d4944602b9609538eccd64c"
+  [background-controller]="reg.kyverno.io/kyverno/background-controller:v1.19.1@sha256:8f1e9143373a27578cafc2d28d2c66ba0926c63b4c77e63de8d2fdd4a122859f"
 )
 declare -A TAG=(
   [kyverno]="kyverno-v1.19.1-pr17085"
   [reports-controller]="kyverno-reports-controller-v1.19.1-pr17085"
+  [background-controller]="kyverno-background-controller-v1.19.1-pr17085"
 )
 
 tmp="$(mktemp -d)"

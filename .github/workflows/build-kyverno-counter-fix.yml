@@ -1,5 +1,5 @@
-# ABOUTME: Build Kyverno v1.19.1's admission and reports controllers with upstream's breaker fix (#1015) into a loopback
-# ABOUTME: registry, and copy each to the ghcr.io tag images.lock pins only when the build's digest is the pinned one.
+# ABOUTME: Build Kyverno v1.19.1's admission, reports and background controllers with upstream's breaker fix (#1015) into
+# ABOUTME: a loopback registry, and copy each to the ghcr.io tag images.lock pins only when its digest is the pinned one.
 name: build-kyverno-counter-fix
 
 on:
@@ -10,6 +10,9 @@ on:
       - 'images/kyverno-counter-fix/**'
       - 'images.lock'
       - 'verify/e2e-tools.lock'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact_cache.py'
+      - 'verify/artifact-cache.sh'
       - '.github/workflows/build-kyverno-counter-fix.yml'
       - 'scripts/ghcr_version_tag.py'
 
@@ -31,18 +34,19 @@ jobs:
         with:
           go-version: '1.26.6'
           cache: false
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
       - name: Fetch the pinned crane
         run: |
           set -euo pipefail
           read -r name version sha url member < <(grep -E '^crane[[:space:]]' verify/e2e-tools.lock)
           [ "${name}" = crane ] || { echo "verify/e2e-tools.lock has no crane row" >&2; exit 1; }
-          curl -fsSL -o "${RUNNER_TEMP}/crane.tgz" "${url}"
-          echo "${sha}  ${RUNNER_TEMP}/crane.tgz" | sha256sum -c -
+          archive="$(bash verify/artifact-cache.sh get "${sha}" "${url}")"
           mkdir -p "${RUNNER_TEMP}/bin"
-          tar -xzf "${RUNNER_TEMP}/crane.tgz" -C "${RUNNER_TEMP}/bin" "${member}"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/bin" "${member}"
           echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
           "${RUNNER_TEMP}/bin/crane" version
-      - name: Build both controllers with build.sh into crane's registry on loopback
+      - name: Build the three controllers with build.sh into crane's registry on loopback
         run: |
           nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &
           for _ in $(seq 50); do curl -fsS http://127.0.0.1:5000/v2/ >/dev/null 2>&1 && break; sleep 0.2; done
@@ -56,6 +60,6 @@ jobs:
           GHCR_USER: peopleforrester
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          for tag in kyverno-v1.19.1-pr17085 kyverno-reports-controller-v1.19.1-pr17085; do
+          for tag in kyverno-v1.19.1-pr17085 kyverno-reports-controller-v1.19.1-pr17085 kyverno-background-controller-v1.19.1-pr17085; do
             python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/peopleforrester/watch-it-burn:${tag}" "ghcr.io/peopleforrester/watch-it-burn:${tag}" images.lock
           done

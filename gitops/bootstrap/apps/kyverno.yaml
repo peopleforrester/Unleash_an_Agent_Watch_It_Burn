@@ -52,8 +52,9 @@ spec:
             # v1.19.1 that counter's watch stops for good on a 410 from the apiserver, so the breaker stays open and
             # every admission report is dropped until the pod restarts. On 2026-11-08 it had dropped 1297 of 1300 on
             # watch-it-burn-community and 2580 of 2831 on watch-it-burn-private. images/kyverno-counter-fix/build.sh
-            # builds this image reproducibly and images.lock pins its digest; the reports controller below runs the
-            # same fix. verify/test_kyverno_counter_fix.py holds the two pins, the build and the patch together.
+            # builds this image reproducibly and images.lock pins its digest; the background and reports controllers
+            # below run the same build. verify/test_kyverno_counter_fix.py holds the pins, the build and the patch
+            # together.
             image:
               registry: ghcr.io
               repository: peopleforrester/watch-it-burn
@@ -93,6 +94,12 @@ spec:
             tags.datadoghq.com/version: "v1.19.1"
         # Background controller for policy reports
         backgroundController:
+          # It gates the reports of mutate-existing and generate rules on the same breaker counter as the admission
+          # and reports controllers (#1015), so it runs the same v1.19.1 build with kyverno/kyverno#17085.
+          image:
+            registry: ghcr.io
+            repository: peopleforrester/watch-it-burn
+            tag: "kyverno-background-controller-v1.19.1-pr17085@sha256:89d0d81502deb1226d88a192b1da68a868227a313b7d50f5c3e1b09ff24cd0c8"
           podLabels: { tags.datadoghq.com/service: burritobot-kyverno-background-controller, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             limits:

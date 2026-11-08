@@ -1,20 +1,21 @@
-# ABOUTME: Holds #1015's fix in place: Kyverno's admission and reports controllers run v1.19.1 with upstream's breaker
-# ABOUTME: fix (kyverno#17085), at the digests images.lock pins, built by images/kyverno-counter-fix from the pinned patch.
-"""Why (#1015). Both Kyverno controllers that write reports pass each one through a breaker that is open while its
-report counter's watch is down. In v1.19.1 the counter starts one RetryWatcher and never replaces it, and the watcher
-stops for good when the apiserver answers 410 (too old resource version). From then on every report is dropped until
-the pod restarts: on 2026-11-08 the reports controller on watch-it-burn-community had dropped 26085 of 26403
-background-scan reports and its admission controller 1297 of 1300, and no Pod created in agent after the first
-minutes of their start had a PolicyReport, so the lab's Challenge 2 report line printed nothing.
+# ABOUTME: Holds #1015's fix in place: Kyverno's admission, reports and background controllers run v1.19.1 with upstream's
+# ABOUTME: breaker fix (kyverno#17085), at the digests images.lock pins, built by images/kyverno-counter-fix from the patch.
+"""Why (#1015). The Kyverno controllers that write reports (admission, reports and background) pass each one through a
+breaker that is open while its report counter's watch is down. In v1.19.1 the counter starts one RetryWatcher and
+never replaces it, and the watcher stops for good when the apiserver answers 410 (too old resource version). From then
+on every report is dropped until the pod restarts: on 2026-11-08 the reports controller on watch-it-burn-community had
+dropped 26085 of 26403 background-scan reports and its admission controller 1297 of 1300, and no Pod created in agent
+after the first minutes of their start had a PolicyReport, so the lab's Challenge 2 report line printed nothing.
 
 Upstream fixed it on main in 7c7042fb (kyverno#17085); no 1.19 release carries it. images/kyverno-counter-fix/build.sh
-applies that commit to v1.19.1 and lays the two rebuilt binaries over upstream's own images, reproducibly, so
+applies that commit to v1.19.1 and lays the three rebuilt binaries over upstream's own images, reproducibly, so
 images.lock pins the digests before .github/workflows/build-kyverno-counter-fix.yml copies them to ghcr.io.
 
 This holds the pieces together, so none can move alone: the patch is the upstream commit and carries the recovery,
-the build starts from the release and the base digests the rest of the chart runs, both controllers point at the
-build's tags at the digests images.lock pins, and the workflow builds and copies both. Reverting either controller to
-the stock image, or bumping Kyverno without carrying the fix, goes red here.
+the build starts from the release and the base digests the rest of the chart runs, the three controllers that gate
+reports on the breaker (admission, reports and background) point at the build's tags at the digests images.lock pins,
+and the workflow builds and copies all three. Reverting one to the stock image, or bumping Kyverno without carrying the
+fix, goes red here.
 """
 import hashlib
 import pathlib
@@ -101,8 +102,9 @@ for line in LOCK.read_text(encoding="utf-8").splitlines():
         lock_rows[parts[0]] = parts
 bases = assoc("BASE")
 tags = assoc("TAG")
-bins = {"kyverno": ("admissionController", "container"), "reports-controller": ("reportsController",)}
-check("build.sh builds exactly the two controllers whose breaker the patch fixes",
+bins = {"kyverno": ("admissionController", "container"), "reports-controller": ("reportsController",),
+        "background-controller": ("backgroundController",)}
+check("build.sh builds exactly the three controllers that gate reports on the breaker the patch fixes",
       set(bases) == set(bins) == set(tags), f"BASE {sorted(bases)}, TAG {sorted(tags)}")
 for b in bins:
     base = bases.get(b, "")
@@ -114,7 +116,7 @@ for b in bins:
     check(f"{b}'s tag names the release and the patch", tags.get(b) == f"{'kyverno' if b == 'kyverno' else 'kyverno-' + b}"
           f"-{deployed}-pr17085", f"got {tags.get(b)!r}")
 
-print("== both controllers run the build, at the pinned digests ==")
+print("== the three controllers run the build, at the pinned digests ==")
 for b, path in bins.items():
     node = values
     for key in path:
@@ -129,7 +131,7 @@ for b, path in bins.items():
     check(f"images.lock has a row for it, with the same digest and this build as its source",
           row is not None and f"{ref.split('@', 1)[0]}@{row[1]}" == ref and row[2] == SOURCE, f"row {row}")
 
-print("== the workflow builds both and copies only the pinned digests ==")
+print("== the workflow builds all three and copies only the pinned digests ==")
 wf = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
 on = wf.get(True) or wf.get("on") or {}
 paths = (on.get("push") or {}).get("paths") or []
@@ -139,7 +141,7 @@ check("it runs on staging and main", set((on.get("push") or {}).get("branches") 
 runs = "\n".join(s.get("run", "") for j in wf["jobs"].values() for s in j["steps"])
 check("it builds with build.sh into a loopback registry", "bash images/kyverno-counter-fix/build.sh 127.0.0.1:" in runs)
 loop = re.search(r"for tag in ([^;]+); do", runs)
-check("it copies both tags", loop is not None and set(loop.group(1).split()) == set(tags.values()),
+check("it copies all three tags", loop is not None and set(loop.group(1).split()) == set(tags.values()),
       f"{loop and loop.group(1)}")
 check("each copy goes through ghcr_version_tag.py's crane: row with images.lock as the pin file",
       'python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/peopleforrester/watch-it-burn:${tag}" '
@@ -149,4 +151,4 @@ print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     sys.exit(1)
-print("Kyverno's admission and reports controllers run v1.19.1 with the breaker fix, at the pinned digests.")
+print("Kyverno's admission, reports and background controllers run v1.19.1 with the breaker fix, at the pinned digests.")

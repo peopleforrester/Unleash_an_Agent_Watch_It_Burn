@@ -37092,3 +37092,95 @@ diagrams). Both segments, and so the 30-minute talk, run over once play, attacks
 The live check: `/kubecon` on the private cluster served the #1141 blocks on 2026-11-08 after promotion. Not yet run
 on a cluster: load `/kubecon` on both clusters after Argo CD syncs this commit and confirm the `#/64` and `#/98` ranges
 show.
+## 2026-11-08 · #1015 · run 18659 · Kyverno's reports go silent on a breaker latched open by a dead watch; the three controllers that write reports now run v1.19.1 with upstream's fix
+
+**Why the controller goes silent.** The Kyverno controllers that write reports pass each report through a breaker.
+The reports controller's is "background scan reports", the admission controller's is "admission reports", the
+background controller's (for mutate-existing and generate rules) is "background-scan reports", and each is open while `Count()` on its report counter says the counter is not running (`cmd/reports-controller/main.go` at
+v1.19.1: `if !isRunning { return true }`). In v1.19.1 the counter (`pkg/breaker/resource_counter.go`) starts one
+`RetryWatcher` on EphemeralReports and never replaces it, and the watcher (`cmd/kyverno/watch/watcher.go`) stops for
+good when the apiserver sends a 410 (too old resource version) in the watch stream. The breaker then drops every report
+until the pod restarts, and nothing is logged at `--v=2`. This is upstream's kyverno/kyverno#17084, fixed on main by
+`7c7042fb` (kyverno/kyverno#17085, merged 2026-09-10, six hours after v1.19.1 was tagged). Neither release-1.19 nor
+v1.19.2 has it; the only release that does is v1.20.0-rc.1. Deleting the pod (run 17286) works because the new process
+starts a new counter.
+
+**The evidence, read on 2026-11-08 between 13:40Z and 14:50Z** (metrics through `kubectl port-forward` to :8000,
+logs from the start of each container):
+
+| | community reports | community admission | private reports | private admission |
+|---|---|---|---|---|
+| process started | 11-05 15:26:53Z | 11-05 15:27:01Z | 11-05 07:52:39Z | 10-29 04:47:42Z |
+| `kyverno_breaker_total` | 26403 | 1300 | 61356 | 2831 |
+| `kyverno_breaker_drops_total` | 26085 | 1297 | 37408 | 2580 |
+| EphemeralReport creates | 318 (agent 257, apps 61) | 3 | 23 namespaces | 251 |
+
+- No EphemeralReport or ClusterEphemeralReport existed on either cluster, so the count was never over
+  `--maxBackgroundReports=10000` (the flag log shows the default): every drop was the counter reading not running.
+- On community the 318 reports that passed are exactly the 318 EphemeralReport creates, the startup scan. The breaker
+  latched within the controller's first minutes, and the newest PolicyReport for a new resource is from 15:27:30Z.
+  On private the reports controller ran about 22 hours before it latched; its newest report is from 11-06T05:58Z.
+- Of the 13 Pods in agent on community, 4 have a PolicyReport, all created before 11-05 15:27Z; the 9 created later
+  have none. On private 6 of 13 have one, none for a Pod created after 11-06 05:41Z.
+- The leases are held and renewed: `kyverno-reports-controller` on community is held by the running pod since
+  11-05T15:26:56Z with 0 transitions and was renewed at 13:40:20Z; on private by the running pod since 11-05T07:52:52Z,
+  renewed at 13:40:36Z. The pods are Ready and the kyverno Application is Synced and Healthy, which is why nothing
+  flagged it. Leadership is not the cause.
+- The logs carry no `Watch failed`, `too old resource version` or `RetryWatcher` line on any of the four containers.
+  The 410-on-the-request path logs `Watch failed` once a second (seen in the stock test run below), so what stopped
+  these watchers is the in-stream 410, the path that logs nothing at `--v=2`.
+- Kyverno v1.19.1 exports no workqueue metrics, so the queue state cannot be read; the breaker counters above are the
+  measure. The deprecation warnings that fill the logs come from the informers on the legacy kinds; no ClusterPolicy
+  or Policy exists on either cluster.
+
+**The fix.** `images/kyverno-counter-fix/build.sh` clones the v1.19.1 tag, checks it is `40ec788d` (the hash the running
+controllers log), applies `pr17085.patch` (upstream's `7c7042fb` as GitHub serves it, sha256 pinned), builds `kyverno`,
+`reports-controller` and `background-controller` with Go 1.26.6 (go.mod's version, fixed by `GOTOOLCHAIN`), `-trimpath` and VCS stamping off,
+and appends each binary as one layer at `/ko-app/<name>` to upstream's linux/amd64 image of v1.19.1, at the index
+digests images.lock already pinned, with crane 0.22.1. The entrypoint, user 65532, environment and kodata stay
+upstream's. The version string is `v1.19.1-pr17085`, so the startup `version=` line names the build. Clean builds on
+this host, each with its own Go cache and registry, gave the same digests: `kyverno-v1.19.1-pr17085@sha256:6889b414…`
+and `kyverno-reports-controller-v1.19.1-pr17085@sha256:90dac88c…` in three builds, and
+`kyverno-background-controller-v1.19.1-pr17085@sha256:89d0d815…` in the two that built it. The background controller was
+added after the first two builds, when its `main.go` turned out to run the same counter. It has no breaker metric on
+either cluster because no policy here has a mutate-existing or generate rule, so nothing has gone through it yet.
+`gitops/bootstrap/apps/kyverno.yaml` points `admissionController.container.image`, `backgroundController.image` and
+`reportsController.image` at those digests on `ghcr.io/peopleforrester/watch-it-burn`, and images.lock has the three
+rows. The cleanup controller keeps the stock image: it runs no breaker. The chart, the CLI and every other v1.19.1 pin
+are unchanged, so `test_kyverno_version_pins.py` and the cosign v2 rule in `verify/sign-images.sh` still hold.
+
+Upstream's own tests run on the patched tree: `go test -race ./pkg/breaker/ ./cmd/kyverno/watch/` printed `ok` for
+both. With the two source files put back to stock v1.19.1 and the test file kept, all three recovery tests failed:
+`TestResourceCounterRecoversFromResourceVersionTooOld` and `TestResourceCounterRecoversFromRejectedWatch` with
+`Count() = (2, false), want (1, true)`, and `TestResourceCounterSeedsOnlyMatchingResources` with `Count() = 2, want 1`.
+
+**Shipping it.** No run may write to ghcr.io, so the digests are pinned before the first push, as the Jokers' were
+(#775). `.github/workflows/build-kyverno-counter-fix.yml` runs on a staging or main push that touches
+`images/kyverno-counter-fix/**` or images.lock, builds into crane's loopback registry, and hands each build to
+`scripts/ghcr_version_tag.py`'s `crane:` row, which copies it to its tag only when the build's digest is the pinned one
+and otherwise pushes nothing and exits 1 naming both. Argo CD may sync the new digests before the workflow has pushed
+them. Each Deployment is one replica with `maxSurge: 1` and `maxUnavailable: 40%`, which rounds to 0, so the old pod
+keeps serving while the new one waits on its pull, and the kubelet's retry picks the image up once it is pushed.
+
+**What was weighed.** Moving to chart 3.10.0-rc.1 (v1.20.0-rc.1) would carry the fix from upstream directly, but it is a
+prerelease of a whole minor with more than a hundred changes, and it moves the CLI the policy tests run, images.lock's
+seven Kyverno rows and the cosign rule with it. The patched v1.19.1 changes three binaries by one reviewed upstream commit.
+When a 1.19 or 1.20 release carries `7c7042fb`, the chart bump that takes it should drop the three image overrides, the
+build directory and its workflow; `verify/test_kyverno_counter_fix.py` goes red on the version change and says so.
+
+**Tests.** `verify/test_kyverno_counter_fix.py` (offline, 29 checks) holds the patch to upstream's commit and to the
+recovery it adds, the build to the deployed release, its commit and the images.lock base digests, the three
+controllers to the build's tags at their images.lock digests, and the workflow to building and copying all three. `test_images_lock_render.py`
+now checks that the render finds Kyverno by `kyverno/kyvernopre:` (the admission image no longer renders as
+`kyverno/kyverno:`) and that it hands the cluster the three #1015 images. The scope map has the new test's entry.
+
+**Live check.** The change touches `gitops/` and `images/`, so it owes a live check. This run read both clusters for the
+cause (above) and changed nothing on them. The fixed build runs only once hecaton promotes this change and the
+workflow has pushed the three digests.
+
+Not yet run on a cluster:
+- `CONTEXT=watch-it-burn-community python3 -u verify/test_kyverno_cel_live.py` step 4, with guardrails off and nobody
+  else switching them, after confirming the reports controller's startup line reads `version=v1.19.1-pr17085`. It
+  should print the lab's PolicyReport line for the villain.
+- On both clusters, a day after the rollout: `kyverno_breaker_drops_total` for both circuits stays near zero, and each
+  Pod created in agent has a PolicyReport.
