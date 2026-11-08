@@ -1,0 +1,42 @@
+#!/opt/wib-e2e-tools/py/bin/python3
+# ABOUTME: The `gh` inside the wib-e2e-tools image (#1188): sends `gh issue view ...` to the host's gh through the socket
+# ABOUTME: verify/e2e-image.sh mounts, so the host's own login answers it. Anything else, or no socket, fails by name.
+"""The tier's cause-comment tests read issues with `gh issue view --json` (verify/gh_comments.py, #863), with gh's own
+token. On the hecaton host gh is a wrapper that runs gh as another user through sudo, which cannot work inside a
+container, and on a CI runner the token is the job's. So the image carries no gh and no token: this client hands its
+arguments to verify/gh_relay.py on the host, which runs the host's gh for `issue view` alone and returns its exit code,
+stdout and stderr. The protocol is one JSON line each way; verify/test_gh_relay.py runs this file against the server.
+"""
+import json
+import os
+import socket
+import sys
+
+SOCKET = os.environ.get("WIB_GH_SOCKET", "/run/wib-gh/gh.sock")
+
+
+def main(argv: list[str]) -> int:
+    if not os.path.exists(SOCKET):
+        sys.stderr.write(f"gh: no gh relay at {SOCKET}; verify/e2e-image.sh mounts the host's relay there, and inside "
+                         "the image gh answers only through it\n")
+        return 4
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(600)
+            s.connect(SOCKET)
+            s.sendall(json.dumps({"argv": argv}).encode() + b"\n")
+            s.shutdown(socket.SHUT_WR)
+            data = b""
+            while chunk := s.recv(65536):
+                data += chunk
+        reply = json.loads(data)
+    except (OSError, ValueError) as e:
+        sys.stderr.write(f"gh: the gh relay at {SOCKET} did not answer: {e}\n")
+        return 1
+    sys.stdout.write(reply.get("stdout", ""))
+    sys.stderr.write(reply.get("stderr", ""))
+    return int(reply.get("rc", 1))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

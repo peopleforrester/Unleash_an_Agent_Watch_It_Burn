@@ -1,0 +1,8 @@
+# The build context of verify/e2e-image/Containerfile is verify/ (#1188). Nothing in it is sent to the builder but the
+# image's own directory and the three files its Python installs read; verify/e2e_image.py hashes exactly these into the
+# tag and its check holds this list.
+*
+!e2e-image/
+!python.lock
+!package_cache.py
+!artifact_cache.py
