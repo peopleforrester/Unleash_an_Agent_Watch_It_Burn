@@ -25,6 +25,12 @@
 # holds the deployments page to greying the public one as "removed at <time>" and not the internal one, and puts the
 # policies back. No model call; its two rows stay on the desk, both greyed once it deletes what it made.
 #
+# #885's last criterion (test_load_replay_live.py, #1056) also runs on COMMUNITY_CONTEXT: once the turn guard is synced
+# there, it runs `load_replay.py attackme.burritobot.co --yes --users 150 --harvest <dir>` and fails on any turn
+# answered 502 after guard-proxy's PROXY_TIMEOUT. The harvest is the gitignored Portland prompts, named by
+# LOAD_REPLAY_HARVEST (default .harvest/devopsdays-portland/prompts). It spends up to 450 model calls, about $3 on
+# attackme's /cost, and deletes what the replayed attacks had the bot create.
+#
 # The tier swap (test_tier_swap_live.py, #793) runs on CONTEXT: it patches workshop-agent from bedrock-nova to
 # bedrock-haiku, holds guard-proxy's /cost to the new tier within 5 seconds and one /chat turn to Haiku rates, and
 # patches it back. It spends one Haiku call and restarts the agent pod twice.

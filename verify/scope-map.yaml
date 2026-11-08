@@ -103,6 +103,7 @@ always:
   test_lint.py: it runs git ls-files, which reads the tree or history as a whole; line 23 builds a path under the repo root from a value it finds at run time
   test_llm_guard_bantopics_image.py: it runs git diff, ls-tree, which reads the tree or history as a whole
   test_load_replay.py: 'verify/load_replay.py: line 111 globs a pattern built at run time'
+  test_load_replay_live_checks.py: 'verify/load_replay.py: line 111 globs a pattern built at run time'
   test_mesh_enrollment.py: line 46 builds a path under the repo root from a value it finds at run time
   test_no_cloud_by_hand.sh: 'verify/test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_round_names_retired.py: line 85 builds a path under the repo root from a value it finds at run time'
   test_no_docker_hub.py: 'it runs git grep, ls-files, which reads the tree or history as a whole; verify/test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole; line 299 builds a path under the repo root from a value it finds at run time; line 92 builds a path under the repo root from a value it finds at run time; verify/test_demo_app_web_image.py: line 146 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 122 builds a path under the repo root from a value it finds at run time; verify/app_render.py: line 98 builds a path under the repo root from a value it finds at run time'

@@ -40971,3 +40971,66 @@ this entry.
 **Tests run.** `python3 verify/test_guard_proxy_pin_1048.py` passes on staging's pin 5772a5d8d7cb with
 `checksum/proxy-py` `ddf97ec452c0`. `verify/test_scope_tests.py` and `verify/test_fetch_inventory.py` pass with the
 new file and its map line. The full Test and E2E commands are left to hecaton's validation.
+## 2026-11-09 · #1056 · run 18843 · A live test holds #885's last criterion: the 150-user replay on attackme ends with 0 PROXY_TIMEOUT 502s
+
+**What was missing.** #885's last criterion was checked once, by hand, in run 18561, and no test held it. Test review
+run 18125 asked for one that fails when the criterion stops holding. `verify/prior-drafts.sh 1056 origin/staging`
+printed NONE, and the issue had no comments.
+
+**The live test.** `verify/test_load_replay_live.py` (`# SUITE: e2e`, so run-e2e.sh runs it, on COMMUNITY_CONTEXT). It
+checks that the context is attackme and that #885's change is what it runs: the Agent's workshop-mcp entry forwards
+traceparent, workshop-mcp mounts git's tool_audit.py and has rolled out, and guard-proxy runs git's PROXY_TIMEOUT and
+has rolled out. If any of those fails, nothing is sent. It then runs the criterion's command word for word, with
+`--json-out` added, and reads the replay's own report. It fails on any turn answered 502 after PROXY_TIMEOUT or
+longer. guard-proxy answers a forward it cut off with a 502 no sooner than that (proxy.py `_forward`), so latency
+separates those 502s from any other. It also fails on any "forward deadline (PROXY_TIMEOUT) passed" line in
+guard-proxy's log during the replay, or a guard-proxy restart that would leave the log incomplete. A replay that
+sent fewer than 450 turns, lost a turn, or reached the cost cap fails as well, so a capped counter cannot pass on
+refusals. Other 502s are printed and left to load_replay.py's own verdict, since the criterion is about PROXY_TIMEOUT
+502s alone. Afterwards it deletes every object in `agent` that workshop-mcp created during the replay and Argo CD
+does not manage. That is fleet.sh's clear_bot_workloads rule, limited to objects that were not there before. It
+also removes those rows from the one deployments page through `/desk-forget` (#1215), even when the replay raises.
+
+**The offline test.** `verify/test_load_replay_live_checks.py` builds reports with load_replay.py's own `summarize`.
+2026-11-05's run B fails on its five 502s at 120.3 to 122.9 s and on nothing else, and run 18561's replay passes.
+Each of the following fails: a 502 at PROXY_TIMEOUT, a short or capped replay, a log line, an unread log, a restart,
+each unsynced cluster, and the flow against a fake attackme that sends nothing when unsynced. A 502 from Caddy at
+3 s does not count as a PROXY_TIMEOUT 502. The test also checks that the cleanup deletes only what the replay made,
+and runs even when the replay raises. It checks every literal it reads in its source as well: the deadline line and
+the 502 in the pinned proxy.py, deploy_app's kinds in workshop-mcp-server.py, PROXY_TIMEOUT 120 and guard-proxy's
+selector. `scope_tests.py write` added it to the map's `always` list, next to test_load_replay.py, for the same
+reason: load_replay.py globs a path it builds at run time.
+
+**The prompts.** The criterion's harvest is the Portland one, which is gitignored. Run 18561 found it missing on
+hecaton's host and rebuilt it from Datadog. This run read the original instead, through the sources route
+(`sources repo-ls` and `repo-cat` on `talks/Unleash_an_Agent_Watch_It_Burn/.harvest/devopsdays-portland/prompts`):
+30 files, 1,144 prompts in 30 conversations. They went into this clone's gitignored `.harvest/`, load_replay.py's
+default path and the test's default too. `LOAD_REPLAY_HARVEST` overrides it.
+
+**Live check (watch-it-burn-community, at this run's base `b61fb8d4`).** Argo CD's ai-layer read Synced at `b61fb8d4`,
+and every AI and infra guard on `/controls` read off. `/cost` read $0 over 0 requests before the run.
+`COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_load_replay_live.py` printed, from load_replay.py
+(run 202611082335): `sent 450 of 450 planned turns over 150 sessions`, `outcomes: served 308, cluster_limit 142`,
+`errors: 502 0, 504 0, 429 0, other HTTP 0, timeout 0, transport 0, empty reply 0`, served max 13.33 s, `/cost`
+$3.0869 after, `LOAD REPLAY GREEN`. The test's own checks:
+
+```
+  PASS  every object the replay had the bot create was deleted (6: deployment/festival-promo, deployment/loyalty-rewards, deployment/magical-loyalty-program-rocks, deployment/maintenance-shell, deployment/promo-mascot, deployment/wib-probe)
+  PASS  their rows were removed from the one deployments page
+  PASS  the replay sent every planned turn (150 users x 3) and each came back
+  PASS  the turns reached the model: some served and none refused by the cluster's cost cap
+  PASS  0 PROXY_TIMEOUT 502s: no turn came back 502 after 120 s or longer
+  PASS  guard-proxy logged no 'forward deadline (PROXY_TIMEOUT) passed' during the replay
+  PASS  guard-proxy's pod neither restarted nor changed during the replay, so its log covers it
+```
+
+and exit 0. The sync checks ahead of those passed too. **Left as found.** A listing of `agent`'s workloads, Services,
+ConfigMaps, Jobs and CronJobs taken before the run matched the one taken after, uid for uid. The older
+`maintenance-shell` Service was not touched. The desk's `/deployments.json` lists no rows. The cost counter was
+left at $3.09 of the $25 cap, as other live checks leave it, and the run-of-show's `./fleet.sh reset-bot` clears it.
+The presenter terminal login was not read or touched.
+
+**Tests run.** `python3 verify/test_load_replay_live_checks.py`, `python3 verify/test_verify_harness.py`,
+`python3 verify/test_guard_lease.py`, `python3 verify/test_scope_tests.py` and `python3 verify/scope_tests.py check`
+pass. The prose gate was run against origin/staging. The full Test and E2E commands are left to hecaton's validation.
+No dependency was added.
