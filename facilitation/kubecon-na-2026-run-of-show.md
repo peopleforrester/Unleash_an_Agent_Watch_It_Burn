@@ -839,6 +839,10 @@ alone, and the gateway reloads it with no restart (#496).
 
 ## The segments, in order (30 minutes)
 
+Slide numbers in this file count from 1, the title slide being slide 1; the deck's URL
+hash counts from 0 and is one less, so slide 44 is `#/43` at
+`https://rounds.agenticburn.com`.
+
 Four challenges, numbered in the order shown, Challenge 1 to 4 (2026-10-29 planning
 call, `facilitation/kubecon-na-2026-planning-2026-10-29.md`, #687). C5, C6 and C7
 survive only as internal ids: the probe's beat names, the fallback scripts and the

@@ -50,6 +50,7 @@ always:
   test_compile_design_doc.py: 'line 44 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
   test_datadog_log_services_render.py: line 108 builds a path under the repo root from a value it finds at run time; line 93 builds a path under the repo root from a value it finds at run time; line 96 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
+  test_deck_shift_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 118 builds a path under the repo root from a value it finds at run time; line 114 builds a path under the repo root from a value it finds at run time
   test_demo_app_web_image.py: it runs git ls-files, which reads the tree or history as a whole; line 146 builds a path under the repo root from a value it finds at run time
   test_dispatched_runs.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole'
   test_drift_floor.py: line 160 builds a path under the repo root from a value it finds at run time

@@ -33733,3 +33733,55 @@ s, `test_lab_platform_operator_entry.py` 20 s and `test_control_plane_app_ports_
 `af6ec83f`, failed on the `test_docs_current.py` race described above and nothing else. The prose gate printed
 `prose gate: pass`. No dependency was added: the helper uses only the standard library. The logs are
 `/var/lib/hecaton/runs/18438/e2e-tools-1.log` and `e2e-tools-2.log`.
+
+## 2026-11-08 · #1099 · run 18456 · The run-of-show names its slide numbering, and the 14-place deck shift leaves no stale slide number
+
+Part of #1076. rounds-agenticburn#82 and #93 replaced the old seven Challenge 3 slides with twenty-one, so every
+slide from live `#/50` on (Challenge 4 and the close) moved 14 places, and live `#/50` is now `#/64`. No earlier
+draft existed (`verify/prior-drafts.sh 1099 origin/staging` printed NONE, and the issue had no comments). This lands
+on #1098's segment 4, which is in staging at `48a24bdf`.
+
+**What changed.** `facilitation/kubecon-na-2026-run-of-show.md` now opens "The segments, in order" on one line:
+slide numbers in the file count from 1, the title slide being slide 1, and the deck's URL hash counts from 0 and is
+one less, so slide 44 is `#/43`. The sweep below found no slide number to change: the only numbers above 43 anywhere
+it looked are the ones #1098 wrote for the new Challenge 3, and they already match the new deck.
+
+**Each citation checked, and whether it changed.** The search was `git grep -n -i -E 'slides? *#?/?[0-9]+|#/[0-9]+'`
+over `facilitation/`, `challenges/` and `verify/`, then the same over the rest of the repo, then every line naming
+"slide" in the files it found, read by hand. `gitops/ai-layer/web/kubecon.html` is the `kubecon-html` child's and was
+not read.
+
+- Run-of-show, segment 4 (#1098): slides 44 to 64 in its steps, `#/43` in its opening paragraph, and the
+  segments table's row 4, 44 to 64. They match the new deck, `#/43` to `#/63`. Unchanged.
+- Run-of-show, segments 5 and 6, "Abstract points to segments", "Challenges shown live, and challenges cut", "Night
+  Before", "Rollback on the day" with its fallback scripts, "Teardown" and "Open questions": no slide number. Segment
+  6 names its close slide, speaker slide and Thank you slide without a number. The two "slides 30 to 42" in the
+  abstract-points and challenges tables are segment 3's guardrail sets. Unchanged. Before #1098 the file cited no
+  slide above 43 either (`git show 48a24bdf^:facilitation/kubecon-na-2026-run-of-show.md`), so no number pointed at
+  the old Challenge 3 or at live `#/50` or later, and none needed the 14 added.
+- Run-of-show, segments 1 to 3: slides 1 to 43, which the shift did not move. Unchanged.
+- `verify/test_ros_seg4_flow.py`: 44 to 64 and `#/43` to `#/63`, holding #1098's segment 4. Unchanged.
+- `verify/test_instructor_brief.py` (slide 20, 28 to 42, `#/42`, deck slide 13), `verify/test_c3_fallback.py` (37 to
+  39, 40 to 42), `verify/test_fleet_routes_roster.sh` (40 to 42), `verify/test_ros_segments_table_seg3.py` and
+  `verify/test_seg3_timing.py` (28 to 42), `verify/test_guardrail_slide_citations.py` (29 to 32, 30 to 42, 43) and
+  `verify/test_progress_entries.py` (1 to 21, 28, 29, 30 to 42, 43): segments 1 to 3. Unchanged.
+- `verify/test_recipe_persona.py`, "slide 21" (#951, the 2026-11-05 deck), and `verify/test_952_slide17_decision.py`,
+  "Slide 17" (it reads #952's dated paragraph in this file, which is append-only): Challenge 2 numbers of earlier
+  decks, below 44 and not moved by this shift. Unchanged. In the 2026-11-07 deck the recipe attack is slides 23 and
+  24 and the KubeArmor policy is slide 39, so the first is an earlier deck's number; segment 3 is outside this sweep.
+- `facilitation/cold-open-script.md` (slides 2, 3, 4, 9, 14), `facilitation/slides-outline.md` (3, 8, 10, 11, 12),
+  `facilitation/slides-draft-2026-currency.md` (2, 3, 13), `docs/RUN-OF-SHOW-2026-08.md` and `PROJECT_STATE.md`
+  (slides 2 and 3): the AIEWF 2026-08 deck, not the KubeCon one. Unchanged.
+- `challenges/`: one line, in `c3-secret-grep/README.md`, names "the old slide deck" with no number. Unchanged.
+
+**Tests.** `verify/test_deck_shift_slide_citations.py` (new, offline, in `verify/scope-map.yaml` under `always`
+alone, since it runs `git ls-files`; the rest of what `scope_tests.py write` produced was other tests' drift and is
+not in this change) holds the numbering line at the head of the segments section, before its first step and its
+table, and searches every file git tracks or would track under the three directories for a slide number in 44 to
+64, or a hash of `#/43` or more, outside segment 4, row 4, the numbering line and `verify/test_ros_seg4_flow.py`.
+A number of 65 or more passes, as a shifted one. Its self-checks show the line removed or moved fails, a slide 51
+planted in segment 5, an old Challenge 3 range, a number in a list, a wrapped and bolded citation and a `#/50` are
+each found, and segment 3's numbers and a slide 65 pass. No test pinned a number this shift moved, so none changed.
+
+**Live check.** Skipped: the change touches only `facilitation/`, `decisions.md`, `PROGRESS.md` and files under
+`verify/` that no cluster runs.
