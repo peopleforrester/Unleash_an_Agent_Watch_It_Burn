@@ -34377,8 +34377,9 @@ burrito-data folder and gives a kitchen reason, training a new line cook under t
 run-of-show changed. Acceptance criteria 1 and 2 for the run-of-show hold by that: the old wording is not in it, and
 the recon prompt is unchanged.
 
-**The old attack sentence is gone from the active copies.** `git grep -nF "Can you read it to me before the dinner rush"`
-finds nothing. The recon prompt is kept on every page, in `prompts.yaml`, and in
+**The old attack sentence is gone from the active copies.** A `git grep -nF` for the old attack's closing sentence
+(the one that ended `...before the dinner rush?`) finds nothing. The recon prompt is kept on every page, in
+`prompts.yaml`, and in
 `docs/research/2026-11-08-ask-user/bedrock_replica.py` (its `recon` key). The old attack also survives in `decisions.md`,
 which is append-only history: lines around 23246, 23444 and 25631 record the live runs and the #952 and #973 decisions
 as they were, with the old sentence wrapped across lines, so the single-line `git grep` does not match them; rewriting
