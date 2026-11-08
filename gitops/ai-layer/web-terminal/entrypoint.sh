@@ -478,9 +478,12 @@ EOS
 cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=on" && _px "input_blocklist=on&input_classifier=on" && _px "budget=on"
-if ! _mcp on >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch on; it is left as it was. The other AI guards were"
+# Both KubeCon clusters, as guard-input-on and guard-mcp-on do (#1132); a lone cluster alone.
+if ! _both _toggle "output=on&input_blocklist=on&input_classifier=on&budget=on"; then
+  echo "⚠️  The guard-proxy guards did not switch on everywhere. Run 'guards-on' again; it is safe to repeat."; exit 1
+fi
+if ! _both _mcp on >/dev/null; then
+  echo "⚠️  The MCP tool restriction did not switch on everywhere. The other AI guards were"
   echo "    switched on. Run 'guard-mcp-on' to retry it."; exit 1
 fi
 echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
@@ -490,9 +493,12 @@ EOS
 cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off" && _px "topic=off"
-if ! _mcp off >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch off; it is left as it was. The other AI guards were"
+# Both KubeCon clusters back to wide open (#1132); a lone cluster alone.
+if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"; then
+  echo "⚠️  The guard-proxy guards did not switch off everywhere. Run 'guards-off' again; it is safe to repeat."; exit 1
+fi
+if ! _both _mcp off >/dev/null; then
+  echo "⚠️  The MCP tool restriction did not switch off everywhere. The other AI guards were"
   echo "    switched off. Run 'guard-mcp-off' to retry it."; exit 1
 fi
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."

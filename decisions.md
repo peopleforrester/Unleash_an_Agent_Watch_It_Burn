@@ -37385,3 +37385,26 @@ suite and 85 tier tests) in 10m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GRE
 `verify/test_guard_mcp_both.py` printed `All two-cluster MCP switch checks passed.` in 34 s, and
 `verify/test_kyverno_cel_policies.py` passed the new guardrails-switch drift cases. The prose gate printed `prose gate:
 pass`. The log is `/var/lib/hecaton/runs/18574/e2e-tools.log`.
+
+## 2026-11-08 · #1132 · Challenge 3's and 4's fixes on both KubeCon clusters, by hand
+
+Worked by hand on Michael's order ("Work 1132 yourself"); hecaton held #1132 and its children #1149 to #1153.
+`guard-agency-on` (#1147) and `guard-input-on` (#1148) were already on staging. #1149's run 18574 had finished
+`guard-mcp-on`/`off` and failed only on a rebase conflict, so its three commits were cherry-picked onto staging
+(`verify/draft-drift.sh` named five edits in place and a decisions.md append). Two conflicts were resolved by hand:
+`verify/scope-map.yaml` keeps staging's entries plus the draft's `test_guard_mcp_both.py` entry, and the comment
+lines in `entrypoint.sh` and `guardrails-switch.yaml` carry both #1148's guard-proxy proxy note and #1149's
+`mcp-switch.yaml` note.
+
+Added here: `guards-on` and `guards-off` send the guard-proxy guards (one `/toggle` with every key) and C7 through
+`_both`, so the reset reaches the peer; `verify/test_guards_all_both.py` holds it. `guards-off` does not touch the
+least-privilege Role, as before: putting `c5-scoped-role.yaml` back would undo `guardrails-off`'s broad Role on a lab
+cluster.
+
+`/controls` for the least-privilege Role needs a guard-proxy change, filed as guard-proxy-agenticburn#76 (an
+`agency_scoped` field). Until Michael repins the submodule, the live check reads the Role with kubectl.
+
+Not yet run on a cluster: after Argo CD syncs this change, from the private terminal, `guard-agency-on`,
+`guard-input-on` and `guard-mcp-on`, then `guards-off`, with both clusters' `/controls` and the workshop-agent Role read
+before and after; on attackme, a room `deploy_app` Forbidden, HC-666 withheld and the weather ask without
+`read_internal_config`; `guard-mcp-on`'s timing line on both clusters.

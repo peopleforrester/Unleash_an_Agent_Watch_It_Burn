@@ -113,9 +113,9 @@ check("guard-topic-on fails loudly on a guard-proxy without the topic stage",
       "This guard-proxy has no on-topic guard, so nothing changed" in terminal)
 guards_on = terminal.split('cat > "$HOME/guards-on" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
 guards_off = terminal.split('cat > "$HOME/guards-off" <<\'EOS\'\n', 1)[1].split("\nEOS\n", 1)[0]
-check("the guards-on and guards-off bodies are found", "_px" in guards_on and "_px" in guards_off)
+check("the guards-on and guards-off bodies are found", "_toggle" in guards_on and "_toggle" in guards_off)
 check("guards-on leaves the on-topic guard off (it would refuse every challenge prompt)", "topic" not in guards_on)
-check("guards-off turns the on-topic guard off too", '_px "topic=off"' in guards_off)
+check("guards-off turns the on-topic guard off too", re.search(r'_toggle "[^"]*\btopic=off\b', guards_off) is not None)
 check("guards-status lists the on-topic guard", '"topic":"On-topic guard' in terminal)
 
 print("== the classifier step: BanTopics in llm-guard-scanners ==")

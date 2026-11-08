@@ -3460,6 +3460,9 @@ reads:
     - verify/no-cloud.sh
     - verify/no_cloud.py
     - verify/registry_allowlist.py
+  test_guards_all_both.py:
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - images/web-terminal/entrypoint.sh
   test_harvest_console_host.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
