@@ -1,0 +1,61 @@
+# ABOUTME: Build Kyverno v1.19.1's admission and reports controllers with upstream's breaker fix (#1015) into a loopback
+# ABOUTME: registry, and copy each to the ghcr.io tag images.lock pins only when the build's digest is the pinned one.
+name: build-kyverno-counter-fix
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [staging, main]
+    paths:
+      - 'images/kyverno-counter-fix/**'
+      - 'images.lock'
+      - 'verify/e2e-tools.lock'
+      - '.github/workflows/build-kyverno-counter-fix.yml'
+      - 'scripts/ghcr_version_tag.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-kyverno-counter-fix
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Any Go from 1.21 on will do: build.sh sets GOTOOLCHAIN=go1.26.6, so the go command fetches that release and
+      # checks it against the Go checksum database, and the binaries are the ones a run builds on its own host.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: false
+      - name: Fetch the pinned crane
+        run: |
+          set -euo pipefail
+          read -r name version sha url member < <(grep -E '^crane[[:space:]]' verify/e2e-tools.lock)
+          [ "${name}" = crane ] || { echo "verify/e2e-tools.lock has no crane row" >&2; exit 1; }
+          curl -fsSL -o "${RUNNER_TEMP}/crane.tgz" "${url}"
+          echo "${sha}  ${RUNNER_TEMP}/crane.tgz" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf "${RUNNER_TEMP}/crane.tgz" -C "${RUNNER_TEMP}/bin" "${member}"
+          echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
+          "${RUNNER_TEMP}/bin/crane" version
+      - name: Build both controllers with build.sh into crane's registry on loopback
+        run: |
+          nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &
+          for _ in $(seq 50); do curl -fsS http://127.0.0.1:5000/v2/ >/dev/null 2>&1 && break; sleep 0.2; done
+          curl -fsS http://127.0.0.1:5000/v2/ >/dev/null
+          bash images/kyverno-counter-fix/build.sh 127.0.0.1:5000
+      # The digests are pinned in images.lock before the first push, as the Jokers' are (#775). ghcr_version_tag.py
+      # copies a build to its tag only when the tag lacks the pinned digest and the build's digest is that digest; a
+      # build that comes out at any other digest is not pushed, and the script exits 1 naming both.
+      - name: Copy each build to its pinned ghcr.io tag
+        env:
+          GHCR_USER: peopleforrester
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          for tag in kyverno-v1.19.1-pr17085 kyverno-reports-controller-v1.19.1-pr17085; do
+            python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/peopleforrester/watch-it-burn:${tag}" "ghcr.io/peopleforrester/watch-it-burn:${tag}" images.lock
+          done

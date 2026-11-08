@@ -47,6 +47,17 @@ spec:
         # Resource limits for Kyverno admission controller
         admissionController:
           container:
+            # v1.19.1 with upstream's breaker fix, kyverno/kyverno#17085 (#1015). The admission controller files an
+            # EphemeralReport for each admission only while a breaker reads its report counter as running, and in
+            # v1.19.1 that counter's watch stops for good on a 410 from the apiserver, so the breaker stays open and
+            # every admission report is dropped until the pod restarts. On 2026-11-08 it had dropped 1297 of 1300 on
+            # watch-it-burn-community and 2580 of 2831 on watch-it-burn-private. images/kyverno-counter-fix/build.sh
+            # builds this image reproducibly and images.lock pins its digest; the reports controller below runs the
+            # same fix. verify/test_kyverno_counter_fix.py holds the two pins, the build and the patch together.
+            image:
+              registry: ghcr.io
+              repository: peopleforrester/watch-it-burn
+              tag: "kyverno-v1.19.1-pr17085@sha256:6889b4142537ae9aee135c5c8a156cfcb5b100835a543306bf3c086a55bf3880"
             resources:
               requests: { cpu: 100m, memory: 128Mi }
               limits: { cpu: 500m, memory: 512Mi }
@@ -134,6 +145,20 @@ spec:
           # So the interval is the chart's 1h default again, set here so it stays explicit, and the CPU limit
           # is 1 so a full scan (at startup and hourly) takes about two minutes instead of ten. At rest the
           # controller uses about 30m CPU.
+          #
+          # The controller went silent anyway (#1015): on watch-it-burn-community it wrote no PolicyReport for a new
+          # resource after 2026-11-05T15:27:30Z, a minute after it started, with its lease renewing and its pod
+          # Ready. Every background-scan report goes through a breaker that is open while the report counter's watch
+          # is down, and in v1.19.1 that watch stops for good on a 410 from the apiserver and is never started again.
+          # Its metrics read kyverno_breaker_drops_total 26085 of kyverno_breaker_total 26403 for "background scan
+          # reports", with no EphemeralReport in the cluster, so the count was never over --maxBackgroundReports.
+          # Upstream's fix (kyverno/kyverno#17085, on main since 2026-09-10, in no 1.19 release) has the counter list
+          # again and start a new watch. This is v1.19.1 with that commit applied, the same build as the admission
+          # controller's image above.
+          image:
+            registry: ghcr.io
+            repository: peopleforrester/watch-it-burn
+            tag: "kyverno-reports-controller-v1.19.1-pr17085@sha256:90dac88c86402a7d03d6750f05eb4e51f344e5160abdc79a42bdd6b75960d8a3"
           podLabels: { tags.datadoghq.com/service: burritobot-kyverno-reports-controller, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             limits:
