@@ -33785,3 +33785,9 @@ each found, and segment 3's numbers and a slide 65 pass. No test pinned a number
 
 **Live check.** Skipped: the change touches only `facilitation/`, `decisions.md`, `PROGRESS.md` and files under
 `verify/` that no cluster runs.
+
+**Suite results, run 18456.** On `7ac9d8af`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so the whole
+suite, printed `348 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the new test among them, ending `All #1099
+deck-shift slide citation checks passed.`), then `83 checks ran (the offline suite and 82 tier tests) in 8m39s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+The log is `/var/lib/hecaton/runs/18456/e2e-tools.log`.
