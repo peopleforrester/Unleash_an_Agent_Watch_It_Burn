@@ -175,9 +175,18 @@ to the fifth (#796).
    first. Then start the command in the background with its output in a log, and keep reading the log in the
    foreground (`tail -n 5 <log>` every few minutes) until it ends; never end the turn to wait for its completion
    notice. The E2E command runs `run-tests.sh` as one of its checks, so it also answers the Test command.
-   The background job's limit is 3600000 ms: run 15816 gave it 20 minutes and it was cut off, and its
-   `checks ran` line prints how long it took (22m58s in run 16533). Write the output and the exit code to a log of
-   this run's own: `bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`. A bounded foreground wait
+   The background job's limit is 7200000 ms, the most the shell tool allows: run 15816 gave it 20 minutes and it
+   was cut off, and run 17957 (#977) gave it 3600000 ms and was cut off inside the tier with no check failed, then
+   took 72m16s on a second try. Its `checks ran` line prints how long it took (22m58s in run 16533, 36m20s in run
+   17929, 72m16s in run 17957), and the time grows on a loaded host. Write the output and the exit code to a log of
+   this run's own: `bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`.
+   When even 7200000 ms is not enough, the log has no `exit=` line and ends with the runner's `STOPPED by a signal`
+   block, which says how many checks ended and names each one still running. The run does not start the suite
+   again (#1190). Each check that ended printed its output and a `-- <check> took` line; the checks the run
+   selected (those the `scope: running` line names, or every tier test when unscoped) that have no `took` line
+   never ended. The run puts the checks that ended, with their verdicts, the ones that never ended and the log's
+   path in its decisions.md entry, reports a check that failed as a failure, and ends its report `partial` with
+   the checks that never ended named under "Not yet run", so the next run on the issue runs those. A bounded foreground wait
    is `timeout 540 bash -c 'until grep -q "^exit=" "$0"; do sleep 15; done' "$LOG"`, under the shell tool's
    10-minute foreground limit, run again after each 124 with a `tail -n 5` of the log between. Monitor needs an
    approval a run cannot get, so do not reach for it; run 16484 on #796 ended its turn to wait instead and was

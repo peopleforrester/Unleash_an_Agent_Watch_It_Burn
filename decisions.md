@@ -36998,3 +36998,25 @@ re-measurement ran against Bedrock from the run directory, not on the bot.
 **What the run spent.** No calls on the live bot. About 480 Nova Pro `converse` calls across the before/after
 measurement and the two-draft comparison, run through boto3 1.40.70 and PyYAML 6.0.3 under `uv run --with` in the
 run directory only. No dependency was added to the repo.
+## 2026-11-08 · #1014 · run 18658 · Point 4 names the shell tool's 7200000 ms limit and what a run does past it
+
+**What changed.** Dispatched runs point 4 in AGENTS.md (CLAUDE.md links to it) gave the background job for `bash
+verify/run-e2e-tools.sh` a 3600000 ms limit. Run 17957 (#977) was cut off at that limit inside the tier, at
+`test_injection_classifier.py`, with no check failed, and its second try under 7200000 ms took 72m16s; runs 17929 and
+16533 took 36m20s and 22m58s. Point 4 now names 7200000 ms, the most the shell tool allows, with those three times.
+It also says what a run does when even that is not enough: the log then has no `exit=` line and ends with the runner's
+`STOPPED by a signal` block; the run does not start the suite again (#1190), works out from the `-- <check> took`
+lines and the `scope: running` selection which checks ended and which never did, records both and the log's path in
+its decisions.md entry, reports any failed check as a failure, and ends `partial` with the unfinished checks named, so
+the next run on the issue runs them. Ending `partial` keeps a run from claiming a suite it never saw finish.
+
+**The test that read it.** `git grep -nF '3600000' -- verify scripts` found one reader,
+`verify/test_dispatched_runs.py`, which checked for `3600000 ms`. It now checks for the 7200000 ms wording and that
+the old limit is gone, for run 17957 and its 72m16s, for the new step, and that the lines the step reads by
+(`STOPPED by a signal after`, `-- %s took`, `scope: running`) are the ones `run-e2e-tools.sh` and
+`scope_tests.py` print, so a reworded runner line fails the test rather than leaving the rule pointing at nothing.
+
+**Live check: skipped.** The change touches AGENTS.md, decisions.md and a `verify/` test no cluster runs.
+
+**Suites (run 18658).** Point 6 rules that a prose change never runs the tools tier, so this run ran the scoped
+offline suite and the prose gate only.
