@@ -55,7 +55,10 @@ CHUNK = 1 << 20
 # Seconds a connect or a read may stall before the fetch fails; a slow but moving download is not cut off.
 TIMEOUT = 60
 # Seconds get_retrying() waits before each retry of a miss the network broke; one more attempt than there are waits.
-BACKOFF = (2, 5, 10)
+# Widened from (2, 5, 10) for #1186: on 2026-11-08 github.com answered release and archive downloads with 502s, 503s and
+# minute-long stalls for longer than those 17 seconds, and four attempts in a row failed while a fifth a minute later
+# came back whole. Six attempts over about five minutes of waits ride that out; a fetch that never comes still fails.
+BACKOFF = (5, 15, 30, 60, 120)
 
 # A fetcher writes the bytes at url to the open file it is given.
 Fetcher = Callable[[str, BinaryIO], None]

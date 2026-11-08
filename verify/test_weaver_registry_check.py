@@ -8,6 +8,14 @@
 # check ran only in .github/workflows/weaver-registry-check.yml, which the hecaton gate never sees; this runs the same
 # weaver (test_e2e_tools_tier.py holds the lock to the workflow's pin) where the gate does. The offline lockstep with
 # proxy.py is test_weaver_guard_proxy_spans.py and test_weaver_guard_proxy_stamps.py.
+#
+# The semconv archive (#1186). Weaver fetched the archive manifest.yaml pins on each of its three runs here, with no
+# retry, and on 2026-11-08 codeload.github.com answered 503 after a minute's wait, so the heavy gate went red on staging
+# 5985b8dc with every check below failing on an empty resolve. The archive now comes from the host's artifact cache by
+# its SHA-256 (artifact_cache.get_retrying: one fetch per host, retried when the network breaks, and checked on every
+# hit), and weaver runs on a copy of the registry whose manifest names that local file in place of the URL. Only the
+# registry_path line differs, and the test first checks the manifest still names SEMCONV_URL, so a pin moved without
+# this file fails by name. SEMCONV_SHA256 is the archive's SHA-256, read from two downloads on 2026-11-08.
 from __future__ import annotations
 
 import json
@@ -17,9 +25,15 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import artifact_cache  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 REG = REPO / "weaver/registry"
 WANT_VERSION = "0.24.2"
+SEMCONV_URL = "https://github.com/open-telemetry/semantic-conventions/archive/refs/tags/v1.41.1.zip"
+SEMCONV_SHA256 = "ea0d4d0a6165facf341dfcb2fae5181cc352a783c6df46f6974334501e148a5d"
+PIN_LINE = f"registry_path: {SEMCONV_URL}[model]"
 failures: list[str] = []
 
 
@@ -45,13 +59,40 @@ v = run("--version")
 check(f"weaver --version is {WANT_VERSION} ({v.stdout.strip()})",
       v.returncode == 0 and v.stdout.split()[-1:] == [WANT_VERSION])
 
-print("== weaver registry check ==")
-r = run("registry", "check", "--registry", str(REG))
-check(f"weaver/registry passes `weaver registry check` (exit {r.returncode})", r.returncode == 0, r.stdout + r.stderr)
+manifest_text = (REG / "manifest.yaml").read_text(encoding="utf-8")
+if manifest_text.count(PIN_LINE) != 1:
+    print(f"FAILED: {REG.relative_to(REPO)}/manifest.yaml does not name the semconv archive once as `{PIN_LINE}`; "
+          "when the pin moves, move SEMCONV_URL and SEMCONV_SHA256 here with it.")
+    sys.exit(1)
+try:
+    archive = artifact_cache.get_retrying(SEMCONV_SHA256, SEMCONV_URL)
+except artifact_cache.ArtifactCacheError as e:
+    print(f"FAILED: the semconv archive the manifest pins is not to be had; this is a failure, not a skip: {e}")
+    sys.exit(1)
+
+
+def local_registry(dest: pathlib.Path) -> pathlib.Path:
+    """A copy of weaver/registry at dest/registry whose manifest names the cached archive in place of SEMCONV_URL.
+    Weaver reads the archive kind off the file name, and the cache names its files by sum alone, so it is copied in."""
+    dest.mkdir(parents=True)
+    zip_path = dest / "semconv-v1.41.1.zip"
+    shutil.copyfile(archive, zip_path)
+    reg = dest / "registry"
+    shutil.copytree(REG, reg)
+    (reg / "manifest.yaml").write_text(manifest_text.replace(PIN_LINE, f"registry_path: {zip_path}[model]"),
+                                       encoding="utf-8")
+    return reg
+
 
 with tempfile.TemporaryDirectory() as t:
-    bad = pathlib.Path(t) / "registry"
-    shutil.copytree(REG, bad)
+    good = local_registry(pathlib.Path(t) / "good")
+
+    print("== weaver registry check ==")
+    r = run("registry", "check", "--registry", str(good))
+    check(f"weaver/registry passes `weaver registry check` (exit {r.returncode})", r.returncode == 0,
+          r.stdout + r.stderr)
+
+    bad = local_registry(pathlib.Path(t) / "bad")
     spans = bad / "guard-proxy-spans.yaml"
     text = spans.read_text()
     spans.write_text(text.replace("ref: error.type", "ref: error.typo", 1))
@@ -60,7 +101,7 @@ with tempfile.TemporaryDirectory() as t:
           "ref: error.type" in text and r.returncode != 0 and "error.typo" in r.stdout + r.stderr, r.stdout + r.stderr)
 
     out = pathlib.Path(t) / "resolved.json"
-    r = run("registry", "resolve", "--registry", str(REG), "--format", "json", "--output", str(out))
+    r = run("registry", "resolve", "--registry", str(good), "--format", "json", "--output", str(out))
     check(f"weaver resolves the registry to JSON (exit {r.returncode})", r.returncode == 0 and out.is_file(),
           r.stdout + r.stderr)
     resolved = json.loads(out.read_text()) if out.is_file() else {"groups": []}

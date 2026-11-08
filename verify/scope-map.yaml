@@ -3001,6 +3001,8 @@ reads:
     - observability-idp
     - policies
     - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/bootstrap_chart.py
   test_gateway_forward.py:
     - agent
@@ -6834,6 +6836,8 @@ reads:
     - weaver/registry
     - weaver/registry/*.yaml
   test_weaver_registry_check.py:
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh

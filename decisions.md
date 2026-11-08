@@ -36280,3 +36280,42 @@ changes when this is promoted. Not yet run on a cluster: the entry above's repea
 RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in 10m03s, 4 at a time`, `ALL E2E
 TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_vllm_fit_probe.py`, `verify/test_platform_baseline.py` and
 `verify/test_local_inference.py` each pass on their own as well. No dependency was added.
+
+## 2026-11-08 · #1186 · run 18622 · The tools tier rides out GitHub's 5xx: the semconv archive comes from the artifact cache, and both upstream reads retry longer
+
+**What failed.** The heavy gate went red on staging `5985b8dc` with two checks, `test_weaver_registry_check.py` and
+`test_gateway_api_crds_upstream.py`, and both failures were GitHub's, not the repo's. Weaver fetched the semantic
+conventions v1.41.1 archive that `weaver/registry/manifest.yaml` pins on each of its three runs in the test, with no
+retry, and got `status: 503`. Every check after that failed on an empty resolve. The gateway test read the Gateway API
+v1.5.1 release asset once and stopped on the first error. The same morning, from this host, `curl` on the release
+asset returned 503 after 61 s and then 200 in 1 s. Codeload returned 503 to four of five tries on the archive, and
+`fetch-e2e-tools.sh` lost kyverno to two stalls and a 502 inside its 17 s of backoff. On staging the two tests pass
+whenever GitHub answers: run 18583 had the whole tier green at `d4706f58` the same day.
+
+**What changed.**
+- `verify/test_weaver_registry_check.py` takes the archive from the host artifact cache
+  (`artifact_cache.get_retrying`, #1117) by its SHA-256,
+  `ea0d4d0a6165facf341dfcb2fae5181cc352a783c6df46f6974334501e148a5d`. That sum was read from a `curl` download and
+  matched again by the cache's own download (the fetch log's `ok` line at 11:36:35Z). Weaver then runs on a copy of
+  the registry whose manifest names that local zip in place of the URL. Weaver reads the archive kind off the file
+  name, and the cache names files by sum alone, so the zip is copied in under a `.zip` name. Before anything else the
+  test checks that the manifest still names the URL exactly once, and fails by name if it does not, so a pin moved
+  without the test reads as that. The three weaver calls now take 0.1 s each where they took about 100 s, and once the
+  archive is cached a gate run makes no request to GitHub for it. `guard-proxy-agenticburn`'s `gen-semconv.sh` still
+  reads the manifest as it is.
+- `verify/test_gateway_api_crds_upstream.py` still reads both sources live, since its point is that the release asset
+  and Istio's `go.mod` still say what we vendored. A read the network broke (as `artifact_cache.transient` defines it:
+  a stall, a reset, an HTTP 408, 429 or 5xx) is asked again after each wait in `artifact_cache.BACKOFF`, and each
+  retry is printed. A 404 or any other error still fails on the first read.
+- `artifact_cache.BACKOFF` goes from `(2, 5, 10)` to `(5, 15, 30, 60, 120)`: six attempts over about four minutes of
+  waits in place of four over 17 s. This also covers `fetch-e2e-tools.sh` and every other caller of `get_retrying`
+  (`package_cache.py`). A fetch that never comes back still fails, naming the URL. In this run the gateway asset came back on its
+  fifth attempt, after four 60 s stalls; under the old backoff that read would have failed.
+  `verify/test_artifact_cache.py` read the attempt count as a literal 4 and now reads `len(ac.BACKOFF) + 1`.
+- `verify/scope-map.yaml` adds `verify/artifact-cache.sh` and `verify/artifact_cache.py` to the two tests' entries,
+  which is what `python3 verify/scope_tests.py write` generates for them. The ~980 other lines `write` rewrote are
+  drift other runs left in other tests' entries, and they stay as staging has them.
+
+**Live check.** Skipped: the change touches only files under `verify/` that no cluster runs.
+
+**Prose.** `python3 verify/prose_gate.py ... origin/staging` was run on this tree before the commit.

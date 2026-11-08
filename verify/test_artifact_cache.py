@@ -306,8 +306,8 @@ def test_retry(base: pathlib.Path, srv: Server) -> None:
         err = ""
     except ac.ArtifactCacheError as e:
         err = str(e)
-    check(f"a 503 on every attempt fails after the last ({err[:80]})", "503" in err and srv.hits.get("/down.bin") == 4
-          and waits == list(ac.BACKOFF), f"{srv.hits} {waits}")
+    check(f"a 503 on every attempt fails after the last ({err[:80]})", "503" in err
+          and srv.hits.get("/down.bin") == len(ac.BACKOFF) + 1 and waits == list(ac.BACKOFF), f"{srv.hits} {waits}")
 
     for path, why in (("/nowhere.bin", "a 404"), ("/flaky.bin", "a download that does not match")):
         waits, before = [], srv.hits.get(path, 0)
