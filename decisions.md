@@ -33900,3 +33900,10 @@ hecaton#540 sets it to a read-only store, a miss there fails on the write, namin
 store must then hold the lock's sums. No new dependency.
 
 **Not yet run on a cluster.** No cluster is involved.
+
+**Suite results, run 18439.** On `47ca33ce`, unscoped, `bash verify/run-e2e-tools.sh` printed `343 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `83 checks ran (the offline suite and 82 tier tests) in 8m49s`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. It ran on the warm cache the live check above had filled: the fetch log read 31
+lines before and after, so the whole tier, its tool fetch and every chart render, made no download of a pinned tool or
+chart. The prose gate printed `prose gate: pass`. #1004 is closed as folded into #1118. The log is
+`/var/lib/hecaton/runs/18439/e2e-tools-1.log`.
