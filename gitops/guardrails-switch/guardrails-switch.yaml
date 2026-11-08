@@ -28,6 +28,9 @@
 # guard-proxy's port: /toggle, and the read-only /guards, /controls, /cost and /prompts the chat page already shows the
 # room. get admits no POST, so not /chat. pods/exec was the other way in, and it cannot be named: a Deployment's pod
 # name changes, so it would be exec into every pod in `agent`, the web terminal's included.
+#
+# guard-mcp-on and guard-mcp-off reach C7's control on the other cluster with the same identity (#1149); their grant is
+# in mcp-switch.yaml beside this one.
 apiVersion: v1
 kind: Namespace
 metadata:
