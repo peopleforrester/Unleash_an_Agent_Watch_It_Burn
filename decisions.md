@@ -36648,6 +36648,95 @@ with the pinned tools. The full command, run again, printed `363 tests ran`, `AL
 `86 checks ran (the offline suite and 85 tier tests) in 15m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. `bash verify/run-tests.sh` on its own also printed `363 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
 No dependency was added.
+
+## 2026-11-08 · #1190 · run 18637 · The gate's tools tier runs only where the range warrants it
+
+**What Michael asked.** On 2026-11-08: "I don't need every commit that's being promoted to main to get the full tool
+tier... If the change warrants it then it goes end-to-end." His correction on #1190 replaced the first criterion: the
+gate runs `verify/scope_tests.py select tools` against origin/main..tip, the whole tier only on FULL, and a docs-only
+range promotes on the scoped offline tests and the prose gate.
+
+**What was already there, and what was not.** `run-e2e-tools.sh` already scoped itself by `HECATON_BASE_SHA` (#1018),
+and hecaton sets that to main's SHA on the gate (hecaton#619), so the range was already origin/main..tip. What kept a
+doc-only range from being doc-only was the map: on staging `3cc0c64c` a decisions.md change alone selected 13 tier
+tests, 5 that read decisions.md (the GitHub comment checks and `test_image_version_tags.py`) and 8 `always` render
+tests, and a `/kubecon` copy edit selected 21. Each of those fetched the pinned tools.
+
+**The rule.** `scope_tests.select()` now sets changed prose aside for the tools suite: `PROSE = (".md", ".mdx", ".html")`,
+the ai-isms gate's own list (`prose_gate.PUBLIC_PROSE`, which the new test holds it equal to). A range of prose alone
+returns SCOPED with no tier test, the `always` ones included, so the runner checks for no tool, fetches nothing and no
+longer names a Terraform cache. A prose path no entry covers no longer runs the whole tier either. The offline suite
+selects on prose exactly as before. A mixed range runs the tier tests its other paths select. Michael's ruling settles
+the trade-off, named here once: a tier test that reads a prose file (a comment check reading a decisions.md entry, a
+Playwright render of `/kubecon`) no longer runs for an edit to that file alone; it runs on the next range that touches
+its code, or in a run that names it.
+
+**What a failure prints.** A failed check's log is copied to `verify/.e2e-logs/<test>.log` (gitignored, so it never
+reads as a change; `E2E_TOOLS_LOG_DIR` overrides it), and the runner prints `FAILED: <check> (exit N); its log: <path>`
+ahead of the check's block, then a list of every failure with its log and its rerun command ahead of the timings. A
+tier test's rerun is `bash verify/run-e2e-tools.sh <test>`, a new form that runs the named tier tests alone with the
+pinned tools and no offline suite; an offline failure's rerun is each failed test's own `python3 verify/<test>`, read
+from the suite's `SOME TESTS FAILED:` list. CLAUDE.md's Dispatched runs gains point 7 (fix it, rerun that one, never
+the whole script, citing run 18622 on #1186), the scoping paragraph after #1018's, and in point 4 the
+`HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)"` prefix that scopes a run's own command. #1191 asks for more
+CLAUDE.md text than this (a prose change never runs `run-e2e-tools.sh` inside a run); that is left to it.
+
+**Tests.** `verify/test_e2e_tools_gate_scope.py`, offline, copies the real runner, `run-tests.sh` and `scope_tests.py`
+into a fixture repo with three offline and four tier tests, one of them `always`, and a tier test reading each doc of
+the doc-only range. A doc-only range (decisions.md, PROGRESS.md, a run-of-show, the page's copy) runs the offline tests
+that read it, no tier test, and logs no call to the fetch, curl or the cache stub. A code range (a chart value and the
+page's event.js) runs the render, the page and the always test and leaves the decisions.md reader. A lock change says
+FULL and runs all. A failed tier test is named first with its kept log and rerun command; that command runs it alone,
+and passes once the cause is fixed; a failed offline test on a doc-only range names its own command and fetches nothing.
+With the prose rule switched off the doc-only checks fail. `verify/test_scope_tests.py`'s decisions.md check now
+expects no tier test, and a display.js change is held to its render tests, short of half the tier.
+
+**Scope map.** Only the new test's entry is added, under `always` (it copies scope_tests.py and imports prose_gate.py,
+which read git history). `scope_tests.py write` would also rewrite about 900 lines of drift staging carries; those stay
+as staging has them, as in run 18615.
+
+**The live check.** Skipped: the change touches only `verify/` files no cluster runs, CLAUDE.md, `.gitignore`,
+PROGRESS.md and this file (Dispatched runs, point 1).
+
+**The suites (run 18637, at `2899e98a`).** The change edits the runner and `scope_tests.py`, both in the map's full
+list, so `HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)" bash verify/run-e2e-tools.sh` ran everything and
+printed `364 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in
+13m01s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+
+**The doc-only range on this repo (run 18637, `2899e98a..dcee7ce4`).** The records commit changes only AGENTS.md,
+PROGRESS.md and decisions.md. `HECATON_BASE_SHA=2899e98a bash verify/run-e2e-tools.sh` printed `3 of the changed paths
+are prose`, `running 0 of 85 tools tests`, `the tools are neither checked for nor fetched`, no fetch and no Terraform
+cache line, `running 96 of 364 offline tests`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `1 checks ran (the offline suite
+and 0 tier tests) in 5m10s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+
+## 2026-11-08 · #1190 · run 18656 · Run 18637's draft ported, and the scope map held current
+
+**Why run 18637 did not land.** Its change conflicted with staging in AGENTS.md, which moved while it worked
+(#1191's point 6 and Michael's release-point rewording, `f459ae4b` and `c43ecf34`). `verify/prior-drafts.sh 1190
+origin/staging` printed START from `origin/agent/1190-18637`, branched from `c43ecf34` with 0 base commits since, and
+CLEAN: staging had touched none of its 9 paths. The draft is taken whole, squashed into one commit, with no change to
+its design.
+
+**What differs from the draft: the map.** Michael's comment on #1190 (from #1189's `2800e073`) folded the map's drift
+into this issue: the gate's scoped selection is only as good as `verify/scope-map.yaml`, which was 112 tests behind.
+Run 18637 left that drift as staging had it. Here `python3 verify/scope_tests.py check` printed `556 problems`, all of
+them drift (`structural()` found 0); `python3 verify/scope_tests.py write` added the missing entries and reads (829
+lines added, 38 removed), and `check` then printed `0 problems`. `verify/test_scope_tests.py`, which every change runs,
+now fails on drift where it printed a NOTE before, naming `scope_tests.py write` as the fix, so staging cannot fall
+behind again. The trade-off #1018's run 18091 named, a run that merges in a staging test whose reads its own edit
+changed, now fails the suite until it runs `write`; with a current map on staging that case is one command, and the
+gate selects from a map that matches the tests. AGENTS.md (CLAUDE.md), `scope_tests.py`'s docstrings and the test's own
+docstring say drift fails.
+
+**The live check.** Skipped: the change touches only `verify/` files no cluster runs, CLAUDE.md, `.gitignore`,
+PROGRESS.md and this file (Dispatched runs, point 1).
+
+**The suites (run 18656, at `a9bf15a6`).** The change edits the runner and `scope_tests.py`, both in the map's full
+list, so `scope_tests.py select tools` printed FULL, and
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-e2e-tools.sh` ran everything: `366 tests
+ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in 13m19s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+
 ## 2026-11-08 · #612 · run 18626 · Readiness row 9 to READY: 9 of 9 points READY, the probe and the audience path green on both clusters
 
 **Why the run before this one did nothing.** Run 18554's session refused every shell call, so it read the readiness
@@ -37910,3 +37999,34 @@ a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (log `/var/lib/hecaton/r
 decisions.md and PROGRESS.md commit, `bash verify/run-tests.sh` at `cfd9925e` ran 104 of 376 offline tests and printed
 `104 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18714/run-tests.log`).
 The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1190 · run 18710 · Run 18656's draft ported, and the drift check fails only on drift a change made under it
+
+**Why run 18656 did not land.** Its `tests` gate failed on `test_scope_tests.py (exit 1)`. The cause, found before any
+code changed: at the draft's last tip `09285554`, `python3 verify/scope_tests.py check` printed `1 problems`,
+`test_kyverno_counter_fix.py reads verify/.tools/bin/crane, which its entry does not cover`. That read came from
+`99a4bbbe` (#1015), a run cut before the drift rule, which landed on staging after run 18656 had brought the map current
+and before hecaton rebased it. The draft's check failed on every drift in the map, so another run's older commit failed
+this one. The `FAIL: --context is empty` line in the gate's output is another test's own printout, not the failure.
+
+**The port.** `verify/prior-drafts.sh 1190 origin/staging` printed START from `origin/agent/1190-18656`, with three drift
+lines, all edits in place (PROGRESS.md, `verify/run-e2e-tools.sh` for #1200's Node on PATH, `verify/scope-map.yaml`),
+and decisions.md as APPEND. The draft merged in with git's own merge except the map, which conflicted. The map was
+taken as staging has it and regenerated with `python3 verify/scope_tests.py write`: staging's map read `612 problems`
+in `check`, and after `write` it read `0 problems`. #1200's runner change and the draft's merged with no conflict.
+
+**What differs from the draft: which drift fails.** `scope_tests.drift_items()` now names, for each place the map is
+behind, the test or helper whose change put it there, and `scope_tests.owed()` splits them. Drift fails
+`test_scope_tests.py` when that path was last changed under the rule: an edit not yet committed, or a commit whose own
+`verify/scope_tests.py` carries `DRIFT_FAILS_SINCE = "#1190"`. Drift from a commit made before the rule, or before
+`scope_tests.py` existed, is printed as a NOTE and fails as soon as a change touches that test again. So a change that
+adds a test or a read still commits the map with it, as Michael's comment asked, and an older commit landing on staging
+mid-gate no longer fails a change that did nothing to it. With staging's map in place of the new one, `owed()` put 611 of
+612 places under NOTE and failed on 1, the new `test_e2e_tools_gate_scope.py`, uncommitted then. A fixture git repo in
+`test_scope_tests.py` holds the split: a test from before scope_tests.py existed and one from before the rule are named,
+and one committed under the rule, one edited and uncommitted, and one git cannot place fail. AGENTS.md (CLAUDE.md) says
+so in the scoping paragraph. The draft's runner, `select()` prose rule, point 7 and `test_e2e_tools_gate_scope.py` are
+taken as they were.
+
+**The live check.** Skipped: the change touches only `verify/` files no cluster runs, CLAUDE.md, `.gitignore`,
+PROGRESS.md and this file (Dispatched runs, point 1).
+

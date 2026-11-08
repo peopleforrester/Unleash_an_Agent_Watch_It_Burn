@@ -52,6 +52,7 @@ always:
   test_chat_turn_cancel.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_witch_name.py: it runs git ls-tree, which reads the tree or history as a whole
   test_claude_md_live_check_scope.py: line 138 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
+  test_claude_md_run_test_scope.py: 'verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_compile_design_doc.py: 'line 44 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
   test_datadog_log_services_render.py: line 108 builds a path under the repo root from a value it finds at run time; line 93 builds a path under the repo root from a value it finds at run time; line 96 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
@@ -61,6 +62,7 @@ always:
   test_drift_floor.py: line 160 builds a path under the repo root from a value it finds at run time
   test_drift_settle.py: it runs git ls-files, which reads the tree or history as a whole; line 139 builds a path under the repo root from a value it finds at run time
   test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole
+  test_e2e_tools_gate_scope.py: 'verify/prose_gate.py: it runs git diff, ls-files, show, which reads the tree or history as a whole; verify/scope_tests.py: it runs git archive, blame, cat-file, diff, diff-tree, grep, log, ls-files, ls-tree, rev-list, shortlog, show, whatchanged, which reads the tree or history as a whole; verify/scope_tests.py: it runs grep -r'
   test_e2e_tools_tier.py: it runs git ls-files, which reads the tree or history as a whole
   test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; line 148 builds a path under the repo root from a value it finds at run time; line 47 builds a path under the repo root from a value it finds at run time
   test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole
@@ -69,6 +71,7 @@ always:
   test_gateway_notes_files.py: line 33 builds a path under the repo root from a value it finds at run time
   test_genai_semconv_pin.py: 'verify/test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole'
   test_gitattributes_union.py: it runs git log, ls-files, which reads the tree or history as a whole
+  test_guard_lease.py: line 640 builds a path under the repo root from a value it finds at run time
   test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
   test_guard_proxy_pin_on_main.sh: 'verify/guard-proxy-pin-on-main.sh: it runs git on the tree or history as a whole; verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
   test_guardrail_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 193 builds a path under the repo root from a value it finds at run time; line 189 builds a path under the repo root from a value it finds at run time
@@ -88,6 +91,7 @@ always:
   test_kubecon_abstract_readiness.py: line 122 builds a path under the repo root from a value it finds at run time
   test_lab_text_export.py: 'it runs git log, which reads the tree or history as a whole; verify/export-lab-text.sh: it runs git on the tree or history as a whole'
   test_lint.py: it runs git ls-files, which reads the tree or history as a whole; line 23 builds a path under the repo root from a value it finds at run time
+  test_llm_guard_bantopics_image.py: it runs git diff, ls-tree, which reads the tree or history as a whole
   test_load_replay.py: 'verify/load_replay.py: line 111 globs a pattern built at run time'
   test_mesh_enrollment.py: line 46 builds a path under the repo root from a value it finds at run time
   test_no_cloud_by_hand.sh: 'verify/test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_round_names_retired.py: line 85 builds a path under the repo root from a value it finds at run time'
@@ -97,6 +101,7 @@ always:
   test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
   test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
   test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
+  test_pantry_header_pin.py: it runs git cat-file, ls-tree, which reads the tree or history as a whole
   test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time
   test_platform_baseline_sister.py: 'verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
@@ -104,6 +109,7 @@ always:
   test_replay_prompts.py: it runs git ls-files, which reads the tree or history as a whole; line 537 builds a path under the repo root from a value it finds at run time
   test_round_names_retired.py: it runs git ls-files, which reads the tree or history as a whole; line 85 builds a path under the repo root from a value it finds at run time
   test_scope_tests.py: it holds this map current with every test and what each reads, so every change runs it
+  test_sister_tree.py: 'verify/sister_tree.py: it runs git ls-tree, which reads the tree or history as a whole; verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_spec_copies.py: line 67 builds a path under the repo root from a value it finds at run time
   test_submodule_pins_pushed.sh: 'verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
   test_terminal_login_live.sh: 'verify/terminal-login-live.sh: it runs git on the tree or history as a whole; verify/test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole'
@@ -112,7 +118,145 @@ always:
   test_tests_own_inputs.py: it runs git grep, which reads the tree or history as a whole
   test_tf_plugin_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: line 70 builds a path under the repo root from a value it finds at run time'
   test_verify_harness.py: 'verify/test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 148 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 47 builds a path under the repo root from a value it finds at run time'
+  test_verify_suites_workflow.py: 'verify/ci-base-sha.sh: it runs git on the tree or history as a whole'
 reads:
+  test_467_live_record.py:
+    - CLAUDE.md
+    - agent
+    - agent/467-17944
+    - backstage
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - gitops
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify/agent_probe.py
+    - verify/bootstrap_chart.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/record_467.py
+    - verify/test_kyverno_cel_live.py
+    - verify/topic_cases.py
+  test_467_live_record_comment_e2e.py:
+    - CLAUDE.md
+    - agent
+    - agent/467-
+    - agent/467-10000
+    - agent/467-17944
+    - backstage
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/LAB-TEXT.md
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - gitops
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno/restrict-image-registries.yaml
+    - security
+    - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/gh_comments.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/record_467.py
+    - verify/test_kyverno_cel_live.py
+    - verify/topic_cases.py
+  test_889_probe_record.py:
+    - agent
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
+  test_900_probe_record.py:
+    - agent
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - decisions.md
+    - docs/KUBECON-ABSTRACT-READINESS.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/input-guard.sh
+    - verify/kubecon_probe.py
+    - verify/topic_cases.py
   test_948_live_check_owed.py:
     - PROGRESS.md
     - decisions.md
@@ -121,8 +265,17 @@ reads:
     - facilitation/kubecon-na-2026/fallback/prompts.yaml
   test_952_suite_record.py:
     - decisions.md
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
     - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/run-e2e-tools.sh
     - verify/run-tests.sh
     - verify/test_kubecon_prompt_sheet_e2e.py
@@ -172,6 +325,104 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/test_recipe_persona.py
+  test_986_attendee_todo_listed.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - decisions.md
+    - docs/admin-console.md
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts
+    - scripts/audience-qr.py
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/.tools/bin/caddy
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/failover_drill.py
+    - verify/fetch-e2e-tools.sh
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/test_failover_drill.py
+    - verify/test_kubecon_failover_attendee_live.py
+  test_986_failover_plan_record.py:
+    - CLAUDE.md
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - decisions.md
+    - docs/admin-console.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/aws/network/terraform.tfstate
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/test_backups.py
   test_a2a_usage_key.py:
     - VERSIONS.lock
     - cost/README.md
@@ -194,6 +445,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -287,9 +540,23 @@ reads:
   test_agent_hitl.py:
     - gitops/workshop-agent/agent.yaml
   test_agent_obs_cause_comment.py:
+    - CLAUDE.md
     - decisions.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
     - gitops/otel-collector/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
@@ -315,6 +582,7 @@ reads:
     - infra/datadog-fleet/monitors.yaml
     - verify/agent_obs_flow.py
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_agent_otlp_logs.py:
@@ -333,6 +601,8 @@ reads:
     - gitops/otel-collector
     - gitops/workshop-agent/agent.yaml
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -340,6 +610,7 @@ reads:
     - agent
     - gitops/ai-layer/ticket_site.py
     - verify/agent_probe.py
+    - verify/guard_lease.py
   test_agent_tools_exist.py:
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
     - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
@@ -370,6 +641,7 @@ reads:
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
     - verify/ensure-submodules.sh
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_agentgateway_config.py:
@@ -402,6 +674,8 @@ reads:
   test_agentgateway_tracing_e2e.py:
     - gitops/ai-layer/agentgateway.yaml
     - verify/.tools/bin/agentgateway
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
@@ -504,7 +778,14 @@ reads:
     - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
     - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_audience_path.py:
     - gitops/ai-layer/console.conf
     - gitops/ai-layer/guard-proxy
@@ -684,6 +965,7 @@ reads:
     - policies/kyverno-breakout/deny-external-registries.yaml
     - policies/kyverno/restrict-image-registries.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_breakout_room_cleanup.py:
@@ -704,13 +986,19 @@ reads:
     - images/workshop-mcp/Dockerfile
     - policies/kyverno-breakout/remove-untrusted-room-workloads.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_burritobot_cluster_live_logic.py:
+    - CLAUDE.md
     - agent
     - backstage
+    - decisions.md
     - gitops/manifests/datadog/datadog-agent.yaml
+    - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
     - security
     - security/datadog-secret
     - verify/test_burritobot_cluster_live.py
@@ -726,8 +1014,11 @@ reads:
     - gitops/ai-layer/weather_feed.py
     - policies/network-policies/per-namespace/agent-egress-allowlist.yaml
   test_c1_exfil_block_restore.py:
+    - agent
     - gitops/ai-layer/resources.yaml
     - verify/c1-exfil-block.sh
+    - verify/fake_lease_kubectl.py
+    - verify/guard_lease.py
   test_c3_bait_baked.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
@@ -774,6 +1065,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
+    - verify/guard_lease.py
   test_c6_joker_public.py:
     - gitops/ai-layer/ticket_site.py
     - images.lock
@@ -790,6 +1082,7 @@ reads:
     - agent
     - gitops/ai-layer/ticket_site.py
     - verify/agent_probe.py
+    - verify/guard_lease.py
   test_c7_badge_grants.py:
     - agent
     - agent/guard-proxy-reader
@@ -798,6 +1091,7 @@ reads:
   test_c7_control_comments.py:
     - agent
     - agent/web-terminal
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/02-sanitization/agent-prompt-injection.txt
     - challenges/02-sanitization/fallback.curl.sh
@@ -817,6 +1111,7 @@ reads:
     - decisions.md
     - docs/admin-console.md
     - docs/research/2026-10-24-agentgateway-evaluation.md
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer
     - gitops/ai-layer/agentgateway.yaml
@@ -836,9 +1131,15 @@ reads:
     - gitops/ai-layer/web/skin.js
     - gitops/ai-layer/web/skins.js
     - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
     - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/guardrails-switch.yaml
     - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/bootstrap/values*.yaml
+    - gitops/guardrails-switch
+    - gitops/guardrails-switch/mcp-switch.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - images/web-terminal/entrypoint.sh
     - images/workshop-mcp/Dockerfile
     - infra
@@ -864,17 +1165,27 @@ reads:
     - policies/kyverno/block-argocd-drift.yaml
     - policies/kyverno/require-resource-limits.yaml
     - policies/kyverno/restrict-image-registries.yaml
+    - scripts/audience-qr.py
     - scripts/harvest_cluster_access.sh
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/guard_lease.py
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
     - verify/nova_replies.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/registry_allowlist.py
     - verify/resource_limits.py
     - verify/test_c7_gateway_toggle.py
+    - verify/test_guard_mcp_both.py
     - verify/test_kubecon_probe.py
     - verify/topic_cases.py
   test_c7_gateway_reader.py:
@@ -907,6 +1218,7 @@ reads:
   test_c7_gateway_toggle.py:
     - agent
     - agent/web-terminal
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -920,7 +1232,12 @@ reads:
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/bootstrap
     - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/apps/guardrails-switch.yaml
+    - gitops/bootstrap/values*.yaml
+    - gitops/guardrails-switch
+    - gitops/guardrails-switch/mcp-switch.yaml
     - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
     - infra/datadog-fleet
@@ -947,6 +1264,9 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/test_guard_mcp_both.py
   test_c7_output_guard.py:
     - gitops/ai-layer/resources.yaml
   test_c7_teaching.py:
@@ -963,6 +1283,7 @@ reads:
     - gitops/ai-layer/web/skin.js
     - gitops/ai-layer/web/skins.js
     - verify/agent_probe.py
+    - verify/guard_lease.py
   test_c8_pod_secret_mount.py:
     - gitops/ai-layer/resources.yaml
     - policies/floor/minimal-floor.yaml
@@ -991,6 +1312,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_challenge_assets.py:
@@ -1057,6 +1379,7 @@ reads:
     - verify/agent_probe.py
     - verify/datadog-orgs.sh
     - verify/fleet-walkthrough.sh
+    - verify/guard_lease.py
     - verify/last_trace.py
   test_challenge_slide_headers.py:
     - facilitation/kubecon-na-2026-run-of-show.md
@@ -1162,13 +1485,30 @@ reads:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
   test_check_inventory_schema_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_check_tls_shell_probe.sh:
     - infra/terraform/fleet/check-tls.sh
-  test_claude_md_run_test_scope.py:
-    - CLAUDE.md
-    - verify/run-e2e-tools.sh
-    - verify/run-tests.sh
+  test_ci_chromium_libs.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ci_chromium_libs.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_cloud_credential_probe_admission.py:
     - gitops/ai-layer/resources.yaml
     - policies/floor/minimal-floor.yaml
@@ -1224,6 +1564,8 @@ reads:
     - gitops/otel-collector
     - gitops/otel-collector/otel-collector-act2-overlay.yaml
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -1315,6 +1657,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -1356,6 +1700,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -1368,6 +1714,10 @@ reads:
     - gitops/otel-collector
     - gitops/otel-collector/values-burn.yaml
     - gitops/otel-collector/values.yaml
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
     - verify/collector_render.py
     - verify/dd_purge_public.py
     - verify/pii_scrub_cases.py
@@ -1379,6 +1729,8 @@ reads:
     - gitops/otel-collector
     - gitops/otel-collector/values-burn.yaml
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -1398,6 +1750,7 @@ reads:
     - CLAUDE.md
     - agent
     - backstage
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -1804,11 +2157,25 @@ reads:
     - security
   test_dd_credential_comment.py:
     - AGENTS.md
+    - CLAUDE.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
@@ -1908,6 +2275,7 @@ reads:
     - images/workshop-mcp/Dockerfile
     - policies/kyverno/require-resource-limits.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/resource_limits.py
     - verify/topic_cases.py
@@ -1964,8 +2332,17 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
   test_deployments_witch_line_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer
     - gitops/ai-layer/ticket_site.py
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_desk_remote_reports.py:
     - CLAUDE.md
     - backstage
@@ -2026,8 +2403,22 @@ reads:
     - gitops/bootstrap/apps/*.yaml
   test_dispatched_runs_cause_comment.py:
     - AGENTS.md
+    - CLAUDE.md
     - gitops/apps
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
@@ -2155,6 +2546,7 @@ reads:
     - docs/floor.md
     - gitops/ai-layer
     - gitops/ai-layer/kustomization.yaml
+    - verify/guard_lease.py
     - verify/test_drift_selfheal_live.py
   test_egress.py:
     - infra/terraform/aws/cluster/main.tf
@@ -2304,20 +2696,38 @@ reads:
     - scripts/reload-routes.sh
     - verify/test_support_desk.py
   test_falco_badge_measured.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
     - gitops/bootstrap/apps/falco.yaml
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
     - infra
+    - scripts/audience-qr.py
     - security
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/browser-smoke.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_fallback_deck_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - facilitation/kubecon-na-2026/fallback
     - facilitation/kubecon-na-2026/fallback/assets.yaml
     - facilitation/kubecon-na-2026/fallback/screenshots/deck.html
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
     - scripts/check-fallback-assets.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
     - verify/playwright_browsers.py
+    - verify/python.lock
   test_feedback_links.py:
     - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
@@ -2329,6 +2739,7 @@ reads:
     - gitops/ai-layer/web/skins.js
   test_finale_cap.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -3091,16 +3502,31 @@ reads:
   test_gateway_forward.py:
     - agent
     - verify/gateway_forward.py
+    - verify/kube_forward.py
     - verify/local-inference-live.py
     - verify/test_gateway_bedrock_tagged_live.py
   test_gh_comments.py:
     - AGENTS.md
+    - CLAUDE.md
     - PROGRESS.md
     - PROJECT_STATE.md
     - decisions.md
     - gitops/apps
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
     - gitops/otel-collector/values.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
@@ -3110,6 +3536,25 @@ reads:
     - verify/test_dispatched_runs_cause_comment.py
     - verify/test_prose_gate_e2e_wait_cause_comment.py
   test_ghcr_pull.py:
+    - '**'
+    - .github/workflows/build-web-terminal.yml
+    - backstage/k8s/templated-test-svc.yaml
+    - decisions.md
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - images.lock
+    - images/sample-app/Dockerfile
+    - images/tool-pin
+    - images/tool-pin/Dockerfile
+    - images/villains
+    - images/villains/build.sh
+    - images/villains/joker-web
+    - images/villains/joker-web-internal/www/index.html
+    - images/villains/joker-web/start.sh
+    - images/villains/joker-web/www
+    - images/villains/joker-web/www/index.html
+    - images/villains/villain-banner.sh
+    - images/workshop-mcp/Dockerfile
     - verify/ghcr_pull.py
     - verify/test_c6_joker_public.py
     - verify/test_image_version_tags.py
@@ -3131,6 +3576,8 @@ reads:
     - images/web-terminal
     - scripts/ghcr_version_tag.py
     - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
   test_gotchas_router_probe.py:
     - agent
@@ -3183,6 +3630,7 @@ reads:
     - infra/terraform/aws/cluster
   test_guard_commands_echo.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -3401,10 +3849,18 @@ reads:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
   test_guardrails_heading_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
     - infra
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
     - verify/playwright_browsers.py
+    - verify/python.lock
   test_guardrails_switch.py:
     - CLAUDE.md
     - agent
@@ -3490,8 +3946,46 @@ reads:
     - verify/no_cloud.py
     - verify/registry_allowlist.py
   test_guards_all_both.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/*
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/workshop-agent/agent.yaml
     - images/web-terminal/entrypoint.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
   test_harvest_console_host.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
@@ -3671,12 +4165,25 @@ reads:
     - verify/test_images_saved.py
   test_injection_classifier.py:
     - agent
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
     - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/guard_lease.py
     - verify/input-guard.sh
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/topic_cases.py
   test_input_guard_host.sh:
+    - agent
+    - verify/fake_lease_kubectl.py
     - verify/input-guard.sh
   test_input_pii_guard.py:
     - agent
@@ -3705,6 +4212,7 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/pii_scrub_cases.py
     - verify/stage_traces.py
@@ -3713,6 +4221,7 @@ reads:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
     - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/agentgateway.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/ticket_site.py
@@ -3722,18 +4231,27 @@ reads:
     - gitops/ai-layer/web/kubecon.html
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
+    - scripts/audience-qr.py
     - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_instructor_brief.py:
     - CLAUDE.md
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-exfil-s3/fallback.kubectl.sh
     - challenges/c1-network-policy.yaml
@@ -3815,6 +4333,8 @@ reads:
     - images/villains/villain-banner.sh
     - scripts/ghcr_version_tag.py
     - verify/.tools/bin/crane
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
   test_joker_web_busybox.py:
@@ -3830,6 +4350,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -3845,6 +4367,38 @@ reads:
     - gitops/bootstrap/apps/kagent.yaml
     - gitops/workshop-agent/agent.yaml
     - prds/13-mvp-walking-skeleton.md
+  test_kitchen_note_followup.py:
+    - CLAUDE.md
+    - decisions.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - policies/kubearmor/block-recipe-snoop.yaml
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/chart_fetch.py
+    - verify/charts.lock
+    - verify/charts_lock.py
+    - verify/gh_comments.py
+    - verify/test_recipe_persona.py
+  test_kube_forward.py:
+    - agent
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/workshop-agent/agent.yaml
+    - verify/gateway_forward.py
+    - verify/kube_forward.py
+    - verify/test_deployments_page_live.py
   test_kubearmor_config_tracked.py:
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/kubearmor-config
@@ -3868,6 +4422,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/run-e2e.sh
     - verify/run-tests.sh
@@ -4011,6 +4566,7 @@ reads:
     - verify/python.lock
   test_kubecon_probe.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/02-sanitization/agent-prompt-injection.txt
     - challenges/02-sanitization/fallback.curl.sh
@@ -4025,6 +4581,7 @@ reads:
     - challenges/c8-broad-role.yaml
     - cost
     - docs/admin-console.md
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer
     - gitops/ai-layer/agentgateway.yaml
@@ -4046,6 +4603,7 @@ reads:
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
     - infra
     - infra/datadog-fleet
@@ -4069,20 +4627,36 @@ reads:
     - infra/terraform/fleet/scheduled-up.sh
     - policies/kyverno/require-resource-limits.yaml
     - policies/kyverno/restrict-image-registries.yaml
+    - scripts/audience-qr.py
     - scripts/harvest_cluster_access.sh
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/guard_lease.py
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
     - verify/nova_replies.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/registry_allowlist.py
     - verify/resource_limits.py
     - verify/topic_cases.py
   test_kubecon_prompt_sheet_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/web/kubecon.html
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
     - verify/playwright_browsers.py
+    - verify/python.lock
   test_kubecon_seg4_flow.py:
     - challenges/02-sanitization/fallback.curl.sh
     - facilitation/kubecon-na-2026-run-of-show.md
@@ -4137,6 +4711,7 @@ reads:
     - security
     - verify/agent_probe.py
     - verify/bootstrap_chart.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/mirror_copies.py
     - verify/topic_cases.py
@@ -4150,11 +4725,13 @@ reads:
     - images/kyverno-counter-fix/build.sh
     - images/kyverno-counter-fix/pr17085.patch
     - scripts/ghcr_version_tag.py
+    - verify/.tools/bin/crane
     - verify/e2e-tools.lock
   test_kyverno_profile_policies.py:
     - CLAUDE.md
     - agent
     - backstage
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/LAB-TEXT.md
     - challenges/c1-network-policy.yaml
@@ -4228,6 +4805,7 @@ reads:
     - security
     - verify/agent_probe.py
     - verify/bootstrap_chart.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/test_kyverno_cel_live.py
     - verify/topic_cases.py
@@ -4286,6 +4864,7 @@ reads:
     - verify/agent_probe.py
     - verify/bootstrap_chart.py
     - verify/e2e-tools.lock
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/mirror_copies.py
     - verify/run-e2e.sh
@@ -4447,34 +5026,10 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py
-  test_llm_guard_bantopics_image.py:
-    - CLAUDE.md
-    - backstage
-    - gitops
-    - gitops/ai-layer
-    - gitops/ai-layer/kustomization.yaml
-    - gitops/bootstrap
-    - gitops/bootstrap/*
-    - gitops/bootstrap/apps
-    - gitops/bootstrap/apps/ai-layer.yaml
-    - gitops/bootstrap/templates
-    - gitops/bootstrap/values.yaml
-    - images.lock
-    - infra/argocd-values.yaml
-    - infra/aws-load-balancer-controller-values.yaml
-    - infra/datadog-cluster-identity.sh
-    - infra/deploy-full-idp.sh
-    - infra/gp3-storageclass.yaml
-    - infra/reload-datadog-consumers.sh
-    - infra/terraform/aws/cluster
-    - lab-platform.yaml
-    - observability-idp
-    - policies
-    - security
-    - verify/bootstrap_chart.py
   test_llm_guard_image.py:
     - CLAUDE.md
     - backstage
@@ -4617,6 +5172,18 @@ reads:
     - security
     - security/**.yaml
     - verify/bootstrap_chart.py
+  test_marketing_output_scrub.py:
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+  test_marketing_send_persona.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
+    - gitops/workshop-agent/agent.yaml
   test_marketing_send_route.py:
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py
@@ -4693,9 +5260,17 @@ reads:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
   test_mobile_titles_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
     - verify/playwright_browsers.py
+    - verify/python.lock
   test_model_pin_check.py:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
@@ -4854,6 +5429,13 @@ reads:
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
     - verify/no_cloud.py
+  test_order_complete_button_e2e.py:
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+  test_order_complete_phrase.py:
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/workshop-agent/agent.yaml
   test_otel_collector_version_pins.py:
     - VERSIONS.lock
     - docs/BUILD-SPEC.md
@@ -4875,6 +5457,8 @@ reads:
     - gitops/otel-collector
     - gitops/otel-collector/otel-collector-act2-overlay.yaml
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -4882,10 +5466,18 @@ reads:
     - verify/test_collector_act2_redaction_e2e.py
     - verify/test_trace_shape_e2e.py
   test_package_cache_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
     - images/watch-it-burn-backstage/.yarn/releases
     - images/watch-it-burn-backstage/.yarn/releases/yarn-4.*.cjs
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_party_app_hosts.py:
     - CLAUDE.md
     - agent
@@ -5076,8 +5668,12 @@ reads:
     - scripts/reload-routes.sh
     - verify/no-cloud.sh
   test_playwright_browsers.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
     - verify
     - verify/playwright_browsers.py
     - verify/test_*.py
@@ -5189,30 +5785,149 @@ reads:
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_progress_entries.py:
+    - CLAUDE.md
     - PROGRESS.md
     - agent
+    - backstage
+    - challenges
+    - challenges/*
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/02-sanitization/plant-fake-recipe.yaml
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - challenges/c5-scoped-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
     - decisions.md
+    - docs/KUBECON-ABSTRACT-READINESS.md
+    - docs/admin-console.md
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops
+    - gitops/**.yaml
+    - gitops/**/*.yaml
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/console.conf
     - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/display.html
     - gitops/ai-layer/web/display.js
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/guardrails-switch.yaml
+    - gitops/bootstrap/apps/internal-registry.yaml
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/bootstrap/apps/kyverno-breakout.yaml
+    - gitops/bootstrap/apps/kyverno-registry-policy.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/guardrails-switch
+    - gitops/guardrails-switch/guardrails-switch.yaml
+    - gitops/internal-registry
+    - gitops/internal-registry/internal-registry.yaml
     - gitops/workshop-agent/agent.yaml
+    - images.lock
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
     - infra/datadog-fleet/dashboard.yaml
     - infra/datadog-fleet/fleet_monitors.py
     - infra/datadog-fleet/leaderboard.yaml
     - infra/datadog-fleet/monitors.yaml
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/org/boundary
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno
+    - policies/kyverno-breakout
+    - policies/kyverno-breakout/deny-external-registries.yaml
+    - policies/kyverno-breakout/remove-untrusted-room-workloads-rbac.yaml
+    - policies/kyverno-breakout/remove-untrusted-room-workloads.yaml
+    - policies/kyverno/restrict-image-registries.yaml
+    - scripts
+    - scripts/audience-qr.py
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - security
+    - verify/.tools/bin/caddy
+    - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/bootstrap_chart.py
     - verify/dd_traces.py
     - verify/display-feed-harness.js
+    - verify/docker_hub.py
+    - verify/e2e-tools.lock
     - verify/ensure-submodules.sh
+    - verify/failover_drill.py
+    - verify/fetch-e2e-tools.sh
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/registry_allowlist.py
     - verify/run-e2e-tools.sh
     - verify/test_allergen_card.py
+    - verify/test_breakout_room_cleanup.py
     - verify/test_dd_traces.py
     - verify/test_dd_traces_live.py
+    - verify/test_deployments_witch_line_e2e.py
     - verify/test_display_masked_prompts_e2e.py
+    - verify/test_failover_drill.py
+    - verify/test_guardrails_switch.py
+    - verify/test_kubecon_failover_attendee_live.py
+    - verify/test_public_images.py
+    - verify/test_recipe_pantry_gate.py
+    - verify/test_recipe_pantry_gate_e2e.py
+    - verify/test_room_cleanup_live.py
+    - verify/test_storefront_backend_check_order_e2e.py
     - verify/test_stream.py
     - verify/topic_cases.py
   test_promo_villains.py:
@@ -5243,6 +5958,7 @@ reads:
     - images/workshop-mcp/Dockerfile
     - policies/kyverno/restrict-image-registries.yaml
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/promo_villains.py
     - verify/registry_allowlist.py
@@ -5254,14 +5970,38 @@ reads:
     - gitops/ai-layer/guard-proxy
     - gitops/ai-layer/resources.yaml
   test_prompts_wall_suite.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
     - verify/prompts_wall_suite.py
+    - verify/python.lock
     - verify/test_prompts_wall_suite_e2e.py
   test_prose_gate_e2e_wait_cause_comment.py:
     - AGENTS.md
+    - CLAUDE.md
     - PROGRESS.md
     - PROJECT_STATE.md
     - decisions.md
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
@@ -5367,6 +6107,7 @@ reads:
   test_recipe_block_coverage.py:
     - agent
     - agent/cluster-identity
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -5414,6 +6155,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/test_recipe_block_live.py
     - verify/topic_cases.py
@@ -5425,8 +6167,16 @@ reads:
     - images/workshop-mcp/Dockerfile
     - security
   test_recipe_pantry_gate_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_recipe_persona.py:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
@@ -5528,6 +6278,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/no-cloud.sh
     - verify/topic_cases.py
@@ -5549,6 +6300,7 @@ reads:
   test_room_reader_rbac.py:
     - agent
     - agent/terminal-auth
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/LAB-TEXT.md
     - challenges/c1-network-policy.yaml
@@ -5594,6 +6346,7 @@ reads:
   test_room_reader_rbac_e2e.py:
     - agent
     - agent/terminal-auth
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/LAB-TEXT.md
     - challenges/c1-network-policy.yaml
@@ -5645,6 +6398,7 @@ reads:
     - CLAUDE.md
     - agent
     - backstage
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/03-bad-mcp-excessive-agency/agent-prompt.txt
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
@@ -5735,6 +6489,7 @@ reads:
     - verify/collector_render.py
     - verify/test_trace_walkthrough_view.py
   test_ros_seg4_flow.py:
+    - docs/mcp-server-vetting-checklist.md
     - facilitation/kubecon-na-2026-run-of-show.md
   test_ros_segments_table_seg3.py:
     - facilitation/kubecon-na-2026-run-of-show.md
@@ -5790,6 +6545,7 @@ reads:
     - CLAUDE.md
     - agent
     - backstage
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/LAB-TEXT.md
     - challenges/c1-network-policy.yaml
@@ -6044,6 +6800,7 @@ reads:
     - verify/topic_cases.py
   test_stage_traces.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/02-sanitization/agent-prompt-injection.txt
     - challenges/02-sanitization/fallback.curl.sh
@@ -6058,6 +6815,7 @@ reads:
     - challenges/c8-broad-role.yaml
     - cost
     - docs/admin-console.md
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer
     - gitops/ai-layer/agentgateway.yaml
@@ -6079,6 +6837,7 @@ reads:
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
     - infra
     - infra/datadog-fleet
@@ -6106,14 +6865,21 @@ reads:
     - infra/terraform/fleet/scheduled-up.sh
     - policies/kyverno/require-resource-limits.yaml
     - policies/kyverno/restrict-image-registries.yaml
+    - scripts/audience-qr.py
     - scripts/harvest_cluster_access.sh
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/guard_lease.py
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
     - verify/nova_replies.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/registry_allowlist.py
     - verify/resource_limits.py
     - verify/stage_traces.py
@@ -6141,6 +6907,7 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/nova_replies.py
     - verify/topic_cases.py
@@ -6154,6 +6921,7 @@ reads:
     - gitops/ai-layer/web/display.js
   test_student_aws_creds_namespace.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6246,9 +7014,23 @@ reads:
     - gitops/workshop-agent
     - gitops/workshop-agent/agent.yaml
   test_support_desk_live.py:
+    - CLAUDE.md
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/ticket_site.py
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
@@ -6309,6 +7091,7 @@ reads:
     - facilitation/self-assessment.md
   test_terminal_kubeconfig.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6385,6 +7168,7 @@ reads:
     - verify/no_cloud.py
   test_terminal_quiet.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6425,7 +7209,12 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
   test_terraform_lock_init.py:
+    - CLAUDE.md
     - VERSIONS.lock
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
     - infra
     - infra/**/.terraform.lock.hcl
     - infra/org/boundary
@@ -6451,7 +7240,12 @@ reads:
     - verify/charts_lock.py
     - verify/tf_plugin_cache.py
   test_terraform_lock_init_retry.py:
+    - CLAUDE.md
     - VERSIONS.lock
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/*.yaml
     - infra
     - infra/**/.terraform.lock.hcl
     - infra/org/boundary
@@ -6496,6 +7290,9 @@ reads:
     - verify/charts.lock
     - verify/charts_lock.py
     - verify/tf_plugin_cache.py
+  test_ticket_persona.py:
+    - gitops/ai-layer/ticket_site.py
+    - gitops/workshop-agent/agent.yaml
   test_tier_swap_live_judges.py:
     - agent
     - gitops/ai-layer/guard-proxy
@@ -6505,21 +7302,30 @@ reads:
   test_tool_audit.py:
     - challenges/03-bad-mcp-excessive-agency/fallback.curl.sh
     - challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
     - gitops/ai-layer/server.py
     - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/event.js
     - gitops/ai-layer/workshop-mcp-server.py
     - gitops/bootstrap/apps
     - gitops/bootstrap/apps/alloy.yaml
     - gitops/bootstrap/apps/loki.yaml
     - gitops/manifests/datadog/datadog-agent.yaml
     - gitops/workshop-agent/agent.yaml
+    - images/llm-guard
     - images/workshop-mcp/Dockerfile
     - policies/floor/minimal-floor.yaml
     - policies/kyverno
     - policies/kyverno/*.yaml
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
     - verify/probe_pod.py
+    - verify/python.lock
     - verify/test_probe_pod_admission.py
     - verify/test_tool_audit_live.py
   test_tool_failure_status_e2e.py:
@@ -6528,6 +7334,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -6641,10 +7449,21 @@ reads:
     - policies
     - verify/tool_pin_kubectl_shim.py
   test_topic_classifier.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
     - verify/topic_cases.py
   test_topic_guard.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6699,11 +7518,13 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/stage_traces.py
     - verify/topic_cases.py
   test_topic_guard_proxy.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6749,6 +7570,8 @@ reads:
     - gitops/bootstrap/apps/otel-collector.yaml
     - gitops/otel-collector
     - verify/.tools/bin/otelcol-contrib
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/collector_render.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
@@ -6756,6 +7579,7 @@ reads:
     - CLAUDE.md
     - agent
     - backstage
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/03-bad-mcp-excessive-agency/agent-prompt.txt
     - challenges/03-bad-mcp-excessive-agency/clown-file.yaml
@@ -6834,6 +7658,7 @@ reads:
     - verify/bootstrap_chart.py
   test_ttyd_ws_auth.py:
     - agent
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6872,6 +7697,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/.tools/bin/ttyd
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
@@ -6904,6 +7731,7 @@ reads:
     - agent
     - backstage/catalog
     - backstage/catalog/*.yaml
+    - challenges/*
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - challenges/c1-network-policy.yaml
     - challenges/c3-kubearmor-policy.yaml
@@ -6977,19 +7805,11 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - images/workshop-mcp/Dockerfile
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/run-e2e.sh
     - verify/test_two_hour_flow_live.py
     - verify/topic_cases.py
-  test_verify_suites_workflow.py:
-    - .github/workflows/verify-suites.yml
-    - agent/**
-    - agent/1020-1
-    - agent/unrelated
-    - verify/**
-    - verify/ci-base-sha.sh
-    - verify/run-e2e-tools.sh
-    - verify/run-tests.sh
   test_villain_app.py:
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - games/villain-apps/deploy-villain.yaml
@@ -7110,8 +7930,33 @@ reads:
     - policies/kyverno/restrict-agent-spawned-workloads.yaml
     - policies/network-policies/per-namespace/agent-allow-weather-feed-egress.yaml
   test_weather_feed_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer/server.py
     - gitops/ai-layer/weather_feed.py
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/weather_feed_probe.py
+  test_weather_feed_upstream_failure.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/server.py
+    - gitops/ai-layer/weather_feed.py
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/test_weather_feed_e2e.py
     - verify/weather_feed_probe.py
   test_weather_tool_scope.py:
     - agent
@@ -7137,6 +7982,8 @@ reads:
     - weaver/registry
     - weaver/registry/*.yaml
   test_weaver_registry_check.py:
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fetch-e2e-tools.sh
     - verify/run-e2e-tools.sh
