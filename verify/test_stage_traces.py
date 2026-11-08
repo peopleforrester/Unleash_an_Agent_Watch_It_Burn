@@ -72,8 +72,18 @@ class FakePrivate(st.StageCluster):
         self.pii_guard = pii_guard  # whether LLM Guard's input scanners include the PII Regex
         self.asked: list[list[str]] = []
 
+    # The private bot on the one desk (#1159): its TICKET_SITE_URL is desk-relay, which names the public desk and holds
+    # the desk-report-token. A test sets it to None for a bot left on its own desk.
+    desk_health: dict | None = {"ok": True, "desk": kp.PUBLIC_DESK, "token": True}
+
     def kubectl_rc(self, *args, timeout=90, stdin=None):
-        """The terminal's guardrails-on and guardrails-off, run in its pod: both clusters switch."""
+        """The terminal's guardrails-on and guardrails-off, run in its pod: both clusters switch; and the one desk's
+        read in the bot's tool pod."""
+        if list(args) == kp.DESK_CHECK:
+            self.log.append("desk read")
+            if self.desk_health is None:
+                return 0, json.dumps({"url": kp.IN_CLUSTER_DESK, "healthz": {"ok": True}}) + "\n"
+            return 0, json.dumps({"url": kp.DESK_RELAY_URL, "healthz": self.desk_health}) + "\n"
         assert "deploy/web-terminal" in args, args
         state = "on" if args[-1].endswith("guardrails-on") else "off"
         self.log.append(f"guardrails {state}")
@@ -287,7 +297,7 @@ with tempfile.TemporaryDirectory() as tmp:
           LOCK.get("ran_inside") is True and LOCK["context"] == "wib-private" and not LOCK["inside"]
           and LOCK["what"] == f"stage_traces.py seed {HOST}", str(LOCK))
     check("the seeds run in presentation order, attack then fix, with the stage's flips between them",
-          keys == ["identity", "start-state", "c1-attack", "c2-attack", "guardrails-on", "armed", "c1-fixed",
+          keys == ["identity", "start-state", "one-desk", "c1-attack", "c2-attack", "guardrails-on", "armed", "c1-fixed",
                    "c2-fixed", "c3-attack", "guard-agency-on", "guard-input-on", "c3-fixed", "c3-pii", "c4-attack", "guard-mcp-on", "c4-fixed",
                    "guards-off"], str(keys))
     check("guardrails-on arms the cluster before the Challenge 3 attack, and guardrails-off is the last act",
@@ -457,6 +467,22 @@ with tempfile.TemporaryDirectory() as tmp:
     check("and flips nothing: no guardrails-off, no AI guard, Role or gateway change, the guardrails left as found",
           la.log == [] and la.armed is True, str(la.log))
     check("and writes no views file, since nothing was seeded", not out_la.exists())
+
+    print("== a seed whose bot is not on the one desk (#1159) ==")
+    for why, health in (("on its own desk", None),
+                        ("on a relay with no token", {"ok": True, "desk": kp.PUBLIC_DESK, "token": False})):
+        od = LeftArmed()
+        od.armed, od.desk_health = False, health
+        out_od = pathlib.Path(tmp, "stage-traces-desk.json")
+        check(f"seed exits 1 with the bot {why}, after reading the desk and before any /chat",
+              run_seed(od, FakeDatadog(), out_od) == 1 and od.calls == 0 and not od.sent and od.log == ["desk read"],
+              str(od.log))
+        check("and writes no views file", not out_od.exists())
+    check("a green seed records the desk its ticket reads and Joker report went to",
+          saved.get("desk") == st.SEED_DESK == kp.PUBLIC_DESK, str(saved.get("desk")))
+    check("the preflight reads the identity, the start state and the one desk, the probe's own beats",
+          [k for k, _ in st.PREFLIGHT] == ["identity", "start-state", "one-desk"]
+          and dict(st.PREFLIGHT)["one-desk"] is kp._desk)
 
     print("== a trace that never reaches Datadog ==")
     out2 = pathlib.Path(tmp, "stage-traces-2.json")

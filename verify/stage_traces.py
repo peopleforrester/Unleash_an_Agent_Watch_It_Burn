@@ -55,9 +55,12 @@ guardrails-off, run even when a seed fails. The prompts carry no probe
 marker, so a seeded trace reads as the prompt Whitney shows; they do appear in the private bot's feed on the prompt
 wall, as the presenters' own stage prompts will.
 
-`seed` first reads the identity and the stage's start state, and sends and flips nothing unless both pass: on
-2026-11-05 the private cluster ran the admin profile, KubeArmor's and the egress guardrails applied by Argo CD, and a
-seed there would have failed and then had its guards-off strip them.
+`seed` first reads the identity, the stage's start state and the one desk, and sends and flips nothing unless all three
+pass: on 2026-11-05 the private cluster ran the admin profile, KubeArmor's and the egress guardrails applied by Argo
+CD, and a seed there would have failed and then had its guards-off strip them. The one desk is the probe's one-desk
+beat (#1159): the private bot reads HC-666 and reports its Joker through desk-relay on the room's desk,
+support.burritobot.co, so c3-attack's Joker shows on deployments.burritobot.co, labelled private, until the desk
+reset (`fleet.sh desk-reset`) clears the page before the room comes in.
 
 The session ids, the Datadog query for each and the room and presenter views are written to --out
 (tmp/stage-traces.json) and printed. Each seed's link is pinned to the seed's own window; the two live tabs are not. Datadog is read with the repo's read-only key (infra/datadog-fleet).
@@ -368,6 +371,7 @@ def seed_beats(stamp: str, page: pathlib.Path = KUBECON_PAGE) -> list[kp.Beat]:
     return [
         beat["identity"],
         beat["start-state"],
+        beat["one-desk"],
         kp.Beat("c1-attack", "2", "Challenge 1 attack: the CEO record leaks",
                 _seed("c1-attack", stamp, ask["c1-attack"], kp.judge_ceo_leaks), calls=1),
         # The four Kubernetes guardrails start off on the private cluster (#774), so Challenge 2's recipe read lands;
@@ -586,6 +590,15 @@ def report(rows: list[dict], verdicts: dict[str, tuple[bool, str]]) -> bool:
     return ok
 
 
+# What `seed` reads before it sends or flips anything: the cluster is the one named, it is at the stage's start state,
+# and its bot is on the one desk (#1159). The probe's own beats, read only.
+PREFLIGHT = (("identity", kp._identity), ("start-state", kp._start_state), ("one-desk", kp._desk))
+# The desk the seeds' ticket reads and deploy reports go to (#1145, #1159): c3-attack's and c3-fixed's
+# read_support_ticket of HC-666, and c3-attack's Joker, which lands on the room's deployments page labelled private.
+# verify/test_one_desk_tools.py holds it to the kubecon-private render and the room's desk host.
+SEED_DESK = kp.PUBLIC_DESK
+
+
 def cmd_seed(args) -> int:
     if not args.context:
         log.error("seed needs --context: it flips the private cluster's guards and never uses the current-context")
@@ -606,11 +619,12 @@ def cmd_seed(args) -> int:
             # left on) would fail the seeds, and the closing guards-off would then change a cluster this run never
             # armed. So nothing is sent and nothing is flipped.
             pre = kp.Probe(cluster, 0)
-            for key, step in (("identity", kp._identity), ("start-state", kp._start_state)):
+            for key, step in PREFLIGHT:
                 ok, note = step(pre)
                 if not ok:
                     log.error("%s  %s: %s", kp.FAIL, key, note)
-                    log.error("SEEDED RED: not at the stage's start state, so nothing was sent and nothing was flipped")
+                    log.error("SEEDED RED: not at the stage's start state or not on the one desk, so nothing was sent "
+                              "and nothing was flipped")
                     return 1
             probe = StageProbe(cluster, args.max_calls, settle=args.settle)
             results = probe.run(seed_beats(stamp), final=kp.GUARDS_OFF_BEAT)
@@ -630,7 +644,7 @@ def cmd_seed(args) -> int:
     found = report(rows, verdicts)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps({"host": args.host, "stamp": stamp, "seeded_at": started.isoformat(),
-                                    "site": site, "views": rows,
+                                    "desk": SEED_DESK, "site": site, "views": rows,
                                     "spans": {k: v[1] for k, v in verdicts.items()}, "beats": results},
                                    indent=2) + "\n")
     log.info("written: %s", args.out)

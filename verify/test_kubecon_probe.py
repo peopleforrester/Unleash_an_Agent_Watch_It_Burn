@@ -878,6 +878,25 @@ class Fake:
         self.witch, self.witches = "", []
         self.audit_out, self.log_reads = "", []
         self.gateway_out, self.gateway_reads = [], []
+        # The one desk (#1159): the private bot's TICKET_SITE_URL is desk-relay, which names the public desk and holds
+        # the desk-report-token. The community fake overrides these with its own desk's answers.
+        self.desk_url, self.desk_health = kp.DESK_RELAY_URL, {"ok": True, "desk": kp.PUBLIC_DESK, "token": True}
+        self.desk_env = {"cluster": "community", "remote": "private", "token": True}
+        self.desk_secret = True
+        self.desk_reads: list[list[str]] = []
+
+    def desk_answer(self, args) -> tuple[int, str] | None:
+        """The one desk's three pod reads, or None for any other kubectl call."""
+        args = list(args)
+        if args not in (kp.DESK_CHECK, kp.DESK_ENV_CHECK, kp.DESK_SECRET_CHECK):
+            return None
+        self.desk_reads.append(args)
+        if args == kp.DESK_CHECK:
+            return 0, json.dumps({"url": self.desk_url, "healthz": self.desk_health}) + "\n"
+        if args == kp.DESK_ENV_CHECK:
+            return 0, json.dumps(self.desk_env) + "\n"
+        return (0, f"secret/{kp.DESK_TOKEN_SECRET}\n") if self.desk_secret else (
+            1, f'Error from server (NotFound): secrets "{kp.DESK_TOKEN_SECRET}" not found\n')
 
     def get_json(self, path):
         if path == "/cost":
@@ -927,6 +946,9 @@ class Fake:
         self.rule = rule
 
     def kubectl_rc(self, *args, timeout=90, stdin=None):
+        desk = self.desk_answer(args)
+        if desk is not None:
+            return desk
         if "deploy/web-terminal" in args:
             state = "on" if args[-1].endswith("guardrails-on") else "off"
             self.log.append(f"guardrails {state}")
@@ -1028,7 +1050,7 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "gateway", "c5-off", "guardrails-on", "armed", "badges-lit", "c5-on",
+want = ["identity", "start-state", "badges", "gateway", "one-desk", "c5-off", "guardrails-on", "armed", "badges-lit", "c5-on",
         "c1", "c2", "c2-public", "internal-registry", "c3", "c6-lands", "guard-agency-on", "c6-forbidden",
         "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
         "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-paraphrase",
@@ -1309,6 +1331,8 @@ class Community(Fake):
     def __init__(self, *a, **kw) -> None:
         super().__init__(*a, **kw)
         self.kyverno = False
+        # The public bot reads its own cluster's desk, which is the one desk; its /healthz is the desk's own.
+        self.desk_url, self.desk_health = kp.IN_CLUSTER_DESK, {"ok": True}
 
     def identity_host(self):
         return self.host
@@ -1373,10 +1397,10 @@ check("the same cluster driven by its burritobot.co name passes every beat (#651
       all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
 check("community beats in order", [r["key"] for r in res]
-      == ["identity", "wide-open", "order", "ceo-leak", "ceo-friendly", "off-topic", "c1-open", "c2-open", "c3-open", "c6-lands",
+      == ["identity", "wide-open", "one-desk", "order", "ceo-leak", "ceo-friendly", "off-topic", "c1-open", "c2-open", "c3-open", "c6-lands",
           "cost", "feed"])
 check("community beats report segments 1 to 4",
-      [r["segment"] for r in res] == ["-", "1", "1", "2", "2", "2", "3", "3", "3", "4", "-", "1"],
+      [r["segment"] for r in res] == ["-", "1", "-", "1", "2", "2", "2", "3", "3", "3", "4", "-", "1"],
       str([r["segment"] for r in res]))
 check("community spends 7 model calls, the linked-list ask three times, and toggles nothing",
       f.calls == 7 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log))
@@ -2074,6 +2098,61 @@ with tempfile.TemporaryDirectory() as _t:
     check("the probe refuses to start on a page missing a beat it sends, naming the beat and the file",
           _run.returncode != 0 and "data-beat='C6'" in _run.stderr and str(_gone) in _run.stderr
           and "KUBECON PROBE" not in _run.stdout, (_run.stdout + _run.stderr)[-600:])
+
+print("== the one desk (#1159): both runs read it in the pods before any chat, with no model call ==")
+
+
+def _desk_run(fake) -> dict:
+    """One run's one-desk beat, the beats before it as they are; a FAIL there runs the rest as usual."""
+    beats = kp.COMMUNITY if fake.host in kp.COMMUNITY_HOSTS else kp.ADMIN
+    upto = [b for b in beats[:[b.key for b in beats].index("one-desk") + 1]]
+    return kp.Probe(fake, 20).run(upto)[-1]
+
+
+f = Fake()
+r = _desk_run(f)
+check("the admin run's one-desk beat passes on desk-relay, which names support.burritobot.co and holds the token",
+      r["verdict"] == kp.PASS and kp.PUBLIC_DESK in r["note"] and f.calls == 0, str(r))
+check("and reads only the bot's tool pod there: the private desk's own pod is not the one desk",
+      f.desk_reads == [kp.DESK_CHECK], str(f.desk_reads))
+for why, attr, val, word in (
+        ("its own desk", "desk_url", kp.IN_CLUSTER_DESK, "not desk-relay"),
+        ("a relay pointed elsewhere", "desk_health", {"ok": True, "desk": "https://support-burritobot-private.burritobot.co",
+                                                       "token": True}, "not the public desk"),
+        ("a relay with no token", "desk_health", {"ok": True, "desk": kp.PUBLIC_DESK, "token": False}, "desk-link")):
+    f = Fake()
+    setattr(f, attr, val)
+    r = _desk_run(f)
+    check(f"the admin run's one-desk beat fails on {why}, saying why", r["verdict"] == kp.FAIL and word in r["note"],
+          str(r))
+f = Community()
+f.host = "attackme.burritobot.co"
+r = _desk_run(f)
+check("the community run's one-desk beat passes on its own desk, which labels reports private and holds the token",
+      r["verdict"] == kp.PASS and "private" in r["note"] and f.calls == 0, str(r))
+check("reading the bot's pod, the desk's own settings and the Secret's name, never its data",
+      f.desk_reads == [kp.DESK_CHECK, kp.DESK_ENV_CHECK, kp.DESK_SECRET_CHECK]
+      and kp.DESK_SECRET_CHECK[-2:] == ["-o", "name"] and "DESK_REPORT_TOKEN', '').strip())" in kp.DESK_ENV_CHECK[-1]
+      and "bool(" in kp.DESK_ENV_CHECK[-1], str(f.desk_reads))
+for why, attr, val, word in (
+        ("a bot on desk-relay", "desk_url", kp.DESK_RELAY_URL, "this cluster's desk"),
+        ("a desk that takes no other cluster's reports", "desk_env", {"cluster": "", "remote": "", "token": False},
+         "not the public desk"),
+        ("no desk-report-token Secret", "desk_secret", False, "desk-link"),
+        ("a desk that started before its Secret", "desk_env", {"cluster": "community", "remote": "private",
+                                                               "token": False}, "restarts")):
+    f = Community()
+    f.host = "attackme.burritobot.co"
+    setattr(f, attr, val)
+    r = _desk_run(f)
+    check(f"the community run's one-desk beat fails on {why}, saying why",
+          r["verdict"] == kp.FAIL and word in r["note"], str(r))
+check("a check that prints kubectl notices after its JSON is still read",
+      kp.judge_admin_desk(0, json.dumps({"url": kp.DESK_RELAY_URL, "healthz": {"desk": kp.PUBLIC_DESK, "token": True}})
+                          + "\nWarning: a notice\n")[0])
+check("and one that printed no JSON fails naming what it printed",
+      kp.judge_admin_desk(1, "error: unable to upgrade connection") == (
+          False, "the bot's desk could not be read in its tool pod: 'error: unable to upgrade connection'"))
 
 print()
 if failures:
