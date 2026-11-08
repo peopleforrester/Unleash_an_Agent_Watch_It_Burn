@@ -41174,3 +41174,102 @@ the first, is its own issue.
 `14 checks ran (the offline suite and 13 tier tests) in 4m31s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The
 change is this entry alone, so the selector ran what reads decisions.md. The prose gate printed `prose gate: pass`.
 The live reads above changed nothing on either cluster.
+
+## 2026-11-09 · #1087 · question 1114: the clusters keep pulling the Docker Hub games anonymously, with no token · run 18854
+
+**The question.** Question 1114 asked whether the two KubeCon clusters should keep pulling Docker Hub games anonymously, or
+whether Michael should provide a fresh read-only Docker Hub token so they pull signed in. The question was put to him on
+#1087 with the recommendation to accept the risk, and this run only records the answer.
+
+**The answer.** Decided by Michael. Michael, 2026-11-08, recorded on #1087: "Yes you should pull from Docker Hub anonymously."
+The clusters keep pulling the Docker Hub game images anonymously, with no token; for room deploys this supersedes the #714
+no-Docker-Hub ruling. Michael said the same in the status session on 2026-11-08 ("So 1087. Yes you should pull from Docker
+Hub anonymously."), and the ruling on #1087 accepts the budget of 100 pulls an hour per NAT address, since #991's
+`IfNotPresent` and digest pins limit the exposure to each image's first pull per cluster. No re-confirmation is needed.
+
+**What it changes.** Nothing in the repo's code or config. Tron and Tetris stay on Docker Hub, pulled anonymously, as #991
+left them. No token is created, stored or placed on a cluster. #714's rule still holds for everything the platform runs and
+builds, so the platform's images stay off Docker Hub; the rule no longer holds for the images a room asks `deploy_app` for.
+#1087 is done when this run's report ends `done`; no issue is closed from this run.
+
+**Today's exposure, measured 2026-11-08 23:55Z from the hecaton host.**
+- The limit. An anonymous token for `ratelimitpreview/test` and a HEAD of its manifest answered `ratelimit-limit: 100;w=3600`
+  and `ratelimit-remaining: 96;w=3600`, from the source `2a0a:4cc0:2000:b49f::`, the host's own IPv6 address. That is the
+  same limit as on 2026-11-06 (run 17981) and 2026-11-07 (run 18295): 100 manifest pulls an hour. The reading is the host's
+  budget, not the NAT's. Reading the NAT's counter at 35.166.107.99 would need a pull from a cluster, and no run changes a
+  cluster to read one, so the NAT's remaining count is not read here. Docker's usage page (read 2026-11-07) says 100 anonymous
+  pulls per six hours; the header is what the registry enforces.
+- The pinned games. A HEAD of Tron (`docker.io/iamassif731/tron-lightcycle-game`, `sha256:610c7c0e…f22`) and of Tetris
+  (`docker.io/bsord/tetris`, `sha256:2ffffd2f…634`) each answered 200 anonymously. A HEAD does not count against the limit.
+- The nodes. One node per cluster, both Ready: watch-it-burn-community on a t3.2xlarge in us-west-2a
+  (`ip-10-0-28-179`), watch-it-burn-private on a t3.2xlarge in us-west-2b (`ip-10-0-90-97`).
+- The images the clusters run. `kubectl get pods -A`, init containers included, with each cluster's own context named.
+  watch-it-burn-community runs 51 distinct images: 13 from the account's ECR, 26 from ghcr.io, 4 from quay.io, 3 from
+  registry.datadoghq.com, 2 from reg.kyverno.io, and 1 each from public.ecr.aws, ecr-public.aws.com and cr.agentgateway.dev.
+  watch-it-burn-private runs 70 distinct images: 13 from ECR, 36 from ghcr.io, 9 from quay.io, 3 from registry.datadoghq.com,
+  3 from registry.istio.io, 2 from reg.kyverno.io, and 1 each from public.ecr.aws, ecr-public.aws.com, cr.agentgateway.dev and
+  registry.k8s.io. **None of them, on either cluster, is from Docker Hub.** The 2026-11-07 reading was 52 and 71 distinct images.
+- The first pulls Challenge 2's games spend. Two of the four games are on Docker Hub (Tron and Tetris). Each costs one pull the
+  first time its image lands on a node, and the nodes keep it after that. So each cluster spends 2 first pulls, 4 across both
+  clusters. 2048 (public.ecr.aws) and Infinite Mario (quay.io) spend none. No Docker Hub game runs on either cluster now, so both
+  pulls are still ahead.
+- The egress and the registry aids. `aws ec2 describe-nat-gateways` in us-west-2, filtered to `vpc-0607c27ee51fb233c`, lists
+  one available gateway, `nat-07ffd533da0fa727b` at 35.166.107.99, so every pull from either cluster and any standby shares
+  one address. `aws ecr describe-pull-through-cache-rules` lists none. `aws secretsmanager list-secrets` lists one secret,
+  `watch-it-burn/datadog`, so no Docker Hub credential is stored in the account. The peopleforrester account is on Docker's
+  Team plan and both tokens on disk are expired (decisions.md 2026-10-29 and 2026-10-31 · #664, not re-read today).
+
+**The ways past the limit, written down.** Way 1 is the one chosen.
+
+1. **Accept the risk as it stands (chosen).** Needs: nothing. Changes in this repo: nothing beyond this entry. Challenge 2's
+   lesson: unchanged. The room's image still comes from Docker Hub as written. With guardrails on, `deny-external-registries`
+   admits only `registry.burritobot.co`, so a Docker Hub image is refused at admission there, as it was before. Past the limit,
+   the next new game's pod sits in `ImagePullBackOff` with `toomanyrequests` and its row never starts, while running games
+   keep running. The fallback is to steer the guest to 2048 or Infinite Mario, which do not use Docker Hub.
+2. **A Docker Hub login on the nodes.** Needs: a read-only token of the Team account, which Michael creates from his Docker Hub
+   account and which the fleet script reads. Changes in this repo: `infra/terraform/aws/cluster/main.tf` gets back the
+   `dockerhub_auth_b64` value and its cloud-config part, which `e9a97dcc` (#714) removed, plus `infra/terraform/fleet/fleet.sh`
+   writes the token, and a test holds both. A node gets it only when it is built. The KubeCon nodes would get it when their
+   node group is replaced, which no dispatched run may do, or when someone writes `/etc/containerd/certs.d/docker.io/hosts.toml`
+   onto each live node by hand. Challenge 2's lesson: unchanged for the policies, since a Docker Hub image is still refused
+   under guardrails on. A credential then sits on each node, and the room's agent cannot read a node file.
+3. **An imagePullSecret on the agent ServiceAccount.** Needs: the same token as a `kubernetes.io/dockerconfigjson` Secret in the
+   agent namespace, named on the agent's ServiceAccount, or set by `deploy_app` on each room pod. Changes in this repo: a Secret
+   built from a Secrets Manager entry, a change to the ServiceAccount under `gitops/`, or `gitops/ai-layer/workshop-mcp-server.py`
+   setting `imagePullSecrets`, and a test. It takes effect on the next pod with no node change. Challenge 2's lesson: changed.
+   The Secret is a live Docker Hub credential in the namespace the agent works in, so a room that talks the agent into reading it
+   walks away with it. The lesson becomes a credential the room can take, which is not the untrusted-source lesson.
+4. **An ECR pull-through cache for Docker Hub.** Needs: a pull-through rule for `registry-1.docker.io` in us-west-2
+   (`aws ecr create-pull-through-cache-rule`), the Docker Hub credential in Secrets Manager under the `ecr-pullthroughcache/`
+   prefix, and either the room naming the cache path or `deploy_app` rewriting `docker.io` names to it. Changes in this repo: a
+   Terraform rule and secret under `infra/terraform/aws`, the rewrite that #991 removed if it is chosen, and tests. Challenge 2's
+   lesson: changed. `restrict-image-registries` admits any ECR account in any region, so a cache path passes that policy, and that
+   is the same kind of trusted route as the ghcr.io mirror this lesson rules out. `deny-external-registries` would still refuse it
+   under guardrails on, but the policy the room is taught about would not stop it. A containerd mirror for `docker.io` cannot carry
+   ECR's credential (2026-10-26 · #622).
+
+**Recommendation, as put to Michael.** Accept the risk. The measured exposure is two first pulls per cluster against a budget
+of 100 an hour, and hitting the budget needs a room to get about 100 different Docker Hub images out of a bot that deploys
+reluctantly. Ways 2 to 4 each add a credential or a rewrite that changes the lesson more than the risk does.
+
+**Checked.** The measurements above, read today. `policies/kyverno/restrict-image-registries.yaml` (the `allowedRegistries`
+list and the ECR rule, read for way 4) and `policies/kyverno-breakout/deny-external-registries.yaml` (only
+`registry.burritobot.co`, read for way 1 and way 4). The draft of run 18295 (`origin/agent/1087-18295`, ported here by
+cherry-pick): its measurement and its question were reread against today's reading and the policies, and held.
+
+**What differs from run 18295's draft.** The draft's entry above was written before the answer and records the question as
+put. This entry records Michael's answer, re-reads the measurement with today's date and the new node and image counts, and names,
+for each way past the limit, what it needs, what it changes in this repo and what it does to Challenge 2's lesson, which the draft
+did not. The draft's own suite paragraph stays as run 18295's record.
+
+**Not yet run on a cluster.** None. This change is this entry, so no cluster check is owed: the reads above changed nothing on
+either cluster.
+
+## 2026-11-09 · #1087 · question 1114 scope: the anonymous Docker Hub pulls are for the images a room asks deploy_app for, and platform images stay off Docker Hub · run 18854
+
+**The scope.** Scope, per Michael on 2026-11-08, on #1087: "the Docker Hub thing is just for when people do an attack, right? Not for
+what we're actually pulling." Decided by Michael. The anonymous Docker Hub pulls cover only the images a room asks `deploy_app` for
+during the attack, such as Tron and Tetris. Platform images stay off Docker Hub, and the #714 rule still holds for them.
+
+**Checked.** The pod images listed in the entry above, on both clusters today, include none from Docker Hub, so the platform's
+own pulls spend none of the 100 an hour. The 2026-11-08 check named in #1087 found the same thing.
