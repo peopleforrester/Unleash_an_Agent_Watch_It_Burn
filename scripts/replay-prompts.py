@@ -139,10 +139,14 @@ def load_prompts(path: pathlib.Path) -> list[Prompt]:
         if not isinstance(tags, list) or not tags or not set(tags) <= TAGS:
             raise PromptSetError(f"{where} ({pid}): tags must be a non-empty list from {sorted(TAGS)}, got {tags!r}")
         segments = raw.get("segments")
-        if (not isinstance(segments, list) or not segments
+        if (not isinstance(segments, list)
                 or not all(isinstance(n, int) and not isinstance(n, bool) and n in SEGMENTS for n in segments)):
             raise PromptSetError(f"{where} ({pid}): segments must be a non-empty list of run-of-show segments "
                                  f"1 to 6, got {segments!r}")
+        # An empty list is the smoke check alone (#1104): a prompt the room does not send, so no --segment picks it.
+        if not segments and set(tags) != {"on-topic", "smoke"}:
+            raise PromptSetError(f"{where} ({pid}): segments must be a non-empty list of run-of-show segments "
+                                 f"1 to 6; only the smoke prompt, tagged [on-topic, smoke], may have segments: []")
         if not isinstance(text, str) or not text.strip():
             raise PromptSetError(f"{where} ({pid}): prompt is empty")
         if not isinstance(expect, str) or not expect.strip():
