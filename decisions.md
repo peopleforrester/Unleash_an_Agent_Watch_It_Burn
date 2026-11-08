@@ -38832,4 +38832,4 @@ offline and render tests, not by a live read.
 
 **Tests (run 18737).** Prose alone (`decisions.md`, `PROGRESS.md`), so by CLAUDE.md's Dispatched runs point 6 the
 scoped `run-tests.sh` and the prose gate ran and `run-e2e-tools.sh` did not. Run 18711's full runs of both, on the code
-this checks, are in its entry above.
+this checks, are in its entry above. `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-tests.sh` ran 99 of 382 offline tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0 (log `/var/lib/hecaton/runs/18737/run-tests.log`). `scope_tests.py select tools` printed `running 0 of 86 tools tests`. The prose gate printed `prose gate: pass`. No dependency was added.
