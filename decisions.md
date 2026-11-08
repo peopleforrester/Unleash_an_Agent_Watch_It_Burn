@@ -38333,3 +38333,102 @@ stubs `cmd_desk_link` beside each `cmd_guardrails_link` stub and guards the new 
 `bash verify/run-e2e-tools.sh` at `9934666b` (log `/var/lib/hecaton/runs/18711/e2e-tools.log`) printed `376 tests ran`
 and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `87 checks ran (the offline suite and 86 tier tests) in 11m24s, 4 at a
 time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1116 · run 18664 · #1115's fetch call sites are inventoried and classed, and the cold baseline is measured
+
+**What.** The first child of #1115 (Michael, 2026-11-07: never download an artifact we already hold a pinned copy of).
+It runs after #1117 to #1123 had already landed the host artifact cache and moved the tools, charts, providers and
+Python and Node packages onto it, so the inventory describes today's tree and the cold baseline is that cache emptied.
+No earlier draft existed: `verify/prior-drafts.sh 1116 origin/staging` printed NONE, and run 18419 was restarted by the
+coordinator before it committed anything. Three files are new: `verify/fetch_inventory.py` (the scan and the check),
+`verify/fetch-inventory.yaml` (the inventory) and `verify/test_fetch_inventory.py` (the offline test).
+
+**The scan.** Every file `git ls-files --cached --others --exclude-standard` lists under `verify/`,
+`.github/workflows/` and `scripts/`, line by line, for thirteen command families: curl, wget, urlopen, the Helm verbs
+that read a repository, a Terraform init, the pip and uv installs and runs, the npm, npx, yarn and corepack fetches, a
+Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, the setup actions a
+workflow downloads a runtime with, and a get from the artifact cache (`artifact-cache.sh get`, `artifact_cache.get()`,
+`chart_fetch.pull()`). The last three are beyond the issue's list: without them the scan never sees
+`fetch-e2e-tools.sh`, which since #1118 fetches every E2E tool through the cache, or the setup actions in CI. On
+`63203854` the scan finds 708 lines in 202 files. The issue's 354 came from a narrower `git grep` on 2026-11-07's
+staging, before the cache children added their helpers and tests. The Docker and Podman pull family finds none.
+
+**The classes.** An entry names its file, a regular expression the line must match and the number of lines it
+claims, so a new call site always changes a count and fails. Each entry is one of four classes. `pinned` names the
+artifact kind, the file holding its pin and whether the fetch goes through the artifact cache today. `live` names
+what it reaches (a cluster, a lab endpoint, a registry, a SaaS API, an upstream index, GitHub or a public web page)
+and the target. Two classes cover what the scan finds that is not a network fetch: `loopback`, a fetch from a server
+on 127.0.0.1 or a repository on this host that the test made itself, and `none`, a line that names a command and runs
+none (a comment, a message, a regex, a stub or a shim). The inventory, the module and the test are left out of the
+scan, since each names every command it looks for, and the test names that exclusion.
+
+**Classification by kind, on `63203854`.**
+
+- Pinned, 46 sites in 31 files: tool 13 (6 through the artifact cache; the 7 others are the CI setup actions for
+  Python, uv and Node and the workflow's `uv venv --python 3.13`), Helm chart 9 (all 9 cached), Terraform provider 9
+  (all 9), Python package 5 (all 5), Node package 1 (cached), git commit 2 (`ensure-submodules.sh`, not cached),
+  browser 2 (Playwright's Chromium, through `playwright_browsers.py` and the Backstage e2e's yarn, not cached, #1120),
+  container image 2 (the Jokers' base image `test_joker_build_digest.py` builds on, not cached, #1122), release file 2
+  (the Gateway API bundle `test_gateway_api_crds_upstream.py` compares and the schema README's command, not cached),
+  and the artifact cache's own download 1.
+- Live, 95 sites in 53 files: cluster 38, lab endpoint 31, SaaS API 11 (Datadog), registry 6 (ghcr.io, and quay.io
+  and Docker Hub for the served-images test), upstream index 6 (PyPI and the chart indexes, read to write a lock or to
+  find newer versions), public web 2 (the doc links), GitHub 1 (the sister repo's shallow clone of a branch).
+- Loopback, 55 sites in 36 files. None, 512 sites in 130 files.
+
+`python3 verify/fetch_inventory.py summary` prints these counts. The scan is a line scan, as the issue's `git grep`
+was, so a download a library makes without a command on the line is not a call site: the two Hugging Face models the
+llm-guard tests load, and the apt packages `ci_chromium_libs.py` unpacks for CI's Chromium. The cold run below
+measures the first and leaves the second to the CI number.
+
+**The test.** `verify/test_fetch_inventory.py` (offline) runs the check on the repo, then on scratch repositories:
+a second call site in a listed file, a call site in an unlisted file and in an untracked one, a call site no entry
+matches, an entry with no class or a class that is not one of the four, a live entry with no target, a pinned entry
+with no `cached` or a wrong kind, an entry for a file with no call site, a zero count and a match that is not a regex.
+Each fails naming the file and line or the file and entry. It also holds that each family's pattern finds a sample
+line and that `fallback.curl.sh`, `curlimages/curl`, a `curl/8` user agent and the `CRANE` variable find none, and
+that a pinned site's pin, when it starts with a repo path, is in the repo. It printed "All fetch inventory checks
+passed." Its fixtures build each command name from pieces, and the inventory writes its install patterns with `\s`,
+so `test_package_cache.py`'s install scan, which reads every tracked file under `verify/`, finds none in them.
+`scope_tests.py write` put the test under `always` (it builds paths from the inventory at run time); the rest of what
+`write` produced was other tests' drift and is not in this change.
+
+**The cold baseline, tools tier (this host, netcup).** On the base `f6b637b4`, unscoped, with every cache pointed at
+an empty directory in this run's own directory: `WIB_ARTIFACT_CACHE`, `ARTIFACT_FETCH_LOG`, `XDG_CACHE_HOME`,
+`PLAYWRIGHT_BROWSERS_PATH`, `HF_HOME`, `UV_CACHE_DIR` and `COREPACK_HOME`. The worktree had no `verify/.tools` and its
+submodules were not yet cloned. `bash verify/run-e2e-tools.sh` printed `86 checks ran (the offline suite and 85 tier
+tests) in 11m14s, 4 at a time` (14:32:36Z to 14:43:51Z). For comparison, the same unscoped tier on a warm cache took
+10m06s (run 18569, #1123, 86 checks) and 8m49s (run 18439, #1118, 83 checks).
+
+- Through the artifact cache, from its fetch log: 128 downloads, 1516.7 MB. They are the 11 E2E tools (443.2 MB),
+  8 Terraform provider zips (599.1 MB), 20 chart tarballs (3.4 MB) and 89 Python wheels (471.0 MB). The log also
+  holds 7 fixture fetches from tests' own `.invalid` hosts (two of them deliberate mismatches), written there only
+  because the measurement set `ARTIFACT_FETCH_LOG` for the whole run; they are not counted.
+- Outside the cache, read from what landed in the empty directories: Playwright's Chromium 1248, its headless shell
+  and ffmpeg (3 downloads, 681 MB unpacked), the two Hugging Face models at their pinned revisions (1.43 GB on disk,
+  716 MB each), and the two submodules at their pinned commits (1.3 MB of git objects). Nothing logs these
+  downloads' bytes, so the sizes are what they take on disk.
+- Every tier test was green. The offline suite was red on one check of `test_package_cache.py`, "each fetch is a
+  fetch-log line". That is the measurement's own doing: with `ARTIFACT_FETCH_LOG` set for the whole run, the test's
+  scratch cache wrote its log line into the run's log instead of its own. Run alone without the variable, it printed
+  "All package cache checks passed." The log is `/var/lib/hecaton/runs/18664/e2e-tools-cold.log`, the fetch log
+  `/var/lib/hecaton/runs/18664/cold/fetch.log`.
+
+Run 18664 ran the whole tier once, against point 6's rule that no run does, because this issue's own work is that
+measurement: a scoped run would not be the tools tier's wall time. Its tests of the change below are scoped.
+
+**The cold baseline, CI e2e tools job: not measured.** The CI job's history was read with `gh api`: the e2e tools jobs
+of the 134 completed `verify-suites.yml` runs from 2026-11-07 03:16Z to 2026-11-08 14:11Z. None ran cold. In each, the
+11 tools were ready 5 s or less after the fetch began, from the workspace's kept `verify/.tools` before #1118 and from
+the runner's cache since. The unscoped jobs on record, all on tanjiro-wsl2 and all warm: job 128542868748 (staging
+`601dfeab`, 2026-11-07 22:33Z, before any cache child) printed 82 checks in 20m36s and took 20m44s; job 128605056156
+(#1118's branch, 2026-11-08 04:54Z) printed 84 checks in 18m09s and took 18m16s; job 128705814367 (staging `5985b8dc`,
+10:46Z, after #1123) printed 86 checks in 7m01s and took 7m10s, red on `test_gateway_api_crds_upstream.py` and
+`test_package_cache_e2e.py`. No CI log counts its downloads or their bytes. A cold CI job needs the runner cache on
+tanjiro-wsl2 emptied and a job started, and a run can do neither, so that measurement is a follow-up. Running the
+same `run-e2e-tools.sh` against the same locks, a cold CI job would fetch the 128 cached artifacts above plus
+Chromium, its libraries, the two models and the setup actions' runtimes. That list comes from the host run; no CI job measured it.
+
+**Live check: skipped.** The change touches only `verify/` files no cluster runs and decisions.md.
+
+**No new dependency.** The module and the test use the standard library and PyYAML, which the offline suite already
+needs.

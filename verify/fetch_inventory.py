@@ -10,7 +10,7 @@
 The scan reads every file `git ls-files --cached --others --exclude-standard` lists under the three directories, so a
 new file is seen before it is committed, and searches each line with the PATTERNS below: curl, wget, urlopen, the Helm
 verbs that read a repository, a Terraform init, the Python installs of pip and uv, the Node fetches of npm, yarn and
-corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone, and the setup actions a workflow downloads a
+corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, and the setup actions a workflow downloads a
 runtime with, and a get from the host artifact cache (#1117) or a chart pull through it, which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the line that
 names it, and a line that only names a command (a comment, a message, a regex, a stub) is found too.
 
@@ -62,7 +62,7 @@ PATTERNS = {
     "playwright-install": r"\bplaywright\W{1,4}install\b",
     "image-pull": r"\b(?:docker|podman)\W{1,4}pull\b",
     "crane": r"(?<![\w./$-])crane(?![\w./-])",
-    "git-clone": r"\bgit\b.*\bclone\b",
+    "git-clone": r"\bgit\b.*\bclone\b|\bgit\b.*\bsubmodule\W{1,4}update\b",
     "setup-action": r"uses:\s*(?:actions/setup-\w+|astral-sh/setup-uv)",
     "artifact-cache": r"artifact-cache\.sh\W{1,4}get\b|\$\{CACHE\}\W{1,4}get\b|\bartifact_cache\.get(?:_retrying)?\("
                       r"|\bchart_fetch\.pull\(",
@@ -77,7 +77,7 @@ CLASSES = {
     "none": ("why",),
 }
 PINNED_KINDS = ("tool", "terraform-provider", "helm-chart", "browser", "python-package", "node-package",
-                "container-image", "release-file", "cache-fill")
+                "container-image", "git-commit", "release-file", "cache-fill")
 LIVE_KINDS = ("cluster", "lab-endpoint", "registry", "saas-api", "upstream-index", "github", "public-web")
 
 
