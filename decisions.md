@@ -34345,3 +34345,10 @@ verify/test_datadog_sandbox_live.py`, with the run's session sourced:
 both (workshop-mcp reads its server from a ConfigMap that kustomize builds): `verify/test_datadog_sandbox_live.py` with the default
 60-minute lookback, an hour after the sync and after a room Joker is deployed, should show no `backstage`,
 `rootHttpRouter` or deploy_app image-name service in check 2. That is #1084's run.
+
+**Suite results, run 18497.** On `567144ff`, unscoped, `bash verify/run-e2e-tools.sh` printed `349 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `84 checks ran (the offline suite and 83 tier tests)
+in 8m48s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_lab_pipeline_collector.py`, which runs the
+pinned collector, was among them and passed. On `8f0a2d91`, `bash verify/run-tests.sh` printed `349 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+The logs are `/var/lib/hecaton/runs/18497/e2e-tools.log` and `run-tests.log`.
