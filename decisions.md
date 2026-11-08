@@ -35564,4 +35564,8 @@ left to another child of #629.
 **Not yet run on a cluster.** Nothing: both live tests ran from this branch, and they read the clusters and do not
 change them.
 
-No dependency was added.
+**Suite results, run 18568.** On `dae78e56`, `bash verify/run-e2e-tools.sh` (no `HECATON_BASE_SHA`, so everything ran)
+printed `360 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier
+tests) in 12m44s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Both new logic tests ran in the
+offline suite and passed. The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18568/e2e-tools.log`.
