@@ -33541,3 +33541,63 @@ is `bash verify/run-tests.sh`), then `30 checks ran (the offline suite and 29 ti
 TIER CHECKS GREEN` and `exit=0`. `verify/test_kubecon_sheet_attack_heads.py` and
 `verify/test_kubecon_prompt_sheet_e2e.py` were among them and passed. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18444/e2e-tools.log`.
+## 2026-11-08 · #1118 · run 18439 · The E2E tools and the pinned Helm charts come from the host artifact cache by their SHA-256
+
+**What changed.** `verify/fetch-e2e-tools.sh` and `verify/chart_fetch.py` now take every pinned download from the
+host artifact cache #1117 built (`verify/artifact_cache.py`, `verify/artifact-cache.sh`), keyed by SHA-256, outside
+every worktree. This folds in #1004, which asked for the same thing for the tools against hecaton's shared store
+(`HECATON_TOOLS_CACHE`, the first root the helper reads). No earlier draft of #1118 existed (`prior-drafts.sh` printed
+NONE).
+
+**The tools.** For each `e2e-tools.lock` line the fetch runs `artifact-cache.sh get <sha256> <url>` and extracts the
+binary into `verify/.tools/bin` from the file it prints. The archive kind is read off the URL, since the cached file is
+named by its sum alone. A failure is the helper's own line after the tool's name and version: a download that does not
+match, a fetch that failed, or a cached file whose sum no longer matches. That last one is not fetched again over the
+file, as #1117 decided; the tool's old binary is removed so a failed fetch leaves no binary behind, and the other tools
+still install. The old per-worktree `verify/.tools/dl` is removed on each run, so a CI workspace that keeps
+`verify/.tools` between jobs gives its 423 MB of downloads back. The cache root is resolved before any fetch, and one
+inside a worktree fails the fetch by name. `curl --retry 3` used to ride out a network blip, so the helper's CLI `get`
+now calls `get_retrying()`: an HTTP 408, 429 or 5xx, or a failure below HTTP (timeout, reset, refused, failed lookup),
+is asked again after 2, 5 and 10 s, each retry printed and logged; a 404 and a mismatch fail on the first attempt. The
+helper also gained `scratch_dir()`, the outside-a-worktree temp directory #1117's test had, so the chart and tier tests
+use the same rule.
+
+**The charts.** `verify/charts.lock` is new: one line per chart, `chart version sha256 repo`, 20 charts. Its sums are
+the digests each repository publishes, read by `python3 verify/charts_lock.py write` from an HTTP repository's
+`index.yaml` or an OCI registry's manifest (the chart layer, with the anonymous token its 401 asks for). kubearmor's
+index lists `v1.7.4` where the Application pins `1.7.4`; Helm reads `--version` as semver, so the writer takes the
+entry that differs by a leading `v` alone when there is no exact one. The pinned charts are every chart source of an
+Application in `gitops/bootstrap/apps/` and every `helm upgrade --install` in `infra/deploy-full-idp.sh` (argo-cd and
+aws-load-balancer-controller, which `test_datadog_log_services_render.py` renders). `chart_fetch.pull()` looks the
+chart up in the lock and fails at once, naming the chart, the version, the repository and the versions the lock does
+pin, when it is not there; it is never fetched unpinned. Then it asks the cache for that sum. A miss runs `helm pull`
+through a fetcher handed to `artifact_cache.get()`, into a staging directory beside the cache, with #1028's retry on a
+network error kept as it was; the cache checks the tarball's sum before the rename. `helm template` renders the cached
+file though it has no `.tgz` suffix (checked with the pinned Helm 4.2.1 on kubearmor-operator). `CHART_CACHE` and
+`verify/.tools/charts` are gone.
+
+**Live check, this run.** On this host, with an empty cache under the pool's `~/.cache/wib-artifacts`: the fetch made
+11 downloads (11 fetch-log lines, 446 MB with the charts below) and installed 11 tools. A second run from a fresh copy
+of the scripts, with no `.tools`, installed the 11 tools in 10.2 s and left the fetch log at 11 lines. `charts_lock.py
+check` with the pinned Helm pulled all 20 charts in 27 s, each matching its locked sum, and a second check served all
+20 in 0.09 s with no fetch-log line added.
+
+**Tests.** `test_e2e_tools_tier.py` now serves its fixture archives from a file server on 127.0.0.1 and gives each
+scratch checkout a cache root outside every worktree; `curl` became a tripwire stub, so a fetch that bypassed the cache
+fails there. New cases: a fresh worktree on the same cache makes no request (#1004's "cache used when it holds the
+sum"), a tampered cache file fails by name with both sums and no request, a 404 is asked once, a stale `.tools/dl` is
+removed, and a root inside a worktree fails before any download. `test_chart_fetch.py` uses fixture tarballs with
+fixed gzip and tar times, so their sums are known, and a lock of its own. New cases: a version or chart missing from the lock fails
+with no Helm call, a malformed lock line, a tampered cache file is never used or fetched over, a repository serving
+other bytes fails with both sums, four fetches at once make one Helm call, `charts.lock` is exactly the pinned charts
+and in the form the writer renders, and the five callers of `chart_fetch.pull` are all there are.
+`test_artifact_cache.py` gained the retry cases. In `verify/scope-map.yaml` the helper's two files join the `full`
+list beside `fetch-e2e-tools.sh`, since every fetch now runs through them, `test_chart_fetch.py` is added to `always`
+with the reason `scope_tests.py write` gave, and the entries that read `chart_fetch.py` gain `charts.lock` and
+`charts_lock.py`. The rest of what `write` produced was other tests' existing drift and is not in this change.
+
+**Read-only store.** `HECATON_TOOLS_CACHE` is not set on this host, so the cache is the per-user default. When
+hecaton#540 sets it to a read-only store, a miss there fails on the write, naming the directory, as #1117 decided; the
+store must then hold the lock's sums. No new dependency.
+
+**Not yet run on a cluster.** No cluster is involved.

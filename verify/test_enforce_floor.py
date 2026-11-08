@@ -47,7 +47,7 @@ def helm_render(app):
         extra = []
         for vf in helm.get("valueFiles", []):
             extra += ["-f", str(REPO / vf.replace("$values/", ""))]
-        # The pinned chart comes from verify/.tools/charts, fetched there once with a network error retried (#1028).
+        # The pinned chart comes from the host artifact cache by its charts.lock sum, pulled once on a miss (#1028, #1118).
         try:
             local = chart_fetch.pull("helm", repo, chart, ver)
         except chart_fetch.ChartFetchError as e:

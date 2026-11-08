@@ -1,0 +1,27 @@
+# ABOUTME: The upstream Helm charts the tier renders, each pinned by version and the SHA-256 of its tarball (#1118).
+# ABOUTME: chart_fetch.pull() serves a chart only by this sum, from the host artifact cache; written by charts_lock.py.
+#
+# One chart a line: chart, version, SHA-256 of the tarball `helm pull` saves, repository (an HTTP repository, or an
+# OCI registry path as the Application's repoURL names it). The sums are the digests the repository's index.yaml or
+# OCI manifest publishes. A chart pinned in gitops/bootstrap/apps/ or infra/deploy-full-idp.sh and missing here fails
+# test_chart_fetch.py and every render that pulls it; after a version bump run python3 verify/charts_lock.py write.
+argo-cd                       10.11.7  9f24a574ead97a1a68af447ab2678073c5e16a98ff9385aee766daf74361f04e  https://argoproj.github.io/argo-helm
+aws-load-balancer-controller  1.14.0   f0c07f52c9b7cbd6ec6e806c73f37438837924cf8f6349e01dea373d47b6b8dc  https://aws.github.io/eks-charts
+base                          1.30.4   d3532767f9f2042ad1a1f7ca060c2b734762c8d1bcd57fa0244482359146a5f1  https://istio-release.storage.googleapis.com/charts
+cert-manager                  v1.21.2  73a56e1728edd6c99f1f31082618c3259d279a76b7ebd3d4bdc5475c2442d34a  https://charts.jetstack.io
+cni                           1.30.4   056627788a56a3c6ca7c3e5ea85c77de448baa80495acc6798a2bb29f4765b3c  https://istio-release.storage.googleapis.com/charts
+datadog-operator              2.27.0   820b5df27235118cf704eb76560ea4a3ab587cf096e2ef230f428161fa605ae0  https://helm.datadoghq.com
+external-secrets              2.10.0   b96e948fff3674638b5d3f9e43886f3796e04739c4b4127929aed2ddac7d1418  https://charts.external-secrets.io
+falco                         9.2.1    726c1fe08c3fd3e2789d4072b34f9eee94ecccad734fee471cc7546124570c6c  https://falcosecurity.github.io/charts
+falco-talon                   0.4.2    bacb613aca2d2703d600b34370fb0d6ce628db74dd95515bfb7ffe921bcb9f8f  https://falcosecurity.github.io/charts
+falcosidekick                 0.14.0   e79abb3d39bee0dc017d5121c5f5cbaa82f4d00d7f1a7e12dcd01c69a3fb068f  https://falcosecurity.github.io/charts
+istiod                        1.30.4   66ad8344e2ef16745aa425dc6609570b42536ecdf1ab5ca04a90abf1bc577344  https://istio-release.storage.googleapis.com/charts
+kagent                        0.10.1   18ba29b588e04e75c3bcd4466126ddc2291abd773516e58b42a01c884d9c3545  ghcr.io/kagent-dev/kagent/helm
+kagent-crds                   0.10.1   85ec46a182eb45b329ece794a53aaefa95037cd1d49b806c3a312e73a9863163  ghcr.io/kagent-dev/kagent/helm
+kube-prometheus-stack         91.4.1   1bd5e7a88e758ed3ec22db0fe6e72b1352f3f0e7e5a93c79979f7edf361becdb  https://prometheus-community.github.io/helm-charts
+kubearmor-operator            1.7.4    0c2359eb115f8daad044135cd61ebac8affd88d8698bf6c20bcae954acb9a86e  https://kubearmor.github.io/charts
+kyverno                       3.9.1    7b7fe51a431b5b133b0ce7eb9dcb222b6a37fb967c163223cf480054ad14d752  https://kyverno.github.io/kyverno
+opentelemetry-collector       0.173.1  66897a36e9eeda71ce227236fb952c0501ce7d7f6387e0318ca15046950ee04d  https://open-telemetry.github.io/opentelemetry-helm-charts
+opentelemetry-operator        0.122.0  b66f9b937ab644e75c0042395dc85bfc041eb5c51d22719b944d3e2bf32b5e4b  https://open-telemetry.github.io/opentelemetry-helm-charts
+tempo                         3.0.0    4118a1ddc4c2a5e666e8f4d9a9648d5a067bccf901ce5ddb39bcbbb9c1670721  https://grafana-community.github.io/helm-charts
+ztunnel                       1.30.4   9a87cc23d5ccc5346e7a0ded03a1d9e8f36d578376c715a5a46daec4de2a6ed0  https://istio-release.storage.googleapis.com/charts
