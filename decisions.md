@@ -33834,3 +33834,9 @@ the `order` beat still on it: the before state. The check sent one chat turn and
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: open
 https://burritobot-private.burritobot.co/kubecon and its `?sheet=1`, and see segment 1 show only the linked-list ask
 and segment 6 its four.
+
+**Suite results, run 18464.** On `3289e0f6`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=0a272c8d`, so
+scoped to this change, printed `216 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which
+is `bash verify/run-tests.sh`), then `32 checks ran (the offline suite and 31 tier tests) in 6m45s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`. `verify/test_replay_prompts.py` was among them and passed. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18464/e2e-tools.log`.
