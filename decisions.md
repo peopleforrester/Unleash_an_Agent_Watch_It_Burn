@@ -33723,3 +33723,13 @@ leave out the repo's ignored `tmp/`. Listing Markdown through `git ls-files` ins
 the nine Markdown files in the two submodules that the walk reads.
 
 **Not yet run on a cluster.** Nothing: this changes only the cluster-free tier, its CI jobs and their tests.
+
+**Suite results, run 18438.** On `afa7bc0d`, with no `HECATON_BASE_SHA`, so unscoped, `bash verify/run-e2e-tools.sh`
+printed `343 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `84 checks ran (the offline suite and 83 tier
+tests) in 8m45s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Inside it, beside three other checks,
+`test_terraform_lock_init.py took 23s` and printed `artifact cache fetches this run: 0`;
+`test_terraform_mirror_lock.py`, `test_terraform_plugin_cache_lock.py` and `test_tf_plugin_cache.py` took 0, 1 and 1
+s, `test_lab_platform_operator_entry.py` 20 s and `test_control_plane_app_ports_module.py` 15 s. The run before it, on
+`af6ec83f`, failed on the `test_docs_current.py` race described above and nothing else. The prose gate printed
+`prose gate: pass`. No dependency was added: the helper uses only the standard library. The logs are
+`/var/lib/hecaton/runs/18438/e2e-tools-1.log` and `e2e-tools-2.log`.
