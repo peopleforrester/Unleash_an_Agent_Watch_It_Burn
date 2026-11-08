@@ -33314,3 +33314,64 @@ to this change, printed `92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`
 `NO GUARDRAIL SLIDE CITATION OF LIVE 29 TO 32 GREEN`), then `15 checks ran (the offline suite and 14 tier tests) in
 3m56s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
 added. The log is `/var/lib/hecaton/runs/18433/e2e-tools.log`.
+## 2026-11-08: #1101, the support desk looks a ticket up by its number and lists none (run 18436)
+
+**What changed.** Whitney asked on 2026-11-07 (#1077) for support.burritobot.co to work like an end-user help desk:
+file a ticket and get its number, look a ticket up by its number, browse nothing. `desk()` in
+`gitops/ai-layer/ticket_site.py` no longer renders "Open and recent tickets". In its place is a "Look up a ticket"
+form: one text field, `number`, and a "Look up" button, a plain `GET /lookup`. The new `/lookup` route resolves the
+value with the existing `find()`, so `hc666`, `HC 666` and `666` all reach HC-666, and answers 303 to `/<the ticket's
+own id>`, or a 404 HTML page reading "No ticket has that number." The redirect is built from the ticket's id in
+`TICKETS`, never from what was typed, so the route is no open redirect and carries no header injection. The editor
+with its Black text and White text buttons, and the `/me` and `/wall` links, are as they were.
+
+**Why a GET form and a route, not a script.** A form that submits with no script works on every phone, and a test
+drives it the way a browser does: read the form's action and field name out of the front page, request
+`action?number=HC-666`, follow the redirect. A script-only look-up would need a JavaScript runtime in the offline
+test. The field carries no example number, since a number such as HC-1234 could be a ticket a visitor filed.
+
+**"Exactly two things".** The issue says the front page offers exactly two things. The `/me` and `/wall` links stay:
+#1077 asks that both be checked so neither exposes another visitor's ticket, not that they be removed, and "don't
+change anything else on the desk" covers them. The page holds exactly two forms, which the new test checks.
+
+**The audit of the other GET routes.** `/me` shows only tickets whose `owner` is the visitor's own witch name, and
+their own Joker rows. `/wall` is a static page that polls `/wall.json`, whose rows carry a Deployment's name, who
+deployed it, its image, ok, a one-sentence refusal and a time; no ticket text. `/deployments.json` and the deployments
+host (`/`, `/mine`, `/deployments.json`) carry deployment rows only. The error answers are JSON (`not found`, `id is
+required`, `no ticket '<what was asked>'`) and the new look-up 404 page; none shows a ticket's text. None of them
+needed a change. The one page that shows a ticket a visitor did not file is that ticket's own page, reached by its
+number, which is what #1077 keeps. The "Joker" wording on `/me` and `/wall` is untouched.
+
+**What is unchanged.** `/ticket?id=` (the handler's lines are identical to `origin/staging`'s), `_ticket_json`,
+`find()`, `TICKETS` with HC-7731, HC-7702, HC-7688 and HC-666, the `/<id>` page, POST `/submit` and its "Your ticket
+is HC-NNNN" page, and `read_support_ticket` in `gitops/ai-layer/workshop-mcp-server.py`, which has no diff against
+`origin/staging`.
+
+**The tests.** `verify/test_support_desk_lookup.py` (new, offline) runs the real site on localhost. It parses the
+front page's forms (exactly two: the `/submit` form with its Black text, White text and Submit ticket buttons, and the
+look-up form), checks there is no `<article>`, no "HC-" followed by a digit, no sentence, subject or customer of any
+seeded ticket and none of HC-666's payload in the page, then submits the look-up form with HC-666 (303 to `/HC-666`,
+which renders HC-666's page with its white span), five other spellings, the other three seeded ids, and four numbers
+no ticket has (404 page, no Location). Visitor A files a ticket with a black and a white sentence; POST `/submit`
+shows its number, and `/ticket?id=` for it and for HC-666 return exactly the five fields. Visitor B then fetches `/`,
+`/me`, `/wall`, `/wall.json`, `/deployments.json` (with and without `witch=`), `/healthz`, three error pages and eight
+paths on the deployments host: none carries A's text, A's number or any seeded ticket's text. A's `/me` still lists
+A's ticket with its text. A filed ticket's `customer` is its author's witch name, which the wall shows by design when
+their Joker lands, so the test compares A's subject and text and leaves that name out. `verify/test_support_desk.py`'s check
+that read "Open and recent tickets" now checks the list is gone and the look-up form is there, and
+`verify/test_fake_ticket.py`'s "it lists every ticket by id except HC-7731" now checks the front page lists no ticket.
+The new test's `verify/scope-map.yaml` entry is the one line `scope_tests.py write` produced for it
+(`gitops/ai-layer/ticket_site.py`); the rest of what `write` produced was other tests' existing drift and is not in
+this change.
+
+**Live check, run 18436.** Read-only, before the change reaches the clusters: on both support.burritobot.co (the
+community cluster's desk) and support-burritobot-private.burritobot.co, `GET /` answered 200 with "Open and recent
+tickets" and HC-666, HC-7688 and HC-7702 in the source, `GET /lookup?number=HC-666` answered 404, and
+`/ticket?id=HC-666` returned the keys body, customer, id, status and subject. That is the shape the change keeps.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD rolls the fake-ticket ConfigMap: on both desks,
+`GET /` shows the look-up form and no `HC-` id, and `GET /lookup?number=HC-666` answers 303 to `/HC-666`
+(`verify/test_support_desk_live.py` reads the desks' hosts). #1077 also owes: a ticket filed on the desk is readable by
+number by both the admin bot and the public bot; a ticket an attendee writes in HC-666's style gets BurritoBot to
+deploy; HC-666 still lands; `guard-agency-on` and `guard-input-on` still stop both. The run-of-show's segment 4 is
+#1076's to rewrite.

@@ -168,10 +168,10 @@ def page(url: str) -> tuple[int, str, str]:
 
 code, ctype, html_page = page(f"{SITE}/")
 check("/ is an HTML page", code == 200 and ctype.startswith("text/html"), ctype)
-# Since the 2026-10-29 call the room's ticket is HC-666, whose injection is white on white, so the front page leaves
-# HC-7731 off: its plain-text instruction would give HC-666 away. HC-7731's own page still shows what the bot read.
-check("it lists every ticket by id except HC-7731",
-      all(t in html_page for t in site.TICKETS if t != "HC-7731") and "HC-7731" not in html_page)
+# Since #1101 the front page lists no ticket at all (it used to list all but HC-7731, whose plain-text instruction
+# would give HC-666 away): a ticket opens by its number. HC-7731's own page still shows what the bot read.
+check("it lists no ticket by id",
+      not any(t in html_page for t in site.TICKETS) and re.search(r"HC-\d", html_page) is None)
 _, _, page_7731 = page(f"{SITE}/HC-7731")
 check("HC-7731's own page shows its instruction, so the lab can see what the bot read",
       "IGNORE ALL PREVIOUS INSTRUCTIONS" in page_7731)

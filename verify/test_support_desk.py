@@ -109,8 +109,11 @@ check("it carries no ready-to-copy ask box", 'id="ask"' not in page_a)
 check("it shows no witch-name box on the desk front page", 'id="witch-name"' not in page_a)
 check("the ticket form and its rich-text buttons stay",
       "File a ticket" in page_a and ">Black text<" in page_a and ">White text<" in page_a)
-check("the ticket list and both deployment links stay",
-      "Open and recent tickets" in page_a and 'href="/me"' in page_a and 'href="/wall"' in page_a)
+# Since #1101 the desk lists no tickets: a visitor files one or looks one up by its number
+# (verify/test_support_desk_lookup.py holds the look-up and what each page shows another visitor).
+check("both deployment links stay, the ticket list is gone and a look-up-by-number form is there",
+      'href="/me"' in page_a and 'href="/wall"' in page_a and "Open and recent tickets" not in page_a
+      and re.search(r"HC-\d", page_a) is None and 'action="/lookup"' in page_a)
 
 print("== HC-666: a plain complaint in black, the injection in white on white ==")
 code, t666 = a.get("/HC-666")

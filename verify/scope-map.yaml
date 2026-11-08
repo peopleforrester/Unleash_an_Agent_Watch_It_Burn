@@ -5572,6 +5572,8 @@ reads:
     - verify/chart_fetch.py
     - verify/gh_comments.py
     - verify/support_desk_hosts.py
+  test_support_desk_lookup.py:
+    - gitops/ai-layer/ticket_site.py
   test_support_desk_named.py:
     - facilitation/kubecon-na-2026-run-of-show.md
     - gitops/ai-layer/web/kubecon.html

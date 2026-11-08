@@ -396,14 +396,19 @@ def render(tickets: list[dict], title: str) -> str:
     return _shell(title, f'<p class="meta">{html.escape(title)}</p>' + "".join(_article(t) for t in tickets))
 
 
+LOOKUP_PATH = "/lookup"
+LOOKUP_FIELD = "number"
+
+
 def desk() -> str:
     # The desk no longer shows the HC-666 walkthrough (the "Ask BurritoBot about ticket HC-666" heading, the
     # "Copy this into the chat" line, the ready-to-copy prompt and its Copy button) or the witch-name box (#764):
-    # the presenters introduce Challenge 3 themselves, and the chat page assigns the witch name now (#762). The
-    # ticket form, the ticket list and the deployment links stay, so a visitor can still file their own injection.
-    # HC-7731's injection is plain text, so listing it would give away HC-666's hidden paragraph; the lab and the
-    # ticket tool still read it by id.
-    fixed = "".join(_article(TICKETS[k]) for k in FIXED_TICKETS if k != C6_TICKET_ID)
+    # the presenters introduce Challenge 3 themselves, and the chat page assigns the witch name now (#762).
+    # Since #1101 (Whitney, 2026-11-07, #1077) it works like an end-user help desk: file a ticket and get its number,
+    # or look one up by its number, and nobody browses tickets. The ticket list is gone, so HC-666's white-text
+    # paragraph is not in this page's source; every seeded ticket still opens at /<id> and through /ticket?id=.
+    # The look-up form is a plain GET to /lookup, so it works with no script and a test can drive it as a browser
+    # would. Its field has no example number: one would name a ticket a visitor may have been given.
     return _shell("Support desk", f"""
 <p><a href="/me">Your tickets and deployments</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>
 <h2>File a ticket</h2>
@@ -413,7 +418,18 @@ def desk() -> str:
 <button type="button" onclick="document.execCommand('foreColor',false,'#ffffff')">White text</button></div>
 <div id="ed" class="ed" contenteditable="true"></div><input type="hidden" name="body">
 <button type="submit">Submit ticket</button></form>
-<h2>Open and recent tickets</h2>{fixed}""")
+<h2>Look up a ticket</h2>
+<form id="lookup" method="get" action="{LOOKUP_PATH}">
+<label for="number">Ticket number</label> <input id="number" name="{LOOKUP_FIELD}" required maxlength="40"
+autocomplete="off" autocapitalize="characters" spellcheck="false">
+<button type="submit">Look up</button></form>""")
+
+
+def lookup_location(query: str) -> str | None:
+    """Where the look-up form sends a visitor: the one-ticket page of the ticket the number names, by its own id, so
+    the redirect never carries what the visitor typed; None when no ticket has that number."""
+    one = find(query.strip().upper()[:40]) if query.strip() else None
+    return f"/{one['id']}" if one else None
 
 
 def me_page(name: str) -> str:
@@ -526,6 +542,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, {"error": f"no ticket {tid!r}"})
                 return
             self._send(200, self._ticket_json(ticket))
+        elif url.path == LOOKUP_PATH:
+            # The desk's look-up form (#1101): straight on to that ticket's own page, or a page that says there is none.
+            where = lookup_location((urllib.parse.parse_qs(url.query).get(LOOKUP_FIELD) or [""])[0])
+            if where is None:
+                self._page(_shell("No such ticket", '<p>No ticket has that number.</p><p><a href="/">Back to the desk'
+                                  "</a></p>"), 404)
+                return
+            self.send_response(303)
+            self.send_header("Location", where)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
         else:
             one = find(urllib.parse.unquote(url.path.strip("/")).upper()[:40])
             if one is None:
