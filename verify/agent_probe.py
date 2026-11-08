@@ -14,7 +14,7 @@ run-of-show uses.
 Guard toggles need cluster access, so pass --context to let the harness flip them; without it the
 harness only probes whatever state the cluster is already in.
 
-    uv run --with nothing python verify/agent_probe.py michael-round3.agenticburn.com \\
+    python3 verify/agent_probe.py michael-round3.agenticburn.com \\
         --context arn:aws:eks:... --profile accen-dev
 
 THIS SPENDS REAL MONEY. Every probe is a Bedrock call. --max-calls is a hard ceiling (default 20) and

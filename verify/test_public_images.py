@@ -381,6 +381,8 @@ check("tron shows, deployed by Edgar the Kelpie", wait_for(lambda: bool(mine()))
 row = (mine() or [{}])[0]
 check("the row carries the image it ran, the Tron game, and its short name", row.get("image") == GAMES["Tron"]
       and row.get("app") == "tron-lightcycle-game", str(row))
+check("and the kind deploy_app created, which a cluster read of that kind is checked against (#1049)",
+      row.get("kind") == "Deployment" and row.get("removed_at") == "", str(row))
 check("the desk's wall now records the image too", any(r.get("image") == GAMES["Tron"]
                                                         for r in json.loads(get("/wall.json")[1])))
 check("?witch=<slug> filters to that visitor", wait_for(lambda: rows(f"?witch={EDGAR_SLUG}") != [])

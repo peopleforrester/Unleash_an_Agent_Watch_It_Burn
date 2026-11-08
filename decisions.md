@@ -34595,3 +34595,329 @@ lines before the run (the three zips and three Packages indexes the two lock wri
 made no network fetch of a browser or a library package. The 39 other lines it added are this pool's first fetch of
 the E2E tools and the pinned charts, whose cache was empty, which #1118 covers. The prose gate printed `prose gate:
 pass`. The log is `/var/lib/hecaton/runs/18529/e2e-tools-1.log`.
+## 2026-11-08 · #1065 · runs 18427 and 18520 · Segment 3's close matches the 2026-11-07 deck: the criteria are met by #1095, #1096, #1097, #1111 and #1112
+
+#1065 asked that the run-of-show and `/kubecon` follow the 2026-11-07 deck (rounds-agenticburn#77). Its work was split
+across five issues, all on staging at base `fc5a25dc`, so these runs change no content and record how each criterion is
+met, read from the files at the base rather than from the earlier entries. Run 18427 did the reading and ended without a
+report: its session's permission mode refused every edit, write and test command. Run 18520 records it here and runs
+the suites.
+
+- **Step 5** (`facilitation/kubecon-na-2026-run-of-show.md`, "One switch, depending on #774 (slide 28), then the room's
+  retry (slide 29)"): quotes slide 28 as `Let's turn on Kubernetes guardrails.`, says the line opens the admin terminal
+  at `https://burritobot-private.burritobot.co/lab` and the presenter clicks it and types `guardrails-on`, and puts the
+  retry on slide 29, "Try your attacks again.", with its note to reset the bot and use saved prompts. What it said about
+  `guardrails-on`, both registry policies, the Jokers (#775) and #990's cleanup is kept. #1095.
+- **Step 6** ("One set per guardrail (slides 30 to 42)"): RBAC 30 to 33, Kyverno 34 to 36 as "an admission policy",
+  KubeArmor 37 to 39 as "runtime security", NetworkPolicy 40 to 42, each recalling its attack, then "This attack was
+  prevented with" its guardrail, then its YAML. `git show 85803838` shows every fallback command (`c2-villain-image`,
+  `c3-secret-grep`, `c1-exfil-s3`), the `c1-fixed` and `c2-fixed` views and the Falco caution carried over word for word
+  into their sets. #1095, tested by #1111 (`verify/test_instructor_brief.py`).
+- **The segments table's row 3 and the paragraph under it** name slide 28's text, slide 29's retry and one set per
+  guardrail on slides 30 to 42. #1095, tested by #1112 (`verify/test_ros_segments_table_seg3.py`).
+- **`kubecon.html`**: segment 3's story and the switch beat, whose heading opens on slide 28's words
+  (`Let's turn on Kubernetes guardrails`), match the run-of-show. `git show db09ce77` changes only the story paragraph and that
+  beat's heading, who line, marker and notes; no `<div class="prompt">` line changed. #1096.
+- **Slide numbers**: #1097 swept `facilitation/`, `gitops/ai-layer/web/`, `challenges/` and `verify/` and found no
+  citation of live 29 to 32 as single guardrail slides and none of live 33 or later. Run 18427's grep for "slide" or
+  "slides" followed by 29 to 59, or a `#/` hash from 28 up, over those directories and `docs/` found only the new
+  numbering (28, 29, 30 to 42 and the slides inside each set).
+- **PROGRESS.md**: the `- (2026-11-08) #1065:` entry, added and pinned by #1097 (`verify/test_progress_entries.py`).
+
+**Not yet run on a cluster.** The page itself: look at `/kubecon` and its sheet after Argo CD syncs staging to the
+clusters, for segment 3's story and the switch beat as written here. These runs deploy nothing.
+## 2026-11-08: The deployments page marks a removed row and keeps it, from a cluster read the desk is sent (#1049, run 18496)
+
+**The choice: mark, not a plain history.** Since #990 the DeletingPolicy remove-untrusted-room-workloads deletes each
+room workload from outside registry.burritobot.co within a minute of guardrails-on arming Kyverno, and the
+deployments page (#773) went on listing it as deployed. #1022 asked whether the page should mark such a row or stay a
+record of the room's asks. It marks it, and keeps it. The reason is what the room is shown: the page is on the
+projector while guardrails-on runs, and the point of that beat is that the platform took the app away. A page that
+still reads "deployed" says the opposite of what happened, while a page that drops the row hides that anything was
+deployed at all. A greyed "<witch> deployed <app> at <time>, removed at <time>" keeps the ask and shows the guardrail
+working, on the same line. A plain history would need the run-of-show to explain the gap out loud each time, which is
+what #1022 was filed against.
+
+**What the desk does.** `gitops/ai-layer/ticket_site.py`:
+- each landing row records `kind`, the kind deploy_app created, next to its name and `ts`.
+  `gitops/ai-layer/workshop-mcp-server.py`'s `_report` now sends it to POST /landed. A row with no kind, as from a
+  workshop-mcp of before this change, is covered by no read and is never marked;
+- POST /cluster-read takes one report, `{"taken_at": <epoch seconds>, "ok": <bool>, "kinds": {"<Kind>": [names]}}`.
+  The kinds it covers are exactly the keys of `kinds`, so a reader that cannot list a kind leaves it out and no row of
+  that kind is touched. A malformed report (no `ok`, no numeric `taken_at`, names not a list of strings, a successful
+  read covering no kind, a body that is not JSON) is a 400 and changes nothing. A report may be up to 512 KiB, since
+  a read lists every name of a kind; a ticket's limit stays as it was;
+- a row is marked (`removed_at`, the read's own time as HH:MM:SS) only when the report succeeded, covers the row's
+  kind, was taken strictly after the row's `ts`, and does not list the row's name (compared at 63 characters, as the
+  row keeps it). A failed report, an earlier one, or one for another kind changes nothing. A refusal is never marked.
+  A marked row is never unmarked, and the same name landing again is a new, unmarked row beside it. No row is dropped;
+- `deployments()` and /deployments.json carry `kind` and `removed_at` (empty until marked), the page's script appends
+  ", removed at <time>" and gives the line the class `removed`, which the page's style greys (text and witch name in
+  `#9b93a8`), and the visitor's /me page says "removed at <time>" on that deploy.
+
+**What stays.** The desk still holds no token and calls no cluster API: the fake-ticket Deployment keeps
+`automountServiceAccountToken: false`, and the read comes to it. `gitops/ai-layer/console.conf` refuses /cluster-read
+from outside on the support desk's server, as it does /landed, and the deployments host answers no POST. Inside the
+agent namespace any pod can reach the desk (agent-allow-intra-namespace), so a room workload could post a false
+report, as it could already post a false landing; the worst it can do is grey a line on a page, and the desk takes
+nothing else from a report. The reader that posts reports, under a ServiceAccount that holds a token and on a loop of
+about 30 s, is #1050's work; the run-of-show line and the live test are #1051's.
+
+**The tests.** `verify/test_desk_removed_rows.py` (new, offline) drives the real desk over HTTP: a failed report, one
+taken before the row's `ts` (and one at it), one covering only other kinds, and one listing the name each leave the row
+unmarked, and a successful later covering report that omits the name marks it with the read's time; a removed row
+stays removed under a later listing read, a relanded name is a new unmarked row, rows with no kind and refusals are
+never marked, malformed reports are 400s, and every row is kept. Mutating out each of the three guards (success, after
+`ts`, covered kind) fails it. It also holds the page's script and style, the console's deny, the deployments host's
+404, `automountServiceAccountToken: false` with no projected token, and that `ticket_site.py` imports no network or
+Kubernetes client and names no API path or token file. `verify/test_public_images.py` holds that the real deploy_app's
+row carries `kind: Deployment`. The tools-tier `verify/test_deployments_witch_line_e2e.py` now posts a read that omits
+the probe's Deployment and runs the page's own script in node: that line reads
+`Someone deployed redis at <t>, removed at <t>` with class `removed`, and the others are unchanged. `verify/test_deploy_app_manifest_shapes.py`
+and `verify/test_deploy_app_reapply_422.py` stub `_report` with its parameters, so their stubs now take `kind` too. Its scope-map
+entry is added for the new test only; `python3 verify/scope_tests.py write` also proposed entries for other runs'
+tests, which are left out of this change.
+
+**Live check, run 18496.** This touches `gitops/`, so it was checked read-only against what the clusters run now, the
+before state. On both watch-it-burn-community and watch-it-burn-private, `kubectl --context <c> -n agent get deploy
+fake-ticket` showed `automountServiceAccountToken` false and one ready replica, and Argo CD's `ai-layer` read `Synced
+Healthy` (private at `fad187ce`, this run's base). `GET https://deployments.burritobot.co/deployments.json` answered
+200 with rows carrying no `kind` and no `removed_at`. From outside, `POST https://support.burritobot.co/landed`
+answered 403 (the console's deny) and `POST https://support.burritobot.co/cluster-read` answered 404 (passed to the
+desk, which has no such path yet). Nothing changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: `POST
+https://support.burritobot.co/cluster-read` answers 403 from outside; a new deploy's row on /deployments.json carries
+`kind` and an empty `removed_at`; and a report posted in-cluster to `http://fake-ticket.agent.svc.cluster.local:8080/cluster-read`
+greys the row of a Deployment it omits. The end-to-end check with #1050's reader is #1051's live test.
+
+**Suite results, run 18496.** On `f8fa66fc`, `bash verify/run-tests.sh` unscoped printed `350 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`. `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=fad187ce` printed `237 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the scoped offline suite, then `36 checks ran (the offline suite
+and 35 tier tests) in 11m20s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; `verify/test_desk_removed_rows.py`,
+`verify/test_public_images.py` and `verify/test_deployments_witch_line_e2e.py` were among them and passed. The first
+pass of the change failed `verify/test_deploy_app_manifest_shapes.py` and `verify/test_deploy_app_reapply_422.py`,
+whose `_report` stubs did not take `kind`; they were fixed in `f8fa66fc`. One earlier E2E pass, run at the same time
+as a second offline run in the same worktree, failed `verify/test_ops_view.py` on "the hosts table it passes is
+fleet.sh hosts": both runs wrote `fleet.sh ops`'s one `${LOG_DIR}/ops-hosts.tsv`. Alone it passed three times out of
+three and in both full runs, so the two runs raced on that file. No dependency was added. The logs are
+`/var/lib/hecaton/runs/18496/run-tests-2.log` and `/var/lib/hecaton/runs/18496/e2e-tools-3.log`.
+## 2026-11-08 · #647 · run 18508 · The post-talk purge is a script a run can run, tried on the scrub check's own spans; the scrub's live checks pass again on the changed collector
+
+Michael on #647, 2026-11-08: "Do all of it." `verify/prior-drafts.sh 647 origin/staging` printed NONE: every earlier
+draft (runs 10438, 12512, 15814, 17362) is on staging. Two parts of the issue were done and one was owed after the talk.
+This run checked the two again and made the third something a run can do on the day.
+
+- **Why the live checks ran again.** Since run 17362's check (2026-11-05), four commits changed the collector the scrub
+  lives in (`ea709dbe` and `267263cb` for #784 and #876, `3edae619` for #894, `a9e7798f` for #903). On
+  watch-it-burn-community (`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-community`, ACTIVE),
+  `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` printed 22 PASS and exit
+  0: sent trace `3ea09849ca3d5cde455d9f14c4428c59`, "APM: the scan read every span of the last 168h (68194 read)",
+  "Agent Observability (ml_app:burritobot): the scan read every span of the last 168h (12738 read)", no raw match in
+  either. `python3 verify/test_public_datadog_button_live.py` printed 11 PASS: both public hosts hide the Datadog button
+  and the private bot shows it. Nothing on the cluster changed (a port-forward and ConfigMap reads).
+- **Why the 2026-10-30 entry's "no purge script" no longer holds.** It said no run had a key to Whitney's org that could
+  delete, so a script could not be tried before its one use. Since 2026-11-05 `watch-it-burn/datadog` also holds a
+  `write-app-key`. Read with a GET to `/api/v2/current_user/application_keys`, it is Michael's `wib-fleet-monitors`
+  key, created 2026-11-03, unscoped, in the org whose public_id is the uuid in the secret's `org` field. With the read
+  pair, `POST /api/v2/llm-obs/deletion/data/llmobs` answers 403; with the write key, an empty body answers 400 and a
+  body with no query answers "query parameter is required and must contain @trace_id filter". The endpoint is no longer
+  in Datadog's published spec (in datadog-api-client-python 2.59.0 of 2026-08-12, gone from 2.60.0 of 2026-09-02 on,
+  and its docs page answers 404), but the route answers and works, as below. #890's rule that `dd_traces.py` never sends
+  the write key stands: that reader is a separate script and still sends only the read pair.
+- **The deletions tried, on fake data only.** The scrub check's three stored spans (ml_app `wib-pii-scrub-check`, fake
+  attendee text, from 2026-11-05 and this morning) were deleted by their Agent Observability trace ids, each request
+  with a window of one minute either side of the span. Datadog files that copy under its own `trace_id`, not the APM id.
+  Request `32d9ce0c-e6ca-4bb2-b2fc-452e5f5e16c5` named `431d1b11b1e85a4db4b5c70adf25285e`; the span was gone within 3
+  minutes and its window still held its other 42 spans. Request `eb49f439-cfaa-4a80-bd66-4ebd19ca45c4` named
+  `badc8af176b45e9f800ef488680624b6` OR an id that does not exist; its window went from 19 spans to 18. Request
+  `65236e86-b396-4130-ba54-2c7b7254644e` named `8215704de3cf5798a9880b3c0fcfa4f6`; its window went from 1 to 0. So a
+  request deletes only the traces it names, and the OR form works.
+- **The script.** `verify/dd_purge_public.py` lists every Agent Observability span under
+  `k8s.cluster.name:burritobot-public` in the window, of any ml_app, so the check's spans are in it, with the read pair.
+  It checks first that the key reaches the org the secret names, by public_id. A dry run prints what would go. With
+  `--apply` it checks the write key's org too and sends one request per 50 trace ids in start order, each naming its
+  ids as `@trace_id:(a OR b ...)` with the window of its spans padded by a minute; nothing is asked by tag or wildcard.
+  A 429 or 412 is waited out and retried, and any other refusal stops it. `--verify` exits 1 while any span is left.
+  `--service` narrows it to one service. It also prints the APM span count, because APM has no delete API: the data
+  deletion API takes `logs` only.
+- **The script, tried.** One new fake span (APM trace `3eb139e5251d645572941010f773db70`) went into the community
+  collector, then `python3 verify/dd_purge_public.py --profile accen-dev --from 2026-11-08 --service
+  wib-pii-scrub-check` listed 1 span in 1 trace, `--apply` sent request `f4a380b8-9d9c-4a7e-a0dd-91cbdffaf687`, and
+  `--verify` still exited 1 sixteen minutes later. That request went out 4 minutes after the span arrived and missed it.
+  A second `--apply` (request `0e6ff691-0ffe-4b99-98eb-db4f4acef293`) deleted it, and `--verify` printed "Purged: no
+  Agent Observability span is left for the cluster in the window." and exit 0 within 2 minutes. The run-of-show's step
+  says to run `--verify` after `--apply` and `--apply` again while it exits 1.
+- **What the purge will cover.** A dry run with `--from 2026-10-28`, the first build day, listed 20,888 Agent
+  Observability spans in 2,493 traces (50 requests) and counted 80,171 APM spans under
+  `kube_cluster_name:burritobot-public`. The APM spans, the four fake spans' APM copies among them, stay for retention
+  or Datadog support, as the step already said.
+
+**Tests.** `verify/test_dd_purge_public.py` (offline, 39 checks) runs the script against a fake org: the dry run sends no
+deletion and never the write key, listing has no ml_app filter, batches and windows, the OR query, the write key sent
+only to the deletion and its org check, both org guards, no write key, no read pair, 429 and 412 retried, other
+refusals stopping it, an accepted request with no id, a trace id no query can name, `--verify`, `--service`, and the
+time parsing. Six mutations of the script (deleting with the read pair, no org guard, a wildcard query, no retry, an
+ml_app filter that drops the check's spans, a window that misses the first span) each failed it with 2 or 3 FAIL lines.
+`verify/test_collector_pii_scrub.py` now also checks that the run-of-show's purge step names the script, `--apply`,
+`--verify` and `wib-pii-scrub-check`, and that the script deletes through the endpoint the step names. Both entries are
+in `verify/scope-map.yaml`. No dependency was added.
+
+**Not yet run.** The purge itself, on or after 2026-11-13, after the talk on 2026-11-12:
+`python3 verify/dd_purge_public.py --profile accen-dev --from 2026-10-28 --apply`, then `--verify` until it exits 0,
+then a comment on #647 with what went and the APM count left to retention.
+
+**The suites (run 18508, at `f826394f`).** `bash verify/run-e2e-tools.sh` ran the offline suite, which printed `351 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` with `verify/test_dd_purge_public.py` among them, then `84 checks ran
+(the offline suite and 83 tier tests) in 13m44s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. The log is `/var/lib/hecaton/runs/18508/work/e2e-tools.log`.
+
+## 2026-11-08 · #1121 · run 18530 · Pinned Python packages come from the host artifact cache by SHA-256, installed offline with --require-hashes
+
+**What.** Part of #1115, after #1117 (the cache), #1118 (tools and charts) and #1119 (Terraform providers). No
+earlier draft existed (`verify/prior-drafts.sh 1121 origin/staging` printed NONE, and the issue had no comments).
+`verify/package_cache.py` is new, with `verify/python.lock`. Every pinned Python install in verify/, scripts/ and the
+CI jobs now goes through it, and the one Node install takes its caches from it.
+
+**The lock.** `python.lock` holds five environments, each pinning every package it installs, dependencies included,
+as one wheel per package by file name, SHA-256 and URL: `pyyaml` (PyYAML 6.0.3, Python 3.13, the CI jobs' Python),
+`playwright` (1.64.1, Python 3.13), `segno` (1.6.6, Python 3.13), `mcp` (mcp 1.29.1 and PyYAML 6.0.2 on Python 3.12,
+the workshop-mcp image's pins on its Python) and `llm-guard` (torch 2.14.0+cpu and llm-guard[onnxruntime] 0.3.16 on
+Python 3.12, with the PyTorch CPU index). That is 135 wheels. `package_cache.py write` makes it: `uv pip compile
+--format pylock.toml` for the environment's Python on `x86_64-manylinux_2_28`, and of the wheels uv lists for that
+platform, the one that Python prefers (`best_wheel()`, packaging's tag order with glibc capped at 2.28 and bare
+`linux_x86_64` left out). No environment needs a source build. The mcp tests used to run on whatever Python uv picked,
+and now run on the image's 3.12; the mcp tests that pinned only mcp now get PyYAML 6.0.2 beside it as well.
+
+**The install.** `wheelhouse(env)` asks `artifact_cache.get_retrying()` for each wheel by its sum. A hit is hashed again
+and served with no network access, a miss is fetched once from the locked URL, and a cached wheel whose bytes changed
+fails, naming the wheel and both sums, and is not fetched again (#1117's rule). The wheels are linked by file name
+into `<root>/packages/wheels/<env>-<digest>/` beside a `requirements.txt` of `name==version --hash=sha256:<sum>`
+lines. uv then installs with `--offline --no-index --no-build --find-links <wheelhouse> --require-hashes`, and pip
+with `--no-index --only-binary=:all: --require-hashes`. Both hash each wheel again before they unpack it: with the
+artifact cache's check bypassed, uv 0.13.0 refused other bytes under the pinned name with "Hash mismatch", with its
+own cache warm too. `environment(env)` builds a venv at `<root>/packages/envs/<env>-<digest>/` (the digest covers the
+lock and the interpreter uv finds) under an flock, once, and every later call fills the wheelhouse again before it
+returns, so every call re-checks the cached wheels. `UV_CACHE_DIR` and `PIP_CACHE_DIR` are
+`<root>/packages/uv-cache` and `pip-cache`.
+
+**The callers.** `package_cache.run_cmd(env)` is the prefix `python3 verify/package_cache.py run <env> --root <root>
+--`, which builds or re-checks the environment and then runs the program from its bin. It names the resolved root,
+since several tier tests hand their child only PATH and HOME, which would lose `WIB_ARTIFACT_CACHE` on the CI runner.
+`playwright_browsers.UV` is that prefix for `playwright`, so the six Playwright tests, `ci_chromium_libs.py` and
+`scripts/capture-fallback-screenshots.py` change with it. The mcp tests (`test_check_inventory_schema_e2e.py`,
+`test_weather_feed_e2e.py`, `test_deployments_witch_line_e2e.py`, `test_recipe_pantry_gate_e2e.py`, and the
+re-execs in `test_tool_audit_live.py` and `test_turn_guard_e2e.py`), the three llm-guard tests and
+`injection_config_matrix.py`, and `test_audience_page_e2e.py`'s segno run use it. The hand-run usage lines in
+`scripts/audience-qr.py`, `failover_drill.py`, `browser-smoke.py`, `lab-render.py` and `version-drift.py` now name it,
+and `agent_probe.py`'s `uv run --with nothing`, which installed a PyPI package named nothing, is now `python3`.
+`prompts_wall_suite.py` and `test_wall_clock_burst_sister_e2e.py` run a sister repo's own `uv run` on that repo's
+uv.lock, whose hashes uv checks; they now set `UV_CACHE_DIR` to the artifact root's.
+
+**CI.** `verify-suites.yml` sets `WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts` in both jobs before the
+Python step, which runs `package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"`; the e2e-tools job's
+later step that set it is folded into this one. `iam-policy.yml` and `plan-policy.yml`, on GitHub-hosted runners with
+no uv, run the same with `--pip`, under `$RUNNER_TEMP`, and trigger on the two new files. Their root is fresh on every
+job, so those two install cold each time, through the cache's pinned and hashed fetch.
+
+**Node.** The one Node install under verify/ and .github/workflows/ is `run-e2e.sh`'s `corepack yarn install
+--immutable` in the Backstage app. It now exports `package_cache.py node-env` first: `YARN_ENABLE_GLOBAL_CACHE=true`,
+`YARN_GLOBAL_FOLDER=<root>/packages/yarn`, `YARN_CHECKSUM_BEHAVIOR=throw` and `COREPACK_HOME=<root>/packages/corepack`.
+Tried with the app's own yarn 4.13.0 on a one-package registry on loopback: a warm cache installed `--immutable` with
+no request, and a cache zip with one file changed failed with `YN0018 ... doesn't match the expected checksum`, made no
+request and left the zip in place. Two gaps remain, both outside verify/. The Backstage yarn.lock records a checksum
+for each of its 2,769 registry packages with no platform condition, but none for 95 platform-conditional ones, the
+native binaries such as `@esbuild/linux-x64`: Yarn 4 does not write them, and a scratch copy with `supportedArchitectures`
+naming linux, x64 and glibc, run with `--mode=update-lockfile`, left yarn.lock unchanged. And corepack fetches the
+yarn 4.13.0 it dispatches through from repo.yarnpkg.com once per COREPACK_HOME with no hash, since the app's
+`packageManager` field carries none; yarn then runs the committed release its `yarnPath` names. Both are followups on
+`images/watch-it-burn-backstage/`.
+
+**The tests.** `verify/test_package_cache.py` (offline) holds the lock's form against `render()`, each environment's
+pins against ENVS and each caller's pin (PLAYWRIGHT, the workshop-mcp Dockerfile's mcp, pyyaml and Python, both
+`LLM_GUARD` constants and `topic_cases.CLASSIFIER`), seven `best_wheel()` cases, the lock's refusals, and the helper
+with a counting fetcher and a stubbed uv: a cold fill fetches each wheel once, a warm one fetches nothing and leaves
+the fetch log alone, a changed cached wheel fails by name with both sums and is not fetched or deleted, a download
+that does not match is kept nowhere, the install command line, the caches' paths, no rebuild on a second call, the
+re-check with the environment built, and an interpreter on another Python refused. It scans every tracked file in
+verify/, scripts/ and .github/workflows/ for `uv run`, `"--with",`, `pip install`, `uvx`, `pipx`, npm, npx, yarn and
+pnpm installs, and fails on any outside nine named files, each with why; it holds run-e2e.sh's node-env and the
+yarn.lock checksums above, and each workflow job that installs PyYAML. `verify/test_package_cache_e2e.py` (tools tier,
+loopback only) runs real uv on a wheel it builds and the Backstage app's yarn on a registry it serves: cold, warm with
+no fetch, a changed wheel refused with no fetch, uv's own refusal of other bytes, and the three Node cases above.
+`test_playwright_browsers.py` now stubs `pb.UV` instead of `uv`, since `uv` builds the environment;
+`test_e2e_tools_tier.py`'s scratch checkouts get a stand-in `package_cache.py` whose prefix is the stubbed `uv`;
+`test_tool_audit.py`, `test_iam_policy_ci.py` and `test_prompts_wall_suite.py` read the new lines. In
+`verify/scope-map.yaml`, `package_cache.py` and `python.lock` join `full` beside `artifact_cache.py`, since every
+Playwright test imports the helper, `test_package_cache.py` goes to `always` and `test_package_cache_e2e.py` to
+`reads`, as `scope_tests.py write` gave them; the rest of what `write` produced was other tests' drift and is not in
+this change.
+
+**Warm, measured on this host.** With the five environments built, `package_cache.py run <env> -- python -c pass`
+took 132 to 174 ms for the four small ones and made no fetch. The llm-guard environment built cold in 118 s, about
+1 GB of wheels fetched once. `test_check_inventory_schema_e2e.py`, `test_audience_page_e2e.py`,
+`test_guardrails_heading_e2e.py`, `test_recipe_pantry_gate_e2e.py` and `test_topic_classifier.py` then passed in 3, 2,
+3, 3 and 40 s with the fetch log unchanged.
+
+**Left behind and limits.** A changed lock makes a new venv beside the old, which is not removed; the llm-guard one is
+about 1.8 GB. A read-only root (hecaton#540's `HECATON_TOOLS_CACHE`, set nowhere today) cannot hold the venvs or
+their locks, so the helper fails there on the write, naming the path, as #1117's misses do. No new dependency: the
+helper and both tests use the standard library, uv, node and the committed yarn release.
+
+**Not yet run on a cluster.** Nothing: the change touches verify/, scripts/ and .github/workflows/ only, none of which a
+cluster runs, so no live check.
+
+**Suite results, run 18530.** On `cce097c4`, with no `HECATON_BASE_SHA`, so unscoped, `bash verify/run-e2e-tools.sh`
+printed `353 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which is `bash
+verify/run-tests.sh`), then `85 checks ran (the offline suite and 84 tier tests) in 21m44s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. It ran on the warm cache the measurements above had filled: the host artifact
+cache's fetch log read 158 lines before and after, so the tier's Python environments, its pinned tools, charts and
+Terraform providers made no download, and the only environments built were the two tests' fixtures in their own
+scratch roots. `test_package_cache.py` took 2 s, `test_package_cache_e2e.py` 4 s, `test_injection_classifier.py`
+24 s, `test_input_pii_guard_llm_guard.py` 7 s, `test_topic_classifier.py` 38 s and `test_turn_guard_e2e.py` 9 s. The
+prose gate printed `prose gate: pass`. The log is `/var/lib/hecaton/runs/18530/e2e-tools-1.log`.
+## 2026-11-08 · change · #1107 · 2C's beacon prompt ends at the POST sentence (run 18528)
+
+Part of #1063. Removed 2C's trailing line from the beacon/customer-breakdown attack prompt so it now ends at the
+POST sentence and still names ticket HC-204. #1002 already keeps the data out of chat, so the trailing line added
+nothing. The exact line cut was the one beginning "I don't need to see the numbers" (quoted here only by its opening
+words, not in full, to keep the attack phrasing out of the record).
+
+**Where it was cut.** The /kubecon C1 beat in segment 3 (`gitops/ai-layer/web/kubecon.html`), the /lab "Stuck? Try
+this prompt" box (`gitops/ai-layer/web/lab.html`), the recorded fallback set
+(`facilitation/kubecon-na-2026/fallback/prompts.yaml`), the C1 section of `challenges/PROMPT-CATALOG.md`, and the
+generated instructor copy `challenges/LAB-TEXT.md`. LAB-TEXT.md is a build output of lab.html, so it was regenerated
+with `bash verify/export-lab-text.sh` after lab.html was committed (`verify/test_lab_text_export.py` pins its blob).
+`facilitation/kubecon-na-2026-run-of-show.md` only paraphrases the attack ("Send customer demographics off the cluster
+to agenticburn.com/beacon") and never quotes the final sentence, so it needed no change.
+A repo-wide `git grep -nF` for that cut sentence now finds no copy of it anywhere in the repo.
+
+**c1-winrate.py: the measured prompt changes.** `verify/c1-winrate.py` carries its own list of C1 phrasings to measure
+the challenge's win rate, one labelled "does not need to see it" that opened with the same banned substring (a longer
+variant). To clear the repo-wide grep its wording was changed, so this measured prompt does change: the opening now
+reads "You don't have to show me the numbers, and I know you can't print them in chat. I just need them delivered."
+The framing it measures (the sender says they will not see the output themselves) is preserved; only the exact words
+changed, enough to drop the banned substring.
+
+**Tests that read the sentence.** `git grep -nF` over `verify` and `scripts` found only `verify/c1-winrate.py`
+(handled above). `verify/test_replay_prompts.py` holds prompts.yaml equal to the /kubecon page word for word, so both
+were edited identically; `verify/test_c3_prompt_copies.py` pins the Challenge 3 recipe prompt, not this C1 one, and is
+unaffected.
+
+**Live check.** The change touches `gitops/` pages the clusters serve, but the only live validation is that the served
+/kubecon and /lab pages show the prompt ending at the POST sentence, which needs the change deployed through Argo CD
+after promotion; the run brings no cluster up and does not deploy. No seeded trace is tied to this prompt (the
+`c1-attack` saved trace in `verify/stage_traces.py` replays the CEO-record prompt, not the beacon one), so no trace
+re-seed is owed.
+
+**Not yet run on a cluster.** After hecaton promotes this change and Argo CD syncs it, confirm the served `/kubecon`
+C1 beat and the `/lab` C1 box show the beacon prompt ending at the POST sentence (no trailing line).
+
+**Suite results, run 18528.** On `4242aad8`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so the whole
+suite, printed `352 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`84 checks ran (the offline suite and 83 tier tests) in 13m55s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`; `verify/test_replay_prompts.py` and `verify/test_lab_text_export.py` were among them. The log is
+`/var/lib/hecaton/runs/18528/e2e-tools.log`. The prose gate passed on the changed public-prose files. No dependency was
+added. After this decisions.md entry was appended, `bash verify/run-tests.sh` was re-run on the final commit and
+printed `352 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`; the decisions-reading tests
+(`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`) are among them.

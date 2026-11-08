@@ -13,8 +13,9 @@ deployed on guard-proxy:
 - the model and revision are the ones llm-guard 0.3.16 itself pins for BanTopics, so the copy the offline
   image bakes is the copy measured here.
 
-Needs uv, and network on the first run: uv fetches llm-guard 0.3.16 and torch 2.14.0+cpu (CPU index, so no
-CUDA packages), and the scanner downloads the model from Hugging Face. A missing tool or no network is a
+Needs uv, and network on a cold host: verify/package_cache.py fetches the llm-guard 0.3.16 and torch 2.14.0+cpu
+wheels verify/python.lock pins into the host artifact cache and installs them offline, hash-checked (#1121), and the
+scanner downloads the model from Hugging Face. A missing tool or no network is a
 failure, never a skip.
 """
 from __future__ import annotations
@@ -29,6 +30,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 import topic_cases as tc  # noqa: E402
 
 if shutil.which("uv") is None:
@@ -61,10 +63,7 @@ for c in cases:
 print("RESULT " + json.dumps(out))
 """
 
-cmd = ["uv", "run", "--no-project", "--python", "3.12",
-       "--index", "https://download.pytorch.org/whl/cpu", "--index-strategy", "unsafe-best-match",
-       "--with", "torch==2.14.0+cpu", "--with", f"llm-guard[onnxruntime]=={tc.CLASSIFIER['llm_guard']}",
-       "python", "-I", "-c", CHILD, json.dumps(tc.CLASSIFIER), json.dumps(cases)]
+cmd = [*package_cache.run_cmd("llm-guard"), "python", "-I", "-c", CHILD, json.dumps(tc.CLASSIFIER), json.dumps(cases)]
 print(f"== BanTopics over the {len(cases)} asks the phrase step leaves to it ==")
 r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
 line = next((ln for ln in r.stdout.splitlines() if ln.startswith("RESULT ")), None)

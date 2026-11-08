@@ -1,7 +1,8 @@
 # ABOUTME: verify/playwright_browsers.py unpacks a missing browser from the host artifact cache by its pinned SHA-256
 # ABOUTME: (#1120), never runs `playwright install`, and names a browser it cannot write or the lock does not pin (#658).
-"""Offline: `uv` is stubbed to answer the dry run with a fixture listing and to log every call, and a
-ThreadingHTTPServer on 127.0.0.1 serves the fixture zips and counts each request.
+"""Offline: the command that runs the pinned playwright (pb.UV, verify/package_cache.py's `run playwright --` prefix
+since #1121) is stubbed to answer the dry run with a fixture listing and to log every call, and a ThreadingHTTPServer
+on 127.0.0.1 serves the fixture zips and counts each request.
 
 `playwright install` takes `__dirlock` in the browsers directory before it looks at anything, so on a host whose
 shared PLAYWRIGHT_BROWSERS_PATH is not writable it spent about 8 minutes per test failing with EACCES (#658). Since
@@ -30,7 +31,10 @@ import zipfile
 VERIFY = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(VERIFY))
 import artifact_cache  # noqa: E402
+import package_cache  # noqa: E402
 import playwright_browsers as pb  # noqa: E402
+
+REAL_UV = list(pb.UV)
 
 failures: list[str] = []
 
@@ -176,6 +180,7 @@ class Case:
         self.lock = write_lock(tmp / "playwright-browsers.lock", **kw.get("lock_kw", {}))
         self.cache = cache or artifact_cache.scratch_dir("pwb-cache-")
         self.fetchlog = self.cache / "fetch.log"
+        pb.UV = [str(tmp / "bin" / "uv")]
         self.browsers.chmod(mode)
         os.environ["PATH"] = f"{tmp / 'bin'}:{PATH}"
 
@@ -428,6 +433,14 @@ os.environ["PATH"] = PATH
 SERVER.close()
 for d in scratch_caches:
     shutil.rmtree(d, ignore_errors=True)
+pb.UV = REAL_UV
+
+print("== the pinned playwright comes from the package cache, hash-checked (#1121) ==")
+check("pb.UV runs a program from package_cache.py's playwright environment",
+      REAL_UV[1:4] == [str(VERIFY / "package_cache.py"), "run", "playwright"] and REAL_UV[-1] == "--", str(REAL_UV))
+check(f"PLAYWRIGHT ({pb.PLAYWRIGHT}) is what that environment asks for and what python.lock pins",
+      pb.PLAYWRIGHT in package_cache.ENVS["playwright"].requires
+      and pb.PLAYWRIGHT == f"playwright=={package_cache.pinned('playwright', 'playwright')}", pb.PLAYWRIGHT)
 
 print("== nothing runs `playwright install` but the module's dry run, and the tier tests install through it ==")
 
@@ -438,14 +451,14 @@ def runs_install(text: str) -> bool:
         code = line.strip()
         if code.startswith("#") or "--dry-run" in code:
             continue
-        if re.search(r'"playwright",\s*"install"', code) or re.search(r"(^|run:\s*|[;&|]\s*)(uv run \S.*\s)?playwright install\b", code):
+        if re.search(r'"playwright",\s*"install"', code) or re.search(r"(^|run:\s*|[;&|]\s*|--\s+)playwright install\b", code):
             return True
     return False
 
 
 check("runs_install() sees a list-form and a shell-form call, and not a dry run or a comment",
       runs_install('subprocess.run([*UV, "playwright", "install", *BROWSERS])')
-      and runs_install("uv run --no-project --with playwright==1 playwright install chromium")
+      and runs_install("python3 verify/package_cache.py run playwright -- playwright install chromium")
       and not runs_install('[*UV, "playwright", "install", "--dry-run", *BROWSERS]')
       and not runs_install("# `playwright install` takes a lock"))
 callers = [f.name for f in sorted({*VERIFY.glob("*.py"), *VERIFY.glob("*.sh"), *(VERIFY.parent / "scripts").glob("*"),

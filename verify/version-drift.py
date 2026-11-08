@@ -59,7 +59,7 @@ def pinned_charts() -> dict[str, tuple[str, str]]:
     try:
         import yaml
     except ImportError:
-        sys.exit("PyYAML is required: uv run --with pyyaml python3 verify/version-drift.py")
+        sys.exit("PyYAML is required: python3 verify/package_cache.py run pyyaml -- python verify/version-drift.py")
     out: dict[str, tuple[str, str]] = {}
     for f in sorted((REPO / "gitops").rglob("*.yaml")):
         try:

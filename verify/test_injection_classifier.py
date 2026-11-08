@@ -21,8 +21,9 @@ threshold or match_type is measured the moment it lands:
 What this config does NOT catch (an injection placed past the model's 512-token window, or one written without
 the "ignore previous instructions" register) is measured in docs/spike-llm-guard-2026-10-26.md, not here.
 
-Needs uv, and network on the first run: uv fetches llm-guard 0.3.16 and torch 2.14.0+cpu (CPU index, so no
-CUDA packages), and the scanner downloads the model from Hugging Face. A missing tool or no network is a
+Needs uv, and network on a cold host: verify/package_cache.py fetches the llm-guard 0.3.16 and torch 2.14.0+cpu
+wheels verify/python.lock pins into the host artifact cache and installs them offline, hash-checked (#1121), and the
+scanner downloads the model from Hugging Face. A missing tool or no network is a
 failure, never a skip.
 """
 from __future__ import annotations
@@ -38,6 +39,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 import topic_cases as tc  # noqa: E402
 
 # The revision images/llm-guard mirrors. Its onnx/model.onnx is byte-identical to the one at 89b085cd, the
@@ -102,10 +104,7 @@ for c in cases:
 print("RESULT " + json.dumps(out))
 """
 
-cmd = ["uv", "run", "--no-project", "--python", "3.12",
-       "--index", "https://download.pytorch.org/whl/cpu", "--index-strategy", "unsafe-best-match",
-       "--with", "torch==2.14.0+cpu", "--with", f"llm-guard[onnxruntime]=={LLM_GUARD}",
-       "python", "-I", "-c", CHILD, MODEL, REVISION, json.dumps(params),
+cmd = [*package_cache.run_cmd("llm-guard"), "python", "-I", "-c", CHILD, MODEL, REVISION, json.dumps(params),
        json.dumps([{k: c[k] for k in ("name", "text", "want")} for c in cases])]
 print(f"== PromptInjection {params} over {len(cases)} prompts ==")
 r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)

@@ -385,11 +385,23 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
         ((VERIFY / "artifact_cache.py",) if BROWSERS in scripts else ())
     for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
-    (vdir / "e2e-tools.lock").write_text(lock)
     if BROWSERS in scripts:
+        # playwright_browsers.py runs playwright through package_cache.py's `run playwright --` prefix (#1121). The
+        # stand-in makes that prefix the stubbed `uv` alone, which answers the dry run, so no environment is built.
+        (vdir / "package_cache.py").write_text(STUB_PACKAGE_CACHE)
         # playwright_browsers.py fails a listed browser its lock does not pin (#1120); this pins uv_listing()'s two.
         (vdir / "playwright-browsers.lock").write_text(BROWSER_LOCK)
+    (vdir / "e2e-tools.lock").write_text(lock)
     return vdir
+
+
+STUB_PACKAGE_CACHE = """import types
+ENVS = {"playwright": types.SimpleNamespace(requires=("playwright==1.64.1",))}
+
+
+def run_cmd(env, root=None):
+    return ["uv"]
+"""
 
 
 def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path,
@@ -534,7 +546,8 @@ PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n", "xz": 
 
 
 LISTED_DIRS = ("chromium-9", "ffmpeg-9")
-BROWSER_LOCK = ("playwright " + re.search(r'^PLAYWRIGHT = "playwright==([^"]+)"$', BROWSERS.read_text(), re.M).group(1)
+# The scratch checkout's PLAYWRIGHT is the package_cache.py stand-in's pin, so the lock names that one.
+BROWSER_LOCK = ("playwright " + re.search(r'"playwright==([^"]+)"', STUB_PACKAGE_CACHE).group(1)
                 + "\n" + "".join(f"{d} {'0' * 64} https://fixture.invalid/{d}\n" for d in LISTED_DIRS))
 
 

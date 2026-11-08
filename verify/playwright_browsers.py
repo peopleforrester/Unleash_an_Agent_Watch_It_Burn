@@ -44,13 +44,16 @@ from typing import NamedTuple
 VERIFY = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(VERIFY))
 import artifact_cache  # noqa: E402
+import package_cache  # noqa: E402
 
-PLAYWRIGHT = "playwright==1.64.1"
-UV = ["uv", "run", "--no-project", "--with", PLAYWRIGHT]
+PLAYWRIGHT = package_cache.ENVS["playwright"].requires[0]
+# The prefix that runs a program from the pinned playwright environment: verify/package_cache.py installs it from the
+# host artifact cache, hash-checked and offline, the first time, and re-checks the cached wheels on every call (#1121).
+UV = package_cache.run_cmd("playwright")
 BROWSERS = ["chromium"]
 MARKER = "INSTALLATION_COMPLETE"
 LOCK = VERIFY / "playwright-browsers.lock"
-# The first run brings playwright in through uv, which is a download.
+# The first run on a cold host fetches the pinned wheels into the artifact cache, which is a download.
 TIMEOUT = 300
 LOCK_HEADER = """\
 # ABOUTME: The browser archives the pinned Playwright lists for `install chromium` on linux x86_64, each pinned by the

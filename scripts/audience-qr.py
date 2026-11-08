@@ -2,11 +2,11 @@
 # ABOUTME: slide and the storefront's event knob can never name two different addresses (#451).
 """Render the audience QR code.
 
-    python3 -m venv /tmp/qr && /tmp/qr/bin/pip install segno==1.6.6
-    /tmp/qr/bin/python scripts/audience-qr.py            # rewrites the committed SVG
-    /tmp/qr/bin/python scripts/audience-qr.py --check    # exit 1 if the committed SVG is stale
+    python3 verify/package_cache.py run segno -- python scripts/audience-qr.py            # rewrites the committed SVG
+    python3 verify/package_cache.py run segno -- python scripts/audience-qr.py --check    # exit 1 if it is stale
 
-segno is pinned in decisions.md (2026-10-24, #451). It is pure Python and deterministic, so the same URL
+The segno environment installs the wheel verify/python.lock pins, from the host artifact cache and hash-checked
+(#1121). segno is pinned in decisions.md (2026-10-24, #451). It is pure Python and deterministic, so the same URL
 always gives the same bytes, which is what lets verify/test_audience_qr_render.py compare them.
 
 The code is built for a ballroom, not a phone held at arm's length: error correction M, the smallest

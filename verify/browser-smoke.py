@@ -23,8 +23,10 @@ response. So this drives Chrome, sends a real prompt through the page's own fetc
 DOM.
 
 Usage:
-    uv run --with playwright verify/browser-smoke.py                  # the roster clusters
-    uv run --with playwright verify/browser-smoke.py burritobot-private    # named hosts only
+    python3 verify/package_cache.py run playwright -- python verify/browser-smoke.py                       # the roster clusters
+    python3 verify/package_cache.py run playwright -- python verify/browser-smoke.py burritobot-private    # named hosts only
+
+The pinned playwright comes from verify/python.lock, hash-checked, through the host artifact cache (#1121).
 
 Exits non-zero if any cluster fails, so it can gate a demo.
 """
@@ -161,8 +163,8 @@ async def main(hosts: list[str]) -> int:
     try:
         from playwright.async_api import async_playwright
     except ImportError:
-        print("playwright not installed. Run:  uv run --with playwright "
-              "python -m playwright install chromium", file=sys.stderr)
+        print("playwright not installed. Run:  python3 verify/package_cache.py run playwright -- "
+              "playwright install chromium", file=sys.stderr)
         return 2
 
     failures = []

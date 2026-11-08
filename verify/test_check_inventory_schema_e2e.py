@@ -24,6 +24,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
@@ -65,7 +67,7 @@ asyncio.run(main())
 """
 
 data = tempfile.mkdtemp(prefix="check-inventory-e2e-")
-r = subprocess.run(["uv", "run", "--no-project", "--with", "mcp==1.29.1", "python", "-I", "-c", PROBE, str(AI)],
+r = subprocess.run([*package_cache.run_cmd("mcp"), "python", "-I", "-c", PROBE, str(AI)],
                    capture_output=True, text=True, cwd="/", timeout=600,
                    env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "WORKSHOP_DATA_DIR": data})
 lines = r.stdout.splitlines()

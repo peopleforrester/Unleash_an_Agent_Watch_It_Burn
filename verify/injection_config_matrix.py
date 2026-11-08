@@ -4,7 +4,7 @@
 
 Prints one block per scanner configuration: the verdict, risk score and scan time for each prompt. Run it pinned
 to one core (`OMP_NUM_THREADS=1 taskset -c 0 python3 verify/injection_config_matrix.py`) to approximate the
-llm-guard pod, which is limited to one CPU. Needs uv and network on the first run, like
+llm-guard pod, which is limited to one CPU. Needs uv, and network on a cold host, like
 verify/test_injection_classifier.py, which is the gate; this only measures.
 """
 from __future__ import annotations
@@ -16,6 +16,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 import topic_cases as tc  # noqa: E402
 
 MODEL = "protectai/deberta-v3-base-prompt-injection-v2"
@@ -74,10 +75,7 @@ for label, threshold, match_type, max_len in configs:
 print("RESULT " + json.dumps(out))
 """
 
-cmd = ["uv", "run", "--no-project", "--python", "3.12",
-       "--index", "https://download.pytorch.org/whl/cpu", "--index-strategy", "unsafe-best-match",
-       "--with", "torch==2.14.0+cpu", "--with", "llm-guard[onnxruntime]==0.3.16",
-       "python", "-I", "-c", CHILD, MODEL, REVISION, json.dumps(CONFIGS), json.dumps(CASES)]
+cmd = [*package_cache.run_cmd("llm-guard"), "python", "-I", "-c", CHILD, MODEL, REVISION, json.dumps(CONFIGS), json.dumps(CASES)]
 r = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
 line = next((ln for ln in r.stdout.splitlines() if ln.startswith("RESULT ")), None)
 if r.returncode != 0 or line is None:

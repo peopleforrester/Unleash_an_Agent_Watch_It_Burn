@@ -86,7 +86,8 @@ check("it puts the fetched tools on PATH", '"$GITHUB_WORKSPACE/verify/.tools/bin
 for t in ("test_iam_policy_pipeline.py", "test_iam_policy_coverage.py", "test_iam_policy_structural.py"):
     check(f"it runs verify/{t}", f"python verify/{t}" in runs and (REPO / "verify" / t).is_file(), runs)
 check("it does not run test_iam_policy_aws.py, which needs an AWS profile", "test_iam_policy_aws" not in runs)
-check("it installs PyYAML at a pinned version", re.search(r"pip install .*PyYAML==\d+\.\d+\.\d+", runs) is not None, runs)
+check("it installs PyYAML from verify/python.lock, hash-checked, with pip (#1121)",
+      re.search(r"python verify/package_cache\.py install pyyaml --python .+ --pip$", runs, re.M) is not None, runs)
 
 lock = (REPO / "verify/e2e-tools.lock").read_text(encoding="utf-8")
 structural = (REPO / "verify/test_iam_policy_structural.py").read_text(encoding="utf-8")

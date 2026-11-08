@@ -2252,15 +2252,20 @@ hosts at peak, down to 1 within three hours).
 - The Datadog pool secret is deliberately not destroyed by `down all`; use
   `fleet.sh reap-secrets` only when the pool itself is finished with.
 - Purge the room's data from Whitney's sandbox org, as promised on the planning call
-  (#647): every `burritobot-public` trace, whatever the scrub caught. Signed in to
-  her org, find the room's traces under `kube_cluster_name:burritobot-public` for the
-  session window, and from the build days before it the spans of service
-  `wib-pii-scrub-check` (ml_app of the same name), which the live scrub check
-  `verify/test_collector_pii_scrub_live.py` sends. Delete their LLM Observability spans by trace id through
-  `POST /api/v2/llm-obs/deletion/data/llmobs` (in preview, so confirm the call on the
-  day). APM spans have no delete-by-query, so ask Datadog support to remove them or
-  let retention expire them. Then post on #647 what was deleted and what is left to
-  retention.
+  (#647): every `burritobot-public` trace, whatever the scrub caught. No sign-in to
+  her org is needed. With the accen-dev session,
+  `python3 verify/dd_purge_public.py --profile accen-dev --from 2026-10-28` lists every
+  LLM Observability span under `k8s.cluster.name:burritobot-public` since the first
+  build day: the room's bot, and the spans of service `wib-pii-scrub-check` (ml_app of
+  the same name) that the live scrub check `verify/test_collector_pii_scrub_live.py`
+  sends. Run it again with `--apply` to delete them by trace id through
+  `POST /api/v2/llm-obs/deletion/data/llmobs`, with the `write-app-key` in
+  `watch-it-burn/datadog` (run 18508 deleted the check's four spans that way on
+  2026-11-08), then with `--verify` a few minutes later, which exits 1 while any is
+  left; a second `--apply` sends only what is left. APM spans under
+  `kube_cluster_name:burritobot-public` have no delete API (the script prints their
+  count), so ask Datadog support to remove them or let retention expire them. Then
+  post on #647 what was deleted and what is left to retention.
 - Record the real spend once the fleet is down, with `teardown/delivery-cost.py
   --start <first build day> --end <day after the last teardown> --event kubecon-na-2026`
   and a `--profile` for each fleet account, saved as `cost/measured/kubecon-na-2026.txt`

@@ -66,17 +66,26 @@ jobs:
           git submodule foreach --recursive 'git clean -ffdx && git reset --hard'
 
       # uv 0.13.7 (latest, 2026-11-07) brings Python 3.13; the suite's only package beyond the standard library is
-      # PyYAML, pinned as in iam-policy.yml.
+      # PyYAML. verify/package_cache.py installs the wheel verify/python.lock pins, served from the host artifact cache
+      # by its SHA-256 and installed offline with --require-hashes, so a warm runner fetches no package (#1121).
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           version: '0.13.7'
           enable-cache: false
 
+      # The host artifact cache (verify/artifact_cache.py, #1117) under the runner's tool cache, outside the workspace,
+      # so the clean step never removes it and it outlives the job. The PyYAML wheel (#1121) and, in the e2e-tools job,
+      # the terraform tests' provider mirror and plugin cache live in it (verify/tf_plugin_cache.py, #1119). Set here,
+      # not in the job's env: the runner context is not available there, and a job env naming it failed the whole
+      # workflow file (Actions run 42427273324).
+      - name: WIB_ARTIFACT_CACHE, the host artifact cache under the runner's tool cache
+        run: echo "WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts" >> "$GITHUB_ENV"
+
       - name: Python 3.13 with PyYAML first on PATH
         run: |
           set -euo pipefail
           uv venv --python 3.13 "$RUNNER_TEMP/venv"
-          uv pip install --python "$RUNNER_TEMP/venv/bin/python" PyYAML==6.0.3
+          "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       - name: HECATON_BASE_SHA, the merge base with origin/staging
@@ -121,11 +130,19 @@ jobs:
           version: '0.13.7'
           enable-cache: false
 
+      # The host artifact cache (verify/artifact_cache.py, #1117) under the runner's tool cache, outside the workspace,
+      # so the clean step never removes it and it outlives the job. The PyYAML wheel (#1121) and, in the e2e-tools job,
+      # the terraform tests' provider mirror and plugin cache live in it (verify/tf_plugin_cache.py, #1119). Set here,
+      # not in the job's env: the runner context is not available there, and a job env naming it failed the whole
+      # workflow file (Actions run 42427273324).
+      - name: WIB_ARTIFACT_CACHE, the host artifact cache under the runner's tool cache
+        run: echo "WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts" >> "$GITHUB_ENV"
+
       - name: Python 3.13 with PyYAML first on PATH
         run: |
           set -euo pipefail
           uv venv --python 3.13 "$RUNNER_TEMP/venv"
-          uv pip install --python "$RUNNER_TEMP/venv/bin/python" PyYAML==6.0.3
+          "$RUNNER_TEMP/venv/bin/python" verify/package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       # The node harnesses run on Node 24, which run-e2e-tools.sh checks before any test (#440).
@@ -136,13 +153,6 @@ jobs:
 
       - name: HECATON_BASE_SHA, the merge base with origin/staging
         run: bash verify/ci-base-sha.sh
-
-      # The host artifact cache (verify/artifact_cache.py, #1117) under the runner's tool cache, outside the workspace,
-      # so the clean step never removes it and it outlives the job. The terraform tests' provider mirror and plugin
-      # cache live in it (verify/tf_plugin_cache.py, #1119). Set here, not in the job's env: the runner context is not
-      # available there, and a job env naming it failed the whole workflow file (Actions run 42427273324).
-      - name: WIB_ARTIFACT_CACHE, the host artifact cache under the runner's tool cache
-        run: echo "WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts" >> "$GITHUB_ENV"
 
       # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),
       # and the host takes nothing from apt. This unpacks the missing Debian packages under the job's temp directory,

@@ -36,6 +36,7 @@ import xml.etree.ElementTree as ET
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 import wall_clock_burst  # noqa: E402
 
 SISTER = "peopleforrester/prompts-agenticburn"
@@ -68,6 +69,9 @@ def gh(*args: str, binary: bool = False) -> subprocess.CompletedProcess:
 def pytest_run(src: pathlib.Path, junit: pathlib.Path, *targets: str) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if k not in {"VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "PYTHONPATH"}}
     env["UV_LINK_MODE"] = "copy"
+    # uv's cache is the host artifact cache's (#1121); `--frozen` installs what the sister repo's uv.lock pins, and uv
+    # checks each package against the hash the lock records.
+    env["UV_CACHE_DIR"] = package_cache.installer_env()["UV_CACHE_DIR"]
     return subprocess.run(["uv", "run", "--frozen", "--directory", str(src), "pytest", "-q", "-p", "no:cacheprovider",
                            f"--junitxml={junit}", *targets], capture_output=True, text=True, timeout=900, env=env)
 
