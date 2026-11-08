@@ -34204,3 +34204,11 @@ On the private bot: the flow check's 35. All of them carried the probe marker.
 
 **Not yet run on a cluster.** Nothing. This run changed no code: it adds this entry and a PROGRESS.md bullet, which no
 cluster runs.
+
+**The suites (run 18474, at `f7a6af6c`).** The first `bash verify/run-e2e-tools.sh`, at `ec423189`, failed one offline
+test, `test_no_docker_hub.py`: the first PROGRESS.md bullet named Tron's Docker Hub reference, which #991's check 3
+allows only in `agent.yaml` and images.lock. `f7a6af6c` names the game without that reference. The rerun printed
+`348 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (which answers `bash verify/run-tests.sh`), then `84 checks
+ran (the offline suite and 83 tier tests) in 8m14s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The
+logs are `/var/lib/hecaton/runs/18474/e2e-tools.log` and `e2e-tools.2.log`. The prose gate printed `prose gate: pass`.
+No dependency was added.
