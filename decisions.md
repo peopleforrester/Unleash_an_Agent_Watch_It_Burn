@@ -38323,3 +38323,13 @@ Not yet run on a cluster:
   desk; run it before a run-through, not in one): a deploy by the admin bot and one by the public bot both show on
   `https://deployments.burritobot.co/deployments.json`, labelled `private` and `community`, and the private row is not
   greyed by the community cluster's next read.
+
+**The suites (run 18711).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`; both resolved to every
+test, because `verify/bootstrap_chart.py` is on the map's full list. The first `bash verify/run-tests.sh`, at `d38af014`
+(log `/var/lib/hecaton/runs/18711/run-tests.log`), ran 375 tests and failed eight: seven shell tests that run `instructors
+up` offline with `cmd_guardrails_link` stubbed reached the new `cmd_desk_link` and called the guard's `aws`, and
+`test_no_cloud_by_hand.sh` named `test_public_desk.py` as a test that runs fleet.sh with no `no_cloud` guard. `0fd8d600`
+stubs `cmd_desk_link` beside each `cmd_guardrails_link` stub and guards the new test; the eight then passed one by one.
+`bash verify/run-e2e-tools.sh` at `9934666b` (log `/var/lib/hecaton/runs/18711/e2e-tools.log`) printed `376 tests ran`
+and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `87 checks ran (the offline suite and 86 tier tests) in 11m24s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
