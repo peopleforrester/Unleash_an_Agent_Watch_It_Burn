@@ -11,10 +11,10 @@ be the parsed JSON, its text or bytes, or None for a read that failed.
 The switches, in talk order, and the fields each owns (guard-proxy proxy.py: the `/controls` handler sends
 {"ai": GUARDS, "infra": read_controls(), "host": WIB_PUBLIC_HOST}):
 
-    guardrails-on    slide #/27  infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
-    guard-agency-on  slide #/50  infra.agency_scoped, the least-privilege Role (guard-proxy-agenticburn#76)
-    guard-input-on   slide #/50  ai.input_blocklist, ai.input_classifier
-    guard-mcp-on     slide #/67  infra.tool_allowlist
+    guardrails-on    segment 3    infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    guard-agency-on  Challenge 3  infra.agency_scoped, the least-privilege Role (guard-proxy-agenticburn#76)
+    guard-input-on   Challenge 3  ai.input_blocklist, ai.input_classifier
+    guard-mcp-on     Challenge 4  infra.tool_allowlist
 
 `agency_scoped` is on guard-proxy's staging but not in the submodule this repo pins, so until the pin moves /controls
 does not carry it and guard-agency-on is judged FAIL, naming #1132, on each cluster where it is missing. A missing
