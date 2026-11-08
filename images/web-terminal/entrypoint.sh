@@ -212,6 +212,39 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
     return 1
   fi
   echo "Both clusters, this one and $peer: all four Kubernetes guardrails are $st."; }
+# _apply <file> <kubectl...> : a switch step for _both. kubectl apply of ~/challenges/<file> through the kubectl given.
+_apply() { local f="$1" c; shift
+  c=("$@" apply -f "$HOME/challenges/$f")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
+# _both <step> [args...] : one switch step on this cluster, then on the other KubeCon cluster (#1147, for #1132: the
+# room plays on the public bot, so a fix the private terminal makes has to reach it too). The step is a function called
+# as `<step> [args...] <kubectl...>`, the way _kg is, with kubectl for this cluster and kubectl --kubeconfig
+# ~/.kube/peer --context <name> for the other, reached through guardrails-peer as _guardrails reaches it. The peer
+# runs as its guardrails-switch ServiceAccount, so a step there can do only what gitops/guardrails-switch/ grants.
+# Says in one line which clusters changed, naming a peer that could not be reached. A cluster with no guardrails-peer
+# Secret, the 2-hour workshop's, is switched alone, and that is success; a Secret that is there but cannot be read is
+# a failure, so a flaky read never passes for an unlinked cluster.
+_both() { local peer="" link=none here=0 there=0 c r
+  if peer="$(_peer)"; then link=peer
+  else
+    c=(kubectl -n guardrails-switch get secret guardrails-peer --ignore-not-found -o name)
+    _show "${c[@]}"
+    if r="$("${c[@]}" 2>/dev/null)" && [ -z "$r" ]; then link=none; else link=unread; fi
+  fi
+  "$@" kubectl || here=1
+  if [ "$link" = peer ]; then "$@" kubectl --kubeconfig "$HOME/.kube/peer" --context "$peer" || there=1; fi
+  case "$link:$here:$there" in
+    peer:0:0) echo "Switched on both clusters: this one and $peer."; return 0 ;;
+    peer:0:1) echo "⚠️  Switched on this cluster, but not on $peer: it could not be reached, or it refused the change." ;;
+    peer:1:0) echo "⚠️  Switched on $peer, but not on this cluster: it refused the change." ;;
+    peer:1:1) echo "⚠️  Switched on neither cluster: this one and $peer both failed." ;;
+    none:0:*) echo "Switched on this cluster alone: it has no guardrails-switch/guardrails-peer Secret, so no other cluster is linked to it."
+              return 0 ;;
+    none:1:*) echo "⚠️  This cluster did not switch, and it has no guardrails-switch/guardrails-peer Secret naming another." ;;
+    unread:0:*) echo "⚠️  Switched on this cluster, but guardrails-switch/guardrails-peer could not be read, so the other KubeCon cluster was not switched." ;;
+    unread:1:*) echo "⚠️  This cluster did not switch, and guardrails-switch/guardrails-peer could not be read." ;;
+  esac
+  return 1; }
 EOS
 
 # The rule rewrite behind _c7rule. Reads the ConfigMap as JSON on stdin and prints the JSON patch. Exactly
@@ -622,29 +655,27 @@ EOS
 # c6-least-privilege-role.yaml, takes create and patch on Deployments and Pods away from agent-sa, so deploy_app comes
 # back Forbidden whatever the image; the CEO's record stays scoped. guard-agency-off applies c5-scoped-role.yaml, the
 # Role guard-rbac-on and guardrails-on leave. The 2-hour lab's second tier stays guard-admission-on, above.
+# Both apply their Role on this cluster and on the other KubeCon cluster (_both in .guardlib, #1147), so the fix run
+# from the private terminal reaches the public bot the room plays on. On the 2-hour lab's lone cluster, this one alone.
 cat > "$HOME/guard-agency-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-c=(kubectl apply -f "$HOME/challenges/c6-least-privilege-role.yaml")
-_show "${c[@]}"
-if "${c[@]}" >/dev/null 2>&1; then
+if _both _apply c6-least-privilege-role.yaml; then
   echo "🛡️  Least privilege ON for the support ticket. agent-sa's Role no longer creates or changes Deployments"
   echo "    or Pods, so BurritoBot cannot deploy anything, from any registry. Re-send the ticket ask: deploy_app"
   echo "    comes back Forbidden from the Kubernetes API. The CEO's record stays out of reach."
 else
-  echo "⚠️  The Role did not change. Wait a moment and try 'guard-agency-on' again."; exit 1
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-on' again; it is safe to repeat."; exit 1
 fi
 EOS
 cat > "$HOME/guard-agency-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-c=(kubectl apply -f "$HOME/challenges/c5-scoped-role.yaml")
-_show "${c[@]}"
-if "${c[@]}" >/dev/null 2>&1; then
+if _both _apply c5-scoped-role.yaml; then
   echo "🔓 Least privilege OFF for the support ticket. agent-sa can create Deployments and Pods again, so the"
   echo "    ticket's Joker lands. The CEO's record stays out of reach."
 else
-  echo "⚠️  The Role did not change. Wait a moment and try 'guard-agency-off' again."; exit 1
+  echo "⚠️  The Role did not change everywhere. Wait a moment and try 'guard-agency-off' again; it is safe to repeat."; exit 1
 fi
 EOS
 # guardrails-on / guardrails-off: the KubeCon breakout's one command for the four Kubernetes guardrails on both

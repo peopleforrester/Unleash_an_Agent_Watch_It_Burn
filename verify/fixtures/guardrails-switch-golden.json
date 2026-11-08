@@ -1,0 +1,816 @@
+{
+ "guardrails-on linked": {
+  "rc": 0,
+  "stdout": "🛡️  RBAC ON: agent-sa reads one Secret by name, its own config. The CEO's record is Forbidden.\n🛡️  Kyverno ON: admission denies every image outside registry.burritobot.co for what BurritoBot deploys, and within a minute Kyverno deletes what it already deployed from anywhere else.\n🛡️  KubeArmor ON: the kernel blocks reads of the recipe files in the agent's tool pod.\n🛡️  Egress ON: the agent namespace reaches its model, DNS, telemetry and the cluster; the internet is cut off.\nBoth clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are on.\n",
+  "stderr": "$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}'\n$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}'\n$ kubectl apply -f $HOME/challenges/c5-scoped-role.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c5-scoped-role.yaml\n$ kubectl patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl apply -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl apply -f $HOME/challenges/c1-network-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c1-network-policy.yaml\n",
+  "calls": [
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.kubeconfig}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.name}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c5-scoped-role.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c5-scoped-role.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   }
+  ]
+ },
+ "guardrails-off linked": {
+  "rc": 0,
+  "stdout": "🔓 RBAC OFF: agent-sa reads every Secret in its namespace again.\n🔓 Kyverno OFF: the registry rules only report; any image BurritoBot deploys is admitted.\n🔓 KubeArmor OFF: the recipe files are readable from the agent's tool pod again.\n🔓 Egress OFF: the agent namespace can reach the internet again.\nBoth clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are off.\n",
+  "stderr": "$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}'\n$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}'\n$ kubectl apply -f $HOME/challenges/c8-broad-role.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c8-broad-role.yaml\n$ kubectl patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl delete --ignore-not-found -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community delete --ignore-not-found -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl delete --ignore-not-found -f $HOME/challenges/c1-network-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community delete --ignore-not-found -f $HOME/challenges/c1-network-policy.yaml\n",
+  "calls": [
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.kubeconfig}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.name}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c8-broad-role.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c8-broad-role.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   }
+  ]
+ },
+ "guardrails-on unlinked": {
+  "rc": 1,
+  "stdout": "🛡️  RBAC ON: agent-sa reads one Secret by name, its own config. The CEO's record is Forbidden.\n🛡️  Kyverno ON: admission denies every image outside registry.burritobot.co for what BurritoBot deploys, and within a minute Kyverno deletes what it already deployed from anywhere else.\n🛡️  KubeArmor ON: the kernel blocks reads of the recipe files in the agent's tool pod.\n🛡️  Egress ON: the agent namespace reaches its model, DNS, telemetry and the cluster; the internet is cut off.\n⚠️  This cluster is not linked to the other KubeCon cluster (no guardrails-switch/guardrails-peer Secret),\n    so only this one was switched. From the fleet host: infra/terraform/fleet/fleet.sh guardrails-link\n",
+  "stderr": "$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}'\n$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}'\n$ kubectl apply -f $HOME/challenges/c5-scoped-role.yaml\n$ kubectl patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl apply -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl apply -f $HOME/challenges/c1-network-policy.yaml\n",
+  "calls": [
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.kubeconfig}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.name}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c5-scoped-role.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   }
+  ]
+ },
+ "guardrails-off unlinked": {
+  "rc": 1,
+  "stdout": "🔓 RBAC OFF: agent-sa reads every Secret in its namespace again.\n🔓 Kyverno OFF: the registry rules only report; any image BurritoBot deploys is admitted.\n🔓 KubeArmor OFF: the recipe files are readable from the agent's tool pod again.\n🔓 Egress OFF: the agent namespace can reach the internet again.\n⚠️  This cluster is not linked to the other KubeCon cluster (no guardrails-switch/guardrails-peer Secret),\n    so only this one was switched. From the fleet host: infra/terraform/fleet/fleet.sh guardrails-link\n",
+  "stderr": "$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}'\n$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}'\n$ kubectl apply -f $HOME/challenges/c8-broad-role.yaml\n$ kubectl patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl delete --ignore-not-found -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl delete --ignore-not-found -f $HOME/challenges/c1-network-policy.yaml\n",
+  "calls": [
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.kubeconfig}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.name}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c8-broad-role.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   }
+  ]
+ },
+ "guardrails-on peer-down": {
+  "rc": 1,
+  "stdout": "🛡️  RBAC ON: agent-sa reads one Secret by name, its own config. The CEO's record is Forbidden.\n🛡️  Kyverno ON: admission denies every image outside registry.burritobot.co for what BurritoBot deploys, and within a minute Kyverno deletes what it already deployed from anywhere else.\n🛡️  KubeArmor ON: the kernel blocks reads of the recipe files in the agent's tool pod.\n🛡️  Egress ON: the agent namespace reaches its model, DNS, telemetry and the cluster; the internet is cut off.\n⚠️  These did not switch on: rbac on watch-it-burn-community kyverno on watch-it-burn-community kubearmor on watch-it-burn-community egress on watch-it-burn-community. Run 'guardrails-on' again; it is safe to repeat.\n",
+  "stderr": "$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}'\n$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}'\n$ kubectl apply -f $HOME/challenges/c5-scoped-role.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c5-scoped-role.yaml\n$ kubectl patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl apply -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl apply -f $HOME/challenges/c1-network-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c1-network-policy.yaml\n",
+  "calls": [
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.kubeconfig}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.name}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c5-scoped-role.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c5-scoped-role.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Deny\"]}]"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   }
+  ]
+ },
+ "guardrails-off peer-down": {
+  "rc": 1,
+  "stdout": "🔓 RBAC OFF: agent-sa reads every Secret in its namespace again.\n🔓 Kyverno OFF: the registry rules only report; any image BurritoBot deploys is admitted.\n🔓 KubeArmor OFF: the recipe files are readable from the agent's tool pod again.\n🔓 Egress OFF: the agent namespace can reach the internet again.\n⚠️  These did not switch off: rbac on watch-it-burn-community kyverno on watch-it-burn-community kubearmor on watch-it-burn-community egress on watch-it-burn-community. Run 'guardrails-off' again; it is safe to repeat.\n",
+  "stderr": "$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.kubeconfig}'\n$ kubectl -n guardrails-switch get secret guardrails-peer -o 'jsonpath={.data.name}'\n$ kubectl apply -f $HOME/challenges/c8-broad-role.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community apply -f $HOME/challenges/c8-broad-role.yaml\n$ kubectl patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl patch validatingpolicy deny-external-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl get validatingpolicy deny-external-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community patch validatingpolicy restrict-image-registries --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]'\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}'\n$ kubectl delete --ignore-not-found -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community delete --ignore-not-found -f $HOME/challenges/c3-kubearmor-policy.yaml\n$ kubectl delete --ignore-not-found -f $HOME/challenges/c1-network-policy.yaml\n$ kubectl --kubeconfig $HOME/.kube/peer --context watch-it-burn-community delete --ignore-not-found -f $HOME/challenges/c1-network-policy.yaml\n",
+  "calls": [
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.kubeconfig}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "-n",
+     "guardrails-switch",
+     "get",
+     "secret",
+     "guardrails-peer",
+     "-o",
+     "jsonpath={.data.name}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c8-broad-role.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "apply",
+     "-f",
+     "$HOME/challenges/c8-broad-role.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "deny-external-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "deny-external-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "patch",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "--type=json",
+     "-p",
+     "[{\"op\":\"replace\",\"path\":\"/spec/validationActions\",\"value\":[\"Audit\"]}]"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "get",
+     "validatingpolicy",
+     "restrict-image-registries",
+     "-o",
+     "jsonpath={.spec.validationActions[0]}"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c3-kubearmor-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "this",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   },
+   {
+    "cluster": "watch-it-burn-community",
+    "args": [
+     "delete",
+     "--ignore-not-found",
+     "-f",
+     "$HOME/challenges/c1-network-policy.yaml"
+    ]
+   }
+  ]
+ }
+}
