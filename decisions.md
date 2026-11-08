@@ -39158,3 +39158,31 @@ as one of its checks, printed `238 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
 offline suite and 11 tier tests) in 13m26s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
 `test_guard_mcp_both.py` (38 s), `test_lab_private_banner.py`, `test_lab_private_banner_e2e.py` (its ten hostnames) and
 `test_lab_text_export.py` were among them. The prose gate exited 0. No dependency was added.
+
+## 2026-11-08 · #1180 · run 18746 · The fake sleep in test_guard_mcp_both.py exits 1, not 2
+
+**Why run 18742 did not land.** Its `skip-markers` gate failed on `adds exit 2 in verify/test_guard_mcp_both.py`. The
+gate counts every non-comment line matching `exit 2` as exit-as-skip. The one line was run 18742's fake `sleep`, which
+ended with `exit 2` on an argument that was not whole seconds. That is a usage failure. It now exits 1,
+which fails the same way. No other line in the change matches a skip marker; hecaton's own `skipmarks.count` was run on
+every changed file against base `294e2c6a` and found none added.
+
+**The port.** `verify/prior-drafts.sh 1180 origin/staging` printed START from `origin/agent/1180-18742`, branched at
+this run's base with CLEAN drift. Its six commits cherry-picked with no conflict and are unchanged apart from the one
+line above.
+
+**Live.** Read-only, before promotion: the `agent/console-src-*` ConfigMap's `lab.html` on watch-it-burn-private
+(`console-src-tk99h2bd2f`) and on watch-it-burn-community (`console-src-f7bmb8h8gh`) has no `privatebanner`, as expected
+until Argo CD syncs this change. Nothing on either cluster was changed.
+
+Not yet run on a cluster:
+- After hecaton promotes this and Argo CD syncs `console-src`, open `https://burritobot-private.burritobot.co/lab` and
+  confirm the red banner above the terminal tabs, with the terminal still filling its pane, and read the
+  `agent/console-src-*` ConfigMap's lab.html on watch-it-burn-community for `privatebanner`, with no banner showing on
+  that cluster's hosts.
+
+**Tests (run 18746).** At `18ae8178`, the scoped `bash verify/run-e2e-tools.sh` with
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"` (log `/var/lib/hecaton/runs/18746/e2e-tools.log`) printed
+`238 tests ran` for the offline suite, then `12 checks ran (the offline suite and 11 tier tests) in 11m55s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_guard_mcp_both.py`, `test_lab_private_banner.py`,
+`test_lab_private_banner_e2e.py` and `verify/test_scope_tests.py` were among them. The prose gate passed.
