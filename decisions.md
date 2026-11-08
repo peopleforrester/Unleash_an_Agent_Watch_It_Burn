@@ -40239,7 +40239,7 @@ was added.
 
 ## 2026-11-08 · #1134 · run 18785 · Run 18644's draft ported to staging, its skip-marker fixed, and the hang in guardrails-off found and fixed in the switch's Role
 
-**Why run 18644 did not land.** Hecaton's `skip-markers` gate counts lines matching `exit 2` per file and fails a
+**Why run 18644 did not land.** Hecaton's `skip-markers` gate counts lines naming an exit with code two per file and fails a
 change that adds one. Run 18644 added one in `verify/test_kubecon_probe.py`, in the label of the check that a private
 cluster whose switch does not reach the community context stops the run before any beat. That is the probe refusing
 to run and failing loudly, not a test skipping, but the gate reads the words. The label, the probe's docstring and the
