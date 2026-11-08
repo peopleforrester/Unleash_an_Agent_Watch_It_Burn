@@ -94,6 +94,17 @@ with the pinned, checksum-verified binaries in `verify/e2e-tools.lock`, which `v
 downloads into the gitignored `verify/.tools`. It needs network but no cluster, no AWS and no CONTEXT, and it
 fails when a fetch fails.
 
+The same binaries also come in one image, `ghcr.io/peopleforrester/wib-e2e-tools` (#1188), built from
+`verify/e2e-image/Containerfile`, which pins exactly the lock's rows (`verify/test_e2e_image.py` holds that). Each
+binary is fetched once, at build, and checked against the lock's SHA-256. The tag is the lock's SHA-256 and the other
+build files' (`python3 verify/e2e_image.py ref`), and `.github/workflows/build-e2e-tools-image.yml` pushes it from
+staging only when that tag is new. `bash verify/e2e-image.sh run` runs the tier inside it with podman or docker: it
+uses the image when the host has the tag and pulls it once when not, so a second run pulls nothing, and with neither
+it fails naming the image and `bash verify/e2e-image.sh build`, never downloading a binary itself. Inside, gh answers
+`gh issue view` through the host's own gh (`verify/gh_relay.py`), and the host's artifact cache is mounted for the
+Terraform providers, charts and wheels. Once the image is on ghcr.io and pullable, `run-e2e-tools.sh` itself runs
+through it and `fetch-e2e-tools.sh` goes (the rest of #1188).
+
 Both runners scope themselves to the change when `HECATON_BASE_SHA` is set, as hecaton's gate and the CI workflow set
 it (#1018): `verify/scope_tests.py` runs only the tests whose entry in `verify/scope-map.yaml` reads a path the change
 touches, and prints which it ran and why. A change to a runner, a shared helper, the map's rules or a path no entry

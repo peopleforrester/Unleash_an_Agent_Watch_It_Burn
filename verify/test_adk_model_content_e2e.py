@@ -51,7 +51,8 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
 
-OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
+# run-e2e-tools.sh names the pinned collector in OTELCOL_CONTRIB, the image's inside wib-e2e-tools (#1188); by hand, the fetched one.
+OTELCOL = pathlib.Path(os.environ.get("OTELCOL_CONTRIB") or REPO / "verify/.tools/bin/otelcol-contrib")
 LOCK = REPO / "verify/e2e-tools.lock"
 PROFILES = ("instructor", "attendee", "burn")
 MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
