@@ -40334,3 +40334,32 @@ Night Before step and the probe (`test_night_before_preflight.py`, `test_stage_s
 `test_900_probe_record.py`). The full Test and E2E commands are left to hecaton's validation, which runs the tests that
 read the changed files. `verify/test_kubecon_c3_live.py` is in the hand-run live suite and needs COMMUNITY_CONTEXT;
 the live community run above runs the same `c6-lands`. No dependency was added.
+
+## 2026-11-08 · #1035 · run 18809 · The suite results for #1035's drift-report change, both runners green
+
+**Why this run.** Run 18799's change merged into staging as ea51277a, and hecaton's test review left #1035 open on its
+last criterion: run 18799's entry recorded only `python3 verify/test_drift_report.py`, with no result for
+`bash verify/run-tests.sh` or `bash verify/run-e2e-tools.sh`. This run changes no code; it runs both and records them.
+
+**How it was run.** In a detached worktree of this clone at ea51277a, so the runners read the change's own tree,
+scoped to that commit alone: `HECATON_BASE_SHA=ea51277af7cf^1 bash verify/run-e2e-tools.sh`, which runs the scoped
+`run-tests.sh` as its first check. The change touches four paths (decisions.md, docs/floor.md,
+infra/terraform/drift/drift-report.py, verify/test_drift_report.py); `verify/scope_tests.py` selected 118 of 389
+offline tests and 16 of 88 tier tests, not FULL, so per CLAUDE.md's dispatched-run point 6 the whole tier was not
+run. The worktree was removed after.
+
+**Result.**
+
+- `run-tests.sh` (the offline suite): `118 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, 258s.
+- `run-e2e-tools.sh`: `17 checks ran (the offline suite and 16 tier tests) in 5m00s, 4 at a time`, `ALL E2E TOOLS
+  TIER CHECKS GREEN`, `exit=0`. The 16 tier tests: test_bootstrap_chart_render, test_control_plane_app_ports_module,
+  test_datadog_log_services_render, test_enforce_floor, test_guardrails_heading_e2e, test_iam_policy_structural,
+  test_image_registry_render, test_image_version_tags, test_images_lock_render, test_kubearmor_config_render,
+  test_lab_platform_operator_entry, test_no_docker_hub_render, test_platform_baseline_sister,
+  test_terraform_lock_init, test_terraform_mirror_lock, test_terraform_plugin_cache_lock.
+- The log is `/var/lib/hecaton/runs/18809/e2e-tools.log` on hecaton's host.
+- At this run's tip (staging 5da273eb, which adds only #1134's commits after ea51277a), `python3
+  verify/test_drift_report.py` passes again.
+
+**Live.** This entry is the only change and touches no path a cluster runs, so no live check applies; run 18799's
+entry records the IAM lookup read live on accen-dev.
