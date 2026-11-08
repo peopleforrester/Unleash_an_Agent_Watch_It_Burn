@@ -1,5 +1,5 @@
 # ABOUTME: The identity the OTHER KubeCon cluster's guardrails-on uses on this one (#774): a ServiceAccount in its own
-# ABOUTME: namespace, a long-lived token, and a grant on exactly the objects the four Kubernetes guardrails are.
+# ABOUTME: namespace, a long-lived token, and a grant on the four guardrails' objects and guard-proxy's /toggle.
 #
 # Michael's spec on #774 (2026-11-01): one guardrails-on, run from either cluster's terminal, arms the four guardrails
 # on BOTH KubeCon clusters, community and private. The terminal reaches its own cluster with its own ServiceAccount; it
@@ -20,6 +20,14 @@
 #   KubeArmor block-recipe-snoop in `agent`, applied and deleted.
 #   Egress    the agent namespace's NetworkPolicies, applied and deleted as one set.
 # create cannot be limited by name in RBAC, so the last two grant create on their kind in `agent`, as the terminal has.
+#
+# Since #1148 it also reaches one endpoint beyond them: guard-proxy's /toggle, which guard-input-on and guard-input-off
+# call on the other cluster (`_both _toggle` in the terminal's .guardlib). The grant is get on services/proxy for the
+# guard-proxy Service's port by name, `guard-proxy:8080`, the name the API server checks for
+# /api/v1/namespaces/agent/services/guard-proxy:8080/proxy/... RBAC cannot narrow a proxy path, so this is every GET on
+# guard-proxy's port: /toggle, and the read-only /guards, /controls, /cost and /prompts the chat page already shows the
+# room. get admits no POST, so not /chat. pods/exec was the other way in, and it cannot be named: a Deployment's pod
+# name changes, so it would be exec into every pod in `agent`, the web terminal's included.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -81,6 +89,10 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
     verbs: ["get", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames: ["guard-proxy:8080"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
