@@ -34569,3 +34569,15 @@ desk, which has no such path yet). Nothing changed on either cluster.
 https://support.burritobot.co/cluster-read` answers 403 from outside; a new deploy's row on /deployments.json carries
 `kind` and an empty `removed_at`; and a report posted in-cluster to `http://fake-ticket.agent.svc.cluster.local:8080/cluster-read`
 greys the row of a Deployment it omits. The end-to-end check with #1050's reader is #1051's live test.
+
+**Suite results, run 18496.** On `f8fa66fc`, `bash verify/run-tests.sh` unscoped printed `350 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`. `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=fad187ce` printed `237 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the scoped offline suite, then `36 checks ran (the offline suite
+and 35 tier tests) in 11m20s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; `verify/test_desk_removed_rows.py`,
+`verify/test_public_images.py` and `verify/test_deployments_witch_line_e2e.py` were among them and passed. The first
+pass of the change failed `verify/test_deploy_app_manifest_shapes.py` and `verify/test_deploy_app_reapply_422.py`,
+whose `_report` stubs did not take `kind`; they were fixed in `f8fa66fc`. One earlier E2E pass, run at the same time
+as a second offline run in the same worktree, failed `verify/test_ops_view.py` on "the hosts table it passes is
+fleet.sh hosts": both runs wrote `fleet.sh ops`'s one `${LOG_DIR}/ops-hosts.tsv`. Alone it passed three times out of
+three and in both full runs, so the two runs raced on that file. No dependency was added. The logs are
+`/var/lib/hecaton/runs/18496/run-tests-2.log` and `/var/lib/hecaton/runs/18496/e2e-tools-3.log`.
