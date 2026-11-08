@@ -41723,3 +41723,48 @@ this run changes only decisions.md, so the selector names no tools-tier test (a 
 `run-e2e-tools.sh` was not re-run and nothing was fetched. No scope-map entry changes, because no test was added.
 
 **Live check.** This run's work is the live check itself, above.
+## 2026-11-08 · #1226 · run 18800 · `fleet.sh beacon-reset` zeroes the shared beacon count and checks the view reads zero
+
+**What.** #1144 asked for a clear of the room's start state before the talk. #1159 already clears the deployments
+page (`desk-reset`). This run adds `./fleet.sh beacon-reset` for the beacon count, which every practice beacon has
+added to. It POSTs `/beacon/reset` on `WIB_PROVISIONING_URL` with the admin token in `X-Admin-Token`. The route is
+provisioning-agenticburn's `app.py` `beacon_reset`, which deletes every row of `beacons` and answers
+`{"cleared": n}`, or 403 to any other token. It then reads `WIB_BEACON_VIEW_URL` (default
+`https://beacon.burritobot.co/beacon/view`, the page the room sees) and exits 0 only when its `data-count` is 0. It
+reads the count the same way `challenges/c1-exfil-s3/fallback.kubectl.sh` does. The provisioning app does not change.
+
+**Choices.** The token comes from `resolve_admin_token`, as for `ingest` and `ops`, and goes to curl as `-H @-` on
+stdin, so it is never on a command line where `ps` would show it. `_prov_call` puts it in argv; this verb does not.
+Nothing the app answers is echoed: a 403 prints the code and what to check, any other code prints the code alone.
+A count above zero after a 200 is named with the count, since a cluster still posting (a practice run, a probe)
+refills it between the reset and the read. The view is read on the router host rather than the Railway host,
+because the router host is the page the room watches.
+
+**Tests.** `bash verify/test_fleet_beacon_reset.sh`: 25 passed, 0 failed. It runs the real `fleet.sh beacon-reset`
+against a fake provisioning app on 127.0.0.1 with a token drawn per run, a stub `railway` and an empty `HOME`. It
+checks that the fake gets the token in `X-Admin-Token` and the token is in no output, that a reset to zero passes,
+and that a 403, a count that stays at 7, a view answering 500, a page with no `data-count`, an unreachable app and a
+stray argument each fail and name the cause. It also checks that with no token anywhere the verb fails naming all
+three sources and posts nothing, and that a token from the secrets env file is used. `verify/scope-map.yaml` gained
+its entry from `python3 verify/scope_tests.py write`. `python3 verify/test_scope_tests.py` ALL PASS,
+`verify/test_fleet_wall_check.sh` 21/21, `verify/test_fleet_wall_reset.sh` 35/35 and
+`python3 verify/test_one_desk_tools.py` passed. The rest of the scoped `run-tests.sh` selection, and the tools tier
+tests `scope_tests.py select tools` names for `fleet.sh`, are left to validation.
+
+**Live.** This host has no Railway login (`railway whoami`: "Unauthorized. Please login with `railway login`") and no
+`~/secrets/projects/watch-it-burn-provisioning.env`, and no `WIB_ADMIN_TOKEN` is exported, so `resolve_admin_token`
+finds nothing. `./fleet.sh beacon-reset` from this branch at 2026-11-08T22:25Z printed, and posted nothing:
+
+```
+beacon-reset: FAIL cannot resolve the provisioning admin token; the beacon count was not reset. It comes from
+  an exported WIB_ADMIN_TOKEN, or the Railway variables of watch-it-burn-provisioning on a host logged in
+  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env
+exit=1
+```
+
+The view read `data-count="273"` then. An unauthenticated `POST /beacon/reset` on the Railway host answered 403, so
+the route is there and refuses without the token. No cluster was read or changed.
+
+**Not yet run on a cluster.** The live reset to zero: `./fleet.sh beacon-reset` on a host holding the admin token
+(Michael's, logged in to Railway, or with the secrets env file), which should print `cleared 273 beacon(s)` or more
+and `beacon-reset: done; the beacon view reads zero`. It is owed before the room, after the last rehearsal.
