@@ -41034,3 +41034,21 @@ The presenter terminal login was not read or touched.
 `python3 verify/test_guard_lease.py`, `python3 verify/test_scope_tests.py` and `python3 verify/scope_tests.py check`
 pass. The prose gate was run against origin/staging. The full Test and E2E commands are left to hecaton's validation.
 No dependency was added.
+
+## 2026-11-09 · #1070 · run 18852 · The moved promo villain `:v1` tags were lab-platform#372's banner rebuild, and staging already pins them
+
+**What moved the tags.** lab-platform#372 rebuilt and signed the ten promo villains with an interactive shell banner
+(`ENV=/etc/villain-banner.sh`), as Michael asked on #714, from lab-platform's staging at about 15:20Z on 2026-11-07.
+The owner's comment on #1070 names it a deliberate hand-over, and the old images cannot come back without dropping
+the banner. Skeletor's `dba85843...` was an intermediate push of the same rebuild.
+
+**Nothing left to change here.** Run 18228 (#1047) repinned `DIGESTS` in `verify/promo_villains.py` to the ten digests
+that comment lists, with the docstring naming lab-platform#372, in staging commit `c2d51ea5`. This run compared the two:
+all ten match, and no file in this repo names an old digest. lab-platform#375 closed at 19:47Z on 2026-11-07, and
+`deploy/watch-it-burn/images.tsv` on lab-platform's staging pins the same ten. Its main still names the 2026-10-30
+digests until lab-platform's own promotion, which nothing in this repo reads.
+
+**Tests run.** `python3 verify/test_promo_villains_public.py` printed twenty PASS lines and
+`All promo villain pull checks passed.` with exit 0, read from ghcr.io with no credential on 2026-11-09. The rest of
+the Test and E2E commands is left to hecaton's validation. No live cluster check: this change touches only
+decisions.md. No dependency was added.
