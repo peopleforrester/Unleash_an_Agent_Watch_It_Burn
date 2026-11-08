@@ -11,6 +11,8 @@ full:
   - verify/e2e-tools.lock
   - verify/artifact-cache.sh
   - verify/artifact_cache.py
+  - verify/package_cache.py
+  - verify/python.lock
   - verify/playwright_browsers.py
   - verify/bootstrap_chart.py
   - .gitmodules
@@ -94,6 +96,7 @@ always:
   test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole
   test_observability.py: line 41 builds a path under the repo root from a value it finds at run time
   test_otel_trace_id_fix_live_checks.py: 'verify/test_otel_trace_id_fix_live.py: it runs git cat-file, show, which reads the tree or history as a whole'
+  test_package_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_e2e_toolchain.py: it runs git ls-files, which reads the tree or history as a whole; line 348 builds a path under the repo root from a value it finds at run time; line 364 builds a path under the repo root from a value it finds at run time'
   test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time
   test_platform_baseline_sister.py: 'verify/test_platform_baseline.py: line 102 builds a path under the repo root from a value it finds at run time'
   test_platform_version_pins.py: 'line 165 builds a path under the repo root from a value it finds at run time; verify/test_observability.py: line 41 builds a path under the repo root from a value it finds at run time'
@@ -4596,6 +4599,11 @@ reads:
     - verify/otelcol_local.py
     - verify/test_collector_act2_redaction_e2e.py
     - verify/test_trace_shape_e2e.py
+  test_package_cache_e2e.py:
+    - images/watch-it-burn-backstage/.yarn/releases
+    - images/watch-it-burn-backstage/.yarn/releases/yarn-4.*.cjs
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
   test_party_app_hosts.py:
     - CLAUDE.md
     - agent

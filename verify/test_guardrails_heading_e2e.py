@@ -10,8 +10,8 @@ bodies, the way checkBackend() calls it: nothing on, one AI guard, one infra con
 /guards shape, and nothing again. For each the test reads what the room sees: the heading's rendered text
 (innerText applies the CSS uppercase), its computed style, the number of badges, and whether the italic note shows.
 
-Needs uv and network on the first run: the playwright pinned in verify/playwright_browsers.py comes in through
-`uv run`, and a browser is installed only when one is missing (#658). A missing tool, a browser that cannot be
+Needs uv and network on a cold host: the playwright pinned in verify/python.lock comes from the host artifact cache
+through verify/package_cache.py (#1121), and a browser is installed only when one is missing (#658). A missing tool, a browser that cannot be
 installed or a failed browser launch is a failure.
 """
 from __future__ import annotations

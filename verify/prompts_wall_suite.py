@@ -16,7 +16,7 @@ call verify/test_images_saved.py makes for the image archive.
 Why a clean environment. The wall's app reads FEED_URL, ROSTER_URL, MAX_ENTRIES and other settings from its
 environment, and run-e2e.sh's environment carries CONTEXT, KUBECONFIG and AWS settings that are none of its business.
 The suite runs with PATH, HOME, the locale, TMPDIR and uv's own UV_* settings only, so its result is the repo's, not
-the caller's ("Tests own their inputs").
+the caller's ("Tests own their inputs"). UV_CACHE_DIR is the uv cache in the host artifact cache (#1121).
 """
 from __future__ import annotations
 
@@ -27,7 +27,11 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
 
 WALL_REPO = "peopleforrester/prompts-agenticburn"
 # main is what the wall serves from; staging is where that repo's runs land first.
@@ -106,7 +110,11 @@ class Step:
 
 
 def suite_env() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items() if k in KEEP_ENV or k.startswith("UV_")}
+    env = {k: v for k, v in os.environ.items() if k in KEEP_ENV or k.startswith("UV_")}
+    # uv's cache is the one in the host artifact cache, outside every worktree (#1121). The wall's uv.lock records a
+    # hash for every package, and uv checks each download against it, so a warm host installs them with no download.
+    env["UV_CACHE_DIR"] = package_cache.installer_env()["UV_CACHE_DIR"]
+    return env
 
 
 def run_suite(src: pathlib.Path) -> list[Step]:

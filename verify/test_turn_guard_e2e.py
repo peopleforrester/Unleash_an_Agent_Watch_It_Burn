@@ -42,6 +42,9 @@ import threading
 import time
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
+
 AI = REPO / "gitops/ai-layer"
 GATEWAY = AI / "agentgateway.yaml"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -71,21 +74,22 @@ print("== prerequisites ==")
 binary = os.environ.get("AGENTGATEWAY", "")
 pin = re.search(r"'mcp==([0-9.]+)'", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"))
 want = pin.group(1) if pin else "?"
-# The library comes in through `uv run` at the image's pin on the image's Python, never from the host (#441). The
-# marker keeps the re-run from re-running itself.
+# The library comes from the package cache's mcp environment, the image's pins on the image's Python, installed from
+# the host artifact cache with hash checks, never from the host (#441, #1121). The marker keeps the re-run from
+# re-running itself.
 if os.environ.get("WIB_TURN_GUARD_UV") != want:
     check("AGENTGATEWAY names an executable agentgateway (run-e2e-tools.sh points it at verify/.tools/bin/agentgateway)",
           bool(binary) and os.access(binary, os.X_OK),
           f"AGENTGATEWAY={binary!r}: run bash verify/fetch-e2e-tools.sh, then AGENTGATEWAY=verify/.tools/bin/agentgateway")
-    check("uv is on PATH; it runs the pinned mcp library without a global install", shutil.which("uv") is not None)
+    check("uv is on PATH; it builds the pinned mcp environment without a global install", shutil.which("uv") is not None)
     check("images/workshop-mcp/Dockerfile pins mcp==<version>", pin is not None)
     if failures:
         finish()
     sys.stdout.flush()
-    os.execvpe("uv", ["uv", "run", "--no-project", "--python", "3.12", "--with", f"mcp=={want}", "--with", "pyyaml",
-                      "python", "-I", __file__], {**os.environ, "WIB_TURN_GUARD_UV": want})
+    cmd = [*package_cache.run_cmd("mcp"), "python", "-I", __file__]
+    os.execve(cmd[0], cmd, {**os.environ, "WIB_TURN_GUARD_UV": want})
 
-import yaml  # noqa: E402  (from the uv environment, beside the pinned mcp)
+import yaml  # noqa: E402  (from the mcp environment, beside the pinned mcp)
 
 try:
     from importlib.metadata import version
@@ -98,7 +102,7 @@ try:
 except ImportError as e:
     have = None
     print(f"        {e}")
-check(f"the mcp library is importable (uv run --with 'mcp=={want}')", have is not None)
+check(f"the mcp library is importable (package_cache.py run mcp, which python.lock pins at {want})", have is not None)
 check(f"it is the version the workshop-mcp image pins ({want}; found {have})", have == want)
 docs = [d for d in yaml.safe_load_all(GATEWAY.read_text(encoding="utf-8")) if d]
 deployment = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentgateway")

@@ -47,6 +47,7 @@ import uuid
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "verify"))
+import package_cache  # noqa: E402
 import probe_pod  # noqa: E402
 
 AI = REPO / "gitops/ai-layer"
@@ -76,16 +77,17 @@ def finish() -> None:
 print("== library prerequisites ==")
 pin = re.search(r"'mcp==([0-9.]+)'", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"))
 want = pin.group(1) if pin else "?"
-# The library comes in through `uv run` at the image's pin on the image's Python, never from whatever the host
-# has installed (#441). The marker keeps the re-run from re-running itself.
+# The library comes from the package cache's mcp environment, the image's pin on the image's Python, installed from
+# the host artifact cache with hash checks, never from whatever the host has installed (#441, #1121). The marker keeps
+# the re-run from re-running itself.
 if os.environ.get("WIB_TOOL_AUDIT_UV") != want:
-    check("uv is on PATH; it runs the pinned mcp library without a global install", shutil.which("uv") is not None)
+    check("uv is on PATH; it builds the pinned mcp environment without a global install", shutil.which("uv") is not None)
     check("images/workshop-mcp/Dockerfile pins mcp==<version>", pin is not None)
     if failures:
         finish()
     sys.stdout.flush()
-    os.execvpe("uv", ["uv", "run", "--no-project", "--python", "3.12", "--with", f"mcp=={want}",
-                      "python", "-I", __file__], {**os.environ, "WIB_TOOL_AUDIT_UV": want})
+    cmd = [*package_cache.run_cmd("mcp"), "python", "-I", __file__]
+    os.execve(cmd[0], cmd, {**os.environ, "WIB_TOOL_AUDIT_UV": want})
 try:
     import mcp  # noqa: F401
     from importlib.metadata import version
@@ -93,7 +95,7 @@ try:
     have = version("mcp")
 except ImportError:
     have = None
-check(f"the mcp library is importable (uv run --with 'mcp=={want}')", have is not None)
+check(f"the mcp library is importable (package_cache.py run mcp, which python.lock pins at {want})", have is not None)
 check(f"it is the version the workshop-mcp image pins ({want}; found {have})", have == want)
 if failures:
     finish()

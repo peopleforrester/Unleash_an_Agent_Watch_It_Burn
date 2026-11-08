@@ -24,6 +24,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
@@ -121,7 +123,7 @@ asyncio.run(main())
 """
 
 print("== run_shell and get_vault_entry over the real MCP transport read X-Pantry-Shut from the tools/call ==")
-r = subprocess.run(["uv", "run", "--no-project", "--with", "mcp==1.29.1", "--with", "pyyaml==6.0.2", "python", "-I", "-c",
+r = subprocess.run([*package_cache.run_cmd("mcp"), "python", "-I", "-c",
                     PROBE, str(AI), str(data), base64.b64encode(CARD.encode()).decode(), PANTRY_MAP, SIGNATURE],
                    capture_output=True, text=True, cwd="/", timeout=600,
                    env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "WORKSHOP_DATA_DIR": str(data)})

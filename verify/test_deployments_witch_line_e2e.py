@@ -30,6 +30,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
 import threading
 import time
 import urllib.request
@@ -140,7 +142,7 @@ for t in threading.enumerate():
 print("== a deploy_app tools/call over the real MCP transport takes the witch name from its request ==")
 data = tempfile.mkdtemp(prefix="deployments-witch-line-")
 # The two libraries images/workshop-mcp pins, at its versions: deploy_app reads a manifest with yaml.
-r = subprocess.run(["uv", "run", "--no-project", "--with", "mcp==1.29.1", "--with", "pyyaml==6.0.2", "python", "-I", "-c",
+r = subprocess.run([*package_cache.run_cmd("mcp"), "python", "-I", "-c",
                     PROBE, str(AI), DESK,
                     EDGAR, AGATHA],
                    capture_output=True, text=True, cwd="/", timeout=600,

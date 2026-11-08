@@ -29,6 +29,7 @@ import time
 import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import package_cache  # noqa: E402
 from weather_feed_probe import error_field, failure_line, request  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -51,7 +52,7 @@ def current_url(base: str, city: str) -> str:
 
 
 def call_tool(feed_url: str) -> str:
-    r = subprocess.run(["uv", "run", "--no-project", "--with", "mcp==1.29.1", "python", "-I", "-c", PROBE,
+    r = subprocess.run([*package_cache.run_cmd("mcp"), "python", "-I", "-c", PROBE,
                         str(AI / "server.py")], capture_output=True, text=True, cwd="/",
                        env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], "WEATHER_FEED_URL": feed_url})
     return r.stdout if r.returncode == 0 else f"<failed: {r.stderr.strip()[-300:]}>"

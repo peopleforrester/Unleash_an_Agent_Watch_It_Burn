@@ -17,6 +17,8 @@ on:
       - 'verify/iam_plan_render.py'
       - 'verify/tf_plugin_cache.py'
       - 'verify/artifact_cache.py'
+      - 'verify/package_cache.py'
+      - 'verify/python.lock'
       - 'verify/test_iam_policy_*.py'
       - 'verify/e2e-tools.lock'
       - 'verify/fetch-e2e-tools.sh'
@@ -28,6 +30,8 @@ on:
       - 'verify/iam_plan_render.py'
       - 'verify/tf_plugin_cache.py'
       - 'verify/artifact_cache.py'
+      - 'verify/package_cache.py'
+      - 'verify/python.lock'
       - 'verify/test_iam_policy_*.py'
       - 'verify/e2e-tools.lock'
       - 'verify/fetch-e2e-tools.sh'
@@ -49,10 +53,14 @@ jobs:
 
       # conftest v0.71.1 and terraform v1.15.6 come from verify/e2e-tools.lock, each checked against its SHA-256
       # before use, the same binaries the E2E tools tier runs with (#572).
+      # PyYAML is the wheel verify/python.lock pins, served from the host artifact cache by its SHA-256 and installed by
+      # pip with --no-index and --require-hashes, so a package whose bytes do not match fails the step (#1121).
       - name: Fetch the pinned tools (verify/e2e-tools.lock)
         run: |
           set -euo pipefail
-          python -m pip install --quiet PyYAML==6.0.3
+          echo "WIB_ARTIFACT_CACHE=$RUNNER_TEMP/wib-artifacts" >> "$GITHUB_ENV"
+          export WIB_ARTIFACT_CACHE="$RUNNER_TEMP/wib-artifacts"
+          python verify/package_cache.py install pyyaml --python "$(command -v python)" --pip
           bash verify/fetch-e2e-tools.sh
           echo "$GITHUB_WORKSPACE/verify/.tools/bin" >> "$GITHUB_PATH"
 
@@ -61,7 +69,6 @@ jobs:
       - name: Fill the Terraform provider mirror (verify/tf_plugin_cache.py prepare)
         run: |
           set -euo pipefail
-          echo "WIB_ARTIFACT_CACHE=$RUNNER_TEMP/wib-artifacts" >> "$GITHUB_ENV"
           WIB_ARTIFACT_CACHE="$RUNNER_TEMP/wib-artifacts" python verify/tf_plugin_cache.py prepare >> "$GITHUB_ENV"
 
       # Extraction, the exceptions table, the boundary on every role and user, and how each check reads AWS's answer.

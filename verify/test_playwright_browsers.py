@@ -1,6 +1,7 @@
 # ABOUTME: verify/playwright_browsers.py runs `playwright install` only when a browser is missing, and reports a missing
 # ABOUTME: browser in a directory it cannot write at once, naming both, instead of an 8-minute lock retry (#658).
-"""Offline: `uv` is stubbed to answer the dry run with a fixture listing and to log every call.
+"""Offline: the command that runs the pinned playwright (pb.UV, verify/package_cache.py's `run playwright --` prefix
+since #1121) is stubbed to answer the dry run with a fixture listing and to log every call.
 
 `playwright install` takes `__dirlock` in the browsers directory before it looks at anything, so on a host whose
 shared PLAYWRIGHT_BROWSERS_PATH is not writable it spent about 8 minutes per test failing with EACCES (#658). These
@@ -18,7 +19,10 @@ import tempfile
 
 VERIFY = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(VERIFY))
+import package_cache  # noqa: E402
 import playwright_browsers as pb  # noqa: E402
+
+REAL_UV = list(pb.UV)
 
 failures: list[str] = []
 
@@ -75,6 +79,7 @@ def scenario(t: str, browsers_mode: int, installed: tuple[str, ...], **kw) -> tu
     browsers.mkdir()
     install(browsers, *installed)
     stub_uv(tmp / "bin", log, browsers, **kw)
+    pb.UV = [str(tmp / "bin" / "uv")]
     browsers.chmod(browsers_mode)
     os.environ["PATH"] = f"{tmp / 'bin'}:{PATH}"
     return browsers, log
@@ -151,7 +156,7 @@ with tempfile.TemporaryDirectory() as t:
     problems = pb.ensure()
     check(f"it is ready ({problems})", problems == [])
     check("`playwright install chromium` ran once, through the pinned playwright",
-          installs(log) == [f"run --no-project --with {pb.PLAYWRIGHT} playwright install chromium"], str(calls(log)))
+          installs(log) == ["playwright install chromium"], str(calls(log)))
 with tempfile.TemporaryDirectory() as t:
     browsers, log = scenario(t, 0o755, (), install_rc=1)
     problems = pb.ensure()
@@ -178,6 +183,14 @@ with tempfile.TemporaryDirectory() as t:
     check("a dry run that lists no install location is a problem",
           len(problems) == 1 and "listed no install location" in problems[0], str(problems))
 os.environ["PATH"] = PATH
+pb.UV = REAL_UV
+
+print("== the pinned playwright comes from the package cache, hash-checked (#1121) ==")
+check("pb.UV runs a program from package_cache.py's playwright environment",
+      REAL_UV[1:4] == [str(VERIFY / "package_cache.py"), "run", "playwright"] and REAL_UV[-1] == "--", str(REAL_UV))
+check(f"PLAYWRIGHT ({pb.PLAYWRIGHT}) is what that environment asks for and what python.lock pins",
+      pb.PLAYWRIGHT in package_cache.ENVS["playwright"].requires
+      and pb.PLAYWRIGHT == f"playwright=={package_cache.pinned('playwright', 'playwright')}", pb.PLAYWRIGHT)
 
 print("== the Playwright tier tests install through the module ==")
 for t in sorted(VERIFY.glob("test_*.py")):

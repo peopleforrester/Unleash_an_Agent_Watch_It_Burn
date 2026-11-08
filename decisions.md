@@ -34681,3 +34681,98 @@ then a comment on #647 with what went and the APM count left to retention.
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` with `verify/test_dd_purge_public.py` among them, then `84 checks ran
 (the offline suite and 83 tier tests) in 13m44s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
 `prose gate: pass`. The log is `/var/lib/hecaton/runs/18508/work/e2e-tools.log`.
+
+## 2026-11-08 · #1121 · run 18530 · Pinned Python packages come from the host artifact cache by SHA-256, installed offline with --require-hashes
+
+**What.** Part of #1115, after #1117 (the cache), #1118 (tools and charts) and #1119 (Terraform providers). No
+earlier draft existed (`verify/prior-drafts.sh 1121 origin/staging` printed NONE, and the issue had no comments).
+`verify/package_cache.py` is new, with `verify/python.lock`. Every pinned Python install in verify/, scripts/ and the
+CI jobs now goes through it, and the one Node install takes its caches from it.
+
+**The lock.** `python.lock` holds five environments, each pinning every package it installs, dependencies included,
+as one wheel per package by file name, SHA-256 and URL: `pyyaml` (PyYAML 6.0.3, Python 3.13, the CI jobs' Python),
+`playwright` (1.64.1, Python 3.13), `segno` (1.6.6, Python 3.13), `mcp` (mcp 1.29.1 and PyYAML 6.0.2 on Python 3.12,
+the workshop-mcp image's pins on its Python) and `llm-guard` (torch 2.14.0+cpu and llm-guard[onnxruntime] 0.3.16 on
+Python 3.12, with the PyTorch CPU index). That is 135 wheels. `package_cache.py write` makes it: `uv pip compile
+--format pylock.toml` for the environment's Python on `x86_64-manylinux_2_28`, and of the wheels uv lists for that
+platform, the one that Python prefers (`best_wheel()`, packaging's tag order with glibc capped at 2.28 and bare
+`linux_x86_64` left out). No environment needs a source build. The mcp tests used to run on whatever Python uv picked,
+and now run on the image's 3.12; the mcp tests that pinned only mcp now get PyYAML 6.0.2 beside it as well.
+
+**The install.** `wheelhouse(env)` asks `artifact_cache.get_retrying()` for each wheel by its sum. A hit is hashed again
+and served with no network access, a miss is fetched once from the locked URL, and a cached wheel whose bytes changed
+fails, naming the wheel and both sums, and is not fetched again (#1117's rule). The wheels are linked by file name
+into `<root>/packages/wheels/<env>-<digest>/` beside a `requirements.txt` of `name==version --hash=sha256:<sum>`
+lines. uv then installs with `--offline --no-index --no-build --find-links <wheelhouse> --require-hashes`, and pip
+with `--no-index --only-binary=:all: --require-hashes`. Both hash each wheel again before they unpack it: with the
+artifact cache's check bypassed, uv 0.13.0 refused other bytes under the pinned name with "Hash mismatch", with its
+own cache warm too. `environment(env)` builds a venv at `<root>/packages/envs/<env>-<digest>/` (the digest covers the
+lock and the interpreter uv finds) under an flock, once, and every later call fills the wheelhouse again before it
+returns, so every call re-checks the cached wheels. `UV_CACHE_DIR` and `PIP_CACHE_DIR` are
+`<root>/packages/uv-cache` and `pip-cache`.
+
+**The callers.** `package_cache.run_cmd(env)` is the prefix `python3 verify/package_cache.py run <env> --root <root>
+--`, which builds or re-checks the environment and then runs the program from its bin. It names the resolved root,
+since several tier tests hand their child only PATH and HOME, which would lose `WIB_ARTIFACT_CACHE` on the CI runner.
+`playwright_browsers.UV` is that prefix for `playwright`, so the six Playwright tests, `ci_chromium_libs.py` and
+`scripts/capture-fallback-screenshots.py` change with it. The mcp tests (`test_check_inventory_schema_e2e.py`,
+`test_weather_feed_e2e.py`, `test_deployments_witch_line_e2e.py`, `test_recipe_pantry_gate_e2e.py`, and the
+re-execs in `test_tool_audit_live.py` and `test_turn_guard_e2e.py`), the three llm-guard tests and
+`injection_config_matrix.py`, and `test_audience_page_e2e.py`'s segno run use it. The hand-run usage lines in
+`scripts/audience-qr.py`, `failover_drill.py`, `browser-smoke.py`, `lab-render.py` and `version-drift.py` now name it,
+and `agent_probe.py`'s `uv run --with nothing`, which installed a PyPI package named nothing, is now `python3`.
+`prompts_wall_suite.py` and `test_wall_clock_burst_sister_e2e.py` run a sister repo's own `uv run` on that repo's
+uv.lock, whose hashes uv checks; they now set `UV_CACHE_DIR` to the artifact root's.
+
+**CI.** `verify-suites.yml` sets `WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts` in both jobs before the
+Python step, which runs `package_cache.py install pyyaml --python "$RUNNER_TEMP/venv/bin/python"`; the e2e-tools job's
+later step that set it is folded into this one. `iam-policy.yml` and `plan-policy.yml`, on GitHub-hosted runners with
+no uv, run the same with `--pip`, under `$RUNNER_TEMP`, and trigger on the two new files. Their root is fresh on every
+job, so those two install cold each time, through the cache's pinned and hashed fetch.
+
+**Node.** The one Node install under verify/ and .github/workflows/ is `run-e2e.sh`'s `corepack yarn install
+--immutable` in the Backstage app. It now exports `package_cache.py node-env` first: `YARN_ENABLE_GLOBAL_CACHE=true`,
+`YARN_GLOBAL_FOLDER=<root>/packages/yarn`, `YARN_CHECKSUM_BEHAVIOR=throw` and `COREPACK_HOME=<root>/packages/corepack`.
+Tried with the app's own yarn 4.13.0 on a one-package registry on loopback: a warm cache installed `--immutable` with
+no request, and a cache zip with one file changed failed with `YN0018 ... doesn't match the expected checksum`, made no
+request and left the zip in place. Two gaps remain, both outside verify/. The Backstage yarn.lock records a checksum
+for each of its 2,769 registry packages with no platform condition, but none for 95 platform-conditional ones, the
+native binaries such as `@esbuild/linux-x64`: Yarn 4 does not write them, and a scratch copy with `supportedArchitectures`
+naming linux, x64 and glibc, run with `--mode=update-lockfile`, left yarn.lock unchanged. And corepack fetches the
+yarn 4.13.0 it dispatches through from repo.yarnpkg.com once per COREPACK_HOME with no hash, since the app's
+`packageManager` field carries none; yarn then runs the committed release its `yarnPath` names. Both are followups on
+`images/watch-it-burn-backstage/`.
+
+**The tests.** `verify/test_package_cache.py` (offline) holds the lock's form against `render()`, each environment's
+pins against ENVS and each caller's pin (PLAYWRIGHT, the workshop-mcp Dockerfile's mcp, pyyaml and Python, both
+`LLM_GUARD` constants and `topic_cases.CLASSIFIER`), seven `best_wheel()` cases, the lock's refusals, and the helper
+with a counting fetcher and a stubbed uv: a cold fill fetches each wheel once, a warm one fetches nothing and leaves
+the fetch log alone, a changed cached wheel fails by name with both sums and is not fetched or deleted, a download
+that does not match is kept nowhere, the install command line, the caches' paths, no rebuild on a second call, the
+re-check with the environment built, and an interpreter on another Python refused. It scans every tracked file in
+verify/, scripts/ and .github/workflows/ for `uv run`, `"--with",`, `pip install`, `uvx`, `pipx`, npm, npx, yarn and
+pnpm installs, and fails on any outside nine named files, each with why; it holds run-e2e.sh's node-env and the
+yarn.lock checksums above, and each workflow job that installs PyYAML. `verify/test_package_cache_e2e.py` (tools tier,
+loopback only) runs real uv on a wheel it builds and the Backstage app's yarn on a registry it serves: cold, warm with
+no fetch, a changed wheel refused with no fetch, uv's own refusal of other bytes, and the three Node cases above.
+`test_playwright_browsers.py` now stubs `pb.UV` instead of `uv`, since `uv` builds the environment;
+`test_e2e_tools_tier.py`'s scratch checkouts get a stand-in `package_cache.py` whose prefix is the stubbed `uv`;
+`test_tool_audit.py`, `test_iam_policy_ci.py` and `test_prompts_wall_suite.py` read the new lines. In
+`verify/scope-map.yaml`, `package_cache.py` and `python.lock` join `full` beside `artifact_cache.py`, since every
+Playwright test imports the helper, `test_package_cache.py` goes to `always` and `test_package_cache_e2e.py` to
+`reads`, as `scope_tests.py write` gave them; the rest of what `write` produced was other tests' drift and is not in
+this change.
+
+**Warm, measured on this host.** With the five environments built, `package_cache.py run <env> -- python -c pass`
+took 132 to 174 ms for the four small ones and made no fetch. The llm-guard environment built cold in 118 s, about
+1 GB of wheels fetched once. `test_check_inventory_schema_e2e.py`, `test_audience_page_e2e.py`,
+`test_guardrails_heading_e2e.py`, `test_recipe_pantry_gate_e2e.py` and `test_topic_classifier.py` then passed in 3, 2,
+3, 3 and 40 s with the fetch log unchanged.
+
+**Left behind and limits.** A changed lock makes a new venv beside the old, which is not removed; the llm-guard one is
+about 1.8 GB. A read-only root (hecaton#540's `HECATON_TOOLS_CACHE`, set nowhere today) cannot hold the venvs or
+their locks, so the helper fails there on the write, naming the path, as #1117's misses do. No new dependency: the
+helper and both tests use the standard library, uv, node and the committed yarn release.
+
+**Not yet run on a cluster.** Nothing: the change touches verify/, scripts/ and .github/workflows/ only, none of which a
+cluster runs, so no live check.

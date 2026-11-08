@@ -383,8 +383,21 @@ def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> 
         ((VERIFY / "artifact-cache.sh", VERIFY / "artifact_cache.py") if FETCH in scripts else ())
     for s in scripts + tuple(dict.fromkeys(h for h in helpers if h not in scripts)):
         shutil.copy2(s, vdir / s.name)
+    if BROWSERS in scripts:
+        # playwright_browsers.py runs playwright through package_cache.py's `run playwright --` prefix (#1121). The
+        # stand-in makes that prefix the stubbed `uv` alone, which answers the dry run, so no environment is built.
+        (vdir / "package_cache.py").write_text(STUB_PACKAGE_CACHE)
     (vdir / "e2e-tools.lock").write_text(lock)
     return vdir
+
+
+STUB_PACKAGE_CACHE = """import types
+ENVS = {"playwright": types.SimpleNamespace(requires=("playwright==1.64.1",))}
+
+
+def run_cmd(env, root=None):
+    return ["uv"]
+"""
 
 
 def run(script: pathlib.Path, tmp: pathlib.Path, bindir: pathlib.Path,
