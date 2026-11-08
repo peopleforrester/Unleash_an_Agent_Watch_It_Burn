@@ -86,12 +86,16 @@ rules:
     resources: ["roles"]
     resourceNames: ["workshop-agent"]
     verbs: ["get", "patch", "escalate"]
+  # list and watch with delete (#1134): guardrails-off's `kubectl delete` waits for each object to go, and while one
+  # still holds a finalizer (the AWS network policy controller's networking.k8s.aws/resources on every NetworkPolicy)
+  # kubectl lists and watches it. Without these two the list is Forbidden and kubectl retries it until it is killed,
+  # which is how guardrails-off hung on the peer in runs 18644 and 18785.
   - apiGroups: ["security.kubearmor.com"]
     resources: ["kubearmorpolicies"]
-    verbs: ["get", "create", "patch", "delete"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
-    verbs: ["get", "create", "patch", "delete"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
   - apiGroups: [""]
     resources: ["services/proxy"]
     resourceNames: ["guard-proxy:8080"]

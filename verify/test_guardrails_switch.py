@@ -294,14 +294,20 @@ for scope, rules in (("agent", role["rules"]), ("", crole["rules"])):
             for name in r.get("resourceNames") or ["*"]:
                 GRANT.setdefault((scope, res, name), set()).update(r["verbs"])
 check("the grant: the workshop-agent Role (get, patch, escalate), the two registry policies (get, patch), "
-      "KubeArmor policies and NetworkPolicies in agent (get, create, patch, delete), and since #1148 get on "
+      "KubeArmor policies and NetworkPolicies in agent (get, list, watch, create, patch, delete), and since #1148 get on "
       "guard-proxy's Service proxy by name",
       GRANT == {("agent", "roles", "workshop-agent"): {"get", "patch", "escalate"},
                 ("agent", "services/proxy", "guard-proxy:8080"): {"get"},
-                ("agent", "kubearmorpolicies", "*"): {"get", "create", "patch", "delete"},
-                ("agent", "networkpolicies", "*"): {"get", "create", "patch", "delete"},
+                ("agent", "kubearmorpolicies", "*"): {"get", "list", "watch", "create", "patch", "delete"},
+                ("agent", "networkpolicies", "*"): {"get", "list", "watch", "create", "patch", "delete"},
                 ("", "validatingpolicies", "restrict-image-registries"): {"get", "patch"},
                 ("", "validatingpolicies", "deny-external-registries"): {"get", "patch"}}, str(GRANT))
+# kubectl delete waits for each object to go (its --wait defaults to true), and while one still holds a finalizer it
+# lists and watches it; a delete the grant admits with no list and watch beside it is retried Forbidden until killed,
+# which hung guardrails-off on the peer in runs 18644 and 18785 (#1134).
+_deletes = {k: v for k, v in GRANT.items() if "delete" in v}
+check("every kind the switch may delete it may also list and watch, so guardrails-off's kubectl delete can see the "
+      "object go (#1134)", bool(_deletes) and all({"list", "watch"} <= v for v in _deletes.values()), str(_deletes))
 bindings = [d for d in sw if d["kind"] in ("RoleBinding", "ClusterRoleBinding")]
 check("both bindings name the guardrails-switch ServiceAccount alone",
       len(bindings) == 2 and all(b["subjects"] == [{"kind": "ServiceAccount", "name": "guardrails-switch",
