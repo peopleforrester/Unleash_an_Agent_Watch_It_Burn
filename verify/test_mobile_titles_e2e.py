@@ -1,27 +1,28 @@
-# ABOUTME: Renders burritbot.html in headless Chromium at phone widths and measures the title bar and the
-# ABOUTME: chat card title, so "the stacking of the title" (#387) is proven by geometry, not by a CSS grep.
+# ABOUTME: Renders burritbot.html in headless Chromium at phone widths and measures the title bar and the chat card
+# ABOUTME: title, so the one-row bar and compact card header (#1214, after #387) are proven by geometry, not a CSS grep.
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The rendered half of verify/test_mobile_titles.py.
 
 At each width the page is loaded from the file with every network request aborted (only layout is under
-test), and these must hold:
+test), so all four header buttons show and no witch name does. These must hold:
 
-- the title "BurritoBot · agenticburn" is one line on a row of its own;
-- the four header buttons are one even row (two even rows of two under 360px), none clipped, none past
-  the right edge;
-- in the chat card, the avatar, "BurritoBot" and Reset share one row, Reset is one line, and the tagline
-  starts below them;
+- the title "BurritoBot" is one line;
+- below 760px the bar is one row (#1214): every header button sits on the title's row, none clipped, none past
+  the right edge, all at one font size; with four buttons a phone shows their icons and 680px and up their labels;
+- in the chat card, the avatar, "BurritoBot", the ⓘ toggle and Reset share one row, the title and Reset are one
+  line each, and the tagline is folded;
 - nothing makes the page scroll sideways.
 
-At 1280 the header is still a single row, so the desktop layout is unchanged.
+At 1280 the bar is one row with its labels and the card shows its tagline with no ⓘ toggle, so the desktop layout is
+unchanged.
 
-Which fonts the host has decides how wide a label renders, and four across at 360px leave the BurritoBot label no
-room to spare: it fit on netcup and was cut off on Tanjiro's CI runner (#1047). So the page steps the four buttons'
-font down together until none overflows, and this test does not rest on the host's fonts to prove it. It renders the
-page twice: as shipped, and as a copy whose header buttons carry 1px of letter-spacing, about 12px wider per label
-than any font the host could pick. That copy must still pass every check, with its buttons at one size below 11px, so
-the fit is shown to work on the widest fonts, not only on the ones this host happens to have.
+Which fonts the host has decides how wide a label renders (#1047: a label fit on netcup and was cut off on Tanjiro's
+CI runner). So the page measures the bar and falls back to icons, then to a smaller font, rather than resting on the
+host's fonts, and this test does not rest on them to prove it. It renders the page twice: as shipped, and as a copy
+whose header buttons carry 4px of letter-spacing, about 40px wider per label than any font the host could pick. That
+copy must still pass every check, and at 680px, where the shipped page keeps its four labels, it must show icons,
+so the fit is shown to work on the widest fonts, not only on the ones this host happens to have.
 
 Needs uv and network on a cold host: the playwright pinned in verify/python.lock comes from the host artifact cache
 through verify/package_cache.py (#1121), and `playwright install chromium` fetches a browser only when one is missing, because it locks the browsers
@@ -43,11 +44,10 @@ from playwright_browsers import UV, ensure  # noqa: E402
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PAGE = REPO / "gitops/ai-layer/web/burritbot.html"
 EVENT_JS = PAGE.parent / "event.js"
-WIDTHS = [320, 359, 360, 390, 412, 430, 680, 1280]
+WIDTHS = [320, 359, 360, 390, 412, 430, 680, 760, 1280]
 # The copy's widening: inserted before the page's one </head>, after its own stylesheet, so it wins.
 HEAD_END = "</head>"
-WIDEN = "<style>header a.hb{letter-spacing:1px}</style>"
-CSS_PX = 11.0   # the phone header buttons' font size in the page's CSS, under 760px
+WIDEN = "<style>header a.hb{letter-spacing:4px}</style>"
 
 failures: list[str] = []
 
@@ -95,7 +95,9 @@ JS = '''() => {
     let n = 0, bottom = -Infinity;
     for (const r of rs) { if (r.top >= bottom - 1) { n++; bottom = r.bottom; } else bottom = Math.max(bottom, r.bottom); }
     return n; };
+  const shown = e => !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none';
   return {
+    icons: hdr.classList.contains('hbicons'), labels: btns.map(a => shown(a.querySelector('.hbl'))),
     brand: box(hdr.querySelector('.brand')), brandLines: lines(hdr.querySelector('.brand')),
     btns: btns.map(box), clipped: btns.filter(a => a.scrollWidth > a.clientWidth).map(a => a.id),
     over: btns.filter(a => a.scrollWidth > a.clientWidth).map(a => `${a.id} ${a.scrollWidth}>${a.clientWidth}`),
@@ -103,7 +105,8 @@ JS = '''() => {
     avatar: box(ch.querySelector('.avatar')), h2: box(ch.querySelector('h2')),
     h2Lines: lines(ch.querySelector('h2')),
     reset: box(ch.querySelector('.reset')), resetLines: lines(ch.querySelector('.reset')),
-    sub: box(ch.querySelector('.sub')),
+    about: shown(ch.querySelector('.about')) ? box(ch.querySelector('.about')) : null,
+    sub: shown(ch.querySelector('.sub')),
     docW: document.documentElement.scrollWidth,
   };
 }'''
@@ -127,9 +130,15 @@ if run.returncode != 0:
     sys.exit(1)
 
 
-shrunk_wide = False
+def same_row(a: dict, b: dict) -> bool:
+    """Two boxes share a row when each one's vertical middle lies inside the other's height."""
+    return a["t"] <= (b["t"] + b["b"]) / 2 <= a["b"] and b["t"] <= (a["t"] + a["b"]) / 2 <= b["b"]
+
+
+icons = {}
 for m in map(json.loads, run.stdout.splitlines()):
     w, btns, label = m["w"], m["btns"], m["page"]
+    icons[(label, w)] = m["icons"]
     tag = f"{w}" if label == "as shipped" else f"{w} {label}"
     print(f"== {w}px ==" if label == "as shipped" else f"== {w}px, {label} ==")
     check(f"{tag}: nothing scrolls sideways", m["docW"] <= w, f"scrollWidth {m['docW']}")
@@ -137,30 +146,31 @@ for m in map(json.loads, run.stdout.splitlines()):
     check(f"{tag}: no header button is clipped", not m["clipped"],
           f"clipped {m['clipped']}, scrollWidth>clientWidth {m['over']}, font px {m['px']}")
     check(f"{tag}: the header buttons share one font size", len(set(m["px"])) == 1, f"font px {m['px']}")
-    if label != "as shipped" and 360 <= w <= 430:
-        shrunk_wide = shrunk_wide or max(m["px"]) < CSS_PX
     check(f"{tag}: no header button runs past the edge", max(b["r"] for b in btns) <= w, "")
-    rows = sorted({round(b["t"]) for b in btns})
+    check(f"{tag}: the bar is one row, every button on the title's row", all(same_row(m["brand"], b) for b in btns),
+          f"title {m['brand']}, buttons {btns}")
+    check(f"{tag}: the buttons show {'icons' if m['icons'] else 'labels'}, all of them alike",
+          all(x == (not m["icons"]) for x in m["labels"]), f"labels shown {m['labels']}")
     if w >= 1280:
-        check(f"{tag}: desktop keeps one row, title beside the buttons",
-              len(rows) == 1 and abs(btns[0]["t"] - m["brand"]["t"]) < m["brand"]["h"], f"rows {rows}")
+        check(f"{tag}: desktop keeps the labels", not m["icons"])
+        check(f"{tag}: desktop shows the tagline and no ⓘ toggle", m["sub"] and m["about"] is None,
+              f"tagline {m['sub']}, toggle {m['about']}")
     else:
-        check(f"{tag}: the buttons sit below the title, not beside it",
-              min(b["t"] for b in btns) >= m["brand"]["b"], f"title bottom {m['brand']['b']}, rows {rows}")
-        want = 2 if w < 360 else 1
-        check(f"{tag}: {want} even row(s) of buttons", len(rows) == want, f"rows {rows}")
-        widths = [round(b["r"] - b["l"]) for b in btns]
-        check(f"{tag}: every button the same width", max(widths) - min(widths) <= 1, f"widths {widths}")
-        check(f"{tag}: avatar, chat title and Reset share a row",
-              all(abs(x["t"] - m["avatar"]["t"]) < m["avatar"]["h"] for x in (m["h2"], m["reset"])), "")
+        if label == "as shipped":
+            check(f"{tag}: four buttons show {'labels' if w >= 680 else 'icons'} at this width",
+                  m["icons"] == (w < 680), f"icons {m['icons']}")
+        check(f"{tag}: avatar, chat title, ⓘ and Reset share a row",
+              m["about"] is not None and all(same_row(m["avatar"], x) for x in (m["h2"], m["about"], m["reset"])),
+              f"avatar {m['avatar']}, title {m['h2']}, about {m['about']}, reset {m['reset']}")
         check(f"{tag}: the chat title is one line", m["h2Lines"] == 1, f"{m['h2Lines']} lines")
         check(f"{tag}: Reset is one line", m["resetLines"] == 1, f"{m['resetLines']} lines")
-        check(f"{tag}: the tagline starts below that row",
-              m["sub"]["t"] >= max(m["avatar"]["b"], m["h2"]["b"], m["reset"]["b"]) - 1, "")
+        check(f"{tag}: the tagline is folded", not m["sub"])
 
 print("== the fit engaged on the wide-font copy ==")
-check(f"at 360-430px the wide-font copy's buttons were stepped below {CSS_PX:g}px, so the fit ran and was "
-      "measured, not skipped", shrunk_wide)
+for w in (680,):
+    check(f"at {w}px the shipped page keeps its labels and the wide-font copy falls back to icons, so the fit ran "
+          "and was measured", icons.get(("as shipped", w)) is False and icons.get(("wide fonts", w)) is True,
+          f"shipped icons {icons.get(('as shipped', w))}, wide-font icons {icons.get(('wide fonts', w))}")
 
 print()
 if failures:

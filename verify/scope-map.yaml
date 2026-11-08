@@ -1509,6 +1509,18 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_chat_phone_screen_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_chat_saved_coc_e2e.py:
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js

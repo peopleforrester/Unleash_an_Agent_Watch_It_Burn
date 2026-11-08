@@ -82,6 +82,8 @@ function element(tag) {
   };
   e.querySelector = (sel) => e.querySelectorAll(sel)[0] || null;
   e.focus = () => {};
+  // No layout here: every box is empty, so the page's scroll to a reply's start (#1214) moves nothing.
+  e.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 });
   e.removeAttribute = () => {};
   e.addEventListener = () => {};
   return e;
@@ -115,7 +117,7 @@ function load() {
   for (const id of IDS) { els[id] = element("div"); els[id].id = id; }
   els.saved.innerHTML = savedMatch[1];
   ctx = {
-    window: {}, location: { search: "", hostname: "localhost" },
+    window: { scrollBy: () => {} }, location: { search: "", hostname: "localhost" },
     document: { getElementById: (id) => els[id] || null, createElement: element, cookie: "" },
     localStorage, sessionStorage, fetch: fetchStub,
     navigator: { clipboard: { writeText: async () => {} } },

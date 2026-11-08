@@ -50,20 +50,20 @@
   header a.hb[hidden]{display:none}
   header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
   header a.hb:hover{background:rgba(255,255,255,.28)}
-  /* PHONE TITLE BAR (#387). A flex-wrap here put "BurritoBot" and one stray button on the top row and
-     dropped the rest below it, ragged: at 390px Terminal rode up beside the title and three buttons sat
-     under it, at 360px three sat under it and Feedback was left alone on a third row. Below 680px, where
-     the title and four buttons stop fitting on one line, the title gets its own row and the four buttons
-     share one even row beneath it, or two even rows of two where four cannot fit (under 360px).
-     681-760px keeps the one row, with the smaller buttons that let it fit. */
-  @media(max-width:760px){header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}}
-  @media(max-width:680px){
-    header{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 6px;padding:10px 12px}
-    header .brand{grid-column:1/-1}
-    header .spacer{display:none}
-    header a.hb{font-size:11px;padding:7px 4px;margin:0;text-align:center;overflow:hidden;text-overflow:ellipsis}
+  /* PHONE TITLE BAR: ONE ROW (#1214). #387 gave the title its own row below 680px and the buttons an even
+     row under it, which made the purple bar about 170px tall on a 412px Pixel, with the conversation pushed
+     down by it. Below 760px the bar is one row again: the brand without its domain (the address bar already
+     shows it), then the buttons at their natural width. Where their labels do not fit beside the brand (the
+     private bot's four buttons on a phone), the fit script below adds .hbicons and each button shows only
+     its icon, named by its aria-label and title. The public bot's two buttons keep their labels. */
+  @media(max-width:760px){
+    header{padding:8px 12px;gap:8px}
+    header .brand{font-size:17px;gap:8px}
+    header .brand .dom{display:none}
+    header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}
+    header.hbicons a.hb{font-size:15px;line-height:1;padding:6px 8px}
+    header.hbicons a.hb .hbl{display:none}
   }
-  @media(max-width:359px){header{grid-template-columns:repeat(2,minmax(0,1fr))}}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
   /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
@@ -107,16 +107,27 @@
   .chathead .mydeploys{margin-left:6px;font-size:11px;font-weight:700;color:var(--accent)}
   .chathead .newwitch{margin-left:6px;font:inherit;font-size:10px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--accent);padding:1px 6px;border-radius:6px;cursor:pointer;vertical-align:middle}
   .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
-  /* PHONE CHAT TITLE (#387). In a row, the tagline squeezed between the avatar and Reset ran to three or
-     four lines at phone width and Reset broke onto two ("↺" over "Reset"). Below 760px the avatar, the
-     "BurritoBot" title and Reset share the first row and the tagline takes the full width under them. */
+  /* The tagline's disclosure, shown only on a phone (#1214); a wider screen always shows the tagline. */
+  .chathead .about{display:none;font:inherit;font-size:15px;line-height:1;border:1px solid var(--line);background:#fff;color:var(--accent);padding:5px 7px;border-radius:8px;cursor:pointer}
+  /* PHONE CHAT TITLE: ONE COMPACT ROW (#1214, after #387). #387 put the avatar, the title and Reset on one row
+     with the tagline the full width under them, and the witch-name row under that: about 220px of card
+     header before any message on a 412px phone. Below 760px the row is the avatar, the title, an ⓘ toggle
+     and Reset, and the witch name with its re-roll button is one short line under it, the full width of the
+     card (.wline wraps the three, an inline span that changes nothing on a wider screen). The tagline folds
+     behind ⓘ: tapping it adds .open, which shows the tagline under the witch line. */
   @media(max-width:760px){
-    .chathead{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;padding:10px 12px}
+    .chathead{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:2px 8px;padding:8px 12px}
     .chathead .ctitle{display:contents}
-    .chathead .avatar{grid-column:1;grid-row:1}
-    .chathead h2{grid-column:2;grid-row:1;align-self:center}
-    .chathead .reset{grid-column:3;grid-row:1}
-    .chathead .sub{grid-column:1/-1;grid-row:2}
+    .chathead .avatar{grid-column:1;grid-row:1;width:30px;height:30px}
+    .chathead h2{grid-column:2;grid-row:1}
+    .chathead .about{grid-column:3;grid-row:1;display:inline-block}
+    .chathead .reset{grid-column:4;grid-row:1;margin-left:0;padding:6px 10px}
+    .chathead .wline{grid-column:1/-1;grid-row:2;line-height:1.3}
+    .chathead .wline:empty,.chathead .wline:not(:has(:not([hidden]))){display:none}
+    .chathead .witch{margin-top:0;font-size:11px}
+    .chathead .newwitch{margin-left:5px}
+    .chathead .sub{display:none}
+    .chathead.open .sub{grid-column:1/-1;grid-row:3;display:block;margin-top:2px}
   }
   /* The ONLY scroller in the desktop layout. min-height:0 is what lets it actually shrink. */
   .stream{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#fff,#fdfaff)}
@@ -208,6 +219,8 @@
      height (the #355 block below, from 980px since #1213). Stacking the panes while keeping the desktop's
      viewport-fraction heights (.menu at 34dvh, .chatcol at min(66dvh,620px), .wrap its own scroller) is
      what drew Backend Insights over the burrito menu on a Pixel Fold, unfolded, at about 840px.
+     760px and under: a phone, where the conversation gets the screen (#1214): a one-row title bar, a one-row chat
+     card header and a stream as tall as the screen less that chrome.
      640px and under: tighter padding and a wider message bubble. */
   @media(max-width:640px){
     .msg{max-width:92%}
@@ -249,6 +262,17 @@
     .stream{max-height:60vh}
     .composer{position:sticky;bottom:0}
   }
+  /* THE CONVERSATION GETS THE SCREEN ON A PHONE (#1214). #355's block above caps the stream at 60vh, and with
+     a two-row title bar and a tall card header only about 40% of a 412x915 screen showed message text. With
+     the one-row bar and the compact card header above, the stream may grow to the viewport less 232px of
+     that chrome (the bar, the card header with a witch line wrapped to two lines on a 360px phone, the composer),
+     so the whole chat card, composer included, fits on the screen, and never below #355's 60vh on a short screen.
+     It is a max-height, so a short conversation leaves the menu in view below. Past the stream's end a drag
+     goes on to scroll the page, where #355's contain would hold it inside the stream. Below 760px only:
+     761-980px keeps #1213's layout as it is. */
+  @media(max-width:760px){
+    .stream{max-height:max(60vh, calc(100dvh - 232px));overscroll-behavior-y:auto;padding:12px}
+  }
   /* Large displays: scale the type up rather than leaving a 4K screen reading like a phone held far away. */
   @media(min-width:1900px){ body{font-size:17px} .msg{font-size:15.5px} .chip{font-size:13px} }
   @media(min-width:2560px){ body{font-size:19px} .msg{font-size:17px} .chip{font-size:14.5px} }
@@ -287,41 +311,54 @@
     <path d="M26.6 4.6 l0.85 2.2 l2.2 0.85 l-2.2 0.85 l-0.85 2.2 l-0.85 -2.2 l-2.2 -0.85 l2.2 -0.85 z" fill="#FFD86B"/>
   </symbol></svg>
   <header>
-    <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· burritobot.co</small></div>
+    <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small class="dom" style="font-weight:600;opacity:.8;font-size:12px">· burritobot.co</small></div>
     <div class="spacer"></div>
     <!-- THE SAME FOUR BUTTONS AS THE VTT, same order (Michael, 2026-08-30). This page had no navigation
          at all, so an attendee who opened BurritoBot had no way back to their terminal except browser
-         history. Keep in sync with the identical block in lab.html. -->
-    <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener">&#9000; Terminal</a>
-    <a class="hb" id="bbbtn" href="/">&#127791; BurritoBot</a>
-    <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
+         history. Keep in sync with the identical block in lab.html. Here each button's icon and label are
+         separate spans (#1214), so a phone whose one-row bar cannot fit the labels shows the icons alone. -->
+    <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener" aria-label="Terminal" title="Terminal"><span class="hbi" aria-hidden="true">&#9000;</span><span class="hbl"> Terminal</span></a>
+    <a class="hb" id="bbbtn" href="/" aria-label="BurritoBot" title="BurritoBot"><span class="hbi" aria-hidden="true">&#127791;</span><span class="hbl"> BurritoBot</span></a>
+    <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener" aria-label="Datadog" title="Datadog"><span class="hbi" aria-hidden="true">&#128202;</span><span class="hbl"> Datadog</span></a>
     <!-- /quick, not the long end-of-workshop form (#364). This is the tab a student sits in for the
          whole workshop, so it is the likeliest place a thought gets dropped mid-attack, and /quick stays
          on the page after a send. source=burritobot separates a note left here from one left in the
          guide, which is what says whether friction was in the chat or in the instructions.
          This href is the workshop default. An event that names its own survey overrides it from
          event.js (#451); do not edit an event's URL in here. -->
-    <a class="hb" id="fbbtn" href="https://feedback.burritobot.co/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener">&#128172; Feedback</a>
+    <a class="hb" id="fbbtn" href="https://feedback.burritobot.co/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener" aria-label="Feedback" title="Feedback"><span class="hbi" aria-hidden="true">&#128172;</span><span class="hbl"> Feedback</span></a>
   </header>
-  <!-- HEADER BUTTONS THAT FIT ANY FONT (#1047). Four across at 360px leave each label about 72px. The
-       BurritoBot label in bold 11px fills that exactly in Liberation Sans and runs 4px past it in DejaVu
-       Sans, so a phone with wider fonts showed it cut off. The CSS size stays the first choice. Where a
-       label still overflows its button, all four step down together, half a pixel at a time, until every
-       one fits, never below 8px. It runs again on a resize, since the grid's columns follow the viewport.
+  <!-- HEADER BUTTONS THAT FIT ANY FONT (#1047), ON ONE ROW ON A PHONE (#1214). The CSS size stays the first
+       choice. Below 760px the bar is one row (#1214): where the brand and the labelled buttons run past the
+       bar's edge, the bar takes .hbicons and each button shows its icon alone. Then, where a label or the row
+       still overflows, all the buttons step down together, half a pixel at a time, never below 8px (#1047:
+       four labels across a 360px phone fit in Liberation Sans and ran 4px past in DejaVu Sans). Above 760px
+       only a label wider than its own button counts, as before, which a desktop's buttons never are. It runs
+       again on a resize, once the fonts load, and once the page's main script has run, since that hides the
+       Terminal and Datadog buttons on the public bot (#645, #647), which can leave room for the labels.
        This is its own script, not part of the page's main one below: verify/chat-saved-harness.js runs
        that one in a stub DOM with no layout. -->
   <script id="hbfit">
     (function fitHeaderButtons(){
+      var bar=document.querySelector('body>header');
       var hb=[].slice.call(document.querySelectorAll('body>header a.hb'));
-      function over(){ return hb.some(function(a){ return a.scrollWidth>a.clientWidth; }); }
+      var phone=window.matchMedia('(max-width:760px)');
+      function over(){
+        return (phone.matches && bar.scrollWidth>bar.clientWidth) ||
+               hb.some(function(a){ return a.scrollWidth>a.clientWidth; });
+      }
       function fit(){
+        bar.classList.remove('hbicons');
         hb.forEach(function(a){ a.style.fontSize=''; });
-        if(!hb.length || !over()) return;
+        if(!hb.length) return;
+        if(phone.matches && over()) bar.classList.add('hbicons');
+        if(!over()) return;
         var px=parseFloat(getComputedStyle(hb[0]).fontSize);
         while(px>8 && over()){ px-=0.5; hb.forEach(function(a){ a.style.fontSize=px+'px'; }); }
       }
       fit();
       window.addEventListener('resize', fit);
+      document.addEventListener('DOMContentLoaded', fit);
       if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
     })();
   </script>
@@ -379,7 +416,8 @@
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
-        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a><button type="button" class="newwitch" id="newwitch" hidden>Get a new witch name</button><a class="mydeploys" id="mydeploys" hidden target="_blank" rel="noopener">see your deployments</a></div>
+        <div class="ctitle"><h2>BurritoBot</h2><div class="sub" id="chatsub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><span class="wline"><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a><button type="button" class="newwitch" id="newwitch" hidden>Get a new witch name</button><a class="mydeploys" id="mydeploys" hidden target="_blank" rel="noopener">see your deployments</a></span></div>
+        <button type="button" class="about" id="aboutbtn" aria-expanded="false" aria-controls="chatsub" aria-label="About BurritoBot" title="About BurritoBot" onclick="this.setAttribute('aria-expanded',String(this.parentNode.classList.toggle('open')))">&#9432;</button>
         <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
@@ -580,8 +618,20 @@
       // Insert before the timestamp line so the stamp stays the last thing in the bubble.
       const meta=d.querySelector('.msgts'); if(meta) d.insertBefore(det, meta); else d.appendChild(det);
     });
-    const s=document.getElementById('stream'); s.scrollTop=s.scrollHeight;
+    showReplyStart(d);
     return d;
+  }
+  // A REPLY OPENS AT ITS FIRST LINE (#1214). Scrolling the stream to its end left a reply taller than the stream
+  // showing its last lines, so on a phone the reader started mid-answer with the opening under the card header.
+  // The stream now scrolls so the reply's top sits at the stream's top. The browser stops the scroll at the
+  // stream's end, so a reply that fits shows exactly as before, the stream at its end. Where the page itself
+  // scrolls (a phone, #355) and the reply's top is above what the screen shows, the page scrolls up to it too;
+  // visualViewport is the part of the page an open on-screen keyboard leaves showing.
+  function showReplyStart(d){
+    const s=document.getElementById('stream');
+    s.scrollTop+=d.getBoundingClientRect().top-s.getBoundingClientRect().top-8;
+    const vv=window.visualViewport, shown=vv?vv.offsetTop:0, top=d.getBoundingClientRect().top;
+    if(top<shown) window.scrollBy(0, top-shown-8);
   }
   function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
   function fmtTs(ts){try{return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
@@ -663,12 +713,14 @@
   // Easter egg (#36): when BurritoBot rings up a completed five-step order it says "Your order is now complete."
   // (#1010; it said "Free burritos for life" before). send() spots that sentence in any case, spacing or
   // punctuation and surfaces a ring-me-up button in chat; clicking it sets off a silly celebration.
-  function winBubble(){
+  // The button goes under the reply that completed the order, and the stream shows that reply from its first
+  // line again (#1214): the button is in view when the reply fits, and below it when the reply is long.
+  function winBubble(reply){
     const s=document.getElementById('stream');
     const d=document.createElement('div'); d.className='msg bot';
     const b=document.createElement('button'); b.className='winbtn'; b.type='button';
     b.textContent="🔔 That's my order, ring me up!"; b.onclick=celebrate;
-    d.appendChild(b); s.appendChild(d); s.scrollTop=s.scrollHeight;
+    d.appendChild(b); s.appendChild(d); showReplyStart(reply);
   }
   function celebrate(){
     const o=document.getElementById('celebrate'); o.style.display='flex';
@@ -713,9 +765,9 @@
       if(!res.ok){ let r=''; try{ r=(await res.json()).reply||''; }catch(e){}
         bubble(r||("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again."),'bot'); return; }
       const data=await res.json();
-      botReply(data.reply);
+      const reply=botReply(data.reply);
       checkMyDeployments();
-      if(/your\s+order\s+is\s+now\s+complete/i.test(data.reply||'')) winBubble();
+      if(/your\s+order\s+is\s+now\s+complete/i.test(data.reply||'')) winBubble(reply);
       const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;
       document.getElementById('tokens').textContent=tokens.toLocaleString();
       document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
