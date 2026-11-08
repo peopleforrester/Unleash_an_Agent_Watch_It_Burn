@@ -36299,3 +36299,48 @@ their 7 and 5 minutes. Flagged for the run-through's Segment 4 and 5 rows.
 
 Not yet run on a cluster: load `/kubecon` on both clusters after promotion and confirm the segment 4 and 5 blocks
 render (`verify/test_kubecon_seg4_flow.py` holds the source).
+
+## 2026-11-08 · #964 · run 18607 · Staging already meets #964 through its two children, #982 and #983; no code changes
+
+**Why the attempt before this one failed.** Run 18194 ended with no report. Its evidence lists six denied Bash
+calls and a denied Write, so it could neither run a command nor write `report.json`; its run directory is not
+readable from this run. That was the run's tool permissions, not the repo, and there is nothing to fix here. This
+run had Bash and Write.
+
+**What was already in staging.** `bash verify/prior-drafts.sh 964 origin/staging` printed START from
+`origin/agent/964-17871` (74e71b44, 9ccc9371), whose drift was two edits in place. That draft added
+`verify/weather_feed_client.py` and `verify/test_weather_feed_client.py`. It did not land (run 17871 ended
+claim-stale), and #964's work was then split into two child issues that did land: #982 (b77756e8, run 17965) added
+`verify/weather_feed_probe.py` and moved `verify/test_weather_feed_e2e.py` onto it, and #983 (run 18187) added
+`verify/test_weather_feed_upstream_failure.py`. The draft is the same design under other names, so it is not
+ported: porting it would add a second helper and a second offline test for the one path. Each criterion on the
+base, 29995f0c:
+
+- A live-reading request the feed answers with an error goes through `weather_feed_probe.request`, which catches
+  `HTTPError` and returns the status, the parsed body and the elapsed time. `check_reading` prints
+  `failure_line`, which reads `/current for Salt Lake City: HTTP 502 (expected 200) after 0.42 s; error: weather
+  service unavailable: timed out`, and fails "the feed answers 200 with a JSON reading" with that line.
+- The unknown-city request prints the same line, with the `error` field, when its status is not 404.
+- On any failed check, `main` prints the feed's stdout and stderr after stopping it, under "the feed's log". The
+  feed logs `upstream lookup for ... failed: <cause>` for each 502.
+- No retry: `request` makes one GET. The offline test holds that the feed got exactly one request per call.
+- The offline test serves the real `Handler` with Open-Meteo timing out, answering 503 and refusing, and holds
+  that the 502, the `error` text naming the cause and the feed's log line reach what `check_reading` prints.
+
+**The suites (run 18607, at 29995f0c).** `python3 verify/test_weather_feed_upstream_failure.py` passed alone. The
+live `python3 verify/test_weather_feed_e2e.py` passed alone, 10 checks. `bash verify/run-tests.sh`, log
+`/var/lib/hecaton/runs/18607/run-tests.log`, printed `361 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and
+`exit=0`. The first `bash verify/run-e2e-tools.sh` (`e2e-tools.log`) could not fetch 8 of its 11 pinned tools: every
+GitHub release download answered `HTTP Error 504: Gateway Time-out`. Once GitHub answered again the fetch completed.
+The second (`e2e-tools.2.log`) printed `86 checks ran (the offline suite and 85 tier tests) in 52m28s` with 7 tier
+checks red, each on a GitHub download: the Datadog Terraform provider zip (`test_iam_policy_structural.py`,
+`test_terraform_lock_init.py`), Gateway API's `standard-install.yaml`, the falco-talon, falcosidekick, falco and
+datadog-operator chart tarballs, and weaver's semantic-conventions fetch. Both weather tests passed in it.
+githubstatus.com read `Partially Degraded Service`, incident "Increase in timeouts for some unauthenticated users".
+
+**Scope map.** `python3 verify/scope_tests.py check` names `test_weather_feed_upstream_failure.py` among 18 tests
+with no entry in `verify/scope-map.yaml`. `scope_tests.py write` rewrote about 980 lines across many entries (each
+test that imports `package_cache` since #1121 gains its reads), so it is left to its own change and filed through
+this run's report. The selector still reads the test's own source, so the test runs when it should.
+
+**Live check.** Skipped: this run changes only decisions.md.
