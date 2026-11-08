@@ -24,7 +24,8 @@ Three questions, each answered from the account itself rather than from memory:
 3. **Is the record on?** Every account must have a Config recorder in the home region recording AWS::S3::Bucket
    and AWS::EKS::Cluster; without it an out-of-band change leaves nothing behind once it is undone. Config is
    regional and the recorder is in the home region only, so a resource in a standby region is reported as
-   outside it; the trail is multi-region, so CloudTrail still names who made it.
+   outside it; the trail is multi-region, so CloudTrail still names who made it. An account with no recorder
+   and no permissions boundary is told to apply the boundary root first, because the audit root needs it.
 
 Every AWS call carries --profile and --region, and every plan carries -var profile/region, so nothing here
 reads a shared default another session may have changed (CLAUDE.md, rule 6). The account list and the default
@@ -59,6 +60,8 @@ TF_DIR = pathlib.Path(__file__).resolve().parents[1]  # infra/terraform
 DEFAULT_REPO = "peopleforrester/Unleash_an_Agent_Watch_It_Burn"
 ISSUE_TITLE = "Fleet drift report"
 REQUIRED_CONFIG_TYPES = ("AWS::S3::Bucket", "AWS::EKS::Cluster")
+# infra/org/boundary's policy name, which aws/audit (and aws/cluster) look up with data "aws_iam_policy".
+BOUNDARY_POLICY = "watch-it-burn-permissions-boundary"
 CONFIG_TYPE = {"s3-bucket": "AWS::S3::Bucket", "eks-cluster": "AWS::EKS::Cluster"}
 CREATE_EVENT = {"s3-bucket": "CreateBucket", "eks-cluster": "CreateCluster"}
 # The tags aws/cluster puts on every resource (local.fleet_tags) that are also variables with no default.
@@ -438,7 +441,14 @@ def config_has(profile: str, region: str, kind: str, name: str) -> str:
     return f"recorded {items[0].get('configurationItemCaptureTime', '')}".strip() if items else "NOT recorded"
 
 
-def check_config(rep: Report, profile: str) -> None:
+def has_boundary(profile: str, region: str, account_id: str) -> bool:
+    """Whether infra/org/boundary's policy is in the account. The audit root looks it up by name, so in an account
+    without it the apply the report would name fails at plan (#981: aws1-student31 to 34 on 2026-11-06)."""
+    arn = f"arn:aws:iam::{account_id}:policy/{BOUNDARY_POLICY}"
+    return aws(profile, region, "iam", "get-policy", "--policy-arn", arn, ok_errors=("NoSuchEntity",)) is not None
+
+
+def check_config(rep: Report, profile: str, account_id: str) -> None:
     recs = (aws(profile, rep.region, "configservice", "describe-configuration-recorders") or {}).get(
         "ConfigurationRecorders", [])
     status = {s.get("name"): s for s in (aws(profile, rep.region, "configservice",
@@ -452,7 +462,10 @@ def check_config(rep: Report, profile: str) -> None:
             rep.config_ok[profile] = True
             return
     rep.config_ok[profile] = False
-    if not recs:
+    if not recs and not has_boundary(profile, rep.region, account_id):
+        rep.config[profile] = (f"NO recorder in {rep.region}, and no {BOUNDARY_POLICY}: apply infra/org/boundary, "
+                               "then infra/terraform/aws/audit, for this account")
+    elif not recs:
         rep.config[profile] = f"NO recorder in {rep.region}: apply infra/terraform/aws/audit for this account"
     else:
         rep.config[profile] = (f"no recorder in {rep.region} is both recording and covering "
@@ -629,7 +642,7 @@ def main(argv: list[str]) -> int:
 
     for prof in rep.accounts:
         try:
-            check_config(rep, prof)
+            check_config(rep, prof, ids[prof])
             inventory(rep, prof, register, managed_names[prof])
         except Incomplete as e:
             rep.errors.append(str(e))
