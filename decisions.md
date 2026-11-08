@@ -39118,3 +39118,36 @@ of 368 offline tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0, after `test
 first pass because `challenges/LAB-TEXT.md` named the old lab.html blob; `bash verify/export-lab-text.sh` re-stamped it.
 `bash verify/run-e2e-tools.sh` ran 29 checks (the offline suite and 28 of 86 tier tests, `test_lab_private_banner_e2e.py`
 among them) in 9m56s, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
+
+## 2026-11-08 · #1180 · run 18742 · Run 18676's draft ported, and test_guard_mcp_both.py given its own clock
+
+**Why run 18676 did not land.** Its `tests` gate failed on `test_guard_mcp_both.py (exit 1)`. The `FAIL: --context is
+empty` line in that output is `test_burritobot_cluster_live.py`'s own printout, not the failure. The test passed here
+by hand and under the runner's no-cloud guard, in 13 s, so the cause was looked for in what the gate host had and this
+one did not: load. guard-mcp-on's `_c7wait` reads `date +%s` against each write's t0. The test's stuck case passes a
+2 s bound and expects at least two reads of the gateway log. Between this cluster's write and the first read, the
+script also writes the peer and reads its Secret, each through a fake kubectl that starts a Python process. On a loaded
+host that span reaches 2 s, the first read is also the last, and the check "it read again, every 2 s, before giving
+up" sees `1 reads`. Shown: with a `time.sleep(0.3)` put into a copy of the fake kubectl, that one check failed with
+`1 reads`, as on the gate.
+
+**The fix.** The test owns the clock (CLAUDE.md, Tests own their inputs). Each run of a terminal command gets a fake
+`date`, which answers `+%s` from a clock file and passes every other form to the real `date`, and a fake `sleep`,
+which moves that file on by its whole seconds and returns at once. Time now passes only when the script sleeps, so the
+stuck case reads exactly twice, at the write and 2 s on, and the check now asks for exactly two. The same slowed copy
+passed with the fix. Nothing under `gitops/` changed for it, and no other test drives `_c7wait` with a bound.
+
+**The port.** `verify/prior-drafts.sh 1180 origin/staging` printed START from `origin/agent/1180-18676`, with drift on
+PROGRESS.md and `verify/scope-map.yaml`, both edits in place, and decisions.md as APPEND. The three commits
+cherry-picked with no conflict, and `python3 verify/scope_tests.py check` printed `0 problems`. The banner, its two
+tests and the LAB-TEXT.md export are the draft's, unchanged.
+
+**Live.** Read-only, before promotion: `https://burritobot-private.burritobot.co/lab` returned 200 with
+`markCommunity` and no `privatebanner`, and `https://attackme.burritobot.co/lab` returned 404, as run 18676 found.
+Nothing on either cluster was changed.
+
+Not yet run on a cluster:
+- After hecaton promotes this and Argo CD syncs `console-src`, open `https://burritobot-private.burritobot.co/lab` and
+  confirm the red banner above the terminal tabs, with the terminal still filling its pane, and read the
+  `agent/console-src-*` ConfigMap's lab.html on watch-it-burn-community for `privatebanner`, with no banner showing on
+  that cluster's hosts.
