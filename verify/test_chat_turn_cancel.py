@@ -13,6 +13,9 @@ What this holds, offline:
 - With every value guard-proxy's Deployment sets, its two timeouts scaled down from seconds to a fraction, the
   pinned proxy.py answers a turn whose task never finishes with a 502 that carries a readable reply, and the
   fake agent then receives tasks/cancel for that task.
+- The 502 is written before the tasks/cancel reaches the agent, held by order and not by a wall clock (#1054). The
+  fake agent holds its tasks/cancel answer until the 502 is written, so a 502 that waited on the cancel round trip
+  would leave the proxy's cancel to time out, and the agent would see the cancel before the 502.
 
 The live half (the proxy's task_cancel log line after a real runaway turn) is not here; see #742's decisions entry.
 """
@@ -38,6 +41,7 @@ CANCEL_FIX = "5fe5a7c30b03d024c5335b67c22e4953dfa06c4f"  # guard-proxy-agenticbu
 KITCHEN_DOWN = "BurritoBot's kitchen isn't answering. Try again in a moment."
 SCALE = 1 / 120  # PROXY_TIMEOUT 120s -> 1s; TURN_TIMEOUT keeps its ratio to it
 TASK = "task-runaway-742"
+CANCEL_HOLD_CEILING = 10.0  # seconds the fake agent holds tasks/cancel for the 502; a guard on a hang, not a bound
 failures: list[str] = []
 
 
@@ -75,13 +79,31 @@ check(f"PROXY_TIMEOUT {proxy_timeout:g}s is under TURN_TIMEOUT {turn_timeout:g}s
       0 < proxy_timeout < turn_timeout)
 
 
+# Set once guard-proxy has written the room's 502 to the client's socket (#1054). The fake agent holds its
+# tasks/cancel answer on it, so the check is about order, which host load cannot change. Run 17768 failed a 2.5 s
+# bound on this turn at 4.98 s, and the theory that the 502 waited on the cancel was wrong: proxy.py writes the 502,
+# then starts the cancel on its own thread (guard-proxy-agenticburn#60). The client, proxy.py and this agent share
+# one process on a shared host, so a starved client reads an answer already in its socket late.
+# The issue suggested setting this once the client has read the 502. The release is tied to the write instead: the
+# proxy's own tasks/cancel waits the scaled PROXY_TIMEOUT (1 s) for an answer, so a hold until a starved client
+# reads would turn host load into task_cancel_failed, the same flake in another check. A proxy that cancelled before
+# its 502 still fails here: the cancel reaches the agent with the event unset, the agent holds its answer, the
+# proxy's cancel times out, and only then is the 502 written.
+written_502 = threading.Event()
+
+
 class RunawayAgent(BaseHTTPRequestHandler):
-    """Accepts the turn as a task and works on it until tasks/cancel, as the 2026-10-31 turn did."""
+    """Accepts the turn as a task and works on it until tasks/cancel, as the 2026-10-31 turn did. It answers
+    tasks/cancel only once the room's 502 is written, and records whether the 502 was written when the cancel came."""
     calls: list[dict] = []
+    cancel_after_502: list[bool] = []
 
     def do_POST(self):  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
         RunawayAgent.calls.append(body)
+        if body.get("method") == "tasks/cancel":
+            RunawayAgent.cancel_after_502.append(written_502.is_set())
+            written_502.wait(CANCEL_HOLD_CEILING)
         state = {"message/send": "submitted", "tasks/get": "working", "tasks/cancel": "canceled"}.get(
             body.get("method"))
         if state is None:
@@ -118,6 +140,19 @@ spec = importlib.util.spec_from_file_location("guard_proxy_742", SUB / "proxy.py
 proxy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(proxy)  # safe: the server only starts under __main__
 proxy.Handler.log_message = lambda *a: None
+# _send is proxy.py's single response path for POST; the event marks the moment its 502 is on the client's socket.
+check("the pinned proxy.py answers POST through Handler._send", callable(getattr(proxy.Handler, "_send", None)),
+      "proxy.Handler has no _send, so this test cannot see when the 502 is written")
+_proxy_send = proxy.Handler._send
+
+
+def _send_and_mark(self, code, *args, **kwargs):
+    _proxy_send(self, code, *args, **kwargs)
+    if code == 502:
+        written_502.set()
+
+
+proxy.Handler._send = _send_and_mark
 
 events: list[str] = []
 messages: dict[str, str] = {}
@@ -170,6 +205,9 @@ cancels = [c for c in RunawayAgent.calls if c.get("method") == "tasks/cancel"]
 check("the agent receives one tasks/cancel", len(cancels) == 1, f"methods {[c.get('method') for c in RunawayAgent.calls]}")
 check("the cancel names the turn's task", bool(cancels) and cancels[0].get("params") == {"id": TASK},
       f"got {cancels[:1]}")
+check("the 502 is written before the tasks/cancel reaches the agent",
+      RunawayAgent.cancel_after_502 == [True],
+      f"502 already written when each cancel came: {RunawayAgent.cancel_after_502}")
 # The cancel thread logs task_cancel after the agent answers, and its JSON line goes to stderr before the Events
 # handler sees it. A fixed 0.2 s sleep went red in run 17835's suite, on a loaded host, with the task_cancel line
 # already on stderr: the thread was still in that write. So wait for the event, up to the same 5 s as the cancel.
