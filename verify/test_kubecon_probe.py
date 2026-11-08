@@ -884,6 +884,8 @@ class Fake:
         self.desk_env = {"cluster": "community", "remote": "private", "token": True}
         self.desk_secret = True
         self.desk_reads: list[list[str]] = []
+        # The one desk's /desk-forget (#1215): what room_ask asked the desk to remove after each HC-666 ask.
+        self.forgets: list[tuple[list[str], float, list[str]]] = []
 
     def desk_answer(self, args) -> tuple[int, str] | None:
         """The one desk's three pod reads, or None for any other kubectl call."""
@@ -990,6 +992,10 @@ class Fake:
         self.c6 = False
         return None
 
+    def forget_on_desk(self, names, since, tickets=()):
+        self.forgets.append((list(names), since, list(tickets)))
+        return None
+
     def tool_calls_since(self, since):
         self.log_reads.append(since)
         return kp.parse_tool_calls(self.audit_out)
@@ -1042,7 +1048,8 @@ class Fake:
 
 
 def run_admin(fake, max_calls=20):
-    return kp.Probe(fake, max_calls, settle=0, sleep=lambda s: None).run(kp.ADMIN, final=kp.GUARDS_OFF_BEAT)
+    # The admin run's desk is its guardrails peer's (main's peer_desk); the fake answers for both clusters.
+    return kp.Probe(fake, max_calls, settle=0, sleep=lambda s: None, desk=fake).run(kp.ADMIN, final=kp.GUARDS_OFF_BEAT)
 
 
 f = Fake()

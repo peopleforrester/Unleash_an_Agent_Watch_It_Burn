@@ -53,7 +53,10 @@ The guards are flipped by the KubeCon probe's own beats (verify/kubecon_probe.py
 stage does, guardrails-on after the Challenge 2 attack included (#774), and its last act is the probe's guards-off and
 guardrails-off, run even when a seed fails. The prompts carry no probe
 marker, so a seeded trace reads as the prompt Whitney shows; they do appear in the private bot's feed on the prompt
-wall, as the presenters' own stage prompts will.
+wall, as the presenters' own stage prompts will. The two Challenge 3 seeds ask through the probe's room_ask, so each
+deletes its Joker and removes its row from the one deployments page on the guardrails peer's desk, the community
+cluster, whatever the seed's verdict; a Joker or row it leaves fails the seed (#1215). The presenters open the seed's
+trace in Datadog, never its row.
 
 `seed` first reads the identity, the stage's start state and the one desk, and sends and flips nothing unless all three
 pass: on 2026-11-05 the private cluster ran the admin profile, KubeArmor's and the egress guardrails applied by Argo
@@ -348,6 +351,11 @@ def _c3(stamp: str, key: str, prompt: str,
             p.cluster.session = ""
         p.state.setdefault("seeded", []).append(key)
         ok, note = judge(d)
+        # A Joker, or its row on the one deployments page, left after the seed fails it, as the probe's C6 beats do
+        # (#1026, #1215): the presenters open the seed's trace in Datadog, never its row.
+        if kp.left_behind(d):
+            return False, f"session {session_id(key, stamp)}: {kp.left_behind(d)} (the seed's own verdict: " \
+                          f"{kp.PASS if ok else kp.FAIL}, {note})"
         return ok, f"session {session_id(key, stamp)}: {note}"
     return go
 
@@ -627,6 +635,8 @@ def cmd_seed(args) -> int:
                               "and nothing was flipped")
                     return 1
             probe = StageProbe(cluster, args.max_calls, settle=args.settle)
+            # c3-attack's Joker lands its row on the one page, the guardrails peer's desk; room_ask removes it (#1215).
+            probe.desk = kp.peer_desk(lease, args.context, args.profile, args.kubeconfig, args.timeout)
             results = probe.run(seed_beats(stamp), final=kp.GUARDS_OFF_BEAT)
     except guard_lease.LeaseBusy as e:
         log.error("SEEDED NOT RUN: the guard lock on %s stayed busy: %s", args.context, e)

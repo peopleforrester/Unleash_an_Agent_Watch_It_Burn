@@ -444,6 +444,11 @@ sites:
     class: live
     kind: cluster
     target: 'the bot''s desk, TICKET_SITE_URL''s /healthz (desk-relay or fake-ticket), from BurritoBot''s tool pod with kubectl exec (#1159)'
+  - match: urlopen\(r, timeout=20\)
+    lines: 1
+    class: live
+    kind: cluster
+    target: 'the one desk''s POST /desk-forget on its own loopback, from inside the community cluster''s fake-ticket pod with kubectl exec (#1215)'
   - match: urlopen
     lines: 2
     class: live
@@ -459,6 +464,12 @@ sites:
     class: live
     kind: lab-endpoint
     target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+  verify/one_desk_live.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the one support desk's public host and deployments page on the KubeCon community cluster (/submit, /deployments.json, #1158, #1215)
   verify/one_root_probe.py:
   - match: curl -s -m 120
     lines: 1
@@ -1114,6 +1125,11 @@ sites:
     lines: 10
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_live_check_cleanup.py:
+  - match: urlopen
+    lines: 4
+    class: loopback
+    why: the support desk's own server on 127.0.0.1, which the test starts (#1215)
   verify/test_lab_pipeline_collector.py:
   - match: urlopen
     lines: 1
