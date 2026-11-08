@@ -240,7 +240,8 @@ _c7wait() { local bound="$1" e ctl new t0 ts gen rest k left=() next=() who n ba
 # KubeArmor and egress, turned on or off on this cluster AND on the other KubeCon cluster at once, from either
 # terminal. The other cluster is reached with the kubeconfig `fleet.sh guardrails-link` writes into the
 # guardrails-switch/guardrails-peer Secret: its endpoint, its CA and the token of its guardrails-switch ServiceAccount,
-# whose grant is these four guardrails' objects and nothing else (gitops/guardrails-switch/).
+# whose grant is these four guardrails' objects (gitops/guardrails-switch/guardrails-switch.yaml) and, since #1149,
+# what guard-mcp-on and guard-mcp-off touch for C7 (mcp-switch.yaml beside it).
 # _peer : write that kubeconfig to ~/.kube/peer and print the other cluster's name. Prints nothing, failing, when this
 # cluster has not been linked.
 _peer() { local c k n

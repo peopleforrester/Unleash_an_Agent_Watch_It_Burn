@@ -20,6 +20,8 @@
 #   KubeArmor block-recipe-snoop in `agent`, applied and deleted.
 #   Egress    the agent namespace's NetworkPolicies, applied and deleted as one set.
 # create cannot be limited by name in RBAC, so the last two grant create on their kind in `agent`, as the terminal has.
+# This file's grant is those four alone. guard-mcp-on and guard-mcp-off reach C7's control on this cluster with the
+# same identity (#1149); their grant is in mcp-switch.yaml beside this one.
 apiVersion: v1
 kind: Namespace
 metadata:
