@@ -37531,3 +37531,57 @@ counting `private (administrator)` per page, is the check.
 `36 checks ran (the offline suite and 35 tier tests) in 10m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`, its offline check among them. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18683/e2e-tools.log`.
+
+## 2026-11-08 · #1181 · run 18681 · A red private (administrator) banner on /kubecon, kept off the iPad prompt sheet
+
+**What changed.** `gitops/ai-layer/web/kubecon.html` carries `<div id="privatebanner" class="combanner" hidden>` with
+the sentence "This is the private (administrator) KubeCon page." as the first child of `<main>`, the chat page's
+`.combanner` rule copied value for value from `burritbot.html` (#761), and a script block after the prompt-sheet
+block that sets `hidden` from `/^burritobot-private\./.test(location.hostname)`. The page ships to every cluster, so
+the host decides at load time, as the issue asks. The chat page reads the host from guard-proxy's `/controls`
+report; this page has no such poll, so it reads `location.hostname`, which is the host the presenter opened. A
+`?cluster=` link does not turn the banner on: the issue names the host, and the cluster chip already follows the
+link. `burritobot-private.agenticburn.com` shows the banner too, since it starts with the same label;
+`burritobot-private-michael.` and other `-admin` hosts do not.
+
+**The sheet: no banner.** The issue leaves this to the run. The banner sits inside `<main>`, which the sheet hides,
+so `/kubecon?sheet=1` shows no banner on any host. The sheet is "every prompt on this page, in order, in large type,
+and nothing else" (#689), and the iPad reads it to type a prompt, whichever cluster served it; a banner there would
+add a block the sheet's own test and purpose exclude, and tell the presenter nothing the prompts depend on. Putting
+the banner in `<main>` rather than the sticky header also leaves the header's layout as it was, which keeps the
+change inside the issue's scope guard. The new tools-tier test holds that the sheet on the private host is the
+same HTML as on the public host and shows no banner.
+
+**Tests.** `verify/test_kubecon_private_banner.py` (offline) reads the markup, that the banner starts hidden inside
+`<main>`, the host rule, and the style values (`font-weight:800`, `color:#fff`, `background:#C62222`,
+`border:1px solid #8E1414`, `border-radius:10px`), and that the rule equals the chat page's `.combanner` so the two
+cannot drift. `verify/test_kubecon_private_banner_e2e.py` (tools tier) has Chromium load the committed page as
+served from `burritobot-private.burritobot.co`, `burritobot-private.agenticburn.com`, `attackme.burritobot.co`,
+`attackme.agenticburn.com`, `burritobot-private-michael.burritobot.co` and `localhost` (every request answered from
+the file through `page.route`) and reads the banner's visibility, text and computed style: `rgb(255, 255, 255)` on
+`rgb(198, 34, 34)`, weight 800, a 1px solid `rgb(142, 20, 20)` border, 10px corners. Both new tests have entries in
+`verify/scope-map.yaml`, taken from `scope_tests.py write`'s output for them alone; the rest of what `write` produced
+on this base, about 850 lines of other tests' drift, is not this change's and was not kept.
+
+**Live look before promotion (run 18681, read-only).** `https://burritobot-private.burritobot.co/kubecon` answered
+200 with a page byte for byte staging's `kubecon.html` before this change, so no banner yet, and the private
+cluster's `agent/console-src-7fm9tt8hbc` ConfigMap holds `kubecon.html`. `https://attackme.burritobot.co/kubecon`
+and `/kubecon.html` answered 404, and the community cluster's `agent/console-src-f7bmb8h8gh` holds no `kubecon.html`:
+the community profile takes the page off that cluster (#909, `verify/test_kubecon_community_gate.py`), so on the
+community cluster the owed look is that `/kubecon` still answers 404. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** After hecaton promotes this and Argo CD syncs it: open
+`https://burritobot-private.burritobot.co/kubecon` and see the red banner at the top of the brief, open
+`https://burritobot-private.burritobot.co/kubecon?sheet=1` and see every prompt and no banner, and read
+`https://attackme.burritobot.co/kubecon` still answering 404 on the community cluster. A `curl` of the private
+page for `id="privatebanner"` and a render through `verify/test_kubecon_private_banner_e2e.py`'s browser on the live
+URL would both show it.
+
+**Suites (run 18681, at `d7b65000`).** Scoped to the change from `a307d478`, as point 6 asks; the change edits
+`kubecon.html`, which tier tests read, so the scoped tools tier ran. `bash verify/run-e2e-tools.sh` printed
+`227 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for its offline check, then `35 checks ran (the offline
+suite and 34 tier tests) in 10m18s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Both new tests,
+`test_kubecon_prompt_sheet_e2e.py`, `test_kubecon_cluster_chip_e2e.py`, `test_kubecon_sheet_attack_heads.py`,
+`test_kubecon_community_gate.py`, `test_kubecon_seg4_flow.py` and `test_scope_tests.py` were among those that ran.
+The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18681/e2e-tools.log`.

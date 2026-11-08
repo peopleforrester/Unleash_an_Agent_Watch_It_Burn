@@ -3993,6 +3993,22 @@ reads:
     - gitops/workshop-agent/agent.yaml
     - infra/terraform/fleet/event.sh
     - verify/model_pin_check.py
+  test_kubecon_private_banner.py:
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+  test_kubecon_private_banner_e2e.py:
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_kubecon_probe.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
