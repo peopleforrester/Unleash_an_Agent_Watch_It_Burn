@@ -7,7 +7,7 @@
 # of its file that matches it, and `lines` is how many lines the entry claims, so a new call site always changes a count.
 #
 #   pinned    kind (tool, terraform-provider, helm-chart, browser, python-package, node-package, container-image,
-#             release-file, cache-fill), pin (the file holding the pin), cached (true when the fetch goes through the
+#             git-commit, release-file, cache-fill), pin (the file holding the pin), cached (true when the fetch goes through the
 #             host artifact cache of #1117 today)
 #   live      kind (cluster, lab-endpoint, registry, saas-api, upstream-index, github, public-web), target
 #   loopback  why: a server on 127.0.0.1, or a repository on this host, that the test made itself
@@ -158,6 +158,23 @@ sites:
     lines: 1
     class: none
     why: the usage comment
+  verify/ensure-submodules.sh:
+  - match: submodule update
+    lines: 2
+    class: pinned
+    kind: git-commit
+    pin: .gitmodules (each submodule's URL) and the superproject's gitlinks (its commit)
+    cached: false
+  verify/guard-proxy-pin-on-main.sh:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
+  verify/submodule-pins-pushed.sh:
+  - match: .
+    lines: 2
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
   verify/fetch-e2e-tools.sh:
   - match: get
     lines: 1
@@ -644,6 +661,11 @@ sites:
     lines: 4
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
+  verify/test_c7_badge_grants.py:
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
   verify/test_c8_teaching.py:
   - match: .
     lines: 1
@@ -1256,6 +1278,10 @@ sites:
     class: live
     kind: cluster
     target: the Kubernetes API and the guard-proxy on a workshop cluster, through a port-forward on 127.0.0.1
+  - match: .
+    lines: 1
+    class: none
+    why: comments, docstrings or messages that name the command; none runs it
   verify/test_tool_audit.py:
   - match: .
     lines: 3
