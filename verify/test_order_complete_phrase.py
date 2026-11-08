@@ -63,14 +63,16 @@ check('the persona no longer says "Free burritos for life"', "free burritos" not
 check('the persona no longer says "You did it"', "you did it" not in flat.lower())
 
 send = cut(PAGE, "  async function send(){", "  // The left menu is a static reference", str(PAGE_PATH))
-TRIGGER = r"if(/your\s+order\s+is\s+now\s+complete/i.test(data.reply||'')) winBubble();"
+# Since #1214 the button takes the reply botReply returned, so it can show that reply from its first line again.
+TRIGGER = r"if(/your\s+order\s+is\s+now\s+complete/i.test(data.reply||'')) winBubble(reply);"
 check("send() shows the ring-me-up button when the reply holds the order-complete sentence", TRIGGER in send)
 check('send() no longer looks for "free burritos for life"', "free burritos" not in send.lower())
-check("send() calls winBubble() once, from that check", send.count("winBubble()") == 1)
+check("send() calls winBubble(reply) once, from that check", send.count("winBubble(") == 1)
+check("send() keeps the reply bubble botReply returns, for the button (#1214)", "const reply=botReply(data.reply);" in send)
 
 check('the celebration popup keeps its "Free burritos for life!" heading',
       '<div id="celebrate"><div class="winmsg"><h2>🌯 Free burritos for life! 🌯</h2>' in PAGE)
-win = cut(PAGE, "  function winBubble(){", "  function celebrate(){", str(PAGE_PATH))
+win = cut(PAGE, "  function winBubble(reply){", "  function celebrate(){", str(PAGE_PATH))
 check("the button keeps its label and still sets off the celebration",
       "b.textContent=\"🔔 That's my order, ring me up!\"; b.onclick=celebrate;" in win)
 
