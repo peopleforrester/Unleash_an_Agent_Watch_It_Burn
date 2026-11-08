@@ -33534,3 +33534,10 @@ a page byte-identical to staging's kubecon.html, with no heads map in its sheet 
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: open
 https://burritobot-private.burritobot.co/kubecon?sheet=1 and look at Challenge 2's headings, 2A, 2B and 2C each in the
 same bright green type as "Challenge 1: the CEO's secret", above that attack's prompts.
+
+**Suite results, run 18444.** On `c006aeff`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=4e7e9c9d`, so
+scoped to this change, printed `205 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which
+is `bash verify/run-tests.sh`), then `30 checks ran (the offline suite and 29 tier tests) in 8m03s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`. `verify/test_kubecon_sheet_attack_heads.py` and
+`verify/test_kubecon_prompt_sheet_e2e.py` were among them and passed. The prose gate printed `prose gate: pass`. No
+dependency was added. The log is `/var/lib/hecaton/runs/18444/e2e-tools.log`.
