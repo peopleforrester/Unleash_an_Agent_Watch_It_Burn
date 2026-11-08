@@ -450,10 +450,10 @@ sites:
     kind: cluster
     target: 'the one desk''s POST /desk-forget on its own loopback, from inside the community cluster''s fake-ticket pod with kubectl exec (#1215)'
   - match: urlopen
-    lines: 2
+    lines: 3
     class: live
     kind: lab-endpoint
-    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
+    target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster, and the one deployments page's /deployments.json on the KubeCon community cluster (c2-lands, #1135)
   - match: .
     lines: 4
     class: none

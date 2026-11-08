@@ -2837,10 +2837,10 @@ def c2_lands_checks() -> None:
     kc = kp.KubeconCluster("attackme.burritobot.co", "watch-it-burn-community", None, None, 30, runner=r)
     check("bot_deployments lists the agent namespace's Deployments with an explicit --context",
           kc.bot_deployments()[0]["name"] == "tron"
-          and r.argv[0] == ["kubectl", "--context", "watch-it-burn-community", *kp.AGENT_DEPLOYMENTS], str(r.argv))
+          and r.argv[0] == "kubectl --context watch-it-burn-community".split() + kp.AGENT_DEPLOYMENTS, str(r.argv))
     kc.remove_deployment("tron")
     check("remove_deployment deletes the one Deployment by name in the agent namespace, and waits",
-          r.argv[-1][:3] == ["kubectl", "--context", "watch-it-burn-community"]
+          r.argv[-1][:3] == "kubectl --context watch-it-burn-community".split()
           and r.argv[-1][3:] == ["-n", "agent", "delete", "deploy", "tron", "--ignore-not-found", "--wait=true"],
           str(r.argv[-1]))
 

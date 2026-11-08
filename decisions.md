@@ -40771,3 +40771,22 @@ result, 17 beats, 16 PASS, 1 FAIL, `KUBECON PROBE RED`:
 Afterwards the bot-made Deployments were `joker-ichabod-the-werewolf` alone and `deployments.json` was `[]` again: the
 cluster and the page as found. The presenter terminal login was not read, printed or touched. The log is
 `/var/lib/hecaton/runs/18804/probe-community.log` on hecaton's host.
+
+## 2026-11-09 · #1135 · run 18826 · Run 18804's validation failure: two offline tests the change tripped, both fixed
+
+Run 18804 ended failed on hecaton's `tests` gate: `verify/test_fetch_inventory.py` and `verify/test_verify_harness.py`
+exited 1. Neither was among the tests that run ran, and both read files the change touched.
+
+- `test_fetch_inventory.py`: `KubeconCluster.deployments_page()`, the c2-lands read of
+  `https://deployments.burritobot.co/deployments.json`, is a third `urlopen` line in `verify/kubecon_probe.py`, and
+  `verify/fetch-inventory.yaml`'s entry for that file claimed 2. The entry now claims 3, same class (`live`) and kind
+  (`lab-endpoint`), and its target names the deployments page and c2-lands.
+- `test_verify_harness.py`: its "no light-suite test runs kubectl, helm or node" check scans each offline test's text
+  for the literal `["kubectl",`. Two of the new c2-lands checks in `verify/test_kubecon_probe.py` compared a faked
+  runner's argv against such a list; nothing ran kubectl. They now build the expected argv with `.split()`, and check
+  the same thing.
+
+Run alone after the fix, `test_fetch_inventory.py`, `test_verify_harness.py`, `test_kubecon_probe.py` and
+`test_scope_tests.py` pass. The "--context is empty" line in the gate's output is not a failing test's: the gate named
+only the two above. The probe and its live result are unchanged from run 18804's entry, so no live check was run
+again; this run touched only `verify/` files no cluster runs and decisions.md.
