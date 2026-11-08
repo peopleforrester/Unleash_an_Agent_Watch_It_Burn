@@ -344,6 +344,60 @@ def reset_desk(tickets: bool = False) -> dict:
                 "fixed_kept": sum(1 for k in TICKETS if k in FIXED_TICKETS)}
 
 
+# --- a live check's own rows (#1215) ------------------------------------------------------------------------------
+# A live check that deploys on a KubeCon bot lands a row on the one page, the probe's HC-666 Joker and #1158's desk
+# check among them, and on 2026-11-08 three such rows sat on deployments.burritobot.co for the room to see. The private
+# bot's rows are never greyed: no reader on this cluster sees the private cluster's Deployments. POST /desk-forget
+# removes exactly the rows a check made and the tickets it filed, and nothing else: {"names": [...]} the deploy names,
+# {"since": <epoch seconds>} only rows that landed at or after it (so a real row of the same name from before the check
+# stays), {"tickets": [...]} the HC- ids the check filed. A fixed ticket is never removed. It answers on the same gate
+# as /desk-reset: this pod's own loopback, through no proxy, so only a kubectl session reaches it.
+DESK_FORGET_PATH = "/desk-forget"
+MAX_FORGET = 50
+
+
+class BadForget(ValueError):
+    """A /desk-forget body the desk cannot read, answered 400 and never applied."""
+
+
+def _check_row(r: dict, names: set[str], since: float) -> bool:
+    return r.get("name") in names and float(r.get("ts") or 0) >= since
+
+
+def forget_on_desk(names: list[str], since: float = 0.0, tickets: list[str] = ()) -> dict:
+    """Remove the rows named in `names` that landed at or after `since`, and the filed tickets in `tickets`; what it
+    removed and what of it is left (named_left and tickets_left are 0 unless something went wrong)."""
+    wanted = set(names)
+    ids = {str(t).strip().upper() for t in tickets}
+    with _lock:
+        keep = [r for r in LANDINGS if not _check_row(r, wanted, since)]
+        removed = len(LANDINGS) - len(keep)
+        LANDINGS[:] = keep
+        gone = [k for k in ids if k in TICKETS and k not in FIXED_TICKETS]
+        for k in gone:
+            TICKETS.pop(k, None)
+        return {"rows_removed": removed, "tickets_removed": len(gone), "rows_left": len(LANDINGS),
+                "named_left": sum(1 for r in LANDINGS if _check_row(r, wanted, since)),
+                "tickets_left": sum(1 for k in ids if k in TICKETS and k not in FIXED_TICKETS),
+                "fixed_kept": sorted(k for k in ids if k in FIXED_TICKETS)}
+
+
+def forget_request(d) -> tuple[list[str], float, list[str]]:
+    """The /desk-forget body as (names, since, tickets), or BadForget naming what is wrong."""
+    if not isinstance(d, dict) or set(d) - {"names", "since", "tickets"}:
+        raise BadForget('the body is {"names": [...], "since": <epoch seconds>, "tickets": [...]}')
+    names, tickets, since = d.get("names", []), d.get("tickets", []), d.get("since", 0)
+    for field, v in (("names", names), ("tickets", tickets)):
+        if not isinstance(v, list) or len(v) > MAX_FORGET or not all(isinstance(x, str) and 0 < len(x) <= 63
+                                                                     for x in v):
+            raise BadForget(f"{field} must be a list of at most {MAX_FORGET} names")
+    if not names and not tickets:
+        raise BadForget("name at least one row or ticket: /desk-forget never clears the page (that is /desk-reset)")
+    if isinstance(since, bool) or not isinstance(since, (int, float)) or since < 0:
+        raise BadForget("since must be epoch seconds")
+    return names, float(since), tickets
+
+
 # --- reports from the other cluster (#1157, part of #1145) --------------------------------------------------------
 # On the KubeCon pair one deployments page shows both clusters' deploys, so the public desk also takes the admin
 # cluster's reports. Those arrive from outside, through the console's /remote-landed, which only the
@@ -885,6 +939,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, {"error": 'the body is {} or {"tickets": true|false}'})
                 return
             self._send(200, reset_desk(d.get("tickets", False)))
+        elif url.path == DESK_FORGET_PATH:
+            # A live check's own rows and tickets (#1215), on the desk reset's gate: this pod's own loopback only.
+            if not reset_allowed(self.client_address[0], self.headers.get("X-Forwarded-For")):
+                self._send(403, {"error": "/desk-forget answers only inside the desk's own pod (kubectl exec)"})
+                return
+            try:
+                names, since, tickets = forget_request(json.loads(raw or b"{}"))
+            except ValueError as e:   # BadForget is a ValueError, as a JSON decode error is
+                self._send(400, {"error": str(e) if isinstance(e, BadForget) else "the body must be JSON"})
+                return
+            self._send(200, forget_on_desk(names, since, tickets))
         elif url.path == "/cluster-read":
             # In-cluster only, as /landed is: the console refuses it from outside (console.conf). #1050's reader posts here.
             try:

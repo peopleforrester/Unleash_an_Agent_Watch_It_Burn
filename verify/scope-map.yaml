@@ -5071,6 +5071,28 @@ reads:
     - policies
     - security
     - verify/bootstrap_chart.py
+  test_live_check_cleanup.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
+    - verify/one_desk_live.py
+    - verify/topic_cases.py
   test_llm_guard_auth.py:
     - agent
     - agent/gateway/guard-proxy/guard-proxy.yaml

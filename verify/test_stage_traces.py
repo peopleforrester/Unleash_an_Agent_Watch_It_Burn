@@ -91,6 +91,14 @@ class FakePrivate(st.StageCluster):
         self.role = kp.RBAC_FIX if self.armed else kp.RBAC_SHIPPED
         return 0, f"Both clusters, this one and watch-it-burn-community: all four Kubernetes guardrails are {state}.\n"
 
+    # The one desk's /desk-forget (#1215), on the guardrails peer that main's kp.peer_desk names: run_seed hands the
+    # seed this fake as that desk too. forget_left is the reason a test makes the desk give back.
+    forget_left: str | None = None
+
+    def forget_on_desk(self, names, since, tickets=()):
+        self.forgets = [*getattr(self, "forgets", []), (list(names), since, list(tickets))]
+        return self.forget_left
+
     def guard_verdicts(self, texts):
         """guard-proxy's input stages: the block-list catches none of this, the Regex scanner catches the PII."""
         self.asked.append(list(texts))
@@ -275,8 +283,9 @@ def _run_in_lock(self, *a, **k):
 st.StageProbe.run = _run_in_lock
 
 
-def run_seed(cluster: FakePrivate, dd: FakeDatadog, out: pathlib.Path) -> int:
+def run_seed(cluster: FakePrivate, dd: FakeDatadog, out: pathlib.Path, desk: bool = True) -> int:
     st.StageCluster = lambda *a, **k: cluster  # noqa: E731 - the seed builds its cluster from argv
+    st.kp.peer_desk = lambda *a, **k: cluster if desk else None  # noqa: E731 - the guardrails peer's desk (#1215)
     st.datadog = lambda profile, region: (dd, "datadoghq.com")  # noqa: E731
     st.wait_for.__defaults__ = (0.0, lambda s: None)
     return st.main(["seed", HOST, "--context", "wib-private", "--profile", "accen-dev", "--settle", "0",
@@ -699,6 +708,27 @@ check("stage_traces keeps no reader of its own", not hasattr(st, "kubecon_prompt
 check("...and reads the probe's page", st.KUBECON_PAGE == kp.KUBECON_PAGE, str(st.KUBECON_PAGE))
 check("Challenge 2's prompt is the C3 beat's last, through kp.kubecon_prompt",
       st.RECIPE_PROMPT == kp.kubecon_prompt("C3", -1) == kp.kubecon_prompts("C3")[-1], st.RECIPE_PROMPT)
+
+print("== the Challenge 3 seeds remove their Joker's row from the one page (#1215) ==")
+with tempfile.TemporaryDirectory() as tmp:
+    out = pathlib.Path(tmp, "stage-traces.json")
+    f = FakePrivate()
+    rc = run_seed(f, FakeDatadog(), out)
+    c3 = [b for b in json.loads(out.read_text())["beats"] if b["key"] in ("c3-attack", "c3-fixed")]
+    check("each Challenge 3 seed asks the guardrails peer's desk to remove joker-<stage name>'s row",
+          rc == 0 and [n for n, _, _ in getattr(f, "forgets", [])] == [[kp.ROOM_JOKER], [kp.ROOM_JOKER]]
+          and all(b["verdict"] == kp.PASS for b in c3), f"{getattr(f, 'forgets', None)}; {c3}")
+    f = FakePrivate()
+    f.forget_left = "the desk on wib-community answered: exit 1"
+    rc = run_seed(f, FakeDatadog(), out)
+    c3 = [b for b in json.loads(out.read_text())["beats"] if b["key"] in ("c3-attack", "c3-fixed")]
+    check("a row the desk could not remove fails both Challenge 3 seeds, naming it, and the seed run",
+          rc == 1 and len(c3) == 2 and all(b["verdict"] == kp.FAIL and "exit 1" in b["note"] for b in c3), str(c3))
+    f = FakePrivate()
+    rc = run_seed(f, FakeDatadog(), out, desk=False)
+    c3 = [b for b in json.loads(out.read_text())["beats"] if b["key"] in ("c3-attack", "c3-fixed")]
+    check("a private cluster with no guardrails peer fails both, saying the row is not removed",
+          rc == 1 and all(b["verdict"] == kp.FAIL and "no desk cluster is known" in b["note"] for b in c3), str(c3))
 
 print("== it refuses what it must not touch ==")
 check("no --context: status 2", st.main(["seed", HOST, "--profile", "accen-dev"]) == 2)
