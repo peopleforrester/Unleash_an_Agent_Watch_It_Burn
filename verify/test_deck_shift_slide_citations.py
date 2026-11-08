@@ -38,8 +38,9 @@ NUMBERING = ("Slide numbers in this file count from 1, the title slide being sli
              "and is one less, so slide 44 is #/43 at https://rounds.agenticburn.com.")
 LINE_START = "Slide numbers in this file count from 1"
 SEG4, SEG5, ROW4 = "### Segment 4:", "### Segment 5:", "| 4 | 7 |"
-# The tests that hold segment 4's slides to the 2026-11-07 deck, and so quote its numbers.
-SEG4_READERS = {"verify/test_ros_seg4_flow.py"}
+# The tests that hold segment 4's slides to the 2026-11-07 deck, and so quote its numbers: the run-of-show's (#1098)
+# and the /kubecon page's (#1100).
+SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
 HASH_FROM = 43      # #/43 is slide 44
 

@@ -244,13 +244,16 @@ check("C2's admission rule is named, inside C6", "restrict-image-registries" in 
 check("C3 marker names KubeArmor's block AND its alert",
       "block-recipe-snoop" in KUBECON and '"Action":"Block"' in KUBECON)
 check("C5 marker is the real CEO signature", "OPHELIA-THORN-TIBBY-TOP-SPIRE-No9" in KUBECON)
-check("C6 marker is the withheld ticket, the room's Joker and both fixes (#640, #685, #775)",
-      "[input guard] withheld" in KUBECON and "joker-agatha-the-banshee" in KUBECON and "HC-666" in KUBECON
-      and "answers Forbidden" in KUBECON.split('data-beat="C6"', 1)[1].split("</article>", 1)[0])
-# The room's Joker pages live on the maintenance-shell host, under joker-<name> (#775); the lab's own Deployment of
-# that name, and its ticket, are not on the stage.
+# Since #1100 segment 4 names no Joker: the deployment lands under the asker's witch name, and the probe's under
+# Agatha the Banshee, as the run-of-show's segment 4 has it (#1098).
+_c6_block = KUBECON.split('data-beat="C6"', 1)[1].split("</article>", 1)[0]
+check("C6 marker is the withheld ticket, the deployment under the probe's witch name and both fixes (#640, #685, #775)",
+      "[input guard] withheld" in KUBECON and "Agatha the Banshee" in _c6_block and "HC-666" in KUBECON
+      and "answers Forbidden" in _c6_block)
+# The room's own pages live on the maintenance-shell host (#775); the lab's own Deployment of that name, and its
+# ticket, are not on the stage.
 check("the stage no longer runs the lab's ticket", "HC-7731" not in KUBECON
-      and re.sub(r"https://maintenance-shell-attackme\.burritobot\.co/joker-", "", KUBECON).count("maintenance-shell") == 0)
+      and re.sub(r"maintenance-shell-attackme\.burritobot\.co", "", KUBECON).count("maintenance-shell") == 0)
 check("C7 marker is the MCP sentinel", "FAKE-MCP-EXFIL-sentinel-4c1d" in KUBECON)
 check("on-topic marker is the burritos-only refusal", "I only talk burritos" in KUBECON)
 
@@ -572,6 +575,14 @@ check("segment 3's hand-off in the run-of-show is slide #/42's note, word for wo
       _ros_handoff(3) == _S3_HANDOFF)
 check("and the 2026-11-06 hand-off is gone from the run-of-show",
       "Next, the bot doing what a stranger asked." not in " ".join(ROS.split()))
+# The page's own copy, the last Hand-off note in segment 3 (#1100).
+_page_seg3_handoffs = re.findall(
+    r'<p class="note"><b>Hand-off:</b> (.*?)</p>',
+    KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0], re.S)
+check("segment 3's hand-off on the page is slide #/42's note, word for word, as in the run-of-show (#1100)",
+      [" ".join(h.split()) for h in _page_seg3_handoffs] == [_S3_HANDOFF])
+check("and the 2026-11-06 hand-off is gone from the page",
+      "the bot doing what a stranger asked" not in " ".join(KUBECON.split()))
 
 print("== the OWASP close (#687, #842, #849) ==")
 _seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
@@ -644,8 +655,8 @@ check("the page names the before-toggle marker least privilege and the after-tog
 check("C6's least-privilege fallback asks the API whether workshop-mcp may create Deployments, without the model",
       "auth can-i create deployments --as=system:serviceaccount:agent:workshop-mcp" in _c6
       and "01-cncf-wall" not in KUBECON)
-check("the page hands each person their own Joker page and the deployments page",
-      "https://maintenance-shell-attackme.burritobot.co/joker-</code> plus their name" in _c6
+check("the page hands each person a page of their own and shows them on the deployments page",
+      "a page of their own on <code>maintenance-shell-attackme.burritobot.co</code>" in _c6
       and "https://deployments.burritobot.co</code> under their witch name" in _c6)
 # The KubeCon pair's presenter login was set by hand on 2026-11-07 (#1069) and lives only in each cluster's
 # agent/terminal-auth Secret, which fleet.sh refuses to write there (#1074). Nothing records a copy in

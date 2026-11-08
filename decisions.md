@@ -33961,3 +33961,64 @@ is `bash verify/run-tests.sh`), then `32 checks ran (the offline suite and 31 ti
 TIER CHECKS GREEN` and `exit=0`. `verify/test_replay_prompts.py`, `verify/test_public_images.py` and
 `verify/test_instructor_brief.py` were among them and passed. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18483/e2e-tools.log`.
+## 2026-11-08 · #1100 · run 18478 · The /kubecon page's segment 4 follows the run-of-show's, slides 44 to 64
+
+Part of #1076: the presenter page's half, in `gitops/ai-layer/web/kubecon.html`, on #1098's segment 4 and #1099's
+numbering, both in staging at `c57c1590`. No earlier draft existed (`verify/prior-drafts.sh 1100 origin/staging`
+printed NONE, and the issue had no comments).
+
+**What changed on the page.** Segment 3's Hand-off note is slide `#/42`'s, word for word, as the run-of-show's is.
+The glance table's row 4 reads "Challenge 3, slides 44 to 64: a support ticket gets the bot to deploy something". In
+segment 4, the source comment, the story (the folded premise), the beat's heading, who line, markers and notes follow
+the run-of-show's steps in its numbering: the desk (44), its QR code (45), the ticket filed on the private desk and
+read back (46), the challenge and play (47), the hint, the white text and the attack (48), the trace after it (49),
+LLM01 (50), the two commands from `/lab` (51), the retry (52), least privilege (53 to 56), the input guard (57 and 58)
+and the diagram (59 to 64). The Datadog line is the private bot's marker, labelled slide 49, after the attack and
+before the first fix, and names `c3-attack`; the after-toggle marker names `c3-fixed`, and the notes `c3-pii`. The
+notes name the deployments page and the prompt wall as optional during play, and the story writes the desk as #1077
+leaves it, filed and looked up by number and never browsed. The notes also carry #1098's two platform facts: the
+slide-46 ticket goes on the private desk, and both commands arm the private cluster alone, so the retry is shown on
+the admin bot.
+
+**Dropped.** Every "Joker" in segment 4: the heading, `joker-` plus the name, `joker-agatha-the-banshee`, the
+per-person page's `/joker-` path (the host, `maintenance-shell-attackme.burritobot.co`, is kept), the desk's wall,
+`/me`, "The wall shows it refused", and "Say the white-text reveal, do not demo it", which the deck's slide 48 replaces
+with selecting the ticket's text. The segment 4 h2, "Challenge 3: prompt injection through a support ticket", is
+unchanged: it is the run-of-show's segment 4 title, and the `?sheet=1` sheet heads segment 4 with it.
+
+**Not changed.** Every prompt, toggle and copy block on the page and every `data-beat` key: `git diff` touches no
+`class="prompt"`, `class="toggle"` or `onclick="cp(this)"` line and no `data-beat`, so the iPad sheet's output is the
+same. Segment 3's guardrail section, its note on "Segment 4's Jokers" included, is #1065's and is untouched; the diff's
+only segment 3 hunk is the Hand-off note after that section closes. The header's "Joker wall" link is not segment 4
+prose and stays; whether the header keeps a link to the desk's wall, when no step projects it, is a followup in the
+run report. Segments 5 and 6 cite no slide number, as the run-of-show's do not, so none needed the 14 added; nothing
+outside segment 4 and row 4 on the page cites a slide above 43.
+
+**Visible words.** `verify/test_instructor_brief.py` holds the page's unfolded text under 2,450 words. The new who
+line and markers came to 2,453 on the first draft, so the markers were cut back to 2,445 rather than the budget
+raised; the slide-by-slide detail sits in the folded story and notes.
+
+**Tests.** `verify/test_kubecon_seg4_flow.py` (new, offline, in `verify/scope-map.yaml` under `reads` alone; the rest
+of what `scope_tests.py write` produced was other tests' drift and is not in this change) holds row 4, the story's
+slides 44 to 64 in order and its beats in the run-of-show's order, the trace, LLM01, switch and retry numbers against
+the run-of-show's, the block's attack before its trace before the fixes, no Joker and no `/wall` in segment 4, the
+optional views and the number-only desk, no slide 44 to 64 or `#/43` on the page outside segment 4 and row 4, and
+segment 4's five copy blocks and its C6 key as they were at `c57c1590`; each check also fails on a copy with the
+old row, a slide out of order, the trace moved ahead of the attack, the wall or a Joker put back, the desk's
+number-only line dropped, a stray slide number, the prompt reworded or the beat key changed.
+`verify/test_instructor_brief.py` now checks the page's segment 3 hand-off is slide `#/42`'s and the 2026-11-06 line is
+gone from the page (the side #1098 left to #1100), and reads the C6 block for the probe's witch name and the
+maintenance-shell host, not the Joker's name and path. `verify/test_kubecon_probe.py` checks the C6 block carries the
+probe's prompt and its stage name, Agatha the Banshee, whose slug the probe's Deployment carries.
+`verify/test_deck_shift_slide_citations.py` lists the new test among SEG4_READERS, since it quotes slides 44 to 64.
+
+**Live check, read only, both clusters, 2026-11-08.** On `--context watch-it-burn-private` and `--context
+watch-it-burn-community`, Argo CD's `ai-layer` Application reads `Synced` at `c57c1590f11f072cd75f2f8573e983b7f9a06c49`,
+this run's base. `curl` of `https://burritobot-private.burritobot.co/kubecon` and its `?sheet=1` answered `200`
+with the old hand-off and the old row (`stranger asked` 1, `deploys your Joker` 2, `specific to AI attacks` 0), and
+`https://attackme.burritobot.co/kubecon` and its `?sheet=1` answered `404`: the community cluster takes the page out
+by design (`gitops/ai-layer/components/no-kubecon-brief`, #909). Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this change and Argo CD syncs it: look at the `/kubecon` page and
+its `?sheet=1` sheet on the clusters, on `https://burritobot-private.burritobot.co/kubecon` (the new hand-off, row 4
+and segment 4, and the sheet's segment 4 prompt as before), with `https://attackme.burritobot.co/kubecon` still 404.
