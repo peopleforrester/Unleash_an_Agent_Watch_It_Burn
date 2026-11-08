@@ -39271,3 +39271,16 @@ on either cluster changed. `agent/terminal-auth` was not read or written.
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs watch-it-burn-private:
 `curl -s https://burritobot-private.burritobot.co/kubecon` carries `localhost:18080/presenter-ticket` and no
 `support-burritobot-private` (today it names that host twice).
+
+**Tests (run 18741).** A code change under `verify/` that a tier test reads, so by CLAUDE.md's Dispatched runs point 6
+the scoped runners ran, not the whole tier. `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash
+verify/run-e2e-tools.sh` on `b269d747` ran 12 checks (the offline suite and 11 of 86 tier tests) in 13m30s and exited 1
+(log `/var/lib/hecaton/runs/18741/e2e-tools.log`). All 11 tier tests passed, `test_support_desk_live.py` among them.
+The offline suite ran 247 of 382 tests, and two of them failed. `test_deck_shift_slide_citations.py` failed because
+`support_desk_hosts.py` and `test_support_desk_named.py` cite `#/46` and `#/47`: the first comment now names the hint's
+slide in words, and `test_support_desk_named.py` joins `SEG4_READERS`, the tests that hold segment 4 to the deck.
+`test_fetch_inventory.py` failed on the presenters' curl, which `test_support_desk_named.py` looks for as a literal: it
+now has an entry in `verify/fetch-inventory.yaml`, class `none`. Each passed when rerun alone, and the 79 offline tests
+the fix commit selects, `HECATON_BASE_SHA=b269d747 bash verify/run-tests.sh`, printed `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, exit 0 (log `/var/lib/hecaton/runs/18741/run-tests-fix.log`). The prose gate printed `prose gate: pass`. No
+dependency was added.
