@@ -37791,3 +37791,13 @@ computed for it; the other drift `write` printed for unrelated tests was left ou
 
 **Live check.** Skipped: the change touches only `verify/` scripts that run from the operator's host and no path a
 cluster runs.
+
+**The suites (run 18702).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs
+point 6 asks. The first scoped `bash verify/run-tests.sh`, at `5ce44e9f`, failed one test,
+`test_deck_shift_slide_citations.py`: it allows a hash of `#/43` or more under `verify/` only in the tests that hold
+segments 4 and 5 to the deck, and the new test quotes `#/48` and `#/68`, with a comment in `stage_traces.py` citing
+them as well. `46881a56` names the new test among those readers and drops the hashes from the comment. The second
+run, at `46881a56` (log `/var/lib/hecaton/runs/18702/run-tests-2.log`), printed `110 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `exit=0`. The scoped `bash verify/run-e2e-tools.sh` at `46881a56` (log
+`/var/lib/hecaton/runs/18702/e2e-tools.log`) printed `16 checks ran (the offline suite and 15 tier tests) in 4m13s,
+4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
