@@ -34999,3 +34999,8 @@ once hecaton promotes and Argo CD syncs:
    kubecon.html's last C3 prompt (the new 2B wording), and check that the trace in Datadog shows that prompt.
 2. Open https://burritobot-private.burritobot.co/kubecon?sheet=1 and check that 2A, 2B and 2C show as headings styled
    like Challenge 1's, each over its own trimmed prompts, with segment 1 holding only the linked-list ask.
+
+**Suite results, run 18553.** On `3fe00e56`, `bash verify/run-e2e-tools.sh` printed `355 tests ran` and
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, then `85 checks ran (the offline suite and 84 tier tests) in 12m48s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; `verify/test_replay_prompts.py` was among them. The log is
+`/var/lib/hecaton/runs/18553/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was added.
