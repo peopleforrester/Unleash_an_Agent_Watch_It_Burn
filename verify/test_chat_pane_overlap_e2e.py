@@ -55,7 +55,7 @@ DESKTOP = [(1280, 800), (1920, 1080)]
 LIVE = sys.argv[1:] == ["--live"]
 if sys.argv[1:] and not LIVE:
     print(f"FAILED: unknown arguments {sys.argv[1:]}; the only one is --live")
-    sys.exit(2)
+    sys.exit(1)
 
 failures: list[str] = []
 
@@ -89,7 +89,8 @@ pages, sizes = json.loads(sys.argv[4]), json.loads(sys.argv[5])
 html, event_js = open(page_path, encoding='utf-8').read(), open(event_path, encoding='utf-8').read()
 JS = '''() => {
   const y = window.scrollY, x = window.scrollX;
-  const box = e => { const r = e.getBoundingClientRect();
+  // A pane the served page lacks is null, so the check names it (a live host mid-rollout can serve another page).
+  const box = e => { if (!e) return null; const r = e.getBoundingClientRect();
     return {l: r.left + x, t: r.top + y, r: r.right + x, b: r.bottom + y}; };
   // A box that clips what it holds: its content is taller than the box and it does not show the rest.
   const clips = e => { const s = getComputedStyle(e);
@@ -98,7 +99,7 @@ JS = '''() => {
   const ban = q('#privatebanner');
   return {
     boxes: Object.fromEntries(['.menu', '.chatcol', '.infra'].map(s => [s, box(q(s))])),
-    clipped: ['.wrap', '.store', '.menu', '.menu .mscroll', '.chatcol', '.infra'].filter(s => clips(q(s))),
+    clipped: ['.wrap', '.store', '.menu', '.menu .mscroll', '.chatcol', '.infra'].filter(s => q(s) && clips(q(s))),
     docH: document.scrollingElement.scrollHeight, viewH: window.innerHeight,
     docW: document.scrollingElement.scrollWidth,
     banner: !!ban && !ban.hidden && ban.getBoundingClientRect().height > 0,
@@ -164,6 +165,10 @@ for m in map(json.loads, run.stdout.splitlines()):
     w, h = m["w"], m["h"]
     m.update(m.pop("boxes"))
     tag = f"{m['page']} {w}x{h}"
+    missing = [k for k in PANES if m[k] is None]
+    check(f"{tag}: the page has .menu, .chatcol and .infra", not missing, f"the served page has no {missing}")
+    if missing:
+        continue
     print(f"== {tag} ==  " + "; ".join(span(m, k) for k in PANES) + f"; page {m['docH']}px tall")
     check(f"{tag}: the private banner is {'shown' if m['private'] else 'not shown'}", m["banner"] == m["private"])
     check(f"{tag}: nothing scrolls sideways", m["docW"] <= w, f"scrollWidth {m['docW']}")

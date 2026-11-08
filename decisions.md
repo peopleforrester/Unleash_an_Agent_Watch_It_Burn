@@ -39734,3 +39734,34 @@ verify/run-tests.sh` ran 245 of 382 offline tests and printed `ALL OFFLINE RENDE
 `test_mobile_titles_e2e.py`, which renders the same page's header and chat title at phone widths; it was run alone,
 `python3 verify/test_mobile_titles_e2e.py`, and printed `All rendered mobile-title checks passed.` The prose gate printed
 `prose gate: pass`. No dependency was added.
+
+## 2026-11-08: #1213 resumed in run 18784, the skip-markers gate fixed
+
+Run 18743's two commits (bd8b983b, 9eb1682e) did not land: hecaton's skip-markers gate read the exit status two in
+`verify/test_chat_pane_overlap_e2e.py` as exit-as-skip. That line was the unknown-argument path, not a missing need,
+but the rule admits no exit code 2 in a test (hecaton#237), so it now exits 1 and still names the bad argument.
+`bash verify/prior-drafts.sh 1213 origin/staging` printed START with two in-place drift lines (PROGRESS.md and
+`verify/scope-map.yaml`, both edited by #1215's commits) and a decisions.md append; the cherry-pick applied with no
+conflict, and the gate's own counter (`skipmarks.count`) reads no added marker in any changed file against staging.
+
+The live render, `python3 verify/test_chat_pane_overlap_e2e.py --live`, crashed on its first pass with a Playwright
+traceback: the private host's page at 1280x800 had no `.menu`, so `getBoundingClientRect` read null. The second pass
+rendered all 16 page and size pairs. A live host mid-rollout can serve another page, which the test cannot own, so
+a missing pane is now a named check ("the page has .menu, .chatcol and .infra") that fails, not a traceback.
+
+What the runs printed:
+
+- `python3 verify/test_mobile_layout.py`: `All mobile-layout checks passed.`, exit 0.
+- `python3 verify/test_chat_pane_overlap_e2e.py` (repo page, routed, no network): 129 PASS lines, `All chat pane
+  overlap checks passed.`, exit 0.
+- `python3 verify/test_chat_pane_overlap_e2e.py --bogus`: names the argument, exit 1.
+- `python3 verify/test_scope_tests.py`: `ALL PASS`.
+- Live, before promotion, on the deployed attackme.burritobot.co and burritobot-private.burritobot.co:
+  `FAILED: 31 check(s)`, the same 31 the draft measured on staging's page, all at 980px or under, none at 1280 or
+  1920. At 840x900, `.infra` spans y 497-853 on the public host and y 436-853 on the private one, inside `.chatcol`'s
+  y 385-979. The desktop rows at 1280x800 put the three panes side by side at y 67-747 on both hosts. The run changed
+  nothing on either cluster.
+
+**Not yet run on a cluster.** `python3 verify/test_chat_pane_overlap_e2e.py --live`, after hecaton promotes this run
+and Argo CD rolls the console on both clusters; it should print `All chat pane overlap checks passed.` for both hosts.
+The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation, as the governance asks.
