@@ -38215,3 +38215,11 @@ the lock is free on both. The command never read the `agent/terminal-auth` Secre
 ending `STAGE SWITCH CHECK GREEN`. It is owed until the guard-proxy pin carries `agency_scoped`, the private
 terminal reaches the community cluster's guard-proxy on 8080 (#1202, #1171), `guards-off` runs every step (#1203),
 and `guardrails-off` no longer waits on a NetworkPolicy delete it cannot watch (this run's followup).
+
+**The suites (run 18721; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6 asks. `bash
+verify/run-e2e-tools.sh` at `cb2b6fae`, which runs the scoped `run-tests.sh` as its offline check, ran 132 of 378
+offline tests and printed `132 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`test_stage_switch_night_before.py` among them, then `16 checks ran (the offline suite and 15 tier tests) in 5m14s, 4
+at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18721/e2e-tools.log`). The
+prose gate printed `prose gate: pass` on the three changed prose files. No dependency was added.
