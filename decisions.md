@@ -34499,4 +34499,8 @@ C3 copy tests among them), then `84 checks ran (the offline suite and 83 tier te
 public-prose files (`kubecon.html`, `lab.html`, `PROMPT-CATALOG.md`, `LAB-TEXT.md`). No dependency was added. The log is
 `/var/lib/hecaton/runs/18504/e2e-tools-2.log`. An earlier run on `09186d62` failed the offline suite only on
 `verify/test_952_slide17_decision.py`, fixed by the anchor change above; its log is
-`/var/lib/hecaton/runs/18504/e2e-tools.log`.
+`/var/lib/hecaton/runs/18504/e2e-tools.log`. After this decisions.md entry was appended, `bash verify/run-tests.sh`
+was re-run on the final commit `16457a18` and printed `350 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`exit=0` (log `/var/lib/hecaton/runs/18504/run-tests-final.log`); the decisions-reading tests
+(`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`, `test_952_suite_record.py`)
+are among them.
