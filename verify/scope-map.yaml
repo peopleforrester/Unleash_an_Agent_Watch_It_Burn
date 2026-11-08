@@ -65,6 +65,7 @@ always:
   test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; line 148 builds a path under the repo root from a value it finds at run time; line 47 builds a path under the repo root from a value it finds at run time
   test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole
   test_evil_tools_by_name.py: line 33 builds a path under the repo root from a value it finds at run time; line 122 builds a path under the repo root from a value it finds at run time; line 119 builds a path under the repo root from a value it finds at run time
+  test_fetch_inventory.py: line 64 builds a path under the repo root from a value it finds at run time
   test_fleet_converge_repairs.sh: it runs git on the tree or history as a whole
   test_gateway_notes_files.py: line 33 builds a path under the repo root from a value it finds at run time
   test_genai_semconv_pin.py: 'verify/test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole'
