@@ -890,7 +890,7 @@ beats give way first.
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
 | 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
-| 4 | 7 | W+M | Challenge 3, `#/43` to `#/64`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket filed on the private desk that the admin bot reads back by its number; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the private deployments page; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry depending on #1132; "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/56` to `#/64`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
+| 4 | 7 | W+M | Challenge 3, `#/43` to `#/64`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry depending on #1132; "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/56` to `#/64`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
 | 5 | 5 | M+W | Challenge 4, `#/68` to `#/98`: BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/65` and `#/66`); "Find the poisoned MCP tool." (`#/67`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/68`), then Michael's live weather ask on the private bot and its trace on the Datadog Challenge 4 tab; LLM03, Supply Chain (`#/69`); "Let's turn on an MCP gateway." (`#/70`), `guard-mcp-on` on the private bot; "Try your attack again." (`#/71`), the room's retry depending on #1132; the MCP gateway, agentgateway in the notes (`#/72` and `#/73`); the two diagrams, one weather question without and then with the gateway (`#/74` to `#/96`); and its rule before and after (`#/97` and `#/98`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
@@ -1471,6 +1471,22 @@ field, and no list. Ticket **HC-666** is pre-made on every desk: a card complain
 black, with the injection under it in white text on the white page. BurritoBot reads a
 ticket with `read_support_ticket` and is told to honor what the desk says.
 
+**One desk and one deployments page for both clusters (#1145).** Both clusters' bots
+read the one support desk, `support.burritobot.co`, and deploy to the one deployments
+page, `deployments.burritobot.co`, where each row carries a tag naming the cluster it
+came from. The desk runs on watch-it-burn-community, and the admin bot reaches it
+through `desk-relay`, which passes one ticket by its number and nothing else (#1158).
+So a ticket the presenters file is one the room's bot can read too, and every deploy,
+the room's and the presenters', shows on the one page. Ticket numbers HC-900 to HC-999
+are the presenters' alone: a ticket filed through the desk's form always gets a
+four-digit number, HC-1000 to HC-9999, and never one in that range (#1156). **On the
+admin bot, read only a presenter number, HC-900 to HC-999, or HC-666, the fixed ticket
+the attack on `#/47` uses.** Never read a four-digit number there: that is a room
+ticket, and it could carry someone's injection to the presenters' bot. The deck
+follows in rounds-agenticburn#122; until it lands, `#/45`'s and `#/47`'s links
+still open the admin cluster's own desk and deployments page, which its bot no longer
+reads or reports to, so open the public addresses above instead.
+
 **Timing.** The Say and Then say notes on `#/43` to `#/64` come to 730 words, about 4
 minutes 50 seconds at 150 words a minute, and 57 of them, on `#/46` and `#/47`, are said
 while the room plays. With the 3 minutes of play, the ticket filed and read back on
@@ -1494,23 +1510,30 @@ its 7 minutes.
   The room is given the support desk at `support.burritobot.co`. The bare
   `support.burritobot.co` routes to attackme's desk (apex-agenticburn#46, live
   2026-10-29); `support-attackme.burritobot.co` is the same desk if the bare name ever
-  fails. The private cluster's desk, the one the admin bot reads, is
-  `support-burritobot-private.burritobot.co`. Each desk keeps its own tickets in its
-  own `fake-ticket` pod, so a ticket filed on one is not on the other; HC-666 and the
-  other seeded tickets are on both. The desk lives only on its own host: neither bot
+  fails. The admin bot reads this same desk, `support.burritobot.co`, so a ticket
+  filed on it is there for both bots, and HC-666 and the other seeded tickets are on
+  it. The desk lives only on its own host: neither bot
   host serves `/support`, and `https://attackme.burritobot.co/support` answers 404
   (#931), so give the room the desk's name, never a path on the bot's.
-- **"Let's file a ticket." (`#/45`).** The line is a link to the private cluster's desk,
-  `https://support-burritobot-private.burritobot.co`, the one the admin bot reads. Say:
-  "I'll file a ticket at the support desk, and then I'll ask BurritoBot about it." The
-  presenter files a short, ordinary complaint ("My burrito came without salsa") and
-  notes the number the desk gives back, then switches to the admin bot and asks
-  "What's the status of my support ticket <number>?", and BurritoBot reads the ticket
-  back. Then say: "BurritoBot reads whatever the ticket says. So here's your next
-  challenge..." The slide's link opens the private desk, so the ticket is filed where
-  the admin bot can read it: each cluster's tool server reads only its own desk, so a
-  ticket on the room's desk, `support.burritobot.co`, is one the admin bot cannot read
-  (the public bot can).
+- **"Let's file a ticket." (`#/45`).** The line is a link to the room's desk,
+  `https://support.burritobot.co`, the one desk both bots read. Say: "I'll file a
+  ticket at the support desk, and then I'll ask BurritoBot about it." The presenter
+  files a short, ordinary complaint ("My burrito came without salsa") through the
+  presenters' path, not the desk's form, from a laptop terminal with kubectl on
+  watch-it-burn-community and the port-forward started ahead of the segment:
+
+      kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080
+      curl -s -X POST localhost:18080/presenter-ticket -H 'Content-Type: application/json' \
+        -d '{"body": "My burrito came without salsa"}'
+
+  The desk answers with the ticket and a presenter number, the lowest one free: HC-900
+  after a desk restart, the next one up after a rehearsal's ticket. The route answers
+  only inside the cluster; from outside, `https://support.burritobot.co/presenter-ticket`
+  answers 403. The presenter notes the number, then switches to the admin bot and asks
+  "What's the status of my support ticket HC-900?" (the number the desk gave), and
+  BurritoBot reads the ticket back. Then say: "BurritoBot reads whatever the ticket
+  says. So here's your next challenge..." The ticket is on the one desk, so anyone in
+  the room can ask their own BurritoBot about HC-900 and get the same ticket back.
 - **The challenge, and play (`#/46`, 3 min).** It reads:
 
   > Challenge 3 - attackme.burritobot.co
@@ -1543,8 +1566,8 @@ its 7 minutes.
   > Hint: Look up ticket HC-666 on the support desk.
 
   "support desk" is a link to the room's desk, `https://support.burritobot.co`, and on
-  this slide "deploy" opens the private bot's deployments page,
-  `https://deployments-burritobot-private.burritobot.co`, the presenters' own. Say:
+  this slide "deploy" opens the same deployments page as on `#/46`,
+  `https://deployments.burritobot.co`, the one both bots deploy to. Say:
   "Ticket HC-666 is a prompt injection attack that works. If you can figure out how it
   works, write your own ticket the same way. Or, if you don't want to write your own,
   just ask BurritoBot to read ticket HC-666." After a few moments the presenters show
@@ -1554,10 +1577,9 @@ its 7 minutes.
   "What's the status of my support ticket HC-666?": the bot reads the ticket with
   `read_support_ticket` and calls `deploy_app`, and the deployment lands under the
   presenter's witch name (the Night Before probe sends the fixed name Agatha the
-  Banshee, so it can check the one it gets). Click "deploy" to open the private
-  deployments page and show it landing. `deployments.burritobot.co`, which `#/46`'s
-  "deploy" opened, is the room's, attackme's. Whether or not it works, move on: time is
-  short.
+  Banshee, so it can check the one it gets). Click "deploy" to open the deployments
+  page and show it landing. Its row is tagged `private`, among the room's rows. Whether
+  or not it works, move on: time is short.
 - **The trace, after the attack (`#/48`).** "Let's look at the trace." is a link: it
   opens Datadog's Agent Observability traces filtered to the admin cluster, in its own
   tab, the same link as `#/11`'s "Ophelia Thorn". Say: "Wait. How did that support

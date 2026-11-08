@@ -7315,6 +7315,7 @@ reads:
     - gitops/ai-layer/ticket_site.py
   test_support_desk_named.py:
     - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/kubecon.html
     - verify/support_desk_hosts.py
   test_support_desk_private_banner.py:

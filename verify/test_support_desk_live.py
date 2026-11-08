@@ -1,5 +1,5 @@
-# ABOUTME: Asks the support desk the KubeCon talk uses, on each cluster, for its page and HC-666 (200), the bot hosts for
-# ABOUTME: /support (404), and reads #916's body for the same desk hosts (#931, #946), with gh's token (#863).
+# ABOUTME: Asks the one support desk both KubeCon clusters use for its page and HC-666 (200), the one deployments page for
+# ABOUTME: its rows, the bot hosts for /support (404), and #916's body for the desk (#931, #946, #1160), with gh's token.
 # SUITE: e2e (needs the network: the desk and bot hosts are asked over HTTPS, and gh with a token reads #916's body)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
@@ -12,9 +12,16 @@
 # HC-666's path, and its bot-host criterion lists no `/support`. So a desk that stops answering, a route that starts
 # serving `/support` on a bot host, or an edit to #916 that drops the desk all fail here.
 #
-# Reads only. Nothing on either cluster or on the router changes.
+# Since #1145 both clusters' bots read one desk and deploy to one page (#1158), so support_desk_hosts.py lists the same
+# desk for both and this asks each of its hosts once, for both clusters (#1160). It also asks the one deployments page
+# for `/deployments.json`, which must answer 200 with a JSON list of rows, and `/presenter-ticket` on the desk, which
+# must answer 403 from outside, since the presenters' range is filed only from inside the cluster (#1156).
+#
+# Reads only. Nothing on either cluster or on the router changes: the one POST, to `/presenter-ticket`, carries an empty
+# body, which the desk itself would refuse with 400 if the public server ever let it through.
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
@@ -44,9 +51,11 @@ def check(name: str, ok: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-def get(url: str) -> tuple[int, str, str]:
-    """(status, body, transport error). A status of 0 means no host answered; the error says why."""
-    req = urllib.request.Request(url, headers={"User-Agent": "watch-it-burn-verify/946", "Cache-Control": "no-cache"})
+def get(url: str, data: bytes | None = None) -> tuple[int, str, str]:
+    """(status, body, transport error). A status of 0 means no host answered; the error says why. With data, a POST."""
+    req = urllib.request.Request(url, data=data, headers={"User-Agent": "watch-it-burn-verify/946",
+                                                          "Cache-Control": "no-cache",
+                                                          "Content-Type": "application/json"})
     last = ""
     for attempt in range(1, ATTEMPTS + 1):
         try:
@@ -61,10 +70,15 @@ def get(url: str) -> tuple[int, str, str]:
     return 0, "", last
 
 
+def post(url: str) -> tuple[int, str, str]:
+    """A POST of an empty presenter ticket, which the desk's public server must refuse before the desk sees it."""
+    return get(url, data=b'{"body": ""}')
+
+
 if DESK_HEADING not in TICKET_SITE.read_text(encoding="utf-8"):
     sys.exit(f"ANCHOR MISSING: {DESK_HEADING!r} is not in {TICKET_SITE}; the live checks read each desk page for it")
 
-print("== each cluster's desk answers 200 with its page and HC-666 ==")
+print("== the one desk answers 200 with its page and HC-666, for both clusters ==")
 for cluster, host in sd.desk_hosts():
     status, body, err = get(f"https://{host}/")
     check(f"https://{host}/ ({cluster}) answers 200 with the desk's page",
@@ -74,6 +88,19 @@ for cluster, host in sd.desk_hosts():
     check(f"https://{host}{sd.TICKET} ({cluster}) answers 200 with HC-666 on the desk's page",
           status == 200 and "HC-666" in body and DESK_HEADING in body,
           err or f"status {status}" + ("" if "HC-666" in body else ", no HC-666"))
+
+print("== the one deployments page answers with its rows, and the presenters' path is closed from outside ==")
+status, body, err = get(f"https://{sd.DEPLOYMENTS}/deployments.json")
+try:
+    rows = json.loads(body) if status == 200 else None
+except ValueError:
+    rows = None
+check(f"https://{sd.DEPLOYMENTS}/deployments.json (both clusters) answers 200 with a JSON list",
+      isinstance(rows, list), err or f"status {status}" + ("" if status != 200 else ", not a JSON list"))
+for _, host in sd.desk_hosts():
+    status, _, err = post(f"https://{host}/presenter-ticket")
+    check(f"POST https://{host}/presenter-ticket from outside answers 403 (#1156)", status == 403,
+          err or f"status {status}")
 
 print("== the bot hosts serve no /support (404), as segment 4 says ==")
 for cluster, host in sd.BOT_HOSTS.items():
@@ -85,8 +112,9 @@ got = gh_comments.read_body(OWNER_REPO, NUMBER)
 gh_comments.check_read(got, ISSUE, check, what="body")
 if got.ok:
     body = sd.flat(got.body)
-    for cluster, (host, _) in sd.DESKS.items():
-        check(f"{ISSUE} names {cluster}'s desk as `https://{host}`", f"`https://{host}`" in body)
+    for host in dict.fromkeys(hosts[0] for hosts in sd.DESKS.values()):
+        clusters = " and ".join(c for c, hosts in sd.DESKS.items() if hosts[0] == host)
+        check(f"{ISSUE} names the desk of {clusters} as `https://{host}`", f"`https://{host}`" in body)
     check(f"{ISSUE} names HC-666's page at `{sd.TICKET}`", f"`{sd.TICKET}`" in body)
     check(f"{ISSUE} says the bot hosts serve no `/support`", "serve no `/support`" in body)
     # #916 first asked for 200 on `/support` of the bot hosts, a path never served. A clause that asks for 200 on a
@@ -101,4 +129,5 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("The talk's desk answers 200 with HC-666 on both clusters, the bot hosts serve no /support, and #916 names the desk.")
+print("The one desk answers 200 with HC-666 for both clusters, the one deployments page lists its rows, the bot hosts "
+      "serve no /support, and #916 names the desk.")

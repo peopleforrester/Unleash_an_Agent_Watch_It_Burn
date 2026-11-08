@@ -13,8 +13,9 @@ holds:
   2. The beats come in the deck's order, in each segment.
   3. Every line the segments quote from a slide is the deck's text, word for word, as rounds-agenticburn#102's body
      gives it (DECK_LINES below, copied from that issue and checked against the built attendee.html on 2026-11-08).
-  4. Segment 4 shows the white text live on `#/47`, links the public deployments page on `#/46` and the private one
-     on `#/47`, and names #1132 at `#/51`'s retry; segment 5 names #1132 at `#/68`'s retry.
+  4. Segment 4 shows the white text live on `#/47`, links the public deployments page on `#/46` and the same one on
+     `#/47`, the one page both bots deploy to since #1145 (#1160), and names #1132 at `#/51`'s retry; segment 5 names
+     #1132 at `#/68`'s retry.
   5. No "Joker" and no desk wall; Challenge 4's room-facing lines never tell the room to try each tool, and the
      old "The setup" framing is gone.
   6. The facts that still hold are still stated.
@@ -44,7 +45,7 @@ BEATS4 = [
     ("the challenge (#/46)", "**Use the support ticket system to get BurritoBot to deploy something.**"),
     ("#/46's deploy opens the public page", "\"deploy\" is a link to the room's deployments page, the public one"),
     ("the HC-666 hint (#/47)", "Hint: Look up ticket HC-666 on the support desk."),
-    ("#/47's deploy opens the private page", "`https://deployments-burritobot-private.burritobot.co`, the presenters' own"),
+    ("#/47's deploy opens the one page", "`https://deployments.burritobot.co`, the one both bots deploy to"),
     ("the white text, live", "the presenters show the white text live"),
     ("the deployment landing", "show it landing"),
     ("the trace after the attack (#/48)", "**The trace, after the attack (`#/48`).**"),
