@@ -38915,3 +38915,22 @@ submodule paths; `test_scope_tests.py` holds that the bound matches the tree's s
 inventory scans only `verify/`, `.github/workflows/` and `scripts/`, so it classes neither; filed as a follow-up.
 
 **No new dependency.** The modules use the standard library, git and the pinned crane.
+
+**Live check (read only).** The change touches `images/villains/build-loopback.sh`, so: on watch-it-burn-private the
+internal registry's `registry/registry-seed` names the breakout's Joker at `793db2995eee`, the images.lock pin the
+build on the cached base reproduces; no Joker pod was running on either cluster, and watch-it-burn-community has no
+`registry` namespace. Nothing was changed on either cluster. Not yet run on a cluster: none; push-jokers.yml runs the
+new build path on its next push to staging that touches its paths.
+
+**Suites (run 18736, at `424733b4`).** `scope_tests.py select tools` printed `running every test`, since the change
+edits `ensure-submodules.sh`, `git_mirror.py`, `scope_tests.py` and the map's `full` and `bounds`, so the scoped
+`run-e2e-tools.sh` was the whole tier, as point 6 has it for a FULL change. It printed `87 checks ran (the offline suite
+and 86 tier tests) in 15m46s, 4 at a time`; every tier test was green (`test_joker_build_digest.py` 3 s,
+`test_joker_web_busybox.py` 2 s), and the offline suite was red on one test of 384, `test_ghcr_pull.py`: "test_joker_web_busybox.py imports read_url or open_url from ghcr_pull". That check
+held the busybox test to ghcr_pull's retrying reads, and the test now reads no registry itself, so the check names the
+two tests that still read ghcr.io and holds the busybox test to `image_cache.layout()` with no ghcr.io URL of its
+own; its inventory count went from 31 to 33 lines for the comment and the check. Rerun alone, as point 7 asks:
+`test_ghcr_pull.py` printed "All ghcr_pull step checks passed.", `test_fetch_inventory.py` "All fetch inventory checks
+passed." and `scope_tests.py check` "0 problems". The fetch log gained no ghcr.io or git line during the run, only
+Python wheels this pool's cache had not held. The log is `/var/lib/hecaton/runs/18736/e2e-tools.log`. The prose gate
+printed `prose gate: pass`.

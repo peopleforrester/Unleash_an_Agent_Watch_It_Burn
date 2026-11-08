@@ -244,7 +244,9 @@ finally:
 
 print("== the tier tests that pull blobs from ghcr.io read it through these helpers (CI run 42405149040) ==")
 HERE = pathlib.Path(__file__).resolve().parent
-for name in ("test_joker_web_busybox.py", "test_image_version_tags.py", "test_c6_joker_public.py"):
+# test_joker_web_busybox.py read the pinned busybox through these too, until #1122 moved it onto the host artifact
+# cache's OCI layout (verify/image_cache.py, which retries what the network broke through artifact_cache.get_retrying).
+for name in ("test_image_version_tags.py", "test_c6_joker_public.py"):
     src = (HERE / name).read_text(encoding="utf-8")
     direct = [line.strip() for line in src.splitlines()
               if "_opener.open(" in line or 'urlopen(e.headers["Location"]' in line or "urlopen(req" in line
@@ -252,6 +254,9 @@ for name in ("test_joker_web_busybox.py", "test_image_version_tags.py", "test_c6
     check(f"{name} imports read_url or open_url from ghcr_pull",
           bool(re.search(r"^from ghcr_pull import .*\b(read_url|open_url)\b", src, re.M)))
     check(f"{name} opens no ghcr.io URL with urlopen of its own", not direct, repr(direct))
+busybox = (HERE / "test_joker_web_busybox.py").read_text(encoding="utf-8")
+check("test_joker_web_busybox.py reads its base from image_cache.layout() and opens no ghcr.io URL itself",
+      "image_cache.layout(" in busybox and "ghcr.io/token" not in busybox and "/v2/" not in busybox)
 
 print()
 if failures:

@@ -1026,7 +1026,7 @@ sites:
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ghcr_pull.py:
   - match: .
-    lines: 31
+    lines: 33
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_ghcr_version_tag.py:
