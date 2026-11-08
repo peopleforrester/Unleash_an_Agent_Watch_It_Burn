@@ -108,13 +108,15 @@ timings=()
 . "${SCRIPT_DIR}/no-cloud.sh"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
-# The Terraform provider cache outlives the checkout (#1114): TF_PLUGIN_CACHE_DIR when the caller sets it (Tanjiro's
-# runner does, under RUNNER_TOOL_CACHE), else hecaton's shared tools cache, else the user's own cache directory, and
-# never inside the working tree; tf_plugin_cache.py names it and fails on any other. In verify/.tools it started cold
-# in every new checkout, and the lock-init test spent 326 s downloading the same providers again. Terraform does not
-# promise a cache is safe to write from two processes at once, so the tests marked `# E2E SERIAL: terraform` run one
-# at a time here (#572, #1005), and each holds TF_CACHE_LOCK while it runs, so a run in another checkout that shares
-# the cache waits its turn. A wait past TF_CACHE_LOCK_WAIT seconds fails the check, naming the lock.
+# Terraform's providers come from the host artifact cache, outside every worktree (#1114, #1119). Each terraform test
+# gets them through tf_plugin_cache.terraform_env: a filesystem mirror filled through artifact_cache.get() by each
+# lock's zh: SHA-256, which terraform installs from and never downloads past, and the plugin cache beside it in the
+# same root, <root>/terraform-plugin-cache, which tf_plugin_cache.py names here and fails on when it is unusable. In
+# verify/.tools it started cold in every new checkout, and the lock-init test spent 326 s downloading the same
+# providers again. Terraform does not promise a cache is safe to write from two processes at once, so the tests marked
+# `# E2E SERIAL: terraform` run one at a time here (#572, #1005), and each holds TF_CACHE_LOCK while it runs, so a run
+# in another checkout that shares the cache waits its turn. A wait past TF_CACHE_LOCK_WAIT seconds fails the check,
+# naming the lock.
 TF_CACHE="$(python3 "${SCRIPT_DIR}/tf_plugin_cache.py")" || {
     printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: no usable Terraform provider cache\n' >&2
     exit 1

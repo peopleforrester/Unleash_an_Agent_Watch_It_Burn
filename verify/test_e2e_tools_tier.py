@@ -40,6 +40,9 @@ import zipfile
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 VERIFY = REPO / "verify"
+sys.path.insert(0, str(VERIFY))
+import tf_plugin_cache  # noqa: E402
+
 LOCK = VERIFY / "e2e-tools.lock"
 FETCH = VERIFY / "fetch-e2e-tools.sh"
 RUNNER = VERIFY / "run-e2e-tools.sh"
@@ -187,9 +190,10 @@ for t in tier:
         check(f"{t.name} runs terraform, so it carries `# E2E SERIAL: terraform`",
               re.search(r"^# E2E SERIAL: terraform", text, re.M) is not None)
 serial_tests = sorted(t.name for t in tier if re.search(r"^# E2E SERIAL: terraform", t.read_text(), re.M))
-check(f"the five terraform tests are the serial ones ({serial_tests})",
+check(f"the six terraform tests are the serial ones ({serial_tests})",
       serial_tests == ["test_control_plane_app_ports_module.py", "test_iam_policy_structural.py",
                        "test_lab_platform_operator_entry.py", "test_terraform_lock_init.py",
+                       "test_terraform_mirror_lock.py",
                        "test_terraform_plugin_cache_lock.py"])
 
 runner = RUNNER.read_text()
@@ -307,19 +311,22 @@ BAD_LOCK = (
 )
 
 
-# The runner keeps the Terraform provider cache outside the checkout and fails on one inside it (#1114). A scratch
-# checkout here is the fixture's whole temp directory, HOME included, so each run names a cache of its own outside it,
-# in a directory removed when this test exits.
-TF_CACHE_HOME = tempfile.TemporaryDirectory(prefix="tier-tf-cache-")
-TF_CACHE_ENV = {"TF_PLUGIN_CACHE_DIR": str(pathlib.Path(TF_CACHE_HOME.name) / "terraform-plugin-cache")}
+# The runner keeps the Terraform plugin cache in the host artifact cache, outside every worktree, and fails on one
+# inside it (#1114, #1119). A scratch checkout here is the fixture's whole temp directory, HOME included, and TMPDIR
+# can sit inside this worktree, so each run names an artifact root of its own outside both, in a directory removed
+# when this test exits.
+TF_CACHE_HOME = tf_plugin_cache.scratch("tier-tf-cache-")
+TF_CACHE_ENV = {"WIB_ARTIFACT_CACHE": str(pathlib.Path(TF_CACHE_HOME.name) / "artifacts")}
+TF_PLUGIN_CACHE = str((pathlib.Path(TF_CACHE_HOME.name) / "artifacts" / tf_plugin_cache.PLUGIN_SUBDIR).resolve())
 
 
 def scratch(tmp: pathlib.Path, lock: str, scripts: tuple[pathlib.Path, ...]) -> pathlib.Path:
     """A scratch verify/ holding copies of the scripts and the given lock, with fixtures and a curl log. The runner
-    names its provider cache through tf_plugin_cache.py, so that comes with it."""
+    names its provider cache through tf_plugin_cache.py, which reads the root through artifact_cache.py, so those
+    come with it."""
     vdir = tmp / "verify"
     vdir.mkdir(parents=True, exist_ok=True)
-    for s in scripts + ((VERIFY / "tf_plugin_cache.py",) if RUNNER in scripts else ()):
+    for s in scripts + ((VERIFY / "tf_plugin_cache.py", VERIFY / "artifact_cache.py") if RUNNER in scripts else ()):
         shutil.copy2(s, vdir / s.name)
     (vdir / "e2e-tools.lock").write_text(lock)
     fx = tmp / "fixtures"
@@ -638,7 +645,7 @@ with tempfile.TemporaryDirectory() as t:
                                             "echo terraform test ran\n")
     (vdir / "test_plain_beside.sh").write_text("# SUITE: e2e\n# E2E TIER: tools\necho plain test ran\n")
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
-    lock_path = pathlib.Path(TF_CACHE_ENV["TF_PLUGIN_CACHE_DIR"] + ".lock")
+    lock_path = pathlib.Path(TF_PLUGIN_CACHE + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     # Held by this process, as flock(1) in the runner takes it, and released when the file closes.
     with lock_path.open("a") as held:
@@ -654,7 +661,7 @@ with tempfile.TemporaryDirectory() as t:
     r = pool_run(tmp, {"TF_CACHE_LOCK_WAIT": "1", "PAIR_POLLS": "1"})
     check(f"released, the same run passes and the terraform test runs (exit {r.returncode})",
           r.returncode == 0 and block(r.stdout, "test_tf_locked.sh") == "terraform test ran\n", r.stdout + r.stderr)
-    check("the runner names the cache it used", f"Terraform provider cache: {TF_CACHE_ENV['TF_PLUGIN_CACHE_DIR']}\n"
+    check("the runner names the cache it used", f"Terraform provider cache: {TF_PLUGIN_CACHE}\n"
           in r.stdout, r.stdout)
 
 print("== stopped by a signal, the runner names what still ran and stops it (#1005) ==")

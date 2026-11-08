@@ -19,6 +19,7 @@ Prerequisites are checked first and all reported together; a missing one is a fa
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -28,6 +29,9 @@ import tempfile
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "verify"))
+import tf_plugin_cache  # noqa: E402
+
 PLAN = REPO / "infra" / "policy" / "plan"
 TOOLS = yaml.safe_load((PLAN / "tools.yaml").read_text())
 
@@ -69,8 +73,11 @@ def tf_version(binary: str) -> str | None:
     return json.loads(out).get("terraform_version")
 
 
+TF_ENV: dict[str, str] = {}
+
+
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+    return subprocess.run(cmd, capture_output=True, text=True, env=TF_ENV or None, **kw)
 
 
 def plan_fixture(binary: str, fixture: str, work: pathlib.Path) -> pathlib.Path:
@@ -101,6 +108,15 @@ if missing:
           file=sys.stderr)
     sys.exit(1)
 
+# Terraform takes every registry.terraform.io provider from the host artifact cache's mirror, which holds the versions
+# the committed locks pin (tf_plugin_cache.py, #1119): the fixtures and plan-fleet's `init -upgrade` get the newest of
+# those the configuration allows. OpenTofu reads the same CLI config, and its registry.opentofu.org providers install
+# directly, as the config leaves every other host to `direct`.
+try:
+    TF_ENV.update(tf_plugin_cache.terraform_env(os.environ))
+except tf_plugin_cache.CacheError as e:
+    print(f"PLAN POLICY E2E CANNOT RUN: {e}", file=sys.stderr)
+    sys.exit(1)
 checker = [sys.executable, str(PLAN / "check-plan.py")]
 with tempfile.TemporaryDirectory() as tmp:
     work = pathlib.Path(tmp)

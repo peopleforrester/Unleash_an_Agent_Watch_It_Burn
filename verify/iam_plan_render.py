@@ -7,7 +7,8 @@ answers those two, with account 111122223333, and planned with -target on the IA
 The EKS module itself is left out: planning it calls EKS, EC2 and SSM, and its own policy documents
 (cluster encryption on a KMS key) are known only after apply in any case.
 
-Needs terraform on PATH (or TERRAFORM) and network to registry.terraform.io for `terraform init`."""
+Needs terraform on PATH (or TERRAFORM). Providers come from the host artifact cache's mirror (tf_plugin_cache.py,
+#1119), filled on first use, which needs network to registry.terraform.io only while the cache is cold."""
 from __future__ import annotations
 
 import http.server
@@ -19,9 +20,13 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import sys
 import urllib.parse
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "verify"))
+import tf_plugin_cache  # noqa: E402
+
 CLUSTER = REPO / "infra/terraform/aws/cluster"
 BOUNDARY = REPO / "infra/org/boundary"
 # The per-account Config recorder and trail (#205). Planned whole: its only AWS reads are the two below.
@@ -117,22 +122,26 @@ def _point_at(main_tf: str, port: int) -> str:
     return out
 
 
-_CACHE: list[str] = []
-# A terraform call that has not finished in this long is a stalled registry download, not a slow one: the aws
-# provider is ~800 MB, and a run that waited on it with no bound held the whole E2E tier for 15 minutes (#572).
+_ENV: list[dict[str, str]] = []
+# A terraform call that has not finished in this long has stalled: the aws provider is ~800 MB unpacked, and a run
+# that waited on a registry download with no bound held the whole E2E tier for 15 minutes (#572).
 TERRAFORM_TIMEOUT = 600
 
 
-def _plugin_cache() -> str:
-    # One provider download per test process, not one per render. The E2E tier sets TF_PLUGIN_CACHE_DIR to a
-    # directory that outlives the checkout (run-e2e-tools.sh, tf_plugin_cache.py, #1114), so it happens once per host.
-    # That holds only with TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE set (render() sets it). The renders copy no
-    # lockfile, and Terraform 1.4+ ignores the cache for a provider no lockfile records: each init fetched aws (about
-    # 840 MB) and cloudinit from releases.hashicorp.com again, four times per test, and a reset connection on one of
-    # those fetches failed the tier on staging (#883, as in run 16828).
-    if not _CACHE:
-        _CACHE.append(tempfile.mkdtemp(prefix="wib-tf-plugins-"))
-    return _CACHE[0]
+def _terraform_env() -> dict[str, str]:
+    # Once per process: the providers every committed lock pins, served from the host artifact cache's mirror with the
+    # plugin cache beside it (tf_plugin_cache.py, #1119), so no render downloads a provider. The renders copy no
+    # lockfile, so terraform picks the newest locked version the root allows, and Terraform 1.4+ ignores the plugin
+    # cache for a provider no lockfile records; TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE keeps the renders on it
+    # (#883: before the cache, each of four renders a test fetched aws and cloudinit again, and a reset connection
+    # failed the tier). The cache holds only what terraform unpacked from mirror zips the artifact cache verified.
+    if not _ENV:
+        try:
+            _ENV.append({**tf_plugin_cache.terraform_env(os.environ),
+                         "TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE": "true"})
+        except tf_plugin_cache.CacheError as e:
+            raise SystemExit(f"FAIL: no provider mirror for the renders: {e}")
+    return _ENV[0]
 
 
 def render(root: str, edit=None) -> dict:
@@ -152,15 +161,13 @@ def render(root: str, edit=None) -> dict:
                 # The associations name the EKS module's cluster; with the module out of the plan, name it directly.
                 text = text.replace("module.eks.cluster_name", "var.name")
             (work / "main.tf").write_text(edit(text) if edit else text, encoding="utf-8")
-            env = {**os.environ, "TF_PLUGIN_CACHE_DIR": os.environ.get("TF_PLUGIN_CACHE_DIR") or _plugin_cache(),
-                   "TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE": "true"}
+            env = _terraform_env()
             def run(*a):
                 try:
                     return subprocess.run([tf, f"-chdir={work}", *a], capture_output=True, text=True, env=env,
                                           timeout=TERRAFORM_TIMEOUT)
                 except subprocess.TimeoutExpired:
-                    raise SystemExit(f"FAIL: terraform {a[0]} of {root} did not finish within {TERRAFORM_TIMEOUT}s; "
-                                     "a provider download from registry.terraform.io has stalled")
+                    raise SystemExit(f"FAIL: terraform {a[0]} of {root} did not finish within {TERRAFORM_TIMEOUT}s")
             # No lockfile is copied: the committed cluster lock trails the module's provider floor, and this renders
             # documents, it does not apply them.
             r = run("init", "-input=false", "-no-color")

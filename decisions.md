@@ -33541,3 +33541,90 @@ is `bash verify/run-tests.sh`), then `30 checks ran (the offline suite and 29 ti
 TIER CHECKS GREEN` and `exit=0`. `verify/test_kubecon_sheet_attack_heads.py` and
 `verify/test_kubecon_prompt_sheet_e2e.py` were among them and passed. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18444/e2e-tools.log`.
+## 2026-11-08 · #1119 · run 18438 · Terraform takes every provider from a mirror in the host artifact cache and downloads none
+
+**What.** #1114 (run 18412, closed) kept the plugin cache outside the checkout, but terraform still downloaded each
+provider into it on a cold cache, and the CI job's cache sat under the runner, apart from the host artifact cache
+that #1117 added. Now `verify/tf_plugin_cache.py` serves the providers itself, all of it under the artifact root
+(`artifact_cache.resolve_root`, refused inside any worktree):
+
+- `fill()` reads each `.terraform.lock.hcl` and, for every provider it pins, finds this platform's zip: from
+  `<root>/terraform-providers/index/...json` when it has seen it before, else from the registry's download API
+  (`https://registry.terraform.io/v1/providers/<ns>/<type>/<version>/download/linux/amd64`). The registry's SHA-256
+  is used only when it is one of the `zh:` hashes the lock records; otherwise the fill fails, naming the sum and the
+  lock, and nothing is fetched. The zip then comes through `artifact_cache.get(sha, url)`, which re-hashes a hit,
+  fetches a miss once under the sum's lock and logs it, and fails on any mismatch without fetching again. The mirror
+  entry `<root>/terraform-providers/mirror/<host>/<ns>/<type>/<zip>` is a symlink to `<root>/sha256/<hex>`, made with
+  one rename. A lock with no `zh:` hashes, an index entry naming a sum the lock does not record, a provider on
+  another host and a registry answer for another file all fail by name.
+- The CLI config it writes, `<root>/terraform-providers/terraformrc`, has a `filesystem_mirror` for
+  `registry.terraform.io/*/*` and a `direct` block that excludes the same pattern, so terraform cannot download a
+  registry.terraform.io provider at all: one the mirror lacks fails init by name. The plugin cache moved to
+  `<root>/terraform-plugin-cache` (it was `${XDG_CACHE_HOME:-$HOME/.cache}/unleash-watch-it-burn/terraform-plugin-cache`);
+  `TF_PLUGIN_CACHE_DIR` from the caller no longer names it.
+- `terraform_env(env, locks)` is what each test gives its terraform: the mirror filled for those locks (every
+  committed lock when none are named), `TF_CLI_CONFIG_FILE` and `TF_PLUGIN_CACHE_DIR` set, and
+  `TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE` dropped. When the caller already set `TF_CLI_CONFIG_FILE`, it is
+  checked instead of filled: it must be byte for byte a config this module wrote, for a mirror outside every worktree,
+  with a usable `TF_PLUGIN_CACHE_DIR` outside every worktree beside it. `tf_plugin_cache.py prepare` fills the mirror
+  for every committed lock and prints the two variables as `KEY=VALUE` lines for `$GITHUB_ENV`.
+
+**Every init.** Under verify/, the files that run a real `terraform init` are `test_terraform_lock_init.py`,
+`test_terraform_plugin_cache_lock.py`, `test_control_plane_app_ports_module.py`, `test_lab_platform_operator_entry.py`,
+`test_plan_policy_e2e.py`, `iam_plan_render.py` (used by the IAM policy tests) and the new
+`test_terraform_mirror_lock.py`; each now takes its env from `terraform_env`. `iam_plan_render.py` no longer makes a
+`mkdtemp` plugin cache in TMPDIR, which on a hecaton run is inside the worktree. In the workflows, `verify-suites.yml`
+sets `WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts` in a step, and `plan-policy.yml` and `iam-policy.yml` set
+it under `$RUNNER_TEMP` and run `prepare >> "$GITHUB_ENV"` before their first init; `plan-policy.yml` needs that
+because `infra/policy/plan/plan-fleet.py` inits from the env it inherits. `plan-policy.yml` no longer sets
+`TF_PLUGIN_CACHE_DIR`. `verify/test_tf_plugin_cache.py` holds this: it finds every verify/ file that runs terraform
+with `init`, and fails on one it has not classed as a real init through `terraform_env` or a stub; and for each
+workflow that runs an init it holds that the artifact root is set under the runner's temp or tool cache, and the
+mirror prepared, before the first one.
+
+**A fix on the way.** #1114's job-level `TF_PLUGIN_CACHE_DIR: ${{ runner.tool_cache }}/...` in `verify-suites.yml`
+broke the whole workflow file: Actions does not offer the `runner` context in `jobs.<id>.env`, and run 42427273324 on
+staging `0366ecf3` failed in 0 s with "This run likely failed because of a workflow file issue". The variable is now
+set from `$RUNNER_TOOL_CACHE` in a step, and the offline test fails any workflow whose job env names `runner.`.
+
+**What the lock still decides, measured.** On the pinned terraform 1.15.6, with hashicorp/null 3.3.2 from the
+cluster root's lock in a filesystem mirror whose zip was a symlink: init installed it (`(unauthenticated)`, terraform's
+word for a mirror package) and a second init used the plugin cache. A zip with its provider binary changed made init
+fail with "the current package for registry.terraform.io/hashicorp/null 3.3.2 doesn't match any of the checksums
+previously recorded in the dependency lock file". A zip with one byte appended after the archive installed cleanly:
+terraform accepts a package that matches either its `zh:` (the zip's bytes) or its `h1:` (its files), and every
+committed lock records an `h1:`. So terraform alone does not catch a changed zip whose files are intact; the fill's
+byte check does, since `artifact_cache.get` hashes every hit. `verify/test_terraform_mirror_lock.py` (tools tier,
+no network) holds both layers with a made-up provider and stubbed registry and download: the good zip installs from
+the mirror and the lock is unchanged; with the cache entry's contents changed, init fails on the lock's checksums and
+installs nothing, and the fill refuses the entry naming both sums; with bytes appended, the fill refuses it; and a
+registry answer whose sum the lock does not record is refused with nothing fetched, cached or indexed.
+`verify/test_tf_plugin_cache.py` (offline) holds the same refusals for the helper alone, a cold fill (one lookup and
+one fetch per provider version, a version two locks share filled once, each fetch one fetch-log line) and a warm one
+(no lookup, no fetch, the log unchanged).
+
+**OpenTofu.** `test_plan_policy_e2e.py` also runs `tofu`, which reads the same `TF_CLI_CONFIG_FILE` and resolves
+`hashicorp/aws` on registry.opentofu.org. The config leaves every host but registry.terraform.io to `direct`, so tofu
+still downloads its providers, into the plugin cache in the artifact root. Tried on tofu 1.13.2 against
+`fixtures/compliant`: terraform installed aws 6.71.0 from the mirror and tofu downloaded 6.72.0 into the shared cache.
+Mirroring tofu's would need a lock for each fixture to vouch for its zips; this issue is about `terraform init`, so it
+is left as it is. The fixtures and `plan-fleet.py`'s `init -upgrade` now get the newest aws version a committed lock
+pins that their constraints allow (6.71.0 today), not the registry's newest (6.72.0).
+
+**Cold and warm times, this host, pinned terraform 1.15.6, `test_terraform_lock_init.py`.** Cold, with an empty
+scratch artifact root: the mirror fill took 20.8 s and fetched 8 zips (572 MB: aws 6.51.0, 6.70.0 and 6.71.0,
+cloudinit, null, time, tls and datadog), then the inits took 17.8, 13.9, 9.9, 2.7 and 1.0 s, about 67 s in all.
+Warm, on the same root: 21.0 s wall, the fill 0.6 s, the inits 9.9, 6.0, 2.6, 2.6 and 0.2 s, and `artifact cache
+fetches this run: 0`. What is left is the cluster root's module downloads and plugin start-up. The test now also
+fails any init whose output names a signer, which is what terraform prints for a registry download, and prints the
+fetch-log lines its run added. #1114's numbers for comparison: 96 s with no cache, 81 s cold and 25 s warm, with
+terraform downloading on a cold cache.
+
+**Left behind.** This pool's `~/.cache/unleash-watch-it-burn/terraform-plugin-cache` (3.3 GB, #1114's location) is no
+longer read; it can be removed. The new plugin cache rebuilds from the mirror with no download.
+
+**Scope map.** `scope_tests.py write` regenerated the whole map, and most of what it changed was other tests' existing
+drift; only the entries of the tests this change touches are in this change. `test_tf_plugin_cache.py` moved to
+`always`, since it runs `git ls-files` to hold that `committed_locks()` is every lock git tracks.
+
+**Not yet run on a cluster.** Nothing: this changes only the cluster-free tier, its CI jobs and their tests.
