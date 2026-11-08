@@ -670,6 +670,9 @@ reads:
     - infra/terraform/aws/cluster/main.tf
     - verify/agentgateway_schema.py
     - verify/schemas/agentgateway-v1.7.0-config.json
+  test_agentgateway_config_checksum.py:
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/bootstrap/apps/ai-layer.yaml
   test_agentgateway_path.py:
     - agent/GATEWAY-NOTES.md
     - challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md
