@@ -38082,3 +38082,9 @@ taken as they were.
 **The live check.** Skipped: the change touches only `verify/` files no cluster runs, CLAUDE.md, `.gitignore`,
 PROGRESS.md and this file (Dispatched runs, point 1).
 
+**The suites (run 18710, at `6f2f056d`).** The change edits the runner and `scope_tests.py`, both in the map's full list,
+so `scope_tests.py select tools` printed FULL, and `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash
+verify/run-e2e-tools.sh` ran everything: `375 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `87 checks ran (the
+offline suite and 86 tier tests) in 11m19s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is
+`/var/lib/hecaton/runs/18710/e2e-tools.log`. No dependency was added.
+
