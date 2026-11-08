@@ -1,0 +1,72 @@
+# ABOUTME: ghcr.io/peopleforrester/wib-e2e-tools (#1188): the tools tier's runtime, with e2e-tools.lock's binaries fetched
+# ABOUTME: once here and SHA-256 checked, so a host pulls one image once instead of downloading each binary every run.
+#
+# Build (the tag is verify/e2e_image.py's: the lock's SHA-256 and the build files'):
+#   bash verify/e2e-image.sh build
+# .github/workflows/build-e2e-tools-image.yml builds and pushes it when the tag is new. Run the tier in it with
+#   bash verify/e2e-image.sh run
+#
+# The context is verify/, cut down by verify/.dockerignore to this directory and the Python pins.
+# verify/test_e2e_image.py holds that the `install.sh tool` lines below are exactly e2e-tools.lock's rows, in its order.
+
+# debian:trixie-slim, linux/amd64, by digest (2026-11-08); the lock pins linux x86_64 binaries only.
+FROM docker.io/library/debian:trixie-slim@sha256:7378260c0a098d27ac206225db5e7d92b8c7c84ea7afccc86eeb513756bbd392
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WIB_E2E_TOOLS=/opt/wib-e2e-tools \
+    UV_PYTHON_INSTALL_DIR=/opt/uv-python \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_GC=1
+
+# What run-e2e-tools.sh checks for (git, jq, openssl, flock) and what the tests call (ps and pkill, tar, xz), with
+# curl and unzip for this build's fetches.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash ca-certificates curl git jq openssl procps tar unzip \
+        util-linux xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY e2e-image/install.sh /usr/local/lib/wib-e2e/install.sh
+
+# uv 0.13.7, as verify-suites.yml sets up; its SHA-256 is the release's uv-x86_64-unknown-linux-gnu.tar.gz.sha256.
+RUN /usr/local/lib/wib-e2e/install.sh bin /usr/local/bin uv c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83 https://github.com/astral-sh/uv/releases/download/0.13.7/uv-x86_64-unknown-linux-gnu.tar.gz uv-x86_64-unknown-linux-gnu/uv
+# The two Pythons python.lock's environments are locked for; uv checks each download against the sum it ships with.
+RUN uv python install 3.12 3.13
+
+# Node 24.22.2, the Backstage image's Node; its SHA-256 is the release's SHASUMS256.txt line.
+RUN /usr/local/lib/wib-e2e/install.sh tree /opt/node 48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75 https://nodejs.org/dist/v24.22.2/node-v24.22.2-linux-x64.tar.xz
+
+# e2e-tools.lock, one row per line.
+RUN /usr/local/lib/wib-e2e/install.sh tool kyverno v1.19.1 b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz kyverno
+RUN /usr/local/lib/wib-e2e/install.sh tool conftest v0.71.1 c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985 https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/conftest_0.71.1_Linux_x86_64.tar.gz conftest
+RUN /usr/local/lib/wib-e2e/install.sh tool terraform v1.15.6 a7150d3b0e1b5c466ad42e8c499954a3c54645f8b56b385fa025d34f7e88faa9 https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_linux_amd64.zip terraform
+RUN /usr/local/lib/wib-e2e/install.sh tool kubectl v1.36.2 1e9045ec32bea85da43de85f0065358529ea7c7a152eca78154fba5b58c27d82 https://dl.k8s.io/release/v1.36.2/bin/linux/amd64/kubectl -
+RUN /usr/local/lib/wib-e2e/install.sh tool helm v4.2.1 479dca836e5b45e8bd222400c5591b0e3a647378f03ff96597180db97c17fdae https://get.helm.sh/helm-v4.2.1-linux-amd64.tar.gz linux-amd64/helm
+RUN /usr/local/lib/wib-e2e/install.sh tool otelcol-contrib v0.160.0 7bb60c584c241c86261c2b8697cd3725dd8c56691f5ad5d98454eaa005b47b0c https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.160.0/otelcol-contrib_0.160.0_linux_amd64.tar.gz otelcol-contrib
+RUN /usr/local/lib/wib-e2e/install.sh tool ttyd 1.7.7 8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55 https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -
+RUN /usr/local/lib/wib-e2e/install.sh tool crane v0.22.1 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0 https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz crane
+RUN /usr/local/lib/wib-e2e/install.sh tool weaver v0.24.2 e5508316149b01cac325bd3b2c72c83ffea4cfcb554cac2906ff80df6edafc0e https://github.com/open-telemetry/weaver/releases/download/v0.24.2/weaver-x86_64-unknown-linux-gnu.tar.xz weaver-x86_64-unknown-linux-gnu/weaver
+RUN /usr/local/lib/wib-e2e/install.sh tool agentgateway v1.7.0 1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8 https://github.com/agentgateway/agentgateway/releases/download/v1.7.0/agentgateway-linux-amd64 -
+RUN /usr/local/lib/wib-e2e/install.sh tool caddy v2.11.4 527fbf917c39189a1e3b31d34fa955601680b2d5c8055d2a87b8b9588dec7bb9 https://github.com/caddyserver/caddy/releases/download/v2.11.4/caddy_2.11.4_linux_amd64.tar.gz caddy
+
+# PyYAML for the suites' python3, and Playwright's Chromium with the libraries and fonts it needs, each from
+# python.lock through verify/package_cache.py's hash-checked, offline install (#1121). The build's artifact root is
+# thrown away; at run time the host's is mounted.
+COPY python.lock package_cache.py artifact_cache.py /tmp/wib-build/
+RUN export WIB_ARTIFACT_CACHE=/tmp/wib-build/cache \
+    && uv venv --no-config --python 3.13 /opt/wib-e2e-tools/py \
+    && python3_=/opt/wib-e2e-tools/py/bin/python \
+    && "${python3_}" /tmp/wib-build/package_cache.py install pyyaml --python "${python3_}" \
+    && "${python3_}" /tmp/wib-build/package_cache.py run playwright -- playwright install --with-deps chromium \
+    && rm -rf /tmp/wib-build /var/lib/apt/lists/* \
+    && chmod -R a+rX /opt/ms-playwright
+
+# Inside the image gh is a client of the host's gh (verify/gh_relay.py); see that file.
+COPY e2e-image/gh /usr/local/bin/gh
+RUN chmod 0755 /usr/local/bin/gh
+
+# No Python is fetched at run time: the two above are the ones uv finds.
+ENV UV_PYTHON_DOWNLOADS=never \
+    PATH=/opt/wib-e2e-tools/py/bin:/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+LABEL org.opencontainers.image.source=https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn \
+      org.opencontainers.image.description="Unleash_an_Agent_Watch_It_Burn's cluster-free E2E tier: e2e-tools.lock's binaries, Node 24, Python 3.12 and 3.13, Playwright's Chromium"
