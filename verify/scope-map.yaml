@@ -81,6 +81,7 @@ always:
   test_git_mirror.py: it runs git cat-file, which reads the tree or history as a whole
   test_gitattributes_union.py: it runs git log, ls-files, which reads the tree or history as a whole
   test_guard_lease.py: line 640 builds a path under the repo root from a value it finds at run time
+  test_guard_proxy_pin_1048.py: it runs git cat-file, ls-tree, show, which reads the tree or history as a whole
   test_guard_proxy_pin_bound_pricing.py: it runs git cat-file, ls-files, show, which reads the tree or history as a whole
   test_guard_proxy_pin_on_main.sh: 'verify/guard-proxy-pin-on-main.sh: it runs git on the tree or history as a whole; verify/submodule-pins-pushed.sh: it runs git on the tree or history as a whole'
   test_guardrail_slide_citations.py: it runs git ls-files, which reads the tree or history as a whole; line 193 builds a path under the repo root from a value it finds at run time; line 189 builds a path under the repo root from a value it finds at run time
