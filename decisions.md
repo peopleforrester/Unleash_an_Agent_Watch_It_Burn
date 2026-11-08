@@ -38758,3 +38758,78 @@ five false, as they did before. The lock was released on both. The log is
 change is prose alone, so `scope_tests.py select tools` ran 0 of 86 tier tests and `run-e2e-tools.sh` was not run.
 `bash verify/run-tests.sh` ran 101 of 382 offline tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0
 (log `/var/lib/hecaton/runs/18735/run-tests.log`). The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1158 · run 18737 · The public desk linked on both KubeCon clusters, and both bots read and deploy on it live
+
+Run 18711's change (`53b819ac`) reached staging and both clusters, so this run did the live checks it named under "Not
+yet run on a cluster". `verify/prior-drafts.sh 1158 origin/staging` printed `LANDED origin/agent/1158-18711` and
+`NONE`, so no draft was ported. No code changed in this run: what it adds is this entry and the PROGRESS.md line.
+
+**Before.** Both clusters had `ai-layer` Synced and Healthy at `30b6b26f`, which contains `53b819ac`. On
+watch-it-burn-private, `desk-relay` was 1/1 with its NetworkPolicy `agent-allow-desk-relay-egress`, and workshop-mcp's
+`TICKET_SITE_URL` was `http://desk-relay.agent.svc.cluster.local:8080`. On watch-it-burn-community it was
+`http://fake-ticket.agent.svc.cluster.local:8080`. Neither cluster had a `desk-report-token` Secret. The egress set was
+off on both (the only NetworkPolicies in `agent` were the always-on ones), and guardrails-on was not armed in this run.
+The public desk's deployments page was `[]`, and its wall held two refused Joker reports from 18:50 and 18:51.
+
+**Linked.** With the run's session sourced, `bash infra/terraform/fleet/fleet.sh desk-link` printed:
+
+    desk-link: watch-it-burn-community (us-west-2) takes the deploy reports of watch-it-burn-private (us-west-2)
+      watch-it-burn-community: agent/desk-report-token written
+      watch-it-burn-private: agent/desk-report-token written
+      watch-it-burn-community: restarting fake-ticket so the desk reads the new token; this clears its filed tickets and rows
+    desk-link: linked; the private bot's deploys show on watch-it-burn-community's deployments page, labelled private
+
+and exited 0. The community fake-ticket rolled out. The relay's `/healthz` read `"token": false` right after and
+`{"ok": true, "desk": "https://support.burritobot.co", "token": true}` 60 seconds later, with no restart, as the
+optional Secret volume was filled in. The token was never printed. `agent/terminal-auth` was not read or written.
+
+**Read by number (criterion 1).** A ticket was filed through the public desk's own form, `POST
+https://support.burritobot.co/submit`, which answered `Your ticket is HC-2038`. Then `read_support_ticket` was called in
+each cluster's deployed workshop-mcp (`kubectl exec deploy/workshop-mcp -c shim -- python3 -c "... import server;
+print(server.read_support_ticket('HC-2038'))"`, the probe's own C6 tool check), and on both clusters printed:
+
+    Ticket HC-2038 [open] from Agatha the Gargoyle: submitted at the support desk
+
+    Desk check for issue 1158 (run 18737): my burrito order page shows the wrong pickup time. Both cantina bots should read this ticket by its number.
+
+`read_support_ticket('HC-0002')` printed `ticket desk: {"error": "no ticket 'HC-0002'"}` on both. On
+watch-it-burn-private the cluster's own desk answered `/ticket?id=HC-2038` with 404, so the private bot's read came
+from the public desk. The tool is still the server's one ticket tool (`read_support_ticket`; the other names with
+"ticket" are `TICKET_SITE_URL`, `TICKET_WITHHELD` and `_ticket_flagged`).
+
+**No list (#1077), from the deployed relay.** From the private workshop-mcp pod, the relay answered 404 to `GET /`,
+`/wall`, `/wall.json`, `/me`, `/mine`, `/deployments.json`, `/HC-2038` and `/lookup` and to `POST /submit`, and 400 to
+`/ticket` with no id and to `/ticket?id=HC-2038&id=HC-7731`. With the egress set off, workshop-mcp itself reached
+`https://support.burritobot.co/ticket?id=HC-2038` directly (200), as the open stage allows; with it on, only the relay
+has 443 out, which run 18711's offline test and NetworkPolicy hold and this run did not arm.
+
+**Both bots' deploys (criterion 2).** `deploy_app` was called in each cluster's workshop-mcp with one harmless ConfigMap,
+`desk-check-1158-private` and `desk-check-1158-community`, `requested_by` `Agatha the Gargoyle`. Each returned
+`deployed ConfigMap/desk-check-1158-<cluster> in agent.`, and `https://deployments.burritobot.co/deployments.json` then
+read:
+
+    [{"name": "desk-check-1158-community", "kind": "ConfigMap", "image": "", "app": "desk-check-1158-community",
+      "witch": "Agatha the Gargoyle", "at": "19:19:38", "removed_at": "", "cluster": "community"},
+     {"name": "desk-check-1158-private", "kind": "ConfigMap", "image": "", "app": "desk-check-1158-private",
+      "witch": "Agatha the Gargoyle", "at": "19:19:27", "removed_at": "", "cluster": "private"}]
+
+The private desk's own page, `https://deployments-burritobot-private.burritobot.co/deployments.json`, read `[]`, so the
+admin bot's deploy went to the public page and not its own, as run 18711's entry said it would. Both ConfigMaps were
+then deleted. The two rows stay on the public page; ConfigMap is not a kind the community reader covers, so neither is
+greyed.
+
+**Left as found, with one change kept.** Both ConfigMaps are gone, and ticket HC-2038 stays on the public desk until its
+next restart. The two `desk-report-token` Secrets are kept: they are the link #1145 asks for, and `instructors up` writes
+them at every bring-up. Removing them would restart the public desk again and take the admin bot's deploys off the
+public page. `desk-link` cleared the public desk's two refused Joker reports from 18:50 and 18:51, the restart its
+log line names. After the checks, both clusters' `ai-layer` read Synced and Healthy at `c60b0c2c`, and the community
+fake-ticket had not restarted since `desk-link`.
+
+**What this run did not do.** The checks call the two tools in the bots' tool pods, not through a chat with the model,
+the method `kubecon_probe.py`'s C6 tool check uses. guardrails-on was not armed, because `guardrails-link` arms both
+clusters at once and the run left the stage as found. So the relay's egress under the armed set is held by run 18711's
+offline and render tests, not by a live read.
+
+**Tests (run 18737).** Prose alone (`decisions.md`, `PROGRESS.md`), so by CLAUDE.md's Dispatched runs point 6 the
+scoped `run-tests.sh` and the prose gate ran and `run-e2e-tools.sh` did not. Run 18711's full runs of both, on the code
+this checks, are in its entry above.
