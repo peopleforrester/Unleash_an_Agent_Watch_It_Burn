@@ -35315,3 +35315,8 @@ them. Staging had not changed that file since. Run alone here it passed.
 
 **Live check.** None: the change touches only `verify/chart_fetch.py`, `verify/test_chart_fetch.py`,
 `verify/test_c7_gateway_toggle.py` and decisions.md, which no cluster runs.
+
+**The suites (run 18562, at `f0bcec81`).** `bash verify/run-e2e-tools.sh`, unscoped, printed `358 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 12m37s, 4 at a time`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_enforce_floor.py` ended `All enforce-floor checks passed.` with
+no retry needed on a real repository. The prose gate printed `prose gate: pass`. No dependency was added.
