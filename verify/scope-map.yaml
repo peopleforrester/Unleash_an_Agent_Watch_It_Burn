@@ -4564,6 +4564,17 @@ reads:
     - verify/kubecon_probe.py
     - verify/mirror_copies.py
     - verify/topic_cases.py
+  test_kyverno_counter_fix.py:
+    - .github/workflows/build-kyverno-counter-fix.yml
+    - VERSIONS.lock
+    - gitops/ai-layer/resources.yaml
+    - gitops/bootstrap/apps/kyverno.yaml
+    - images.lock
+    - images/kyverno-counter-fix
+    - images/kyverno-counter-fix/build.sh
+    - images/kyverno-counter-fix/pr17085.patch
+    - scripts/ghcr_version_tag.py
+    - verify/e2e-tools.lock
   test_kyverno_profile_policies.py:
     - CLAUDE.md
     - agent

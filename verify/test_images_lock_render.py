@@ -134,7 +134,13 @@ for ref, where in missing:
 check(f"no rendered image without a row ({len(missing)} missing: add a row with its digest and source, then run "
       "mirror-images.sh save on netcup)", not missing)
 check("the render finds Argo CD, Istio and Kyverno, so the rows are not judged against an empty list",
-      all(any(n in ref for ref in found) for n in ("argoproj/argocd", "istio.io/release/pilot", "kyverno/kyverno:")))
+      all(any(n in ref for ref in found) for n in ("argoproj/argocd", "istio.io/release/pilot", "kyverno/kyvernopre:")))
+# Kyverno's admission, reports and background controllers run this repo's build of v1.19.1 with the breaker fix since
+# #1015, so the render must hand the cluster all three, at the digests images.lock pins.
+check("the render hands the cluster the #1015 Kyverno build for the admission, reports and background controllers",
+      all(any(ref.startswith(f"ghcr.io/peopleforrester/watch-it-burn:{t}@sha256:") for ref in found)
+          for t in ("kyverno-v1.19.1-pr17085", "kyverno-reports-controller-v1.19.1-pr17085",
+                    "kyverno-background-controller-v1.19.1-pr17085")))
 
 print()
 if failures:
