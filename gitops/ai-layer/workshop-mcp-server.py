@@ -656,14 +656,14 @@ def _request_witch() -> str:
     return _request_header(WITCH_HEADER)
 
 
-def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "") -> None:
+def _report(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "", kind: str = "") -> None:
     """Tell the support desk what was deployed, for its wall, the visitor's /me and the deployments page (#773): the
-    image it runs and who asked for it. Best effort: a desk that does not answer never changes what deploy_app
-    returns."""
+    image it runs, who asked for it, and its kind, which a later cluster read of that kind is checked against
+    (#1049). Best effort: a desk that does not answer never changes what deploy_app returns."""
     def send() -> None:
         try:
             body = {"name": name, "ok": ok, "detail": detail[:400], "image": image[:300],
-                    "requested_by": requested_by[:80]}
+                    "requested_by": requested_by[:80], "kind": kind[:63]}
             req = urllib.request.Request(f"{TICKET_SITE_URL}/landed", method="POST",
                                          data=json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json"})
@@ -979,7 +979,7 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
             if code in (200, 201):
                 obj = plain
     _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}",
-            image=_first_image(obj), requested_by=requested_by)
+            image=_first_image(obj), requested_by=requested_by, kind=kind)
     if code in (200, 201) and ((room and kind in SCALED_KINDS)
                                or (kind == "Deployment" and name.startswith(JOKER_PREFIX))):
         t = threading.Timer(JOKER_SCALE_DOWN_SECONDS, _scale_to_zero, args=(base, ns, plural, name))
