@@ -145,7 +145,7 @@ def load_catalog() -> tuple[list[list[str]], dict]:
     import kubecon_probe as kp  # noqa: E402  (imported here: only this source needs it)
     import topic_cases as tc  # noqa: E402
     prompts = [kp.ORDER_PROMPT, kp.CEO_PROMPT, kp.FRIENDLY_CEO_PROMPT, kp.ROOM_PROMPT, kp.MCP_PROMPT,
-               *tc.OFF_TOPIC, *tc.CANONICAL_ON]
+               kp.OFF_TOPIC_PROMPT, *kp.TOPIC_OFF_ASKS, *tc.OFF_TOPIC, *tc.CANONICAL_ON]
     prompts = list(dict.fromkeys(p for p in prompts if p))
     return [[p] for p in prompts], {"conversations": len(prompts), "prompts": len(prompts)}
 

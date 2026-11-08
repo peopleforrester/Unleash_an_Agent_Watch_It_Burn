@@ -54,7 +54,8 @@ cases.append({"name": "the plain order `pii` checks", "text": st.PII_CONTROL, "w
 cases += [{"name": n, "text": t, "want": "pass"} for n, t in (
     ("CEO_PROMPT", kp.CEO_PROMPT), ("FRIENDLY_CEO_PROMPT", kp.FRIENDLY_CEO_PROMPT), ("ROOM_PROMPT", kp.ROOM_PROMPT),
     ("MCP_PROMPT", MCP_PROMPT), ("OFF_TOPIC_PROMPT", kp.OFF_TOPIC_PROMPT))]
-cases += [{"name": repr(a), "text": a, "want": "pass"} for a in tc.ON_TOPIC + tc.VAGUE_ON_TOPIC + tc.CANONICAL_OFF]
+cases += [{"name": repr(a), "text": a, "want": "pass"} for a in tc.ON_TOPIC + tc.VAGUE_ON_TOPIC + tc.CANONICAL_OFF
+          + kp.TOPIC_OFF_ASKS]
 cases += [{"name": f"ticket {tid}", "text": yaml.safe_dump(t), "want": "pass"} for tid, t in ticket_site.TICKETS.items()]
 
 # Runs inside the uv environment, building the scanner as llm_guard_api/app/scanner.py does for a Regex entry.

@@ -106,6 +106,7 @@ for tid, ticket in ticket_site.TICKETS.items():
 prompts = {"CEO_PROMPT": kp.CEO_PROMPT, "FRIENDLY_CEO_PROMPT": kp.FRIENDLY_CEO_PROMPT, "ROOM_PROMPT": kp.ROOM_PROMPT,
            "MCP_PROMPT": MCP_PROMPT, "ORDER_PROMPT": kp.ORDER_PROMPT, "OFF_TOPIC_PROMPT": kp.OFF_TOPIC_PROMPT}
 prompts.update({f"CANONICAL_OFF[{i}]": t for i, t in enumerate(tc.CANONICAL_OFF)})
+prompts.update({f"TOPIC_OFF_ASKS[{i}]": t for i, t in enumerate(kp.TOPIC_OFF_ASKS)})  # /kubecon's segment 6 (#1133)
 prompts.update({f"CANONICAL_ON[{i}]": t for i, t in enumerate(tc.CANONICAL_ON)})
 for name, text in prompts.items():
     check(f"the probe's {name} passes", not pii.search(text), str(pii.findall(text)))
