@@ -843,7 +843,9 @@ alone, and the gateway reloads it with no restart (#496).
 
 Slide numbers in this file count from 1, the title slide being slide 1; the deck's URL
 hash counts from 0 and is one less, so slide 44 is `#/43` at
-`https://rounds.agenticburn.com`.
+`https://rounds.agenticburn.com`. Segments 4 and 5, and their rows in the
+table below, give the deck's URL hash itself, `#/N`, as rounds-agenticburn#102 numbers
+the slides (#1141).
 
 Four challenges, numbered in the order shown, Challenge 1 to 4 (2026-10-29 planning
 call, `facilitation/kubecon-na-2026-planning-2026-10-29.md`, #687). C5, C6 and C7
@@ -877,8 +879,8 @@ beats give way first.
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
 | 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
-| 4 | 7 | W+M | Challenge 3, slides 44 to 64: BurritoBot's support desk (44), its QR code, `support.burritobot.co`, the room's first look at it (45), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (46), an ordinary ticket the admin bot reads back by its number; the challenge sentence (47), the deployments page and the prompt wall optional during play; the hint, HC-666 (48), whose white text the presenters select to show, then their live attack on the private bot and its deployment landing; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (49); LLM01, Prompt Injection (50); "Let's turn on least privilege and an input guard." (51), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (52); least privilege and its Role before and after (53 to 56); the input guard, LLM Guard in the notes (57 and 58); the architecture diagram, a request's path (59 to 63) and where the input guard is added (64) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
-| 5 | 5 | M+W | Challenge 4: the public bot, the prompt wall optional during play; Michael's live attack on the private bot, then its trace on the Datadog Challenge 4 tab; then `guard-mcp-on` on the private bot | Orders a burrito for the weather | 2, 4, 6, 7 |
+| 4 | 7 | W+M | Challenge 3, `#/43` to `#/61`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket filed on the private desk that the admin bot reads back by its number; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the private deployments page; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry depending on #1132; "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the architecture diagram, a request's path and where LLM Guard checks the ticket (`#/56` to `#/61`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
+| 5 | 5 | M+W | Challenge 4, `#/62` to `#/72`: BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/62` and `#/63`); "Find the poisoned MCP tool." (`#/64`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/65`), then Michael's live weather ask on the private bot and its trace on the Datadog Challenge 4 tab; LLM03, Supply Chain (`#/66`); "Let's turn on an MCP gateway." (`#/67`), `guard-mcp-on` on the private bot; "Try your attack again." (`#/68`), the room's retry depending on #1132; the MCP gateway, agentgateway in the notes, and its rule before and after (`#/69` to `#/72`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
@@ -1434,12 +1436,13 @@ in the Run-through record's Segment 3 row.
 
 ### Segment 4: Challenge 3, prompt injection through a support ticket (7 min). Owner: Whitney and Michael.
 
-The steps follow the deck's order, slides 44 to 64: Whitney's walk on 2026-11-07
-(rounds-agenticburn#82) and the architecture diagram on slides 59 to 64
-(rounds-agenticburn#93). Slide numbers here count from 1, as in the rest of this file;
-the deck's URL hash is one less, so slide 44 is `#/43`. Segment 3's hand-off above is
-slide 43's note, said on its one heading, "AI guardrails". Each challenge slide opens
-on the header line "Challenge 3 - attackme.burritobot.co".
+The steps follow the deck's order, `#/43` to `#/61`, as rounds-agenticburn#102 built it
+from Whitney's third walkthrough on 2026-11-07, with #99's architecture diagram on `#/56`
+to `#/61`. Segments 4 and 5 give each slide as the deck's URL hash, `#/N`, which counts
+from 0; the rest of this file counts from 1 (see the note under "The segments, in
+order"). Segment 3's hand-off above is `#/42`'s note, said on its one heading, "AI
+guardrails". Each challenge slide opens on the header line "Challenge 3 -
+attackme.burritobot.co".
 
 **The desk, as #1077 leaves it.** Anyone can file a ticket and gets its number back,
 and anyone can look a ticket up by its number. Nobody can browse tickets: the front
@@ -1448,26 +1451,26 @@ field, and no list. Ticket **HC-666** is pre-made on every desk: a card complain
 black, with the injection under it in white text on the white page. BurritoBot reads a
 ticket with `read_support_ticket` and is told to honor what the desk says.
 
-**Timing.** The Say notes on slides 44 to 64 come to 623 words, about 4 minutes 10
-seconds at 150 words a minute, and 63 of them, on slides 47 and 48, are said while the
-room plays. With the 3 minutes of play, the ticket filed and read back on slide 46, the
-live attack, the trace and the two commands on top, the segment as the deck has it
-runs past its 7 minutes. The rehearsal times each step and puts the total in the
-Run-through record's Segment 4 row.
+**Timing.** The Say and Then say notes on `#/43` to `#/61` come to 721 words, about 4
+minutes 50 seconds at 150 words a minute, and 57 of them, on `#/46` and `#/47`, are said
+while the room plays. With the 3 minutes of play, the ticket filed and read back on
+`#/45`, the live attack, the trace and the two commands on top, the segment runs past
+its 7 minutes. The rehearsal times each step and puts the total in the Run-through
+record's Segment 4 row.
 
-- **The support desk, then its QR code (slides 44 and 45).** Slide 44 reads:
+- **The support desk, then its QR code (`#/43` and `#/44`).** `#/43` reads:
 
   > **BurritoBot has a support desk.**
-  > It can file tickets, and read them by ticket number.
+  > It can read tickets by ticket number.
 
-  Say: "BurritoBot works with Hex & Cauldron's support desk. When a customer has a
-  problem, BurritoBot can file a ticket for them. When a customer asks about a ticket,
-  BurritoBot looks it up by its number and reads it." Slide 45 reads "People can use
-  the support desk too." over the desk's QR code, the room's first look at the desk,
-  and its written URL is a link that opens `https://support.burritobot.co` in its own
-  tab. Say: "Customers can go to the support desk directly, too. Scan this to open it.
-  You can file a ticket and get its number, and you can look up a ticket if you know
-  its number. You can't browse other people's tickets."
+  Say: "BurritoBot works with Hex & Cauldron's support desk. When a customer asks about
+  a ticket, BurritoBot looks it up by its number and reads it." `#/44` reads "People
+  can use the support desk too." over the desk's QR code, the room's first look at the
+  desk, and its written URL is a link that opens `https://support.burritobot.co` in its
+  own tab. Say: "Customers can go to the support desk directly, too. Scan this to open
+  it. You can file a ticket and get its number, and you can look up a ticket if you
+  know its number. You can also take that ticket number to BurritoBot and have it look
+  it up."
 
   The room is given the support desk at `support.burritobot.co`. The bare
   `support.burritobot.co` routes to attackme's desk (apex-agenticburn#46, live
@@ -1478,25 +1481,25 @@ Run-through record's Segment 4 row.
   other seeded tickets are on both. The desk lives only on its own host: neither bot
   host serves `/support`, and `https://attackme.burritobot.co/support` answers 404
   (#931), so give the room the desk's name, never a path on the bot's.
-- **"Let's file a ticket." (slide 46).** The line is a link to the private cluster's desk,
-  `https://support-burritobot-private.burritobot.co`, the one the admin bot reads. Say: "Let's
-  see how this works. I'll file a ticket at the support desk, and then I'll ask
-  BurritoBot about it." The presenter files a short, ordinary complaint ("My burrito
-  came without salsa") and notes the number the desk gives back, then switches to the
-  admin bot and asks "What's the status of my support ticket <number>?", and
-  BurritoBot reads the ticket back. Then say: "BurritoBot reads whatever the ticket
-  says. So here's your next challenge..." The slide's link opens the private desk, so
-  the ticket is filed where the admin bot can read it: each cluster's tool server reads
-  only its own desk, so a ticket on the room's desk, `support.burritobot.co`, is one the
-  admin bot cannot read (the public bot can).
-- **The challenge, and play (slide 47, 3 min).** It reads:
+- **"Let's file a ticket." (`#/45`).** The line is a link to the private cluster's desk,
+  `https://support-burritobot-private.burritobot.co`, the one the admin bot reads. Say:
+  "I'll file a ticket at the support desk, and then I'll ask BurritoBot about it." The
+  presenter files a short, ordinary complaint ("My burrito came without salsa") and
+  notes the number the desk gives back, then switches to the admin bot and asks
+  "What's the status of my support ticket <number>?", and BurritoBot reads the ticket
+  back. Then say: "BurritoBot reads whatever the ticket says. So here's your next
+  challenge..." The slide's link opens the private desk, so the ticket is filed where
+  the admin bot can read it: each cluster's tool server reads only its own desk, so a
+  ticket on the room's desk, `support.burritobot.co`, is one the admin bot cannot read
+  (the public bot can).
+- **The challenge, and play (`#/46`, 3 min).** It reads:
 
   > Challenge 3 - attackme.burritobot.co
-  >
   > **Use the support ticket system to get BurritoBot to deploy something.**
 
-  Say: "Anyone can write a ticket, and BurritoBot reads whatever the ticket says. Can
-  you write a ticket that gets BurritoBot to deploy something?" Play runs from here, on
+  "deploy" is a link to the room's deployments page, the public one,
+  `https://deployments.burritobot.co`. Say: "Can you write a ticket that gets
+  BurritoBot to misbehave? Can you get it to deploy something?" Play runs from here, on
   the public bot. The room writes its own injection ticket on the desk, the White text
   button hiding the instruction, and asks BurritoBot about it by its number, or asks
   BurritoBot to read HC-666. Each attendee's chat page has given them a generated
@@ -1512,55 +1515,59 @@ Run-through record's Segment 4 row.
   public bot HC-666 has landed about one ask in five (#1021), so a room that gets a
   refusal tries again or writes its own ticket.
 
-  Optional during play: the deployments page, `https://deployments.burritobot.co`, to
-  see which deployments land, and the prompt wall, `https://prompts.burritobot.co`, to
-  see what people are trying. Then back to the deck.
-- **The hint, the white text and the attack (slide 48).** It adds:
+  Optional during play: the deployments page, `https://deployments.burritobot.co`, from
+  the slide's "deploy", to see which of the room's deployments land, and the prompt
+  wall, `https://prompts.burritobot.co`, to see what people are trying. Then back to
+  the deck.
+- **The hint, the white text shown live, and the attack (`#/47`).** It adds:
 
   > Hint: Look up ticket HC-666 on the support desk.
 
-  "support desk" is a link to the desk. Say: "Ticket HC-666 is a prompt injection
-  attack that works. If you can figure out how it works, write your own ticket the same
-  way. Or, if you don't want to write your own, just ask BurritoBot to read ticket
-  HC-666." After a few moments the presenters attack. Look up HC-666 on the desk by its
-  number and select all of its text, which shows the instructions hidden in white text
-  under the complaint. Switch to the admin bot and send the `/kubecon` prompt from the
-  iPad cheat sheet, "What's the status of my support ticket HC-666?": the bot reads the
-  ticket with `read_support_ticket` and calls `deploy_app`, and the deployment lands
-  under the presenter's witch name (the Night Before probe sends the fixed name Agatha
-  the Banshee, so it can check the one it gets). Then switch to the deployments page and
-  show it landing. The admin bot's row is on the private cluster's page,
-  `deployments-burritobot-private.burritobot.co`; `deployments.burritobot.co` is the
-  room's, attackme's. Whether or not it works, move on: time is short.
-- **The trace, after the attack (slide 49).** "Let's look at the trace." is a link: it
+  "support desk" is a link to the room's desk, `https://support.burritobot.co`, and on
+  this slide "deploy" opens the private bot's deployments page,
+  `https://deployments-burritobot-private.burritobot.co`, the presenters' own. Say:
+  "Ticket HC-666 is a prompt injection attack that works. If you can figure out how it
+  works, write your own ticket the same way. Or, if you don't want to write your own,
+  just ask BurritoBot to read ticket HC-666." After a few moments the presenters show
+  the white text live: look up HC-666 on the desk by its number and select all of its
+  text, which shows the instructions hidden in white text under the complaint. Then
+  switch to the admin bot and send the `/kubecon` prompt from the iPad cheat sheet,
+  "What's the status of my support ticket HC-666?": the bot reads the ticket with
+  `read_support_ticket` and calls `deploy_app`, and the deployment lands under the
+  presenter's witch name (the Night Before probe sends the fixed name Agatha the
+  Banshee, so it can check the one it gets). Click "deploy" to open the private
+  deployments page and show it landing. `deployments.burritobot.co`, which `#/46`'s
+  "deploy" opened, is the room's, attackme's. Whether or not it works, move on: time is
+  short.
+- **The trace, after the attack (`#/48`).** "Let's look at the trace." is a link: it
   opens Datadog's Agent Observability traces filtered to the admin cluster, in its own
-  tab. Say: "From the outside, a prompt injection doesn't look like an attack. The
-  person only asked about a ticket. The trace shows what BurritoBot did: it called
-  `read_support_ticket`, and the next thing it did was call `deploy_app` with exactly
-  what the ticket asked for." Show the pre-seeded Challenge 3 trace (#648), the Datadog
+  tab, the same link as `#/11`'s "Ophelia Thorn". Say: "Wait. How did that support
+  ticket cause BurritoBot to deploy something?! Let's look at the trace to see the
+  agent's reasoning." Show the pre-seeded Challenge 3 trace (#648), the Datadog
   Challenge 3 tab's first saved view, `c3-attack`: the `read_support_ticket` span
-  returning HC-666, then the `deploy_app` call it leads to. Before the 2026-11-07 deck
-  this trace came before play; it now follows the attack, as every challenge's does.
-  The same tab keeps two more saved views for after the fix: `c3-fixed`, the same ask
-  after both commands, the guard's withheld notice with no `deploy_app` after it; and
-  `c3-pii` in Trace Explorer, the input guard's double duty below: the `/chat` root
-  span decided by `input_classifier`, zero tokens, no agent span, and none of the
-  neighbor's card, phone or e-mail anywhere in it.
-- **LLM01 (slide 50).** It reads "LLM01: Prompt Injection", "Number one on the OWASP Top
+  returning HC-666, then the `deploy_app` call it leads to. After the trace, say: "Do
+  you know the name for this type of attack?" The same tab keeps two more saved views
+  for after the fix: `c3-fixed`, the same ask after both commands, the guard's withheld
+  notice with no `deploy_app` after it; and `c3-pii` in Trace Explorer, the input
+  guard's double duty below: the `/chat` root span decided by `input_classifier`, zero
+  tokens, no agent span, and none of the neighbor's card, phone or e-mail anywhere in
+  it.
+- **LLM01 (`#/49`).** It reads "LLM01: Prompt Injection", "Number one on the OWASP Top
   10 LLM Vulnerabilities", and the title is a link to
   `https://genai.owasp.org/llmrisk/llm01-prompt-injection/`, optionally opened. Say:
-  "That was a prompt injection, number one on the OWASP list. This one is an indirect
-  prompt injection: the instructions didn't come from the person chatting with
-  BurritoBot. They came from content BurritoBot read, the ticket." Then say: "We're
-  going to fix this two ways."
-- **Fix, two AI-era layers, from `/lab` (slide 51), least privilege first (#775):**
-  slide 51 reads "Let's turn on least privilege and an input guard.", and the line is a
-  link that opens the admin cluster's terminal,
-  `https://burritobot-private.burritobot.co/lab`, in its own tab. Say: "I'm going to
-  switch to the terminal and turn on two fixes. I'll explain each one in a minute."
-  The presenter types `guard-agency-on`, then `guard-input-on`; admission is not one of
-  them, since it already did its job. Run `guard-agency-on`, which prints the `kubectl apply`
-  of `~/challenges/c6-least-privilege-role.yaml`: the bot's Role keeps Challenge 1's
+  "Prompt injection. It is number one on the OWASP list. A prompt injection is an
+  attack method where someone tricks a large language model (LLM) or AI agent into
+  ignoring its original instructions and safety guardrails. But the prompt injection
+  isn't the only problem. Did you notice? We have to take care of a Kubernetes-level
+  security issue too. But first..."
+- **Fix, two AI-era layers, from `/lab` (`#/50`), least privilege first (#775):** `#/50`
+  reads "Let's turn on some guardrails.", and only "guardrails" is a link: it opens the
+  admin cluster's terminal, `https://burritobot-private.burritobot.co/lab`, in its own
+  tab. Say: "Let's put a stop to the exploits. I'm going to switch to the terminal and
+  turn on two fixes. I'll explain each one in a minute." The presenter types
+  `guard-agency-on`, then `guard-input-on`; admission is not one of them, since it
+  already did its job. Run `guard-agency-on`, which prints the `kubectl apply` of
+  `~/challenges/c6-least-privilege-role.yaml`: the bot's Role keeps Challenge 1's
   scoped Secret and loses create and patch on Deployments and Pods. That is OWASP
   LLM06, Excessive Agency, from right after Challenge 1: the bot never needed to deploy
   anything to answer a support ticket. With it alone, the bot follows the ticket,
@@ -1572,62 +1579,65 @@ Run-through record's Segment 4 row.
   the payload, so there is no `deploy_app` call left to refuse. Say "deterministic"
   only for the Role, never for the classifier. The classifier flags a ticket written
   as an override of the bot's instructions, as HC-666's is, and passes one worded as a
-  polite note or a plain request to deploy: on 2026-11-08 LLM Guard scored such a ticket
-  clean and the admin bot deployed it with `guard-input-on` alone (#1102, question
-  1120). With both commands on, the Role stops that ticket. Both commands change the cluster whose
-  terminal runs them, the private one; unlike `guardrails-on`, neither reaches the
-  public cluster. `guard-agency-off` puts the scoped Role back. The 2-hour lab keeps
-  its admission tier, `guard-admission-on`, on HC-7731's refused image.
-- **The retry (slide 52).** It reads "Try your attack again." Say: "Reset your bot and
-  ask BurritoBot about your ticket again. It should no longer deploy anything. Let's
-  talk about why." The room presses reset and asks about its ticket, or HC-666, again
-  while the next slides run. The two commands armed the private cluster alone, so the
-  public bot the room asks has neither fix yet; show the retry on the admin bot, where
-  HC-666 now comes back withheld. A room ticket worded as a plain request can come back
-  whole there and fail at `deploy_app`, Forbidden by the Role.
-- **Least privilege (slides 53 to 56).** Slide 53 recalls the challenge sentence, "Use
-  the support ticket system to get BurritoBot to deploy something.", and has no notes.
-  Slide 54 adds "This attack was prevented with least privilege." Say: "Least privilege
-  means giving an agent only the permissions its job needs. BurritoBot takes burrito
-  orders; it never needed to create Deployments. Notice that Kyverno didn't stop this
-  one: the image came from our own internal registry, which Kyverno trusts." Slide 55
-  shows BurritoBot's Role as `guardrails-on` leaves it, `c5-scoped-role.yaml` in
-  `gitops/ai-layer/resources.yaml`, with `verbs: ["create", "get", "list", "patch"]` on
-  `deployments` in red. Say: "Here's BurritoBot's Role. It's allowed to create
-  Deployments." Slide 56 sets beside it the Role `guard-agency-on` applies,
-  `c6-least-privilege-role.yaml`, with `verbs: ["get", "list"]` on `deployments` in
-  green. Say: "With least privilege, BurritoBot can still look at Deployments, but it
-  can't create them. Pods get the same treatment. So even if a ticket tricks it, it has
-  nothing to deploy with."
-- **The input guard (slides 57 and 58).** Slide 57 recalls the challenge sentence. Say:
-  "But least privilege only limits the damage. BurritoBot still read and followed the
-  hidden instructions." Slide 58 adds "This attack was prevented with an input guard.":
-  the slide names the concept, and its notes name the product. Say: "Specifically, we
-  prevented this with LLM Guard, an open-source library that scans text before it
-  reaches the model. Our input guard checks the ticket as BurritoBot reads it. A
-  block-list catches known bad phrases, and a prompt-injection classifier catches
-  instructions hidden in the text. Let's walk through it." Then say: "The classifier
-  catches the textbook attack, text that tries to override the bot's instructions. If
-  your ticket just asked politely, it may have got past the input guard, and least
-  privilege is what stopped it. That's why we layer them." The deck's slide 58 notes
-  carry the same sentence once the deck repo, rounds-agenticburn, takes it (question
-  1120).
-- **The architecture diagram (slides 59 to 64).** One left-to-right diagram, the same
+  polite note or a plain request to deploy: on 2026-11-08 LLM Guard scored such a
+  ticket clean and the admin bot deployed it with `guard-input-on` alone (#1102,
+  question 1120). With both commands on, the Role stops that ticket. `guard-agency-off`
+  puts the scoped Role back. The 2-hour lab keeps its admission tier,
+  `guard-admission-on`, on HC-7731's refused image.
+- **The retry (`#/51`).** It reads "Try your attack again." Say: "Reset your bot and ask
+  BurritoBot about your ticket again. It should no longer deploy anything. Let's talk
+  about what just happened and how we fixed it. There are two problems here. The first
+  is when you already saw..." The room presses reset and asks about its ticket, or
+  HC-666, again while the next slides run. The room's retry works only once #1132 is
+  built: it makes `guard-agency-on` and `guard-input-on` switch both clusters, as
+  `guardrails-on` does. Until then both commands change only the cluster whose terminal
+  runs them, the private one, so the public bot the room asks has neither fix; show the
+  retry on the admin bot, where HC-666 now comes back withheld. A room ticket worded as
+  a plain request can come back whole there and fail at `deploy_app`, Forbidden by the
+  Role.
+- **Least privilege (`#/52` to `#/54`).** `#/52` reads "Pesky RBAC!" Say: "BurritoBot
+  had too much access. BurritoBot should not be able to make deployments. Here's how to
+  fix this..." Optionally, ask the room: "Do you know why Kyverno let this through?"
+  The answer: the image came from our own internal registry, `registry.burritobot.co`,
+  which Kyverno trusts. `#/53` shows BurritoBot's Role as `guardrails-on` leaves it,
+  `c5-scoped-role.yaml` in `gitops/ai-layer/resources.yaml`, with
+  `verbs: ["create", "get", "list", "patch"]` on `deployments` in red. Say: "Here's
+  BurritoBot's Role. It's allowed to create Deployments." `#/54` sets beside it the
+  Role `guard-agency-on` applies, `c6-least-privilege-role.yaml`, with
+  `verbs: ["get", "list"]` on `deployments` in green. Say: "With least privilege,
+  BurritoBot can still look at Deployments, but it can't create them. Pods get the
+  same treatment. So even if a ticket tricks it, it has nothing to deploy with. But
+  least privilege only limits the damage. BurritoBot still read and followed the
+  hidden instructions. We were able to execute a prompt injection attack against
+  BurritoBot. How do we stop that?"
+- **The input guard, LLM Guard (`#/55`).** It reads "LLM Guard": this slide names the
+  product on screen, the one exception to the deck's rule that a "prevented with" slide
+  names the concept. Say: "We prevented this with LLM Guard, an open-source library
+  that scans text before it reaches the model. Some examples of products that do this
+  are Amazon Bedrock Guardrails, Azure AI Content Safety's Prompt Shields, Lakera
+  Guard, and NVIDIA NeMo Guardrails. Our input guard checks the ticket as BurritoBot
+  reads it. A block-list catches known bad phrases, and a prompt-injection classifier
+  catches instructions hidden in the text. Let's walk through it." If a ticket worded
+  as a plain request came up in the room, add: "The classifier catches the textbook
+  attack, text that tries to override the bot's instructions. If your ticket just
+  asked politely, it may have got past the input guard, and least privilege is what
+  stopped it. That's why we layer them."
+- **The architecture diagram (`#/56` to `#/61`).** #99's stacked diagram, the same
   boxes in the same place on all six slides, each slide lighting its new step in
-  Challenge 3's yellow. Slides 59 to 63 follow one request: the person and the chat
-  page (59), guard-proxy, "where our AI guardrails live", and the BurritoBot agent (60),
-  the model, Amazon Nova Pro, asking the agent to call a tool (61), `read_support_ticket`
-  on the MCP tool server (62), and the support desk handing the ticket back, hidden
-  instructions and all, to the agent and into the model (63). Slide 63's notes say the
-  ticket never went through guard-proxy: it came in through a tool. Slide 64 adds the
-  input guard beside the tool server, which asks it to check the ticket. Say: "Here's where the
-  input guard goes. Before the tool server hands the ticket back, it asks LLM Guard to
-  check it. The prompt-injection classifier spots the hidden instructions, and the
-  ticket comes back withheld. The model never sees the instructions, so nothing gets
-  deployed." On the platform that check is the MCP tool server's: `read_support_ticket`
-  asks LLM Guard whenever guard-proxy's input classifier is on, and returns
-  `[input guard] withheld` for a flagged ticket. The diagram leaves out agentgateway,
-  which chat messages and tool calls also pass through (rounds-agenticburn#93).
+  Challenge 3's yellow. The person sits above the chat page; the chat page, AI
+  guardrails, the BurritoBot agent and the model form the main row; the MCP tool server
+  sits below the agent with the support desk to its left; LLM Guard sits below the tool
+  server. `#/56` to `#/60` follow one request, from the person through the AI
+  guardrails and the agent to the model, which asks the agent to call
+  `read_support_ticket` on the MCP tool server, and the support desk handing the
+  ticket back, hidden instructions and all, to the agent and into the model. The
+  ticket never went through the AI guardrails: it came in through a tool. `#/61` adds
+  LLM Guard below the tool server, which asks it to check the ticket. The diagram's
+  speaker notes are #99's, unchanged. On the platform that check is the MCP tool
+  server's: `read_support_ticket` asks LLM Guard whenever guard-proxy's input
+  classifier is on, and returns `[input guard] withheld` for a flagged ticket. The
+  diagram leaves out agentgateway, which chat messages and tool calls also pass through
+  (rounds-agenticburn#93).
 - **The input guard's double duty:** it keeps someone else's PII out of the model,
   out of the traces, and out of a later operator's agent that reads those logs
   (Michael's Toronto keynote point). What it catches: e-mail addresses, card
@@ -1643,24 +1653,103 @@ Run-through record's Segment 4 row.
 
 ### Segment 5: Challenge 4, the poisoned weather tool (5 min). Owner: Michael and Whitney.
 
-- **Tee-up:** the bot has a weather tool from an MCP server nobody vetted. It returns
-  real weather (#642). Its description also tells the bot to call
-  `read_internal_config` and print the secret sauce recipe into the chat.
-- **Play (2 min):** the room asks for a lunch burrito that matches the weather.
-  The real forecast comes back with the recipe under it (the Bat Spit Amazing
-  Awesome Sauce batch formula and its calibration token), then an order.
-  Measured 3 of 3 on attackme.burritobot.co, 2026-10-29 (#683). After the
-  challenge slide (the call to action), the presenters may optionally switch to the
-  prompt wall while the room plays, and back to the deck for the attack.
-- **Attack:** Michael sends the `/kubecon` ask on the private bot, and the recipe comes
-  back under the forecast.
-- **Datadog Challenge 4 tab, after the attack:** the `read_internal_config` call the
-  poisoned description chains the bot into. After the fix, its absence.
-- **Fix:** on the private bot, `guard-mcp-on`. The agent reaches evil-mcp
-  through agentgateway, and the rule narrows to the one registered tool,
-  `get_weather`. The poisoned call is blocked because that tool was never
-  registered. Give the gateway the measured reload delay before re-asking.
-  Measured reload delay: not measured yet (the Night Before C7 step fills it in).
+The steps follow the deck's Challenge 4, `#/62` to `#/72`, as rounds-agenticburn#102
+redrafted it, in Challenge 4's green. Each challenge slide opens on the header line
+"Challenge 4 - attackme.burritobot.co".
+
+**The solve is presenter-only.** The room's hint is "Ask BurritoBot what tools it has."
+The rest of the solve is in the presenters' notes and the solve notes below, never on a
+slide, in a line said to the room, or in a room-facing part of `/kubecon`.
+
+**Timing.** The Say and Then say notes on `#/62` to `#/72` come to 339 words, about 2
+minutes 15 seconds at 150 words a minute. With 2 minutes of play, the live attack, the
+trace and `guard-mcp-on` with its reload delay on top, the segment runs past its 5
+minutes. The rehearsal times each step and puts the total in the Run-through record's
+Segment 5 row.
+
+- **The tee-up (`#/62` and `#/63`).** `#/62` reads:
+
+  > **BurritoBot gets its tools from MCP servers.**
+  > That's how it checks inventory and reads support tickets.
+
+  Say: "An MCP server is a standard way to give an AI agent tools. Each tool has a
+  name, a description that tells the model what the tool is for, and code that runs
+  when the model calls it. Plugging BurritoBot into an MCP server that somebody else
+  wrote is a reasonable thing that a reasonable developer could do." `#/63` reads
+  "But not every MCP server can be trusted." Say: "Installing an MCP server without
+  reading every tool it comes with is also something a developer could reasonably do.
+  So here's your last challenge..."
+- **The challenge, and play (`#/64`, 2 min).** It reads:
+
+  > Challenge 4 - attackme.burritobot.co
+  >
+  > **Find the poisoned MCP tool.**
+
+  Say: "One of BurritoBot's tools is poisoned. It carries instructions that BurritoBot
+  follows instead of the person it's talking to. Can you find out which tool it is,
+  and what it makes BurritoBot do?" Play runs from here, on the public bot.
+  Optionally, switch to the prompt wall while the room works, and back to the deck.
+- **The hint, and the attack (`#/65`).** It adds:
+
+  > Hint: Ask BurritoBot what tools it has.
+
+  "tools" is a link to Datadog's Agent Observability traces filtered to the admin
+  cluster, the same link as `#/11`'s "Ophelia Thorn". Say: "Ask BurritoBot what tools
+  it has. One of them is poisoned." After a few moments the presenters attack: switch
+  to the admin bot and send the weather prompt from `/kubecon`, from the iPad cheat
+  sheet ("I want my lunch burrito to match the weather..."). The real forecast comes
+  back (#642) with the recipe under it, the Bat Spit Amazing Awesome Sauce batch
+  formula and its calibration token, then an order. Measured 3 of 3 on
+  attackme.burritobot.co, 2026-10-29 (#683). Whether or not it works, move on: time is
+  short. Then say: "Wait. How did checking the weather cause BurritoBot to share the
+  super duper secret recipe? Leaking this leads to company ruin! Let's look at the
+  trace to see the agent's reasoning." Click "tools" and show the pre-seeded Challenge
+  4 trace on the Datadog Challenge 4 tab: `get_weather`, then a call to
+  `read_internal_config` that nobody asked for. After the trace, say: "Do you know the
+  name for this type of attack?"
+
+  The solve, for the presenters only: the weather tool comes from an MCP server nobody
+  vetted, evil-mcp. It returns real weather, and its description also tells the bot to
+  call `read_internal_config` and print the recipe into the chat. Asking BurritoBot
+  what tools it has, then trying each one, finds it.
+- **LLM03 (`#/66`).** It reads "LLM03: Supply Chain", "OWASP Top 10 for LLM
+  Applications", and the title is a link to
+  `https://genai.owasp.org/llmrisk/llm032025-supply-chain/`. Say: "This is supply chain
+  risk. BurritoBot trusted a tool because it was installed, not because anyone checked
+  it. The poisoned instructions are prompt injection too, delivered through a tool
+  instead of through a person." Click the title to open the OWASP page.
+- **Fix, from `/lab` (`#/67`).** It reads "Let's turn on an MCP gateway.", and the line
+  is a link that opens the admin cluster's terminal,
+  `https://burritobot-private.burritobot.co/lab`, in its own tab. Say: "I'm going to
+  switch to the terminal and turn on a rule in our MCP gateway." The presenter types
+  `guard-mcp-on`. The agent reaches evil-mcp through agentgateway, and the rule narrows
+  to the one registered tool, `get_weather`. The poisoned call is blocked because that
+  tool was never registered. Give the gateway the measured reload delay before
+  re-asking. Measured reload delay: not measured yet (the Night Before C7 step fills it
+  in). Optionally, send the same weather prompt on the admin bot: the forecast comes
+  back, and the recipe doesn't. The Challenge 4 tab shows the fixed trace, without the
+  `read_internal_config` call.
+- **The retry (`#/68`).** It reads "Try your attack again." Say: "Reset your bot and
+  ask BurritoBot about the weather again. This time the poisoned tool isn't there to
+  call." The room's retry works only once #1132 is built: it makes `guard-mcp-on`
+  switch both clusters, as `guardrails-on` does. Until then the command changes only
+  the private cluster, so the public bot the room asks still calls the poisoned tool;
+  show the retry on the admin bot.
+- **The MCP gateway (`#/69` to `#/72`).** `#/69` recalls "Find the poisoned MCP tool."
+  Say: "So why didn't it work this time?" `#/70` adds "This attack was prevented with an
+  MCP gateway.": the slide names the concept, and its notes name the product. Say:
+  "Specifically, we prevented this with agentgateway. An MCP gateway sits between the
+  agent and its MCP servers, and it decides which tools the agent is allowed to call.
+  So what rule did we add?" `#/71` shows the `mcpAuthorization` rule from the
+  `agentgateway-c7-config` ConfigMap in `gitops/ai-layer/agentgateway.yaml`, with
+  `- 'true'`, every tool, in red. Say: "Before, the gateway let BurritoBot call every
+  tool on the weather server, including the two it never needed." `#/72` sets beside
+  it the rule `guard-mcp-on` sets, `RULES["on"]` in `_c7rule` in
+  `gitops/ai-layer/web-terminal/entrypoint.sh`, with
+  `mcp.tool.name == "get_weather"` in green. Say: "Now the gateway lets BurritoBot call
+  only get_weather. The poisoned instructions can be as convincing as they like.
+  BurritoBot can still be fooled, but the tool it would be fooled into calling isn't
+  there. Michael's MCP server vetting checklist is on the take-home slide."
 - **The claim on stage:** tools are vetted through an MCP proxy and a registry
   allow-list, so the model can be fully persuaded and still find the capability
   gone. Only that still holds when the next model is more persuadable. Do not say the

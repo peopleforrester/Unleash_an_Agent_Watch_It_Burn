@@ -37,7 +37,9 @@ TABLE = "| # | Min | Who | On screen | The room | Abstract points |"
 NUMBERING = ("Slide numbers in this file count from 1, the title slide being slide 1; the deck's URL hash counts from 0 "
              "and is one less, so slide 44 is #/43 at https://rounds.agenticburn.com.")
 LINE_START = "Slide numbers in this file count from 1"
-SEG4, SEG5, ROW4 = "### Segment 4:", "### Segment 5:", "| 4 | 7 |"
+SEG4, SEG5, SEG6, ROW4, ROW5 = "### Segment 4:", "### Segment 5:", "### Segment 6:", "| 4 | 7 |", "| 5 | 5 |"
+# Since #1141, segment 5 and its row cite rounds-agenticburn#102's Challenge 4 by hash (#/62 to #/72), so the cut
+# runs from segment 4 to segment 6 and drops rows 4 and 5.
 # The tests that hold segment 4's slides to the 2026-11-07 deck, and so quote its numbers: the run-of-show's (#1098)
 # and the /kubecon page's (#1100).
 SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py"}
@@ -85,15 +87,15 @@ def hits(text: str) -> list[str]:
 
 
 def ros_outside_seg4(ros: str) -> str:
-    """The run-of-show with segment 4's section and the segments table's row 4 cut out."""
+    """The run-of-show with segments 4 and 5 and the segments table's rows 4 and 5 cut out."""
     need(ros, SEG4, ROS_REL)
-    need(ros, SEG5, ROS_REL)
+    need(ros, SEG6, ROS_REL)
     head, rest = ros.split(SEG4, 1)
-    tail = rest.split(SEG5, 1)[1]
+    tail = rest.split(SEG6, 1)[1]
     need(head, LINE_START, ROS_REL)
     i = head.index(LINE_START)
     head = head[:i] + head[head.index("\n\n", i):]
-    lines = [ln for ln in (head + "\n" + SEG5 + tail).splitlines() if not ln.startswith(ROW4)]
+    lines = [ln for ln in (head + "\n" + SEG6 + tail).splitlines() if not ln.startswith((ROW4, ROW5))]
     return "\n".join(lines)
 
 
@@ -153,8 +155,8 @@ texts = {f: t for f in files if (t := read_text(f)) is not None}
 found = scan(texts, me)
 for f in found:
     print("  " + f)
-check("no slide number 44 to 64 and no hash #/43 or more outside segment 4 and its readers", not found)
-check("segment 4 itself cites the new Challenge 3, so cutting it is what makes the run-of-show pass",
+check("no slide number 44 to 64 and no hash #/43 or more outside segments 4 and 5 and their readers", not found)
+check("segments 4 and 5 cite the new deck by hash, so cutting them is what makes the run-of-show pass",
       bool(hits(ros)) and not hits(ros_outside_seg4(ros)))
 
 print("== each check can fail ==")
@@ -163,9 +165,9 @@ no_line = ros.replace(ros[ros.index(LINE_START):ros.index("Four challenges,")], 
 check("with the numbering line removed, the numbering check fails", not numbering_ok(no_line)[0])
 moved = no_line.replace(TABLE, ros[ros.index(LINE_START):ros.index("Four challenges,")] + TABLE, 1)
 check("with the numbering line moved below the first step, the numbering check fails", not numbering_ok(moved)[0])
-need(ros, SEG5 + " Challenge 4", ROS_REL)
-planted = ros.replace(SEG5 + " Challenge 4", SEG5 + " Challenge 4 (slide 51)", 1)
-check("a pre-shift Challenge 4 number planted in segment 5 is found",
+need(ros, SEG6 + " The OWASP close", ROS_REL)
+planted = ros.replace(SEG6 + " The OWASP close", SEG6 + " The OWASP close (slide 51)", 1)
+check("a pre-shift number planted in segment 6 is found",
       bool(scan({ROS_REL: planted}, me)))
 stale = {
     "an old Challenge 3 range": f"the support ticket on {S}s 44 to 50",

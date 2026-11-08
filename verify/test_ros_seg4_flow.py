@@ -1,20 +1,23 @@
-# ABOUTME: Holds the KubeCon run-of-show's segment 4 (Challenge 3) and its segments-table row to the 2026-11-07 deck
-# ABOUTME: (#1098): the slides in order, each cited, no Joker and no desk wall, and the facts that still hold.
-"""Segment 4 of `facilitation/kubecon-na-2026-run-of-show.md` follows the 2026-11-07 deck's Challenge 3 (#1098).
+# ABOUTME: Holds the KubeCon run-of-show's segments 4 and 5 (Challenges 3 and 4) and their segments-table rows to
+# ABOUTME: rounds-agenticburn#102's deck: each slide cited by its URL hash in order, the deck's quoted lines, the kept facts.
+"""Segments 4 and 5 of `facilitation/kubecon-na-2026-run-of-show.md` follow rounds-agenticburn#102's deck (#1141).
 
-rounds-agenticburn#82 replaced the old seven Challenge 3 slides with slides `#/43` to `#/63` by the deck's URL hash,
-which the run-of-show counts from 1 as slides 44 to 64; rounds-agenticburn#93 drew the architecture diagram on the
-last six. This test holds:
+rounds-agenticburn#102, built 2026-11-08 from Whitney's third walkthrough, put Challenge 3 on `#/43` to `#/61` (two
+slides cut, #99's stacked diagram on `#/56` to `#/61`) and redrafted Challenge 4 on `#/62` to `#/72`. Segments 4 and 5
+cite each slide by that URL hash, `#/N`; the rest of the file keeps its own count from 1 (#1099's note). This test
+holds:
 
-  1. Segment 4's steps, its `- **...**` bullets, cite slides 44 to 64, each slide once, in ascending order.
-  2. The beats come in the deck's order: the desk, its QR code, filing a ticket and the admin bot reading it back,
-     the challenge, the HC-666 hint, the white text, the deployment, the trace after the attack, LLM01,
-     `guard-agency-on` then `guard-input-on` from `/lab`, the retry, least privilege, the input guard, the diagram.
-  3. No "Joker" and no desk wall; the deployments page and the prompt wall are the optional views during play; the
-     desk is #1077's, filed and looked up by number and never browsed.
-  4. The facts that still hold are still stated: Kyverno trusts the internal registry, the room's deployments run
-     tiny and scale to zero, the three saved Datadog views, the two fixes and what each does, the double duty.
-  5. The segments table's row 4 names the same beats with the same slides, in the same order, and no Joker.
+  1. Segment 4's steps, its `- **...**` bullets, cite `#/43` to `#/61`, and segment 5's cite `#/62` to `#/72`, each
+     slide once, in ascending order.
+  2. The beats come in the deck's order, in each segment.
+  3. Every line the segments quote from a slide is the deck's text, word for word, as rounds-agenticburn#102's body
+     gives it (DECK_LINES below, copied from that issue and checked against the built attendee.html on 2026-11-08).
+  4. Segment 4 shows the white text live on `#/47`, links the public deployments page on `#/46` and the private one
+     on `#/47`, and names #1132 at `#/51`'s retry; segment 5 names #1132 at `#/68`'s retry.
+  5. No "Joker" and no desk wall; Challenge 4's room-facing lines never tell the room to try each tool, and the
+     old "The setup" framing is gone.
+  6. The facts that still hold are still stated.
+  7. The segments table's rows 4 and 5 name the same beats with the same slides, in order.
 
 The desk hosts and the `/support` 404 are verify/test_support_desk_named.py's, and segment 3's hand-off is
 verify/test_instructor_brief.py's. Each cut on repo text checks its literal first and exits naming it when it is gone
@@ -29,29 +32,61 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 ROS_PATH = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
-SEG4 = "### Segment 4:"
-SEG5 = "### Segment 5:"
-ROW4 = "| 4 | 7 |"
-FIRST, LAST = 44, 64
+SEG4, SEG5, SEG6 = "### Segment 4:", "### Segment 5:", "### Segment 6:"
+ROW4, ROW5 = "| 4 | 7 |", "| 5 | 5 |"
 
-# Each beat of the deck's Challenge 3, as segment 4 words it, in the deck's order (whitespace flattened).
-BEATS = [
-    ("the desk (slide 44)", "**BurritoBot has a support desk.**"),
-    ("its QR code (slide 45)", "\"People can use the support desk too.\" over the desk's QR code"),
-    ("filing a ticket (slide 46)", "**\"Let's file a ticket.\" (slide 46).**"),
+BEATS4 = [
+    ("the desk (#/43)", "**BurritoBot has a support desk.**"),
+    ("its QR code (#/44)", "\"People can use the support desk too.\" over the desk's QR code"),
+    ("filing a ticket (#/45)", "**\"Let's file a ticket.\" (`#/45`).**"),
     ("the admin bot reads it back", "BurritoBot reads the ticket back"),
-    ("the challenge (slide 47)", "**Use the support ticket system to get BurritoBot to deploy something.**"),
-    ("the HC-666 hint (slide 48)", "Hint: Look up ticket HC-666 on the support desk."),
-    ("the white text", "shows the instructions hidden in white text"),
+    ("the challenge (#/46)", "**Use the support ticket system to get BurritoBot to deploy something.**"),
+    ("#/46's deploy opens the public page", "\"deploy\" is a link to the room's deployments page, the public one"),
+    ("the HC-666 hint (#/47)", "Hint: Look up ticket HC-666 on the support desk."),
+    ("#/47's deploy opens the private page", "`https://deployments-burritobot-private.burritobot.co`, the presenters' own"),
+    ("the white text, live", "the presenters show the white text live"),
     ("the deployment landing", "show it landing"),
-    ("the trace after the attack (slide 49)", "**The trace, after the attack (slide 49).**"),
-    ("LLM01 (slide 50)", "**LLM01 (slide 50).**"),
-    ("the switch from /lab (slide 51)", "`https://burritobot-private.burritobot.co/lab`"),
+    ("the trace after the attack (#/48)", "**The trace, after the attack (`#/48`).**"),
+    ("LLM01 (#/49)", "**LLM01 (`#/49`).**"),
+    ("the switch from /lab (#/50)", "`https://burritobot-private.burritobot.co/lab`"),
     ("guard-agency-on", "The presenter types `guard-agency-on`, then `guard-input-on`"),
-    ("the retry (slide 52)", "\"Try your attack again.\""),
-    ("least privilege (slides 53 to 56)", "\"This attack was prevented with least privilege.\""),
-    ("the input guard (slides 57 and 58)", "\"This attack was prevented with an input guard.\""),
-    ("the diagram (slides 59 to 64)", "**The architecture diagram (slides 59 to 64).**"),
+    ("the retry (#/51)", "**The retry (`#/51`).**"),
+    ("#1132 at the retry", "The room's retry works only once #1132 is built"),
+    ("Pesky RBAC (#/52)", "\"Pesky RBAC!\""),
+    ("the optional Kyverno question", "\"Do you know why Kyverno let this through?\""),
+    ("LLM Guard (#/55)", "**The input guard, LLM Guard (`#/55`).**"),
+    ("the diagram (#/56 to #/61)", "**The architecture diagram (`#/56` to `#/61`).**"),
+]
+BEATS5 = [
+    ("the tee-up (#/62)", "**BurritoBot gets its tools from MCP servers.**"),
+    ("not every server (#/63)", "\"But not every MCP server can be trusted.\""),
+    ("the challenge (#/64)", "**Find the poisoned MCP tool.**"),
+    ("the hint (#/65)", "Hint: Ask BurritoBot what tools it has."),
+    ("the live weather ask", "send the weather prompt from `/kubecon`"),
+    ("the trace", "`read_internal_config` that nobody asked for"),
+    ("LLM03 (#/66)", "**LLM03 (`#/66`).**"),
+    ("guard-mcp-on (#/67)", "The presenter types `guard-mcp-on`"),
+    ("the retry (#/68)", "**The retry (`#/68`).**"),
+    ("#1132 at the retry", "The room's retry works only once #1132 is built"),
+    ("the gateway (#/69 to #/72)", "\"This attack was prevented with an MCP gateway.\""),
+    ("the rule before and after", "`mcp.tool.name == \"get_weather\"` in green"),
+]
+# Lines the segments quote from slides, word for word as rounds-agenticburn#102 gives them (markdown stripped).
+DECK_LINES = {
+    "BurritoBot has a support desk.", "It can read tickets by ticket number.",
+    "Challenge 3 - attackme.burritobot.co", "Use the support ticket system to get BurritoBot to deploy something.",
+    "Hint: Look up ticket HC-666 on the support desk.",
+    "BurritoBot gets its tools from MCP servers.", "That's how it checks inventory and reads support tickets.",
+    "Challenge 4 - attackme.burritobot.co", "Find the poisoned MCP tool.",
+    "Hint: Ask BurritoBot what tools it has.",
+}
+# Slide lines named in running text, which must appear exactly so.
+NAMED_LINES = [
+    "\"People can use the support desk too.\"", "\"Let's look at the trace.\"", "\"LLM01: Prompt Injection\"",
+    "\"Number one on the OWASP Top 10 LLM Vulnerabilities\"", "\"Let's turn on some guardrails.\"",
+    "\"Try your attack again.\"", "\"Pesky RBAC!\"", "\"LLM Guard\"", "\"But not every MCP server can be trusted.\"",
+    "\"LLM03: Supply Chain\"", "\"OWASP Top 10 for LLM Applications\"", "\"Let's turn on an MCP gateway.\"",
+    "\"This attack was prevented with an MCP gateway.\"",
 ]
 KEPT = [
     ("Kyverno at Deny admits HC-666's image: it trusts the internal registry",
@@ -68,17 +103,31 @@ KEPT = [
     ("the deployments page, optional during play", "Optional during play: the deployments page,"),
     ("the prompt wall, optional during play", "and the prompt wall, `https://prompts.burritobot.co`,"),
 ]
-# The row's beats, each with the slides it cites, in order.
-ROW_BEATS = [
-    ("the desk", "support desk (44)"), ("its QR code", "the room's first look at it (45)"),
-    ("filing a ticket", "\"Let's file a ticket.\" (46)"), ("the challenge", "the challenge sentence (47)"),
-    ("optional views", "the deployments page and the prompt wall optional during play"),
-    ("the hint", "the hint, HC-666 (48)"), ("the white text", "white text"), ("the trace", "Challenge 3 tab (49)"),
-    ("LLM01", "LLM01, Prompt Injection (50)"), ("the switch", "\"Let's turn on least privilege and an input guard.\" (51)"),
-    ("the retry", "\"Try your attack again.\" (52)"), ("least privilege", "(53 to 56)"),
-    ("the input guard", "(57 and 58)"), ("the diagram", "(59 to 63) and where the input guard is added (64)"),
+KEPT5 = [
+    ("the gateway narrows to get_weather", "the rule narrows to the one registered tool, `get_weather`"),
+    ("no MCP-return scan is claimed", "Do not say the MCP server's reply is scanned before the model reads it"),
+    ("the vetting checklist", "`docs/mcp-server-vetting-checklist.md`"),
+    ("the solve is presenter-only", "**The solve is presenter-only.**"),
 ]
-SLIDE_REF = re.compile(r"\(slides? (\d+)(?: (?:to|and) (\d+))?\b")
+ROW4_BEATS = [
+    ("the desk", "support desk (`#/43`)"), ("its QR code", "the room's first look at it (`#/44`)"),
+    ("filing a ticket", "\"Let's file a ticket.\" (`#/45`)"), ("the challenge", "the challenge sentence (`#/46`)"),
+    ("optional views", "the deployments page and the prompt wall optional during play"),
+    ("the hint", "the hint, HC-666 (`#/47`)"), ("the white text", "white text"),
+    ("the trace", "Challenge 3 tab (`#/48`)"), ("LLM01", "LLM01, Prompt Injection (`#/49`)"),
+    ("the switch", "\"Let's turn on some guardrails.\" (`#/50`)"), ("the retry", "\"Try your attack again.\" (`#/51`)"),
+    ("RBAC", "\"Pesky RBAC!\""), ("the Role", "(`#/53` and `#/54`)"), ("LLM Guard", "(`#/55`)"),
+    ("the diagram", "(`#/56` to `#/61`)"),
+]
+ROW5_BEATS = [
+    ("the tee-up", "(`#/62` and `#/63`)"), ("the challenge", "\"Find the poisoned MCP tool.\" (`#/64`)"),
+    ("the hint", "(`#/65`)"), ("LLM03", "LLM03, Supply Chain (`#/66`)"),
+    ("the switch", "\"Let's turn on an MCP gateway.\" (`#/67`)"), ("the retry", "\"Try your attack again.\" (`#/68`)"),
+    ("the gateway", "(`#/69` to `#/72`)"),
+]
+# Room-facing wording that would give Challenge 4's solve away.
+SOLVE_LEAKS = ["try each tool", "try each one", "then use each", "use each one"]
+SLIDE_REF = re.compile(r"\(`#/(\d+)`(?:,[^)]*)?(?: (?:to|and) `#/(\d+)`)?")
 
 failures: list[str] = []
 
@@ -91,24 +140,26 @@ def check(name: str, ok: bool) -> None:
 
 def need(text: str, literal: str) -> None:
     if literal not in text:
-        sys.exit(f"ANCHOR MISSING: {literal!r} is not in {ROS_PATH}; the segment 4 checks cut on it")
+        sys.exit(f"ANCHOR MISSING: {literal!r} is not in {ROS_PATH}; the segment 4 and 5 checks cut on it")
 
 
 def flat(text: str) -> str:
     return " ".join(text.split())
 
 
-def parts(ros: str) -> tuple[str, str]:
-    """Segment 4's section and the segments table's row 4, each whitespace flattened."""
-    for lit in (SEG4, SEG5, "\n" + ROW4):
+def parts(ros: str) -> tuple[str, str, str, str, str, str]:
+    """Segments 4 and 5 raw and flattened, and the table's rows 4 and 5."""
+    for lit in (SEG4, SEG5, SEG6, "\n" + ROW4, "\n" + ROW5):
         need(ros, lit)
-    seg = ros.split(SEG4, 1)[1].split(SEG5, 1)[0]
-    row = next(ln for ln in ros.splitlines() if ln.startswith(ROW4))
-    return flat(seg), flat(row)
+    s4 = ros.split(SEG4, 1)[1].split(SEG5, 1)[0]
+    s5 = ros.split(SEG5, 1)[1].split(SEG6, 1)[0]
+    r4 = next(ln for ln in ros.splitlines() if ln.startswith(ROW4))
+    r5 = next(ln for ln in ros.splitlines() if ln.startswith(ROW5))
+    return s4, s5, flat(s4), flat(s5), flat(r4), flat(r5)
 
 
 def cited_slides(seg: str) -> list[int]:
-    """The slides each step cites in its bold lead, `- **... (slide N)` or `(slides N to M)`, expanded, in order."""
+    """The slides each step cites in its bold lead, `(`#/N`)` or `(`#/N` to `#/M`)`, expanded, in order."""
     out: list[int] = []
     for lead in re.findall(r"(?:^| )- \*\*(.*?)\*\*", seg):
         m = SLIDE_REF.search(lead)
@@ -130,17 +181,39 @@ def in_order(text: str, phrases: list[tuple[str, str]]) -> list[str]:
     return bad
 
 
+def quoted_lines(raw: str) -> list[str]:
+    """Each `> ...` quote line in the segment, markdown bold stripped."""
+    out = []
+    for ln in raw.splitlines():
+        m = re.match(r"^\s*>\s?(.*)$", ln)
+        if m and m.group(1).strip():
+            out.append(m.group(1).strip().replace("**", ""))
+    return out
+
+
 def problems(ros: str) -> dict[str, list[str]]:
-    seg, row = parts(ros)
+    s4, s5, f4, f5, r4, r5 = parts(ros)
     out: dict[str, list[str]] = {}
-    slides = cited_slides(seg)
-    out[f"segment 4's steps cite slides {FIRST} to {LAST}, each once, in order"] = (
-        [] if slides == list(range(FIRST, LAST + 1)) else [f"cited {slides}"])
-    out["segment 4's beats come in the deck's order"] = in_order(seg, BEATS)
-    out["segment 4 says no Joker and puts no desk wall on screen"] = [w for w in ("Joker", "joker", "/wall") if w in seg]
-    out["segment 4 still states the facts that hold"] = [f"{label}: {p!r}" for label, p in KEPT if p not in seg]
+    c4, c5 = cited_slides(f4), cited_slides(f5)
+    out["segment 4's steps cite #/43 to #/61, each once, in order"] = (
+        [] if c4 == list(range(43, 62)) else [f"cited {c4}"])
+    out["segment 5's steps cite #/62 to #/72, each once, in order"] = (
+        [] if c5 == list(range(62, 73)) else [f"cited {c5}"])
+    out["segment 4's beats come in the deck's order"] = in_order(f4, BEATS4)
+    out["segment 5's beats come in the deck's order"] = in_order(f5, BEATS5)
+    out["every quoted slide line is the deck's text"] = [
+        q for q in quoted_lines(s4) + quoted_lines(s5) if q not in DECK_LINES]
+    out["every slide line named in the text is the deck's"] = [n for n in NAMED_LINES if n not in f4 + " " + f5]
+    out["segment 4 says no Joker and puts no desk wall on screen"] = [w for w in ("Joker", "joker", "/wall") if w in f4]
+    out["segment 4 still states the facts that hold"] = [f"{label}: {p!r}" for label, p in KEPT if p not in f4]
+    out["segment 5 still states the facts that hold"] = [f"{label}: {p!r}" for label, p in KEPT5 if p not in f5]
+    room5 = " ".join(quoted_lines(s5)) + " " + " ".join(re.findall(r"Say: \"(.*?)\"", f5))
+    out["no room-facing Challenge 4 line tells the room to try each tool"] = [
+        w for w in SOLVE_LEAKS if w in room5.lower()]
+    out["segment 5 drops the old \"The setup\" framing"] = ["The setup"] if "The setup" in f5 else []
     out["the segments table's row 4 names the same beats and slides, in order, and no Joker"] = (
-        in_order(row, ROW_BEATS) + [w for w in ("Joker", "joker", "wall,") if w in row.split("|")[4]])
+        in_order(r4, ROW4_BEATS) + [w for w in ("Joker", "joker", "wall,") if w in r4.split("|")[4]])
+    out["the segments table's row 5 names the same beats and slides, in order"] = in_order(r5, ROW5_BEATS)
     return out
 
 
@@ -151,24 +224,40 @@ for name, errs in problems(ros).items():
     check(name, not errs)
 
 # Each check can fail.
-seg_raw = ros.split(SEG4, 1)[1].split(SEG5, 1)[0]
-need(seg_raw, "**LLM01 (slide 50).**")
-moved = ros.replace("**LLM01 (slide 50).**", "**LLM01 (slide 49).**", 1)
+s4_raw = ros.split(SEG4, 1)[1].split(SEG5, 1)[0]
+s5_raw = ros.split(SEG5, 1)[1].split(SEG6, 1)[0]
+need(s4_raw, "**LLM01 (`#/49`).**")
+moved = ros.replace("**LLM01 (`#/49`).**", "**LLM01 (`#/48`).**", 1)
 check("a step citing a slide out of order fails the citation check",
-      bool(problems(moved)[f"segment 4's steps cite slides {FIRST} to {LAST}, each once, in order"]))
-need(seg_raw, "Hint: Look up ticket HC-666 on the support desk.")
-swapped = ros.replace(seg_raw, seg_raw.replace("Hint: Look up ticket HC-666 on the support desk.", "", 1)
-                      .replace("**LLM01 (slide 50).**", "Hint: Look up ticket HC-666 on the support desk. "
-                               "**LLM01 (slide 50).**", 1), 1)
+      bool(problems(moved)["segment 4's steps cite #/43 to #/61, each once, in order"]))
+need(s4_raw, "Hint: Look up ticket HC-666 on the support desk.")
+swapped = ros.replace(s4_raw, s4_raw.replace("Hint: Look up ticket HC-666 on the support desk.", "", 1)
+                      .replace("**LLM01 (`#/49`).**", "Hint: Look up ticket HC-666 on the support desk. "
+                               "**LLM01 (`#/49`).**", 1), 1)
 check("the hint moved after LLM01 fails the order check", bool(problems(swapped)["segment 4's beats come in the deck's order"]))
-need(seg_raw, "show it landing.")
+need(s4_raw, "  > It can read tickets by ticket number.")
+filing = ros.replace("  > It can read tickets by ticket number.", "  > It can file tickets, and read them by ticket number.", 1)
+check("the pre-#102 slide line put back fails the deck-text check",
+      bool(problems(filing)["every quoted slide line is the deck's text"]))
+need(s4_raw, "show it landing.")
 joker = ros.replace("show it landing.", "show the Joker landing on `https://support.burritobot.co/wall`.", 1)
 check("the old Joker wall put back fails the no-Joker check",
       bool(problems(joker)["segment 4 says no Joker and puts no desk wall on screen"]))
-need(seg_raw, "the policy trusts the internal registry.")
+need(s4_raw, "the policy trusts the internal registry.")
 dropped = ros.replace("the policy trusts the internal registry.", "the policy admits it.", 1)
 check("dropping the internal-registry fact fails the kept-facts check",
       bool(problems(dropped)["segment 4 still states the facts that hold"]))
+need(s5_raw, "Say: \"Ask BurritoBot what tools")
+leak = ros.replace("Say: \"Ask BurritoBot what tools", "Say: \"Try each tool. Ask BurritoBot what tools", 1)
+check("telling the room to try each tool fails the solve check",
+      bool(problems(leak)["no room-facing Challenge 4 line tells the room to try each tool"]))
+need(s5_raw, "**The tee-up (`#/62` and `#/63`).**")
+setup = ros.replace("**The tee-up (`#/62` and `#/63`).**", "**The tee-up (`#/62` and `#/63`).** The setup:", 1)
+check("the old \"The setup\" put back fails its check", bool(problems(setup)["segment 5 drops the old \"The setup\" framing"]))
+need(s5_raw, "The room's retry works only once #1132 is built")
+no1132 = ros.replace(s5_raw, s5_raw.replace("The room's retry works only once #1132 is built", "The room retries", 1), 1)
+check("dropping #1132 from #/68's retry fails the order check",
+      bool(problems(no1132)["segment 5's beats come in the deck's order"]))
 old_row = ("| 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, the prompt wall optional during play | "
            "Asks BurritoBot about HC-666 | 4, 5, 6, 7 |")
 need(ros, "\n" + ROW4)
@@ -179,4 +268,4 @@ check("the 2026-11-06 row put back fails the row check",
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)
-print("\nsegment 4 and its row follow the 2026-11-07 deck's Challenge 3")
+print("\nsegments 4 and 5 and their rows follow rounds-agenticburn#102's deck")

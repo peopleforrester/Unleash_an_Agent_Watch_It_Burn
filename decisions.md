@@ -36280,3 +36280,22 @@ changes when this is promoted. Not yet run on a cluster: the entry above's repea
 RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in 10m03s, 4 at a time`, `ALL E2E
 TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_vllm_fit_probe.py`, `verify/test_platform_baseline.py` and
 `verify/test_local_inference.py` each pass on their own as well. No dependency was added.
+
+## 2026-11-08 · #1141 · Segments 4 and 5 and /kubecon matched to rounds-agenticburn#102, by hand
+
+Worked by hand on Michael's order (rounds-agenticburn #97 waited on it); hecaton held #1141 and its planned parts
+#1173 to #1175 meanwhile. rounds-agenticburn#102 was built (rounds main `267b38b`, 128 slides), so every quoted slide
+line was checked against its `attendee.html` on 2026-11-08 and pinned in `verify/test_ros_seg4_flow.py`'s DECK_LINES.
+The test reads the pinned lines, not the deck, so the offline suite needs no other repo.
+
+Judgment calls. Segments 4 and 5 and their table rows cite the deck's URL hash, `#/N`; the rest of the file keeps its
+count from 1, and the numbering note now says so. The slide #/42 hand-off already read as Whitney's note, so it is
+unchanged. `/kubecon` carried no "The setup" text before this change; the test now fails one put back. No `/kubecon`
+prompt changed (#1063's children own them); the C7 prompt is pinned byte for byte.
+
+Timing: the deck's Say and Then say notes come to 721 words on `#/43` to `#/61` (about 4 min 50 s at 150 wpm) and
+339 on `#/62` to `#/72` (about 2 min 15 s). With play, the live attacks, traces and commands, both segments run past
+their 7 and 5 minutes. Flagged for the run-through's Segment 4 and 5 rows.
+
+Not yet run on a cluster: load `/kubecon` on both clusters after promotion and confirm the segment 4 and 5 blocks
+render (`verify/test_kubecon_seg4_flow.py` holds the source).
