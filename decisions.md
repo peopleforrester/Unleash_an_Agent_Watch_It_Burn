@@ -33887,3 +33887,10 @@ served there. The check only read; nothing changed on either cluster.
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: `GET
 https://burritobot-private.burritobot.co/kubecon` and its `?sheet=1` show Challenge 2 with the one Tron prompt and
 no follow-up. The #991 retest of whether that prompt alone deploys is not this issue's.
+
+**Suite results, run 18483.** On `e51a4a30`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=c0164259`, so
+scoped to this change, printed `218 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which
+is `bash verify/run-tests.sh`), then `32 checks ran (the offline suite and 31 tier tests) in 8m35s`, `ALL E2E TOOLS
+TIER CHECKS GREEN` and `exit=0`. `verify/test_replay_prompts.py`, `verify/test_public_images.py` and
+`verify/test_instructor_brief.py` were among them and passed. The prose gate printed `prose gate: pass`. No
+dependency was added. The log is `/var/lib/hecaton/runs/18483/e2e-tools.log`.
