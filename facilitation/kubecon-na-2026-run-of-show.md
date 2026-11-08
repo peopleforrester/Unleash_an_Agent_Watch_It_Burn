@@ -2052,7 +2052,60 @@ is merely slow rather than rebuilding:
   cluster's load balancer):
   `curl -fsS https://registry.burritobot.co/v2/burritobot/maintenance-shell/tags/list`
   lists the seeded tag.
-- [ ] **Hostnames serve over HTTPS and websocket:**
+- [ ] **Every stage switch reaches both clusters (#1146), after #1132's switches are
+  built.** #1132 made Challenge 3's and Challenge 4's fixes (`guard-agency-on`,
+  `guard-input-on`, `guard-mcp-on`) switch both clusters from the private terminal, as
+  `guardrails-on` does, so the room's retry on the public bot meets the fix too. This
+  step proves each one does, after the guardrails step above and before the admin
+  probe. From the repo root, with the private cluster's credentials in their own
+  kubeconfig (it never falls back to the current-context):
+
+  ```bash
+  python3 verify/stage_switch_run.py --context <private-context> \
+      --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+  ```
+
+  It holds both clusters' guard lock from its first read to its last, stops unless the
+  context is the private cluster, and reads both clusters' `/controls`
+  (`burritobot-private.burritobot.co` and `attackme.burritobot.co`). Then it runs
+  `guardrails-on`, `guard-agency-on`, `guard-input-on` and `guard-mcp-on` in talk order
+  in the private terminal pod, as the presenter types them, printing what the terminal
+  prints, and after each reads both `/controls` again. Last it runs `guards-off` and
+  `guardrails-off` from the same terminal, whatever happened before (a FAIL, a ^C), and
+  reads both clusters once more.
+
+  - **PASS** on a switch's line for a cluster: every `/controls` field that switch
+    owns read off before it and on after it on that cluster (`guardrails-on` the four
+    Kubernetes guardrails, `guard-agency-on` `agency_scoped`, `guard-input-on`
+    `input_blocklist` and `input_classifier`, `guard-mcp-on` `tool_allowlist`). The
+    closing lines are `start-state`, every one of those fields off again on that
+    cluster (Falco is not judged), and `as-found`, each field the closing pair turns
+    off reading what it read before the first switch.
+  - **FAIL** on a switch's line: that cluster did not get the switch, and a room's
+    retry there would not meet the fix. A `terminal` FAIL line is the terminal's own
+    command exiting non-zero or timing out; read what it printed above the line. A
+    FAIL on `start-state` or `as-found` means the closing pair left a guard on: run
+    the switch's own `-off` command (`guard-mcp-off`, `guard-input-off`) in the private
+    terminal before anything else.
+  - It must end `STAGE SWITCH CHECK GREEN` (exit 0). `STAGE SWITCH CHECK RED` (exit 1)
+    is any FAIL line; its summary names the lines that wait on #1132. `STAGE SWITCH
+    CHECK NOT RUN` switched nothing: exit 3 is another run holding the lock
+    (`python3 verify/guard_lease.py show --context <context>` names it), exit 4 is a
+    cluster not at the start state, with the fields named.
+  - On 2026-11-08 (run 18721) it ended RED, 8 PASS and 10 FAIL, as on the first run
+    (run 18714): `guard-agency-on` FAIL on both, since the pinned guard-proxy does not
+    send `agency_scoped` yet (#1132's last piece); `guard-input-on` FAIL on the
+    community cluster and `guards-off` FAIL in the terminal, since the private
+    terminal cannot reach the community cluster's guard-proxy on 8080 (#1202, #1171);
+    and `guards-off` stopping before its MCP step, which left `tool_allowlist` on on
+    both (#1203). New on this run, `guardrails-off` hung on the community cluster
+    until the check's 420-second limit: its NetworkPolicies now carry the AWS network
+    policy agent's finalizer, so `kubectl delete` waits for them to go, and that wait
+    needs list and watch, which the `guardrails-switch` ServiceAccount does not have.
+    The objects were already gone. If `guardrails-off` sits on the community
+    cluster's `delete ... c1-network-policy.yaml`, that delete is done: read both
+    `/controls`, and when all four guardrails read off, stop it with ^C. The full pass
+    is owed until those land.
   `./fleet.sh check-tls --closed-terminal attackme.burritobot.co attackme.agenticburn.com`, then
   `./fleet.sh check-tls burritobot-private.burritobot.co burritobot-private.agenticburn.com`.
   Each second name is the agenticburn.com twin, kept for redundancy (#651): neither is shown, and both must pass.

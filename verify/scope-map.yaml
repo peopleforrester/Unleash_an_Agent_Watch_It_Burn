@@ -6694,6 +6694,63 @@ reads:
     - verify/kubecon_probe.py
     - verify/stage_switch_check.py
     - verify/topic_cases.py
+  test_stage_switch_night_before.py:
+    - agent
+    - agent/terminal-auth
+    - challenges/*
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - challenges/c5-scoped-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/stage_switch_check.py
+    - verify/stage_switch_run.py
+    - verify/topic_cases.py
   test_stage_switch_run.py:
     - agent
     - agent/terminal-auth
