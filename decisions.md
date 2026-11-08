@@ -36985,5 +36985,16 @@ run's report.
 
 **Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
 
+**The suites (run 18630, on netcup).** Inside the image, at 465c64fc, the first full run had failed seven checks:
+the two collector tests, four `uv finds no Python 3.12` tests and the offline suite, on the Docker Hub base. After
+the fixes above, `bash verify/e2e-image.sh run` with no HECATON_BASE_SHA used the image already on the host and
+printed `365 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests)
+in 17m04s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The artifact cache's fetch log gained no
+line during that run, and nothing was pulled. On the host, as the gate runs it, at ea7a11e3,
+`HECATON_BASE_SHA=9f4bd7d2 bash verify/run-e2e-tools.sh` ran everything, since the change touches the runner. It
+fetched the 11 tools from the artifact cache and printed `365 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`86 checks ran (the offline suite and 85 tier tests) in 12m06s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`.
+
 **No new dependency** is added to the repo. The image pins uv 0.13.7, as `verify-suites.yml` already does, and Python
 3.12.16 and 3.13.18, the builds uv 0.13.7 installs for the two Pythons `python.lock` is locked for.
