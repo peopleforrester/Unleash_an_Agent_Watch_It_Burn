@@ -35674,3 +35674,25 @@ whatever produced it runs again; #1163 is where its source is found and fixed.
 
 **Nothing changed on either cluster.** The chats were order questions that call no tool, and both tests only read.
 This run wrote nothing to either cluster or to the Datadog org.
+
+**The second run, 05:58Z.** `python3 verify/test_datadog_sandbox_live.py` (60-minute lookback) again printed all 16
+checks PASS and `Both KubeCon clusters ship under Whitney's sandbox rules (#629).`, exit 0, and
+`verify/test_burritobot_cluster_live.py` on both contexts again closed `all 2 cluster(s) passed (#629, #1083).`
+(72 containers in 57 Running pods on community, 94 in 74 on private), exit 0.
+
+**The org after the run, 05:59Z.** The same listing read the same: 6 dashboards outside ours, 4 monitors, 5 users, 3
+roles and 4 API keys, with the same digests (`efe0c3462f16f31e`, `4da04e590e7e0a31`, `83d3fae5e2b7ec3e`,
+`774f9fa42145f485`, `8cf06d5986c17d5b`). The before and after listings are equal field by field, ids, titles, names
+and `modified_at` included, and our own 2 dashboards and 7 monitors are unchanged too. Nothing in the org outside
+BurritoBot changed.
+
+**Both clusters as found.** At 05:59Z every Argo CD Application read Synced, Healthy and selfHeal on: 24 on
+watch-it-burn-community and 40 on watch-it-burn-private, the same as at 05:45Z.
+
+**Not yet run on a cluster.** Nothing: this change is the record, and the live checks above ran from it.
+
+**Suite results, run 18581.** On `636656f7`, `bash verify/run-e2e-tools.sh` (no `HECATON_BASE_SHA`, so everything
+ran) printed `360 tests ran` for the offline suite, then `86 checks ran (the offline suite and 85 tier tests) in
+9m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No
+dependency was added and no test changed. The logs are `/var/lib/hecaton/runs/18581/e2e-tools.log`, `sandbox-1.log`,
+`sandbox-2.log`, `cluster-1.log` and `cluster-2.log`; the org listings are `before.json` and `after.json` there.
