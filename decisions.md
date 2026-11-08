@@ -38223,3 +38223,103 @@ offline tests and printed `132 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GRE
 `test_stage_switch_night_before.py` among them, then `16 checks ran (the offline suite and 15 tier tests) in 5m14s, 4
 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18721/e2e-tools.log`). The
 prose gate printed `prose gate: pass` on the three changed prose files. No dependency was added.
+
+## 2026-11-08 · #1158 · run 18711 · The admin cluster's bot reads and reports on the public desk, through a relay, on kubecon-private only
+
+Part of #1145, the one support desk and deployments page for both KubeCon clusters, approved by Michael on 2026-11-08.
+#1157 gave the public desk its token-only `/remote-landed`; this is the private cluster's half.
+
+**Why a relay and not an egress allow on workshop-mcp.** `support.burritobot.co`, `beacon.burritobot.co`,
+`registry.burritobot.co` and `attackme.burritobot.co` all resolve to one router address, `153.52.255.114`
+(measured 2026-11-08, a Railway host). A NetworkPolicy cannot name a host, so any rule that let workshop-mcp reach the
+desk would also let it reach Challenge 1's beacon from the pod `run_shell` runs in, with guardrails-on armed. So the
+admin cluster's workshop-mcp reaches the desk only through `desk-relay`, a pod of its own: it builds every URL itself
+from `DESK_PUBLIC_URL` (`https://support.burritobot.co`) and passes four things and nothing else. `GET
+/ticket?id=<number>` goes to the public desk's `/ticket`. `POST /landed` goes to its `/remote-landed` with
+`X-Desk-Report-Token`, read on each report from the `desk-report-token` Secret's mounted file, so a Secret written
+after the pod starts needs no restart; with no token it answers 503 naming the Secret and sends nothing. `POST
+/cluster-read` goes to this cluster's own desk, as before. `GET /healthz` reports the relay's state. Everything else is
+a 404. Its NetworkPolicy, `agent-allow-desk-relay-egress`, selects the relay alone and allows TCP 443, DNS to
+kube-system and in-namespace 8080. Argo CD keeps it on at all times, outside the four guardrails, so the relay works with
+the egress set off and adds to it when guardrails-on applies it. Its label `app.kubernetes.io/name=desk-relay` is on the Kyverno
+`egressLabels` list, so the agent cannot mint a pod that borrows the egress. The relay runs the pinned workshop-mcp
+image with no ServiceAccount token, as weather-feed does.
+
+**Scoped to kubecon-private.** A new chart value, `desk.usePublicDesk` (false in `values.yaml`, true only in
+`values-kubecon-private.yaml`), has the ai-layer Application add the `components/public-desk` kustomize component:
+`desk-relay.yaml`, the `desk-relay-src` ConfigMap generated from `desk_relay.py`, and a patch setting workshop-mcp's
+`TICKET_SITE_URL` to `http://desk-relay.agent.svc.cluster.local:8080`. `apps.yaml` fails a value that is not a bool
+and one set where `console.kubeconBrief` is false (a community profile, whose desk is the public one). The
+`components:` key now sits in its own guard, rendered when either this block or the community block adds one. Every
+other profile, the 2-hour workshop's attendee clusters included, renders without it, so `TICKET_SITE_URL` stays the
+in-cluster fake-ticket Service and each cluster keeps its own desk.
+
+**Read by number only (#1077).** The relay passes the desk's `/ticket` alone, which answers the one id it is given,
+and refuses `/`, `/wall`, `/wall.json`, `/me`, `/mine`, the deployments paths, a ticket's own page, `/lookup`, a
+missing, empty, repeated or over-long id, and every POST but the two above, without reaching the desk.
+`read_support_ticket` is still the MCP server's one ticket tool.
+
+**One fix on the public desk.** With both clusters' rows on one page, the community cluster's reader (#1050) would have
+greyed every private row within a minute, since its read never lists the private cluster's workloads.
+`record_cluster_read` now marks only the rows whose cluster is the desk's own (`DESK_CLUSTER`). On the 2-hour
+workshop's desks both are empty, so nothing changes there. The private cluster's rows on the public page are therefore
+never greyed when Kyverno removes them; carrying the private cluster's reads to the public desk is left to a followup.
+
+**The token's writer.** `fleet.sh desk-link [<community> <private>]` writes one `agent/desk-report-token` on both
+clusters. It keeps the community cluster's token when there is one, so a second run changes nothing there; else it
+writes a new one and restarts the community fake-ticket, which reads it as an env at start, and says that this clears
+the desk's filed tickets and rows. It never prints the token and never touches `agent/terminal-auth`. `instructors up`
+runs it after guardrails-link on the KubeCon roster; the seven offline tests that run `instructors up` with the link
+stubbed stub it too. Standbys are #1159's.
+
+**The private desk hosts.** Decided: they keep serving, unchanged, as the private cluster's own desk. No redirect now,
+because the Night Before probe (#1129), the trace seeds (#1130), the desk reset (#1144) and standby failover (#986)
+still use the private desk until #1159 points them at the public one, and #1160's desk host list decides whether to
+retire `support-burritobot-private` and `deployments-burritobot-private`. Until then the private deployments page no
+longer gets the admin bot's deploys, and a presenter demo ticket the admin bot is to read has to be filed on the
+public desk's in-cluster `/presenter-ticket` on watch-it-burn-community (#1156), which #1159 and #1160 write up.
+
+**Tests.** `verify/test_public_desk.py` (offline) renders every profile's ai-layer through `bootstrap_chart.py` and
+applies the components' workshop-mcp patches: the attendee profile's `TICKET_SITE_URL` is
+`http://fake-ticket.agent.svc.cluster.local:8080`, and only kubecon-private's is the relay. It runs the real
+`desk_relay.py` between the real `workshop-mcp-server.py` and two real `ticket_site.py` desks, the public one with the
+token and its labels: a ticket filed through the public desk's `/submit` is read by its number, a report with no token
+is refused and lands nothing, then lands under `private` once the token file appears, and a wrong token gets the desk's
+401. It holds the refusals above, the cluster-read fix, and `desk-link` against fake aws and kubectl.
+`verify/bootstrap_chart.py` gains `use_public_desk`, `for_public_desk` and `ai_layer_for`; `test_bootstrap_chart.py`,
+`test_kubecon_community_gate.py` and `test_desk_remote_reports.py` follow the new guard, and
+`test_bootstrap_chart_render.py` renders the two new failures with Helm and builds four profiles with kustomize:
+workshop-mcp's `TICKET_SITE_URL` is the relay on kubecon-private and the in-cluster desk on attendee, kubecon-community
+and admin, and the relay's four objects exist on kubecon-private alone. The scope map has the new test's entry and no
+other drift `write` printed.
+
+**Live check (before promotion, both clusters at `1f38f9ac`, Synced and Healthy).** Nothing was written to either
+cluster. This change's `desk_relay.py` was run as a throwaway process inside watch-it-burn-private's workshop-mcp pod,
+pointed at `https://support.burritobot.co`, with no token file, and exited:
+
+    relay GET /ticket?id=HC-7731 -> 200 HC-7731 | cannot list my pods
+    relay GET /ticket?id=HC-666 -> 200 HC-666 | card keeps failing at checkout
+    relay GET /ticket?id=HC-0001 -> 404 no ticket 'HC-0001' |
+    relay GET / -> 404
+    relay GET /wall.json -> 404
+    relay GET /deployments.json -> 404
+    relay GET /HC-7731 -> 404
+    relay POST /landed with no token -> 503 {"error": "no desk report token: write the agent/desk-report-token Secret (fleet
+    relay /healthz -> (200, '{"ok": true, "desk": "https://support.burritobot.co", "token": false}')
+
+and on watch-it-burn-community, the public bot's own path to the same ticket:
+
+    community TICKET_SITE_URL http://fake-ticket.agent.svc.cluster.local:8080 -> HC-7731: HC-7731 open | cannot list my pods
+    public POST /remote-landed, no token -> 401
+
+Neither cluster has a `desk-report-token` Secret. A seeded ticket was read rather than a new one filed, so the public
+desk was left as found; the egress set was off on both, as found.
+
+Not yet run on a cluster:
+- Once promoted and synced on watch-it-burn-private: `desk-relay` is Ready, workshop-mcp's `TICKET_SITE_URL` is the
+  relay, and `read_support_ticket` on the admin bot reads a ticket filed on `support.burritobot.co` by its number, with
+  the egress set off and again with guardrails-on armed.
+- After `infra/terraform/fleet/fleet.sh desk-link` (which restarts the community fake-ticket and so clears the public
+  desk; run it before a run-through, not in one): a deploy by the admin bot and one by the public bot both show on
+  `https://deployments.burritobot.co/deployments.json`, labelled `private` and `community`, and the private row is not
+  greyed by the community cluster's next read.
