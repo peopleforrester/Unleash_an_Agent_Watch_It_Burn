@@ -23,6 +23,12 @@
 # lab-platform/profile label, which accepts admin and kubecon-private.
 c7Control: gateway
 #
+# The admin bot reads and reports on the public desk, support.burritobot.co and deployments.burritobot.co, which the
+# room's bot uses too (#1158, part of #1145): the public-desk component's desk-relay passes one ticket by its number
+# and the deploy report with the desk-report-token Secret's token, and workshop-mcp's TICKET_SITE_URL points at it.
+desk:
+  usePublicDesk: true
+#
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
 apps:

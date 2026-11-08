@@ -28,6 +28,12 @@ ABOUTME: source takes .Values.revision and every lab-platform image .Values.imag
 {{- if and .Values.desk.remoteReports .Values.console.kubeconBrief }}
 {{- fail "desk.remoteReports is for the public desk, a community profile's: set it only where console.kubeconBrief is false" }}
 {{- end }}
+{{- if not (kindIs "bool" .Values.desk.usePublicDesk) }}
+{{- fail (printf "desk.usePublicDesk is whether this cluster's bot uses the public desk instead of its own: true, or false (got %v)" .Values.desk.usePublicDesk) }}
+{{- end }}
+{{- if and .Values.desk.usePublicDesk (not .Values.console.kubeconBrief) }}
+{{- fail "desk.usePublicDesk is for the private cluster's bot: a community profile's desk is the public one, so set it only where console.kubeconBrief is true" }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}

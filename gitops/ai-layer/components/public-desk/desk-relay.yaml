@@ -1,0 +1,73 @@
+# ABOUTME: The admin KubeCon cluster's relay to the public support desk (#1158): its Deployment, Service, and the one
+# ABOUTME: NetworkPolicy that lets it, and only it, out to the desk on 443. Added only by the public-desk component.
+#
+# workshop-mcp's TICKET_SITE_URL points here on this profile (kustomization.yaml), so read_support_ticket reads a ticket
+# filed on support.burritobot.co by its number, and deploy_app's report lands on deployments.burritobot.co under
+# "private". desk_relay.py says what it passes and why it is a pod of its own.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: desk-relay
+  namespace: agent
+  labels: { app.kubernetes.io/name: desk-relay }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: desk-relay } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: desk-relay, tags.datadoghq.com/service: burritobot-desk-relay, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
+    spec:
+      automountServiceAccountToken: false # it needs no cluster API, so it holds no token
+      enableServiceLinks: false
+      containers:
+        - name: relay
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime, as weather-feed does
+          imagePullPolicy: Always
+          command: ["python", "/app/desk_relay.py"]
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          env:
+            - { name: DESK_PUBLIC_URL, value: "https://support.burritobot.co" }
+            - { name: DESK_LOCAL_URL, value: "http://fake-ticket.agent.svc.cluster.local:8080" }
+            - { name: DESK_REPORT_TOKEN_FILE, value: /var/run/desk-report-token/token }
+          volumeMounts:
+            - { name: src, mountPath: /app, readOnly: true }
+            - { name: token, mountPath: /var/run/desk-report-token, readOnly: true }
+      volumes:
+        - name: src
+          configMap: { name: desk-relay-src }
+        # The token the public desk checks (#1157). Optional, so the relay starts before fleet.sh desk-link writes the
+        # Secret; the kubelet fills the file in once it exists, and the relay reads it on each report.
+        - name: token
+          secret: { secretName: desk-report-token, optional: true }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: desk-relay
+  namespace: agent
+spec:
+  selector: { app.kubernetes.io/name: desk-relay }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+# Always on, not one of the guardrails: with the agent egress set off it is the relay's only policy, and with it on it
+# adds to that set. Its own DNS and the in-namespace desk, for the cluster reads it passes on, and TCP 443 anywhere,
+# since the desk's router address is not this repo's and a NetworkPolicy cannot name a host. What keeps that narrow is
+# the pod: desk_relay.py builds every URL from DESK_PUBLIC_URL. The Kyverno egressLabels list carries its label.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-desk-relay-egress
+  namespace: agent
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: desk-relay }
+  policyTypes: [Egress]
+  egress:
+    - ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to: [{ podSelector: {} }]
+      ports: [{ protocol: TCP, port: 8080 }]

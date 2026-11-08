@@ -32,8 +32,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, DESK_REMOTE_COMPONENT, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO,  # noqa: E402
-                             REVISION, all_profiles, app_names, desk_remote_reports, for_desk_remote_reports,
-                             for_kubecon_brief, kubecon_brief, without_front_door)
+                             REVISION, ai_layer_for, all_profiles, app_names, desk_remote_reports)
 
 AI = REPO / "gitops/ai-layer"
 COMPONENT = AI / DESK_REMOTE_COMPONENT
@@ -236,9 +235,7 @@ check("the base console-conf is default.conf alone", base_keys == ["default.conf
 
 
 def ai_layer_components(profile: str) -> list[str]:
-    raw = for_desk_remote_reports((APPS / "ai-layer.yaml").read_text(encoding="utf-8"), desk_remote_reports(profile))
-    raw = without_front_door(for_kubecon_brief(raw, kubecon_brief(profile)))
-    app = yaml.safe_load(raw.replace(REVISION, "0" * 40).replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR))
+    app = yaml.safe_load(ai_layer_for(profile).replace(REVISION, "0" * 40).replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR))
     return list(app["spec"]["source"].get("kustomize", {}).get("components") or [])
 
 

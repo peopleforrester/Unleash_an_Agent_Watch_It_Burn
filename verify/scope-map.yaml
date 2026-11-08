@@ -6014,6 +6014,69 @@ reads:
     - gitops/ai-layer/resources.yaml
   test_proxy_guards.py:
     - gitops/ai-layer/guard-proxy
+  test_public_desk.py:
+    - CLAUDE.md
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - backstage
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/components/public-desk/desk-relay.yaml
+    - gitops/ai-layer/components/public-desk/desk_relay.py
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/bootstrap
+    - gitops/bootstrap/*
+    - gitops/bootstrap/apps
+    - gitops/bootstrap/apps/ai-layer.yaml
+    - gitops/bootstrap/templates
+    - gitops/bootstrap/values.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/argocd-values.yaml
+    - infra/aws-load-balancer-controller-values.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/deploy-full-idp.sh
+    - infra/gp3-storageclass.yaml
+    - infra/org/boundary
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform/aws/cluster
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - lab-platform.yaml
+    - observability-idp
+    - policies
+    - policies/kyverno/restrict-agent-spawned-workloads.yaml
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - security
+    - verify/bootstrap_chart.py
   test_public_images.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

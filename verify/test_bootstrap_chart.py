@@ -20,6 +20,7 @@ from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, 
                              C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES, UNARMED_IF,
                              FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, KUBECON_WITHHELD_END,
                              KUBECON_WITHHELD_IF, LAB_PLATFORM_GHCR, REPO, REPO_URL, DESK_REMOTE_END, DESK_REMOTE_IF,
+                             COMPONENTS_END, COMPONENTS_IF, PUBLIC_DESK_END, PUBLIC_DESK_IF,
                              REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, profiles, values_path)
 
 failures = []
@@ -142,11 +143,12 @@ check("values.yaml shares an empty revision, so a render without the parameter f
       "c7Control toolnames, so a profile that names none keeps the Agent's evil-mcp toolNames ignore (#679), and "
       "guardrails.validationAction Audit, so only a root lab-platform arms renders the two policies at Deny (#638), "
       "and console.kubeconBrief true, so a profile that says nothing keeps serving /kubecon (#909), and "
-      "desk.remoteReports false, so a profile that says nothing keeps its desk in-cluster only (#1157)",
+      "desk.remoteReports false, so a profile that says nothing keeps its desk in-cluster only (#1157), and "
+      "desk.usePublicDesk false, so a profile that says nothing keeps its bot on its own desk (#1158)",
       yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
       == {"revision": "", "imageRegistry": LAB_PLATFORM_GHCR, "frontDoor": {"certificateArn": ""},
           "c7Control": "toolnames", "guardrails": {"validationAction": "Audit"}, "console": {"kubeconBrief": True},
-          "desk": {"remoteReports": False}})
+          "desk": {"remoteReports": False, "usePublicDesk": False}})
 check("the chart holds apps/, templates/ and no other directory (the four old root directories are gone)",
       sorted(d.name for d in CHART.iterdir() if d.is_dir()) == ["apps", "templates"])
 check("gitops/apps is gone: its files are the chart's apps/", not (REPO / "gitops/apps").exists())
@@ -166,15 +168,25 @@ ai_layer = (APPS / "ai-layer.yaml").read_text(encoding="utf-8")
 check("ai-layer.yaml patches the console Service only when frontDoor.certificateArn is set, the guard in comments",
       "      # {{- if .Values.frontDoor.certificateArn }}\n      patches:\n" in ai_layer
       and "      # {{- end }}\n  destination:" in ai_layer)
+check("ai-layer.yaml renders its components key only when a block below adds a component, the guard in comments "
+      "(#909, #1158)", f"      # {COMPONENTS_IF}\n      components:\n      # {COMPONENTS_END}\n" in ai_layer)
 check("ai-layer.yaml adds the no-kubecon-brief component only when console.kubeconBrief is false, the guard in "
       "comments, after the images and before the front door's patches (#909)",
-      f"      # {KUBECON_WITHHELD_IF}\n      components:\n        - components/no-kubecon-brief\n" in ai_layer
-      and f"      # {DESK_REMOTE_END}\n      # {KUBECON_WITHHELD_END}\n      # The front door's certificate" in ai_layer
+      f"      # {COMPONENTS_END}\n      # {KUBECON_WITHHELD_IF}\n        - components/no-kubecon-brief\n" in ai_layer
+      and f"      # {DESK_REMOTE_END}\n      # {KUBECON_WITHHELD_END}\n      # The admin bot on the public desk" in ai_layer
       and ai_layer.index("      images:\n") < ai_layer.index(KUBECON_WITHHELD_IF) < ai_layer.index(FRONT_DOOR_IF))
 check("ai-layer.yaml adds the desk-remote-reports component only when desk.remoteReports is true, its guard nested in "
       "the community one (#1157)",
       f"      # {DESK_REMOTE_IF}\n        - components/desk-remote-reports\n      # {DESK_REMOTE_END}\n" in ai_layer
       and ai_layer.index(KUBECON_WITHHELD_IF) < ai_layer.index(DESK_REMOTE_IF) < ai_layer.index(FRONT_DOOR_IF))
+check("ai-layer.yaml adds the public-desk component only when desk.usePublicDesk is true, after the community block and "
+      "before the front door's patches (#1158)",
+      f"      # {PUBLIC_DESK_IF}\n        - components/public-desk\n      # {PUBLIC_DESK_END}\n      # The front door's "
+      "certificate" in ai_layer
+      and ai_layer.index(KUBECON_WITHHELD_IF) < ai_layer.index(PUBLIC_DESK_IF) < ai_layer.index(FRONT_DOOR_IF))
+check("apps.yaml fails a desk.usePublicDesk that is not a bool, and one set where console.kubeconBrief is false (#1158)",
+      '{{- if not (kindIs "bool" .Values.desk.usePublicDesk) }}' in tpl
+      and '{{- if and .Values.desk.usePublicDesk (not .Values.console.kubeconBrief) }}' in tpl)
 check("apps.yaml fails a desk.remoteReports that is not a bool, and one set where console.kubeconBrief is true (#1157)",
       '{{- if not (kindIs "bool" .Values.desk.remoteReports) }}' in tpl
       and '{{- if and .Values.desk.remoteReports .Values.console.kubeconBrief }}' in tpl)
@@ -225,8 +237,10 @@ for profile in all_profiles():
     community = profile in ("burn", "kubecon-community")
     # The KubeCon community profile's desk is the public one both clusters report deploys to (#1157).
     public_desk = profile == "kubecon-community"
+    # The KubeCon private profile's bot reads and reports on that public desk (#1158).
+    public_desk_bot = profile == "kubecon-private"
     want_keys = (["c7Control"] if gateway else []) + (["console"] if community else []) \
-        + (["desk"] if public_desk else []) + ["apps"]
+        + (["desk"] if public_desk or public_desk_bot else []) + ["apps"]
     check(f"{profile}: the values file holds only {' and '.join(want_keys)}", list(doc) == want_keys)
     if gateway:
         check(f"{profile}: c7Control is gateway", doc.get("c7Control") == "gateway")
@@ -236,6 +250,9 @@ for profile in all_profiles():
     if public_desk:
         check(f"{profile}: desk.remoteReports is true, so its desk takes the private cluster's deploy reports (#1157)",
               doc.get("desk") == {"remoteReports": True})
+    if public_desk_bot:
+        check(f"{profile}: desk.usePublicDesk is true, so its bot reads and reports on the public desk (#1158)",
+              doc.get("desk") == {"usePublicDesk": True})
     check(f"{profile}: it lists apps, each once", bool(names) and len(names) == len(set(names)))
     missing = [n for n in names if f"{n}.yaml" not in app_files]
     check(f"{profile}: every listed app has its file in apps/ {missing}", not missing)
@@ -288,7 +305,8 @@ for f in app_files:
     # workshop-agent.yaml alone holds the c7Control guard on the Agent's evil-mcp toolNames ignore (#679, #707).
     # ai-layer.yaml alone also holds the KubeCon page's withholding guard (#909).
     allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END, KUBECON_WITHHELD_IF,
-                                             KUBECON_WITHHELD_END, DESK_REMOTE_IF, DESK_REMOTE_END)
+                                             KUBECON_WITHHELD_END, DESK_REMOTE_IF, DESK_REMOTE_END, COMPONENTS_IF,
+                                             COMPONENTS_END, PUBLIC_DESK_IF, PUBLIC_DESK_END)
                                             if f == "ai-layer.yaml" else ()) \
         + ((C7_TOOLNAMES_IF, C7_TOOLNAMES_END) if f == "workshop-agent.yaml" else ()) \
         + ((ARMED_IF, UNARMED_IF, ARM_END) if f == "kyverno-policies.yaml" else ())

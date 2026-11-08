@@ -27,7 +27,7 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, DESK_REMOTE_COMPONENT, IMAGE_REGISTRY, LAB_PLATFORM_GHCR,  # noqa: E402
                              NO_KUBECON_COMPONENT, REPO, REVISION, all_profiles, app_names, desk_remote_reports,
-                             for_desk_remote_reports, for_kubecon_brief, kubecon_brief, without_front_door)
+                             PUBLIC_DESK_COMPONENT, ai_layer_for, kubecon_brief, use_public_desk)
 
 AI_LAYER = REPO / "gitops/ai-layer"
 CONF = (AI_LAYER / "console.conf").read_text(encoding="utf-8")
@@ -50,10 +50,7 @@ def check(name: str, cond: bool, why: str = "") -> None:
 
 def ai_layer_app(profile: str) -> dict:
     """The ai-layer Application the chart renders for a profile with no frontDoor.certificateArn."""
-    raw = for_desk_remote_reports((APPS / "ai-layer.yaml").read_text(encoding="utf-8"), desk_remote_reports(profile))
-    raw = for_kubecon_brief(raw, kubecon_brief(profile))
-    raw = without_front_door(raw).replace(REVISION, "0" * 40).replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
-    return yaml.safe_load(raw)
+    return yaml.safe_load(ai_layer_for(profile).replace(REVISION, "0" * 40).replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR))
 
 
 def console_src() -> dict[str, pathlib.Path]:
@@ -69,13 +66,19 @@ def console_src() -> dict[str, pathlib.Path]:
 def apply_component(path: str, data: dict) -> list[str]:
     """Apply one kustomize Component's console-src patches to the keys; return what it could not read, by name.
     A patch on another object, or a generator for another ConfigMap, leaves console-src as it is: desk-remote-reports
-    (#1157) adds a file to console-conf and env to fake-ticket, which verify/test_desk_remote_reports.py holds."""
+    (#1157) adds a file to console-conf and env to fake-ticket, which verify/test_desk_remote_reports.py holds, and
+    public-desk (#1158) adds the desk-relay's own objects and workshop-mcp's env, which verify/test_public_desk.py holds.
+    A resource it adds that is console-src is a problem, since this render does not model one."""
     doc = yaml.safe_load((AI_LAYER / path / "kustomization.yaml").read_text(encoding="utf-8"))
     problems = []
     if doc.get("kind") != "Component" or doc.get("apiVersion") != "kustomize.config.k8s.io/v1alpha1":
         problems.append(f"{path} is not a kustomize Component")
-    for key in set(doc) - {"apiVersion", "kind", "patches", "configMapGenerator"}:
+    for key in set(doc) - {"apiVersion", "kind", "patches", "configMapGenerator", "resources"}:
         problems.append(f"{path} sets {key}, which this render does not model")
+    for r in doc.get("resources") or []:
+        for d in yaml.safe_load_all((AI_LAYER / path / r).read_text(encoding="utf-8")):
+            if d and d.get("kind") == "ConfigMap" and d["metadata"]["name"] == "console-src":
+                problems.append(f"{path}'s {r} adds console-src, which this render does not model")
     for g in doc.get("configMapGenerator") or []:
         if g.get("name") == "console-src":
             problems.append(f"{path} generates into console-src, which this render does not model")
@@ -141,7 +144,7 @@ for profile in all_profiles():
         continue
     comps = ((ai_layer_app(profile).get("spec") or {}).get("source") or {}).get("kustomize", {}).get("components")
     want = ([NO_KUBECON_COMPONENT] + ([DESK_REMOTE_COMPONENT] if desk_remote_reports(profile) else [])
-            if profile in WITHHOLD else None)
+            if profile in WITHHOLD else [PUBLIC_DESK_COMPONENT] if use_public_desk(profile) else None)
     check(f"{profile}: ai-layer's kustomize components are {want}", comps == want, str(comps))
 
 print("== each rendered console answers the gated paths ==")

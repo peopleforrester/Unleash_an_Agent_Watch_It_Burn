@@ -768,6 +768,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       when event.sh's WIB_ROSTER_PROFILES is kubecon. Each link is checked from this host first.
                       A standby build (WIB_NO_LINK) is not linked; backups.py links a standby when it
                       takes a hostname (#985).
+    desk-link [<community>[@<region>] <private>[@<region>]]
+                      One support desk for the KubeCon pair's two bots (#1158): write one agent/desk-report-token
+                      Secret on both clusters, so the private cluster's desk-relay reports its bot's deploys to the
+                      community cluster's desk, deployments.burritobot.co. Keeps the community cluster's token when
+                      it has one; else writes a new one and restarts its fake-ticket, which clears the desk. Never
+                      prints the token. Defaults as guardrails-link; 'instructors up' runs it after that.
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -3438,10 +3444,13 @@ cmd_instructors() {
             log "standbys: not linked at build; backups.py links a standby when it takes a hostname (#985)"
         elif [[ -n "${WIB_DRY_RUN}" ]]; then
             log "dry run: would link the KubeCon pair's guardrails switch (guardrails-link)"
+            log "dry run: would write the KubeCon pair's one desk-report-token (desk-link)"
         elif [[ -z "${role_filter}" && -z "${owner_filter}" ]]; then
             cmd_guardrails_link || _rc=1
+            cmd_desk_link || _rc=1
         else
             log "the guardrails switch needs both KubeCon clusters linked: run '${0##*/} guardrails-link' once both are up"
+            log "and the one support desk needs their token: run '${0##*/} desk-link' once both are up"
         fi
     fi
     return "${_rc}"
@@ -5281,6 +5290,70 @@ cmd_guardrails_link() {
     log "guardrails-link: linked; guardrails-on in either terminal arms both"
 }
 
+# The one support desk both KubeCon clusters' bots use (#1145): support.burritobot.co and deployments.burritobot.co are
+# the community cluster's fake-ticket, which takes the private cluster's deploy reports at /remote-landed only with the
+# token in its agent/desk-report-token Secret (#1157), and the private cluster's desk-relay sends them with the same
+# token, read from the same Secret there (#1158).
+readonly DESK_TOKEN_SECRET="desk-report-token"
+
+# desk-link [<community>[@<region>] <private>[@<region>]]: one desk-report-token on both clusters. The community
+# cluster's token is kept when it has one, so a second run changes nothing there; else a new one is written and its
+# fake-ticket restarted, the one way the desk reads it (an env from the Secret), which clears the desk's filed tickets
+# and deploy rows. The private cluster's relay reads the file the Secret mounts on each report and needs no restart.
+# The token is never printed. Each cluster is refused unless its isolated kubeconfig's context is that cluster.
+cmd_desk_link() {
+    local a="${1:-watch-it-burn-community}" b="${2:-${SHARED_ADMIN_NAME}}" acct="${WIB_DEFAULT_ACCOUNT}"
+    local an="${a%@*}" bn="${b%@*}" ar="${WIB_REGION}" br="${WIB_REGION}" akc bkc actx bctx tok fresh="" rc=0
+    [[ "${a}" == *@* ]] && ar="${a#*@}"
+    [[ "${b}" == *@* ]] && br="${b#*@}"
+    if [[ ! "${an}" =~ ^watch-it-burn-[a-z0-9-]+$ || ! "${bn}" =~ ^watch-it-burn-[a-z0-9-]+$ || "${an}" == "${bn}" ]]; then
+        log "usage: desk-link [<community>[@<region>] <private>[@<region>]], two different watch-it-burn clusters"
+        return 2
+    fi
+    akc="$(mktemp -t "${an}.kcfg.XXXX")"; bkc="$(mktemp -t "${bn}.kcfg.XXXX")"; tok="$(mktemp -t desk-token.XXXX)"
+    chmod 600 "${tok}"
+    log "desk-link: ${an} (${ar}) takes the deploy reports of ${bn} (${br})"
+    if actx="$(WIB_REGION="${ar}" admin_kubeconfig "${an}" "${acct}" "${akc}")" \
+        && bctx="$(WIB_REGION="${br}" admin_kubeconfig "${bn}" "${acct}" "${bkc}")"; then
+        KUBECONFIG="${akc}" AWS_PROFILE="${acct}" kubectl --context "${actx}" -n agent get secret "${DESK_TOKEN_SECRET}" \
+            -o jsonpath='{.data.token}' 2>/dev/null | base64 -d >"${tok}" 2>/dev/null || true
+        if [[ ! -s "${tok}" ]]; then
+            fresh=1
+            python3 -c 'import secrets; print(secrets.token_hex(32), end="")' >"${tok}" || rc=1
+        fi
+        local to_name to_kcfg to_ctx
+        for to_name in "${an}" "${bn}"; do
+            [[ "${rc}" -eq 0 ]] || break
+            if [[ "${to_name}" == "${an}" ]]; then
+                [[ -n "${fresh}" ]] || { log "  ${an}: keeps its ${DESK_TOKEN_SECRET}"; continue; }
+                to_kcfg="${akc}"; to_ctx="${actx}"
+            else
+                to_kcfg="${bkc}"; to_ctx="${bctx}"
+            fi
+            if ! KUBECONFIG="${to_kcfg}" AWS_PROFILE="${acct}" kubectl --context "${to_ctx}" -n agent create secret generic \
+                    "${DESK_TOKEN_SECRET}" --from-file=token="${tok}" --dry-run=client -o yaml 2>/dev/null \
+                | KUBECONFIG="${to_kcfg}" AWS_PROFILE="${acct}" kubectl --context "${to_ctx}" apply -f - >/dev/null 2>&1; then
+                log "  ${to_name}: could not write agent/${DESK_TOKEN_SECRET}"; rc=1
+            else
+                log "  ${to_name}: agent/${DESK_TOKEN_SECRET} written"
+            fi
+        done
+        if [[ "${rc}" -eq 0 && -n "${fresh}" ]]; then
+            log "  ${an}: restarting fake-ticket so the desk reads the new token; this clears its filed tickets and rows"
+            KUBECONFIG="${akc}" AWS_PROFILE="${acct}" kubectl --context "${actx}" -n agent rollout restart \
+                deployment/fake-ticket >/dev/null 2>&1 || { log "  ${an}: could not restart fake-ticket"; rc=1; }
+        fi
+    else
+        rc=1
+    fi
+    rm -f "${akc}" "${bkc}" "${tok}"
+    if [[ "${rc}" -ne 0 ]]; then
+        log "desk-link: NOT linked; the private bot's deploys do not reach ${an}'s deployments page"
+        return 1
+    fi
+    log "desk-link: linked; the private bot's deploys show on ${an}'s deployments page, labelled private"
+}
+
 # One field of a JSON object, empty when absent.
 _json_field() { python3 -c 'import json, sys; v = json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2" 2>/dev/null; }
 
@@ -5653,6 +5726,7 @@ main() {
         restart-console) cmd_restart_console "$@" ;;
         reset-bot) cmd_reset_bot "$@" ;;
         guardrails-link) cmd_guardrails_link "$@" ;;
+        desk-link) cmd_desk_link "$@" ;;
         terminal-password) cmd_terminal_password "$@" ;;
         serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;

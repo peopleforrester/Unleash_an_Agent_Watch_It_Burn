@@ -73,11 +73,15 @@ def kubecon_brief(profile: str) -> bool:
 
 def for_kubecon_brief(raw: str, serve: bool) -> str:
     """An app file as the chart renders it at this console.kubeconBrief: the withholding block left out on true, with
-    the desk-remote-reports block nested in it (#1157)."""
+    the desk-remote-reports block nested in it (#1157), and then the components key too unless the public-desk block
+    is still there (#1158). So apply for_public_desk first."""
     if not serve:
         return raw
     raw = for_desk_remote_reports(raw, False)
-    return re.sub(" " + re.escape(KUBECON_WITHHELD_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+    raw = re.sub(" " + re.escape(KUBECON_WITHHELD_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+    if PUBLIC_DESK_ITEM not in raw:
+        raw = re.sub(" " + re.escape(COMPONENTS_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+    return raw
 
 
 # The public desk (#1157): values.yaml's desk.remoteReports, false unless a profile's values file says true, which only
@@ -99,6 +103,39 @@ def for_desk_remote_reports(raw: str, on: bool) -> str:
     if on:
         return raw
     return re.sub(" " + re.escape(DESK_REMOTE_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
+# The admin bot on the public desk (#1158): values.yaml's desk.usePublicDesk, false unless a profile's values file says
+# true, which only kubecon-private does. ai-layer.yaml holds its block after the /kubecon withholding block, rendered on
+# true, which adds the public-desk component: the desk-relay pod and workshop-mcp's TICKET_SITE_URL pointed at it. The
+# components key itself sits in a block of its own, rendered when either block adds a component.
+PUBLIC_DESK_IF = "{{- if .Values.desk.usePublicDesk }}"
+PUBLIC_DESK_END = "{{- end }}"
+PUBLIC_DESK_COMPONENT = "components/public-desk"
+PUBLIC_DESK_ITEM = f"        - {PUBLIC_DESK_COMPONENT}\n"
+COMPONENTS_IF = "{{- if or (not .Values.console.kubeconBrief) .Values.desk.usePublicDesk }}"
+COMPONENTS_END = "{{- end }}"
+
+
+def use_public_desk(profile: str) -> bool:
+    """Whether a profile's bot uses the public desk: its values file's desk.usePublicDesk, else values.yaml's."""
+    shared = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) or {}
+    return (values(profile).get("desk") or {}).get("usePublicDesk", shared["desk"]["usePublicDesk"])
+
+
+def for_public_desk(raw: str, on: bool) -> str:
+    """An app file as the chart renders it at this desk.usePublicDesk: the public-desk block left out on false."""
+    if on:
+        return raw
+    return re.sub(" " + re.escape(PUBLIC_DESK_IF) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
+def ai_layer_for(profile: str) -> str:
+    """ai-layer.yaml as the chart renders its kustomize block for a profile: every profile guard resolved, with no
+    frontDoor.certificateArn, the revision and image registry left as written."""
+    raw = (APPS / "ai-layer.yaml").read_text(encoding="utf-8")
+    raw = for_public_desk(for_desk_remote_reports(raw, desk_remote_reports(profile)), use_public_desk(profile))
+    return without_front_door(for_kubecon_brief(raw, kubecon_brief(profile)))
 
 
 # The guardrails' action (#638, lab-platform#310): values.yaml's guardrails.validationAction, Audit unless lab-platform's

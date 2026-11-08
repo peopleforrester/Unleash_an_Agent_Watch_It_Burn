@@ -26,7 +26,8 @@ from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, 
                              FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO, LAB_PLATFORM_GHCR, REPO_URL, REVISION,
                              UNARMED_IF, all_profiles, app_names, c7_control, for_c7_control, for_guardrails,
                              for_kubecon_brief, kubecon_brief, profiles, values_path, kustomize_images,
-                             without_front_door, DESK_REMOTE_COMPONENT, desk_remote_reports, for_desk_remote_reports)
+                             without_front_door, DESK_REMOTE_COMPONENT, desk_remote_reports, for_desk_remote_reports,
+                             PUBLIC_DESK_COMPONENT, for_public_desk, use_public_desk)
 
 failures: list[str] = []
 
@@ -80,7 +81,8 @@ for profile in all_profiles():
     want = []
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
-        raw = for_kubecon_brief(for_desk_remote_reports(raw, desk_remote_reports(profile)), kubecon_brief(profile))
+        raw = for_public_desk(for_desk_remote_reports(raw, desk_remote_reports(profile)), use_public_desk(profile))
+        raw = for_kubecon_brief(raw, kubecon_brief(profile))
         raw = without_front_door(for_guardrails(raw, "Audit")).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
@@ -213,7 +215,8 @@ def console_src_built(components: list[str]) -> tuple[dict, str, str]:
 built = {}
 for profile, served in (("kubecon-community", False), ("kubecon-private", True), ("burn", False), ("admin", True)):
     comps = ((ai_layer_for(profile).get("spec") or {}).get("source") or {}).get("kustomize", {}).get("components") or []
-    want = [] if served else ["components/no-kubecon-brief"] + ([DESK_REMOTE_COMPONENT] if profile == "kubecon-community" else [])
+    want = ([PUBLIC_DESK_COMPONENT] if profile == "kubecon-private" else []) if served \
+        else ["components/no-kubecon-brief"] + ([DESK_REMOTE_COMPONENT] if profile == "kubecon-community" else [])
     check(f"{profile}: ai-layer renders the components {want}", comps == want, str(comps))
     if not KUBECTL:
         continue
@@ -276,6 +279,43 @@ for profile in ("kubecon-community", "burn", "attendee", "kubecon-private"):
         ref = (env.get("DESK_REPORT_TOKEN", {}).get("valueFrom") or {}).get("secretKeyRef") or {}
         check(f"{profile}: the token is the desk-report-token Secret's token key, optional",
               ref == {"name": "desk-report-token", "key": "token", "optional": True}, str(ref))
+
+print("== the admin bot on the public desk, kubecon-private alone (#1158) ==")
+r = render("-f", str(values_path("kubecon-private")), "--set", f"revision={COMMIT}", "--set", "desk.usePublicDesk=yes")
+check("a desk.usePublicDesk that is not a bool: the render fails, naming it", r.returncode != 0
+      and "desk.usePublicDesk is whether this cluster's bot uses the public desk" in r.stderr, r.stderr.strip()[:200])
+r = render("-f", str(values_path("kubecon-community")), "--set", f"revision={COMMIT}", "--set", "desk.usePublicDesk=true")
+check("desk.usePublicDesk on a community profile (the public desk's own cluster): the render fails, naming it",
+      r.returncode != 0 and "desk.usePublicDesk is for the private cluster's bot" in r.stderr, r.stderr.strip()[:200])
+IN_CLUSTER_DESK = "http://fake-ticket.agent.svc.cluster.local:8080"
+RELAY = "http://desk-relay.agent.svc.cluster.local:8080"
+for profile in ("attendee", "kubecon-private", "kubecon-community", "admin"):
+    comps = ((ai_layer_for(profile).get("spec") or {}).get("source") or {}).get("kustomize", {}).get("components") or []
+    on = profile == "kubecon-private"
+    check(f"{profile}: the ai-layer {'adds' if on else 'does not add'} the public-desk component {comps}",
+          (PUBLIC_DESK_COMPONENT in comps) is on)
+    if not KUBECTL:
+        continue
+    docs, err = ai_layer_built(comps)
+    mcp = next((x for x in docs if x.get("kind") == "Deployment" and x["metadata"]["name"] == "workshop-mcp"), {})
+    env = {e["name"]: e.get("value") for c in (mcp.get("spec") or {}).get("template", {}).get("spec", {})
+           .get("containers", []) for e in c.get("env") or []}
+    check(f"{profile}: kustomize builds it, and workshop-mcp's TICKET_SITE_URL is {RELAY if on else IN_CLUSTER_DESK}",
+          env.get("TICKET_SITE_URL") == (RELAY if on else IN_CLUSTER_DESK), err or str(env.get("TICKET_SITE_URL")))
+    relay = [(x["kind"], x["metadata"]["name"]) for x in docs if "desk-relay" in x["metadata"]["name"]]
+    check(f"{profile}: {'the relay, its Service, its NetworkPolicy and its source' if on else 'no desk-relay object'} "
+          f"{relay}", sorted(k for k, _ in relay) == (["ConfigMap", "Deployment", "NetworkPolicy", "Service"] if on
+                                                      else []))
+    if on:
+        dep = next((x for x in docs if x.get("kind") == "Deployment" and x["metadata"]["name"] == "desk-relay"), {})
+        src = next((x for x in docs if x.get("kind") == "ConfigMap" and x["metadata"]["name"].startswith("desk-relay-src-")),
+                   {})
+        vols = (dep.get("spec") or {}).get("template", {}).get("spec", {}).get("volumes", [])
+        check(f"{profile}: the relay mounts its source by the hashed name, and the token Secret optional",
+              {"name": src.get("metadata", {}).get("name")} in [v.get("configMap") for v in vols]
+              and {"secretName": "desk-report-token", "optional": True} in [v.get("secret") for v in vols], str(vols))
+        check(f"{profile}: the relay source is the component's desk_relay.py", (src.get("data") or {}).get("desk_relay.py")
+              == (REPO / "gitops/ai-layer/components/public-desk/desk_relay.py").read_text(encoding="utf-8"))
 
 print("== the guardrails, armed by lab-platform's arm parameter (#638, lab-platform#310) ==")
 ARMING = ("--set", f"{ARM_PARAMETER}={ARM_VALUE}")

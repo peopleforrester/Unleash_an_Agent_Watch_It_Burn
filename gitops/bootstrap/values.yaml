@@ -45,5 +45,10 @@ console:
 # the ai-layer Application add the desk-remote-reports component: the console's support host gains /remote-landed,
 # which records a report only with the token from the desk-report-token Secret, and each deployments row names its
 # cluster. Only kubecon-community sets it; every other profile, the 2-hour workshop's included, keeps the desk as it was.
+# Whether this cluster's bot reads tickets from and reports deploys to that public desk instead of its own (#1158). true
+# has the ai-layer Application add the public-desk component: a desk-relay pod, and workshop-mcp's TICKET_SITE_URL
+# pointed at it. Only kubecon-private sets it; every other profile, the 2-hour workshop's attendee clusters included,
+# keeps TICKET_SITE_URL on its own in-cluster fake-ticket.
 desk:
   remoteReports: false
+  usePublicDesk: false

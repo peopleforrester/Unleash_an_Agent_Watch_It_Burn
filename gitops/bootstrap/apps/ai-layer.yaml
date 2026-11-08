@@ -35,8 +35,12 @@ spec:
       # burn and kubecon-community profiles' value, the no-kubecon-brief component takes kubecon.html out of the
       # console-src ConfigMap, so /kubecon on attackme is a 404 while the private cluster still serves it. The guard
       # sits in YAML comments, as the front door's below does; verify/test_kubecon_community_gate.py renders it.
-      # {{- if not .Values.console.kubeconBrief }}
+      # The components key is rendered when either block below adds one: no-kubecon-brief on a community profile, or
+      # public-desk on the private one (#1158). apps.yaml fails a profile that would want both.
+      # {{- if or (not .Values.console.kubeconBrief) .Values.desk.usePublicDesk }}
       components:
+      # {{- end }}
+      # {{- if not .Values.console.kubeconBrief }}
         - components/no-kubecon-brief
       # The public desk both KubeCon clusters report deploys to (#1157). With desk.remoteReports true, kubecon-community's
       # value and no other profile's, the desk-remote-reports component adds the token-only /remote-landed route to the
@@ -45,6 +49,13 @@ spec:
       # {{- if .Values.desk.remoteReports }}
         - components/desk-remote-reports
       # {{- end }}
+      # {{- end }}
+      # The admin bot on the public desk (#1158). With desk.usePublicDesk true, kubecon-private's value and no other
+      # profile's, the public-desk component adds the desk-relay pod and points workshop-mcp's TICKET_SITE_URL at it, so
+      # read_support_ticket reads a ticket filed on support.burritobot.co by its number and deploy_app reports to
+      # deployments.burritobot.co. Every other profile keeps TICKET_SITE_URL on its own in-cluster fake-ticket.
+      # {{- if .Values.desk.usePublicDesk }}
+        - components/public-desk
       # {{- end }}
       # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
       # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which

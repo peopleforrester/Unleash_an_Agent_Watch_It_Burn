@@ -1,0 +1,38 @@
+# ABOUTME: Points this cluster's bot at the public support desk and deployments page (#1158, part of #1145): the
+# ABOUTME: kubecon-private profile's ai-layer adds it, so the admin bot reads and reports where the room's bot does.
+#
+# The ai-layer Application adds it on a profile whose values set desk.usePublicDesk true, which only kubecon-private
+# does. Every other profile, the 2-hour workshop's attendee clusters included, renders without it, so workshop-mcp's
+# TICKET_SITE_URL stays the in-cluster fake-ticket Service and each cluster keeps its own desk.
+#
+#   desk-relay.yaml  the relay pod, its Service, and its own egress allow (desk_relay.py says why it is a pod).
+#   desk-relay-src   desk_relay.py, generated so a change to it rolls the relay through the content hash.
+#   the patch        workshop-mcp's TICKET_SITE_URL: the relay, which passes one ticket by its number and the deploy
+#                    report with the desk's token, and nothing else, so the admin bot still reads no ticket list (#1077).
+# This cluster's own desk keeps serving support-burritobot-private and deployments-burritobot-private as it did
+# (decisions.md, #1158). Nothing here writes the desk-report-token Secret: fleet.sh desk-link writes the same token on
+# both KubeCon clusters. verify/test_public_desk.py holds it, and verify/test_bootstrap_chart_render.py builds it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - desk-relay.yaml
+configMapGenerator:
+  - name: desk-relay-src
+    files:
+      - desk_relay.py
+patches:
+  - target:
+      kind: Deployment
+      name: workshop-mcp
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: workshop-mcp
+      spec:
+        template:
+          spec:
+            containers:
+              - name: shim
+                env:
+                  - { name: TICKET_SITE_URL, value: "http://desk-relay.agent.svc.cluster.local:8080" }

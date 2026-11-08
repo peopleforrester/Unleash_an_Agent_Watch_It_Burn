@@ -430,10 +430,12 @@ def record_cluster_read(d) -> dict:
     if not ok:
         return {"applied": False, "marked": marked}
     removed_at = time.strftime("%H:%M:%S", time.localtime(taken_at))
+    # The read is this cluster's (it comes in-cluster only), so it covers this cluster's own rows alone: on the public
+    # desk a row the private cluster reported (#1157, #1158) names a workload this read never lists, and is not marked.
     with _lock:
         for r in LANDINGS:
             if (r["ok"] and not r.get("removed_at") and r.get("kind") in kinds and r["ts"] < taken_at
-                    and r["name"] not in kinds[r["kind"]]):
+                    and r.get("cluster", LOCAL_CLUSTER) == LOCAL_CLUSTER and r["name"] not in kinds[r["kind"]]):
                 r["removed_at"], r["removed_ts"] = removed_at, taken_at
                 marked.append(r["name"])
     return {"applied": True, "marked": marked}
