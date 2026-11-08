@@ -38753,3 +38753,8 @@ five false, as they did before. The lock was released on both. The log is
 
 **Not yet run on a cluster.** Nothing this change needs: the rules are in AWS now, and the repo change is prose.
 `guard-input-on` from the community terminal toward private, and #1132's stage switch check, were not run here.
+
+**The suites.** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"` (Dispatched runs point 6). The
+change is prose alone, so `scope_tests.py select tools` ran 0 of 86 tier tests and `run-e2e-tools.sh` was not run.
+`bash verify/run-tests.sh` ran 101 of 382 offline tests and printed `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0
+(log `/var/lib/hecaton/runs/18735/run-tests.log`). The prose gate printed `prose gate: pass`. No dependency was added.
