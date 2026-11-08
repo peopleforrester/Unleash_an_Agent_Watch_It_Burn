@@ -41034,3 +41034,65 @@ The presenter terminal login was not read or touched.
 `python3 verify/test_guard_lease.py`, `python3 verify/test_scope_tests.py` and `python3 verify/scope_tests.py check`
 pass. The prose gate was run against origin/staging. The full Test and E2E commands are left to hecaton's validation.
 No dependency was added.
+
+## 2026-11-09 · #1053 · run 18850 · The admin probe's second lock: found from the guardrails-peer Secret, and a run that cannot take it runs no beat
+
+**What #1053 asks.** The admin KubeCon probe's guardrails-on and guardrails-off, run in the private terminal, also switch
+the community cluster (#774), so a community probe holding only the community cluster's lock could have its guardrails
+switched under it. The issue asks the admin probe and `verify/stage_traces.py seed` to hold the community cluster's lock
+too, community first, through a required way to name its kube-context such as `--community-context`, and to fail
+loudly rather than skip that lock. `verify/prior-drafts.sh 1053 origin/staging` printed NONE, and the issue had no
+comments. This run added the issue's `## Acceptance criteria` from its request.
+
+**Most of it landed under #1016.** The issue was filed from #1024 on the morning of 2026-11-07; #1016 (run 18150, the
+entry above for it) landed later that day and gave both callers `guard_lease.hold_switch`. It takes the lock on the
+private context and on the cluster that cluster's `guardrails-switch/guardrails-peer` Secret names, in sorted order,
+which is watch-it-burn-community before watch-it-burn-private from either role, so two probes cannot each hold one and
+wait on the other. #1134 made the community probe take the same pair.
+
+**No `--community-context` flag.** The Secret is what guardrails-on itself reads to find the cluster it also switches
+(`gitops/ai-layer/web-terminal/entrypoint.sh`), so the lock follows the switch's real reach. A flag would be a second
+name for the same cluster that could disagree with the Secret, and then the lock would sit on one cluster while the
+switch reached another. A private cluster with no Secret switches only itself, so there the one lock is the whole reach.
+
+**What this run changed: a run that cannot take the second lock now stops cleanly.** Before, a kubeconfig with no
+context for the cluster the Secret names, or a Secret the caller could not read, raised a plain RuntimeError out of
+`hold_switch`, and the probe and the seeds ended on a Python traceback. That was loud, and no beat ran, but it did not
+say NOT RUN or name what to fix.
+- `guard_lease.LockUnavailable` (a RuntimeError, so existing callers still catch it) is what `hold_switch` raises when
+  it cannot read the peer Secret or cannot take a lock it needs for any reason other than a holder.
+- `verify/kubecon_probe.py` catches it, prints `KUBECON PROBE NOT RUN` naming the cluster and the context to add, and
+  exits 2 with no beat run. `verify/stage_traces.py seed` logs `SEEDED NOT RUN` and exits 2, before its read-only
+  preflight.
+- The probe's docstring and the run-of-show's probe section say both.
+
+**Live check (watch-it-burn-community and watch-it-burn-private, 2026-11-08, 23:44 UTC).**
+- `guard_lease.peer_context('watch-it-burn-private')` read `watch-it-burn-community`.
+- `guard_lease.py show` on both clusters at 23:44:30Z found another run's admin probe holding both:
+  `kubecon_probe.py admin burritobot-private.burritobot.co pid 684045 ... in 1270196839-1136-18849`, acquired on
+  watch-it-burn-community at 23:42:56.544991Z and on watch-it-burn-private at 23:43:01.336082Z. So the admin probe as
+  deployed holds the community cluster's lock, and takes it first.
+- At 23:44:45Z, `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co --context watch-it-burn-private
+  --kubeconfig <a kubeconfig with only watch-it-burn-private> --profile accen-dev --lock-wait 5` printed `KUBECON PROBE
+  NOT RUN: the guard lock could not be taken on every cluster guardrails-on switches: watch-it-burn-private's guardrails
+  switch also switches watch-it-burn-community ... Run with a kubeconfig that has a context named
+  watch-it-burn-community (no beat ran, nothing was flipped)` and exited 2.
+- Left as found: that run read the peer Secret and tried a Lease on a context its kubeconfig lacked, so it wrote
+  nothing on either cluster. Both Leases still named run 18849's probe afterwards, unchanged.
+
+The error it printed reads `could not read Lease` rather than `could not create Lease`: `hold`'s cleanup after an
+interrupted acquire (`release(unsure=True)`) reads the Lease again, fails on the same missing context, and its error
+replaces the first. The message still names the missing context, so this run left it.
+
+**Not yet run on a cluster.** `python3 verify/stage_traces.py seed` with a kubeconfig that lacks the community context.
+It takes the same `hold_switch` as the probe's run above, so it should stop the same way; its offline check is below.
+
+**Tests.** `verify/test_guard_lease.py` drives `kubecon_probe.main` through the real `hold_switch` over one fake API
+server per context, with only the beats stood in for. The admin run holds both Leases under one holder while its beats
+run, creates community then private, releases both, and its final beat reads the community cluster back. The community
+run takes the same order. A kubeconfig without the community context, or a private cluster whose peer Secret is
+Forbidden, exits 2 with `KUBECON PROBE NOT RUN`, runs no beat and leaves no Lease. `verify/test_stage_traces.py` does
+the same for the seed. Against the code before this change, the missing-context cases ended in a traceback. Both
+passed, as did `python3 verify/test_kubecon_probe.py` and `python3 verify/test_scope_tests.py` after
+`python3 verify/scope_tests.py write` added `verify/fake_lease_kubectl.py` to test_stage_traces.py's entry. No
+dependency was added. The full Test and E2E commands are left to hecaton's validation.

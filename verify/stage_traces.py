@@ -641,6 +641,11 @@ def cmd_seed(args) -> int:
     except guard_lease.LeaseBusy as e:
         log.error("SEEDED NOT RUN: the guard lock on %s stayed busy: %s", args.context, e)
         return guard_lease.BUSY_EXIT
+    except guard_lease.LockUnavailable as e:
+        # A cluster the seeds' guardrails-on reaches that the run cannot lock stops it before any read (#1053).
+        log.error("SEEDED NOT RUN: the guard lock could not be taken on every cluster the guardrails switch reaches: "
+                  "%s (nothing was sent and nothing was flipped)", e)
+        return 2
     if lease.lost:
         results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",
                         "verdict": kp.FAIL, "note": f"{lease.lost}: another run may have flipped guards mid-seed"})

@@ -2243,7 +2243,11 @@ is merely slow rather than rebuilding:
     `verify/test_drift_selfheal_live.py`, and so do the checks that read the
     guardrails off, `verify/test_kubecon_c3_live.py`,
     `verify/test_two_hour_flow_live.py` and `verify/test_room_cleanup_live.py`. So
-    the community probe and the admin one take turns on their own.
+    the community probe and the admin one take turns on their own. A probe or seed
+    whose kubeconfig has no context for the other cluster, or that cannot read the
+    private cluster's `guardrails-peer` Secret, runs no beat and exits 2 with
+    `KUBECON PROBE NOT RUN` or `SEEDED NOT RUN`, rather than hold one lock only
+    (#1053).
     `WIB_GUARD_LEASE_WAIT` sets the wait for the scripts that have no `--lock-wait`.
     To run `guardrails-on` by hand, wrap it: `python3 verify/guard_lease.py hold
     --with-peer --context <context> -- <the kubectl exec>`. On 2026-11-06 run

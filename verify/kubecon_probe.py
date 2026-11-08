@@ -88,8 +88,12 @@ guardrails-on and guardrails-off are the terminal's own commands, run in the pri
 each switches the community cluster too (#774). So both runs hold the lock on both clusters (#1016, #1134,
 guard_lease.hold_switch): on the private context (an admin run's --context, a community run's --switch-context) and on
 the cluster that one's guardrails-switch/guardrails-peer Secret names, whose kube-context must be in the kubeconfig
-under that name. A community run whose private cluster's Secret does not name its --context stops before any beat
-(return code 2): that switch would not reach it. A third run holding either cluster's lock waits for the probe rather than
+under that name. The locks are taken in sorted order, watch-it-burn-community before watch-it-burn-private, from
+either role, so two probes cannot each hold one and wait on the other. A community run whose private cluster's Secret
+does not name its --context stops before any beat (return code 2): that switch would not reach it. So does a run whose
+kubeconfig has no context for the cluster the Secret names, or whose Secret cannot be read (#1053): it prints KUBECON
+PROBE NOT RUN naming the cluster, rather than switch the community cluster under a community probe's lock while
+holding only the private one's. A third run holding either cluster's lock waits for the probe rather than
 reading a switch mid-run.
 
 Both runs read the one support desk both bots use (#1145, #1159) before any chat: the room's desk is the community
@@ -2165,6 +2169,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nKUBECON PROBE NOT RUN: another holder kept the cluster's guard lock: {e} "
               "(no beat ran, nothing was flipped)")
         return guard_lease.BUSY_EXIT
+    except guard_lease.LockUnavailable as e:
+        # A cluster the switch reaches that the run cannot lock (its context missing from the kubeconfig, the peer
+        # Secret unreadable) stops the run before any beat: guardrails-on would switch a cluster nobody holds (#1053).
+        log.error("the guard lock could not be taken on every cluster the guardrails switch reaches: %s", e)
+        print(f"\nKUBECON PROBE NOT RUN: the guard lock could not be taken on every cluster guardrails-on switches: {e} "
+              "(no beat ran, nothing was flipped)")
+        return 2
     if lease.lost:
         results.append({"key": "guard-lock", "segment": "-", "title": "The guard lock was held for the whole run",
                         "verdict": FAIL, "note": f"{lease.lost}: another run may have flipped guards mid-probe"})
