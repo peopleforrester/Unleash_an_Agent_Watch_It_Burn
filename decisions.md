@@ -35204,3 +35204,64 @@ copy and 3 are unsaved. `verify/test_images_lock.py`, `verify/test_public_images
 **The suites (run 18555, at `75117a8b`).** `bash verify/run-e2e-tools.sh`, unscoped, printed `86 checks ran (the
 offline suite and 85 tier tests) in 9m46s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No
 dependency was added.
+## 2026-11-08 · change · #1147 · guard-agency-on and guard-agency-off switch both KubeCon clusters through _both (run 18550)
+
+First piece of #1132 (every KubeCon guard command reaches the public bot the room plays on, not only the cluster whose
+terminal runs it). `.guardlib` gains `_both <step> [args...]`: it reads the link with `_peer`, the way `_guardrails`
+does, runs the step on this cluster with `kubectl`, then on the peer with `kubectl --kubeconfig ~/.kube/peer
+--context <name>`, and prints one line naming the clusters it changed. A step is a function called the way `_kg` is,
+with the kubectl to use last; the first one is `_apply <file>`, a `kubectl apply -f ~/challenges/<file>`. The later
+children of #1132 (guard-input, guard-mcp, guards-off) add their own steps.
+
+**What it prints and when it fails.** Both changed: `Switched on both clusters: this one and <peer>.`, exit 0. The
+peer failed: it names the peer as one that could not be reached or refused the change, and fails. No
+`guardrails-switch/guardrails-peer` Secret, the 2-hour workshop's case: one line, `Switched on this cluster alone: it
+has no guardrails-switch/guardrails-peer Secret, so no other cluster is linked to it.`, exit 0. When `_peer` comes back
+empty, `_both` makes one more call, `kubectl -n guardrails-switch get secret guardrails-peer --ignore-not-found -o
+name`, which it prints like every other call, to tell a Secret that is absent from one this cluster could not read. The
+second case fails ("could not be read, so the other KubeCon cluster was not switched"): a flaky read on a KubeCon
+cluster must not pass for the 2-hour workshop and leave the room's bot unfixed.
+
+**guard-agency-on and guard-agency-off.** Each is now `_both _apply <its Role file>`, then its old explanation on
+success. On failure it prints `The Role did not change everywhere. Wait a moment and try '<cmd>' again; it is safe to
+repeat.` after `_both`'s line, and the explanation is left out, since it would read as done. The Role files are
+unchanged: c6-least-privilege-role.yaml and c5-scoped-role.yaml, both the `agent/workshop-agent` Role alone.
+
+**Which entrypoint the KubeCon terminals run.** The KubeCon terminals run `gitops/ai-layer/web-terminal/entrypoint.sh`.
+ai-layer's kustomization generates the `web-terminal-entrypoint` ConfigMap from it (`entrypoint.sh=web-terminal/entrypoint.sh`),
+and the terminal Deployment in `gitops/ai-layer/resources.yaml` mounts it over the image's `/entrypoint.sh` (`subPath:
+entrypoint.sh`). That is the copy changed here. The repo keeps `images/web-terminal/entrypoint.sh` byte-identical to it
+(`verify/test_manifest_contract.py`, `verify/test_guard_commands_echo.py` and `verify/test_c7_gateway_toggle.py` all hold
+that), so the image copy was overwritten with it in the same commit.
+
+**The peer's grant is enough and stays as narrow.** `gitops/guardrails-switch/guardrails-switch.yaml` is unchanged. On
+an existing Role, `kubectl apply` reads it and patches it, and writing rules the writer does not hold needs `escalate`.
+The `guardrails-switch` Role grants get, patch and escalate on `roles/workshop-agent` by name, which is all of that.
+`verify/test_guard_switch_both.py` checks that what both commands ask of the peer is inside that grant, and holds the
+grant equal to #774's.
+
+**guardrails-on and guardrails-off.** Not changed: `_guardrails`, `_kg` and `_peer` are as they were.
+`verify/fixtures/guardrails-switch-golden.json` records the exact kubectl calls (cluster and arguments), stdout, stderr
+and exit code of both, linked, unlinked and with the peer down. It was written by the new test's `--write-golden` from
+this run's base `e4354c50`, before the entrypoint was edited, and the test fails on any difference, naming the first.
+Swapping the order of two guardrails in `_guardrails` made it fail on the calls and the stdout, as it should.
+
+**Tests.** `verify/test_guard_switch_both.py` (offline) runs guard-agency-on and guard-agency-off against a kubectl stub
+that plays two clusters. The cases are: linked (the Role applied on both, every printed `$ ` line replays the call it
+made), the peer unreachable, no peer Secret, a peer Secret that cannot be read, and this cluster refusing. It has a
+`verify/scope-map.yaml` entry, the one `scope_tests.py write` produced for it. The other entries that command added for
+older tests were not kept, being other tests' drift. `verify/test_guard_commands_echo.py` and
+`verify/test_guardrails_switch.py` pass unchanged.
+
+**Live check (run 18550), with no change to either cluster.** Both clusters hold a `guardrails-peer` Secret, private
+naming watch-it-burn-community and community naming watch-it-burn-private. In each direction, the peer kubeconfig was
+read from that Secret into a temporary file with mode 600 and deleted afterwards. Through it, `kubectl apply
+--dry-run=server` of c6-least-privilege-role.yaml and of c5-scoped-role.yaml printed `role.rbac.authorization.k8s.io/workshop-agent
+configured (server dry run)`, exit 0, for both files and both directions. `auth whoami` read
+`system:serviceaccount:guardrails-switch:guardrails-switch`. `auth can-i` in agent read yes for patch and escalate on
+roles/workshop-agent, and no for patch on another Role, create roles, create deployments and get secrets. The live
+workshop-agent Role on both still read the broad shipped rules afterwards, as found.
+
+**Not yet run on a cluster.** The changed command itself, once hecaton promotes this and Argo CD rolls the terminal:
+`guard-agency-on` from the private terminal (watch-it-burn-private), then a room `deploy_app` on attackme
+(watch-it-burn-community) comes back Forbidden, then `guard-agency-off`. The live-pass child of #1132 runs it.
