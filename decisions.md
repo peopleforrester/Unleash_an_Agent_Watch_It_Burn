@@ -40704,3 +40704,34 @@ runs. The Datadog reads above were GETs and a log search with the read-only pair
 
 **Tests run.** `python3 verify/test_turn_guard.py`, all checks passing. The full Test and E2E commands are left to
 hecaton's validation. No dependency was added.
+
+## 2026-11-09 · #1033 · run 18830 · The C1 stage-2b egress waypoint may reach istiod on TCP 15012
+
+**Where the issue stood.** `bash verify/prior-drafts.sh 1033 origin/staging` printed NONE: no `agent/1033-*` branch.
+The issue names run 17960's commit `48521ebb` on `origin/agent/980-17960` as the draft to port. That branch's other
+two commits enrol the weather feed in the mesh, which is #980's own work and not this issue's, and is not on staging.
+`bash verify/draft-drift.sh 48521ebb origin/staging` named six paths staging edited in place since `629c53ea`, none
+of them the three files this issue changes (`git log 629c53ea..origin/staging` on them is empty).
+
+**What was ported and what differs.** The NetworkPolicy rule and its comment in
+`challenges/c1-exfil-s3/fix/agent-egress-fqdn.yaml` are the draft's, unchanged: `agent-allow-egress-waypoint` also
+admits `app: istiod` in `istio-system` on TCP 15012. The README text in the draft sat under a heading about the
+weather feed's enrolment, which staging does not have, so the README gets its own section on the istiod rule and
+the "Owed at build time" bullet on enrolment stays as it is. The test differs from the draft: the draft's check
+looked only at rules carrying port 15012, so a second rule to istiod on another port passed it. Now
+`verify/test_c1_dns_exfil_fix.py` takes every egress rule that names istio-system, istiod or 15012, wants exactly one,
+with the istiod peer alone and TCP 15012 alone (no `endPort`), and runs the same check on eleven mutated copies of
+the policy (the rule removed, the peer widened, changed or added to, the peer list dropped, the port changed, added
+to, widened to a range or switched to UDP, and a second istiod rule on 15010), each of which must fail. The PROGRESS.md
+line in the draft described the enrolment as well and is not ported.
+
+**Why the rule.** Run 17960's live check on `watch-it-burn-private` (decisions.md, 2026-11-06, #980): the waypoint
+connected to istiod at start, before the VPC CNI applied its policies, and when istiod closed the xDS stream at its
+30-minute age every redial of `172.20.76.29:15012` timed out. With the rule applied in place it reconnected one
+second later, and a pod with the waypoint's label reached istiod on 15012 and timed out on 15010 and 15014.
+
+**Live check.** None in this run: the change touches `challenges/c1-exfil-s3/fix/`, which no Argo CD Application
+sources, `verify/test_c1_dns_exfil_fix.py` and this file. Run 17960's check above is the rule's live evidence.
+
+**Tests run.** `python3 verify/test_c1_dns_exfil_fix.py`: every check passes, the eleven mutation cases included.
+The prose gate passes against origin/staging. The full Test and E2E commands are left to hecaton's validation.
