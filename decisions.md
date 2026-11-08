@@ -36731,6 +36731,12 @@ docstring say drift fails.
 **The live check.** Skipped: the change touches only `verify/` files no cluster runs, CLAUDE.md, `.gitignore`,
 PROGRESS.md and this file (Dispatched runs, point 1).
 
+**The suites (run 18656, at `a9bf15a6`).** The change edits the runner and `scope_tests.py`, both in the map's full
+list, so `scope_tests.py select tools` printed FULL, and
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-e2e-tools.sh` ran everything: `366 tests
+ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in 13m19s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+
 ## 2026-11-08 · #612 · run 18626 · Readiness row 9 to READY: 9 of 9 points READY, the probe and the audience path green on both clusters
 
 **Why the run before this one did nothing.** Run 18554's session refused every shell call, so it read the readiness
