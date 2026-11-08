@@ -38088,3 +38088,9 @@ verify/run-e2e-tools.sh` ran everything: `375 tests ran`, `ALL OFFLINE RENDER-GA
 offline suite and 86 tier tests) in 11m19s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The log is
 `/var/lib/hecaton/runs/18710/e2e-tools.log`. No dependency was added.
 
+**The doc-only range on this repo (run 18710, `6f2f056d..2a33e4b3`).** The records commit changes only decisions.md.
+`HECATON_BASE_SHA=6f2f056d bash verify/run-e2e-tools.sh` printed `1 of the changed paths are prose`, `running 0 of 86
+tools tests`, `the tools are neither checked for nor fetched`, no fetch and no Terraform cache line, `running 97 of 375
+offline tests`, `1 checks ran (the offline suite and 0 tier tests) in 3m40s`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The log is `/var/lib/hecaton/runs/18710/e2e-doconly.log`.
+
