@@ -35696,3 +35696,91 @@ ran) printed `360 tests ran` for the offline suite, then `86 checks ran (the off
 9m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No
 dependency was added and no test changed. The logs are `/var/lib/hecaton/runs/18581/e2e-tools.log`, `sandbox-1.log`,
 `sandbox-2.log`, `cluster-1.log` and `cluster-2.log`; the org listings are `before.json` and `after.json` there.
+## 2026-11-08 · change · #1148 · guard-input-on and guard-input-off set the input guards on both KubeCon clusters (run 18563)
+
+Second piece of #1132, after #1147's `_both`. `guard-input-on` and `guard-input-off` set `input_blocklist` and
+`input_classifier` on this cluster's guard-proxy and on the other KubeCon cluster's, and print `_both`'s one line naming
+the clusters that changed or the peer that did not. `.guardlib` gains one step, `_toggle <query> <kubectl...>`. Called
+with plain `kubectl` (this cluster) it is `_px`, the `kubectl exec` into `deploy/guard-proxy` it always was, so the
+2-hour lab's lone cluster and the terminal's own cluster work exactly as before. Called with the peer's kubectl it is
+`kubectl --kubeconfig ~/.kube/peer --context <peer> get --raw
+/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?<query> --request-timeout=20s`. On failure each command
+now says `The input guards did not change everywhere. Wait a moment and try '<cmd>' again; it is safe to repeat.` and
+exits 1, as guard-agency-on does; before, a failed call printed a warning and exited 0. Both copies of the entrypoint
+changed together and stay byte-identical; the KubeCon terminals run `gitops/ai-layer/web-terminal/entrypoint.sh`
+(#1147's entry says how).
+
+**The path chosen: the guard-proxy Service's proxy, by name.** `gitops/guardrails-switch/guardrails-switch.yaml`'s
+`agent` Role gains one rule: `services/proxy`, `resourceNames: ["guard-proxy:8080"]`, verb `get`. The API server
+authorizes `.../services/guard-proxy:8080/proxy/...` as `get` on `services/proxy` named `guard-proxy:8080`, which the
+live check below read back from its refusal. RBAC cannot narrow a proxy path, so the grant is every GET on guard-proxy's
+port: `/toggle` and the read-only `/guards`, `/controls`, `/cost` and `/prompts` the chat page already shows the room.
+`get` admits no POST, so `/chat` is out. The other path, `pods/exec` on the guard-proxy pod, cannot be granted by name:
+a Deployment's pod name changes at every rollout, so the grant would be exec into every pod in `agent`, the web
+terminal's included, whose ServiceAccount reads Secrets everywhere. `kubectl exec deploy/guard-proxy` would also need
+list on pods. `pods/portforward` has the same naming problem. The Service proxy is the only one of the three that names
+one endpoint.
+
+**What the chosen path needs on the clusters, and does not have yet.** The Service proxy dials the pod from the
+control-plane ENIs on 8080. #869's `ingress_cluster_8080_workshop_apps` node rule in `infra/terraform/aws/cluster/main.tf`
+admits that, and it is not on either KubeCon cluster: #1042 (open) is the apply that puts it there. Until it is applied,
+the peer's step waits its 20 seconds, `_both` prints that the peer could not be reached, and the command exits 1 with
+this cluster switched. So the room's bot gets the input guard from the private terminal only once #1042 is applied.
+The private cluster's agent namespace carries Istio's `agent-mtls` PeerAuthentication in PERMISSIVE mode and the
+community cluster runs no Istio, so the mesh admits a plaintext call from the control plane on both.
+
+**Tests.** `verify/test_guard_input_both.py` (offline, new, with its `verify/scope-map.yaml` entry and none of the other
+entries `scope_tests.py write` produced) runs both commands against a kubectl stub that plays two clusters, each with a
+guard-proxy holding its guard state. Linked: the exec here, then the Service proxy GET on the peer, both stages set on
+both clusters, no other guard touched, the "both clusters" line, the explanation, and every printed `$ ` line replays
+its call. The peer unreachable and the peer refusing (403): this cluster switched, the peer named, exit 1, no
+explanation. No `guardrails-peer` Secret: this cluster alone by exec, the one "alone" line, exit 0. An unreadable
+Secret: exit 1. This cluster refusing: the peer still switched, exit 1. The grant: every peer call, read as the API
+server's authorizer reads it, is inside the grant; `services/proxy` is granted for `guard-proxy:8080` alone with `get`
+alone; nothing grants pods, pods/exec, pods/portforward, pods/proxy, services or nodes/proxy; and 8080 is a port of the
+guard-proxy Service in `gitops/ai-layer/resources.yaml`. Mutations each failed it: guard-input-off back on `_px`, `create`
+added to the rule, and the peer step sent by exec. `verify/test_guardrails_switch.py` and
+`verify/test_guard_switch_both.py`, which pin the grant, now pin #774's grant plus this one rule.
+
+**The input guard on the room's traffic from slide 50 on.** This reverses part of the 2026-11-05 decision that the
+public bot stays wide open: from `guard-input-on` on slide 50, every prompt the room sends attackme passes the block-list
+and the classifier before the model.
+- The block-list is `blocklisted` in the pinned `proxy.py`: a lowercase and a substring test against 15 terms, in
+  process. Timed here on the 40-word prompt below with those 15 terms: 1.4 microseconds a prompt. No network call.
+- The classifier is one POST to the cluster's LLM Guard `/analyze/prompt` (PromptInjection and the Regex PII scanner;
+  BanTopics suppressed). Measured live this run from inside each cluster's guard-proxy pod, 10 timed calls after one
+  warm-up, the body guard-proxy sends: on watch-it-burn-community, the room's, an 8-word menu ask took a median 202 ms
+  (197 to 288), a 14-word ticket ask 210 ms (129 to 295) and a 40-word injection 487 ms (311 to 504, refused at risk
+  1.0); on watch-it-burn-private 246, 267 and 436 ms. So a room prompt waits about 0.2 seconds more, about 0.5 for a
+  long one, before a reply that takes seconds (the served p50 of 5.30 s recorded earlier in this file). With the input
+  guard on, the support ticket tool's check scans the ticket text too, one more call of the same kind per ticket read.
+- Cost: no model tokens. LLM Guard runs on CPU in the cluster, and its pod (1 replica, 250m CPU requested, 1 CPU limit,
+  `gitops/ai-layer/resources.yaml`) runs whether the guard is on or off, so a prompt adds no dollar spend. A prompt the
+  guard refuses makes no model call at all (`input_tokens: 0`, `output_tokens: 0` in the reply), so the room's Nova Pro
+  spend falls by the prompts it stops, about $0.006 each at Run A's $0.00602 a served turn (the 500-session load run
+  recorded earlier in this file, with its 5.30 s p50).
+- Capacity, estimated from those serial figures and not measured under load: at guard-proxy's cluster cap of 150
+  prompts a minute (`RATE_LIMIT_RPM`), short prompts need about 30 seconds of scanner time a minute and 40-word ones
+  about 73, more than one CPU gives. A burst of long prompts then queues at LLM Guard; a scan past its 10-second
+  `scan_prompt_timeout` fails, and guard-proxy, failing closed (`PROXY_FAIL_CLOSED`), refuses that prompt. The
+  live-pass child should read LLM Guard's latency during the room's retry.
+
+**Live check (run 18563).** The clusters left as found.
+- Through each cluster's `guardrails-peer` kubeconfig (read into a mode-600 temporary file, deleted afterwards), as
+  `system:serviceaccount:guardrails-switch:guardrails-switch`: `get --raw .../services/guard-proxy:8080/proxy/guards`
+  printed `services "guard-proxy:8080" is forbidden: User "system:serviceaccount:guardrails-switch:guardrails-switch"
+  cannot get resource "services/proxy" in API group "" in the namespace "agent"`, in both directions. That is today's
+  grant, and it names the resource and name the rule above grants.
+- On watch-it-burn-private, a temporary Role and RoleBinding holding only the new rule, bound to guardrails-switch, then
+  deleted: through community's peer kubeconfig, `auth can-i` in agent read yes for get on `services/guard-proxy:8080`
+  subresource proxy, and no for create on it, for get on `guard-proxy:http`, for get on `llm-guard:8000` and for create
+  on pods/exec. The GET of `/guards` (read-only) then passed authorization and timed out at the network after 20
+  seconds (`net/http: request canceled (Client.Timeout exceeded while awaiting headers)`), the missing #869 rule; the
+  same GET on llm-guard was refused. My own credentials' GET of the same path timed out on both clusters, and on
+  private a GET of llm-guard:8000 did too.
+- The classifier timings above. `/toggle` was not called on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs guardrails-switch and rolls the terminal, and
+once #1042 puts #869's 8080 node rule on both clusters: `guard-input-on` from the private terminal prints `Switched on
+both clusters: this one and watch-it-burn-community.`, HC-666 on attackme comes back withheld, then `guard-input-off`.
+The live-pass child of #1132 runs it.
