@@ -37910,3 +37910,48 @@ a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (log `/var/lib/hecaton/r
 decisions.md and PROGRESS.md commit, `bash verify/run-tests.sh` at `cfd9925e` ran 104 of 376 offline tests and printed
 `104 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18714/run-tests.log`).
 The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1139 · run 18716 · The Night Before seed step written around the deck's four Datadog links
+
+Part of #1130. The run-of-show's Night Before step "Seed the stage's Datadog traces" told Whitney to save nine
+views, one per seed, on Past 7 Days. The deck opens Datadog from one slide per challenge instead, so the step now
+names each of the four, the attack seed it shows, the spans, and how to reach the trace from the link.
+
+**The slides are cited by URL hash, and Challenge 4's is `#/68`.** The issue named slides 11, 26, 48 and 65, which
+are the deck's hashes. The run-of-show counts slides from 1, so "slide 48" there would be `#/47`; the step cites
+`#/11`, `#/26`, `#/48` and `#/68`. `#/68` is the "tools" link: #1138 (decisions.md, 2026-11-08) read the deck at
+rounds-agenticburn `9c80fb7a`, found `#/65` is "BurritoBot gets its tools from MCP servers." after the deck grew
+(rounds-agenticburn#118), and found the hint "Ask BurritoBot what tools it has." on `#/68`, as segment 5 cites it.
+
+**Both kinds of link are covered, and neither is changed.** In the source of truth each link opens Agent
+Observability's traces filtered to `ml_app:burritobot k8s.cluster.name:burritobot-private`; Michael's deck commit
+`dbc0a4c` points the live links at the Datadog home page. From the filtered link the presenter adds
+`session_id:wib-stage-<key>-<stamp>` and sets Past 7 Days, since the link opens on Datadog's live range and the seed
+is from the night before. From the home page the presenter types `app.datadoghq.com/llm/traces`, the page the
+filtered link opens, and searches `ml_app:burritobot session_id:...`, the query `stage_traces.py`'s own links carry.
+The step does not name a side-menu path, since Datadog's menu labels were not checked here. The seed's printed link in
+`tmp/stage-traces.json`, pinned to its window, is named as the fallback. The stamp is the same for all nine seeds, so
+the step has it written into the presenters' notes after `seed`.
+
+**Spans and prompts as `verify/stage_traces.py` holds them after #1137 and #1138.** `c1-attack` `get_vault_entry`
+(the Secret read), `c2-attack` `run_shell`, `c3-attack` `read_support_ticket` then `deploy_app`, `c4-attack`
+`get_weather` then `read_internal_config`; the waits paragraph now gives the order with "then". The prompt source is
+`SEED_BEATS`: C5, the last prompt of C3, C6 and C7 off `/kubecon`, each `-fixed` seed its attack's prompt, and
+`c3-pii` the script's own `PII_PROMPT`. The `-fixed` seeds and `c3-pii` are placed where the segments already show
+them: `c1-fixed` and `c2-fixed` in segment 3's RBAC and KubeArmor sets, `c3-fixed` and `c3-pii` in segment 4 after the
+fix, `c4-fixed` in segment 5 after `guard-mcp-on`. `c3-pii` is reached in APM (`app.datadoghq.com/apm/traces`,
+`service:burritobot @session.id:...`), as `pii_view` builds its link. The commands, the PII check and the retention
+filter are kept word for word.
+
+**A test that reads the wording changed with it.** `verify/test_deck_shift_slide_citations.py` (#1099) fails on a
+hash of `#/43` or more outside segments 4 and 5, and the step now cites `#/48` and `#/68`. It cuts the step, from
+"- [ ] **Seed the stage's Datadog traces" to the next step, out of its scan, as it cuts segments 4 and 5, and two
+new self-checks show the cut is narrow: a stale `#/50` planted as the next Night Before step is still found, and the
+step itself has hits, so the cut is what makes it pass. `verify/test_stage_trace_slides.py` reads the segments'
+steps, which come before the Night Before, so its anchors are unaffected.
+
+**Left as found.** Segments 2 to 5 and "Datadog on stage" still speak of each challenge's Datadog tab and its saved
+views (`c3-attack` as "the Datadog Challenge 3 tab's first saved view"). They are outside this issue; filed as a
+followup in the run report.
+
+**Live check.** Skipped: the change touches only the run-of-show, a `verify/` test no cluster runs, PROGRESS.md and
+this file.

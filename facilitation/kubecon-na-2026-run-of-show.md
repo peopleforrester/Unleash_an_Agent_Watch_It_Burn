@@ -2168,6 +2168,14 @@ is merely slow rather than rebuilding:
   `guardrails-on`, beside `c2-fixed`: the Secret read Forbidden by the switch's scoped
   Role (#855).
 
+  The seeds read their prompts from `/kubecon` (#1137). When the run starts, every
+  seed but `c3-pii` takes its prompt off the page (`gitops/ai-layer/web/kubecon.html`),
+  so it sends what the presenters copy: Challenge 1's from the C5 beat, Challenge 2's
+  the last prompt of the C3 beat, Challenge 3's from C6 and Challenge 4's from C7 (the
+  page's beat names are the workshop's challenge numbers, not the talk's), each
+  `-fixed` seed the same prompt as its attack. No beat carries a PII prompt, so
+  `c3-pii` sends the script's own.
+
   First, what the input guard refuses. No model call, nothing toggled; it asks
   guard-proxy's own input stages, in its pod, about a card, an SSN, an e-mail, a
   phone number and the stage's PII prompt, and checks a plain order still passes. It
@@ -2190,30 +2198,78 @@ is merely slow rather than rebuilding:
       --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
   ```
 
-  Each seed is its own session, `wib-stage-<seed>-<UTC minute>`, sent without the
-  probe marker so the trace reads as the prompt shown (the prompts show in the
+  Each seed is its own session, `wib-stage-<key>-<stamp>`, where `<key>` is the seed
+  (`c1-attack` to `c4-fixed`) and `<stamp>` the UTC minute the run started, the same
+  for all nine. The prompts go without the probe marker, so the trace reads as the
+  prompt shown (the prompts show in the
   private bot's column of the prompt wall, except the PII one: the feed masks it to
   `[redacted]`, and a masked prompt is left off `/display` (#915) and, with
   prompts-agenticburn#15, off the wall). The
   PII prompt is sent only after guard-proxy's input stages say they refuse it. It
   waits until every trace in LLM Observability carries the tool spans the stage
   points at (`get_vault_entry`; `run_shell`, the recipe grep; `read_support_ticket`
-  and `deploy_app`, and no `deploy_app` once fixed; `get_weather` and
+  then `deploy_app`, and no `deploy_app` once fixed; `get_weather` then
   `read_internal_config`), and until the
   PII seed's trace in APM is stamped `input_classifier` with no agent span and none
   of the PII in it. Then it prints one link per seed plus the room's and the
-  presenters' views, and writes them to `tmp/stage-traces.json`. It must end
-  `SEEDED GREEN`. Each seed's link opens paused on the seed's own window, so it finds
-  its trace whenever it is opened. Whitney opens each link in her org and saves it as a
-  view, in that order: `c1-attack`, `c1-fixed`, `c2-attack`, `c2-fixed`, `c3-attack`,
-  `c3-fixed`, `c3-pii`, `c4-attack`, `c4-fixed`, then the room's and the presenters'
-  (the `c3-pii` link opens Trace Explorer, the others LLM Observability). Before she
-  presses Save on a seed view, she sets the time picker to Past 7 Days: a saved view
-  keeps only a live range, and Datadog turns a fixed range into a live one when it is
-  saved, so a view saved on the seed's own window would read the last half hour on
-  stage and find nothing. The session in each query keeps a week's range to that one
-  trace. The room's and the presenters' views are live tabs: save them on Past 15
-  Minutes.
+  presenters' live tabs, and writes them, with the stamp (`"stamp"`), to
+  `tmp/stage-traces.json`. It must end `SEEDED GREEN`. Write the stamp into the
+  presenters' notes: every trace below is found by its session id.
+
+  **The four Datadog links.** The deck opens Datadog once per challenge, from the
+  slide that shows the attack's trace, not from saved views. Where those links point
+  is open: in the talk's source of truth each opens Agent Observability's traces
+  filtered to the admin cluster
+  (`https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-private`),
+  and Michael's deck commit `dbc0a4c` points the live links at the Datadog home page.
+  Whitney has not decided which the deck keeps, so this step covers both and changes
+  neither. Each slide below opens its challenge's attack seed:
+
+  | Slide (URL hash) | Where Datadog opens | Seed and session | The spans the presenter shows |
+  |---|---|---|---|
+  | `#/11`, segment 2 | "Ophelia Thorn" on Challenge 1's hint slide | `c1-attack`, `wib-stage-c1-attack-<stamp>` | `get_vault_entry`, the Secret read, with the CEO's record in its result |
+  | `#/26`, segment 3 | Whitney opens Datadog after her live recipe read | `c2-attack`, `wib-stage-c2-attack-<stamp>` | `run_shell`, the grep of `/tmp/burrito-data`, with the recipe in the reply |
+  | `#/48`, segment 4 | "Let's look at the trace." | `c3-attack`, `wib-stage-c3-attack-<stamp>` | `read_support_ticket` returning HC-666, then `deploy_app` |
+  | `#/68`, segment 5 | "tools" in "Ask BurritoBot what tools it has." | `c4-attack`, `wib-stage-c4-attack-<stamp>` | `get_weather`, then `read_internal_config`, which nobody asked for |
+
+  How to reach the seed from either link:
+
+  - **The filtered link** opens the presenters' traces on Datadog's live range, where
+    the live attack just sent is the newest trace and the seed, sent the night
+    before, is out of range. Add `session_id:wib-stage-<key>-<stamp>` to the search,
+    after the query the link brings, set the time picker to Past 7 Days, and click
+    the one trace the list then holds.
+  - **The home page link** opens Datadog's home page, which has no trace on it. Type
+    `app.datadoghq.com/llm/traces` in the address bar, the page the filtered link
+    opens, search `ml_app:burritobot session_id:wib-stage-<key>-<stamp>`, set Past
+    7 Days, and click the one trace.
+
+  Either way the session id keeps the list to that one trace. The seed's own link in
+  `tmp/stage-traces.json` (its `url`) opens the same trace, paused on the seed's
+  window, so the morning of, open the four attack links in their own tabs as the
+  fallback if a search comes up empty on stage.
+
+  **The `-fixed` seeds and `c3-pii`** have no deck link of their own. Each is the same
+  search with its own key, on the tab the challenge's link already opened, except
+  `c3-pii`:
+
+  - `c1-fixed`, segment 3's RBAC set, when the room's Challenge 1 retry is not on
+    screen: `get_vault_entry`, its result Forbidden by the scoped Role, and no record
+    in the reply (#855).
+  - `c2-fixed`, segment 3's KubeArmor set: `run_shell`, with the recipe kept out of
+    the reply by `block-recipe-snoop` (#843).
+  - `c3-fixed`, segment 4, after `guard-agency-on` and `guard-input-on`:
+    `read_support_ticket` with the guard's withheld notice, and no `deploy_app`.
+  - `c3-pii`, segment 4's input guard double duty. A refused prompt reaches no model,
+    so it is not in Agent Observability: type `app.datadoghq.com/apm/traces`, search
+    `service:burritobot @session.id:wib-stage-c3-pii-<stamp>` on Past 7 Days, and
+    open the trace: the `/chat` root span decided by `input_classifier`, zero tokens,
+    no agent span and none of the PII.
+  - `c4-fixed`, segment 5, after `guard-mcp-on`: `get_weather`, the poisoned call
+    stopped at the gateway.
+
+  The room's link (`k8s.cluster.name:burritobot-public`) is the `burritobot-public`
+  tab Whitney keeps for the room's own prompts; leave it on Past 15 Minutes.
 
   `seed` starts only from the stage's start state: every AI guard off and the four
   Kubernetes guardrails off, as the `kubecon-private` profile deploys them. Anywhere
