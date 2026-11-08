@@ -40826,3 +40826,13 @@ its entry (it reads `verify/weather_feed_probe.py` and `gitops/ai-layer/weather_
 problems; `test_scope_tests.py` scoped to the change: ALL PASS. The scoped selection for this change is 81 offline tests
 and 10 tools tests, most of them `always` entries. As the run's governance says, it runs only the tests it wrote or
 changed and leaves the scoped `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` to hecaton's validation.
+
+**Resumed in run 18827.** Run 18797 failed hecaton's `tests` gate on one test, `test_fetch_inventory.py`. The run had
+run only the test it wrote, and the new test's 14 lines that name `urlopen` (the guards, the stub, the anchor literal
+and the docstring) had no entry in `verify/fetch-inventory.yaml`, which #1116 requires for every line under `verify/`
+that names a fetch command. Those lines now have one entry, class `none`: each is a guard that raises, a stubbed
+`urlopen` or text about the call, and nothing leaves the host. `python3 verify/fetch_inventory.py check`: every call
+site classed; `python3 verify/test_fetch_inventory.py`: all checks passed. The gate's `FAIL: --context is empty` line
+is a negative case's expected output from a test that passed, not a failure. The scoped Test command,
+`HECATON_BASE_SHA=8088b661 bash verify/run-tests.sh` (log `/var/lib/hecaton/runs/18827/run-tests-scoped.log`): 105 of
+390 offline tests ran, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0`. The scoped tools tier is left to the gate.
