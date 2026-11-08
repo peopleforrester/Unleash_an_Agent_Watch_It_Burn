@@ -34583,7 +34583,8 @@ never marked, malformed reports are 400s, and every row is kept. Mutating out ea
 Kubernetes client and names no API path or token file. `verify/test_public_images.py` holds that the real deploy_app's
 row carries `kind: Deployment`. The tools-tier `verify/test_deployments_witch_line_e2e.py` now posts a read that omits
 the probe's Deployment and runs the page's own script in node: that line reads
-`Someone deployed redis at <t>, removed at <t>` with class `removed`, and the others are unchanged. Its scope-map
+`Someone deployed redis at <t>, removed at <t>` with class `removed`, and the others are unchanged. `verify/test_deploy_app_manifest_shapes.py`
+and `verify/test_deploy_app_reapply_422.py` stub `_report` with its parameters, so their stubs now take `kind` too. Its scope-map
 entry is added for the new test only; `python3 verify/scope_tests.py write` also proposed entries for other runs'
 tests, which are left out of this change.
 
