@@ -2087,6 +2087,32 @@ reads:
     - gitops/ai-layer
     - gitops/ai-layer/kustomization.yaml
     - verify/test_drift_selfheal_live.py
+  test_e2e_image.py:
+    - .github/workflows/build-e2e-tools-image.yml
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/web/event.js
+    - images.lock
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - scripts/ghcr_version_tag.py
+    - verify
+    - verify/.dockerignore
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-image
+    - verify/e2e-image.sh
+    - verify/e2e-image/Containerfile
+    - verify/e2e-image/install.sh
+    - verify/e2e-tools.lock
+    - verify/e2e_image.py
+    - verify/fetch-e2e-tools.sh
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
+    - verify/run-e2e-tools.sh
+    - weaver
   test_egress.py:
     - infra/terraform/aws/cluster/main.tf
     - policies/network-policies
@@ -3040,6 +3066,10 @@ reads:
     - verify/test_agent_obs_cause_comment.py
     - verify/test_dispatched_runs_cause_comment.py
     - verify/test_prose_gate_e2e_wait_cause_comment.py
+  test_gh_relay.py:
+    - verify/e2e-image/Containerfile
+    - verify/e2e-image/gh
+    - verify/gh_relay.py
   test_ghcr_pull.py:
     - verify/ghcr_pull.py
     - verify/test_c6_joker_public.py

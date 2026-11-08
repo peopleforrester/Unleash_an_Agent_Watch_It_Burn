@@ -51,6 +51,8 @@ CACHE_STEP = "bash verify/ci-artifact-cache.sh"
 # Every job, and whether it fetches a pinned artifact (#1116's sense: a tool, provider, chart, package or image with a
 # version, digest or checksum). A job not here fails, so a new one is classed when it is added.
 JOBS = {
+    ("build-e2e-tools-image.yml", "build"): False,    # docker builds verify/e2e-image on GitHub's runner (#1188); the
+                                                      # lock's binaries are fetched and checked inside the build
     ("build-web-terminal.yml", "build"): False,       # docker builds images/web-terminal; its base images are #1122's
     ("iam-policy.yml", "check"): True,                # PyYAML, e2e-tools.lock, the Terraform provider mirror
     ("keep-sample-app-tag.yml", "tag"): False,        # puts a pinned manifest on a ghcr.io tag; it fetches nothing to use

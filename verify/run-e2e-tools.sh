@@ -28,6 +28,18 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"
+# Inside the wib-e2e-tools image (#1188, verify/e2e-image.sh run), whose ENV sets WIB_E2E_TOOLS, the pinned binaries
+# are the image's own, fetched and checked when it was built. The image must be this lock's, and nothing is fetched.
+in_image=0
+if [[ -n "${WIB_E2E_TOOLS:-}" ]]; then
+    in_image=1
+    TOOLS_BIN="${WIB_E2E_TOOLS}/bin"
+    python3 "${SCRIPT_DIR}/e2e_image.py" matches "${WIB_E2E_TOOLS}/tools.txt" || {
+        printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: the image is not e2e-tools.lock'"'"'s\n' >&2
+        exit 1
+    }
+    printf 'E2E tools from the image %s, %s\n' "${WIB_E2E_IMAGE:-(unnamed)}" "${TOOLS_BIN}"
+fi
 
 # Scoped to the change (#1018), as run-tests.sh is: with HECATON_BASE_SHA set, a tier test runs only when the change
 # touches what it reads (verify/scope-map.yaml), and when none does, the tools are neither checked for nor fetched.
@@ -62,7 +74,8 @@ missing=()
 # pins; openssl mints the Kyverno test's wrong key; jq runs test_ai_layer_rollout.py's filters; node runs the harnesses.
 # flock holds the shared Terraform provider cache for one terraform test at a time (#1114).
 tools=(python3 git)
-[[ "${need_tools}" -eq 0 ]] || tools+=(curl tar sha256sum xz uv node jq openssl flock)
+[[ "${need_tools}" -eq 0 ]] || tools+=(uv node jq openssl flock)
+[[ "${need_tools}" -eq 0 || "${in_image}" -eq 1 ]] || tools+=(curl tar sha256sum xz)
 for tool in "${tools[@]}"; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
@@ -90,7 +103,7 @@ if [[ "${#missing[@]}" -gt 0 ]]; then
     printf '  - %s\n' "${missing[@]}" >&2
     exit 1
 fi
-if [[ "${need_tools}" -eq 1 ]] && ! bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
+if [[ "${need_tools}" -eq 1 && "${in_image}" -eq 0 ]] && ! bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"; then
     printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip: the pinned tools could not be fetched\n' >&2
     exit 1
 fi
