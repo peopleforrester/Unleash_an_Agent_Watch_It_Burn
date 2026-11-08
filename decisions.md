@@ -35569,3 +35569,108 @@ printed `360 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `86 chec
 tests) in 12m44s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Both new logic tests ran in the
 offline suite and passed. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18568/e2e-tools.log`.
+## 2026-11-08 · #1084 · run 18581 · The sandbox org check passes clean on both KubeCon clusters after #629's tagging fixes synced
+
+**Where it started.** `bash verify/prior-drafts.sh 1084 origin/staging` printed NONE, and the issue's only comment is
+run 18239's restart, so there was no earlier work to port. #629's other children are closed: #1080 (the tags on the
+workloads outside the platform's Deployments), #1081 (KubeArmor and the Helm releases past Kyverno's limits rule),
+#1082 (the env-scoped monitors and dashboards) and #1083 (the cluster-side check and check 5). At 05:45Z every Argo CD
+Application on watch-it-burn-community and watch-it-burn-private read Synced and Healthy with selfHeal on, `ai-layer`
+on both at staging `4b1ef1fc` (synced 04:46Z) and `backstage` on private synced at 02:41Z. The live Backstage
+Deployment carries the `ad.datadoghq.com/backstage.logs` annotation with service `burritobot-backstage` and the
+`backstage_service_key` mask rule.
+
+**The org before the run, 05:45Z.** A read-only listing with watch-it-burn/datadog's application key
+(`/api/v1/dashboard`, `/api/v1/monitor`, `/api/v2/users`, `/api/v2/roles`, `/api/v2/api_keys`), our own objects set
+aside (dashboards titled `Watch It Burn: ` or `BurritoBot`, monitors named `[WIB fleet] `). Org name `Datadog`.
+- Dashboards outside ours, 6, each with its id and `modified_at`: `2bd-r7v-rcs` `Content Manager Pipeline Health`
+  (2026-06-29), `68y-xeg-j6s` `Scaling on Satisfaction — KubeCon EU 2026` (2026-03-22), `7rb-375-qzh` `Choose Your
+  Own Adventure: Inference - race` (2026-11-03), `gmf-rra-var` `commit-story Observability Triangle` (2026-07-13),
+  `mzt-ra7-us3` `Story Votes - Scaling on Satisfaction` (2026-03-08), `u3v-vtj-xii` `Flagger` (2026-03-20).
+- Monitors outside ours, 4: `295791529` `content-manager: partial post failure` (2026-07-16), `295791590`
+  `content-manager: LinkedIn token expiry warning` (2026-10-13), `305968091` `content-manager: daily-sync CI pipeline
+  failure` (2026-07-16), `332471567` `content-manager: daily-sync liveness` (2026-10-14).
+- Users, 5: four Active and one Disabled, each with one role, the newest `modified_at` 2026-10-27. This repo is public,
+  so the users are recorded by count and by a digest of the sorted listing (id, email, status, disabled,
+  `modified_at`, roles): `83d3fae5e2b7ec3e`.
+- Roles, 3: `Datadog Admin Role` (4 users), `Datadog Standard Role` (0), `Datadog Read Only Role` (0), each last
+  modified 2025-04-09.
+- API keys, 4: `BurritoBot` (modified 2026-10-28), `commit-story-dev` (2025-09-08), `dot` (2026-10-18),
+  `platform_vibez` (2025-07-08). The listing's digest (id, name, last4, `created_at`, `modified_at`) is
+  `8cf06d5986c17d5b`.
+- Ours, set aside: 2 dashboards (`Watch It Burn: challenge leaderboard`, `Watch It Burn: fleet`) and 7 `[WIB fleet] `
+  monitors.
+The digests of the dashboard, monitor and role listings are `efe0c3462f16f31e`, `4da04e590e7e0a31` and
+`774f9fa42145f485`.
+
+**The /chat on each cluster, 05:46Z.** One benign order question each, the body the chat page sends:
+`curl -s -m 180 https://<host>/chat -H 'Content-Type: application/json' -H 'X-BurritoBot-Session: check-1084-18581'
+-d '{"prompt":"What are your hours?","session":"check-1084-18581","witch":"Hazel the Ghoul"}'` on
+`attackme.burritobot.co` and on `burritobot-private.burritobot.co`. Both answered 200 in about 2 seconds with the
+cantina's hours. That question calls no tool, so it deploys nothing and toggles no guard. The full probe
+(`verify/kubecon_probe.py`) was left unrun: it flips the guards and lands a Joker, and this check needs only a chat in
+the window.
+
+**The cluster-side check, 05:46Z.** `python3 verify/test_burritobot_cluster_live.py --context watch-it-burn-community
+--context watch-it-burn-private`, exit 0. It printed, for each cluster:
+
+```
+== 1. datadog-secret holds watch-it-burn/datadog's api-key on <context> ==
+  PASS  datadog/datadog-secret's api-key is the burritobot key
+  PASS  monitoring/datadog-secret's api-key is the burritobot key
+  PASS  security/datadog-secret's api-key is the burritobot key
+== 2. no second key: no admin secret, and every key variable reads datadog-secret ==
+  PASS  no datadog-admin-secret in datadog
+  PASS  no datadog-admin-secret in monitoring
+  PASS  no datadog-admin-secret in agent
+  PASS  the cluster has Running pods to read
+  PASS  every Datadog API key variable reads datadog-secret's api-key
+== 3. every running container logs under a burritobot service and the env ==
+  PASS  the DatadogAgent carries file-based log configs
+  read 72 container(s) in 57 Running pod(s)        (community; private read 94 in 74)
+  PASS  every container's logs carry a burritobot service and env:burritobot-kubecon-na-26
+```
+
+and closed `all 2 cluster(s) passed (#629, #1083).`
+
+**The sandbox org check, 05:47Z.** `python3 verify/test_datadog_sandbox_live.py` with the default 60-minute
+lookback (no `WIB_DD_LOOKBACK_MIN`), as accen-dev in us-west-2, exit 0:
+
+```
+== Whitney's sandbox org: Datadog (datadoghq.com), keys from watch-it-burn/datadog as accen-dev in us-west-2 ==
+== 1. the Agents report under distinct burritobot- cluster names (datadog.agent.running) ==
+  PASS  Agent: burritobot-public reports in the last 60 minutes
+  PASS  Agent: burritobot-private reports in the last 60 minutes
+  PASS  Agent: every group carries env:burritobot-kubecon-na-26
+== 2. every log from the clusters (Logs aggregate, kube_cluster_name:burritobot-*) ==
+  PASS  logs: burritobot-public reports in the last 60 minutes
+  PASS  logs: burritobot-private reports in the last 60 minutes
+  PASS  logs: every group carries env:burritobot-kubecon-na-26
+  PASS  logs: every group's service is burritobot or burritobot-<name>
+== 3. every span from the clusters (traces.span.metrics.calls, counted before sampling) ==
+  PASS  spans: burritobot-public reports in the last 60 minutes
+  PASS  spans: burritobot-private reports in the last 60 minutes
+  PASS  spans: every group carries env:burritobot-kubecon-na-26
+  PASS  spans: every group's service is burritobot or burritobot-<name>
+== 4. LLM Observability files the interactions under ml_app burritobot (ml_obs.trace) ==
+  PASS  ml_obs.trace reports under env:burritobot-kubecon-na-26 as ml_app burritobot
+  PASS  no other ml_app reports under env:burritobot-kubecon-na-26
+== 5. the clusters' key is the org's one API key named burritobot (GET /api/v2/api_keys) ==
+  PASS  exactly one API key in the org is named burritobot
+  PASS  watch-it-burn/datadog's api-key is that key (GET /api/v2/api_keys/<id>, the whole value)
+  PASS  Datadog saw the burritobot key used in the last 24 hours
+
+Both KubeCon clusters ship under Whitney's sandbox rules (#629).
+```
+
+No log group, span group or container fell outside the env or a burritobot service, so there was nothing to tag. The
+issue's wait for a second lookback window applies after a tag, and this run made none.
+
+**Check 4 and #1163.** Check 4 passes over this hour, and #1163 is still open. Over the last 24 hours,
+`sum:ml_obs.trace{env:burritobot-kubecon-na-26} by {ml_app}` reads `ml_app:burritobot` in 71 minutes (1221 traces,
+the last at 05:40Z) and `ml_app:burritobot-agent` in 13 (137 traces, the last at 02:25Z). So the second ml_app that
+run 18497 saw has filed nothing for three hours, and nothing in this run names its source. It can return when
+whatever produced it runs again; #1163 is where its source is found and fixed.
+
+**Nothing changed on either cluster.** The chats were order questions that call no tool, and both tests only read.
+This run wrote nothing to either cluster or to the Datadog org.
