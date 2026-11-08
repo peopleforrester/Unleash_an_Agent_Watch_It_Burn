@@ -35400,3 +35400,15 @@ to `['Audit']`, and the agent namespace's workloads matched what it found. On wa
 "04:54:22"`, on `https://deployments-burritobot-private.agenticburn.com/`, and left as found. The logs are
 `/var/lib/hecaton/runs/18559/live-community-1.log` and `/var/lib/hecaton/runs/18559/live-private-1.log`. The
 `agent/terminal-auth` Secret was not read or touched.
+
+**Final live run and suite results, run 18559.** On `d46591f8`, with the 150 s limit, the test ran green again on
+watch-it-burn-community: every check PASS, marked 20 s after the arm (`"at": "04:58:22", "removed_at": "05:00:00"`),
+`DEPLOYMENTS REMOVED-ROW LIVE CHECK GREEN`, exit 0. Afterwards both clusters read `[Audit]` on both registry policies
+and held no `wib-1051-*` Deployment. `bash verify/run-tests.sh` unscoped printed `358 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, with `exit=0`. `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=3c630161` printed `127
+tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the scoped offline suite, then `17 checks ran (the offline
+suite and 16 tier tests) in 7m39s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The new live test is in no scope-map
+entry, since neither runner runs a `# SUITE: e2e` test without a tools tier; `python3 verify/scope_tests.py write`
+proposed entries for other runs' tests only, which are left out. No dependency was added. The logs are
+`/var/lib/hecaton/runs/18559/live-community-2.log`, `/var/lib/hecaton/runs/18559/run-tests.log` and
+`/var/lib/hecaton/runs/18559/e2e-tools.log`.
