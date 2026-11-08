@@ -103,6 +103,7 @@ always:
   test_terminal_login_request.py: 'verify/test_no_presenter_login.py: it runs git ls-files, which reads the tree or history as a whole'
   test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; line 70 builds a path under the repo root from a value it finds at run time
   test_tests_own_inputs.py: it runs git grep, which reads the tree or history as a whole
+  test_tf_plugin_cache.py: 'it runs git ls-files, which reads the tree or history as a whole; verify/test_event_tag.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: it runs git ls-files, which reads the tree or history as a whole; verify/test_terraform_module_pins.py: line 70 builds a path under the repo root from a value it finds at run time'
   test_verify_harness.py: 'verify/test_enforce_floor.py: line 103 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 148 builds a path under the repo root from a value it finds at run time; verify/test_enforce_floor.py: line 47 builds a path under the repo root from a value it finds at run time'
 reads:
   test_948_live_check_owed.py:
@@ -1414,11 +1415,16 @@ reads:
     - verify/node_sg_rules.py
   test_control_plane_app_ports_module.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/*.tf
     - infra/terraform/aws/cluster/.terraform.lock.hcl
     - infra/terraform/aws/cluster/main.tf
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/node_sg_rules.py
+    - verify/tf_plugin_cache.py
   test_cost_counter.py:
     - gitops/ai-layer/guard-proxy
   test_cost_tier_matches_model.py:
@@ -3171,11 +3177,16 @@ reads:
     - verify/no_cloud.py
   test_iam_plan_render_cache.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org/boundary
     - infra/org/permissions-boundary.json.tftpl
     - infra/terraform/aws/audit
     - infra/terraform/aws/cluster
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/iam_plan_render.py
+    - verify/tf_plugin_cache.py
   test_iam_policy_pipeline.py:
     - infra
     - infra/**.tf
@@ -3194,6 +3205,8 @@ reads:
     - infra/terraform/aws/cluster/main.tf
   test_iam_policy_structural.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org
     - infra/org/boundary
     - infra/org/effect-tests.yaml
@@ -3915,12 +3928,17 @@ reads:
     - verify/collector_render.py
     - verify/lab-events-harness.js
   test_lab_platform_operator_entry.py:
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster
     - infra/terraform/aws/cluster/*.tf
     - infra/terraform/aws/cluster/.terraform.lock.hcl
     - infra/terraform/aws/cluster/main.tf
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fixtures/lab_platform_operator_entry.tftest.hcl
+    - verify/tf_plugin_cache.py
   test_lab_progress_harvest.py:
     - challenges
     - scripts/harvest/06-lab-progress.py
@@ -5745,6 +5763,8 @@ reads:
     - scripts/reload-routes.sh
   test_terraform_lock_init.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org/boundary
     - infra/org/boundary/*.tf
     - infra/org/boundary/.terraform.lock.hcl
@@ -5761,10 +5781,14 @@ reads:
     - infra/terraform/dashboards/*.tf
     - infra/terraform/dashboards/.terraform.lock.hcl
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/tf_plugin_cache.py
   test_terraform_lock_init_retry.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/org/boundary
     - infra/org/boundary/*.tf
     - infra/org/boundary/.terraform.lock.hcl
@@ -5781,40 +5805,27 @@ reads:
     - infra/terraform/dashboards/*.tf
     - infra/terraform/dashboards/.terraform.lock.hcl
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
     - verify/test_terraform_lock_init.py
     - verify/tf_plugin_cache.py
+  test_terraform_mirror_lock.py:
+    - infra
+    - infra/**/.terraform.lock.hcl
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/e2e-tools.lock
+    - verify/tf_plugin_cache.py
   test_terraform_plugin_cache_lock.py:
     - VERSIONS.lock
+    - infra
+    - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster/.terraform.lock.hcl
     - verify/.tools/charts
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
     - verify/chart_fetch.py
-  test_tf_plugin_cache.py:
-    - .github/workflows/verify-suites.yml
-    - VERSIONS.lock
-    - infra/org/boundary
-    - infra/org/boundary/*.tf
-    - infra/org/boundary/.terraform.lock.hcl
-    - infra/terraform/aws/audit
-    - infra/terraform/aws/audit/*.tf
-    - infra/terraform/aws/audit/.terraform.lock.hcl
-    - infra/terraform/aws/cluster
-    - infra/terraform/aws/cluster/*.tf
-    - infra/terraform/aws/cluster/.terraform.lock.hcl
-    - infra/terraform/aws/network
-    - infra/terraform/aws/network/*.tf
-    - infra/terraform/aws/network/.terraform.lock.hcl
-    - infra/terraform/dashboards
-    - infra/terraform/dashboards/*.tf
-    - infra/terraform/dashboards/.terraform.lock.hcl
-    - verify/.tools
-    - verify/.tools/charts
-    - verify/.tools/plugin-cache
-    - verify/.tools/plugin-cache-test-1114
-    - verify/chart_fetch.py
-    - verify/run-e2e-tools.sh
-    - verify/test_terraform_lock_init.py
-    - verify/test_terraform_plugin_cache_lock.py
     - verify/tf_plugin_cache.py
   test_tier_swap_live_judges.py:
     - agent

@@ -1,22 +1,25 @@
 # ABOUTME: The plugin cache test_terraform_lock_init.py reads cannot let a provider through that the lock does not
 # ABOUTME: match (#1114): a cached provider whose bytes were changed is never what an init links in.
-# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
+# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and on a cold artifact cache network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 """A tampered provider in the plugin cache never reaches an init.
 
 #1114 gave test_terraform_lock_init.py a plugin cache that outlives the checkout, so its inits read providers an
 earlier run left. Terraform 1.4 and later use a cached provider only when its h1: checksum is one the lock records,
-and otherwise download it again and check that against the lock. This holds that on the pinned terraform, with the
-environment the lock-init test gives it (TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE unset).
+and otherwise install it again from its source and check that against the lock. Since #1119 the source is the
+provider mirror in the host artifact cache (tf_plugin_cache.terraform_env), so nothing is downloaded either way. This
+holds that on the pinned terraform, with the environment the lock-init test gives it
+(TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE unset).
 
-It uses hashicorp/null, a few MB, with the block the cluster root's lock records for it, and a cache of its own in a
-temp directory, so the shared cache is never the one tampered with:
+It uses hashicorp/null, a few MB, with the block the cluster root's lock records for it, and a plugin cache of its own
+outside the checkout, so the shared cache is never the one tampered with:
 
-1. cold: an init into the empty cache installs null there and links it into .terraform/providers, lock unchanged.
-2. warm: a fresh init takes null from the cache and downloads nothing, lock unchanged.
-3. tampered: bytes are added to the cached binary; a fresh init does not take it, downloads null again and puts the
-   verified bytes back, lock unchanged. Nothing the lock does not vouch for is linked in.
+1. cold: an init into the empty cache installs null there from the mirror and links it into .terraform/providers.
+2. warm: a fresh init takes null from the cache and installs nothing, lock unchanged.
+3. tampered: bytes are added to the cached binary; a fresh init does not take it, installs null again from the mirror
+   and puts the verified bytes back, lock unchanged. Nothing the lock does not vouch for is linked in.
+Terraform downloads nothing in any of the three: a registry download names its signer, and none does.
 """
 from __future__ import annotations
 
@@ -27,17 +30,14 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
-import time
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
-from chart_fetch import is_network_error  # noqa: E402
+import tf_plugin_cache  # noqa: E402
 
 LOCK_SRC = REPO / "infra/terraform/aws/cluster/.terraform.lock.hcl"
 PROVIDER = "registry.terraform.io/hashicorp/null"
 INIT_TIMEOUT = 300
-BACKOFF = (10.0, 30.0)
 TAMPER = b"\n#1114 tampered\n"
 failures: list[str] = []
 
@@ -65,29 +65,27 @@ LOCK = block.group(0).encode()
 VERSION = version.group(1)
 MAIN_TF = ('terraform {\n  required_providers {\n'
            f'    null = {{ source = "hashicorp/null", version = "{VERSION}" }}\n  }}\n}}\n')
+try:
+    BASE_ENV = tf_plugin_cache.terraform_env({**os.environ, "TF_IN_AUTOMATION": "1", "CHECKPOINT_DISABLE": "1"},
+                                             tf_plugin_cache.parse_lock(block.group(0), str(LOCK_SRC.relative_to(REPO))))
+except tf_plugin_cache.CacheError as e:
+    print(f"FAIL: {e}", file=sys.stderr)
+    sys.exit(1)
+BASE_ENV.pop("TF_DATA_DIR", None)
 
 
 def init(work: pathlib.Path, cache: pathlib.Path) -> subprocess.CompletedProcess | None:
-    """A fresh `terraform init -lockfile=readonly` in work against cache, the lock-init test's way, run again on a
-    network error. None when it timed out."""
-    env = {**os.environ, "TF_IN_AUTOMATION": "1", "CHECKPOINT_DISABLE": "1", "TF_PLUGIN_CACHE_DIR": str(cache)}
-    env.pop("TF_DATA_DIR", None)
-    env.pop("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", None)
+    """A fresh `terraform init -lockfile=readonly` in work against the mirror and cache, the lock-init test's way.
+    None when it timed out."""
+    env = {**BASE_ENV, "TF_PLUGIN_CACHE_DIR": str(cache)}
     work.mkdir()
     (work / "main.tf").write_text(MAIN_TF)
     (work / ".terraform.lock.hcl").write_bytes(LOCK)
-    for attempt in range(len(BACKOFF) + 1):
-        shutil.rmtree(work / ".terraform", ignore_errors=True)
-        try:
-            r = subprocess.run([exe, "init", "-lockfile=readonly", "-backend=false", "-input=false", "-no-color"],
-                               cwd=work, env=env, capture_output=True, text=True, timeout=INIT_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            return None
-        if r.returncode == 0 or not is_network_error(r.stdout + r.stderr) or attempt == len(BACKOFF):
-            return r
-        print(f"  RETRY: init failed on the network; again in {BACKOFF[attempt]:g}s", flush=True)
-        time.sleep(BACKOFF[attempt])
-    return r
+    try:
+        return subprocess.run([exe, "init", "-lockfile=readonly", "-backend=false", "-input=false", "-no-color"],
+                              cwd=work, env=env, capture_output=True, text=True, timeout=INIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None
 
 
 def linked(work: pathlib.Path) -> pathlib.Path:
@@ -107,15 +105,20 @@ def said(r: subprocess.CompletedProcess | None) -> str:
     return "timed out" if r is None else (r.stdout + r.stderr)[-1500:]
 
 
-with tempfile.TemporaryDirectory(prefix="tf-cache-lock-") as td:
+def downloaded(out: str) -> bool:
+    return "(signed by" in out or "(self-signed" in out
+
+
+with tf_plugin_cache.scratch("tf-cache-lock-") as td:
     tmp = pathlib.Path(td)
     cache = tmp / "cache"
     cache.mkdir()
     entry = cache / PROVIDER / VERSION / "linux_amd64"
 
-    print(f"== cold: an init into an empty cache installs {PROVIDER} {VERSION} there ==")
+    print(f"== cold: an init into an empty cache installs {PROVIDER} {VERSION} there from the mirror ==")
     r = init(tmp / "cold", cache)
     check("init succeeds against the lock", r is not None and r.returncode == 0, said(r))
+    check("terraform downloads nothing: the provider comes from the mirror", not downloaded(said(r)), said(r))
     good = binary(entry)
     check("the provider is in the cache", good is not None, str(entry))
     check(".terraform/providers links to the cache entry",
@@ -132,7 +135,8 @@ with tempfile.TemporaryDirectory(prefix="tf-cache-lock-") as td:
     out = said(r)
     check("init succeeds against the lock", r is not None and r.returncode == 0, out)
     check("terraform says it used the cache", "from the shared cache directory" in out, out)
-    check("nothing is downloaded", f"Installing hashicorp/null v{VERSION}" not in out, out)
+    check("nothing is installed or downloaded", f"Installing hashicorp/null v{VERSION}" not in out
+          and not downloaded(out), out)
     check(".terraform/providers links to the cache entry", linked(tmp / "warm").resolve() == entry.resolve())
     check("the lock is unchanged", (tmp / "warm/.terraform.lock.hcl").read_bytes() == LOCK)
 
@@ -144,8 +148,9 @@ with tempfile.TemporaryDirectory(prefix="tf-cache-lock-") as td:
     r = init(tmp / "tampered", cache)
     out = said(r)
     check("init succeeds against the lock", r is not None and r.returncode == 0, out)
-    check("terraform downloads the provider again rather than take the cached one",
-          f"Installing hashicorp/null v{VERSION}" in out and "from the shared cache directory" not in out, out)
+    check("terraform installs the provider again from the mirror rather than take the cached one",
+          f"Installing hashicorp/null v{VERSION}" in out and "from the shared cache directory" not in out
+          and not downloaded(out), out)
     now = binary(linked(tmp / "tampered"))
     check("the binary the init links in is the verified one", digest(now) == verified,
           f"{now}: {digest(now)}, verified {verified}")

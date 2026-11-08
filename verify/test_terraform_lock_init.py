@@ -1,6 +1,6 @@
 # ABOUTME: A fresh `terraform init -lockfile=readonly` of each committed root (in a clean copy, no .terraform/)
-# ABOUTME: succeeds against its committed lock and leaves it byte-for-byte unchanged; providers come from the cache.
-# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
+# ABOUTME: succeeds against its committed lock and leaves it unchanged; providers come from the host artifact cache.
+# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and on a cold artifact cache network to registry.terraform.io)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 #
@@ -14,23 +14,28 @@
 # times; any other failure, a lock that does not match included, fails on the first. TF_LOCK_INIT_BACKOFF (seconds,
 # comma-separated) is for test_terraform_lock_init_retry.py, which runs this against a stub terraform.
 #
-# #1114: the inits took 326 s of the tier, nearly all of it downloading the same providers again. They now share
-# the persistent plugin cache tf_plugin_cache.py names (TF_PLUGIN_CACHE_DIR when set, else outside the checkout), so
-# a warm run downloads nothing. Each init is still fresh: a new directory with no .terraform/ and no module cache,
-# which is what #468 needed. The cache does not weaken the lock: Terraform takes a cached provider only when its h1:
-# checksum is one the lock records, and downloads and verifies it again otherwise. The one switch that loosens that,
-# TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE, is unset here; test_terraform_plugin_cache_lock.py tampers with
-# a cached provider and holds that its bytes never reach an init.
+# #1114: the inits took 326 s of the tier, nearly all of it downloading the same providers again. #1119: terraform no
+# longer downloads them at all. tf_plugin_cache.terraform_env fills a filesystem mirror in the host artifact cache,
+# outside every worktree, with each provider zip the locks pin, fetched once per host through artifact_cache.get() by
+# the zh: SHA-256 the lock records, and gives terraform a CLI config that installs registry.terraform.io providers from
+# that mirror only, with the shared plugin cache beside it. Each init is still fresh: a new directory with no
+# .terraform/ and no module cache, which is what #468 needed. Neither cache weakens the lock: terraform checks each
+# mirror zip against the lock's hashes, and takes a cached provider only when its h1: checksum is one the lock records.
+# TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE, the one switch that loosens that, is dropped by terraform_env;
+# test_terraform_mirror_lock.py holds that a mirror zip the lock does not match fails init, and
+# test_terraform_plugin_cache_lock.py that a tampered cached provider never reaches one.
 import os, pathlib, shutil, subprocess, sys, tempfile, time
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 from chart_fetch import is_network_error  # noqa: E402
+import artifact_cache  # noqa: E402
 import tf_plugin_cache  # noqa: E402
 
 ROOTS = ["infra/terraform/aws/cluster", "infra/terraform/aws/network", "infra/terraform/aws/audit", "infra/org/boundary",
          "infra/terraform/dashboards"]
-# A cold cache downloads each root's providers, the aws one ~800 MB: a healthy init fits well inside this bound (#572).
+# A cold plugin cache unpacks each root's providers from the mirror, the aws one ~800 MB, and the cluster root still
+# fetches its modules: a healthy init fits well inside this bound (#572).
 INIT_TIMEOUT = 600
 BACKOFF = tuple(float(x) for x in (os.environ.get("TF_LOCK_INIT_BACKOFF") or "10,30").split(","))
 failures = []
@@ -49,12 +54,28 @@ if not exe:
 
 env = {**os.environ, "TF_IN_AUTOMATION": "1", "CHECKPOINT_DISABLE": "1"}
 env.pop("TF_DATA_DIR", None)
-env.pop("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", None)
+# Every network fetch of the artifact cache is one line in its fetch log: a warm run adds none.
 try:
-    env["TF_PLUGIN_CACHE_DIR"] = str(tf_plugin_cache.ensure(env))
+    FETCH_LOG = artifact_cache.fetch_log_path(tf_plugin_cache.root_of(env), env)
 except tf_plugin_cache.CacheError as e:
     print(f"FAIL: {e}", file=sys.stderr)
     sys.exit(1)
+fetched_before = len(FETCH_LOG.read_text().splitlines()) if FETCH_LOG.is_file() else 0
+# The mirror is filled for exactly the locks this test inits against. A cold fill goes to the network, so one that
+# fails on what reads as the network is tried again, as an init is.
+began = time.monotonic()
+for attempt in range(1, len(BACKOFF) + 2):
+    try:
+        env = tf_plugin_cache.terraform_env(env, [REPO / r / ".terraform.lock.hcl" for r in ROOTS])
+        break
+    except tf_plugin_cache.CacheError as e:
+        if not is_network_error(str(e)) or attempt == len(BACKOFF) + 1:
+            print(f"FAIL: {e}", file=sys.stderr)
+            sys.exit(1)
+        print(f"  RETRY the provider mirror: {e}; again in {BACKOFF[attempt - 1]:g}s", flush=True)
+        time.sleep(BACKOFF[attempt - 1])
+print(f"provider mirror ready in {time.monotonic() - began:.1f}s")
+print(f"CLI config: {env['TF_CLI_CONFIG_FILE']}")
 print(f"provider cache: {env['TF_PLUGIN_CACHE_DIR']}")
 
 
@@ -96,7 +117,13 @@ for root in ROOTS:
         said += f"\n(a network error on each of {attempt} tries)"
     check("fresh init succeeds against the committed lock", r.returncode == 0, said)
     check("the lock is unchanged by init", lock == (src / ".terraform.lock.hcl").read_bytes())
+    # terraform names the signer of a package it downloaded from the registry; one from the mirror is unauthenticated
+    # and one from the plugin cache is "from the shared cache directory".
+    check("terraform downloads no provider: each comes from the mirror or the plugin cache",
+          "(signed by" not in r.stdout and "(self-signed" not in r.stdout, said)
 
+fetched = (len(FETCH_LOG.read_text().splitlines()) if FETCH_LOG.is_file() else 0) - fetched_before
+print(f"\nartifact cache fetches this run: {fetched} (in {FETCH_LOG})")
 if failures:
     print(f"\n{len(failures)} FAILED", file=sys.stderr)
     sys.exit(1)

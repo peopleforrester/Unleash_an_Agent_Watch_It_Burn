@@ -15,6 +15,8 @@ on:
       - 'infra/terraform/**'
       - 'infra/org/**'
       - 'verify/iam_plan_render.py'
+      - 'verify/tf_plugin_cache.py'
+      - 'verify/artifact_cache.py'
       - 'verify/test_iam_policy_*.py'
       - 'verify/e2e-tools.lock'
       - 'verify/fetch-e2e-tools.sh'
@@ -24,6 +26,8 @@ on:
       - 'infra/terraform/**'
       - 'infra/org/**'
       - 'verify/iam_plan_render.py'
+      - 'verify/tf_plugin_cache.py'
+      - 'verify/artifact_cache.py'
       - 'verify/test_iam_policy_*.py'
       - 'verify/e2e-tools.lock'
       - 'verify/fetch-e2e-tools.sh'
@@ -51,6 +55,14 @@ jobs:
           python -m pip install --quiet PyYAML==6.0.3
           bash verify/fetch-e2e-tools.sh
           echo "$GITHUB_WORKSPACE/verify/.tools/bin" >> "$GITHUB_PATH"
+
+      # The renders' terraform inits take their providers from a filesystem mirror in the host artifact cache, outside
+      # the workspace, filled through verify/artifact_cache.py by each committed lock's zh: SHA-256 (#1119).
+      - name: Fill the Terraform provider mirror (verify/tf_plugin_cache.py prepare)
+        run: |
+          set -euo pipefail
+          echo "WIB_ARTIFACT_CACHE=$RUNNER_TEMP/wib-artifacts" >> "$GITHUB_ENV"
+          WIB_ARTIFACT_CACHE="$RUNNER_TEMP/wib-artifacts" python verify/tf_plugin_cache.py prepare >> "$GITHUB_ENV"
 
       # Extraction, the exceptions table, the boundary on every role and user, and how each check reads AWS's answer.
       - name: The pipeline's offline checks
