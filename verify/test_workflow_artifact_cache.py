@@ -63,7 +63,7 @@ JOBS = {
 # A step that fetches a pinned artifact, or runs a suite or script that does.
 FETCH = re.compile(r"fetch-e2e-tools\.sh|artifact-cache\.sh|artifact_cache|package_cache\.py|tf_plugin_cache\.py|"
                    r"install-tools\.py|run-e2e-tools\.sh|run-tests\.sh|e2e-tools\.lock|\bcurl\b|\bwget\b|"
-                   r"pip install|uv pip|helm (pull|repo)|terraform init")
+                   r"pip3?[ ]install|uv[ ]pip|helm (pull|repo)|terraform init")
 CACHE_VARS = ("WIB_ARTIFACT_CACHE", "HECATON_TOOLS_CACHE", "TF_PLUGIN_CACHE_DIR", "PLAYWRIGHT_BROWSERS_PATH",
               "XDG_CACHE_HOME")
 LOOPBACK = re.compile(r"https?://(127\.0\.0\.1|localhost)[:/]")
