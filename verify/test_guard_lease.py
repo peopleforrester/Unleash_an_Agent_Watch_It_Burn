@@ -364,8 +364,8 @@ seen: dict = {}
 
 
 class FakeLease:
-    def __init__(self, lost=None):
-        self.lost, self.holder = lost, "fake"
+    def __init__(self, lost=None, contexts=()):
+        self.lost, self.holder, self.contexts = lost, "fake", list(contexts)
 
 
 def fake_hold(lost=None, busy=False, kind="hold"):
@@ -377,7 +377,8 @@ def fake_hold(lost=None, busy=False, kind="hold"):
             raise gl.LeaseBusy("held by 'another run'")
         seen["inside"] = True
         try:
-            yield FakeLease(lost)
+            # hold_switch takes the lock on the context and on the cluster its guardrails switch reaches (#1016)
+            yield FakeLease(lost, [context] if kind == "hold" else sorted({context, "watch-it-burn-community"}))
         finally:
             seen["inside"] = False
     return hold
@@ -393,7 +394,8 @@ real = (kp.guard_lease.hold, kp.guard_lease.hold_switch, kp.Probe.run, kp.Kubeco
 kp.Probe.run, kp.KubeconCluster.get_json = fake_run, lambda self, path: None
 try:
     # An admin probe runs guardrails-on and guardrails-off, which switch both KubeCon clusters, so it holds the lock
-    # through hold_switch (#1016); a community probe switches nothing beyond its guards-free start and holds one.
+    # through hold_switch (#1016); since #1134 a community probe runs them too, in the private terminal, and holds the
+    # same pair through hold_switch on its --switch-context.
     kp.guard_lease.hold, kp.guard_lease.hold_switch = fake_hold(), fake_hold(kind="hold_switch")
     with contextlib.redirect_stdout(io.StringIO()) as out:
         rc = kp.main(["admin", "burritobot-private.burritobot.co", "--context", "watch-it-burn-private",
@@ -409,9 +411,11 @@ try:
           and seen["wait"] == gl.WAIT_S, str(seen))
     seen.clear()
     with contextlib.redirect_stdout(io.StringIO()):
-        kp.main(["community", "attackme.burritobot.co", "--context", "watch-it-burn-community", "--lock-wait", "5"])
-    check("kubecon_probe community holds it too, with --lock-wait", seen.get("ran_inside") is True
-          and seen["context"] == "watch-it-burn-community" and seen["wait"] == 5.0 and seen["kind"] == "hold",
+        kp.main(["community", "attackme.burritobot.co", "--context", "watch-it-burn-community",
+                 "--switch-context", "watch-it-burn-private", "--lock-wait", "5"])
+    check("kubecon_probe community holds it on both clusters, through hold_switch on the private context whose "
+          "terminal switches them (#1134), with --lock-wait", seen.get("ran_inside") is True
+          and seen["context"] == "watch-it-burn-private" and seen["wait"] == 5.0 and seen["kind"] == "hold_switch",
           str(seen))
     seen.clear()
     kp.guard_lease.hold_switch = fake_hold(busy=True)

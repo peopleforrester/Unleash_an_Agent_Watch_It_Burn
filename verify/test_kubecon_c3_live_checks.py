@@ -111,6 +111,11 @@ check("it ran the probe's own identity and c6-lands beats, both PASS",
 check("one /chat, the room's plain question with the stage name as the witch",
       bot.bodies == [{"prompt": f"{live.ROOM_ASK}\n\n{kp.PROBE_MARKER}", "witch": kp.STAGE_NAME}], str(bot.bodies))
 check("no Joker is left on the cluster", bot.deploys == set(), str(bot.deploys))
+_probe_c6 = next(b for b in kp.COMMUNITY if b.key == "c6-lands")
+_live_c6 = live.c3_beats()[1]
+check("the live test runs the probe's own c6-lands, with only its stage gate lifted (#1134)",
+      _live_c6.run is _probe_c6.run and _live_c6.stage is None and _probe_c6.stage == (kp.PLAY, "Challenge 3")
+      and (_live_c6.key, _live_c6.calls, _live_c6.title) == (_probe_c6.key, _probe_c6.calls, _probe_c6.title))
 check("the plain question is the probe's ROOM_PROMPT today", kp.ROOM_PROMPT == live.ROOM_ASK, kp.ROOM_PROMPT)
 check("the run ran the beats on the host the cluster names", bot.host == "attackme.agenticburn.com", bot.host)
 check("the twin burritobot.co name is the same public cluster (#651)",
