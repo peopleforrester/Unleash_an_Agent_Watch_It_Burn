@@ -36917,3 +36917,73 @@ any staging run's scope. Scoping by the newest staging ancestor whose verify-sui
 ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then printed `86 checks ran (the offline suite and 85 tier tests) in
 10m20s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate passed. No dependency was added.
 The logs are `/var/lib/hecaton/runs/18643/e2e-tools.log` (the red run on `45606927`) and `e2e-tools-2.log`.
+## 2026-11-08 · #1188 · run 18630 · The tools tier's image, built from e2e-tools.lock; the tier ran green inside it
+
+**What landed.** `verify/e2e-image/Containerfile` builds `ghcr.io/peopleforrester/wib-e2e-tools`. It installs the
+eleven rows of `verify/e2e-tools.lock` with one `install.sh tool` line each, the lock's name, version, SHA-256, URL
+and member as written, in the lock's order. `verify/e2e-image/install.sh` fetches each file once at build, checks its
+SHA-256 before anything reads it, and records the row in `/opt/wib-e2e-tools/tools.txt`. Beside the lock's tools the
+image has uv 0.13.7 (by its release SHA-256), Python 3.12.16 and 3.13.18 through `uv python install`, PyYAML and
+Playwright's Chromium through `verify/package_cache.py` from `python.lock` (hash-checked, as #1121 requires), and a
+`gh` that relays `gh issue view` to the host. `verify/e2e_image.py` names the image and holds the pins, and
+`verify/test_e2e_image.py` and `verify/test_gh_relay.py` hold all of it offline.
+
+**The base image.** The first build used `debian:trixie-slim` from Docker Hub. `test_no_docker_hub.py` and
+`test_images_lock.py` failed on it in the first run inside the image, since nothing here may name Docker Hub (#714)
+and every reference needs an `images.lock` row. The base is now lab-platform's mirror of `node:24.22.2-trixie-slim`,
+the row the Backstage image already pins, which also brings the Node 24.22.2 that the image had fetched on its own.
+
+**The tag.** The issue asks for a tag of the lock file's hash. The tag is `<the first 16 hex of the lock's SHA-256>-<the
+first 8 hex of the other build inputs'>`: the Containerfile, `install.sh`, the `gh` client, `.dockerignore`,
+`python.lock`, `package_cache.py` and `artifact_cache.py`. With the lock alone, a change to the Containerfile would
+rebuild the image under a tag every host already holds, and no host would pull it again. `verify/.dockerignore`
+cuts the build context to exactly those files, so the build cannot read a file the tag does not hash, and
+`verify/.tools` is never sent to a builder. The tag on this commit is `51ec299b51b3558f-941aebbd`.
+
+**The workflow.** `.github/workflows/build-e2e-tools-image.yml` runs on a push to staging or main that touches the
+lock or a build input, and by hand. It builds on `ubuntu-latest`, not Tanjiro: GitHub's runner has Docker and fetches
+from GitHub's own network. It checks the pins first, checks that the built image's `tools.txt` is the lock's, and
+pushes through `scripts/ghcr_version_tag.py`, as `test_workflow_registry_writes.py` requires (#815). The image's
+source-tree label is its tag, so a tag ghcr.io already has reads as this build's and nothing is pushed over it.
+`test_workflow_artifact_cache.py`'s JOBS lists the job as fetching nothing to use: the binaries are fetched inside
+the build.
+
+**Running the tier inside it.** `bash verify/e2e-image.sh run` picks podman when the host has it, else docker, uses
+the image when the host holds the tag, pulls it once when not, and starts it with `--pull=never`. When the pull
+fails it exits 1 naming the image and `bash verify/e2e-image.sh build`, and runs no container and no download. The
+container gets this checkout and its git directory at their own paths, the host's artifact cache (Terraform
+providers, charts, wheels) at its own path, HECATON_BASE_SHA, E2E_TOOLS_JOBS and TF_CACHE_LOCK_WAIT, and nothing
+else: no AWS session, no KUBECONFIG, none of the host's tools. Rootless podman runs it as the user (`--userns=keep-id`),
+so what the tier writes stays the user's. Inside the image `run-e2e-tools.sh` reads `WIB_E2E_TOOLS`, checks that
+`tools.txt` is this lock's (`e2e_image.py matches`), runs the image's binaries and never calls `fetch-e2e-tools.sh`.
+
+**gh inside the container.** Seven tier tests read issues with `gh issue view` (#863). On a dispatched run the host's
+gh is hecaton's wrapper, which runs gh as michael through sudo, and that cannot work inside a container. So the image's
+`gh` is a client of `verify/gh_relay.py`, which `e2e-image.sh run` starts on a socket in a fresh directory, mode 0600,
+mounted at `/run/wib-gh`. It runs the host's gh for `gh issue view` and refuses every other call with exit 2, naming
+it. In CI the host gh is the runner's, with the job's GH_TOKEN.
+
+**Eight tests read the collector from a fixed path.** `test_adk_model_content_e2e.py` and seven other collector tests
+built `verify/.tools/bin/otelcol-contrib` from the repo root, though the runner already exports OTELCOL_CONTRIB. They
+failed in the first run inside the image and now read OTELCOL_CONTRIB, with the fetched path for a run by hand.
+Four tests that hand a child process PATH and HOME alone failed on `uv finds no Python 3.12`, since uv then reads its
+default install directory. The image now links `python3.12` and `python3.13` onto its PATH, where uv also looks.
+
+**What is left of #1188, and why it waits.** Three criteria are not met by this run: `run-e2e-tools.sh` itself
+running through the image and refusing to download, CI and hecaton's gate using it, and the test that the script
+refuses to download. Each needs the image on ghcr.io first. This run cannot push it, and the gate runs
+`bash verify/run-e2e-tools.sh` on netcup as hecaton-gate, whose podman holds no image. A runner that required the
+image would fail this run's own gate and stop the change from landing. Once hecaton promotes these commits, the
+workflow pushes the tag from staging. The next run on #1188 then checks that an anonymous pull of the tag works. A
+package GITHUB_TOKEN creates may start private, and then Michael makes it public in its settings on github.com. With
+the image pullable, that run makes `run-e2e-tools.sh` run through `e2e-image.sh run`, removes `fetch-e2e-tools.sh`,
+and switches the CI job. Two facts outside this repo shape that step. Megumi's runner, which also takes
+`[self-hosted, Linux, X64, tanjiro]` jobs, has no podman or docker (hecaton's `docs/runbooks/ci-runners.md`), so the
+e2e job needs a runner label only Tanjiro carries, or podman on Megumi. Rootless podman keeps images per user, so on
+netcup each run user and hecaton-gate pulls the image once, not the host once. Both are filed for hecaton in this
+run's report.
+
+**Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
+
+**No new dependency** is added to the repo. The image pins uv 0.13.7, as `verify-suites.yml` already does, and Python
+3.12.16 and 3.13.18, the builds uv 0.13.7 installs for the two Pythons `python.lock` is locked for.
