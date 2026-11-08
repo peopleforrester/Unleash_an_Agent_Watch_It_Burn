@@ -1313,6 +1313,11 @@ sites:
     class: live
     kind: lab-endpoint
     target: the support desk's public host
+  verify/test_support_desk_named.py:
+  - match: 'curl -s -X POST localhost:18080/presenter-ticket'
+    lines: 1
+    class: none
+    why: a literal the test looks for in the run-of-show's segment 4, the presenters' command; it runs nothing
   verify/test_terminal_login_live.sh:
   - match: .
     lines: 8

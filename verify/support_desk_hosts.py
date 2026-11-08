@@ -52,7 +52,7 @@ BOT_HOSTS = {
 }
 # The pre-made ticket Challenge 3 reads, on every desk.
 TICKET = "/ticket/HC-666"
-# The fixed ticket the presenters' attack reads on the admin bot (`#/47`). It is on every desk and no filed ticket can
+# The fixed ticket the presenters' attack reads on the admin bot, on the hint's slide. It is on every desk and no filed ticket can
 # take its number, so it is never a room ticket.
 ADMIN_FIXED = ("HC-666",)
 TICKET_SITE = REPO / "gitops/ai-layer/ticket_site.py"
