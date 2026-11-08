@@ -727,7 +727,7 @@ check("every prompt and toggle stays visible",
       KUBECON.count('<div class="prompt"') == _visible.count('<div class="prompt"')
       and KUBECON.count('<div class="toggle"') == _visible.count('<div class="toggle"'))
 # 2,100 since #773: Challenge 2's ask is the 2026-11-01 Tron prompt and its follow-up, word for word (83 words,
-# where the promo-mascot prompt was 41), and its marker was cut to one line to make room. 2,300 since #844: the
+# where the promo-mascot prompt was 41; #1105 cut the follow-up and the ticket number, about 16 words), and its marker was cut to one line to make room. 2,300 since #844: the
 # 2026-11-01 flow adds a visible cue per challenge for the presenters' attack and its trace, Challenge 1's close on
 # the OWASP page, Challenge 2's before-and-after markers and its guardrails-on switch beat; the story, notes and
 # fallbacks added with them are folded. 2,400 since #952: C3's recipe read is now the conversational recon-then-attack

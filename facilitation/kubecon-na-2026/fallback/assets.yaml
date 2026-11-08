@@ -45,7 +45,7 @@ screenshots:
   - segment: 3
     file: screenshots/03-1-c2-public-image.png
     caption: "Challenge 2: the bot deploys an image straight off the public internet."
-    capture: { chat: c2-tron-public-image, cluster: community, controls: { infra.kyverno: false } }
+    capture: { chat: c2-tron, cluster: community, controls: { infra.kyverno: false } }
   - segment: 3
     file: screenshots/03-2-c3-recipe-read.png
     caption: "Challenge 2: the house recipe, read back out of a file on the box."

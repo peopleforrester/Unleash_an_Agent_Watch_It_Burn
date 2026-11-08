@@ -2301,7 +2301,9 @@ number and says who settled it and when, so references to it elsewhere still lan
    and once more for the shot on the community bot, called `deploy_app` five times
    with "Tron", and all five deployed nginx. Since #991 a bare name is refused, saying
    to send the image, and BurritoBot's prompt names the Tron game's exact image, so
-   the shot is owed again on the bot that runs #991.
+   the shot is owed again on the bot that runs #991. Since #1105 the Tron ask is one
+   prompt, with no follow-up and no ticket number, and the shot sends it alone
+   (`c2-tron` in `fallback/prompts.yaml`).
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet
