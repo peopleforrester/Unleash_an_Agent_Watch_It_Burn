@@ -37498,3 +37498,12 @@ community cluster the owed look is that `/kubecon` still answers 404. Nothing wa
 `https://attackme.burritobot.co/kubecon` still answering 404 on the community cluster. A `curl` of the private
 page for `id="privatebanner"` and a render through `verify/test_kubecon_private_banner_e2e.py`'s browser on the live
 URL would both show it.
+
+**Suites (run 18681, at `d7b65000`).** Scoped to the change from `a307d478`, as point 6 asks; the change edits
+`kubecon.html`, which tier tests read, so the scoped tools tier ran. `bash verify/run-e2e-tools.sh` printed
+`227 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for its offline check, then `35 checks ran (the offline
+suite and 34 tier tests) in 10m18s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Both new tests,
+`test_kubecon_prompt_sheet_e2e.py`, `test_kubecon_cluster_chip_e2e.py`, `test_kubecon_sheet_attack_heads.py`,
+`test_kubecon_community_gate.py`, `test_kubecon_seg4_flow.py` and `test_scope_tests.py` were among those that ran.
+The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18681/e2e-tools.log`.
