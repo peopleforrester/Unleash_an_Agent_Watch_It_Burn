@@ -525,7 +525,8 @@ check("open to narrowed: the probe writes the same C7 config as the terminal's .
       terminal_rewrite(C7_COMMITTED, "on") == narrowed and narrowed != C7_COMMITTED)
 check("narrowed to open: the probe writes the same C7 config as the terminal's .c7rule.py off, the committed file",
       terminal_rewrite(narrowed, "off") == kp.c7_config_with_rule(narrowed, kp.C7_OPEN) == C7_COMMITTED)
-check("guard-input-on is the terminal's query", f'_px "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
+check("guard-input-on is the terminal's query, which it sends on both KubeCon clusters (#1148)",
+      f'_both _toggle "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
 check("guard-output-on is the terminal's query", f'_px "{kp.GUARD_OUTPUT_ON}"' in helper("guard-output-on"))
 check("guard-topic-on is the terminal's query", f'_pxkey "{kp.GUARD_TOPIC_ON}" topic' in helper("guard-topic-on"))
 
