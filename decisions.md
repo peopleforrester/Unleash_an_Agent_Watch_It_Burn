@@ -33627,4 +33627,13 @@ longer read; it can be removed. The new plugin cache rebuilds from the mirror wi
 drift; only the entries of the tests this change touches are in this change. `test_tf_plugin_cache.py` moved to
 `always`, since it runs `git ls-files` to hold that `committed_locks()` is every lock git tracks.
 
+**A race the first suite run found.** The first `run-e2e-tools.sh` of this change failed on the offline suite alone,
+in `test_docs_current.py`: its walk of the whole tree read hecaton's TMPDIR, `<worktree>/tmp/hecaton`, and listed a
+module's `CHANGELOG.md` under `test_lab_platform_operator_entry.py`'s terraform work directory, which that test
+removed before this one opened it (`FileNotFoundError`). It passed when run alone. The exposure was there before this
+change, since that test already inited in TMPDIR. `test_docs_current.py`, `test_image_version_tags.py`,
+`test_kube_safety.py`, `test_event_tag.py` and `test_plan_policy.py`, the five offline walks of the whole tree, now
+leave out the repo's ignored `tmp/`. Listing Markdown through `git ls-files` instead was tried and dropped: it misses
+the nine Markdown files in the two submodules that the walk reads.
+
 **Not yet run on a cluster.** Nothing: this changes only the cluster-free tier, its CI jobs and their tests.

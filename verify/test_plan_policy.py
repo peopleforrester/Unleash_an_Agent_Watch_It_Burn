@@ -138,7 +138,8 @@ inline = re.compile(r"(checkov:skip|trivy:ignore|tfsec:ignore)")
 silencers = []
 for path in REPO.rglob("*"):
     rel = path.relative_to(REPO)
-    if any(part in SKIP_DIRS for part in rel.parts) or not path.is_file():
+    # tmp/ is the repo's ignored scratch, where hecaton's TMPDIR sits and other tests write and remove files (#1119).
+    if any(part in SKIP_DIRS for part in rel.parts) or rel.parts[0] == "tmp" or not path.is_file():
         continue
     if path.name in {".trivyignore", ".trivyignore.yaml", ".checkov.yaml", ".checkov.yml", "trivy.yaml"}:
         silencers.append(str(rel))
