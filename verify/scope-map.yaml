@@ -3937,6 +3937,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/guard_lease.py
     - verify/injection_config_matrix.py
     - verify/kubecon_probe.py
     - verify/nova_replies.py
