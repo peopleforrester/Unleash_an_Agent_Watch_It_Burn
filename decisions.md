@@ -37327,3 +37327,11 @@ Chromium, its libraries, the two models and the setup actions' runtimes. That li
 
 **No new dependency.** The module and the test use the standard library and PyYAML, which the offline suite already
 needs.
+
+**Suites (run 18664, at `17ea0b28`).** Scoped to the change from `f6b637b4`, as point 6 asks:
+`bash verify/run-e2e-tools.sh` printed `102 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `15 checks ran
+(the offline suite and 14 tier tests) in 4m31s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The
+commit after it rewraps the module's docstring and has `summary` read a malformed entry without a KeyError; on it,
+`verify/test_fetch_inventory.py`, `test_package_cache.py`, `test_tf_plugin_cache.py`, `test_chart_fetch.py` and
+`test_scope_tests.py` each passed alone. The prose gate printed `prose gate: pass`. The log is
+`/var/lib/hecaton/runs/18664/e2e-tools-scoped.log`.

@@ -10,9 +10,10 @@
 The scan reads every file `git ls-files --cached --others --exclude-standard` lists under the three directories, so a
 new file is seen before it is committed, and searches each line with the PATTERNS below: curl, wget, urlopen, the Helm
 verbs that read a repository, a Terraform init, the Python installs of pip and uv, the Node fetches of npm, yarn and
-corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, and the setup actions a workflow downloads a
-runtime with, and a get from the host artifact cache (#1117) or a chart pull through it, which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the line that
-names it, and a line that only names a command (a comment, a message, a regex, a stub) is found too.
+corepack, a Playwright browser install, a Docker or Podman pull, crane, a git clone or submodule update, the setup
+actions a workflow downloads a runtime with, and a get from the host artifact cache (#1117) or a chart pull through
+it, which fetch on a miss. It is a line scan, as #1115's `git grep` was: a command built across lines is found on the
+line that names it, and a line that only names a command (a comment, a message, a regex, a stub) is found too.
 
 The inventory, verify/fetch-inventory.yaml, lists by file the entries that claim those lines. An entry's `match` is a
 regular expression searched in the line, and a line belongs to the first entry of its file that matches it; `lines`
@@ -220,13 +221,13 @@ def summary(root: pathlib.Path | None = None, inventory: pathlib.Path | None = N
     files: dict[str, set] = collections.defaultdict(set)
     for (rel, i), got in claimed.items():
         e = sites[rel][i]
-        cls = e.get("class")
+        cls, kind = str(e.get("class")), str(e.get("kind", "-"))
         for _, line in got:
-            by_kind[cls][e.get("kind", "-")] += 1
+            by_kind[cls][kind] += 1
             for fam in families(line):
                 by_family[cls][fam] += 1
             if cls == "pinned":
-                cached[(e["kind"], bool(e.get("cached")))] += 1
+                cached[(kind, e.get("cached") is True)] += 1
             files[cls].add(rel)
     return {"problems": problems, "by_kind": by_kind, "by_family": by_family, "cached": cached, "files": files,
             "total": sum(len(g) for g in claimed.values())}
