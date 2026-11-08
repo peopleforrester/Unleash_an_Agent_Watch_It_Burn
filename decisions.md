@@ -40363,3 +40363,28 @@ run. The worktree was removed after.
 
 **Live.** This entry is the only change and touches no path a cluster runs, so no live check applies; run 18799's
 entry records the IAM lookup read live on accen-dev.
+## 2026-11-08 · #1008 · run 18806 · Both scoped suites recorded green for #1008's change
+
+**Why this run.** #1008's work merged into staging as `8088b661` (run 18780, then run 18789's docstring fix), and
+hecaton's test review left the issue open on one criterion: neither decisions.md entry recorded a `checks ran` line,
+`ALL E2E TOOLS TIER CHECKS GREEN` or `exit=0` for the two runners. This run adds no code; it runs the suites and
+records them.
+
+**What ran.** `HECATON_BASE_SHA=1f79e18f bash verify/run-e2e-tools.sh`, at this branch's base `5da273eb`. `1f79e18f`
+is staging just before #1008's first commit (`c6f13d16`), so the scope holds #1008's three commits plus the eight
+#1134 commits that landed after them: 19 paths, of which 6 are prose. It ran the offline suite as one check
+(`run-tests.sh`) beside the tier tests. Log: `/var/lib/hecaton/runs/18806/e2e-tools.log`.
+
+- Offline suite: `269 tests ran` (269 of 389, scoped), `ALL OFFLINE RENDER-GATE TESTS GREEN`, in 482s. It included
+  `test_c8_persona.py`, `test_c8_teaching.py`, `test_ceo_persona.py`, `test_fetch_inventory.py`,
+  `test_lab_text_export.py` and `test_scope_tests.py`.
+- Tools tier: `26 checks ran (the offline suite and 25 tier tests) in 8m39s, 4 at a time`, 25 of the 88 tier tests
+  selected, then `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `scope_tests.py` selected a scoped set; the selection was never FULL.
+- `test_recipe_persona.py` reads nothing in the range, so the scope left it out; run alone, it passes (exit 0).
+
+The `FAIL` lines in the log come from fixtures inside passing tests (for example the empty `--context` case in
+`test_burritobot_cluster_live_logic.py` and the fake-cluster cases in the probe tests), none from a failed check.
+`git grep -nF 'often refuses this one' -- verify scripts gitops challenges` finds nothing, so no reader of the old
+caret is left.
+
+**Live check.** Skipped: this run changes only decisions.md.
