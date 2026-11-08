@@ -37408,3 +37408,43 @@ Not yet run on a cluster: after Argo CD syncs this change, from the private term
 `guard-input-on` and `guard-mcp-on`, then `guards-off`, with both clusters' `/controls` and the workshop-agent Role read
 before and after; on attackme, a room `deploy_app` Forbidden, HC-666 withheld and the weather ask without
 `read_internal_config`; `guard-mcp-on`'s timing line on both clusters.
+
+## 2026-11-08: a red private (administrator) banner on `/lab` (#1180, run 18676)
+
+Part of #1142. `/lab` (`gitops/ai-layer/web/lab.html`) ships to every cluster, so, as with the chat page's private
+banner (#761), the host decides at load time. When `location.hostname` starts with `burritobot-private.`, the page
+shows "This is the private (administrator) terminal page." in a `.combanner` whose font, colour, background, border,
+radius and padding are the chat page's (bold white on `#C62222`, `#8E1414` border, 10px corners).
+
+**Placement.** The banner is the first child of `.termcol`, above `.termtabs`, so it sits in the page around the
+terminal and never inside a ttyd iframe or `.termpanes`. `.termcol` is already a flex column and `.termpanes` is
+`flex:1; min-height:0`, so the banner is given `flex:0 0 auto` and an 8px margin and the panes shrink by its height:
+the terminal still fills what is left. The element starts `hidden` and the rule sets no `display`, so nothing shows on
+any other host and nothing flashes before the script runs.
+
+**The rule.** An inline `markPrivate(host)` right after the element runs on `location.hostname`, as `markCommunity`
+does in the head, and clears `hidden` only for `/^burritobot-private\./i`. The public bot's `attackme.`, attendee and
+instructor-admin hosts, a service host such as `burritobot-private-attackme.` and a missing hostname all leave it
+hidden. Unlike the chat page, `/lab` does not wait on guard-proxy's `/controls` host: the issue asks for the address
+bar, and the banner is then right before any fetch. `markCommunity` and the rest of the page are unchanged.
+
+**Tests.** `verify/test_lab_private_banner.py` (offline, 26 checks) reads the element, its text, its `hidden` start,
+its style against burritbot.html's `.combanner` rule, its place as `.termcol`'s first child outside any iframe and
+`.termpanes`, the flex layout that gives it room, and that `markCommunity` still marks `attackme.` as the burn profile.
+`verify/test_lab_private_banner_e2e.py` (tools tier) cuts the one inline script between the banner and the tabs and runs
+it in a node vm on ten hostnames: both `burritobot-private.` domains show it, and `attackme.` on both domains, an
+attendee host, an admin host, `feedback.`, `burritobot-private-attackme.`, `localhost` and an empty name do not. With
+the rule's `!` struck, it failed 10 checks; put back, it passed. Each test exits naming the literal and file when an
+anchor it cuts on is gone. Both have scope-map entries, added by hand: `scope_tests.py write` would also have rewritten
+844 lines of other tests' entries already drifted on staging, which is not this change's to carry.
+
+**Live.** Before the change reaches the clusters, a read-only look: `curl https://burritobot-private.burritobot.co/lab`
+returned 200 with no `privatebanner` in it, and the `agent/console-src` ConfigMap's lab.html on both
+watch-it-burn-community and watch-it-burn-private had `markCommunity` and no banner. `attackme.burritobot.co/lab`
+returned 404: the community cluster does not publish `/lab` on its public host. Nothing on either cluster was changed.
+
+Not yet run on a cluster:
+- After hecaton promotes this and Argo CD syncs `console-src`, open `https://burritobot-private.burritobot.co/lab` and
+  confirm the red banner above the terminal tabs, with the terminal still filling its pane, and read the
+  `agent/console-src-*` ConfigMap's lab.html on watch-it-burn-community for `privatebanner` with no banner showing on
+  that cluster's hosts.

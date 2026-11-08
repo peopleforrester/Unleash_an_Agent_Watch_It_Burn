@@ -150,6 +150,12 @@
   .step.open .b{display:block}
   /* multi-terminal tabs: each pane is an independent ttyd session */
   .termcol{display:flex;flex-direction:column}
+  /* The private (administrator) terminal page's banner (#1180), in the chat page's .combanner look (#335, #761):
+     red, deliberately not the page accent, because its one job is to say which cluster this terminal is on. It
+     is a flex row of .termcol above the tabs, outside every ttyd iframe, so .termpanes (flex:1) shrinks by its
+     height and the terminal still fills what is left of the pane. */
+  .combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:#C62222;
+             border:1px solid #8E1414;border-radius:10px;padding:10px 12px;margin:8px 8px 2px;flex:0 0 auto}
   .termtabs{flex:0 0 auto;display:flex;align-items:center;gap:3px;background:#0a0c12;padding:6px 6px 0}
   .ttab{font:inherit;font-size:12px;font-weight:700;color:#aeb4c8;background:#1a1e2b;border:0;border-radius:7px 7px 0 0;padding:6px 13px;cursor:pointer;display:flex;align-items:center;gap:7px}
   .ttab.active{background:var(--term);color:#fff}
@@ -934,6 +940,18 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path"
          show its UI. If a help surface is wanted, it must be purpose-built: a panel that takes a
          question, calls a model server-side, and renders text. See issue #89. -->
     <section class="termcol">
+      <!-- The private (administrator) terminal page announces itself (#1180), as the private chat page does
+           (#761). This page ships to every cluster, so the host decides at load time: burritobot-private. shows
+           the banner and every other host, the public (attackme.) and community ones and every attendee cluster
+           included, leaves it hidden. It starts hidden, so nothing flashes on a host that should not show it. -->
+      <div id="privatebanner" class="combanner" hidden>This is the private (administrator) terminal page.</div>
+      <script>
+        function markPrivate(host){
+          var ban=document.getElementById('privatebanner');
+          if(ban) ban.hidden = !(typeof host==='string' && /^burritobot-private\./i.test(host));
+        }
+        markPrivate(location.hostname||'');
+      </script>
       <div class="termtabs" id="termtabs">
         <!-- NO Blueprint or Endpoints tab. Both were ported from the Packt VTT (#153) and neither
              worked in the lab: /diagram and /links serve 200, so the pages are fine, but the panes came
