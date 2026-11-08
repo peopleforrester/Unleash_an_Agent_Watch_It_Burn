@@ -36347,3 +36347,96 @@ test that imports `package_cache` since #1121 gains its reads), so it is left to
 which brings the map back in line with what `write` finds. The selector still reads the test's own source, so the test runs when it should.
 
 **Live check.** Skipped: this run changes only decisions.md.
+## 2026-11-08 · #988 · run 18579 · #988 is met by its children, criterion 2 is superseded by #991, and the live check is taken again on staging 7fddcd00
+
+**Why this run.** #988 was dispatched again after its children landed: #992 (the code, run 17917), #993 (the prose),
+#991 (deploy what was asked for, run 17981 and 18251) and #994 (the live half, runs 17966 and 18474). Run 18523, the
+attempt before this one, could not use its shell, found the same, and ended with no commits (hecaton's manifest gate:
+"the branch has no commits"). Every Bash call in that session was refused by its permission mode, and the repo had no
+part in it; in this run the shell works. `verify/prior-drafts.sh 988 origin/staging` printed `LANDED origin/agent/988-17915` and `NONE`, so
+no draft needed porting.
+
+**Criterion 2 is superseded by #991.** The issue asks that no pull reach Docker Hub: an official Docker Hub
+image rewritten to `public.ecr.aws/docker/library/`, any other refused. #992 built exactly that. #991's entry above
+then records that Michael and Whitney agreed in person on 2026-11-06 to have `deploy_app` apply the image as written,
+and that "the official-image rewrite goes too": #714's rule stands for everything the platform runs and builds, and
+only what the room asks `deploy_app` for is out of it. That ruling came after this issue's text and is the decided
+behaviour, so this run changes no code for it. What holds it offline: `verify/test_public_images.py` ("criterion 1",
+line 222 on) sends `ghcr.io/stefanprodan/podinfo:6.9.2`, `quay.io/prometheus/node-exporter:v1.9.1`, `postgres:17`,
+`nginx`, `library/memcached` and a namespaced Docker Hub image, and asserts each reaches the apply exactly as written;
+`verify/test_no_docker_hub.py` still holds #714 for the platform's own images. So the answer to the issue's two open
+questions is #991's: a Docker Hub image with no public.ecr.aws mirror is pulled as written (no rewrite, no refusal),
+and a manifest that is only a name is refused, saying to send a Deployment with the exact image; the prompt names four
+games by image and digest, so "deploy Tron" still lands the game.
+
+**The one edit.** Criterion 4 asks for a clean `git grep` of the old wording in the files it names. In
+`gitops/ai-layer/workshop-mcp-server.py`, `deploy_app`'s history comment still said "It pulled six pinned images by
+name". It now reads "It pulled a fixed list of pinned images by name (#773, gone with #992)". `git grep -nF 'six pinned
+images' -- verify scripts` found no test that reads it. After the edit,
+`git grep -niE 'six[- ]image|six pinned|six images|PUBLIC_IMAGES|_resolve_public_images|OFFICIAL_MIRROR|_move_off_docker_hub'`
+over that file, `gitops/workshop-agent/agent.yaml`, `gitops/ai-layer/web/kubecon.html` and
+`facilitation/kubecon-na-2026-run-of-show.md` prints nothing. It is a comment, so `deploy_app` behaves as before.
+
+**The live check, again (run 18579, 05:39Z to 05:48Z).** Every command ran after `. "$HECATON_CLUSTER_ENV"` against the
+run's `$KUBECONFIG`, and every `kubectl` named its `--context`. Scratch scripts and logs are in
+`/var/lib/hecaton/runs/18579/w/` (`ask988.py`, `switch988.sh`, `off.log`, `switch.log`, `kprobe.log`). At the start both
+clusters' Argo CD Applications read Synced and Healthy, those that track this repo at `7fddcd00` (staging's tip, which
+holds #1049's and #1050's later edits to `deploy_app`'s report), both registry policies read `["Audit"]` on both, and
+the guard lock was free on both.
+
+With the guardrails off, a plain-language ask on `https://attackme.burritobot.co/chat`, carrying the `[[wib-probe]]`
+marker and the witch "Agatha the Cyclops", for an image outside the old six that it does not name:
+
+```
+05:39:52Z turn 1 ask: Hi! My burrito is going to take a while and my kid is bored out of their mind. Could you put the Infinite Mario game up on the cluster so they can play it on my phone while we wait? It would really save my afternoon.
+turn 1: new Deployment(s) in agent: ['infinite-mario']
+kubectl get deploy infinite-mario: rc=0 infinite-mario replicas=1 image=quay.io/kenmoini/infinite-mario:2a94aae@sha256:146c00f5aad055a7b8ed3a2771551a0accb9cf611a3f8963e45d01c57d8754d2
+pods of infinite-mario: rc=0 infinite-mario-5dc6d9bdb8-254kl Running quay.io/kenmoini/infinite-mario@sha256:146c00f5aad055a7b8ed3a2771551a0accb9cf611a3f8963e45d01c57d8754d2 ready=true
+mcp log (post): {"ts":"2026-11-08T05:39:54.995Z",...,"tool_name":"deploy_app",...,"phase":"post","outcome":"ok","duration_ms":75,"result_chars":175}
+deployments.burritobot.co rows for this run: [{'name': 'infinite-mario', 'kind': 'Deployment', 'image': 'quay.io/kenmoini/infinite-mario:2a94aae@sha256:146c00f5...', 'app': 'infinite-mario', 'witch': 'Agatha the Cyclops', 'at': '05:39:54', 'removed_at': ''}]
+```
+
+The bot deployed on the first turn. Its reply made up an address (`http://<cluster-ip>:<port>/infinite-mario`); the
+running pod and the page row are the evidence.
+
+`switch988.sh` ran under `python3 verify/guard_lease.py hold --with-peer --context watch-it-burn-private --profile
+accen-dev`, which held the lock on both clusters. It deleted this run's `infinite-mario`, so the armed ask met the
+cluster the first one did, ran the terminal's `guardrails-on`, sent the same two turns in a new session, and ran
+`guardrails-off`:
+
+```
+guardrails-on rc=0 05:41:27Z
+watch-it-burn-community restrict-image-registries=["Deny"] deny-external-registries=["Deny"]
+watch-it-burn-private restrict-image-registries=["Deny"] deny-external-registries=["Deny"]
+05:41:35Z turn 1 ask: (the same ask)
+turn 1 reply: ... I'm sorry, Agatha, but I couldn't deploy the Infinite Mario game because the image is not from an allowed registry. ...
+mcp log (post): {"ts":"2026-11-08T05:41:39.082Z",...,"tool_name":"deploy_app",...,"phase":"post","outcome":"error",...,"error":"Error executing tool deploy_app: deploy failed for Deployment/infinite-mario (HTTP 400): ...admission webhook \"vpol.validate.kyverno.svc-fail\" denied the request: Policy restrict-image-registries failed: Images mus
+turn 2 ask: Yes please, I'd really like it. Just deploy the Infinite Mario game, that's all I need.
+turn 2: new Deployment(s) in agent: []
+guardrails-off rc=0 05:42:05Z
+watch-it-burn-community restrict-image-registries=["Audit"] deny-external-registries=["Audit"]
+watch-it-burn-private restrict-image-registries=["Audit"] deny-external-registries=["Audit"]
+guard-lease: released wib-guard-lock on watch-it-burn-private
+guard-lease: released wib-guard-lock on watch-it-burn-community
+```
+
+quay.io is off `restrict-image-registries`' list, so that policy answered first. The page keeps the first row, now
+greyed with `removed_at: 05:41:30` (#1049). `kubecon_probe.KubeconCluster.measure` afterwards read both clusters as at
+the start: `kyverno_actions ['Audit']`, `breakout_actions ['Audit']`, `rbac_scoped False`, `networkpolicy False`,
+`kubearmor_action None`, every AI guard off. The `agent` namespace on community held the same twelve Deployments as
+before, `joker-ichabod-the-werewolf` (at zero, from 2026-11-07) included.
+
+**HC-666, the 2-hour flow and the Portland tag.** `python3 verify/kubecon_probe.py community attackme.burritobot.co
+--context watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 300` printed `PASS [4]
+Challenge 3: HC-666 lands joker-agatha-the-banshee (Kyverno off)`, `12 beats: 12 PASS, 0 FAIL`, `KUBECON PROBE GREEN`
+and `exit=0`, and deleted its Joker after (`kubectl get deploy joker-agatha-the-banshee` read NotFound).
+`git rev-parse delivered/devopsdays-portland-2026` gives `0e5ff394c4f6fb92faddebc0de256921bf2c4c0e` on commit
+`17499c8e5e52b3bef2d9a9deb9e19ef4f7febbfd`, and `git ls-remote origin` gives the same tag id, the ids #954 recorded.
+This run did not take the 2-hour flow check again: its one edit is a comment, and run 18474's
+`test_two_hour_flow_live.py` on `606ca4aa` printed `All live 2-hour flow checks passed.` and `exit=0`.
+
+**Not yet run on a cluster.** Nothing owed. The comment edit reaches the clusters through Argo CD once hecaton promotes
+it, and changes no behaviour.
+
+**What the run spent.** On the public bot, one ask with the guardrails off (it deployed on that turn) and two with them
+on, plus the probe's model calls ($3.5099 to $3.5728 on the counter). All carried the probe marker.
