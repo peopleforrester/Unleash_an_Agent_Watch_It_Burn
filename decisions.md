@@ -38508,3 +38508,11 @@ commands.
 **Live check: skipped.** The change touches only `verify/` files no cluster runs and decisions.md.
 
 **No new dependency.**
+
+**Suites (run 18729, at `3a6f17f4`).** Scoped to the change from `53b819ac`, as point 6 asks:
+`bash verify/run-e2e-tools.sh` printed `103 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `11 checks ran
+(the offline suite and 10 tier tests) in 4m24s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (log
+`/var/lib/hecaton/runs/18729/e2e-tools-scoped.log`). The gate that failed run 18664 runs the offline suite whole, so
+`bash verify/run-tests.sh` ran unscoped too: `382 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `exit=0` (log
+`/var/lib/hecaton/runs/18729/run-tests-full.log`). `scope_tests.py write` changed nothing in the map. The prose gate
+printed `prose gate: pass`.
