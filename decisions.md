@@ -36891,3 +36891,50 @@ time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`, with `test_turn_guard.py`
 it was 18126's failing gate, on a base without #1017's scratch-directory fix). The two new files under
 `verify/fixtures/c8-credential-audit/` are data for the reword children, so no offline test reads them yet. The log
 is `/var/lib/hecaton/runs/18635/e2e-tools.log`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-08 · #921 · run 18646 · the feed carries each prompt's witch name on both clusters, and the no-name case is held offline
+
+**Where #921 stands.** Every step the 2026-11-06 entry listed as owed is done. guard-proxy-agenticburn#59 closed on
+2026-11-07 (merged there as `431c4ab9`, carrying `92fd19f`), lab-platform#374 closed the same day, and Michael's
+`c51e1851` (#1079) repinned `gitops/ai-layer/guard-proxy` to `5772a5d`, which holds `92fd19f`, with
+`checksum/proxy-py` `ddf97ec452c0`, the sha256 prefix of that proxy.py. prompts-agenticburn#16 had closed on
+2026-11-05. `verify/prior-drafts.sh 921 origin/staging` printed NONE: both earlier drafts are in staging.
+
+**Live, 2026-11-08 (read only).** On each of watch-it-burn-community and watch-it-burn-private, guard-proxy's
+Deployment carries `checksum/proxy-py` `ddf97ec452c0` and is 1/1 ready. The `ai-layer` Argo CD Application is Synced
+at `d7a1b91e` on the community cluster and at `294d9b63` on the private cluster, and the proxy.py in each pod hashes
+to `ddf97ec452c0`. `kubectl --context <ctx> -n agent exec deploy/guard-proxy -c proxy -- python3 -c <GET
+127.0.0.1:8080/prompts, print its keys and the shape of each list>` printed:
+
+- community: `['enabled', 'prompts', 'witches'] enabled= True n_prompts= 1 prompts_all_str= True has_witches= True
+  len_eq= True witches_all_str= True named= 1 blank= 0`
+- private: `['enabled', 'prompts', 'witches'] enabled= True n_prompts= 4 prompts_all_str= True has_witches= True
+  len_eq= True witches_all_str= True named= 1 blank= 3`
+
+The wall end, read from outside: `https://prompts.burritobot.co/api/prompts` answered with `boot`, `clusters`,
+`prompts` and `seq`. Its 116 entries each carry the keys `cluster`, `seq`, `text`, `ts` and `witch`, every one has a
+`cluster` (`attackme` or `burritobot-private`), and 17 have a non-empty `witch`. The rest are older prompts, from
+before the repin, or senders with no usable name. So each prompt reaches the wall with its witch name and keeps
+`cluster` for the "All clusters" filter, which is what #921 asked for. No prompt text and no name was printed, and
+nothing on either cluster was changed.
+
+**The no-name case, offline.** `verify/test_chat_witch_name.py` checked that named turns land at their prompt's index
+in `witches`. It now also checks, at a pin that holds `92fd19f`, that turns with no usable name land in the feed as
+their prompt with `""` at the same index, and that the 32 named turns before them keep their names. There are seven
+such turns: no `witch` field, an empty one, a blank one, a null one, a non-string one, one not shaped
+`<First> the <Creature>` ("Bob"), and "Bastard the Ghoul". The last is shaped right, so it still reaches the agent,
+but the pinned moderator masks it, so the projected feed drops it whole. The test checks that the moderator masks
+it before relying on it, so a changed wordlist fails on that check, by name. Three mutants of
+guard-proxy's `feed_witch`, patched in memory, each failed the extended test. Passing any string name through failed
+the `""` check on the masked name, repeating the last real name failed the same check, and dropping every name
+failed the two named-index checks. The unmutated test passed. The wall's no-name wording is unchanged from the
+2026-11-05 entry: "someone who gave no name".
+
+**Not yet run on a cluster.** Nothing is owed. The change here is a test under `verify/` that no cluster runs, and
+the live read above is the check the 2026-11-05 and 2026-11-06 entries named as owed.
+
+**The suites (run 18646, at `a3dd9776` on staging `d7a1b91e`).** `HECATON_BASE_SHA=d7a1b91e bash verify/run-tests.sh`
+printed `100 tests ran` (100 of the 365 offline tests, `test_chat_witch_name.py` among them), `ALL OFFLINE
+RENDER-GATE TESTS GREEN` and `exit=0`. The tools tier was not run, under #1191's rule: no tier test reads the changed
+test, and the 14 the scoped selector picks are picked by these two records or are on the map's `always` list. The
+prose gate printed `prose gate: pass`. No dependency was added.

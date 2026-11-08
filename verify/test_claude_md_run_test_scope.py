@@ -7,7 +7,7 @@ aren't fucking clear, for fucking file edits." Point 6 of "Dispatched runs" says
 
   1. Point 6 is in the "Dispatched runs" section, and carries the scoped command form (`HECATON_BASE_SHA`).
   2. Its three rules: a prose change never runs `run-e2e-tools.sh`; a code change runs the tests that read the changed
-     files; the full tools tier is the promotion gate's and is not run inside a run.
+     files; the full tools tier runs only on FULL and at release points, never on every promotion to main.
   3. It says how to run one tier test alone.
   4. Point 1 no longer tells every run to run both suites whole.
 
@@ -30,8 +30,9 @@ RULES = {
         "A change to .md, .html or other prose files runs the prose gate and the offline tests that read those files, "
         "and never `run-e2e-tools.sh`."),
     "a code change runs the tests that read it": "A code change runs the tests that read the changed files",
-    "the full tier is the promotion gate's": (
-        "The full tools tier is the promotion gate's and is not run inside a run."),
+    "the full tier runs only on FULL and at release points": (
+        "The full tools tier runs only when `verify/scope_tests.py` returns FULL for the change, and at release points"),
+    "never on every promotion to main": "never on every promotion to main and never inside a run.",
     "one tier test alone": "To run one tier test alone, change it and run the scoped `run-e2e-tools.sh`",
 }
 OLD_POINT1 = "run `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`, run the live check"
@@ -86,4 +87,4 @@ check("putting point 1's old run-both-suites wording back fails", bool(problems(
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)
-print("\nCLAUDE.md's point 6 holds #1191: a run tests what it changed, and the full tools tier is the gate's")
+print("\nCLAUDE.md's point 6 holds #1191: a run tests what it changed, and the full tools tier runs on FULL and at release points")
