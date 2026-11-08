@@ -39319,3 +39319,52 @@ in `traces/llmobs`, a pipeline that does not feed Tempo.
 `trace_id:<sha256 of the tools/call trace id>[:32]` for each tool call's gateway trace. It should find nothing, and
 the gateway's own trace should still hold the pair. Also rerun `CONTEXT=watch-it-burn-private python3
 verify/one_root_probe.py`.
+## 2026-11-08 · #877 · run 18769 · Run 17501's draft ported onto staging, with item 1's cause read again live on both clusters
+
+**Why the draft is reused.** `bash verify/prior-drafts.sh 877 origin/staging` printed START from
+`origin/agent/877-17501`, 786 staging commits behind, with two drift lines, both edits in place: `decisions.md` (an
+append) and `gitops/otel-collector/values.yaml` (c1832c82, #1080, which adds a `deployment.environment.name` insert
+to the resource processor and leaves `filter/drop_noise` and `traces/llmobs` alone). The issue had no comments, so
+no reason for the draft not landing was on record. Both commits cherry-picked with no conflict and nothing in them
+differs from the draft. Since the draft, staging added `transform/llmobs_model` (#784) to `traces/llmobs`, and the
+test reads that pipeline's processors from the rendered config, so it runs the new processor too. guard-proxy is now
+pinned at 5772a5d, and its `tasks/get` poll still goes out sampled (`proxy.py`, the `/chat` forward). The
+workshop-agent on watch-it-burn-private still runs `ghcr.io/kagent-dev/kagent/golang-adk:0.10.1` and the gateway
+`agentgateway:v1.7.0`, so both findings about the source still hold.
+
+**Item 1, read again in Datadog (2026-11-08, about 21:20Z).** The APM spans API (`service:burritobot-gateway`, the
+last 72 hours, the `watch-it-burn/datadog` read pair) returned 200 gateway spans. Each `tools/call` span id showed
+up in exactly two traces, on burritobot-private and burritobot-public alike, and in each pair one trace id is the
+first 32 hex digits of the other's SHA-256, the id `transform/llmobs_one_root` gives the copy. Eight of them:
+
+    span 16002158929781734172  9630b502f35dfa80c637f3f379b09e2c / cbdae3702ca2b37033a1c47f8258a830
+    span 5061982352099191324   6cada55e5105aae9e88cbdcadbac8b37 / a11771113971abb0f941547840ca5f4e
+    span 16847315063312326554  9a59b70b185aa4c1fdb11b15c094036c / d02c62453a1a4fc12cfff9967d9d150f
+    span 7728569725437607161   4b2592989cc1b1de94b7fbbdcf69824d / 776c88b484b2a9c0c15cdc9446bccc9b
+    span 17435306859895422102  79cf89178863bacd429592b5ca9a6910 / f7323cb4b28fef7f718e0ad39d277ecc
+    span 5424373821849909677   3696c5126f3abd9fb00e14fe393fa8b3 / 5c94de0c7c2557554e5174b086fbbc5d
+    span 8549996656192724554   3696c5126f3abd9fb00e14fe393fa8b3 / 5c94de0c7c2557554e5174b086fbbc5d
+    span 17488388697001617696  b462613548ae7877aaf52b17d53f9adb / e4fd83f8fbd64b568afbfd7f274ded16
+
+So the second trace per call is still #746's copy, and the new fourth rule in `filter/llmobs_one_root` is what
+removes it. The first trace stays in APM, parentless, until kagent's MCP client sends a traceparent.
+
+**Tests.** `bash verify/run-e2e-tools.sh test_collector_one_root_e2e.py` with the pinned tools: every check passed on
+the instructor, attendee and burn collectors, including the four #877 checks (the poll stays whole in the one trace,
+APM keeps the tools/call pair, the copy has the turn's model calls, the copy has no gateway span). `1 checks ran
+(the 1 tier tests named, no offline suite) in 1m19s`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The rest of the
+scoped offline suite and tier, the tests that also read `values.yaml`, are left to validation.
+
+**Live, on watch-it-burn-private (run 18769).** `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`
+passed every check on trace `52c3af90c4c14ecaaf28ad3048bbd5bd` and printed `One interaction, one root.` Its probe
+pod is gone and the cluster is as found.
+
+**Follow-ups this run names.** Two changes outside this repo finish what the collector cannot: kagent's golang-adk
+MCP transport wrapped in `otelhttp.NewTransport`, so the gateway's tools/call pair joins the turn's trace, and
+guard-proxy-agenticburn sending each `tasks/get` poll under an unsampled traceparent with urllib's span suppressed,
+so the polls drop at source.
+
+**Not yet run on a cluster.** The same as run 17501's entry: once Argo CD has synced this collector config, send one
+Challenge 1 turn (`bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`), read APM for
+`trace_id:<sha256 of each tools/call trace id>[:32]` and find nothing, check the gateway's own trace still holds
+the pair, and rerun `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`.
