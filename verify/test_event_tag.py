@@ -137,8 +137,10 @@ check(f"every documented boundary apply passes -var event=\"${{WIB_EVENT}}\" (mi
 # shared-vpc and attendee-cluster READMEs showed them bare, which prompts or fails since the network root
 # lost its default. Each passes the variable, and its document sources fleet/event.sh before the first one.
 def repo_docs():
+    # tmp/ is the repo's ignored scratch, where hecaton's TMPDIR sits and other tests write and remove files (#1119).
     skip = {".git", ".terraform", "node_modules"}
-    return sorted(p for p in REPO.rglob("*.md") if p.is_file() and not skip & set(p.relative_to(REPO).parts))
+    return sorted(p for p in REPO.rglob("*.md") if p.is_file() and not skip & set(p.relative_to(REPO).parts)
+                  and p.relative_to(REPO).parts[0] != "tmp")
 tf_cmd = re.compile(r"\bterraform(?: -chdir=\S+)? (apply|destroy)\b")
 net_lines, net_bad = [], []
 for d in repo_docs():

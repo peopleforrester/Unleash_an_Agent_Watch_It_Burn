@@ -68,8 +68,11 @@ def tracked_markdown() -> list[pathlib.Path]:
     out = []
     for p in sorted(REPO.rglob("*.md")):
         rel = p.relative_to(REPO).as_posix()
-        # .claude/worktrees/ holds other checkouts of this repo (git worktrees), each read in its own run.
-        if rel.startswith((".git/", ".venv/", ".claude/worktrees/")) or "/.feedback/" in f"/{rel}" \
+        # .claude/worktrees/ holds other checkouts of this repo (git worktrees), each read in its own run. tmp/ is the
+        # repo's ignored scratch, where hecaton's TMPDIR sits (<worktree>/tmp/hecaton) and tier tests init terraform
+        # roots: in run 18438 this walk listed a module's CHANGELOG.md in test_lab_platform_operator_entry.py's temp
+        # directory, which that test removed before this one opened it, and the offline suite failed on it (#1119).
+        if rel.startswith((".git/", ".venv/", ".claude/worktrees/", "tmp/")) or "/.feedback/" in f"/{rel}" \
                 or "/node_modules/" in f"/{rel}":
             continue
         if rel in EXEMPT or rel.startswith(TRANSCRIPTS):
