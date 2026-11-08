@@ -37087,3 +37087,78 @@ re-measurement ran against Bedrock from the run directory, not on the bot.
 **What the run spent.** No calls on the live bot. About 480 Nova Pro `converse` calls across the before/after
 measurement and the two-draft comparison, run through boto3 1.40.70 and PyYAML 6.0.3 under `uv run --with` in the
 run directory only. No dependency was added to the repo.
+## 2026-11-08 · #1013 · run 18657 · A test holds #968's owed live run on the public bot, and the names its record uses
+
+**What #1013 asks.** Test review run 18016 found that no test checked #968's criterion that the live run on the
+public bot, once the recipe rule and guard-proxy's kitchen note are both on the community cluster, is named under
+"Not yet run on a cluster" in its decisions.md entry. `verify/prior-drafts.sh 1013 origin/staging` printed NONE, and
+the issue's only comment is the coordinator's restart of run 18067, which left no commits, so this is a first draft.
+
+**The test.** `verify/test_968_live_run_owed.py` (offline, so `bash verify/run-tests.sh` runs it) reads the three #968
+entries, runs 17897, 17919 and 17954, as literal text, and holds three things:
+
+1. The record. Run 17954 is #968's latest entry and carries exactly one **Not yet run on a cluster.** paragraph, with
+   exactly one clause naming a fallback prompt id. That clause says "The live run on the public bot", "as named in
+   the two entries above", one URL, `c3-recon` then `c3-attack` in one chat, Reset, then `c3-attack`, at least five
+   times each as run 17832 ran them for #953, once this rule and guard-proxy's note are both on
+   watch-it-burn-community.
+2. The two entries above. The only #968 entries before run 17954 are runs 17897 and 17919, in that order, and each
+   one's owed paragraph names the same run: the same URL, the same prompt ids in the same order with Reset before the
+   third, the same count and precedent, and the same cluster. Run 17897 writes "the community cluster", which the
+   test resolves to the roster's one community cluster.
+3. The names. Both prompt ids are prompts in `facilitation/kubecon-na-2026/fallback/prompts.yaml`, once each, the
+   recon one asking for the folders and the attack one for the recipe from burrito-data. The URL is
+   `gitops/ai-layer/web/event.js`'s `publicUrl`, and its host is in `publicHosts`. The cluster is the one community
+   row in `infra/terraform/fleet/roster.tsv`, which `fleet.sh` (sourced, its `public_host_for`,
+   `role_of_instructor_name` and `twin_rows`) gives the community role and publishes on that host. "guard-proxy's
+   note" is the kitchen note the recipe rule in `gitops/workshop-agent/agent.yaml` quotes, byte-equal to
+   `KITCHEN_NOTE` in `verify/test_recipe_persona.py`.
+
+Each check also runs against mutated copies, 41 in all: the 17954 entry with its heading, label, URL, prompt order,
+Reset, "in one chat", count, precedent, note or cluster struck or changed, a second owed paragraph or a later #968
+entry added; the two earlier entries with a heading, label, URL, Reset, count, precedent or cluster changed, or a third
+entry above; and the sheet, event.js, the roster, fleet.sh, the rule and `KITCHEN_NOTE` each with what the test reads
+changed. Every mutated copy is refused. A mutated `fleet.sh` is sourced from a scratch tree laid out as the repo's, and
+the test exits if the cut changed any fact other than the one it aims at, so a copy that failed to source cannot pass
+as a refusal. Its scope-map entry is added by hand: `python3 verify/scope_tests.py write` also rewrote several hundred
+unrelated lines of the map (drift already on staging, as run 18609 found), so only this test's entry, as `write`
+computed it, is committed.
+
+**Live check: skipped.** The change touches only `verify/` files no cluster runs and decisions.md.
+
+**Not yet run on a cluster.** Nothing here needs one: the test reads the tree. #968's own live run stays owed where
+its entries name it.
+
+**The suites (run 18657, at `f8dc3edd`; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as CLAUDE.md's point 6 asks: `bash verify/run-tests.sh`
+printed `101 tests ran` (101 of the 366 offline tests, `test_968_live_run_owed.py` among them) and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `exit=0`; `bash verify/run-e2e-tools.sh` printed `15 checks ran (the offline suite and 14
+tier tests) in 6m09s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose
+gate: pass`. No dependency was added. The logs are `/var/lib/hecaton/runs/18657/run-tests.log` and `e2e-tools.log`.
+## 2026-11-08 · #1014 · run 18658 · Point 4 names the shell tool's 7200000 ms limit and what a run does past it
+
+**What changed.** Dispatched runs point 4 in AGENTS.md (CLAUDE.md links to it) gave the background job for `bash
+verify/run-e2e-tools.sh` a 3600000 ms limit. Run 17957 (#977) was cut off at that limit inside the tier, at
+`test_injection_classifier.py`, with no check failed, and its second try under 7200000 ms took 72m16s; runs 17929 and
+16533 took 36m20s and 22m58s. Point 4 now names 7200000 ms, the most the shell tool allows, with those three times.
+It also says what a run does when even that is not enough: the log then has no `exit=` line and ends with the runner's
+`STOPPED by a signal` block; the run does not start the suite again (#1190), works out from the `-- <check> took`
+lines and the `scope: running` selection which checks ended and which never did, records both and the log's path in
+its decisions.md entry, reports any failed check as a failure, and ends `partial` with the unfinished checks named, so
+the next run on the issue runs them. Ending `partial` keeps a run from claiming a suite it never saw finish.
+
+**The test that read it.** `git grep -nF '3600000' -- verify scripts` found one reader,
+`verify/test_dispatched_runs.py`, which checked for `3600000 ms`. It now checks for the 7200000 ms wording and that
+the old limit is gone, for run 17957 and its 72m16s, for the new step, and that the lines the step reads by
+(`STOPPED by a signal after`, `-- %s took`, `scope: running`) are the ones `run-e2e-tools.sh` and
+`scope_tests.py` print, so a reworded runner line fails the test rather than leaving the rule pointing at nothing.
+
+**Live check: skipped.** The change touches AGENTS.md, decisions.md and a `verify/` test no cluster runs.
+
+**Suites (run 18658, at `82a7b2d5`).** Both runs were scoped to the change from `c43ecf34`, as point 6 asks. The
+change also edits a `verify/` test, and 16 tier tests read AGENTS.md, decisions.md or that test (or run always), so
+the scoped tools tier ran as well. `bash verify/run-tests.sh` printed `102 tests ran` and `ALL OFFLINE RENDER-GATE
+TESTS GREEN`, exit 0. `bash verify/run-e2e-tools.sh` printed `17 checks ran (the offline suite and 16 tier tests) in
+5m59s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_dispatched_runs.py` alone printed
+"All dispatched-run checks passed." The prose gate printed `prose gate: pass`. No dependency was added. The logs are
+`/var/lib/hecaton/runs/18658/run-tests.log` and `e2e-tools.log`.

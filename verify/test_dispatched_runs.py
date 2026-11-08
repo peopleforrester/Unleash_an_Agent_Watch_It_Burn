@@ -168,7 +168,18 @@ check("the E2E command does run run-tests.sh, as the item says",
       "run-tests.sh" in poll and 'bash "${SCRIPT_DIR}/run-tests.sh"' in runner)
 check("the intro names runs 15816 and 9604 and #796",
       "Run 15816" in runs_flat and "run 9604 to the fifth (#796)" in runs_flat)
-check("it gives the background limit as 3600000 ms", "3600000 ms" in poll)
+check("it gives the background limit as 7200000 ms, the shell tool's most (#1014)",
+      "limit is 7200000 ms, the most the shell tool allows" in poll and "limit is 3600000 ms" not in poll)
+check("it names run 17957's cut-off under 3600000 ms and its 72m16s", "run 17957 (#977)" in poll
+      and "72m16s" in poll)
+check("it says what a run does when even 7200000 ms is not enough",
+      "When even 7200000 ms is not enough" in poll and "does not start the suite again (#1190)" in poll
+      and "`partial`" in poll and "never ended" in poll)
+check("the lines it reads a cut-off log by are the ones the runner and the selector print",
+      "`STOPPED by a signal`" in poll and "STOPPED by a signal after" in runner
+      and "`-- <check> took`" in poll and "printf -- '-- %s took %ds\\n'" in runner
+      and "`scope: running`" in poll
+      and 'print(f"scope: running {len(why)} of' in (REPO / "verify" / "scope_tests.py").read_text(encoding="utf-8"))
 check("it names run 15816 and the 20 minutes it gave the job", "run 15816 gave it 20 minutes" in poll)
 log = """`bash verify/run-e2e-tools.sh >"$LOG" 2>&1; echo "exit=$?" >>"$LOG"`"""
 check("the log it names gets the exit line", log in poll)
