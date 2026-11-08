@@ -5988,6 +5988,7 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/agent_probe.py
+    - verify/fake_lease_kubectl.py
     - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/stage_switch_check.py

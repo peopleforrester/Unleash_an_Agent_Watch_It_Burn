@@ -2,15 +2,14 @@
 # ABOUTME: a failing, raising or interrupted switch, and both clusters' guard lock held across the run, kubectl and HTTP faked.
 """Runs the stage-switch command against a fake pair of clusters, with no cluster and no network.
 
-FakeWorld answers every kubectl call the command and verify/guard_lease.py make: the Lease agent/wib-guard-lock on
-each context (create, get, replace, delete with its resourceVersion precondition), the private cluster's
-guardrails-peer name and cluster-identity, and the terminal commands, which change the fake /controls the way the
+FakeWorld answers every kubectl call the command and verify/guard_lease.py make: the Lease agent/wib-guard-lock and the
+guardrails-peer name on each context, through one verify/fake_lease_kubectl.py FakeLeaseApi per context, the private
+cluster's cluster-identity, and the terminal commands, which change the fake /controls the way the
 terminal's own commands change the real ones. The lock code is the real guard_lease.hold_switch, so "held" here means
 a Lease naming this run was in the fake API on both contexts when each terminal command ran.
 """
 from __future__ import annotations
 
-import base64
 import contextlib
 import copy
 import io
@@ -26,6 +25,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 import guard_lease  # noqa: E402
 import kubecon_probe as kp  # noqa: E402
+from fake_lease_kubectl import FakeLeaseApi  # noqa: E402
 import stage_switch_check as ssc  # noqa: E402
 import stage_switch_run as ssr  # noqa: E402
 
@@ -59,11 +59,10 @@ class FakeWorld:
         self.controls = {"private": start_read("burritobot-private.agenticburn.com", True, agency),
                          "community": start_read("attackme.agenticburn.com", False, agency)}
         self.agency = agency
-        self.leases: dict[str, dict] = {}
-        self.rv = 0
+        # Each cluster's own Lease; the private cluster's guardrails-peer names the community one.
+        self.apis = {PRIVATE: FakeLeaseApi(peer=COMMUNITY), COMMUNITY: FakeLeaseApi(peer=PRIVATE)}
         self.events: list[tuple] = []
         self.identity = "burritobot-private.agenticburn.com"
-        self.peer = COMMUNITY
         self.reach = {name: ("private", "community") for name in [*TALK_ORDER, *ssr.CLOSE]}
         self.rc: dict[str, int] = {}
         self.raise_on: dict[str, BaseException] = {}
@@ -89,6 +88,10 @@ class FakeWorld:
                     continue
                 self.controls[cluster][section][key] = on
 
+    @property
+    def leases(self) -> dict[str, dict]:
+        return {c: api.lease for c, api in self.apis.items() if api.lease}
+
     def _lease_holders(self) -> dict[str, str]:
         return {c: (l.get("spec") or {}).get("holderIdentity", "") for c, l in self.leases.items()}
 
@@ -111,43 +114,16 @@ class FakeWorld:
                 raise self.raise_on[name]
             self._apply(name)
             return done(self.rc.get(name, 0), f"{name} ran\n")
-        if args[:2] == ["-n", "agent"] and "lease" in args and "get" in args:
-            lease = self.leases.get(ctx)
-            return done(0, json.dumps(lease) if lease else "")
-        if args[:1] == ["create"]:
-            if ctx in self.leases:
-                return done(1, "", 'Error from server (AlreadyExists): leases "wib-guard-lock" already exists')
-            self.rv += 1
-            body = json.loads(input)
-            body["metadata"]["resourceVersion"] = str(self.rv)
-            self.leases[ctx] = body
-            self.events.append(("lease-create", ctx))
-            return done(0, json.dumps(body))
-        if args[:1] == ["replace"]:
-            body = json.loads(input)
-            cur = self.leases.get(ctx)
-            if cur is None:
-                return done(1, "", "NotFound")
-            if body["metadata"].get("resourceVersion") != cur["metadata"]["resourceVersion"]:
-                return done(1, "", "Conflict")
-            self.rv += 1
-            body["metadata"]["resourceVersion"] = str(self.rv)
-            self.leases[ctx] = body
-            return done(0, json.dumps(body))
-        if args[:2] == ["delete", "--raw"]:
-            pre = json.loads(input)["preconditions"]["resourceVersion"]
-            cur = self.leases.get(ctx)
-            if cur is None or cur["metadata"]["resourceVersion"] != pre:
-                return done(1, "", "Conflict")
-            del self.leases[ctx]
-            self.events.append(("lease-delete", ctx))
-            return done(0, "")
-        if "guardrails-peer" in args:
-            assert ctx == PRIVATE, f"the peer is read on the private context, not {ctx}"
-            return done(0, base64.b64encode(self.peer.encode()).decode() if self.peer else "")
         if "cluster-identity" in args:
             return done(0, self.identity)
-        raise AssertionError(f"unexpected kubectl call: {cmd}")
+        before = self.apis[ctx].lease
+        p = self.apis[ctx].run(cmd, input=input)
+        assert p.returncode != 9, p.stderr
+        if before is None and self.apis[ctx].lease is not None:
+            self.events.append(("lease-create", ctx))
+        if before is not None and self.apis[ctx].lease is None:
+            self.events.append(("lease-delete", ctx))
+        return p
 
     def fetch(self, host: str):
         cluster = {h: c for c, h in ssc.CLUSTERS.items()}[host]
@@ -346,7 +322,7 @@ check(signal.getsignal(signal.SIGINT) is signal.default_int_handler, "the ^C han
 # --- the lock ------------------------------------------------------------------------------------------------------
 
 w = FakeWorld()
-w.leases[COMMUNITY] = {"apiVersion": "coordination.k8s.io/v1", "kind": "Lease",
+w.apis[COMMUNITY].lease = {"apiVersion": "coordination.k8s.io/v1", "kind": "Lease",
                        "metadata": {"name": guard_lease.NAME, "resourceVersion": "99"},
                        "spec": {"holderIdentity": "kubecon_probe.py community pid 1 by x@y in z",
                                 "leaseDurationSeconds": 300,
@@ -358,13 +334,13 @@ check(code == guard_lease.BUSY_EXIT and not w.terminals() and "NOT RUN" in text 
 check(PRIVATE not in w.leases and COMMUNITY in w.leases, "the private lock it took is released; the other's is kept")
 
 w = FakeWorld()
-w.peer = ""
+w.apis[PRIVATE].peer = ""
 code, text = go(w)
 check(not any(e[0] == "lease-create" and e[1] == COMMUNITY for e in w.events),
       "an unlinked private cluster holds its own lock only (guard_lease's rule)")
 
 w = FakeWorld()
-w.during["guardrails-off"] = lambda: w.leases.pop(COMMUNITY)
+w.during["guardrails-off"] = lambda: setattr(w.apis[COMMUNITY], "lease", None)
 code, text = go(w)
 r = rows(text)
 check(code == 1 and r.get(("guard-lock", "-")) == "FAIL", "a lock lost during the run is a FAIL line")
