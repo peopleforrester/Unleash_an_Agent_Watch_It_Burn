@@ -48,6 +48,15 @@ def save():
     json.dump(state, open(state_path, "w"))
 if "application" in args:
     sys.stdout.write("attendee"); sys.exit(0)
+if "guardrails-peer" in args:
+    # An attendee cluster has no guardrails-peer Secret: the terminal's switches run on it alone (#1147).
+    if "--ignore-not-found" in args:
+        sys.exit(0)
+    sys.stderr.write('Error from server (NotFound): secrets "guardrails-peer" not found\n'); sys.exit(1)
+if "get" in args and "deployment" in args:
+    # The Deployment kagent rolls for each new toolNames list, read by guard-mcp-on's wait (#1149): rolled at once.
+    g = str(1 + state["patches"])
+    sys.stdout.write(g if args[-1] == "jsonpath={.metadata.generation}" else f"{g} {g} 1 1 1"); sys.exit(0)
 if "get" in args and "workshop-agent" in args and args[-2:] == ["-o", "json"]:
     print(json.dumps(state["agent"]))
     if os.environ.get("FAKE_REORDER_AFTER_GET"):

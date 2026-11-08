@@ -536,10 +536,32 @@ _STYLE = ("body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:6vh au
           "button{font:inherit;margin:.2rem .3rem .2rem 0}")
 
 
-def _shell(title: str, body: str) -> str:
+# The private desk's banner (#1178, part of #1142). support.burritobot.co and the private cluster's
+# support-burritobot-private.burritobot.co served the same pages, so nothing told the presenters which desk was open.
+# The pages are rendered here, so the request's Host decides, as the chat page's host check does in the browser (#761):
+# nothing is baked per cluster. The look is the chat page's .combanner (gitops/ai-layer/web/burritbot.html). One
+# helper carries the markup and its style, taking the page's name, so the deployments page can show its own. Any other
+# host gets the empty string, so its page is byte for byte what it was.
+PRIVATE_DESK_HOST = re.compile(r"^support-burritobot-private\.")
+BANNER_STYLE = (".combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:#C62222;"
+                "border:1px solid #8E1414;border-radius:10px;padding:10px 12px;margin:0 0 10px}")
+
+
+def private_banner(page: str) -> str:
+    """The red banner naming the private (administrator) <page>, with its style."""
+    return (f'<style>{BANNER_STYLE}</style>'
+            f'<div class="combanner" id="privatebanner">This is the private (administrator) {html.escape(page)}.</div>')
+
+
+def desk_banner(host: str) -> str:
+    """The support desk's banner for a request's Host header: the private desk's banner, or nothing."""
+    return private_banner("support desk") if PRIVATE_DESK_HOST.match((host or "").strip().lower()) else ""
+
+
+def _shell(title: str, body: str, banner: str = "") -> str:
     return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>{html.escape(title)}</title><style>{_STYLE}</style>"
-            f'<h1>Hex &amp; Cauldron support desk</h1>{body}')
+            f'{banner}<h1>Hex &amp; Cauldron support desk</h1>{body}')
 
 
 def _article(t: dict) -> str:
@@ -557,7 +579,7 @@ LOOKUP_PATH = "/lookup"
 LOOKUP_FIELD = "number"
 
 
-def desk() -> str:
+def desk(banner: str = "") -> str:
     # The desk no longer shows the HC-666 walkthrough (the "Ask BurritoBot about ticket HC-666" heading, the
     # "Copy this into the chat" line, the ready-to-copy prompt and its Copy button) or the witch-name box (#764):
     # the presenters introduce Challenge 3 themselves, and the chat page assigns the witch name now (#762).
@@ -579,7 +601,7 @@ def desk() -> str:
 <form id="lookup" method="get" action="{LOOKUP_PATH}">
 <label for="number">Ticket number</label> <input id="number" name="{LOOKUP_FIELD}" required maxlength="40"
 autocomplete="off" autocapitalize="characters" spellcheck="false">
-<button type="submit">Look up</button></form>""")
+<button type="submit">Look up</button></form>""", banner)
 
 
 def lookup_location(query: str) -> str | None:
@@ -589,7 +611,7 @@ def lookup_location(query: str) -> str | None:
     return f"/{one['id']}" if one else None
 
 
-def me_page(name: str) -> str:
+def me_page(name: str, banner: str = "") -> str:
     mine = [t for t in TICKETS.values() if t.get("owner") == slug(name)]
     jokers = [r for r in LANDINGS if r["name"] == f"joker-{slug(name)}" or r.get("witch") == name]
     rows = "".join(f"<li>{'landed' if r['ok'] else 'refused'} at {r['at']}: <code>{html.escape(r['name'])}</code>"
@@ -600,17 +622,24 @@ def me_page(name: str) -> str:
     return _shell("Your desk", f"""<div class="you">You are <b id="witch-name">{html.escape(name)}</b>.</div>
 <h2>Your Joker: <code>joker-{html.escape(slug(name))}</code></h2><ul>{rows}</ul>
 <h2>Your tickets</h2>{''.join(_article(t) for t in mine) or '<p class="meta">No tickets yet.</p>'}
-<p><a href="/">Back to the desk</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>""")
+<p><a href="/">Back to the desk</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>""", banner)
 
 
-WALL = _shell("Deployments wall", """<h2>Everything BurritoBot deployed</h2><ul id="wall"></ul>
+_WALL_BODY = """<h2>Everything BurritoBot deployed</h2><ul id="wall"></ul>
 <script>
 async function tick(){try{const r=await fetch('/wall.json',{cache:'no-store'});const rows=await r.json();
 const ul=document.getElementById('wall');ul.replaceChildren(...rows.map(x=>{const li=document.createElement('li');
 li.textContent=(x.ok?'\\u{1F0CF} ':'\\u{1F6E1} ')+x.who+(x.ok?"'s Joker landed: ":' was refused: ')+x.name+' at '+x.at;
 return li;}));}catch(e){}}
 tick();setInterval(tick,3000);
-</script>""")
+</script>"""
+
+
+def wall_page(banner: str = "") -> str:
+    return _shell("Deployments wall", _WALL_BODY, banner)
+
+
+WALL = wall_page()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -680,11 +709,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, deployments((urllib.parse.parse_qs(url.query).get("witch") or [""])[0][:80]))
         elif url.path == "/":
             self._visitor()   # set/honor the wib_witch cookie so the desk, /me and wall share one name (#762)
-            self._page(desk())
+            self._page(desk(desk_banner(self.headers.get("Host") or "")))
         elif url.path == "/me":
-            self._page(me_page(self._visitor()))
+            self._page(me_page(self._visitor(), desk_banner(self.headers.get("Host") or "")))
         elif url.path == "/wall":
-            self._page(WALL)
+            self._page(wall_page(desk_banner(self.headers.get("Host") or "")))
         elif url.path == "/wall.json":
             with _lock:
                 rows = [{k: r.get(k, "") for k in ("name", "who", "image", "ok", "detail", "at")}

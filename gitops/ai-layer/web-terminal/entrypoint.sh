@@ -75,7 +75,8 @@ cat > "$HOME/.guardlib" <<'EOS'
 # the result. Michael, 2026-10-29: the room sees the real kubectl behind every guard command, not only the text.
 # An argument is quoted the way bash reads it back: double quotes when it holds a ' and no " \ $ or `, else single
 # quotes. verify/test_guard_commands_echo.py runs every printed line and compares it with the call that ran.
-_show() { local a o='$'
+# _q <cmd...> prints the same quoting as one line, each word after a space, for a `$` line that pipes the call on.
+_q() { local a o=''
   for a in "$@"; do
     case "$a" in
       *[!A-Za-z0-9_./=:,@%+-]*)
@@ -86,62 +87,161 @@ _show() { local a o='$'
       *) o+=" $a" ;;
     esac
   done
-  printf '%s\n' "$o" >&2; }
+  printf '%s' "$o"; }
+_show() { printf '$%s\n' "$(_q "$@")" >&2; }
 _px() { local c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
   "import urllib.request;urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10).read()")
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
 _pxkey() { local c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
   "import json,urllib.request;print(json.load(urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10)).get('$2','missing'))")
   _show "${c[@]}"; "${c[@]}" 2>/dev/null | tail -1; }
-# _evil <json-array> : set ONLY the evil-mcp toolNames. It reads the live Agent, finds the tools entry whose
-# mcpServer.name is evil-mcp (.evilpatch.py, never a fixed place in the array), and JSON-patches that entry's
+# C7's helpers each take the kubectl to use last, the way _kg does: none means kubectl, this cluster; _both hands them
+# kubectl --kubeconfig ~/.kube/peer --context <name> for the other KubeCon cluster (#1149).
+# _evil <json-array> [kubectl...] : set ONLY the evil-mcp toolNames. It reads the live Agent, finds the tools entry
+# whose mcpServer.name is evil-mcp (.evilpatch.py, never a fixed place in the array), and JSON-patches that entry's
 # toolNames after a test op on its name, so a reorder in gitops/workshop-agent/agent.yaml, or one between the read
-# and the patch, fails instead of narrowing workshop-mcp (#708). The real BurritoBot tools are never touched.
-_evil() { local p c
-  printf '$ kubectl -n agent get agent workshop-agent -o json | python3 "$HOME/.evilpatch.py" %s\n' "'$1'" >&2
-  p="$(kubectl -n agent get agent workshop-agent -o json 2>/dev/null \
-  | python3 "$HOME/.evilpatch.py" "$1")" || return 1
-  c=(kubectl -n agent patch agent workshop-agent --type=json -p "$p")
-  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
-# _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root lab-bootstrap is
-# labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml), or the KubeCon private one, labelled
-# kubecon-private (values-kubecon-private.yaml, #774): there it is agentgateway's rule. Returns 1 anywhere else: there
-# it is the toolNames allow-list. Returns 2 when Argo CD could not be asked, so a flaky lookup never picks
-# the wrong control for an admin cluster's stage demo.
-_c7gw() { local r c=(kubectl -n argocd get application lab-bootstrap --ignore-not-found \
-  -o jsonpath='{.metadata.labels.lab-platform/profile}')
+# and the patch, fails instead of narrowing workshop-mcp (#708). The real BurritoBot tools are never touched. Sets
+# _C7LIST to same when kubectl says the patch changed nothing, else new.
+_evil() { local n="$1" p c o; shift; [ $# -gt 0 ] || set -- kubectl
+  _C7LIST=""
+  c=("$@" -n agent get agent workshop-agent -o json)
+  printf '$%s | python3 "$HOME/.evilpatch.py" %s\n' "$(_q "${c[@]}")" "'$n'" >&2
+  p="$("${c[@]}" 2>/dev/null | python3 "$HOME/.evilpatch.py" "$n")" || return 1
+  c=("$@" -n agent patch agent workshop-agent --type=json -p "$p")
+  _show "${c[@]}"; o="$("${c[@]}" 2>/dev/null)" || return 1
+  case "$o" in *"(no change)"*) _C7LIST=same ;; *) _C7LIST=new ;; esac; }
+# _c7gw [kubectl...] : C7's control on that cluster. Returns 0 on an admin cluster, whose Argo CD root lab-bootstrap
+# is labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml), or the KubeCon private one, labelled
+# kubecon-private (values-kubecon-private.yaml, #774): there it is agentgateway's rule. Returns 1 anywhere else, the
+# KubeCon community cluster (kubecon-community) among them: there it is the toolNames allow-list. Returns 2 when Argo
+# CD could not be asked, so a flaky lookup never picks the wrong control for an admin cluster's stage demo.
+_c7gw() { local r c; [ $# -gt 0 ] || set -- kubectl
+  c=("$@" -n argocd get application lab-bootstrap --ignore-not-found \
+    -o jsonpath='{.metadata.labels.lab-platform/profile}')
   _show "${c[@]}"; r="$("${c[@]}" 2>/dev/null)" || return 2; [ "$r" = admin ] || [ "$r" = kubecon-private ]; }
-# _c7rule on|off : rewrite the one rule line in agentgateway-c7-config (on = get_weather only, off = 'true').
-# The JSON patch tests the resourceVersion it read, so it never writes over a change it did not see. Then it
-# touches the gateway pod: a pod update makes the kubelet refresh the ConfigMap volume now instead of on its
-# next periodic sync, and agentgateway reloads the file when it changes. The touch is best effort.
-_c7rule() { local p c
-  printf '$ kubectl -n agent get configmap agentgateway-c7-config -o json | python3 "$HOME/.c7rule.py" %s\n' "$1" >&2
-  p="$(kubectl -n agent get configmap agentgateway-c7-config -o json 2>/dev/null \
-  | python3 "$HOME/.c7rule.py" "$1")" || return 1
-  c=(kubectl -n agent patch configmap agentgateway-c7-config --type=json -p "$p")
-  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1 || return 1
-  c=(kubectl -n agent annotate pod -l app.kubernetes.io/name=agentgateway --overwrite \
+# _c7rule on|off [kubectl...] : rewrite the one rule line in agentgateway-c7-config (on = get_weather only, off =
+# 'true'). The JSON patch tests the resourceVersion it read, so it never writes over a change it did not see. Then it
+# touches the gateway pod: a pod update makes the kubelet refresh the ConfigMap volume now instead of on its next
+# periodic sync, and agentgateway reloads the file when it changes. The touch is best effort. Sets _C7RULE to same
+# when kubectl says the patch changed nothing (so there is no reload to wait for), else new.
+_c7rule() { local st="$1" p c o; shift; [ $# -gt 0 ] || set -- kubectl
+  _C7RULE=""
+  c=("$@" -n agent get configmap agentgateway-c7-config -o json)
+  printf '$%s | python3 "$HOME/.c7rule.py" %s\n' "$(_q "${c[@]}")" "$st" >&2
+  p="$("${c[@]}" 2>/dev/null | python3 "$HOME/.c7rule.py" "$st")" || return 1
+  c=("$@" -n agent patch configmap agentgateway-c7-config --type=json -p "$p")
+  _show "${c[@]}"; o="$("${c[@]}" 2>/dev/null)" || return 1
+  case "$o" in *"(no change)"*) _C7RULE=same ;; *) _C7RULE=new ;; esac
+  c=("$@" -n agent annotate pod -l app.kubernetes.io/name=agentgateway --overwrite \
     "wib.agenticburn.com/c7-rule-at=$(date +%s)")
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1 || true; }
-# _mcp on|off : flip C7 through this cluster's control. Prints which one it used (gateway or toolnames), or
-# nothing, with a failing status, when the change did not go through. On an admin cluster the rule is written
-# first, so a refused patch (a stale read) leaves the allow-list as it was too; nothing here deletes, restarts
-# or rolls out the gateway pod.
-_mcp() { local all='["get_weather","read_internal_config","apply_optimization"]' gw
-  _c7gw; gw=$?
-  case "$gw:$1" in
-    0:on)  _c7rule on && _evil "$all" && echo gateway ;;
-    0:off) _c7rule off && _evil "$all" && echo gateway ;;
-    1:on)  _evil '["get_weather"]' && echo toolnames ;;
-    1:off) _evil "$all" && echo toolnames ;;
-    *) return 1 ;;
+# _c7gen [kubectl...] : the workshop-agent Deployment's generation, read into _C7GEN before a toolNames write, so the
+# wait below can tell kagent's roll for the new list from the Deployment as it was. Empty when it could not be read.
+_c7gen() { local c; [ $# -gt 0 ] || set -- kubectl
+  c=("$@" -n agent get deployment workshop-agent -o 'jsonpath={.metadata.generation}')
+  _show "${c[@]}"; _C7GEN="$("${c[@]}" 2>/dev/null)" || _C7GEN=""; }
+# _who <kubectl...> : the cluster a kubectl reaches, as the switches name it: its --context, or This cluster.
+_who() { local a p=""
+  for a in "$@"; do [ "$p" = --context ] && { printf '%s\n' "$a"; return; }; p="$a"; done
+  echo "This cluster"; }
+# _mcp on|off [kubectl...] : flip C7 on one cluster through that cluster's own control, the one _c7gw picks there.
+# guards-on and guards-off call it bare, for this cluster; guard-mcp-on and guard-mcp-off call it through _both, so it
+# runs here and then on the other KubeCon cluster, each with its own control (#1149). Prints one line naming the
+# cluster and the control it used, or what did not switch, failing then. On an admin cluster the rule is written
+# first, so a refused patch (a stale read) leaves the allow-list as it was too; nothing here deletes, restarts or rolls
+# out the gateway pod. It records what was written in _C7W for _c7wait, and this cluster's control in _C7HERE.
+_C7W=() _C7HERE=""
+_mcp() { local st="$1" all='["get_weather","read_internal_config","apply_optimization"]' gw who t0 ts ctl="" new
+  shift; [ $# -gt 0 ] || set -- kubectl
+  who="$(_who "$@")"; _C7GEN=""
+  _c7gw "$@"; gw=$?
+  t0="$(date +%s)"; ts="$(date -u -d "@$t0" +%Y-%m-%dT%H:%M:%SZ)"
+  case "$gw:$st" in
+    0:on)  _c7rule on "$@" && _evil "$all" "$@" && ctl=gateway ;;
+    0:off) _c7rule off "$@" && _evil "$all" "$@" && ctl=gateway ;;
+    1:on)  _c7gen "$@"; _evil '["get_weather"]' "$@" && ctl=toolnames ;;
+    1:off) _c7gen "$@"; _evil "$all" "$@" && ctl=toolnames ;;
+  esac
+  case "$ctl:$st" in
+    gateway:on)    echo "🛡️  $who: ON, at the gateway. agentgateway-c7-config's rule allows only get_weather on evil-mcp." ;;
+    gateway:off)   echo "🔓 $who: OFF, at the gateway. agentgateway-c7-config's rule is 'true' again: every evil-mcp tool passes." ;;
+    toolnames:on)  echo "🛡️  $who: ON, in the agent's allow-list. evil-mcp's toolNames on the workshop-agent Agent are get_weather alone." ;;
+    toolnames:off) echo "🔓 $who: OFF, in the agent's allow-list. evil-mcp's three tools are back in the workshop-agent Agent's toolNames." ;;
+    *) if [ "$gw" = 2 ]; then
+         echo "⚠️  $who: the MCP tool restriction did not switch $st: Argo CD's lab-bootstrap could not be read there, so neither control was touched."
+       else
+         echo "⚠️  $who: the MCP tool restriction did not switch $st: the write was refused, and the control is as it was."
+       fi
+       return 1 ;;
+  esac
+  new="$_C7LIST"; [ "$ctl" = gateway ] && new="$_C7RULE"
+  [ "$who" = "This cluster" ] && _C7HERE="$ctl"
+  _C7W+=("$ctl|$new|$t0|$ts|$_C7GEN|$(IFS=$'\x1f'; printf '%s' "$*")"); }
+# _c7poll gateway|toolnames <since> <kubectl...> : the read that tells a cluster serves what _mcp wrote, into _P.
+# gateway: agentgateway-c7's log since the write. agentgateway logs `loaded config from File(...)` each time it
+# reloads its file, and keeps the old config, logging no such line, when a reload fails; read live on
+# watch-it-burn-private on 2026-11-08, 8 s after the write with the pod touched. toolnames: the workshop-agent
+# Deployment, which kagent rolls with the new list.
+_c7poll() { local ctl="$1" ts="$2"; shift 2
+  case "$ctl" in
+    gateway) _P=("$@" -n agent logs -l app.kubernetes.io/name=agentgateway -c agentgateway-c7 --since-time="$ts" --tail=-1) ;;
+    *) _P=("$@" -n agent get deployment workshop-agent -o 'jsonpath={.metadata.generation} {.status.observedGeneration} {.status.replicas} {.status.updatedReplicas} {.status.availableReplicas}') ;;
   esac; }
+# _c7served gateway|toolnames <generation before> : runs _P and says whether that cluster serves the change: the
+# gateway logged a reload, or the Deployment's generation moved on and every replica is the new one and available.
+_c7served() { local o g ob r u a
+  o="$("${_P[@]}" 2>/dev/null)" || return 1
+  case "$1" in
+    gateway) case "$o" in *"loaded config from"*) return 0 ;; esac; return 1 ;;
+    *) read -r g ob r u a <<<"$o"
+       [ -n "$2" ] && [ -n "$a" ] && [ "$g" != "$2" ] && [ "$ob" = "$g" ] && [ "$r" = "$u" ] && [ "$u" = "$a" ] ;;
+  esac; }
+# _c7wait <seconds> : after guard-mcp-on, wait on each cluster _mcp wrote to until it serves the change, every 2 s
+# and at most <seconds> after that cluster's write, and print how long each took (#1149: one probe run's guard-mcp-on
+# timed out after 90 s, and the delay had never been measured). Each read is printed once, before the first. A
+# cluster whose write changed nothing has nothing to reload, and says so. Fails, naming the cluster and the bound,
+# when a wait runs out.
+_c7wait() { local bound="$1" e ctl new t0 ts gen rest k left=() next=() who n bad=0
+  for e in "${_C7W[@]}"; do
+    IFS='|' read -r ctl new t0 ts gen rest <<<"$e"; IFS=$'\x1f' read -r -a k <<<"$rest"; who="$(_who "${k[@]}")"
+    if [ "$new" = same ]; then
+      echo "⏱  $who: it already read that way, so there is nothing to reload."; continue
+    fi
+    _c7poll "$ctl" "$ts" "${k[@]}"; _show "${_P[@]}"; left+=("$e")
+  done
+  [ "${#left[@]}" -gt 0 ] || return 0
+  echo "Waiting, up to $bound s after each write, until each cluster serves it."
+  while :; do
+    next=()
+    for e in "${left[@]}"; do
+      IFS='|' read -r ctl new t0 ts gen rest <<<"$e"; IFS=$'\x1f' read -r -a k <<<"$rest"; who="$(_who "${k[@]}")"
+      _c7poll "$ctl" "$ts" "${k[@]}"
+      if _c7served "$ctl" "$gen"; then
+        n=$(( $(date +%s) - t0 ))
+        case "$ctl" in
+          gateway) echo "⏱  $who: the gateway served the new rule $n s after the write (agentgateway-c7 logged that it loaded its config)." ;;
+          *)       echo "⏱  $who: kagent rolled workshop-agent with the new allow-list $n s after the write." ;;
+        esac
+      elif [ $(( $(date +%s) - t0 )) -ge "$bound" ]; then
+        bad=1
+        case "$ctl" in
+          gateway) echo "⚠️  $who: gave up after $bound s: the gateway had not logged a reload of the new rule." ;;
+          *)       echo "⚠️  $who: gave up after $bound s: kagent had not rolled workshop-agent with the new allow-list." ;;
+        esac
+      else
+        next+=("$e")
+      fi
+    done
+    [ "${#next[@]}" -gt 0 ] || break
+    left=("${next[@]}"); sleep 2
+  done
+  return "$bad"; }
 # The KubeCon breakout's switch (#774, Michael's spec 2026-11-01): the four Kubernetes guardrails, RBAC, Kyverno,
 # KubeArmor and egress, turned on or off on this cluster AND on the other KubeCon cluster at once, from either
 # terminal. The other cluster is reached with the kubeconfig `fleet.sh guardrails-link` writes into the
 # guardrails-switch/guardrails-peer Secret: its endpoint, its CA and the token of its guardrails-switch ServiceAccount,
-# whose grant is these guardrails' objects, what _both's steps need, and nothing else (gitops/guardrails-switch/).
+# whose grant is these guardrails' objects, what _both's steps need, and nothing else (gitops/guardrails-switch/, with
+# C7's part, for guard-mcp-on and guard-mcp-off, in mcp-switch.yaml since #1149).
 # _peer : write that kubeconfig to ~/.kube/peer and print the other cluster's name. Prints nothing, failing, when this
 # cluster has not been linked.
 _peer() { local c k n
@@ -378,9 +478,12 @@ EOS
 cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=on" && _px "input_blocklist=on&input_classifier=on" && _px "budget=on"
-if ! _mcp on >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch on; it is left as it was. The other AI guards were"
+# Both KubeCon clusters, as guard-input-on and guard-mcp-on do (#1132); a lone cluster alone.
+if ! _both _toggle "output=on&input_blocklist=on&input_classifier=on&budget=on"; then
+  echo "⚠️  The guard-proxy guards did not switch on everywhere. Run 'guards-on' again; it is safe to repeat."; exit 1
+fi
+if ! _both _mcp on >/dev/null; then
+  echo "⚠️  The MCP tool restriction did not switch on everywhere. The other AI guards were"
   echo "    switched on. Run 'guard-mcp-on' to retry it."; exit 1
 fi
 echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
@@ -390,9 +493,12 @@ EOS
 cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off" && _px "topic=off"
-if ! _mcp off >/dev/null; then
-  echo "⚠️  The MCP tool restriction did not switch off; it is left as it was. The other AI guards were"
+# Both KubeCon clusters back to wide open (#1132); a lone cluster alone.
+if ! _both _toggle "output=off&input_blocklist=off&input_classifier=off&budget=off&topic=off"; then
+  echo "⚠️  The guard-proxy guards did not switch off everywhere. Run 'guards-off' again; it is safe to repeat."; exit 1
+fi
+if ! _both _mcp off >/dev/null; then
+  echo "⚠️  The MCP tool restriction did not switch off everywhere. The other AI guards were"
   echo "    switched off. Run 'guard-mcp-off' to retry it."; exit 1
 fi
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
@@ -454,11 +560,21 @@ EOS
 # MCP tool authorization, the poisoned weather tool's fix. Only get_weather stays usable on evil-mcp; the rogue tools
 # (read_internal_config, apply_optimization) are stopped. workshop-mcp is left fully intact. Where they are
 # stopped depends on the cluster (_mcp in .guardlib): at agentgateway on an admin cluster, in the agent's
-# allow-list everywhere else.
+# allow-list everywhere else. Both commands switch this cluster and the other KubeCon cluster (_both, #1149), each
+# through its own control, so the fix run from the private terminal reaches the public bot the room plays on; on the
+# 2-hour lab's lone cluster, this one alone. guard-mcp-on then waits until each cluster serves the change and prints
+# how long that took (_c7wait); its one argument is the bound in seconds, 180 unless given.
 cat > "$HOME/guard-mcp-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-case "$(_mcp on)" in
+bound="${1:-180}"
+case "$bound" in ''|*[!0-9]*) echo "Usage: guard-mcp-on [seconds to wait for each cluster to serve it, default 180]"; exit 2 ;; esac
+switched=1; served=1
+_both _mcp on || switched=0
+_c7wait "$bound" || served=0
+[ "$switched" = 1 ] || { echo "⚠️  The MCP tool restriction did not switch on everywhere. Wait a moment and try 'guard-mcp-on' again; it is safe to repeat."; exit 1; }
+[ "$served" = 1 ] || { echo "⚠️  The restriction is written, but not every cluster serves it yet: the ones named above had not, within $bound s. Give them a moment before the re-ask."; exit 1; }
+case "$_C7HERE" in
   gateway)
     echo "🛡️  MCP tool authorization ON, at the gateway, against the poisoned weather tool. agentgateway now allows only get_weather"
     echo "    on evil-mcp: the rogue tools drop out of the tool list it hands the agent, and a call to"
@@ -477,7 +593,10 @@ EOS
 cat > "$HOME/guard-mcp-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-case "$(_mcp off)" in
+switched=1
+_both _mcp off || switched=0
+[ "$switched" = 1 ] || { echo "⚠️  The MCP tool restriction did not switch off everywhere. Wait a moment and try 'guard-mcp-off' again; it is safe to repeat."; exit 1; }
+case "$_C7HERE" in
   gateway)
     echo "🔓 MCP tool authorization OFF, at the gateway, for the poisoned weather tool. agentgateway lets every evil-mcp tool"
     echo "    through again. Re-ask the weather question and the agent gets chained into read_internal_config,"

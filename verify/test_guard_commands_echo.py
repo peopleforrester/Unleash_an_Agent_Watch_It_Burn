@@ -36,6 +36,8 @@ elif "get" in args and "validatingpolicy" in args:
     sys.stdout.write("Deny" if "admission-on" in os.environ.get("FAKE_CALLS", "") else "Audit")
 elif "get" in args and "application" in args:
     sys.stdout.write("admin")
+elif "logs" in args:
+    print('info  state_manager  loaded config from File("/etc/agentgateway-c7/config.yaml")')  # guard-mcp-on's wait
 elif "get" in args and "workshop-agent" in args:
     print(json.dumps({"metadata": {"name": "workshop-agent"}, "spec": {"declarative": {"tools": [
         {"type": "McpServer", "mcpServer": {"name": "workshop-mcp", "toolNames": ["run_shell"]}},

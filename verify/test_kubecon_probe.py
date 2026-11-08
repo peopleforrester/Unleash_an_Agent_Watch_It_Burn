@@ -513,15 +513,16 @@ def terminal_rewrite(text: str, mode: str) -> str | None:
 
 off_body = helper("guards-off")
 guardlib = helper(".guardlib")
+# Since #1132 guards-off sends every guard-proxy key in one `_both _toggle` call, so the probe's queries, joined, are it.
 check("guards-off sends exactly the terminal's /toggle queries, in order",
-      kp.GUARDS_OFF == [ln for ln in re.findall(r'_px "([^"]+)"', off_body)])
+      re.findall(r'_both _toggle "([^"]+)"', off_body) == ["&".join(kp.GUARDS_OFF)])
 check("guards-off and guard-mcp-off both go through the terminal's _mcp, which carries the full evil-mcp list",
       "_mcp off" in off_body and "_mcp off" in helper("guard-mcp-off")
       and f"all='{json.dumps(kp.EVIL_ALL).replace(' ', '')}'" in guardlib)
 check("guard-mcp-on goes through the terminal's _mcp on", "_mcp on" in helper("guard-mcp-on"))
 check("on an admin cluster the terminal sets the gateway rule and leaves toolNames full (#496)",
-      re.search(r'0:on\)\s+_c7rule on && _evil "\$all"', guardlib) is not None
-      and re.search(r'0:off\)\s+_c7rule off && _evil "\$all"', guardlib) is not None)
+      re.search(r'0:on\)\s+_c7rule on "\$@" && _evil "\$all" "\$@"', guardlib) is not None
+      and re.search(r'0:off\)\s+_c7rule off "\$@" && _evil "\$all" "\$@"', guardlib) is not None)
 narrowed = kp.c7_config_with_rule(C7_COMMITTED, kp.C7_NARROWED)
 check("open to narrowed: the probe writes the same C7 config as the terminal's .c7rule.py on",
       terminal_rewrite(C7_COMMITTED, "on") == narrowed and narrowed != C7_COMMITTED)
