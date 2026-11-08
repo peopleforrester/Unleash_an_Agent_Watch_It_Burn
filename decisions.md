@@ -36912,3 +36912,8 @@ cancelled (here `2800e073`'s own `verify/ci-base-sha.sh` and `verify/test_verify
 any staging run's scope. Scoping by the newest staging ancestor whose verify-suites run finished green would close it.
 
 **Live check: skipped.** The change is to `verify/` files that no cluster runs.
+
+**The suites (run 18643, at `26fd2d35`).** `bash verify/run-e2e-tools.sh`, unscoped, ran the offline suite (`363 tests
+ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`), then printed `86 checks ran (the offline suite and 85 tier tests) in
+10m20s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate passed. No dependency was added.
+The logs are `/var/lib/hecaton/runs/18643/e2e-tools.log` (the red run on `45606927`) and `e2e-tools-2.log`.
