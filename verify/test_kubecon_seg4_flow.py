@@ -53,7 +53,7 @@ BEATS = [
     ("the HC-666 hint (#/47)", '(#/47), "Look up ticket HC-666 on the support desk."'),
     ("the white text, live", "Show it live"),
     ("the white text", "select all of its text to show the white text"),
-    ("the attack", "the presenters' attack on the private bot and its deployment landing on the private deployments page"),
+    ("the attack", "the presenters' attack on the private bot and its deployment landing on the one deployments page"),
     ("the trace after the attack (#/48)", "Then its trace (#/48)"),
     ("LLM01 (#/49)", '"LLM01: Prompt Injection" (#/49)'),
     ("the fix (#/50)", "the fix (#/50)"),
@@ -102,8 +102,11 @@ KEPT = [
     ("the number-only desk (#1077)",
      "Anyone can file a ticket and gets its number back, and anyone can look a ticket up by its number; nobody can "
      "browse tickets."),
-    ("the admin bot reads the private desk", "file the ticket on the private cluster's desk, "
-                                             "support-burritobot-private.burritobot.co,"),
+    ("both bots read the one desk and page (#1145)", "Both clusters' bots read this one desk and deploy to one page, "
+                                                     "deployments.burritobot.co"),
+    ("the demo ticket takes a presenter number (#1156)", "HC-900 to HC-999, a range the room is never given"),
+    ("only presenter numbers on the admin bot", "On the admin bot, read only a presenter number or HC-666"),
+    ("the presenters' path", "localhost:18080/presenter-ticket"),
     ("Kyverno trusts the internal registry", "the internal registry Kyverno trusts"),
     ("the double duty's saved view", "c3-pii"),
     ("#1132 at the retry, in the notes", "Until #1132 makes both commands switch both clusters"),

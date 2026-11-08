@@ -39234,3 +39234,88 @@ error in APM and in Agent Observability.
 
 **Tests.** This entry changes no code and no test. The prose gate is the only check that reads it; validation runs
 it after this report.
+## 2026-11-08 · #1160 · run 18741 · The talk names one desk and one deployments page for both KubeCon clusters, and the presenters read only their own range on the admin bot
+
+The last piece of #1145, the one support desk and deployments page Michael approved on 2026-11-08. #1156 reserved
+HC-900 to HC-999 for the presenters, #1157 gave the public desk the private cluster's deploy reports, and #1158 pointed
+the admin bot at the public desk through `desk-relay` and linked the two clusters live (run 18737). This run puts that
+into the talk. `verify/prior-drafts.sh 1160 origin/staging` printed `NONE`, so no draft was ported.
+
+**The run-of-show.** Segment 4 of `facilitation/kubecon-na-2026-run-of-show.md` gains a paragraph, "One desk and one
+deployments page for both clusters (#1145)": both bots read `support.burritobot.co` and deploy to
+`deployments.burritobot.co`, each row tagged with its cluster; HC-900 to HC-999 are the presenters' alone; and, in
+bold, "On the admin bot, read only a presenter number, HC-900 to HC-999, or HC-666, the fixed ticket the attack on
+`#/47` uses", followed by "Never read a four-digit number there". `#/45`'s step has the presenter file the demo ticket
+through `/presenter-ticket` on watch-it-burn-community (the port-forward and curl #1156 wrote), not the desk's form,
+which gives a room number, and ask the admin bot about HC-900; the room can read the same ticket on its own bot.
+`#/47`'s "deploy" opens `https://deployments.burritobot.co`, where the presenters' row is tagged `private`. The desk
+paragraph under `#/43` and `#/44` says the admin bot reads the same desk, and the segments table's row 4 follows. The
+admin cluster's own hosts, `support-burritobot-private` and `deployments-burritobot-private`, are named nowhere in
+segment 4.
+
+**HC-666 on the admin bot.** The issue asks that the presenters read only reserved-range numbers on the admin bot.
+The `#/47` attack reads HC-666, which is three digits and below the reserved range. It is kept, named beside the
+range: HC-666 is a fixed ticket on every desk, no filed ticket can take its number (room tickets are four digits,
+presenter tickets HC-900 to HC-999), so it is never a ticket someone in the room wrote, which is what Michael's guard
+in #1145 keeps off the presenters' bot. Moving the attack to a reserved-range copy of HC-666 would change the
+`/kubecon` prompt, the Night Before probe's C6 ask and the trace seeds, which #1159 owns.
+
+**The private desk hosts.** #1158 left to this issue's host list whether to retire them. Decided: not now. They still
+answer, from the admin cluster's own fake-ticket, and the probe (#1129), the trace seeds (#1130), the desk reset
+(#1144) and standby failover (#986) still use them until #1159 moves those to the one desk. `support_desk_hosts.py`
+names them in `PRIVATE_DESK_HOSTS`, and `test_support_desk_named.py` fails a segment 4 that names either. Retiring
+their routes is for after #1159.
+
+**The presenter page.** `gitops/ai-layer/web/kubecon.html`, the presenters' `/kubecon` page, said the same as the old
+run-of-show: file on the private desk, find the row on the private deployments page. It now says what segment 4 says,
+with the two commands in `#/45`'s note. `verify/test_kubecon_seg4_flow.py`'s beat and kept facts follow.
+
+**The host list and the tests.** `verify/support_desk_hosts.py` has `DESK` (`support.burritobot.co`, then
+`support-attackme.burritobot.co`) for both clusters in `DESKS`, `DEPLOYMENTS`, `PRIVATE_DESK_HOSTS`, `ADMIN_FIXED`
+(HC-666), and `presenter_numbers()`, which reads `PRESENTER_NUMBERS` from `gitops/ai-layer/ticket_site.py` and exits
+naming the line when it is gone. `desk_hosts()` lists each host once, for both clusters. `verify/test_support_desk_named.py`
+holds the one desk for both clusters, the one page, the range said as ticket_site.py has it, the reading rule, the
+presenters' path and its 403 from outside, and that every `support ticket HC-<n>` asked in a sentence naming the admin
+bot is a presenter number or HC-666; each new negative check is run on a copy that breaks it. `verify/test_support_desk_live.py`
+asks the one desk's two hosts once each, `https://deployments.burritobot.co/deployments.json` for a JSON list, and
+`POST /presenter-ticket` from outside on each desk host for 403 (an empty body, which the desk itself would refuse with
+400); #916's body check names the one desk once. `verify/test_ros_seg4_flow.py`'s `#/47` beat follows the new
+wording. Before rewording, `git grep` found these four tests and `desk_ticket_live.py`, which names the private desk
+for #1102's read-back and is #1159's to move; no other test reads the changed words. `scope_tests.py write` added
+`ticket_site.py` to `test_support_desk_named.py`'s reads and nothing else.
+
+**The deck issue.** https://github.com/peopleforrester/rounds-agenticburn/issues/122 asks for `#/45`'s link and Do
+note and `#/47`'s "deploy" to point at the public desk and deployments page, links rounds-agenticburn#97 and #1145,
+and names the deck's two tests that follow: `tests/test_deck.py`'s #97 test, and `tests/e2e_runofshow_slide46.py`,
+which reads this run-of-show on staging and fails `test_the_step_names_the_desk_the_slide_links` once this reaches
+staging, until the slide's link changes. Segment 4 tells the presenters to open the public addresses until it lands.
+
+**Live demo flow (watch-it-burn-community and watch-it-burn-private, both `ai-layer` Synced and Healthy, at
+`294e2c6a` and `c60b0c2c`).** `POST https://support.burritobot.co/presenter-ticket` from outside answered 403. Through
+`kubectl --context watch-it-burn-community -n agent port-forward svc/fake-ticket 18741:8080`, `POST /presenter-ticket`
+with an ordinary complaint answered 201:
+
+    {"id": "HC-900", "subject": "submitted at the support desk", "status": "open", "customer": "Agatha the Banshee",
+     "body": "My burrito came without salsa. Demo ticket for issue 1160 (run 18741): both cantina bots should read this one by its number."}
+
+`https://support.burritobot.co/ticket/HC-900` answered 200 with the body. `read_support_ticket('HC-900')` in each
+cluster's workshop-mcp printed, on both, `Ticket HC-900 [open] from Agatha the Banshee: submitted at the support desk`
+and the body. Then each bot was asked through its chat page, `POST https://<bot>/chat` with `"[[wib-probe]] What's the
+status of my support ticket HC-900?"` and witch `Agatha the Banshee`, the probe marker keeping it off the room's
+prompt feed. The public bot, `attackme.burritobot.co`, replied:
+
+    The status of your support ticket HC-900 is currently open. It was submitted by Agatha the Banshee and the issue
+    reported is that the burrito came without salsa. This is a demo ticket for issue 1160 (run 18741), which both
+    cantina bots should be able to read by its number. If you need further assistance or have any other concerns,
+    please let me know. I'm here to help!
+
+and the admin bot, `burritobot-private.burritobot.co`, replied "Agatha the Banshee, your support ticket HC-900 is
+currently open. It describes an issue where your burrito came without salsa. ...". workshop-mcp's audit log read
+`read_support_ticket` with `{'ticket_id': 'HC-900'}` at 19:36:56Z on watch-it-burn-community and 19:36:59Z on
+watch-it-burn-private. `python3 verify/test_support_desk_live.py`, with this change, passed all 17 checks against the
+live hosts, exit 0. HC-900 stays on the public desk until its next restart, which renumbers from HC-900; nothing else
+on either cluster changed. `agent/terminal-auth` was not read or written.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs watch-it-burn-private:
+`curl -s https://burritobot-private.burritobot.co/kubecon` carries `localhost:18080/presenter-ticket` and no
+`support-burritobot-private` (today it names that host twice).
