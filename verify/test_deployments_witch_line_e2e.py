@@ -1,5 +1,6 @@
 # ABOUTME: Holds #995 end to end: a deploy_app tools/call on a request carrying X-Witch-Name is credited to that witch with no
-# ABOUTME: requested_by, and deployments-<cluster>'s own script renders "<witch> deployed <image> at <time>" or "Someone deployed".
+# ABOUTME: requested_by, and deployments-<cluster>'s own script renders "<witch> deployed <image> at <time>" or "Someone deployed",
+# ABOUTME: and a row a cluster read reports gone as "..., removed at <time>", greyed (#1049).
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: uv for mcp 1.29.1 and pyyaml 6.0.2 as the image pins them; node runs the page's script)
 """The executed half of the #995 checks in verify/test_public_images.py.
@@ -12,7 +13,9 @@
    Each reports to the real support desk (ticket_site.py) on localhost, whose /deployments.json is read back. This is
    the part the offline test can only fake: that the header really is on the request context deploy_app reads.
 2. The deployments page's own script, served by that desk under deployments-<cluster>, runs in node against those
-   rows with stub elements, and each line's text and hover text are read off what it built.
+   rows with stub elements, and each line's text and hover text are read off what it built. Before it runs, a cluster
+   read report that omits the probe's Deployment is posted to the desk's /cluster-read (#1049), so the probe's line is
+   the removed one: it reads "..., removed at <time>" and carries the class the page greys.
 
 Needs uv and the network to fetch mcp, and node. A missing tool or a failed fetch is a failure, not a skip. No cluster.
 """
@@ -169,6 +172,19 @@ check("the request's witch name wins over a requested_by naming someone else",
       by_name.get("told", {}).get("witch") == EDGAR, str(by_name.get("told")))
 check("the probe's deploy, with no header and no requested_by, has no witch name",
       by_name.get("probe-redis", {}).get("witch") == "", str(by_name.get("probe-redis")))
+check("each row carries the kind deploy_app created, sent over /landed (#1049)",
+      all(by_name.get(n, {}).get("kind") == "Deployment" for n in ("tron-lightcycle-game", "told", "probe-redis")),
+      str(by_name))
+
+print("== a cluster read that omits the probe's Deployment marks its row removed (#1049) ==")
+taken = time.time() + 1
+read = urllib.request.Request(DESK + "/cluster-read", method="POST", headers={"Content-Type": "application/json"},
+                              data=json.dumps({"taken_at": taken, "ok": True,
+                                               "kinds": {"Deployment": ["tron-lightcycle-game", "told"]}}).encode())
+with urllib.request.urlopen(read, timeout=5) as resp:
+    marked = json.loads(resp.read())
+check("the desk marks the probe's row and only it", marked == {"applied": True, "marked": ["probe-redis"]}, str(marked))
+removed_at = time.strftime("%H:%M:%S", time.localtime(taken))
 
 print("== the deployments page's own script renders each line ==")
 req = urllib.request.Request(DESK + "/", headers={"Host": DOMAIN})
@@ -195,7 +211,7 @@ const vm = require('vm');
 const ctx = vm.createContext({document, fetch, setInterval: () => 0, encodeURIComponent, console});
 vm.runInContext(script, ctx);
 setTimeout(() => {
-  const lines = ul.children.map(li => ({text: li.textContent,
+  const lines = ul.children.map(li => ({text: li.textContent, cls: li.className,
     hover: li.children.filter(c => c.tag === 'code').map(c => c.title)}));
   process.stdout.write(JSON.stringify(lines));
 }, 200);
@@ -212,14 +228,18 @@ want_chat = f"{EDGAR} deployed tron-lightcycle-game at {at.get('tron-lightcycle-
 check(f"the chat deploy's line reads {want_chat!r}", want_chat in texts, str(texts))
 chat = next((x for x in lines if x["text"] == want_chat), {})
 check("its hover text is the full image", chat.get("hover") == ["ghcr.io/someone/tron-lightcycle-game:2"], str(chat))
-want_probe = f"Someone deployed redis at {at.get('probe-redis')}"
+want_probe = f"Someone deployed redis at {at.get('probe-redis')}, removed at {removed_at}"
 check(f"the probe's line reads {want_probe!r}", want_probe in texts, str(texts))
 probe = next((x for x in lines if x["text"] == want_probe), {})
 check("its hover text is the full image, Docker Hub's redis as written (#991 applies it unchanged)",
       probe.get("hover") == ["redis:8"], str(probe))
-check("every line reads '<witch name or Someone> deployed <short name> at <HH:MM:SS>', and none 'deployed by'",
+check("the removed line carries the class the page greys, and only it does",
+      probe.get("cls") == "removed" and "li.removed,li.removed b{color:" in page
+      and [x["cls"] for x in lines].count("removed") == 1, str(lines))
+check("every line reads '<witch name or Someone> deployed <short name> at <HH:MM:SS>[, removed at <HH:MM:SS>]', "
+      "and none 'deployed by'",
       len(lines) == 3 and all(re.fullmatch(r"(Someone|[A-Z][a-z]+ the [A-Z][a-z]+) deployed [a-z0-9._-]+ at "
-                                           r"\d\d:\d\d:\d\d", t) for t in texts), str(texts))
+                                           r"\d\d:\d\d:\d\d(, removed at \d\d:\d\d:\d\d)?", t) for t in texts), str(texts))
 check("no line names a Deployment in parentheses", not any("(" in t for t in texts), str(texts))
 check("both deploys from the chat request read the witch name, and only the probe's reads 'Someone'",
       sum(t.startswith(EDGAR + " deployed ") for t in texts) == 2 and sum(t.startswith("Someone ") for t in texts) == 1,

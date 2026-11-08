@@ -34536,3 +34536,66 @@ the suites.
 
 **Not yet run on a cluster.** The page itself: look at `/kubecon` and its sheet after Argo CD syncs staging to the
 clusters, for segment 3's story and the switch beat as written here. These runs deploy nothing.
+## 2026-11-08: The deployments page marks a removed row and keeps it, from a cluster read the desk is sent (#1049, run 18496)
+
+**The choice: mark, not a plain history.** Since #990 the DeletingPolicy remove-untrusted-room-workloads deletes each
+room workload from outside registry.burritobot.co within a minute of guardrails-on arming Kyverno, and the
+deployments page (#773) went on listing it as deployed. #1022 asked whether the page should mark such a row or stay a
+record of the room's asks. It marks it, and keeps it. The reason is what the room is shown: the page is on the
+projector while guardrails-on runs, and the point of that beat is that the platform took the app away. A page that
+still reads "deployed" says the opposite of what happened, while a page that drops the row hides that anything was
+deployed at all. A greyed "<witch> deployed <app> at <time>, removed at <time>" keeps the ask and shows the guardrail
+working, on the same line. A plain history would need the run-of-show to explain the gap out loud each time, which is
+what #1022 was filed against.
+
+**What the desk does.** `gitops/ai-layer/ticket_site.py`:
+- each landing row records `kind`, the kind deploy_app created, next to its name and `ts`.
+  `gitops/ai-layer/workshop-mcp-server.py`'s `_report` now sends it to POST /landed. A row with no kind, as from a
+  workshop-mcp of before this change, is covered by no read and is never marked;
+- POST /cluster-read takes one report, `{"taken_at": <epoch seconds>, "ok": <bool>, "kinds": {"<Kind>": [names]}}`.
+  The kinds it covers are exactly the keys of `kinds`, so a reader that cannot list a kind leaves it out and no row of
+  that kind is touched. A malformed report (no `ok`, no numeric `taken_at`, names not a list of strings, a successful
+  read covering no kind, a body that is not JSON) is a 400 and changes nothing. A report may be up to 512 KiB, since
+  a read lists every name of a kind; a ticket's limit stays as it was;
+- a row is marked (`removed_at`, the read's own time as HH:MM:SS) only when the report succeeded, covers the row's
+  kind, was taken strictly after the row's `ts`, and does not list the row's name (compared at 63 characters, as the
+  row keeps it). A failed report, an earlier one, or one for another kind changes nothing. A refusal is never marked.
+  A marked row is never unmarked, and the same name landing again is a new, unmarked row beside it. No row is dropped;
+- `deployments()` and /deployments.json carry `kind` and `removed_at` (empty until marked), the page's script appends
+  ", removed at <time>" and gives the line the class `removed`, which the page's style greys (text and witch name in
+  `#9b93a8`), and the visitor's /me page says "removed at <time>" on that deploy.
+
+**What stays.** The desk still holds no token and calls no cluster API: the fake-ticket Deployment keeps
+`automountServiceAccountToken: false`, and the read comes to it. `gitops/ai-layer/console.conf` refuses /cluster-read
+from outside on the support desk's server, as it does /landed, and the deployments host answers no POST. Inside the
+agent namespace any pod can reach the desk (agent-allow-intra-namespace), so a room workload could post a false
+report, as it could already post a false landing; the worst it can do is grey a line on a page, and the desk takes
+nothing else from a report. The reader that posts reports, under a ServiceAccount that holds a token and on a loop of
+about 30 s, is #1050's work; the run-of-show line and the live test are #1051's.
+
+**The tests.** `verify/test_desk_removed_rows.py` (new, offline) drives the real desk over HTTP: a failed report, one
+taken before the row's `ts` (and one at it), one covering only other kinds, and one listing the name each leave the row
+unmarked, and a successful later covering report that omits the name marks it with the read's time; a removed row
+stays removed under a later listing read, a relanded name is a new unmarked row, rows with no kind and refusals are
+never marked, malformed reports are 400s, and every row is kept. Mutating out each of the three guards (success, after
+`ts`, covered kind) fails it. It also holds the page's script and style, the console's deny, the deployments host's
+404, `automountServiceAccountToken: false` with no projected token, and that `ticket_site.py` imports no network or
+Kubernetes client and names no API path or token file. `verify/test_public_images.py` holds that the real deploy_app's
+row carries `kind: Deployment`. The tools-tier `verify/test_deployments_witch_line_e2e.py` now posts a read that omits
+the probe's Deployment and runs the page's own script in node: that line reads
+`Someone deployed redis at <t>, removed at <t>` with class `removed`, and the others are unchanged. Its scope-map
+entry is added for the new test only; `python3 verify/scope_tests.py write` also proposed entries for other runs'
+tests, which are left out of this change.
+
+**Live check, run 18496.** This touches `gitops/`, so it was checked read-only against what the clusters run now, the
+before state. On both watch-it-burn-community and watch-it-burn-private, `kubectl --context <c> -n agent get deploy
+fake-ticket` showed `automountServiceAccountToken` false and one ready replica, and Argo CD's `ai-layer` read `Synced
+Healthy` (private at `fad187ce`, this run's base). `GET https://deployments.burritobot.co/deployments.json` answered
+200 with rows carrying no `kind` and no `removed_at`. From outside, `POST https://support.burritobot.co/landed`
+answered 403 (the console's deny) and `POST https://support.burritobot.co/cluster-read` answered 404 (passed to the
+desk, which has no such path yet). Nothing changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: `POST
+https://support.burritobot.co/cluster-read` answers 403 from outside; a new deploy's row on /deployments.json carries
+`kind` and an empty `removed_at`; and a report posted in-cluster to `http://fake-ticket.agent.svc.cluster.local:8080/cluster-read`
+greys the row of a Deployment it omits. The end-to-end check with #1050's reader is #1051's live test.

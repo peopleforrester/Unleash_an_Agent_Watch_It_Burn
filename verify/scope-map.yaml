@@ -1892,6 +1892,12 @@ reads:
   test_deployments_witch_line_e2e.py:
     - gitops/ai-layer
     - gitops/ai-layer/ticket_site.py
+  test_desk_removed_rows.py:
+    - gitops/ai-layer/console.conf
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/workshop-mcp-server.py
   test_diagram_chip_apps.py:
     - gitops/ai-layer/web/diagram.html
     - gitops/bootstrap/apps
