@@ -38440,3 +38440,71 @@ commit after it rewraps the module's docstring and has `summary` read a malforme
 `verify/test_fetch_inventory.py`, `test_package_cache.py`, `test_tf_plugin_cache.py`, `test_chart_fetch.py` and
 `test_scope_tests.py` each passed alone. The prose gate printed `prose gate: pass`. The log is
 `/var/lib/hecaton/runs/18664/e2e-tools-scoped.log`.
+
+## 2026-11-08 · #1116 · run 18729 · the fetch inventory names drift from before it, instead of failing on it, and is current with staging
+
+**Why run 18664 did not land.** Its gate failed on `test_fetch_inventory.py` alone ("1 fetch inventory checks
+failed"). The draft was cut at `f6b637b4`, and hecaton rebased it onto `a307d478` for the gate (committer time
+15:57:56). Between the two, #1015's `fbf739ec` and `99a4bbbe` had added crane, setup-go and loopback curl lines to
+`.github/workflows/build-kyverno-counter-fix.yml`, `verify/test_kyverno_counter_fix.py` and
+`verify/test_workflow_artifact_cache.py`. The inventory listed none of them, so the check failed on lines no change of
+#1116 had made. By this run's base `53b819ac` there were 24 such problems: those three files, and lines from
+`07438f49` (`verify/stage_switch_run.py`), `2c0c6c2f`, `98e3123f` and `d5d67cc5` (the #1158 desk tests), `cd6910d6`
+(`verify/test_presenter_ticket_range.py`), `6d21eb9d` (`verify/test_e2e_tools_gate_scope.py`) and `a729615a`
+(`verify/run-e2e.sh`, `verify/test_e2e_toolchain.py`). It is the race #1190 met on the scope map: a check that fails
+on all drift fails a change that had brought the inventory current, whenever another run lands a call site first.
+
+**The change.** `verify/prior-drafts.sh 1116 origin/staging` printed START from `origin/agent/1116-18664`, with one
+DRIFT line, an edit in place to `verify/scope-map.yaml` by `d5d67cc5`, and an APPEND on decisions.md. The three draft
+commits were cherry-picked with no conflict, and `d5d67cc5` touches the map's #1158 lines only, not the draft's
+`test_fetch_inventory.py` entry. On top of them:
+
+- `verify/fetch_inventory.py` gains `owed()` and `check_split()`, the same rule `scope_tests.owed()` uses. Drift on a
+  file (a call site no entry claims, a count that is off, an entry for a file with no call site) fails when the file
+  was last changed under the rule: an edit not yet committed, a path git cannot place, or a commit whose own
+  `verify/fetch_inventory.py` carries `DRIFT_FAILS_SINCE = "#1116"`. Drift on a file last changed in a commit made
+  before the inventory existed is printed as a NOTE and passes until a change touches that file again. A
+  malformed entry (no class, a wrong kind, a missing field, a bad regex) always fails. The failing line names the
+  fix: run `python3 verify/fetch_inventory.py draft`, class each line and commit the inventory with the change.
+- `verify/test_fetch_inventory.py` runs the repo check through `check_split()` and adds four scratch-repository
+  cases: drift on a file last committed before `fetch_inventory.py` existed prints and passes; drift on a file
+  committed under the rule fails; the same old file, edited and not committed, fails; a malformed entry fails either
+  way. It also holds that the module carries the rule string.
+- `verify/fetch-inventory.yaml` classes the 24 lines: seven new files and three counts. The workflow
+  `build-kyverno-counter-fix.yml` has setup-go (pinned tool, its `go-version` and build.sh's `GOTOOLCHAIN`, not cached),
+  crane from `e2e-tools.lock` through `artifact-cache.sh get` (pinned tool, cached, four lines, as `push-jokers.yml`
+  has it), its loopback registry probe (two lines) and two lines that run none. `stage_switch_run.py` reads each
+  KubeCon cluster's guard-proxy `/controls` (live, lab endpoint). The desk tests' `urlopen` calls reach servers on
+  127.0.0.1 that each test starts (loopback, four lines in three files). The rest name a command and run none:
+  `test_kyverno_counter_fix.py` (five), `test_e2e_tools_gate_scope.py` (two), and one more line each in
+  `run-e2e.sh`, `test_e2e_toolchain.py` and `test_workflow_artifact_cache.py`.
+
+The cost of the rule falls on the next run that touches a listed file after this lands. A run cut before the inventory
+whose commits hecaton rebases onto a staging that has it carries the rule in those commits' trees, so its own new call
+sites fail its gate by name. That is the guard working on the change that made the drift, as #1190's map does.
+
+**Classification by kind, on `3a6f17f4`.** `python3 verify/fetch_inventory.py summary` printed 732 call sites in 209
+files (run 18664 had 708 in 202):
+
+- Pinned, 51 sites in 32 files: tool 18 (10 through the artifact cache), Helm chart 9 (9), Terraform provider 9 (9),
+  Python package 5 (5), git commit 2 (0), browser 2 (0), release file 2 (0), container image 2 (0), Node package 1
+  (1), cache fill 1 (1).
+- Live, 96 sites in 54 files: cluster 38, lab endpoint 32, SaaS API 11, registry 6, upstream index 6, public web 2,
+  GitHub 1.
+- Loopback, 61 sites in 40 files. None, 524 sites in 133 files.
+
+**The cold baseline.** The tools tier's stays as run 18664 measured it on `f6b637b4` with every cache empty: 86 checks
+in 11m14s, 128 pinned downloads through the artifact cache totalling 1516.7 MB, plus Playwright's browsers, the two
+Hugging Face models and the two submodules outside it. This run did not run the whole tier again: the 24 lines it
+classed add no download to a cold run, since the crane they fetch is the same `e2e-tools.lock` row and the rest are
+cluster, loopback or text. The CI e2e tools job's cold number is still not measured. `gh run list` shows the
+verify-suites runs after run 18664's survey, 14:11Z to 18:01Z, all on the same tanjiro runner, whose
+`$RUNNER_TOOL_CACHE/wib-artifacts` was warm throughout. The workflow has no `workflow_dispatch`, and a run can
+neither empty that cache nor push. `verify/ci-base-sha.sh` leaves `HECATON_BASE_SHA` unset on a new branch's first
+push (PUSH_BEFORE all zeros), so a fresh `agent/**` branch at staging's tip runs the whole tier. The cold CI
+measurement is that push after the runner's caches are emptied on tanjiro, and the report's escalation names the
+commands.
+
+**Live check: skipped.** The change touches only `verify/` files no cluster runs and decisions.md.
+
+**No new dependency.**
