@@ -34718,3 +34718,12 @@ re-seed is owed.
 
 **Not yet run on a cluster.** After hecaton promotes this change and Argo CD syncs it, confirm the served `/kubecon`
 C1 beat and the `/lab` C1 box show the beacon prompt ending at the POST sentence (no trailing line).
+
+**Suite results, run 18528.** On `4242aad8`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so the whole
+suite, printed `352 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`84 checks ran (the offline suite and 83 tier tests) in 13m55s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`; `verify/test_replay_prompts.py` and `verify/test_lab_text_export.py` were among them. The log is
+`/var/lib/hecaton/runs/18528/e2e-tools.log`. The prose gate passed on the changed public-prose files. No dependency was
+added. After this decisions.md entry was appended, `bash verify/run-tests.sh` was re-run on the final commit and
+printed `352 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`; the decisions-reading tests
+(`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`) are among them.
