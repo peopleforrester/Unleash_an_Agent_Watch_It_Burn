@@ -40867,3 +40867,35 @@ sources, `verify/test_c1_dns_exfil_fix.py` and this file. Run 17960's check abov
 
 **Tests run.** `python3 verify/test_c1_dns_exfil_fix.py`: every check passes, the eleven mutation cases included.
 The prose gate passes against origin/staging. The full Test and E2E commands are left to hecaton's validation.
+## 2026-11-09 · #1214 · run 18840 · The live after-check on both hosts: the phone layout and #1213's band pass on the deployed pages
+
+**What this run did.** Run 18815's resume of #1214 merged into staging as `6409df1d`, and its one open criterion was
+the live check after Argo CD rolled the page out. On 2026-11-09 both hosts serve it: the page curled from
+`https://attackme.burritobot.co/` (community cluster) and from `https://burritobot-private.burritobot.co/` (private
+cluster) is byte for byte the repo's `gitops/ai-layer/web/burritbot.html`, last changed by #1214's `ef201077`.
+
+**`python3 verify/test_chat_phone_screen_e2e.py --live`** ended `All chat phone screen checks passed.` and `exit=0`.
+Only `/chat` was answered by the test, so no prompt reached either bot. What it printed, per host:
+
+- public bot: 320x640 bar 43px (icons), card header 91px, reply over 62%; 360x780 bar 42px (labels), 91px, 69%;
+  390x844 bar 42px (labels), 70px, 72%; 412x915 bar 42px (labels), 70px, 74%; 840x900 labels, 74px, the 60vh cap
+  (540px); 1280x800 labels, 88px, no cap.
+- private bot: 320x640 bar 42px (icons), 91px, 62%; 360x780 43px (icons), 91px, 69%; 390x844 43px (icons), 70px, 72%;
+  412x915 43px (icons), 70px, 74%; 840x900 labels, 74px, 540px cap; 1280x800 labels, 88px, no cap.
+
+At every size the reply's first line ("Salt Lake City, Utah") was inside the stream's visible box and on the screen,
+with the widest witch name the vocabulary makes (Wilhelmina the Werewolf) pinned. Before the rollout the same command
+failed 76 checks on both hosts (run 18795).
+
+**`python3 verify/test_chat_pane_overlap_e2e.py --live`** (#1213's check, nothing routed, render only) ended
+`All chat pane overlap checks passed.` and `exit=0`, 129 checks passing: no pane overlaps another at 390x844, 761x900,
+768x1024, 840x900, 884x1000 and 980x800, and the three panes stand side by side at 1280x800 and 1920x1080, on both
+hosts.
+
+**The iPad sheet.** `https://burritobot-private.burritobot.co/kubecon?sheet=1` answered 200 with the repo's
+`kubecon.html` byte for byte; #1214 did not touch that file. The community cluster serves no `/kubecon` (#909), and
+answered 404 there as before.
+
+Nothing on either cluster was changed. Logs: `/tmp/run18840/phone-live.log` and `/tmp/run18840/overlap-live.log`.
+PROGRESS.md has a 2026-11-09 "#1214, live" bullet under Fixed. **Tests run.** The two live checks above and the prose
+gate; no code changed.
