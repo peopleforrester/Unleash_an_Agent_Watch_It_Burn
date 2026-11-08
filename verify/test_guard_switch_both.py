@@ -11,7 +11,8 @@ Checked here, with a kubectl on PATH that plays two clusters:
   * a peer Secret whose cluster cannot be reached: this cluster switches, the run fails and names the peer;
   * a cluster with no peer Secret (the 2-hour workshop's): this cluster switches alone, one line says so, exit 0;
   * a peer Secret that is there but cannot be read: this cluster switches and the run fails, never passing as unlinked;
-  * what the two commands ask of the peer is inside its guardrails-switch grant, and that grant is no wider than it was;
+  * what the two commands ask of the peer is inside its guardrails-switch grant, and that grant is #774's plus
+    #1148's one guard-proxy Service proxy rule;
   * guardrails-on and guardrails-off make the same kubectl calls and print the same output as before #1147, held to
     verify/fixtures/guardrails-switch-golden.json, recorded from staging e4354c50.
 
@@ -233,7 +234,7 @@ for cmd, f in ROLE.items():
           r["rc"] == 1 and "not on this cluster" in r["stdout"] and r["state"].get(PEER, {}).get("applied") == [f],
           r["stdout"])
 
-print("== what the peer is asked for is inside its guardrails-switch grant, which stays as narrow ==")
+print("== what the peer is asked for is inside its guardrails-switch grant, #774's plus one guard-proxy rule ==")
 sw = docs(SWITCH.read_text(encoding="utf-8"))
 GRANT: dict[tuple[str, str, str], set[str]] = {}
 for d in sw:
@@ -243,9 +244,10 @@ for d in sw:
             for res in rule["resources"]:
                 for name in rule.get("resourceNames") or ["*"]:
                     GRANT.setdefault((scope, res, name), set()).update(rule["verbs"])
-check("the grant is #774's, unchanged: the workshop-agent Role by name (get, patch, escalate), the two registry "
-      "policies, KubeArmor policies and NetworkPolicies in agent",
+check("the grant is #774's, with #1148's get on guard-proxy's Service proxy alone added: the workshop-agent Role by "
+      "name (get, patch, escalate), the two registry policies, KubeArmor policies and NetworkPolicies in agent",
       GRANT == {("agent", "roles", "workshop-agent"): {"get", "patch", "escalate"},
+                ("agent", "services/proxy", "guard-proxy:8080"): {"get"},
                 ("agent", "kubearmorpolicies", "*"): {"get", "create", "patch", "delete"},
                 ("agent", "networkpolicies", "*"): {"get", "create", "patch", "delete"},
                 ("", "validatingpolicies", "restrict-image-registries"): {"get", "patch"},

@@ -141,7 +141,7 @@ _mcp() { local all='["get_weather","read_internal_config","apply_optimization"]'
 # KubeArmor and egress, turned on or off on this cluster AND on the other KubeCon cluster at once, from either
 # terminal. The other cluster is reached with the kubeconfig `fleet.sh guardrails-link` writes into the
 # guardrails-switch/guardrails-peer Secret: its endpoint, its CA and the token of its guardrails-switch ServiceAccount,
-# whose grant is these four guardrails' objects and nothing else (gitops/guardrails-switch/).
+# whose grant is these guardrails' objects, what _both's steps need, and nothing else (gitops/guardrails-switch/).
 # _peer : write that kubeconfig to ~/.kube/peer and print the other cluster's name. Prints nothing, failing, when this
 # cluster has not been linked.
 _peer() { local c k n
@@ -215,6 +215,16 @@ _guardrails() { local st="$1" pause="${2:-0}" peer g bad=() line
 # _apply <file> <kubectl...> : a switch step for _both. kubectl apply of ~/challenges/<file> through the kubectl given.
 _apply() { local f="$1" c; shift
   c=("$@" apply -f "$HOME/challenges/$f")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
+# _toggle <query> <kubectl...> : a switch step for _both. guard-proxy's /toggle?<query> on one cluster (#1148). Here,
+# with plain kubectl, it is _px, the kubectl exec into deploy/guard-proxy it always was. On the peer it is a GET through
+# the API server's Service proxy on guard-proxy:8080, the one guard-proxy grant guardrails-switch holds there
+# (services/proxy, resourceNames guard-proxy:8080, get). An exec cannot be granted by name, since a Deployment's pod
+# name changes, so it would open every pod in agent. The Service proxy dials the pod from the control plane on 8080,
+# which #869's node rule admits; a cluster without that rule times out, so the wait is bounded at 20 seconds.
+_toggle() { local q="$1" c; shift
+  if [ "$*" = kubectl ]; then _px "$q"; return; fi
+  c=("$@" get --raw "/api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?$q" --request-timeout=20s)
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
 # _both <step> [args...] : one switch step on this cluster, then on the other KubeCon cluster (#1147, for #1132: the
 # room plays on the public bot, so a fix the private terminal makes has to reach it too). The step is a function called
@@ -412,27 +422,32 @@ fi
 EOS
 
 # INPUT guards, the support ticket's fix (deterministic block-list + prompt-injection classifier), upstream of the model.
+# Both set the two stages on this cluster's guard-proxy and on the other KubeCon cluster's (_both _toggle in .guardlib,
+# #1148), so from slide 50 on every prompt the room sends the public bot is checked too. On the 2-hour lab's lone
+# cluster, this one alone.
 cat > "$HOME/guard-input-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _px "input_blocklist=on&input_classifier=on"; then
+if _both _toggle "input_blocklist=on&input_classifier=on"; then
   echo "🛡️  INPUT guards ON, the support ticket's first tier (two stages): (1) a block-list rejects prompts containing"
   echo "    destructive commands or the secret-recipe phrases, and (2) a prompt-injection classifier catches"
   echo "    poisoned instructions, both in a prompt and in a support ticket as the ticket tool reads it."
   echo "    Re-send the ticket ask: the ticket comes back withheld, so the model never sees the hidden"
   echo "    instructions and nothing is deployed. A prompt the guards block never reaches the model at all."
 else
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-input-on' again."
+  echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guard-input-on' again; it is safe to repeat."
+  exit 1
 fi
 EOS
 cat > "$HOME/guard-input-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _px "input_blocklist=off&input_classifier=off"; then
+if _both _toggle "input_blocklist=off&input_classifier=off"; then
   echo "🔓 INPUT guards OFF. Prompts go straight to the model. Re-send the poisoned support ticket and"
   echo "    the injected instructions ride right in (and you pay tokens for it)."
 else
-  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-input-off' again."
+  echo "⚠️  The input guards did not change everywhere. Wait a moment and try 'guard-input-off' again; it is safe to repeat."
+  exit 1
 fi
 EOS
 

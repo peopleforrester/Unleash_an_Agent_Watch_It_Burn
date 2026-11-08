@@ -293,9 +293,11 @@ for scope, rules in (("agent", role["rules"]), ("", crole["rules"])):
         for res in r["resources"]:
             for name in r.get("resourceNames") or ["*"]:
                 GRANT.setdefault((scope, res, name), set()).update(r["verbs"])
-check("the grant: the workshop-agent Role (get, patch, escalate), the two registry policies (get, patch), and "
-      "KubeArmor policies and NetworkPolicies in agent (get, create, patch, delete)",
+check("the grant: the workshop-agent Role (get, patch, escalate), the two registry policies (get, patch), "
+      "KubeArmor policies and NetworkPolicies in agent (get, create, patch, delete), and since #1148 get on "
+      "guard-proxy's Service proxy by name",
       GRANT == {("agent", "roles", "workshop-agent"): {"get", "patch", "escalate"},
+                ("agent", "services/proxy", "guard-proxy:8080"): {"get"},
                 ("agent", "kubearmorpolicies", "*"): {"get", "create", "patch", "delete"},
                 ("agent", "networkpolicies", "*"): {"get", "create", "patch", "delete"},
                 ("", "validatingpolicies", "restrict-image-registries"): {"get", "patch"},
