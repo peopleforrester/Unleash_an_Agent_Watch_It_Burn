@@ -40388,3 +40388,30 @@ The `FAIL` lines in the log come from fixtures inside passing tests (for example
 caret is left.
 
 **Live check.** Skipped: this run changes only decisions.md.
+## 2026-11-08 · #1054 · run 18811 · test_chat_turn_cancel.py holds that the 502 is written before the cancel, by order
+
+**What changed.** `verify/test_chat_turn_cancel.py` now checks the order the issue asked for. `RunawayAgent` holds its
+tasks/cancel answer on a `threading.Event`, `written_502`, for up to 10 s, and records whether the event was set
+when the cancel arrived. The test wraps `proxy.Handler._send`, proxy.py's single response path for POST, so the event
+is set once the 502 is on the client's socket. The new check, "the 502 is written before the tasks/cancel reaches the
+agent", reads that record, and a check ahead of the turn fails by name if a future pin drops `Handler._send`. The
+2.5 s bound the issue names was already gone: #974 (d34badc3) replaced it with the proxy's own `forward_error` line
+and a 15 s ceiling under the client's 30 s urlopen timeout, and both stay as they were.
+
+**Where this differs from the issue's suggestion.** The issue suggested setting the event once the client has read
+its 502. proxy.py's `_cancel_task` waits `PROXY_TIMEOUT` for the agent's answer, and the test scales that to 1 s, so a
+hold until a starved client thread reads its answer would turn host load into `task_cancel_failed` and fail the
+existing task_cancel check instead. Releasing on the write keeps the order check free of timing: proxy.py writes the
+502, then starts the cancel thread, so the event is always set before the cancel arrives.
+
+**Mutant.** With proxy.py edited in the worktree to call `_cancel_task` synchronously before `_send(502)`, the test
+exited 1 with two failures: "the 502 is written before the tasks/cancel reaches the agent" (`[False]`) and
+"guard-proxy logs forward_error, then task_cancel" (`['forward_error', 'task_cancel_failed']`), since the held cancel
+timed out at 1 s before the 502 went out. The turn still ended inside the 15 s ceiling, so the order check is what
+caught it. The edit was reverted with `git checkout`; the pin, 5772a5d, is untouched. Against the pinned proxy.py all
+15 checks pass, the turn ending in 1.02 s.
+
+**Live check.** None: the change touches only `verify/test_chat_turn_cancel.py` and this file, which no cluster runs.
+
+**Tests run.** `python3 verify/test_chat_turn_cancel.py` and `python3 verify/test_scope_tests.py`. The full Test and
+E2E commands are left to hecaton's validation. No dependency was added.
