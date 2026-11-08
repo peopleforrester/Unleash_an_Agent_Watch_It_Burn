@@ -35793,3 +35793,10 @@ exemption. The fakes in `verify/test_c7_gateway_toggle.py`, `verify/test_guard_c
 `verify/test_evil_tools_by_name.py` answer the new reads (the log line, the Deployment, the absent peer Secret).
 `verify/test_kubecon_probe.py`'s check that the admin branch writes the rule and then the full list reads the kubectl
 argument now passed to both. No dependency was added.
+
+**Suite results, run 18574.** On `093267d2`, with no `HECATON_BASE_SHA`, so unscoped, `bash verify/run-e2e-tools.sh`
+printed `360 tests ran` for the offline suite (which is `bash verify/run-tests.sh`), then `86 checks ran (the offline
+suite and 85 tier tests) in 10m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+`verify/test_guard_mcp_both.py` printed `All two-cluster MCP switch checks passed.` in 34 s, and
+`verify/test_kyverno_cel_policies.py` passed the new guardrails-switch drift cases. The prose gate printed `prose gate:
+pass`. The log is `/var/lib/hecaton/runs/18574/e2e-tools.log`.
