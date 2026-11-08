@@ -37801,3 +37801,103 @@ run, at `46881a56` (log `/var/lib/hecaton/runs/18702/run-tests-2.log`), printed 
 RENDER-GATE TESTS GREEN`, `exit=0`. The scoped `bash verify/run-e2e-tools.sh` at `46881a56` (log
 `/var/lib/hecaton/runs/18702/e2e-tools.log`) printed `16 checks ran (the offline suite and 15 tier tests) in 4m13s,
 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
+
+## 2026-11-08 · #1183 · run 18714 · The stage-switch check as one command, run live from the private terminal
+
+**What changed.** Second piece of #1146, on #1182's judge. `verify/stage_switch_run.py --context <private context>`
+holds the guard lock on both KubeCon clusters through `guard_lease.hold_switch` (the private context and the one its
+guardrails-peer Secret names) from its first `/controls` read to its last. Inside the lock it checks that the
+context's cluster-identity and the private bot's `/controls` both name burritobot-private (the probe's
+`judge_identity`), reads both clusters' `/controls`, and runs `guardrails-on`, `guard-agency-on`, `guard-input-on`
+and `guard-mcp-on` in talk order in the private terminal pod through `kubecon_probe.TERMINAL_EXEC`, printing what
+the terminal printed. After each switch it waits out guard-proxy's cache (`kubecon_probe.CONTROLS_CACHE_S`), reads
+both clusters, and prints `stage_switch_check.judge_switch`'s PASS or FAIL per cluster. A non-zero exit from the
+terminal is a FAIL line of its own, and a switch that raises is a FAIL with the next switch still run. Then
+`guards-off` and `guardrails-off` run from the same terminal in a `finally`, after a failing switch, a raise, a ^C
+or a SIGTERM (main turns a SIGTERM into an unwind, as `guard_lease.py hold` does), with a ^C or SIGTERM during them
+held until both have run. Each terminal command runs in a session of its own, so a ^C at the keyboard reaches the
+script and not a closing command midway. It ends with two verdicts per cluster: `start-state`, the judge's
+`judge_start_state`, and `as-found`, every field the closing pair turns off reading what it read at the start.
+Exit 0 when every line is PASS, 1 on any FAIL, 2 with no `--context`, 3 when the lock stays busy, 4 when the
+clusters are not at the start state, 130 or 143 after a ^C or a SIGTERM. The summary names each line whose FAIL waits
+on #1132. It never reads or writes `agent/terminal-auth`: the commands run through `kubectl exec` as the caller.
+
+**Decided: it refuses to start from a state other than the start state.** The run ends by turning every switch's
+field off, plus the AI guards `guards-off` turns off (`output`, `budget`, `topic`). If any of those already read on
+or `null`, or a read cannot be judged, closing would change what it found, so it switches nothing, names the fields
+and exits 4. A field the pinned guard-proxy does not send yet (`WAITS_ON`, `agency_scoped`) does not stop it.
+`as-found` is there because `start-state` fails on that missing field until the guard-proxy pin moves; `as-found`
+says whether the run left both clusters as they were.
+
+**#1134.** Still open with nothing on staging, so it covers none of the four switches; this command duplicates
+nothing of it. It reuses the probe's `TERMINAL_EXEC`, `CONTROLS_CACHE_S`, `judge_identity`, `identity_name` and
+`KubeconCluster`, the judge's `judge_switch`, `judge_start_state` and `read_controls`, and `guard_lease.hold_switch`.
+
+**#1132.** Closed: its terminal commands are on staging and in the private terminal (the live `guard-agency-on`
+holds `_both _apply c6-least-privilege-role.yaml`). What still waits on it is `agency_scoped`, guard-proxy-agenticburn#76,
+which reaches `/controls` when this repo's guard-proxy submodule pin moves.
+
+**The test.** `verify/test_stage_switch_run.py` (offline) runs `main` against a fake pair of clusters: one
+`fake_lease_kubectl.FakeLeaseApi` per context for the Lease and the peer name, so the lock is the real
+`hold_switch`, and a fake terminal that changes the fake `/controls` the way each command changes the real ones.
+It holds the talk order through `TERMINAL_EXEC` (and `GUARDRAILS_ON`/`OFF` equal to the probe's), every terminal
+command, the closing pair included, run while both contexts' Leases name this run, the lock taken before the first
+read and released after the last, the cache waited out before every read after a command; guard-agency-on and the
+start state FAIL naming #1132 with no `agency_scoped`; a switch reaching one cluster, one exiting 1, one timing out
+and a `guards-off` that raises, each followed by the rest; a ^C and a SIGTERM mid-switch and a ^C during
+`guards-off`, each with the closing pair run under the lock; a busy lock, a lost lock, an unlinked cluster, a
+context that is not the private cluster, and six starting states that stop the run with nothing switched. Ten
+mutants of the runner (no `finally`, no cache wait, `hold` for `hold_switch`, no own session, the closing pair
+reversed, `WAITS_ON` ignored, no signal holding, `null` taken as off, the lost lock ignored, the body outside the
+lock) each fail it. Its scope-map entry is the one `scope_tests.py write` computed for it; the other drift `write`
+printed was left out.
+
+**Live run (run 18714, watch-it-burn-private's terminal, both clusters).** Before it, both `/controls` read every
+field off (Falco on the private cluster only), and the lock was free on both. The command printed (terminal echo
+trimmed; the full log is `/var/lib/hecaton/runs/18714/stage-switch-live.log`):
+
+    PASS  identity         private    kube-context and https://burritobot-private.burritobot.co are the same cluster
+    PASS  start            private    every field the closing commands turn off reads off
+    PASS  start            community  every field the closing commands turn off reads off
+    PASS  guardrails-on    private    guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    PASS  guardrails-on    community  guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    FAIL  guard-agency-on  private    /controls after the switch does not carry infra.agency_scoped; it waits on #1132 (...)
+    FAIL  guard-agency-on  community  /controls after the switch does not carry infra.agency_scoped; it waits on #1132 (...)
+    FAIL  guard-input-on   terminal   the terminal's guard-input-on exited 1
+    PASS  guard-input-on   private    guard-input-on turned on ai.input_blocklist, ai.input_classifier
+    FAIL  guard-input-on   community  ai.input_blocklist reads false after the switch, not true; ai.input_classifier reads false after the switch, not true
+    PASS  guard-mcp-on     private    guard-mcp-on turned on infra.tool_allowlist
+    PASS  guard-mcp-on     community  guard-mcp-on turned on infra.tool_allowlist
+    FAIL  guards-off       terminal   the terminal's guards-off exited 1
+    FAIL  start-state      private    ... does not carry infra.agency_scoped; it waits on #1132 ...; infra.tool_allowlist reads true, not false (guard-mcp-on)
+    FAIL  start-state      community  ... does not carry infra.agency_scoped; it waits on #1132 ...; infra.tool_allowlist reads true, not false (guard-mcp-on)
+    FAIL  as-found         private    infra.tool_allowlist read false at the start and true at the end
+    FAIL  as-found         community  infra.tool_allowlist read false at the start and true at the end
+    17 lines: 8 PASS, 9 FAIL
+    waiting on #1132 (agency_scoped, ...): guard-agency-on on private, community; start-state on private, community
+    STAGE SWITCH CHECK RED
+    exit=1
+
+The terminal's own words for the two terminal failures: `guard-input-on` printed "Switched on this cluster, but not on
+watch-it-burn-community: it could not be reached, or it refused the change.", and `guards-off` printed the same line
+and "The guard-proxy guards did not switch off everywhere." Both reach the peer's guard-proxy through the API
+server's Service proxy (`kubectl get --raw /api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?...`).
+Read as the run's admin identity, the same path to `/controls` timed out after 20 s on both clusters ("context
+deadline exceeded"), while `kubectl auth can-i get services/guard-proxy:8080 --subresource=proxy` as the community
+cluster's `guardrails-switch` ServiceAccount answered yes. So the grant is in place, and the control plane cannot dial
+the pod on 8080: #869's node rule is still not on these clusters (#979's entry, "Rules AWS does not hold"; #1042 is
+that apply). `guards-off` stops at its first failing step, so its `_both _mcp off` never ran, and the MCP
+restriction was left on on both clusters, which is what the `start-state` and `as-found` lines caught.
+
+**Left as found.** The run's last step was put right under both clusters' lock with the terminal's own command:
+`python3 verify/guard_lease.py hold --with-peer --context watch-it-burn-private ... -- kubectl --context
+watch-it-burn-private -n agent exec deploy/web-terminal -c ttyd -- bash /home/student/guard-mcp-off`, which printed
+"Switched on both clusters: this one and watch-it-burn-community." Then both `/controls` read exactly what they read
+before the run (every field off, Falco on the private cluster only), the workshop-agent Role on both equals
+`c8-broad-role.yaml`'s rules (the shipped Role `guardrails-off` applies), and the lock was free on both. The
+community cluster's workshop-agent Deployment rolled for each toolNames change, as every MCP switch there does.
+
+**Not yet run on a cluster.** A green run of `python3 verify/stage_switch_run.py --context watch-it-burn-private`
+waits on three things outside this change: the guard-proxy pin carrying `agency_scoped` (#1132's last piece), the
+control plane reaching guard-proxy on 8080 on the community cluster (#1042), and `guards-off` running every step when
+one fails (a followup in this run's report).
