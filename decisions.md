@@ -40867,3 +40867,49 @@ sources, `verify/test_c1_dns_exfil_fix.py` and this file. Run 17960's check abov
 
 **Tests run.** `python3 verify/test_c1_dns_exfil_fix.py`: every check passes, the eleven mutation cases included.
 The prose gate passes against origin/staging. The full Test and E2E commands are left to hecaton's validation.
+
+## 2026-11-09 · #1058 · run 18844 · A test holds #998's record of what drops the API server's dial to fake-ticket:8080
+
+Test review run 18129 found that no test checked one criterion of #998: what drops the API server's connection to
+fake-ticket's pod port 8080 on both clusters is found and recorded in decisions.md. Run 18118 met it in its entry,
+"**What drops the connection.**", and run 18206 (#1038) read both clusters again and wrote the same groups.
+`verify/prior-drafts.sh 1058 origin/staging` printed NONE, and the issue had no comments, so this run started from
+staging at `b61fb8d4`. The issue came with no checklist, so this run added an `## Acceptance criteria` section to its
+body first.
+
+**The test, `verify/test_998_sg_cause_record.py`.** It is offline, so `run-tests.sh` finds it. `verdict(decisions,
+main_tf)` reads the "## 2026-11-07 · #998 · run 18118" entry, which must appear once, and its cause paragraph up to
+"**The change.**". That paragraph must say the service proxy dials fake-ticket's pod from the control plane, which
+carries the cluster security group, and that the node security group judges the dial and admits that group only on
+443, 4443, 6443, 8443, 9443, 10250 and 10251: the list is parsed, must be those seven, and must not hold 8080. 10250 is
+the kubelet port the port-forward fix goes through. It must say 8080 is admitted only from the load balancer
+controller's shared group. Each cluster's bullet must name fake-ticket's pod, its node, and the node group and
+cluster group run 18118 read (community `sg-0b7d2a0cfaed6fecd` and `sg-04130d5989d5c1ab1`, private
+`sg-011fc555e507cfb40` and `sg-0ca9886f5a9d4f6d3`), two different groups, held to the seven ports, and the two
+clusters' groups must differ. The paragraph must rule out a NetworkPolicy on fake-ticket and Cilium, record the
+proxy's `kubectl get --raw` timing out after 15 s on both, and name #869's `ingress_cluster_8080_workshop_apps` in
+`infra/terraform/aws/cluster/main.tf` as the rule that would admit 8080. `verify/node_sg_rules.py` reads the root,
+and that rule must still admit TCP 8080 from the cluster security group. The #1038 entry's reread must list the same
+seven ports and name the same two groups for each cluster.
+
+The test then runs the verdict on 38 cut copies of the real decisions.md and main.tf, and each is refused for its
+own reason, read off a debug copy that printed every refusal. The cuts: the entry struck or doubled, the label
+renamed, the proxy's origin, the cluster group and the node group's part struck, 8080 added to the ports, 10250
+struck, the port list struck, 8080 admitted from the cluster group, then for each cluster its bullet struck, its pod,
+node, node group and cluster group changed, and its cluster group set to its node group. Then each cluster's seven
+ports struck, both clusters given community's groups, the NetworkPolicy and Cilium not ruled out, the timeout struck
+or read on one cluster, the rule not named, the rule renamed, moved to 8081 or given no cluster source in main.tf,
+and the #1038 entry struck, its label renamed, one group changed on each cluster, and 8080 added to its ports. Every
+literal it cuts on is checked first and exits naming the literal and the file. No record was changed.
+
+**When #1042 lands.** #1042 applies #869's rule to the clusters. The record stays true as a finding of 2026-11-07,
+and the test reads only the record and the root, not AWS, so the apply does not turn it red. Rewording the entry,
+removing the rule from the root, or a later reread that disagrees does.
+
+**Live check.** None: the change touches only `verify/` files no cluster runs and this file, and the criterion is the
+text of decisions.md and the root's rule. No dependency was added.
+
+**Tests run.** `python3 verify/test_998_sg_cause_record.py` passed, the 38 cuts included, as did
+`python3 verify/test_scope_tests.py` after `python3 verify/scope_tests.py write` added the test's entry (decisions.md,
+main.tf, node_sg_rules.py). The prose gate passes against origin/staging. The full Test and E2E commands are left to
+hecaton's validation.
