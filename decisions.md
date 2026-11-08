@@ -37184,6 +37184,84 @@ Not yet run on a cluster:
   should print the lab's PolicyReport line for the villain.
 - On both clusters, a day after the rollout: `kyverno_breaker_drops_total` for both circuits stays near zero, and each
   Pod created in agent has a PolicyReport.
+
+## 2026-11-08 · #1157 · run 18670 · The public desk takes the private cluster's deploy reports with a token, and labels each row with its cluster
+
+Part of #1145, the one support desk and deployments page for both KubeCon clusters, approved by Michael on 2026-11-08.
+This is the desk's half only: what the private cluster's bot sends, and where the token comes from on each side, is
+#1158.
+
+**The route.** The public desk (the community cluster's fake-ticket, behind support.burritobot.co) takes a report from
+outside at `POST /remote-landed`. The console publishes that path only through a new kustomize component,
+`gitops/ai-layer/components/desk-remote-reports`, which the ai-layer Application adds when the chart value
+`desk.remoteReports` is true. Only `values-kubecon-community.yaml` sets it. Its guard sits inside the `/kubecon`
+withholding guard, since only a community cluster's desk is the public one, and `apps.yaml` fails a profile that sets
+it where `console.kubeconBrief` is true, and one that sets it to anything but a bool.
+
+nginx cannot make a location conditional on a profile, so console.conf's support-desk server now carries
+`include /etc/nginx/conf.d/desk-remote-report*.locations;`. The console-conf ConfigMap is mounted at conf.d, so the
+component merges a second key, `desk-remote-report.locations`, into it, and that file holds the one location. On every
+other profile the glob matches nothing and nginx includes nothing: a glob, because nginx refuses to start on a missing
+file it names, and not `*.conf`, so nginx's own `conf.d/*.conf` never loads the location file at the top level. The
+route is POST only, 4k at most, answers 401 at the console when the `X-Desk-Report-Token` header is missing, and
+otherwise passes to the desk, which compares the header with `DESK_REPORT_TOKEN` (`secrets.compare_digest`) and
+records the report only on a match. A custom header and not `Authorization`, because `test_desk_removed_rows.py`
+holds that ticket_site.py names no Authorization: the desk calls nothing that takes one. In-cluster `/landed` and
+`/cluster-read` are unchanged and still refused from outside.
+
+The component also patches fake-ticket's env: `DESK_REPORT_TOKEN` from the `desk-report-token` Secret's `token` key,
+optional, so the desk starts without it and then answers `/remote-landed` with its plain 404; `DESK_CLUSTER=community`
+and `DESK_REMOTE_CLUSTER=private`. Nothing writes that Secret yet. Once it is written, fake-ticket needs a restart to
+read it, which clears the desk's in-memory tickets and rows, so the Secret goes in before the run-throughs, not during
+one.
+
+**The label.** Each row in `LANDINGS` now carries `cluster`, and so does each `/deployments.json` entry, beside its
+witch name. A row from in-cluster `/landed` takes `DESK_CLUSTER`; a row that came with the token takes
+`DESK_REMOTE_CLUSTER` ("remote" if unset), whatever cluster the report itself names, so the reporter cannot label its
+own rows. The deployments page shows a row's cluster as a small tag after the line, and only when it has one. With no
+component, `DESK_CLUSTER` is empty, so the 2-hour workshop's page reads as it did, and its JSON gains an empty
+`cluster` field and nothing else.
+
+**Measured.** Both console builds were started in the console's pinned image
+(`watch-it-burn:nginx-1.27-alpine@sha256:65e3e85d...`) with the files copied in. Both pass `nginx -t`. With Host
+`support.burritobot.co`: without the component, `POST /remote-landed` with or without the header falls through to
+`location /` and is proxied to the desk (whose answer without a token is 404), and `POST /landed` is 403. With it,
+`POST /remote-landed` without the header is 401, with it is proxied to the desk, `GET` is 403, `/landed` is still 403,
+and under `deployments.burritobot.co` it is 404. `kubectl kustomize` (v1.36.2) builds the ai-layer with both community
+components: console-conf holds `default.conf` and `desk-remote-report.locations`, and the console mounts it by its
+new hashed name, so the console rolls onto it.
+
+**Tests.** `verify/test_desk_remote_reports.py` (offline) runs the real ticket_site.py with no token and with one:
+with none, `/remote-landed` is a 404 for any header and records nothing; with one, no header, an empty, wrong, short,
+long or bearer-only token is a 401 and records nothing, and the token records the row under `private` with its witch
+name. It holds each row's and each `/deployments.json` entry's cluster and witch name, the include and the component's
+route file as nginx reads them, and, for every profile that renders the ai-layer, the attendee one included, that only
+kubecon-community adds the component and only its console-conf has a file the include matches. In the tools tier,
+`test_bootstrap_chart_render.py` now renders the two new failures with Helm and builds four profiles' ai-layer with
+kustomize: console-conf and fake-ticket's env are as above on kubecon-community and unchanged on burn, attendee and
+kubecon-private. `bootstrap_chart.py` gains `for_desk_remote_reports`, and `for_kubecon_brief` drops the nested block
+with its own. `test_bootstrap_chart.py` and `test_kubecon_community_gate.py` follow the new guard and value. The
+scope map has the new test's entry.
+
+`verify/bootstrap_chart.py` is on the scope map's full list, so `verify/scope_tests.py select` returned FULL for this
+change, and the E2E command ran everything: `HECATON_BASE_SHA=99a4bbbe bash verify/run-e2e-tools.sh` printed
+`86 checks ran (the offline suite and 85 tier tests) in 11m40s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0` (log: /var/lib/hecaton/runs/18670/e2e-tools.log). The offline suite inside it, which is the Test command,
+was green with it. `scope_tests.py write` also rewrote about 850 lines of other tests' entries, drift that was already
+on staging (`scope_tests.py check` names 558 problems on staging and 557 here); only the new test's entry is
+committed, and the rest is left to a run that owns the map.
+
+**Live check.** The change touches `gitops/`, so it owes one. Before it, read on watch-it-burn-community only, changing
+nothing: the ai-layer Application was Synced and Healthy at 99a4bbbe, fake-ticket had no env and one ready replica,
+there is no `desk-report-token` Secret, `POST https://support.burritobot.co/remote-landed` answered 404 (the desk's
+unknown path), `POST .../landed` 403, and `/deployments.json` rows had no `cluster` field.
+
+Not yet run on a cluster:
+- Once promoted and synced on watch-it-burn-community: `POST https://support.burritobot.co/remote-landed` with no
+  `X-Desk-Report-Token` is 401, and with a wrong one 401 again (the desk's, once the Secret exists).
+- Once #1158 or the presenters have written the `desk-report-token` Secret and fake-ticket has restarted: a report
+  with the token lands on `https://deployments.burritobot.co/deployments.json` with `"cluster": "private"`, and the
+  check leaves the page as it found it.
 ## 2026-11-08 · #1193 · run 18663 · The stale evil-mcp-shim copy under challenges/03 is gone; gitops/ai-layer/server.py is the one copy
 
 **What changed.** `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/` held a June copy of the poisoned weather
@@ -37599,73 +37677,3 @@ the ask is sent. The second run, at `188caaa9` (log `/var/lib/hecaton/runs/18686
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_stage_trace_prompts.py` and `test_kubecon_c3_live_checks.py`
 among them, then `20 checks ran (the offline suite and 19 tier tests) in 7m20s, 4 at a time`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
-
-## 2026-11-08 · #1157 · run 18670 · The public desk takes the private cluster's deploy reports with a token, and labels each row with its cluster
-
-Part of #1145, the one support desk and deployments page for both KubeCon clusters, approved by Michael on 2026-11-08.
-This is the desk's half only: what the private cluster's bot sends, and where the token comes from on each side, is
-#1158.
-
-**The route.** The public desk (the community cluster's fake-ticket, behind support.burritobot.co) takes a report from
-outside at `POST /remote-landed`. The console publishes that path only through a new kustomize component,
-`gitops/ai-layer/components/desk-remote-reports`, which the ai-layer Application adds when the chart value
-`desk.remoteReports` is true. Only `values-kubecon-community.yaml` sets it. Its guard sits inside the `/kubecon`
-withholding guard, since only a community cluster's desk is the public one, and `apps.yaml` fails a profile that sets
-it where `console.kubeconBrief` is true, and one that sets it to anything but a bool.
-
-nginx cannot make a location conditional on a profile, so console.conf's support-desk server now carries
-`include /etc/nginx/conf.d/desk-remote-report*.locations;`. The console-conf ConfigMap is mounted at conf.d, so the
-component merges a second key, `desk-remote-report.locations`, into it, and that file holds the one location. On every
-other profile the glob matches nothing and nginx includes nothing: a glob, because nginx refuses to start on a missing
-file it names, and not `*.conf`, so nginx's own `conf.d/*.conf` never loads the location file at the top level. The
-route is POST only, 4k at most, answers 401 at the console when the `X-Desk-Report-Token` header is missing, and
-otherwise passes to the desk, which compares the header with `DESK_REPORT_TOKEN` (`secrets.compare_digest`) and
-records the report only on a match. A custom header and not `Authorization`, because `test_desk_removed_rows.py`
-holds that ticket_site.py names no Authorization: the desk calls nothing that takes one. In-cluster `/landed` and
-`/cluster-read` are unchanged and still refused from outside.
-
-The component also patches fake-ticket's env: `DESK_REPORT_TOKEN` from the `desk-report-token` Secret's `token` key,
-optional, so the desk starts without it and then answers `/remote-landed` with its plain 404; `DESK_CLUSTER=community`
-and `DESK_REMOTE_CLUSTER=private`. Nothing writes that Secret yet. Once it is written, fake-ticket needs a restart to
-read it, which clears the desk's in-memory tickets and rows, so the Secret goes in before the run-throughs, not during
-one.
-
-**The label.** Each row in `LANDINGS` now carries `cluster`, and so does each `/deployments.json` entry, beside its
-witch name. A row from in-cluster `/landed` takes `DESK_CLUSTER`; a row that came with the token takes
-`DESK_REMOTE_CLUSTER` ("remote" if unset), whatever cluster the report itself names, so the reporter cannot label its
-own rows. The deployments page shows a row's cluster as a small tag after the line, and only when it has one. With no
-component, `DESK_CLUSTER` is empty, so the 2-hour workshop's page reads as it did, and its JSON gains an empty
-`cluster` field and nothing else.
-
-**Measured.** Both console builds were started in the console's pinned image
-(`watch-it-burn:nginx-1.27-alpine@sha256:65e3e85d...`) with the files copied in. Both pass `nginx -t`. With Host
-`support.burritobot.co`: without the component, `POST /remote-landed` with or without the header falls through to
-`location /` and is proxied to the desk (whose answer without a token is 404), and `POST /landed` is 403. With it,
-`POST /remote-landed` without the header is 401, with it is proxied to the desk, `GET` is 403, `/landed` is still 403,
-and under `deployments.burritobot.co` it is 404. `kubectl kustomize` (v1.36.2) builds the ai-layer with both community
-components: console-conf holds `default.conf` and `desk-remote-report.locations`, and the console mounts it by its
-new hashed name, so the console rolls onto it.
-
-**Tests.** `verify/test_desk_remote_reports.py` (offline) runs the real ticket_site.py with no token and with one:
-with none, `/remote-landed` is a 404 for any header and records nothing; with one, no header, an empty, wrong, short,
-long or bearer-only token is a 401 and records nothing, and the token records the row under `private` with its witch
-name. It holds each row's and each `/deployments.json` entry's cluster and witch name, the include and the component's
-route file as nginx reads them, and, for every profile that renders the ai-layer, the attendee one included, that only
-kubecon-community adds the component and only its console-conf has a file the include matches. In the tools tier,
-`test_bootstrap_chart_render.py` now renders the two new failures with Helm and builds four profiles' ai-layer with
-kustomize: console-conf and fake-ticket's env are as above on kubecon-community and unchanged on burn, attendee and
-kubecon-private. `bootstrap_chart.py` gains `for_desk_remote_reports`, and `for_kubecon_brief` drops the nested block
-with its own. `test_bootstrap_chart.py` and `test_kubecon_community_gate.py` follow the new guard and value. The
-scope map has the new test's entry.
-
-**Live check.** The change touches `gitops/`, so it owes one. Before it, read on watch-it-burn-community only, changing
-nothing: the ai-layer Application was Synced and Healthy at 99a4bbbe, fake-ticket had no env and one ready replica,
-there is no `desk-report-token` Secret, `POST https://support.burritobot.co/remote-landed` answered 404 (the desk's
-unknown path), `POST .../landed` 403, and `/deployments.json` rows had no `cluster` field.
-
-Not yet run on a cluster:
-- Once promoted and synced on watch-it-burn-community: `POST https://support.burritobot.co/remote-landed` with no
-  `X-Desk-Report-Token` is 401, and with a wrong one 401 again (the desk's, once the Secret exists).
-- Once #1158 or the presenters have written the `desk-report-token` Secret and fake-ticket has restarted: a report
-  with the token lands on `https://deployments.burritobot.co/deployments.json` with `"cluster": "private"`, and the
-  check leaves the page as it found it.
