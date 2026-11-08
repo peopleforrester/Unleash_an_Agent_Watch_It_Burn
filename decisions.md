@@ -39669,3 +39669,17 @@ for the next run on the issue:
   --kubeconfig "$KUBECONFIG" --profile accen-dev` ends `ONE DESK LIVE GREEN`, and the page then reads as it did before.
 - The Night Before probe's admin and community runs (`verify/kubecon_probe.py`) end with no `joker-agatha-the-banshee`
   row on `https://deployments.burritobot.co/deployments.json`.
+
+**Suites (run 18753).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6
+asks. The change touches what tier tests read, so the scoped `bash verify/run-e2e-tools.sh` ran at `7849d877`: `33
+checks ran (the offline suite and 32 tier tests) in 9m06s, 4 at a time`, every tier test green, and the offline suite
+(237 of 386) red on three. `test_kubecon_c3_live_checks.py` and `test_stage_trace_prompts.py` drive the HC-666 ask with
+fakes of their own that did not answer the desk; `test_verify_harness.py` read the new test's `["kubectl",` assertion
+as a light-suite test running kubectl. Each was fixed (`4a000572`) and passed run alone, as did
+`test_live_check_cleanup.py`, `test_c3_prompt_copies.py`, `test_ceo_persona.py` and `test_no_docker_hub.py`, the other
+offline tests that import the probe's beats. Then `HECATON_BASE_SHA=7849d877 bash verify/run-tests.sh`, the tests the
+later commits touch, every reader of decisions.md among them, ran 107 of 386 and printed `ALL OFFLINE RENDER-GATE TESTS
+GREEN`, exit 0. The prose gate printed `prose gate: pass`. No dependency was added. The logs are under
+`/var/lib/hecaton/runs/18753/logs/`. `verify/test_kubecon_c3_live.py`, an E2E-suite test, runs the probe's `c6-lands`
+beat on watch-it-burn-community and so now asks its row off the desk there: it is red until `/desk-forget` is deployed,
+and is the third check for the next run, after promotion.
