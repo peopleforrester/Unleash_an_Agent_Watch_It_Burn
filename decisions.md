@@ -38695,3 +38695,9 @@ GitHub 1. Loopback, 61 sites in 40 files. None, 524 sites in 133 files.
 **Live check: skipped.** The change is this decisions.md entry alone; the tanjiro reads were reads.
 
 **No new dependency.**
+
+**Suites (run 18734, at `9d835547`).** Scoped to the change from `30b6b26f`, as point 6 asks: `bash
+verify/run-tests.sh` printed `scope: running 98 of 382 offline tests`, `98 tests ran`, `ALL OFFLINE RENDER-GATE TESTS
+GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18734/run-tests-scoped.log`). `scope_tests.py select tools` printed
+`running 0 of 86 tools tests`, since the change is prose alone, so `run-e2e-tools.sh` was not run.
+`verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` The prose gate printed `prose gate: pass`.
