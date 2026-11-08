@@ -3,8 +3,8 @@
 """The real ticket site (gitops/ai-layer/ticket_site.py) runs on localhost and is driven over HTTP with the Host header
 the console passes on. No cluster, no model.
 
-deployments.burritobot.co (deck slide #/46) and the private cluster's deployments-burritobot-private.burritobot.co
-(#/47) served the same page. On the private Host the page (`/`) and its per-witch view (`/mine`, with a witch named,
+deployments.burritobot.co and the private cluster's deployments-burritobot-private.burritobot.co, both linked from
+the deck, served the same page. On the private Host the page (`/`) and its per-witch view (`/mine`, with a witch named,
 with only the cookie, and with no name at all) now open with the banner "This is the private (administrator)
 deployments page.", built by the support desk's helper (private_banner, #1178) in its .combanner style. Each view is
 checked on its own:

@@ -559,9 +559,10 @@ def desk_banner(host: str) -> str:
     return private_banner("support desk") if PRIVATE_DESK_HOST.match((host or "").strip().lower()) else ""
 
 
-# The private deployments page's banner (#1179, part of #1142). deployments.burritobot.co (deck slide #/46) and the
-# private cluster's deployments-burritobot-private.burritobot.co (#/47) looked the same. Its page and its per-witch
-# view (/mine) take the same helper's banner on that Host; every other deployments Host gets the page as before.
+# The private deployments page's banner (#1179, part of #1142). deployments.burritobot.co and the private cluster's
+# deployments-burritobot-private.burritobot.co, both linked from the deck, looked the same. Its page and its
+# per-witch view (/mine) take the same helper's banner on that Host; every other deployments Host gets the page as
+# before.
 PRIVATE_DEPLOYMENTS_HOST = re.compile(r"^deployments-burritobot-private\.")
 
 
