@@ -37677,3 +37677,58 @@ the ask is sent. The second run, at `188caaa9` (log `/var/lib/hecaton/runs/18686
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_stage_trace_prompts.py` and `test_kubecon_c3_live_checks.py`
 among them, then `20 checks ran (the offline suite and 19 tier tests) in 7m20s, 4 at a time`, `ALL E2E TOOLS TIER
 CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-08 · #1182 · run 18703 · The stage-switch check's judge: each switch per cluster from both clusters' /controls
+
+**What changed.** First piece of #1146. `verify/stage_switch_check.py` judges, with no cluster access of its own,
+the Night Before stage-switch check from guard-proxy's `/controls` reads of `burritobot-private.burritobot.co` and
+`attackme.burritobot.co`, filed under `private` and `community`. `judge_switch(switch, before, after)` returns PASS
+or FAIL per cluster, PASS only when every field the switch owns read `false` before it and `true` after it there.
+`judge_start_state(reads)` returns PASS or FAIL per cluster for the state after `guards-off` and `guardrails-off`,
+naming each field that does not read `false` and the switch that owns it. A read may be the parsed JSON, its text or
+bytes, or None for a read that failed.
+
+**The fields.** Read off guard-proxy at the pinned submodule `5772a5d8`: the `/controls` handler sends
+`{"ai": GUARDS, "infra": read_controls(), "host": WIB_PUBLIC_HOST}`. `guardrails-on` owns `infra.rbac_scoped`,
+`infra.kyverno`, `infra.kubearmor` and `infra.networkpolicy`; `guard-input-on` owns `ai.input_blocklist` and
+`ai.input_classifier`; `guard-mcp-on` owns `infra.tool_allowlist`. These are the keys the probe's `judge_badges` and
+`AI_GUARDS` already read. `guard-agency-on` owns `infra.agency_scoped`, the name guard-proxy-agenticburn#76 gave it.
+That change is on guard-proxy's staging (`3c682245`) but not in the pin, so the live reads of 2026-11-08 carry no
+`agency_scoped`, and `guard-agency-on` is judged FAIL naming #1132 on each cluster where it is missing. The
+start-state judge fails the same way, since a missing field cannot be read as off; it turns PASS once the pin
+moves and the field reads `false`. Nothing here asks for the repin: the issue says Michael repins.
+
+**Stricter than "on after".** A field that read `true` before the switch fails it, since the switch was not seen to
+turn it on, and a field that read `null` (guard-proxy could not measure it) before or after fails it. Only JSON
+`true` and `false` count. A read whose `host` names the other cluster fails, by the probe's `identity_name`, so a
+swapped pair is not judged as each other's; an empty `host`, which guard-proxy sends when `WIB_PUBLIC_HOST` is
+unset, is accepted, as the probe's community start check does. Falco is outside the start state (the private cluster
+runs it), and so are the AI guards that are not stage switches (`output`, `budget`, `topic`). A field guard-proxy
+already sent and then dropped fails without naming #1132. An unknown switch name raises ValueError: it is the
+caller's mistake, not a verdict.
+
+**Reuse.** `PASS`, `FAIL` and `identity_name` are imported from `verify/kubecon_probe.py`. `judge_badges` itself does
+not fit: it compares the badges with the cluster's measured objects, not a before and an after.
+
+**#1134.** #1134 (the probe at the stage's guardrail state) is still open with nothing on staging, so it covers none
+of the four switches yet, and the runner child of #1146 duplicates nothing by judging all four.
+
+**The test.** `verify/test_stage_switch_check.py` (offline, 88 checks) builds its reads on the shape both clusters'
+`/controls` answered on 2026-11-08 (a plain GET of each in this run: every switch's field `false`, Falco `true` only
+on the private cluster, no `agency_scoped`). It covers each switch passing on both clusters, run cumulatively;
+reads as text and bytes; a FAIL on one cluster only (KubeArmor missing on community after `guardrails-on`,
+`guard-mcp-on` reaching private only, half of `guard-input-on`); `guard-agency-on` failing on both clusters while the
+field is missing, and on one cluster only where the other carries it, naming #1132; a field already on before, `null`
+before or after, and the string `"true"`; six unreadable reads (no response, an HTML error page, bytes not UTF-8, a
+JSON list, no `infra` object, `infra` null), before and after the switch and at the start-state check, each failing
+that cluster only; a cluster with no read; swapped reads; and the start state, with every owned field left on or
+`null` failing it, naming its switch, and Falco and the topic guard not deciding it. It also reads the pinned
+`proxy.py` and fails if `read_controls` or `GUARDS` stops sending a field a switch owns, unless `WAITS_ON` names it.
+Five mutants of the judge (no already-on check, `null` after taken as on, no missing-field check at the start state,
+no identity check, no missing-field check after the switch) each fail it. Its scope-map entry is the one
+`scope_tests.py write` computed with the files tracked; the other drift `write` printed for unrelated tests was left
+out of this change.
+
+**Live check: skipped.** No cluster runs the module, and the change touches only files under `verify/` that no
+cluster runs. The only live act was a read-only GET of both clusters' `/controls`, to take the fixture's shape;
+nothing on either cluster was changed.
