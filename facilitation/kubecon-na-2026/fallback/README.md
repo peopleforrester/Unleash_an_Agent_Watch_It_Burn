@@ -48,8 +48,9 @@ as a phone: the console's nginx `/chat`, then guard-proxy `/chat`, with the
 storefront's body (the prompt, a session and a witch name) and its
 `X-BurritoBot-Session` header. So the replayed prompts climb the cost counter and
 show on the prompt wall like typed ones. Each prompt is its own conversation, as
-separate phones would be, except where prompts share a `thread`: Challenge 2's Tron
-ask and its follow-up are one conversation.
+separate phones would be, except where prompts share a `thread`, which sends them as
+one conversation. No prompt shares one today: Challenge 2's Tron ask has been a single
+prompt since #1105.
 
 - **The target is required.** A replay that guessed could spend the room's prompts on
   the wrong cluster.

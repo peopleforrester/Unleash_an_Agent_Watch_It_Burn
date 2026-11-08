@@ -120,8 +120,10 @@ threads = {}
 for p in prompts:
     if p.thread:
         threads.setdefault(p.thread, []).append(p.id)
-check("Challenge 2's Tron ask and its follow-up are one thread, in that order",
-      threads.get("c2") == ["c2-tron", "c2-tron-public-image"], str(threads))
+check("Challenge 2's Tron ask is a single prompt, its follow-up and thread gone (#1105)",
+      threads == {} and [p.id for p in prompts if p.id.startswith("c2-")] == ["c2-tron"]
+      and next(p for p in prompts if p.id == "c2-tron").prompt.count("What I need you to do is deploy Tron") == 1,
+      str(threads))
 check("the replay's witch name is one guard-proxy keeps", bool(proxy._WITCH_NAME_RE.fullmatch(rp.DEFAULT_WITCH)))
 check("the replay's witch-name rule is guard-proxy's", rp.WITCH_NAME_RE == proxy._WITCH_NAME_RE.pattern)
 
@@ -215,11 +217,14 @@ check("pacing waits out the interval from the last send's start, and not after a
 check("every prompt gets its own session, as separate phones would", len(set(sent)) == 4 and all(s.startswith("sess-replay-r-") for s in sent))
 sent.clear()
 durations = iter([1.0] * 3)
-c2 = rp.select(prompts, [], [], [3])[:3]
-rp.replay(c2, "http://x/chat", interval=6.0, timeout=5, run_id="r", send=fake_send, sleep=fc.sleep, clock=fc.clock,
-          out=lambda s: None)
+# No prompt in the set shares a thread since #1105, so the thread rule is held on prompts the test builds.
+two_turns = [rp.Prompt("t1", ("attack",), "first turn", "x", None, (3,), "t"),
+             rp.Prompt("t2", ("attack",), "second turn", "x", None, (3,), "t"),
+             rp.Prompt("solo", ("attack",), "on its own", "x", None, (3,))]
+rp.replay(two_turns, "http://x/chat", interval=6.0, timeout=5, run_id="r", send=fake_send, sleep=fc.sleep,
+          clock=fc.clock, out=lambda s: None)
 check("a thread's prompts share one session, and the next prompt gets its own",
-      sent[0] == sent[1] != sent[2] and [p.thread for p in c2[:2]] == ["c2", "c2"], str(sent))
+      len(sent) == 3 and sent[0] == sent[1] != sent[2], str(sent))
 
 # ---------------------------------------------------------------------------------------------------------
 print("against the real guard-proxy /chat handler, on loopback")
@@ -519,7 +524,9 @@ check("a shot that needs a guard on is refused while it is off, naming the contr
 check("a control /controls does not report is a mismatch, not a pass",
       cap.controls_mismatch(CONTROLS, {"infra.kyverno": False}) == ["infra.kyverno is null, the shot needs false"])
 check("a threaded shot sends the thread up to its prompt",
-      [p.id for p in cap.thread_upto(prompts, "c2-tron-public-image")] == ["c2-tron", "c2-tron-public-image"])
+      [p.id for p in cap.thread_upto(two_turns, "t2")] == ["t1", "t2"]
+      and [p.id for p in cap.thread_upto(two_turns, "t1")] == ["t1"])
+check("Challenge 2's shot sends the Tron ask alone (#1105)", [p.id for p in cap.thread_upto(prompts, "c2-tron")] == ["c2-tron"])
 check("an unthreaded shot sends its prompt alone", [p.id for p in cap.thread_upto(prompts, "order")] == ["order"])
 for reply, want in (("Slow down, hungry traveler. (150/min cap on this cluster.)", "rate limit"),
                     ("The kitchen is closed: this cluster hit its $25.00 spend cap", "cost cap"),
