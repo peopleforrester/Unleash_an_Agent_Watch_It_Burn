@@ -97,8 +97,9 @@ check("it maps the cadence rules' provisioning onto the two clusters",
       "rules 3 and 4" in up and "validate on one of the two" in up)
 check("it runs a step written for a fresh attendee cluster on one of the two",
       "a step written for a fresh attendee cluster runs on one of them instead" in up)
-for cmd in ("bash verify/run-tests.sh", "bash verify/run-e2e-tools.sh"):
-    check(f"it says to run `{cmd}`", f"`{cmd}`" in up)
+# Since #1191 point 1 sends a run to point 6 for what it tests, not to both suites whole;
+# verify/test_claude_md_run_test_scope.py holds point 6 itself.
+check("it says to run the tests point 6 names (#1191)", "run the tests point 6 names" in up)
 check("it says to run the live check and record what it printed",
       "run the live check, and put what it printed" in up)
 check('it keeps "Not yet run on a cluster" for a check that needs the change promoted',

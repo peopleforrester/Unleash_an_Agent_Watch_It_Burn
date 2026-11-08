@@ -130,8 +130,8 @@ to the fifth (#796).
    files. A run never creates or tears down a cluster or nodegroup, and there is no third cluster; the `aws` and
    `terraform` on its PATH refuse to. So "provision one and validate" in change cadence rules 3 and 4 above means,
    in a run, validate on one of the two, and a step written for a fresh attendee cluster runs on one of them
-   instead. In a run, write the change and its offline test, run `bash verify/run-tests.sh` and
-   `bash verify/run-e2e-tools.sh`, run the live check, and put what it printed in the change's decisions.md entry.
+   instead. In a run, write the change and its offline test, run the tests point 6 names, run the live check, and put
+   what it printed in the change's decisions.md entry.
    Since Michael's ruling of 2026-11-07 (#1062), a run checks live only when the issue's own work is a live check
    or a live run, or when the change touches what the clusters run: `gitops/`, `policies/`, `images/`,
    `gitops/workshop-agent/agent.yaml` (the agent prompt), `infra/terraform/fleet/fleet.sh`, the guard-proxy or
@@ -203,6 +203,18 @@ to the fifth (#796).
    `terminal-password` verb fails on either name, and a bring-up that finds no Secret writes none and fails by
    name. A live check reads the login from that Secret, never from an issue, a commit or a transcript, and never
    prints it. Their standbys (`-bNN`) are not covered by this rule.
+6. **A run tests what it changed, and never the whole tools tier.** Michael, 2026-11-08 (#1191): "it still sounds
+   like we're running the end-to-end tools way too fucking much for reasons that aren't fucking clear, for fucking
+   file edits." Both scripts scope to the change when `HECATON_BASE_SHA` is set (#1018, `verify/scope-map.yaml`), so
+   run them as `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/<script>`.
+   - A change to .md, .html or other prose files runs the prose gate and the offline tests that read those files,
+     and never `run-e2e-tools.sh`.
+   - A code change runs the tests that read the changed files: the scoped `run-tests.sh`, and the scoped
+     `run-e2e-tools.sh` only when the change touches what a tier test reads.
+   - The full tools tier is the promotion gate's and is not run inside a run. A tier failure is reported with the
+     failing test, never answered by running the whole suite again (#1190).
+   - To run one tier test alone, change it and run the scoped `run-e2e-tools.sh`: a changed test selects itself,
+     and the tier then fetches only for the tests it selected.
 
 ## Tests own their inputs
 

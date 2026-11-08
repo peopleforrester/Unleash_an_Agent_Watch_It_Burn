@@ -1125,6 +1125,10 @@ reads:
     - gitops/ai-layer
   test_check_tls_shell_probe.sh:
     - infra/terraform/fleet/check-tls.sh
+  test_claude_md_run_test_scope.py:
+    - CLAUDE.md
+    - verify/run-e2e-tools.sh
+    - verify/run-tests.sh
   test_cloud_credential_probe_admission.py:
     - gitops/ai-layer/resources.yaml
     - policies/floor/minimal-floor.yaml
