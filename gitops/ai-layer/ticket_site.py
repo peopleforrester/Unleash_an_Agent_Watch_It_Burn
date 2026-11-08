@@ -241,6 +241,30 @@ def file_ticket(raw: str, owner: str) -> dict:
 LANDINGS: list[dict] = []
 SCALE_DOWN_SECONDS = int(os.environ.get("JOKER_SCALE_DOWN_SECONDS", "300"))
 
+# --- reports from the other cluster (#1157, part of #1145) --------------------------------------------------------
+# On the KubeCon pair one deployments page shows both clusters' deploys, so the public desk also takes the admin
+# cluster's reports. Those arrive from outside, through the console's /remote-landed, which only the
+# desk-remote-reports component publishes (the kubecon-community profile's desk.remoteReports). The desk records one only
+# when it carries REMOTE_TOKEN_HEADER with the token in DESK_REPORT_TOKEN, which the component reads from the
+# desk-report-token Secret. With no token configured, every profile's case but that one, /remote-landed is the
+# desk's plain 404, as it was before. In-cluster /landed is unchanged and still refused from outside (console.conf).
+# Each row carries the cluster it came from: DESK_CLUSTER for this cluster's own /landed, and DESK_REMOTE_CLUSTER for a
+# report that carried the token ("remote" if unset), so the reporter never names its own row. DESK_CLUSTER is "" unless
+# the component sets it, and the page shows a row's cluster only when it has one, so the 2-hour workshop's page reads
+# as it did.
+REMOTE_PATH = "/remote-landed"
+REMOTE_TOKEN_HEADER = "X-Desk-Report-Token"
+REMOTE_TOKEN = os.environ.get("DESK_REPORT_TOKEN", "").strip()
+LOCAL_CLUSTER = os.environ.get("DESK_CLUSTER", "").strip()[:63]
+REMOTE_CLUSTER = os.environ.get("DESK_REMOTE_CLUSTER", "").strip()[:63] or "remote"
+
+
+def remote_report_allowed(given: str | None) -> bool | None:
+    """None when this desk takes no remote reports (no token configured); else whether the header carries the token."""
+    if not REMOTE_TOKEN:
+        return None
+    return secrets.compare_digest((given or "").strip().encode(), REMOTE_TOKEN.encode())
+
 
 def name_from_display(s: str) -> str | None:
     """The vocabulary's name for what deploy_app says the person gave ("Edgar the Kelpie", any case, or its slug)."""
@@ -275,7 +299,8 @@ def plain_refusal(detail: str) -> str:
     return f"Refused by the cluster (HTTP {code.group(1)})." if code else "Refused by the cluster."
 
 
-def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "", kind: str = "") -> dict:
+def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_by: str = "", kind: str = "",
+                   cluster: str | None = None) -> dict:
     # The witch is the name deploy_app says the person gave (#773), taken only when the vocabulary makes it, as the
     # cookie is; a Joker's own name still says whose it is when the model passed none.
     witch = name_from_display(requested_by) or (name_from_slug(name.removeprefix("joker-"))
@@ -284,7 +309,8 @@ def record_landing(name: str, ok: bool, detail: str, image: str = "", requested_
     # with no kind (a report from before #1049) is covered by no read and is never marked removed.
     row = {"name": name[:63], "kind": str(kind)[:63], "who": who_deployed(name, witch), "witch": witch,
            "image": str(image)[:300], "ok": bool(ok), "detail": "" if ok else plain_refusal(str(detail)[:400]),
-           "at": time.strftime("%H:%M:%S"), "ts": time.time(), "removed_at": "", "removed_ts": None}
+           "at": time.strftime("%H:%M:%S"), "ts": time.time(), "removed_at": "", "removed_ts": None,
+           "cluster": LOCAL_CLUSTER if cluster is None else str(cluster)[:63]}
     with _lock:
         LANDINGS.insert(0, row)
         del LANDINGS[1000:]
@@ -368,13 +394,14 @@ def deployments(witch_slug: str = "") -> list[dict]:
     # app is what the line names: the image's short name, or the resource's own name for one that runs no image.
     return [{"name": r["name"], "kind": r.get("kind", ""), "image": r.get("image", ""),
              "app": image_label(r.get("image", "")) or r["name"], "witch": r.get("witch", ""), "at": r["at"],
-             "removed_at": r.get("removed_at", "")} for r in rows[:200]]
+             "removed_at": r.get("removed_at", ""), "cluster": r.get("cluster", "")} for r in rows[:200]]
 
 
 _DEPLOY_STYLE = ("body{font:22px/1.45 system-ui,sans-serif;max-width:60rem;margin:5vh auto;padding:0 1.25rem;"
                  "color:#1c1330;background:#ffffff}h1{font-size:1.6rem;margin:0 0 .3rem}.meta{color:#6b5f80;"
                  "font-size:.8em}ul{list-style:none;padding:0}li{border-bottom:1px solid #e6def3;padding:.55rem 0}"
-                 "b{color:#6a2bd9}code{font-size:.85em}li.removed,li.removed b{color:#9b93a8}")
+                 "b{color:#6a2bd9}code{font-size:.85em}li.removed,li.removed b{color:#9b93a8}"
+                 ".cluster{font-size:.7em;color:#6b5f80;border:1px solid #d9d0ea;border-radius:6px;padding:0 .35em}")
 _DEPLOY_SCRIPT = """<script>
 const WITCH=%s;
 async function tick(){try{const r=await fetch('/deployments.json'+(WITCH?'?witch='+encodeURIComponent(WITCH):''),
@@ -386,6 +413,8 @@ b.textContent=x.witch||'Someone';li.appendChild(b);li.appendChild(document.creat
 const c=document.createElement('code');c.textContent=x.app;if(x.image){c.title=x.image;}li.appendChild(c);
 li.appendChild(document.createTextNode(' at '+x.at));
 if(x.removed_at){li.className='removed';li.appendChild(document.createTextNode(', removed at '+x.removed_at));}
+if(x.cluster){const k=document.createElement('span');k.className='cluster';k.textContent=x.cluster;
+li.appendChild(document.createTextNode(' '));li.appendChild(k);}
 return li;}));}catch(e){}}
 tick();setInterval(tick,3000);
 </script>"""
@@ -626,6 +655,18 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return self.rfile.read(n)
 
+    def _landed(self, raw: bytes, cluster: str | None) -> None:
+        """One deploy report, as deploy_app posts it, recorded under this cluster (None) or the one named."""
+        try:
+            d = json.loads(raw or b"{}")
+            name = str(d["name"])
+        except (ValueError, KeyError, TypeError):
+            self._send(400, {"error": "name is required"})
+            return
+        self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or ""),
+                                       str(d.get("image") or ""), str(d.get("requested_by") or ""),
+                                       str(d.get("kind") or ""), cluster))
+
     def do_POST(self) -> None:  # noqa: N802
         url = urllib.parse.urlsplit(self.path)
         if DEPLOYMENTS_HOST.match((self.headers.get("Host") or "").lower()):
@@ -650,15 +691,16 @@ class Handler(BaseHTTPRequestHandler):
 {_article(t)}<p><a href="/">Back to the desk</a> &middot; <a href="/me">Your tickets and deployments</a></p>"""))
         elif url.path == "/landed":
             # In-cluster only: the console refuses /landed from outside (console.conf). deploy_app posts here.
-            try:
-                d = json.loads(raw or b"{}")
-                name = str(d["name"])
-            except (ValueError, KeyError, TypeError):
-                self._send(400, {"error": "name is required"})
-                return
-            self._send(200, record_landing(name, bool(d.get("ok")), str(d.get("detail") or ""),
-                                           str(d.get("image") or ""), str(d.get("requested_by") or ""),
-                                           str(d.get("kind") or "")))
+            self._landed(raw, None)
+        elif url.path == REMOTE_PATH:
+            # The other cluster's report (#1157): recorded only with the configured token, under DESK_REMOTE_CLUSTER.
+            allowed = remote_report_allowed(self.headers.get(REMOTE_TOKEN_HEADER))
+            if allowed is None:
+                self._send(404, {"error": "not found"})   # no token configured: the desk takes no remote reports
+            elif not allowed:
+                self._send(401, {"error": f"a remote deploy report needs the desk's {REMOTE_TOKEN_HEADER}"})
+            else:
+                self._landed(raw, REMOTE_CLUSTER)
         elif url.path == "/cluster-read":
             # In-cluster only, as /landed is: the console refuses it from outside (console.conf). #1050's reader posts here.
             try:

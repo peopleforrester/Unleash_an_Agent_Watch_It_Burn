@@ -25,6 +25,11 @@
 # Application add the no-kubecon-brief component, which takes kubecon.html out; console.conf's /kubecon then 404s.
 console:
   kubeconBrief: false
+# The desk here is the public one, deployments.burritobot.co, so it also takes the private cluster's deploy reports
+# (#1157): the desk-remote-reports component adds /remote-landed, which needs the desk-report-token Secret's token, and
+# labels each row community or private.
+desk:
+  remoteReports: true
 #
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.

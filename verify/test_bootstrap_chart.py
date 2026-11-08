@@ -19,7 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, C7_TOOLNAMES_END,  # noqa: E402
                              C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES, UNARMED_IF,
                              FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, KUBECON_WITHHELD_END,
-                             KUBECON_WITHHELD_IF, LAB_PLATFORM_GHCR, REPO, REPO_URL,
+                             KUBECON_WITHHELD_IF, LAB_PLATFORM_GHCR, REPO, REPO_URL, DESK_REMOTE_END, DESK_REMOTE_IF,
                              REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, profiles, values_path)
 
 failures = []
@@ -141,10 +141,12 @@ check("values.yaml shares an empty revision, so a render without the parameter f
       "frontDoor.certificateArn, so a root that passes none keeps nginx's self-signed certificate (#638), and "
       "c7Control toolnames, so a profile that names none keeps the Agent's evil-mcp toolNames ignore (#679), and "
       "guardrails.validationAction Audit, so only a root lab-platform arms renders the two policies at Deny (#638), "
-      "and console.kubeconBrief true, so a profile that says nothing keeps serving /kubecon (#909)",
+      "and console.kubeconBrief true, so a profile that says nothing keeps serving /kubecon (#909), and "
+      "desk.remoteReports false, so a profile that says nothing keeps its desk in-cluster only (#1157)",
       yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
       == {"revision": "", "imageRegistry": LAB_PLATFORM_GHCR, "frontDoor": {"certificateArn": ""},
-          "c7Control": "toolnames", "guardrails": {"validationAction": "Audit"}, "console": {"kubeconBrief": True}})
+          "c7Control": "toolnames", "guardrails": {"validationAction": "Audit"}, "console": {"kubeconBrief": True},
+          "desk": {"remoteReports": False}})
 check("the chart holds apps/, templates/ and no other directory (the four old root directories are gone)",
       sorted(d.name for d in CHART.iterdir() if d.is_dir()) == ["apps", "templates"])
 check("gitops/apps is gone: its files are the chart's apps/", not (REPO / "gitops/apps").exists())
@@ -166,9 +168,16 @@ check("ai-layer.yaml patches the console Service only when frontDoor.certificate
       and "      # {{- end }}\n  destination:" in ai_layer)
 check("ai-layer.yaml adds the no-kubecon-brief component only when console.kubeconBrief is false, the guard in "
       "comments, after the images and before the front door's patches (#909)",
-      f"      # {KUBECON_WITHHELD_IF}\n      components:\n        - components/no-kubecon-brief\n"
-      f"      # {KUBECON_WITHHELD_END}\n" in ai_layer
+      f"      # {KUBECON_WITHHELD_IF}\n      components:\n        - components/no-kubecon-brief\n" in ai_layer
+      and f"      # {DESK_REMOTE_END}\n      # {KUBECON_WITHHELD_END}\n      # The front door's certificate" in ai_layer
       and ai_layer.index("      images:\n") < ai_layer.index(KUBECON_WITHHELD_IF) < ai_layer.index(FRONT_DOOR_IF))
+check("ai-layer.yaml adds the desk-remote-reports component only when desk.remoteReports is true, its guard nested in "
+      "the community one (#1157)",
+      f"      # {DESK_REMOTE_IF}\n        - components/desk-remote-reports\n      # {DESK_REMOTE_END}\n" in ai_layer
+      and ai_layer.index(KUBECON_WITHHELD_IF) < ai_layer.index(DESK_REMOTE_IF) < ai_layer.index(FRONT_DOOR_IF))
+check("apps.yaml fails a desk.remoteReports that is not a bool, and one set where console.kubeconBrief is true (#1157)",
+      '{{- if not (kindIs "bool" .Values.desk.remoteReports) }}' in tpl
+      and '{{- if and .Values.desk.remoteReports .Values.console.kubeconBrief }}' in tpl)
 check("apps.yaml fails a console.kubeconBrief that is not a bool, by name (#909)",
       '{{- if not (kindIs "bool" .Values.console.kubeconBrief) }}' in tpl
       and 'fail (printf "console.kubeconBrief is whether' in tpl)
@@ -214,13 +223,19 @@ for profile in all_profiles():
     gateway = profile in ("admin", "kubecon-private")
     # The two community profiles also withhold the KubeCon presenter page from their console (#909).
     community = profile in ("burn", "kubecon-community")
-    want_keys = (["c7Control"] if gateway else []) + (["console"] if community else []) + ["apps"]
+    # The KubeCon community profile's desk is the public one both clusters report deploys to (#1157).
+    public_desk = profile == "kubecon-community"
+    want_keys = (["c7Control"] if gateway else []) + (["console"] if community else []) \
+        + (["desk"] if public_desk else []) + ["apps"]
     check(f"{profile}: the values file holds only {' and '.join(want_keys)}", list(doc) == want_keys)
     if gateway:
         check(f"{profile}: c7Control is gateway", doc.get("c7Control") == "gateway")
     if community:
         check(f"{profile}: console.kubeconBrief is false, so attackme's console serves no /kubecon (#909)",
               doc.get("console") == {"kubeconBrief": False})
+    if public_desk:
+        check(f"{profile}: desk.remoteReports is true, so its desk takes the private cluster's deploy reports (#1157)",
+              doc.get("desk") == {"remoteReports": True})
     check(f"{profile}: it lists apps, each once", bool(names) and len(names) == len(set(names)))
     missing = [n for n in names if f"{n}.yaml" not in app_files]
     check(f"{profile}: every listed app has its file in apps/ {missing}", not missing)
@@ -273,13 +288,14 @@ for f in app_files:
     # workshop-agent.yaml alone holds the c7Control guard on the Agent's evil-mcp toolNames ignore (#679, #707).
     # ai-layer.yaml alone also holds the KubeCon page's withholding guard (#909).
     allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END, KUBECON_WITHHELD_IF,
-                                             KUBECON_WITHHELD_END) if f == "ai-layer.yaml" else ()) \
+                                             KUBECON_WITHHELD_END, DESK_REMOTE_IF, DESK_REMOTE_END)
+                                            if f == "ai-layer.yaml" else ()) \
         + ((C7_TOOLNAMES_IF, C7_TOOLNAMES_END) if f == "workshop-agent.yaml" else ()) \
         + ((ARMED_IF, UNARMED_IF, ARM_END) if f == "kyverno-policies.yaml" else ())
     stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))
              if m not in allowed]
     check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped)"
-          + (" and the front door's certificate and the /kubecon guard" if f == "ai-layer.yaml" else "")
+          + (" and the front door's certificate and the /kubecon and desk guards" if f == "ai-layer.yaml" else "")
           + (" and the c7Control guard" if f == "workshop-agent.yaml" else "")
           + (" and the guardrails' arm guards" if f == "kyverno-policies.yaml" else "")
           + f" {stray}", not stray)
