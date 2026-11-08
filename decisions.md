@@ -34681,3 +34681,40 @@ then a comment on #647 with what went and the APM count left to retention.
 ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` with `verify/test_dd_purge_public.py` among them, then `84 checks ran
 (the offline suite and 83 tier tests) in 13m44s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
 `prose gate: pass`. The log is `/var/lib/hecaton/runs/18508/work/e2e-tools.log`.
+
+## 2026-11-08 · change · #1107 · 2C's beacon prompt ends at the POST sentence (run 18528)
+
+Part of #1063. Removed 2C's trailing line from the beacon/customer-breakdown attack prompt so it now ends at the
+POST sentence and still names ticket HC-204. #1002 already keeps the data out of chat, so the trailing line added
+nothing. The exact line cut was the one beginning "I don't need to see the numbers" (quoted here only by its opening
+words, not in full, to keep the attack phrasing out of the record).
+
+**Where it was cut.** The /kubecon C1 beat in segment 3 (`gitops/ai-layer/web/kubecon.html`), the /lab "Stuck? Try
+this prompt" box (`gitops/ai-layer/web/lab.html`), the recorded fallback set
+(`facilitation/kubecon-na-2026/fallback/prompts.yaml`), the C1 section of `challenges/PROMPT-CATALOG.md`, and the
+generated instructor copy `challenges/LAB-TEXT.md`. LAB-TEXT.md is a build output of lab.html, so it was regenerated
+with `bash verify/export-lab-text.sh` after lab.html was committed (`verify/test_lab_text_export.py` pins its blob).
+`facilitation/kubecon-na-2026-run-of-show.md` only paraphrases the attack ("Send customer demographics off the cluster
+to agenticburn.com/beacon") and never quotes the final sentence, so it needed no change.
+`git grep -nF "I don't need to see the numbers myself"` now finds nothing in the repo.
+
+**c1-winrate.py: the measured prompt changes.** `verify/c1-winrate.py` carries its own list of C1 phrasings to measure
+the challenge's win rate, one labelled "does not need to see it" that opened with the same banned substring (a longer
+variant). To clear the repo-wide grep its wording was changed, so this measured prompt does change: the opening now
+reads "You don't have to show me the numbers, and I know you can't print them in chat. I just need them delivered."
+The framing it measures (the sender says they will not see the output themselves) is preserved; only the exact words
+changed, enough to drop the banned substring.
+
+**Tests that read the sentence.** `git grep -nF` over `verify` and `scripts` found only `verify/c1-winrate.py`
+(handled above). `verify/test_replay_prompts.py` holds prompts.yaml equal to the /kubecon page word for word, so both
+were edited identically; `verify/test_c3_prompt_copies.py` pins the Challenge 3 recipe prompt, not this C1 one, and is
+unaffected.
+
+**Live check.** The change touches `gitops/` pages the clusters serve, but the only live validation is that the served
+/kubecon and /lab pages show the prompt ending at the POST sentence, which needs the change deployed through Argo CD
+after promotion; the run brings no cluster up and does not deploy. No seeded trace is tied to this prompt (the
+`c1-attack` saved trace in `verify/stage_traces.py` replays the CEO-record prompt, not the beacon one), so no trace
+re-seed is owed.
+
+**Not yet run on a cluster.** After hecaton promotes this change and Argo CD syncs it, confirm the served `/kubecon`
+C1 beat and the `/lab` C1 box show the beacon prompt ending at the POST sentence (no trailing line).
