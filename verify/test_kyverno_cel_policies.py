@@ -64,6 +64,9 @@ USERS = {
                      ["system:serviceaccounts", "system:serviceaccounts:agent", "system:authenticated"]),
     "web-terminal": ("system:serviceaccount:agent:web-terminal",
                      ["system:serviceaccounts", "system:serviceaccounts:agent", "system:authenticated"]),
+    # The identity the other KubeCon cluster's terminal acts as here, through the guardrails-peer Secret (#774, #1149).
+    "guardrails-switch": ("system:serviceaccount:guardrails-switch:guardrails-switch",
+                          ["system:serviceaccounts", "system:serviceaccounts:guardrails-switch", "system:authenticated"]),
     "replicaset-controller": ("system:serviceaccount:kube-system:replicaset-controller",
                               ["system:serviceaccounts", "system:serviceaccounts:kube-system", "system:authenticated"]),
 }
@@ -263,6 +266,16 @@ expect("nor DELETE agentgateway-c7-config", g, "agentgateway-c7-config", "fail",
 g = run(DRIFT, [c7_cm], operation="UPDATE", user="agent-sa")
 expect("and agent-sa may not UPDATE it (the agent cannot switch off its own C7 guard)", g,
        "agentgateway-c7-config", "fail", DRIFT_MSG)
+# The same rule line written from the other KubeCon cluster (#1149): guardrails-switch may UPDATE it, and only it.
+g = run(DRIFT, [c7_cm, gw_cm, managed_cm], operation="UPDATE", user="guardrails-switch")
+expect("the other cluster's guardrails-switch may UPDATE agentgateway-c7-config (guard-mcp-on/off on both clusters)",
+       g, "agentgateway-c7-config", "ignored")
+expect("but not agentgateway-config", g, "agentgateway-config", "fail", DRIFT_MSG)
+expect("nor any other managed ConfigMap", g, "proxy-src", "fail", DRIFT_MSG)
+g = run(DRIFT, [c7_cm], operation="DELETE", user="guardrails-switch")
+expect("nor DELETE agentgateway-c7-config", g, "agentgateway-c7-config", "fail", DRIFT_MSG)
+g = run(DRIFT, [managed], operation="UPDATE", user="guardrails-switch")
+expect("nor UPDATE a managed Deployment", g, "guard-proxy", "fail", DRIFT_MSG)
 
 FLOOR_NS_MSG = "Protected platform namespace; deletion is not permitted (workshop floor)."
 FLOOR_WL_MSG = "Protected platform workload; deletion is not permitted (workshop floor)."

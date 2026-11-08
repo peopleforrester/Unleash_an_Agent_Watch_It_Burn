@@ -1,0 +1,136 @@
+# ABOUTME: What guard-mcp-on and guard-mcp-off may do on this cluster as the OTHER KubeCon cluster's guardrails-switch
+# ABOUTME: identity (#1149): C7's two controls, the read that picks between them, and the reads that time the reload.
+#
+# #1132: the room plays on the public bot, so Challenge 4's fix, run from the private terminal, has to reach the other
+# cluster too. guard-mcp-on and guard-mcp-off run _mcp there through _both (gitops/ai-layer/web-terminal/entrypoint.sh),
+# as the guardrails-switch ServiceAccount whose token the guardrails-peer Secret carries (guardrails-switch.yaml). _mcp
+# asks _c7gw which control the cluster uses and switches that one: agentgateway's rule on the private cluster
+# (kubecon-private), the workshop-agent Agent's evil-mcp toolNames on the community one (kubecon-community). Then
+# guard-mcp-on waits until the cluster serves the change, and prints how long that took.
+#
+# The grant is each object those steps touch, by name where Kubernetes allows:
+#   argocd/lab-bootstrap          get           _c7gw reads its lab-platform/profile label.
+#   agent/agentgateway-c7-config  get, patch    _c7rule reads the rule and JSON-patches it.
+#   agent/workshop-agent Agent    get, patch    _evil reads evil-mcp's toolNames and JSON-patches them.
+#   agent/workshop-agent Deploy   get           _c7gen and the wait read kagent's roll for a new toolNames list.
+#   pods in agent                 list, patch   _c7rule's touch of the gateway pod, `kubectl annotate pod -l`.
+#   pods/log in agent             get           the wait reads agentgateway-c7's `loaded config` line, `kubectl logs -l`.
+# A pod is named by its ReplicaSet's hash, so pods and pods/log cannot be granted by name. The patch is held to the touch
+# by the admission policy below: the agentgateway pod, the one annotation, and nothing else of it. list and the log
+# read stay unnamed: they read the agent namespace's pods and their logs, and change nothing.
+#
+# The private cluster's block-argocd-drift denies every UPDATE of an object Argo CD manages; its
+# not-guardrails-switch-c7-rule condition lets this identity UPDATE agentgateway-c7-config alone, as the web terminal may.
+#
+# Separate from guardrails-switch.yaml, which holds #774's four guardrails' objects and nothing else, so each switch's
+# grant reads on its own. verify/test_guard_mcp_both.py holds every rule here to the calls guard-mcp-on and
+# guard-mcp-off make on the other cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: guardrails-switch-mcp
+  namespace: agent
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["agentgateway-c7-config"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["kagent.dev"]
+    resources: ["agents"]
+    resourceNames: ["workshop-agent"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["workshop-agent"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: guardrails-switch-mcp
+  namespace: agent
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: guardrails-switch-mcp }
+subjects:
+  - kind: ServiceAccount
+    name: guardrails-switch
+    namespace: guardrails-switch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: guardrails-switch-mcp
+  namespace: argocd
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    resourceNames: ["lab-bootstrap"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: guardrails-switch-mcp
+  namespace: argocd
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: guardrails-switch-mcp }
+subjects:
+  - kind: ServiceAccount
+    name: guardrails-switch
+    namespace: guardrails-switch
+---
+# The pod patch above, held to _c7rule's touch. A native ValidatingAdmissionPolicy, so it needs no Kyverno engine and
+# no guardrail turns it off. It matches every pod UPDATE this identity makes and admits one only when the pod is
+# agentgateway's in agent, and the update changes the wib.agenticburn.com/c7-rule-at annotation and nothing else of the
+# pod: its spec (images included), its labels (the Service selects on them), its other annotations, owners and
+# finalizers are as they were. An image change on a running pod is a patch RBAC cannot tell from an annotation.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: guardrails-switch-pod-touch
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: guardrails-switch
+      expression: "request.userInfo.username == 'system:serviceaccount:guardrails-switch:guardrails-switch'"
+  variables:
+    - name: touch
+      expression: "'wib.agenticburn.com/c7-rule-at'"
+    - name: before
+      expression: "oldObject.metadata.?annotations.orValue({})"
+    - name: after
+      expression: "object.metadata.?annotations.orValue({})"
+  validations:
+    - expression: >-
+        object.metadata.namespace == 'agent' &&
+        oldObject.metadata.?labels.orValue({}).exists(k, k == 'app.kubernetes.io/name' &&
+        oldObject.metadata.labels[k] == 'agentgateway')
+      message: "guardrails-switch may touch the agentgateway pod in agent alone"
+    - expression: >-
+        object.spec == oldObject.spec &&
+        object.metadata.?labels.orValue({}) == oldObject.metadata.?labels.orValue({}) &&
+        object.metadata.?ownerReferences.orValue([]) == oldObject.metadata.?ownerReferences.orValue([]) &&
+        object.metadata.?finalizers.orValue([]) == oldObject.metadata.?finalizers.orValue([])
+      message: "guardrails-switch may change the agentgateway pod's c7-rule-at annotation, not its spec, labels, owners or finalizers"
+    - expression: >-
+        variables.after.all(k, k == variables.touch || (k in variables.before && variables.before[k] == variables.after[k])) &&
+        variables.before.all(k, k == variables.touch || k in variables.after)
+      message: "guardrails-switch may change the wib.agenticburn.com/c7-rule-at annotation alone"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: guardrails-switch-pod-touch
+spec:
+  policyName: guardrails-switch-pod-touch
+  validationActions: [Deny]

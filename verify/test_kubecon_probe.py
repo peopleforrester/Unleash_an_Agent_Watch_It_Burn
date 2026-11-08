@@ -518,8 +518,8 @@ check("guards-off and guard-mcp-off both go through the terminal's _mcp, which c
       and f"all='{json.dumps(kp.EVIL_ALL).replace(' ', '')}'" in guardlib)
 check("guard-mcp-on goes through the terminal's _mcp on", "_mcp on" in helper("guard-mcp-on"))
 check("on an admin cluster the terminal sets the gateway rule and leaves toolNames full (#496)",
-      re.search(r'0:on\)\s+_c7rule on && _evil "\$all"', guardlib) is not None
-      and re.search(r'0:off\)\s+_c7rule off && _evil "\$all"', guardlib) is not None)
+      re.search(r'0:on\)\s+_c7rule on "\$@" && _evil "\$all" "\$@"', guardlib) is not None
+      and re.search(r'0:off\)\s+_c7rule off "\$@" && _evil "\$all" "\$@"', guardlib) is not None)
 narrowed = kp.c7_config_with_rule(C7_COMMITTED, kp.C7_NARROWED)
 check("open to narrowed: the probe writes the same C7 config as the terminal's .c7rule.py on",
       terminal_rewrite(C7_COMMITTED, "on") == narrowed and narrowed != C7_COMMITTED)

@@ -35696,3 +35696,100 @@ ran) printed `360 tests ran` for the offline suite, then `86 checks ran (the off
 9m30s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No
 dependency was added and no test changed. The logs are `/var/lib/hecaton/runs/18581/e2e-tools.log`, `sandbox-1.log`,
 `sandbox-2.log`, `cluster-1.log` and `cluster-2.log`; the org listings are `before.json` and `after.json` there.
+## 2026-11-08 · change · #1149 · guard-mcp-on and guard-mcp-off switch C7 on both KubeCon clusters, each by its own control, and guard-mcp-on times the reload (run 18574)
+
+Part of #1132 (every KubeCon guard command reaches the public bot the room plays on). `guard-mcp-on` and
+`guard-mcp-off` are now `_both _mcp on` and `_both _mcp off` in `gitops/ai-layer/web-terminal/entrypoint.sh`, the copy
+the KubeCon terminals run (#1147's entry says why); `images/web-terminal/entrypoint.sh` is kept byte-identical to it.
+`_mcp` runs on this cluster with `kubectl`, then on the peer named by `guardrails-switch/guardrails-peer` with `kubectl
+--kubeconfig ~/.kube/peer --context <name>`. On each cluster it asks `_c7gw` which control that cluster uses and switches
+that one. `_c7gw`, `_c7rule` and `_evil` take the kubectl to use last, the way `_kg` does, with plain `kubectl` when
+none is given, so `guards-on` and `guards-off` still call `_mcp` bare for this cluster alone (#1150 owns `guards-off`).
+
+**Which control each KubeCon cluster uses.** `values-kubecon-private.yaml` sets `c7Control: gateway`.
+`values-kubecon-community.yaml` sets no `c7Control`, so the community cluster takes `values.yaml`'s `toolnames`. Live,
+lab-bootstrap's `lab-platform/profile` label reads `kubecon-private` on watch-it-burn-private and `kubecon-community` on
+watch-it-burn-community, so `_c7gw` picks agentgateway's rule on the private cluster and the Agent's evil-mcp
+`toolNames` on the community one. From the private terminal, `guard-mcp-on` therefore narrows the gateway rule here and
+the allow-list on attackme.
+
+**What it prints.** One line per cluster naming the control (`This cluster: ON, at the gateway.` or `<peer>: ON, in the
+agent's allow-list.`), then `_both`'s line naming the clusters it changed or the peer it could not reach, then, for
+`guard-mcp-on`, one timing line per cluster, then the explanation for this cluster's control. A peer that fails gets its
+own line (Argo CD's lab-bootstrap could not be read there, or the write was refused) and the run exits 1 after waiting
+on what did switch. A cluster with no `guardrails-peer` Secret is switched and timed alone, and that is success.
+
+**The bounded wait.** `guard-mcp-on [seconds]` waits at most 180 s after each cluster's write, unless given a number,
+and reads every 2 s. On a gateway cluster it waits for agentgateway-c7 to log `loaded config from
+File("/etc/agentgateway-c7/config.yaml")` after the write (`kubectl logs -l app.kubernetes.io/name=agentgateway -c
+agentgateway-c7 --since-time=<write> --tail=-1`). agentgateway logs that line on each reload and keeps the old config,
+logging no such line, when a reload fails. On a toolnames cluster it waits for kagent's roll of the workshop-agent
+Deployment: the generation moved on from the one read before the write, observed, and every replica updated and
+available. It prints `<cluster>: the gateway served the new rule N s after the write` or `<cluster>: kagent rolled
+workshop-agent with the new allow-list N s after the write`. When a wait runs out it prints `<cluster>: gave up after
+<bound> s` with what had not happened, and the run exits 1. A write kubectl reports as `(no change)` has nothing to
+reload, and the line says so. Each read is printed once, as a `$` line, before the first poll. `guard-mcp-off` waits for
+nothing.
+
+**Why the log, and why not the gateway itself.** The direct check would be an MCP `tools/list` through the gateway. The
+terminal reaches its own cluster's gateway in-cluster, but the peer's only through the API server's service proxy.
+On both clusters that proxy timed out after 15 s, for agentgateway's :3003 and for guard-proxy's :8080 (which has no
+NetworkPolicy), so the EKS control plane cannot open connections to pods here. #1148 meets the same limit for guard-proxy's
+`/toggle`. The log line is readable through the API server on either cluster.
+
+**The reload, measured on watch-it-burn-private (2026-11-08, 05:35 UTC).** Run as the web terminal's ServiceAccount by
+impersonation, the narrowed rule written and the gateway pod touched: `on: loaded after 8 s`, then the rule put back to
+`'true'`: `off: loaded after 8 s`. The rule read `- 'true' # c7-rule` afterwards, and the pod's `c7-rule-at`
+annotation was set back to the value it had (1794091675). The probe run's 90 s timeout predates this measurement and
+was not traced; the 180 s bound covers the kubelet's own sync too, in case the touch is refused.
+
+**The peer's grant.** `gitops/guardrails-switch/mcp-switch.yaml`, beside #774's `guardrails-switch.yaml`, which is
+unchanged. Role `guardrails-switch-mcp` in argocd: get on `applications/lab-bootstrap`. Role `guardrails-switch-mcp` in
+agent: get and patch on `configmaps/agentgateway-c7-config` and on `agents.kagent.dev/workshop-agent`, get on
+`deployments/workshop-agent`, list and patch on pods, get on `pods/log`. A pod's name carries its ReplicaSet's hash,
+so pods and `pods/log` cannot be granted by name. The pod patch is held instead by a ValidatingAdmissionPolicy,
+`guardrails-switch-pod-touch`, failing closed and bound with Deny. It matches every pod UPDATE by
+`system:serviceaccount:guardrails-switch:guardrails-switch` and admits one only on agentgateway's pod in agent, changing
+the `wib.agenticburn.com/c7-rule-at` annotation and nothing else (spec, labels, owners, finalizers and every other
+annotation as they were). List and the log read change nothing. Every rule is something `guard-mcp-on` or
+`guard-mcp-off` asks of the peer, in either direction, and each of those requests is inside the grant;
+`verify/test_guard_mcp_both.py` holds both.
+
+**block-argocd-drift.** On the private cluster it denies every UPDATE of an object Argo CD manages, even one that
+changes nothing, to anyone but the listed principals. A new matchCondition, `not-guardrails-switch-c7-rule`, exempts
+an UPDATE of `agent/agentgateway-c7-config` by the guardrails-switch ServiceAccount, the same shape as the web
+terminal's. `verify/test_kyverno_cel_policies.py` gains the cases: that UPDATE is ignored, and `agentgateway-config`,
+another managed ConfigMap, a managed Deployment and a DELETE of the C7 ConfigMap are still denied.
+
+**Live check (run 18574), both clusters left as found.** The two Roles were applied under the temporary name
+`r18574-mcp-probe`, and every call `_mcp` and the wait make on a peer was run as the guardrails-switch ServiceAccount
+by impersonation, writes as server dry runs. On watch-it-burn-community: `_c7gw` read `kubecon-community`; the
+ConfigMap patch printed `configmap/agentgateway-c7-config patched (no change)`; the annotate printed
+`pod/agentgateway-66d77d546d-chnzw annotated (server dry run)`; the Agent read and the Agent patch went through; the
+Deployment read `37 37 1 1 1`; the log read was allowed. On watch-it-burn-private: `_c7gw` read `kubecon-private`; the
+annotate, the Agent and Deployment reads, the Agent patch and the log read went through (2 `loaded config` lines since
+05:30Z, the measurement's); the ConfigMap patch was denied by `block-argocd-drift`, which is the new exemption's work
+once it is promoted. On both, `auth can-i` read no for get secrets, delete pods, patch `configmap/agentgateway-config`,
+create `pods/exec` and get `application/ai-layer`. Both Agents read their generation (30 and 31) and all three evil-mcp
+tools afterwards. The admission policy, under the temporary name `r18574-pod-touch-probe`, with get on pods added to
+the temporary Role so that admission was what decided, admitted the touch on the agentgateway pod and denied, on both
+clusters, another annotation, a label change, the touch on the guard-proxy pod and an image change, each with its
+message. Removing `kubectl.kubernetes.io/restartedAt` was denied. Removing `kubearmor-policy` was admitted because
+KubeArmor's mutating webhook puts it back before validation (a dry run as admin showed it back as `enabled`). By name,
+without that added get, RBAC refused all of them first. `mcp-switch.yaml` and the changed `block-argocd-drift.yaml`
+passed a server dry run on both. Every temporary object was deleted, and both clusters listed none afterwards.
+
+**Not yet run on a cluster.** The changed commands themselves, once hecaton promotes this and Argo CD rolls the
+terminal, the grant and the drift exemption: `guard-mcp-on` from the private terminal, then the weather ask on
+attackme no longer calls `read_internal_config`, with the timing line read for both clusters, then `guard-mcp-off`.
+The live-pass child of #1132 (#1153) runs it.
+
+**Tests.** `verify/test_guard_mcp_both.py` (offline, with its `verify/scope-map.yaml` entry and none of the drift
+entries `scope_tests.py write` added for other tests) runs both commands against a kubectl stub that plays two
+clusters, private here and community the peer and the reverse. It covers the reload timing lines, both waits running
+out (names the cluster and the bound, exit 1), a write that changed nothing, a cluster with no `guardrails-peer`
+Secret and an unreachable peer. It also holds the grant to the calls, the admission policy's shape and the drift
+exemption. The fakes in `verify/test_c7_gateway_toggle.py`, `verify/test_guard_commands_echo.py` and
+`verify/test_evil_tools_by_name.py` answer the new reads (the log line, the Deployment, the absent peer Secret).
+`verify/test_kubecon_probe.py`'s check that the admin branch writes the rule and then the full list reads the kubectl
+argument now passed to both. No dependency was added.

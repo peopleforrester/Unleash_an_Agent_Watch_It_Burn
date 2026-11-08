@@ -81,7 +81,7 @@ check("on the agentgateway Deployment only the BEDROCK_NOVA_MODEL and BEDROCK_RE
 check("RespectIgnoreDifferences is on, so a sync does not revert the edit either",
       "RespectIgnoreDifferences=true" in APP["spec"]["syncPolicy"]["syncOptions"])
 
-print("== block-argocd-drift lets the terminal, and only the terminal, UPDATE it ==")
+print("== block-argocd-drift lets the terminal UPDATE it (and, from the other KubeCon cluster, guardrails-switch: test_guard_mcp_both.py) ==")
 conds = {c["name"]: c["expression"] for c in DRIFT["spec"]["matchConditions"]}
 exempt = conds.get("not-terminal-c7-rule", "")
 check("there is a not-terminal-c7-rule matchCondition", bool(exempt))
@@ -165,6 +165,15 @@ if "patch" in args and "configmap" in args:
             state["config"] = op["value"]
     state["rv"] += 1
     done()
+if "logs" in args:
+    # guard-mcp-on's wait (#1149): agentgateway-c7 logs this line each time it reloads its file.
+    print('2026-11-08T05:35:31.361287Z\tinfo\tstate_manager\tloaded config from File("/etc/agentgateway-c7/config.yaml")')
+    done()
+if "get" in args and "deployment" in args:
+    # The workshop-agent Deployment kagent rolls for a new toolNames list: one generation per Agent patch, rolled at once.
+    g = str(1 + state.get("agent_patches", 0))
+    sys.stdout.write(g if args[-1] == "jsonpath={.metadata.generation}" else f"{g} {g} 1 1 1")
+    done()
 if "get" in args and "workshop-agent" in args:
     # _evil reads the Agent to find evil-mcp's entry by name (#708); a read alone leaves toolNames untouched.
     print(json.dumps({"spec": {"declarative": {"tools": [
@@ -173,6 +182,7 @@ if "get" in args and "workshop-agent" in args:
     done()
 if "patch" in args and "workshop-agent" in args:
     state["toolNames"] = next(op["value"] for op in json.loads(args[args.index("-p") + 1]) if op["op"] == "replace")
+    state["agent_patches"] = state.get("agent_patches", 0) + 1
     done()
 done()
 """
