@@ -35200,3 +35200,7 @@ copy and 3 are unsaved. `verify/test_images_lock.py`, `verify/test_public_images
 `verify/test_images_saved_judge.py` each exit 0.
 
 **Live check.** None: the change touches only images.lock and decisions.md, which no cluster runs.
+
+**The suites (run 18555, at `75117a8b`).** `bash verify/run-e2e-tools.sh`, unscoped, printed `86 checks ran (the
+offline suite and 85 tier tests) in 9m46s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No
+dependency was added.
