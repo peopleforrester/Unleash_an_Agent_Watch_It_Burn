@@ -68,7 +68,7 @@ exec {REAL_DATE} "$@"
 '''
 # sleep N moves the clock N seconds on and returns at once.
 FAKE_SLEEP = '''#!/usr/bin/env bash
-case "$1" in ''|*[!0-9]*) echo "fake sleep: whole seconds only, got '$1'" >&2; exit 2 ;; esac
+case "$1" in ''|*[!0-9]*) echo "fake sleep: whole seconds only, got '$1'" >&2; exit 1 ;; esac
 echo $(( $(cat "$CLOCK") + $1 )) >"$CLOCK"
 '''
 failures: list[str] = []
