@@ -16,6 +16,9 @@ on:
       - 'images/villains/**'
       - 'images.lock'
       - 'verify/e2e-tools.lock'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact_cache.py'
+      - 'verify/artifact-cache.sh'
       - '.github/workflows/push-jokers.yml'
       - 'scripts/ghcr_version_tag.py'
 
@@ -31,16 +34,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The runner's artifact cache, $RUNNER_TOOL_CACHE/wib-artifacts, outside the workspace (#1123).
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
       # The crane build.sh is pinned to (verify/e2e-tools.lock): gzip output can differ between crane releases, and the
-      # digest the build must reach was computed with this one. Its SHA-256 is checked before it runs.
+      # digest the build must reach was computed with this one. verify/artifact-cache.sh serves its archive by that
+      # SHA-256, hashing a hit again and fetching a miss once, and fails on a mismatch, before it is unpacked.
       - name: Fetch the pinned crane
         run: |
+          set -euo pipefail
           read -r name version sha url member < <(grep -E '^crane[[:space:]]' verify/e2e-tools.lock)
           [ "${name}" = crane ] || { echo "verify/e2e-tools.lock has no crane row" >&2; exit 1; }
-          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/crane.tar.gz" "${url}"
-          echo "${sha}  ${RUNNER_TEMP}/crane.tar.gz" | sha256sum -c -
+          archive="$(bash verify/artifact-cache.sh get "${sha}" "${url}")"
           mkdir -p "${RUNNER_TEMP}/bin"
-          tar -xzf "${RUNNER_TEMP}/crane.tar.gz" -C "${RUNNER_TEMP}/bin" "${member}"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/bin" "${member}"
           echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
           "${RUNNER_TEMP}/bin/crane" version
       # No registry credential is in this step's environment, and build-loopback.sh refuses any address but loopback,

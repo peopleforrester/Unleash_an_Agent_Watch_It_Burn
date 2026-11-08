@@ -17,6 +17,7 @@ on:
       - 'verify/tf_plugin_cache.py'
       - 'verify/artifact_cache.py'
       - 'verify/package_cache.py'
+      - 'verify/ci-artifact-cache.sh'
       - 'verify/python.lock'
       - '.github/workflows/plan-policy.yml'
   pull_request:
@@ -27,6 +28,7 @@ on:
       - 'verify/tf_plugin_cache.py'
       - 'verify/artifact_cache.py'
       - 'verify/package_cache.py'
+      - 'verify/ci-artifact-cache.sh'
       - 'verify/python.lock'
       - '.github/workflows/plan-policy.yml'
 
@@ -45,18 +47,19 @@ jobs:
         with:
           python-version: '3.13'
 
+      # The runner's artifact cache, $RUNNER_TOOL_CACHE/wib-artifacts, outside the workspace (#1123): the PyYAML wheel
+      # and the Terraform provider mirror below live in it, the same step the self-hosted runners run.
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
+
       - name: Install the pinned plan-policy toolchain (infra/policy/plan/tools.yaml)
         run: |
           set -euo pipefail
-          # The `runner` context is not available in job-level env, so the paths are exported from here.
-          {
-            echo "PLAN_DIR=$RUNNER_TEMP/fleet-plan"
-            echo "WIB_ARTIFACT_CACHE=$RUNNER_TEMP/wib-artifacts"
-          } >> "$GITHUB_ENV"
+          # The `runner` context is not available in job-level env, so the path is exported from here.
+          echo "PLAN_DIR=$RUNNER_TEMP/fleet-plan" >> "$GITHUB_ENV"
           # PyYAML is the wheel verify/python.lock pins, from the host artifact cache, installed by pip with
           # --no-index and --require-hashes (#1121).
-          WIB_ARTIFACT_CACHE="$RUNNER_TEMP/wib-artifacts" \
-            python verify/package_cache.py install pyyaml --python "$(command -v python)" --pip
+          python verify/package_cache.py install pyyaml --python "$(command -v python)" --pip
           python infra/policy/plan/install-tools.py "$RUNNER_TEMP/plan-policy-tools"
           echo "$RUNNER_TEMP/plan-policy-tools/bin" >> "$GITHUB_PATH"
 

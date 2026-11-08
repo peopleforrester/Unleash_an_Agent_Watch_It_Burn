@@ -510,8 +510,11 @@ check("only the step that calls the script holds GHCR_TOKEN, and the build step 
       "python3 scripts/ghcr_version_tag.py" in next(str(s["run"]) for s in steps if s.get("name") == holders[0]),
       str(holders))
 fetch = next((str(s["run"]) for s in steps if "e2e-tools.lock" in str(s.get("run", ""))), "")
-check("it fetches crane from e2e-tools.lock's row and checks its SHA-256 before running it",
-      "grep -E '^crane[[:space:]]' verify/e2e-tools.lock" in fetch and "sha256sum -c -" in fetch)
+# #1123: the archive comes from the runner's artifact cache by the row's SHA-256, which artifact_cache.py checks on a hit
+# and on a fresh fetch alike, and fails on a mismatch.
+check("it fetches crane from e2e-tools.lock's row through the artifact cache, by its SHA-256, before running it",
+      "grep -E '^crane[[:space:]]' verify/e2e-tools.lock" in fetch
+      and 'archive="$(bash verify/artifact-cache.sh get "${sha}" "${url}")"' in fetch and "curl" not in fetch)
 loop = re.search(r"for tag in ([^;]+); do\n\s+(python3 scripts/ghcr_version_tag\.py .+)\n", jokers_text)
 call = ('python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/festival-ops/maintenance-shell:${tag}" '
         '"ghcr.io/peopleforrester/festival-ops/maintenance-shell:${tag}" images.lock')

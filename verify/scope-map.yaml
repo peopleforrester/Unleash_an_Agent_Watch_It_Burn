@@ -6840,6 +6840,29 @@ reads:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/burritbot.html
     - gitops/ai-layer/web/event.js
+  test_workflow_artifact_cache.py:
+    - .github/workflows
+    - .github/workflows/*.yml
+    - .gitignore
+    - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer/web/event.js
+    - images/llm-guard
+    - images/workshop-mcp/Dockerfile
+    - scripts/audience-qr.py
+    - verify
+    - verify/.tools
+    - verify/.tools/bin
+    - verify/.tools/bin/tool
+    - verify/.tools/dl
+    - verify/.tools/dl/old.zip
+    - verify/artifact-cache.sh
+    - verify/artifact_cache.py
+    - verify/ci-artifact-cache.sh
+    - verify/e2e-tools.lock
+    - verify/fetch-e2e-tools.sh
+    - verify/package_cache.py
+    - verify/playwright_browsers.py
+    - verify/python.lock
   test_workflow_registry_writes.py:
     - .github/workflows
     - .github/workflows/*.yaml

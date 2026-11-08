@@ -318,8 +318,8 @@ for wf in sorted(WF.glob("*.yml")):
         steps = [s for j in doc["jobs"].values() for s in j.get("steps", [])]
         runs = [str(s.get("run", "")) for s in steps]
         first = next(i for i, r in enumerate(runs) if INITS[wf.name] in r)
-        cache = next((i for i, r in enumerate(runs) if re.search(r'WIB_ARTIFACT_CACHE="?\$RUNNER_(TEMP|TOOL_CACHE)/', r)), None)
-        check(f"{wf.name}: WIB_ARTIFACT_CACHE is set under the runner's temp or tool cache before the first init",
+        cache = next((i for i, r in enumerate(runs) if r.strip() == "bash verify/ci-artifact-cache.sh"), None)
+        check(f"{wf.name}: WIB_ARTIFACT_CACHE is set by verify/ci-artifact-cache.sh before the first init (#1123)",
               cache is not None and cache < first, str(runs[:first + 1]))
         if wf.name != "verify-suites.yml":
             prep = next((i for i, r in enumerate(runs) if 'tf_plugin_cache.py prepare >> "$GITHUB_ENV"' in r), None)

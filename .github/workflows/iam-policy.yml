@@ -18,6 +18,8 @@ on:
       - 'verify/tf_plugin_cache.py'
       - 'verify/artifact_cache.py'
       - 'verify/package_cache.py'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact-cache.sh'
       - 'verify/python.lock'
       - 'verify/test_iam_policy_*.py'
       - 'verify/e2e-tools.lock'
@@ -31,6 +33,8 @@ on:
       - 'verify/tf_plugin_cache.py'
       - 'verify/artifact_cache.py'
       - 'verify/package_cache.py'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact-cache.sh'
       - 'verify/python.lock'
       - 'verify/test_iam_policy_*.py'
       - 'verify/e2e-tools.lock'
@@ -51,6 +55,11 @@ jobs:
         with:
           python-version: '3.13'
 
+      # The runner's artifact cache, $RUNNER_TOOL_CACHE/wib-artifacts, outside the workspace (#1123): every pinned fetch
+      # below reads it. It is the step the tanjiro and megumi runners take too, so the path is the same rule everywhere.
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
+
       # conftest v0.71.1 and terraform v1.15.6 come from verify/e2e-tools.lock, each checked against its SHA-256
       # before use, the same binaries the E2E tools tier runs with (#572).
       # PyYAML is the wheel verify/python.lock pins, served from the host artifact cache by its SHA-256 and installed by
@@ -58,8 +67,6 @@ jobs:
       - name: Fetch the pinned tools (verify/e2e-tools.lock)
         run: |
           set -euo pipefail
-          echo "WIB_ARTIFACT_CACHE=$RUNNER_TEMP/wib-artifacts" >> "$GITHUB_ENV"
-          export WIB_ARTIFACT_CACHE="$RUNNER_TEMP/wib-artifacts"
           python verify/package_cache.py install pyyaml --python "$(command -v python)" --pip
           bash verify/fetch-e2e-tools.sh
           echo "$GITHUB_WORKSPACE/verify/.tools/bin" >> "$GITHUB_PATH"
@@ -67,9 +74,7 @@ jobs:
       # The renders' terraform inits take their providers from a filesystem mirror in the host artifact cache, outside
       # the workspace, filled through verify/artifact_cache.py by each committed lock's zh: SHA-256 (#1119).
       - name: Fill the Terraform provider mirror (verify/tf_plugin_cache.py prepare)
-        run: |
-          set -euo pipefail
-          WIB_ARTIFACT_CACHE="$RUNNER_TEMP/wib-artifacts" python verify/tf_plugin_cache.py prepare >> "$GITHUB_ENV"
+        run: python verify/tf_plugin_cache.py prepare >> "$GITHUB_ENV"
 
       # Extraction, the exceptions table, the boundary on every role and user, and how each check reads AWS's answer.
       - name: The pipeline's offline checks

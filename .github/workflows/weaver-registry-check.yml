@@ -7,10 +7,16 @@ on:
     branches: [staging, main]
     paths:
       - 'weaver/**'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact_cache.py'
+      - 'verify/artifact-cache.sh'
       - '.github/workflows/weaver-registry-check.yml'
   pull_request:
     paths:
       - 'weaver/**'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact_cache.py'
+      - 'verify/artifact-cache.sh'
       - '.github/workflows/weaver-registry-check.yml'
 
 permissions:
@@ -28,14 +34,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner's artifact cache, $RUNNER_TOOL_CACHE/wib-artifacts, outside the workspace (#1123).
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
+
+      # The archive comes from the artifact cache by its SHA-256, hashed again on a hit and fetched once on a miss, and
+      # is unpacked under the runner's temp directory, so nothing pinned is kept in the workspace (#1123).
       - name: Install OTel Weaver (pinned, sha-verified)
         run: |
           set -euo pipefail
           url="https://github.com/open-telemetry/weaver/releases/download/${WEAVER_VERSION}/weaver-x86_64-unknown-linux-gnu.tar.xz"
-          curl -sSfL "$url" -o weaver.tar.xz
-          echo "${WEAVER_SHA256}  weaver.tar.xz" | sha256sum -c -
-          tar xf weaver.tar.xz
-          install -m 0755 weaver-x86_64-unknown-linux-gnu/weaver /usr/local/bin/weaver
+          archive="$(bash verify/artifact-cache.sh get "${WEAVER_SHA256}" "${url}")"
+          mkdir -p "${RUNNER_TEMP}/weaver"
+          tar -xJf "${archive}" -C "${RUNNER_TEMP}/weaver"
+          install -m 0755 "${RUNNER_TEMP}/weaver/weaver-x86_64-unknown-linux-gnu/weaver" /usr/local/bin/weaver
           weaver --version
 
       - name: Check registry against OTel semconv v1.41.1

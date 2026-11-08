@@ -12,11 +12,13 @@
 # leaves it unset and runs everything.
 #
 # The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
-# removes every untracked and ignored file except verify/.tools, whose binaries fetch-e2e-tools.sh extracts again each
-# run. Their downloads, and the pinned charts, are in the host artifact cache outside the workspace (#1118), checked
-# against e2e-tools.lock and verify/charts.lock on every hit. The Terraform provider cache, about 2.4 GB, is not in the workspace at all: the
-# e2e-tools job keeps it under the runner's tool cache, which outlives the job, and the lock-init test reads it warm
-# instead of downloading every provider again (#1114).
+# removes every untracked and ignored file, verify/.tools included, whose binaries fetch-e2e-tools.sh extracts again
+# each run from the runner's artifact cache (#1123). That cache, WIB_ARTIFACT_CACHE, is set by
+# verify/ci-artifact-cache.sh to $RUNNER_TOOL_CACHE/wib-artifacts, outside the workspace and every checkout, and is
+# the same step on the tanjiro and megumi runners. It holds the pinned tools and charts (#1118), checked against
+# e2e-tools.lock and verify/charts.lock on every hit, the PyYAML wheel (#1121), and the Terraform provider mirror and
+# plugin cache, about 2.4 GB, which the lock-init test reads warm instead of downloading every provider again (#1114,
+# #1119). verify/test_workflow_artifact_cache.py holds every workflow to this.
 #
 # Staging tests only its newest tip (#1113). Hecaton merges into staging every few minutes and the e2e job takes about
 # 45 minutes on Tanjiro's one runner, so queued staging runs fell further behind with each merge. The workflow's own
@@ -59,10 +61,10 @@ jobs:
           clean: false
           persist-credentials: false
 
-      - name: Clean the workspace, keeping the verified tool downloads
+      - name: Clean the workspace of everything git does not track
         run: |
           set -euo pipefail
-          git clean -ffdx -e verify/.tools/
+          git clean -ffdx
           git submodule foreach --recursive 'git clean -ffdx && git reset --hard'
 
       # uv 0.13.7 (latest, 2026-11-07) brings Python 3.13; the suite's only package beyond the standard library is
@@ -73,13 +75,12 @@ jobs:
           version: '0.13.7'
           enable-cache: false
 
-      # The host artifact cache (verify/artifact_cache.py, #1117) under the runner's tool cache, outside the workspace,
-      # so the clean step never removes it and it outlives the job. The PyYAML wheel (#1121) and, in the e2e-tools job,
-      # the terraform tests' provider mirror and plugin cache live in it (verify/tf_plugin_cache.py, #1119). Set here,
-      # not in the job's env: the runner context is not available there, and a job env naming it failed the whole
-      # workflow file (Actions run 42427273324).
-      - name: WIB_ARTIFACT_CACHE, the host artifact cache under the runner's tool cache
-        run: echo "WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts" >> "$GITHUB_ENV"
+      # The runner's artifact cache (verify/artifact_cache.py, #1117), $RUNNER_TOOL_CACHE/wib-artifacts, outside the
+      # workspace, so the clean step never removes it and it outlives the job (#1123). The script refuses a path inside
+      # the workspace or a checkout. Set in a step, not in the job's env: the runner context is not available there,
+      # and a job env naming it failed the whole workflow file (Actions run 42427273324).
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
 
       - name: Python 3.13 with PyYAML first on PATH
         run: |
@@ -119,10 +120,10 @@ jobs:
           clean: false
           persist-credentials: false
 
-      - name: Clean the workspace, keeping the verified tool downloads
+      - name: Clean the workspace of everything git does not track
         run: |
           set -euo pipefail
-          git clean -ffdx -e verify/.tools/
+          git clean -ffdx
           git submodule foreach --recursive 'git clean -ffdx && git reset --hard'
 
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
@@ -130,13 +131,12 @@ jobs:
           version: '0.13.7'
           enable-cache: false
 
-      # The host artifact cache (verify/artifact_cache.py, #1117) under the runner's tool cache, outside the workspace,
-      # so the clean step never removes it and it outlives the job. The PyYAML wheel (#1121) and, in the e2e-tools job,
-      # the terraform tests' provider mirror and plugin cache live in it (verify/tf_plugin_cache.py, #1119). Set here,
-      # not in the job's env: the runner context is not available there, and a job env naming it failed the whole
-      # workflow file (Actions run 42427273324).
-      - name: WIB_ARTIFACT_CACHE, the host artifact cache under the runner's tool cache
-        run: echo "WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts" >> "$GITHUB_ENV"
+      # The runner's artifact cache (verify/artifact_cache.py, #1117), $RUNNER_TOOL_CACHE/wib-artifacts, outside the
+      # workspace, so the clean step never removes it and it outlives the job (#1123). The script refuses a path inside
+      # the workspace or a checkout. Set in a step, not in the job's env: the runner context is not available there,
+      # and a job env naming it failed the whole workflow file (Actions run 42427273324).
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
 
       - name: Python 3.13 with PyYAML first on PATH
         run: |
