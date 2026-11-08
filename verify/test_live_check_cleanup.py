@@ -194,7 +194,7 @@ check("it removes the ask's row, and a report that lands between its two passes,
                                  (kp.ROOM_JOKER, "community")], f"{why}; {rows()}")
 check("it waits DESK_REPORT_SETTLE_S between the two passes", slept == [kp.DESK_REPORT_SETTLE_S], str(slept))
 check("each pass is one exec into fake-ticket's site container in agent, on the desk's own context",
-      len(runner.calls) == 2 and all(c[:3] == ["kubectl", "--context", "ctx-community"]
+      len(runner.calls) == 2 and all(c[0] == "kubectl" and c[1:3] == ["--context", "ctx-community"]
                                      and c[3:3 + len(kp.DESK_FORGET)] == kp.DESK_FORGET for c in runner.calls)
       and "deploy/fake-ticket" in kp.DESK_FORGET and kp.DESK_FORGET[kp.DESK_FORGET.index("-c") + 1] == "site",
       str(runner.calls))

@@ -69,6 +69,9 @@ class FakeCluster:
     def remove_room_joker(self) -> str:
         return ""
 
+    def forget_on_desk(self, names, since, tickets=()) -> None:
+        return None   # the one desk's /desk-forget (#1215): nothing landed, so nothing to remove
+
     def guard_verdicts(self, texts: list[str]) -> list[dict]:
         return [{"blocklist": "a fake refusal"} for _ in texts]
 
@@ -76,6 +79,7 @@ class FakeCluster:
 class FakeProbe:
     def __init__(self) -> None:
         self.cluster = FakeCluster()
+        self.desk = self.cluster   # the guardrails peer's desk the seed's room_ask removes its row from (#1215)
         self.state: dict = {}
 
     def ask(self, prompt: str) -> dict:

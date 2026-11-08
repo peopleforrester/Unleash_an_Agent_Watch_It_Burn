@@ -53,6 +53,7 @@ class FakePublicBot(live.RecordingCluster):
         self.reads_ticket = reads_ticket
         self.audit: list[str] = []
         self.log: list[tuple[str, ...]] = []
+        self.forgot: list[list[str]] = []
 
     def _run(self, *args: str, timeout: float = 90, stdin: str | None = None) -> tuple[int, str, str]:
         self.log.append(args)
@@ -67,7 +68,14 @@ class FakePublicBot(live.RecordingCluster):
         if args[:4] == ("-n", "agent", "delete", "deploy"):
             self.deploys.discard(args[4])
             return 0, "", ""
+        if list(args[:len(kp.DESK_FORGET)]) == kp.DESK_FORGET:
+            # The one desk is this cluster's (#1215): room_ask asks its Joker's row off the page after each ask.
+            self.forgot.append(json.loads(args[-1])["names"])
+            return 0, json.dumps({"rows_removed": 1, "named_left": 0, "tickets_left": 0}) + "\n", ""
         raise AssertionError(f"unexpected kubectl call {args}")
+
+    def forget_on_desk(self, names, since, tickets=(), sleep=None):
+        return super().forget_on_desk(names, since, tickets, sleep=lambda s: None)
 
     def get_json(self, path: str) -> dict | None:
         return {"/controls": {"host": self.host, "ai": {"output": False}}, "/cost": {"usd": 0.01}}.get(path)
@@ -111,6 +119,8 @@ check("it ran the probe's own identity and c6-lands beats, both PASS",
 check("one /chat, the room's plain question with the stage name as the witch",
       bot.bodies == [{"prompt": f"{live.ROOM_ASK}\n\n{kp.PROBE_MARKER}", "witch": kp.STAGE_NAME}], str(bot.bodies))
 check("no Joker is left on the cluster", bot.deploys == set(), str(bot.deploys))
+check("and its row is asked off the one page, on this cluster's desk (#1215)",
+      bot.forgot and all(n == [kp.ROOM_JOKER] for n in bot.forgot), str(bot.forgot))
 check("the plain question is the probe's ROOM_PROMPT today", kp.ROOM_PROMPT == live.ROOM_ASK, kp.ROOM_PROMPT)
 check("the run ran the beats on the host the cluster names", bot.host == "attackme.agenticburn.com", bot.host)
 check("the twin burritobot.co name is the same public cluster (#651)",
