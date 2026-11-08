@@ -1840,13 +1840,13 @@ STAGE_ANCHORS = {
     (kp.SWITCH, "guardrails-on"): ("3", "`guardrails-on` arms RBAC"),
     (kp.RETRY, "Challenge 1"): ("3", '"Try your attacks again." (slide 29)'),
     (kp.RETRY, "Challenge 2"): ("3", '"Try your attacks again." (slide 29)'),
-    (kp.PLAY, "Challenge 3"): ("4", "Challenge 3, `#/43` to `#/61`"),
+    (kp.PLAY, "Challenge 3"): ("4", "| Challenge 3, "),
     (kp.SWITCH, "guard-agency-on"): ("4", "`guard-agency-on`, then"),
     (kp.SWITCH, "guard-input-on"): ("4", "`guard-input-on`, run on the private bot"),
-    (kp.RETRY, "Challenge 3"): ("4", '"Try your attack again." (`#/51`)'),
-    (kp.PLAY, "Challenge 4"): ("5", "Challenge 4, `#/62` to `#/72`"),
+    (kp.RETRY, "Challenge 3"): ("4", '"Try your attack again."'),
+    (kp.PLAY, "Challenge 4"): ("5", "| Challenge 4, "),
     (kp.SWITCH, "guard-mcp-on"): ("5", "`guard-mcp-on` on the private bot"),
-    (kp.RETRY, "Challenge 4"): ("5", '"Try your attack again." (`#/68`)'),
+    (kp.RETRY, "Challenge 4"): ("5", '"Try your attack again."'),
 }
 _ros_text = ROS_PATH.read_text(encoding="utf-8")
 _rows = {m.group(1): m.group(0) for m in re.finditer(r"^\| (\d) \| \d+ \| [^|]+ \|[^\n]*$", _ros_text, re.M)}
@@ -1859,6 +1859,10 @@ for _point in kp.STAGE_ORDER:
     if _row not in _rows or _anchor not in _rows[_row]:
         print(f"FAILED: the anchor {_anchor!r} is not in segment {_row}'s row of {ROS_PATH}'s segments table; "
               "this test places STAGE_ORDER's point there")
+        sys.exit(1)
+    if _rows[_row].count(_anchor) != 1:
+        print(f"FAILED: the anchor {_anchor!r} is in segment {_row}'s row of {ROS_PATH} {_rows[_row].count(_anchor)} "
+              "times, not once, so its place there is ambiguous")
         sys.exit(1)
     _where.append((int(_row), _rows[_row].index(_anchor)))
 check("STAGE_ORDER follows the run-of-show's segments table, point by point",
@@ -1921,7 +1925,7 @@ check("admin: every Challenge 4 beat runs with the four Kubernetes guardrails, g
           if b.stage and b.stage[1] == "Challenge 4")
       and {b.key for b in kp.ADMIN if b.stage and b.stage[1] == "Challenge 4"} == {"c7-off", "c7-on"},
       str({k: sorted(_aat[k]) for k in ("c7-off", "c7-on")}))
-check("admin: the beats that show the slide 50 fixes come after both and keep them on",
+check("admin: the beats that show Challenge 3's two fixes come after both and keep them on",
       all({"guard-agency-on", "guard-input-on"} <= _aat[k] for k in ("c6-withheld", "c6-on"))
       and "guard-agency-on" in _aat["c6-forbidden"], str({k: sorted(_aat[k]) for k in ("c6-forbidden", "c6-on")}))
 
@@ -2036,7 +2040,7 @@ class OffHangs(LinkedPrivate):
     def kubectl_rc(self, *args, timeout=90, stdin=None):
         rc, out = super().kubectl_rc(*args, timeout=timeout, stdin=stdin)
         if "deploy/web-terminal" in args and args[-1].endswith("guardrails-off"):
-            raise subprocess.TimeoutExpired(["kubectl", *args], timeout)
+            raise subprocess.TimeoutExpired(list(args), timeout)
         return rc, out
 
 
