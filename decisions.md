@@ -36440,3 +36440,11 @@ it, and changes no behaviour.
 
 **What the run spent.** On the public bot, one ask with the guardrails off (it deployed on that turn) and two with them
 on, plus the probe's model calls ($3.5099 to $3.5728 on the counter). All carried the probe marker.
+
+**The suites (run 18579).** On `48f00830`, unscoped, `bash verify/run-e2e-tools.sh` printed `352 tests ran` and `ALL
+OFFLINE RENDER-GATE TESTS GREEN` (which answers `bash verify/run-tests.sh`), then `84 checks ran (the offline suite and
+83 tier tests) in 9m02s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`
+(`/var/lib/hecaton/runs/18579/e2e-tools.log`). `7897eb5e` adds only this entry and the PROGRESS.md bullet; on it,
+`HECATON_BASE_SHA=48f00830 bash verify/run-tests.sh` printed `91 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and
+`exit=0`, `verify/test_progress_entries.py` among them. The prose gate printed `prose gate: pass`. No dependency was
+added.
