@@ -36481,3 +36481,16 @@ every Argo CD Application reads Synced and Healthy, those on this repo at `29995
 namespace on watch-it-burn-community holds no `infinite-mario`, so run 18579's test Deployment is gone. This run did not
 take the guardrails A/B again: its only code change is the ported comment, and run 18579's A/B (entry above) is the
 criterion 3 evidence. Nothing owed on a cluster.
+
+**The suites (run 18605).** On `62e45d38`, unscoped. The first two tries of `bash verify/run-e2e-tools.sh` could not
+fetch the pinned tools: GitHub's release downloads answered 504, 503 or timed out, while githubstatus.com listed
+"Increase in timeouts for some unauthenticated users" (`e2e-tools.log`, `e2e-tools-2.log`). The third ran `86 checks`
+in 35m23s and six failed, each on a GitHub release download during that incident: the Datadog Terraform provider
+(`test_iam_policy_structural.py`, `test_terraform_lock_init.py`), the gateway-api CRDs
+(`test_gateway_api_crds_upstream.py`) and the falco and opentelemetry-collector charts
+(`test_image_registry_render.py`, `test_datadog_log_services_render.py`, `test_enforce_floor.py`); none reads a file
+this change touches (`e2e-tools-3.log`). On the next run, with GitHub answering, the same command printed `361 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 15m51s, 4
+at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18605/e2e-tools-4.log`). A separate
+`bash verify/run-tests.sh` printed `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0` (`run-tests.log`). The prose gate
+printed `prose gate: pass`. No dependency was added.
