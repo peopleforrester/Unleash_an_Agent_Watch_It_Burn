@@ -2,14 +2,16 @@
 # ABOUTME: and both runners, driven in a fixture repo, run only what a change touches, or everything.
 """Offline. scope_tests.py and the map it reads decide which tests a hecaton validation runs (#1018).
 
-1. The map's rules hold (scope_tests.structural()). Its drift from the tests' sources (a test with no entry, an entry
-   missing a path scope_tests.extract() finds) is printed, not failed on: select() reads every test's source and runs
-   from the union, and a test without an entry, or with an empty one, still runs when what it reads changes. A run cut
-   before a test landed on staging and rebased after sees that test without an entry through no edit of its own.
+1. The map's rules hold (scope_tests.structural()), and the map is current with the tests' sources
+   (scope_tests.drift(): no test without an entry, no entry missing a path scope_tests.extract() finds). select()
+   still reads every test's source and runs from the union, so a test the map is behind runs when it should; drift
+   fails here because the gate's scoped selection is only as good as the map (#1190), and it had fallen 112 tests
+   behind (#1189's 2800e073). `python3 verify/scope_tests.py write` brings it current.
 2. The two bounds hold: every file bootstrap_chart.source_files() reads for an Application source in
    gitops/bootstrap/apps, and every values file collector_render.value_files() names, is inside the paths the map
    bounds that helper by.
-3. select() on the real map: a change to decisions.md alone runs its readers and the always tests and leaves the rest;
+3. select() on the real map: a change to decisions.md alone runs its offline readers and the always tests and leaves
+   the rest, and no tier test (#1190); a change to display.js runs its tier tests, not the whole tier;
    a change to a runner, the map, a shared helper, or a path no entry covers runs everything; a changed test runs.
    A change to the map's rules runs everything, and one to a test's entry runs that test.
 4. Both runners, copied into a fixture repo with four fixture tests (an offline and a tier test reading alpha/, the same
@@ -47,15 +49,15 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-print("== the map's rules hold, and its drift from the tests' sources is shown, not failed on ==")
+print("== the map's rules hold, and the map is current with the tests' sources ==")
 tree = st.Tree()
 doc = st.load_map()
 bad = st.structural(doc, tree)
 check("the map's rules (full, unread, bounds, always) name what the repo has, and no test is in two lists", not bad,
       "\n".join(bad))
 behind = st.drift(doc, tree)
-print(f"  NOTE  the map is behind the tests' sources in {len(behind)} places; select reads those from source"
-      + "".join(f"\n        {b}" for b in behind[:20]))
+check("the map is current with every test's source (run `python3 verify/scope_tests.py write`, review what it "
+      f"adds and commit it with the change); {len(behind)} places behind", not behind, "\n".join(behind[:40]))
 tests = st.discover()
 check("the map has an entry for nearly every offline and tier test", len(tests) > 300
       and sum(1 for t in tests if t in doc["always"] or t in doc["reads"]) > len(tests) * 0.9, str(len(tests)))
@@ -159,8 +161,12 @@ check("on the committed map, the live map only adds to each entry",
       all(set(doc["reads"][t]) <= set(live["reads"].get(t, [])) or t in live["always"] for t in doc["reads"] if t in tests))
 
 mode, why = st.select(doc, "tools", ["decisions.md"], tests)
-check("the tier is scoped by the same map: a decisions.md change runs a few tier tests, not all of them",
-      mode == "scoped" and 0 < len(why) < sum(1 for s in tests.values() if s == "tools") // 4, str(sorted(why)))
+check("a decisions.md change runs no tier test: the tier sets prose aside (#1190)", mode == "scoped" and not why,
+      str(sorted(why)))
+mode, why = st.select(doc, "tools", ["gitops/ai-layer/web/display.js"], tests)
+check("the tier is scoped by the same map: a display.js change runs its render tests, not the whole tier",
+      mode == "scoped" and "test_display_throttle_e2e.py" in why
+      and len(why) < sum(1 for s in tests.values() if s == "tools") // 2, str(sorted(why)))
 
 print("== both runners, in a fixture repo, run only what the change touches ==")
 FIXTURE_TEST = ('import pathlib, sys\n'
