@@ -37448,3 +37448,9 @@ Not yet run on a cluster:
   confirm the red banner above the terminal tabs, with the terminal still filling its pane, and read the
   `agent/console-src-*` ConfigMap's lab.html on watch-it-burn-community for `privatebanner` with no banner showing on
   that cluster's hosts.
+
+Test results for run 18676 (scoped to the change with `HECATON_BASE_SHA=99a4bbbe`): `bash verify/run-tests.sh` ran 230
+of 368 offline tests, `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0, after `test_lab_text_export.py` failed once on the
+first pass because `challenges/LAB-TEXT.md` named the old lab.html blob; `bash verify/export-lab-text.sh` re-stamped it.
+`bash verify/run-e2e-tools.sh` ran 29 checks (the offline suite and 28 of 86 tier tests, `test_lab_private_banner_e2e.py`
+among them) in 9m56s, `ALL E2E TOOLS TIER CHECKS GREEN`, exit 0.
