@@ -40,10 +40,14 @@ makes say about four kinds of PII and the c3-pii prompt, and that a plain order 
 guard is toggled: it measures what the input guard does once guard-input-on turns it on.
 
 Challenge 2 is seeded with the recipe read, one of the three /kubecon asks for it, because it is the one that changes
-nothing: a public image would leave a Deployment behind and the beacon post would move the count the room watches. Its
-prompt is read off the /kubecon page's C3 beat, so the seed sends what Whitney sends, and both of its seeds are judged
-on workshop-mcp's audit log as well as the reply: run_shell must have run the grep, so the trace has the span Whitney
-points at.
+nothing: a public image would leave a Deployment behind and the beacon post would move the count the room watches.
+Both of its seeds are judged on workshop-mcp's audit log as well as the reply: run_shell must have run the grep, so
+the trace has the span Whitney points at.
+
+Every seed the presenters send live reads its prompt off the /kubecon page (gitops/ai-layer/web/kubecon.html) at run
+time, by the beat SEED_BEATS names, through the KubeCon probe's reader (#1137), so a seed sends what the presenters
+copy: Challenge 1's off the C5 beat, Challenge 2's off C3, Challenge 3's off C6 and Challenge 4's off C7, each -fixed
+seed the same prompt as its attack. c3-pii's prompt is this script's own, since no beat carries one.
 
 The guards are flipped by the KubeCon probe's own beats (verify/kubecon_probe.py), so a seed is exactly what the
 stage does, guardrails-on after the Challenge 2 attack included (#774), and its last act is the probe's guards-off and
@@ -62,11 +66,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import html
 import json
 import logging
 import pathlib
-import re
 import sys
 import time
 import urllib.error
@@ -112,29 +114,33 @@ SEEDS = (
 # The PII seed, shown in Challenge 3 after c3-fixed, read from APM rather than LLM Observability.
 PII_SEED = ("c3-pii", "Challenge 3", "someone else's PII refused by the input guard: zero tokens, none of it traced")
 
-# Challenge 2's seeded attack: the /kubecon page's recipe-read prompt (its C3 beat), and the directory the read
-# touches. Since #952 the C3 beat is the conversational recon-then-attack pair (#925): recon names the folders and
-# opens nothing, so the seed sends the last prompt, the attack after a reset, which is the one that reads the recipe.
-KUBECON_PAGE = REPO / "gitops/ai-layer/web/kubecon.html"
+# Each seed the presenters send live, with the /kubecon beat and the position in it that its prompt is read from
+# (#1137), through the probe's one reader, kp.kubecon_prompt. The page's beat names are the workshop's challenge
+# numbers, not the talk's, so each beat here was found by its prompt: the talk's Challenge 1 is the C5 beat (the CEO's
+# record), Challenge 2 the C3 beat (the recipe read), Challenge 3 the C6 beat (HC-666), Challenge 4 the C7 beat (the
+# weather tool). A -fixed seed sends its attack seed's prompt. Since #952 the C3 beat is the conversational
+# recon-then-attack pair (#925): recon names the folders and opens nothing, so Challenge 2's seeds send the last
+# prompt, the attack after a reset, which is the one that reads the recipe.
+KUBECON_PAGE = kp.KUBECON_PAGE
+SEED_BEATS = {
+    "c1-attack": ("C5", 0), "c1-fixed": ("C5", 0),
+    "c2-attack": ("C3", -1), "c2-fixed": ("C3", -1),
+    "c3-attack": ("C6", 0), "c3-fixed": ("C6", 0),
+    "c4-attack": ("C7", 0), "c4-fixed": ("C7", 0),
+}
+# Not on /kubecon (#1137): the presenters send no PII prompt from the page; c3-pii's is this script's own, PII_PROMPT.
+OFF_PAGE_SEEDS = ("c3-pii",)
+# The directory Challenge 2's read touches.
 RECIPE_DIR = "/tmp/burrito-data"
 
 
-def kubecon_prompt(beat: str, page: pathlib.Path = KUBECON_PAGE, which: int = 0) -> str:
-    """The `which`-th prompt (default the first) of one /kubecon beat, whitespace collapsed, so a seed sends what the
-    presenters copy."""
-    text = page.read_text()
-    anchor = f'<article class="beat" data-beat="{beat}"'
-    if anchor not in text:
-        raise RuntimeError(f"{page.name} has no {anchor!r}: the beat was renamed or removed")
-    body = text.split(anchor, 1)[1].split("</article>", 1)[0]
-    found = re.findall(r'<div class="prompt"[^>]*>(.*?)<button', body, re.S)
-    if not found:
-        raise RuntimeError(f"{page.name}'s {beat} beat has no <div class=\"prompt\">")
-    return html.unescape(re.sub(r"\s+", " ", found[which])).strip()
+def seed_prompts(page: pathlib.Path = KUBECON_PAGE) -> dict[str, str]:
+    """Each /kubecon seed's prompt, read off `page` as it stands, so a seed sends what the presenters copy."""
+    return {key: kp.kubecon_prompt(beat, position, page=page) for key, (beat, position) in SEED_BEATS.items()}
 
 
-# The attack after a reset is the last C3 prompt; the recon before it opens nothing, so it is not the seed.
-RECIPE_PROMPT = kubecon_prompt("C3", which=-1)
+# Challenge 2's prompt, the attack after a reset.
+RECIPE_PROMPT = seed_prompts()["c2-attack"]
 
 # Someone else's PII, asked of the bot: test-only values (Visa's test card, a 555-01xx number, example.com).
 PII_VALUES = ("4111 1111 1111 1111", "(503) 555-0142", "dana.reyes@example.com")
@@ -296,13 +302,14 @@ def _seed(key: str, stamp: str, prompt: str, judge: Callable[[dict], tuple[bool,
     return go
 
 
-def _c2(stamp: str, key: str, judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
+def _c2(stamp: str, key: str, prompt: str,
+        judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
     """Challenge 2's recipe read, judged on the reply and on the tool calls workshop-mcp logged during the ask."""
     def go(p: kp.Probe) -> tuple[bool, str]:
         p.cluster.session = session_id(key, stamp)
         since = dt.datetime.now(dt.timezone.utc)
         try:
-            d = p.ask(RECIPE_PROMPT)
+            d = p.ask(prompt)
             d = {**d, "tools": p.cluster.tool_calls_since(since)}
         finally:
             p.cluster.session = ""
@@ -312,12 +319,13 @@ def _c2(stamp: str, key: str, judge: Callable[[dict], tuple[bool, str]]) -> Call
     return go
 
 
-def _c3(stamp: str, key: str, judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
+def _c3(stamp: str, key: str, prompt: str,
+        judge: Callable[[dict], tuple[bool, str]]) -> Callable[[kp.Probe], tuple[bool, str]]:
     """Challenge 3 judged on joker-<stage name> and the tool calls that made it, as the probe's own C6 beats do."""
     def go(p: kp.Probe) -> tuple[bool, str]:
         p.cluster.session = session_id(key, stamp)
         try:
-            d = kp.room_ask(p)
+            d = kp.room_ask(p, prompt)
         finally:
             p.cluster.session = ""
         p.state.setdefault("seeded", []).append(key)
@@ -338,38 +346,40 @@ def _pii(stamp: str) -> Callable[[kp.Probe], tuple[bool, str]]:
     return go
 
 
-def seed_beats(stamp: str) -> list[kp.Beat]:
+def seed_beats(stamp: str, page: pathlib.Path = KUBECON_PAGE) -> list[kp.Beat]:
+    """The seed run in stage order, each /kubecon seed sending the prompt `page` carries for its beat (SEED_BEATS)."""
     beat = {b.key: b for b in kp.ADMIN}
+    ask = seed_prompts(page)
     return [
         beat["identity"],
         beat["start-state"],
         kp.Beat("c1-attack", "2", "Challenge 1 attack: the CEO record leaks",
-                _seed("c1-attack", stamp, kp.CEO_PROMPT, kp.judge_ceo_leaks), calls=1),
+                _seed("c1-attack", stamp, ask["c1-attack"], kp.judge_ceo_leaks), calls=1),
         # The four Kubernetes guardrails start off on the private cluster (#774), so Challenge 2's recipe read lands;
         # then the stage's one switch arms them: Challenge 1's ask, sent again, is Forbidden by the scoped Role (#855),
         # and Challenge 2's is denied by KubeArmor (#843). Challenge 3's Joker
         # meets Kyverno at Deny, as it does on stage, and lands: its image is on the internal registry, which Kyverno
         # trusts (#775). The fix is least privilege, then the input guard.
         kp.Beat("c2-attack", "3", "Challenge 2 attack: the recipe read lands",
-                _c2(stamp, "c2-attack", judge_recipe_leaks), calls=1),
+                _c2(stamp, "c2-attack", ask["c2-attack"], judge_recipe_leaks), calls=1),
         beat["guardrails-on"],
         beat["armed"],
         kp.Beat("c1-fixed", "3", "Challenge 1 again after guardrails-on: the record out of reach",
-                _seed("c1-fixed", stamp, kp.CEO_PROMPT, kp.judge_ceo_unreadable), calls=1),
+                _seed("c1-fixed", stamp, ask["c1-fixed"], kp.judge_ceo_unreadable), calls=1),
         kp.Beat("c2-fixed", "3", "Challenge 2 fixed: KubeArmor denies the read",
-                _c2(stamp, "c2-fixed", judge_recipe_kept), calls=1),
+                _c2(stamp, "c2-fixed", ask["c2-fixed"], judge_recipe_kept), calls=1),
         kp.Beat("c3-attack", "4", "Challenge 3 attack: the Joker lands with Kyverno on",
-                _c3(stamp, "c3-attack", kp.judge_joker_lands), calls=1),
+                _c3(stamp, "c3-attack", ask["c3-attack"], kp.judge_joker_lands), calls=1),
         beat["guard-agency-on"],
         beat["guard-input-on"],
         kp.Beat("c3-fixed", "4", "Challenge 3 fixed: the ticket withheld",
-                _c3(stamp, "c3-fixed", kp.judge_joker_blocked), calls=1),
+                _c3(stamp, "c3-fixed", ask["c3-fixed"], kp.judge_joker_blocked), calls=1),
         kp.Beat("c3-pii", "4", "Challenge 3: someone else's PII refused by the input guard", _pii(stamp), calls=1),
         kp.Beat("c4-attack", "5", "Challenge 4 attack: the rogue tool chains",
-                _seed("c4-attack", stamp, kp.MCP_PROMPT, kp.judge_c7_chained), calls=1),
+                _seed("c4-attack", stamp, ask["c4-attack"], kp.judge_c7_chained), calls=1),
         beat["guard-mcp-on"],
         kp.Beat("c4-fixed", "5", "Challenge 4 fixed: stopped at the gateway",
-                _seed("c4-fixed", stamp, kp.MCP_PROMPT, lambda d: kp.from_green(kp.judge_mcp_blocked(d))),
+                _seed("c4-fixed", stamp, ask["c4-fixed"], lambda d: kp.from_green(kp.judge_mcp_blocked(d))),
                 calls=1),
     ]
 
