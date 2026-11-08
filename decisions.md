@@ -39151,3 +39151,10 @@ Not yet run on a cluster:
   confirm the red banner above the terminal tabs, with the terminal still filling its pane, and read the
   `agent/console-src-*` ConfigMap's lab.html on watch-it-burn-community for `privatebanner`, with no banner showing on
   that cluster's hosts.
+
+**Tests (run 18742).** At `0145559f`, scoped with `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, the scoped
+`bash verify/run-e2e-tools.sh` (log `/var/lib/hecaton/runs/18742/e2e-tools.log`), which runs the scoped `run-tests.sh`
+as one of its checks, printed `238 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `12 checks ran (the
+offline suite and 11 tier tests) in 13m26s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`.
+`test_guard_mcp_both.py` (38 s), `test_lab_private_banner.py`, `test_lab_private_banner_e2e.py` (its ten hostnames) and
+`test_lab_text_export.py` were among them. The prose gate exited 0. No dependency was added.
