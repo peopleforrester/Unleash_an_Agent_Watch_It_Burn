@@ -33399,7 +33399,7 @@ no create or teardown, `--context` on every `kubectl`, a cluster left as found, 
 those and three more kinds the tree shows a cluster runs: the other top directories an Argo CD Application in
 `gitops/bootstrap/apps/` sources (`backstage/`, `observability-idp/`, `security/`), and the two `verify/` scripts
 `fleet.sh` runs during a converge (`verify/datadog-orgs.sh`, `verify/fleet-walkthrough.sh`). Without them a change
-to a Backstage chart or to the walkthrough would have read as a harness change and skipped a check it needs.
+to a Backstage chart or to the walkthrough would have read as a test-only change and skipped a check it needs.
 
 **The test.** `verify/test_claude_md_live_check_scope.py` holds both lists as the issue words them, and derives the
 second half of the live list from the tree: each local Application source's top directory, each `.gitmodules` path
