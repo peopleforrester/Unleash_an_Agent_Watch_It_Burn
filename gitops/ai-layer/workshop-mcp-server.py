@@ -19,6 +19,7 @@ import re
 import ssl
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -131,8 +132,9 @@ def _ctx() -> ssl.SSLContext:
     return ssl.create_default_context(cafile=f"{_SA}/ca.crt")
 
 
-def _req(method: str, path: str, body=None, content_type: str = "application/json"):
-    """One authenticated call to the in-cluster API. Returns (status_code, text)."""
+def _req(method: str, path: str, body=None, content_type: str = "application/json", accept: str = "application/json",
+         timeout: float = 15):
+    """One authenticated call to the in-cluster API. Returns (status_code, text); 0 when no answer came."""
     if body is None:
         data = None
     elif isinstance(body, bytes):
@@ -143,11 +145,11 @@ def _req(method: str, path: str, body=None, content_type: str = "application/jso
         data = json.dumps(body).encode()
     req = urllib.request.Request(f"{_API}{path}", data=data, method=method)
     req.add_header("Authorization", f"Bearer {_token()}")
-    req.add_header("Accept", "application/json")
+    req.add_header("Accept", accept)
     if data is not None:
         req.add_header("Content-Type", content_type)
     try:
-        with urllib.request.urlopen(req, context=_ctx(), timeout=15) as resp:
+        with urllib.request.urlopen(req, context=_ctx(), timeout=timeout) as resp:
             return resp.status, resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "replace")
@@ -1157,7 +1159,137 @@ def _run_shell(command: str) -> str:
         return f"error running command: {e}"
 
 
+# ----- what the cluster still runs, read for the deployments page (#1050) ----------------------------------------
+# Since #990 the DeletingPolicy remove-untrusted-room-workloads deletes, within a minute of guardrails-on arming
+# Kyverno, each room workload from outside registry.burritobot.co. The desk (ticket_site.py) keeps every landed row and
+# greys one as "removed at <time>" from a cluster read report (#1049), but it holds no token and asks the cluster
+# nothing. This pod already holds one, so it reads: about every CLUSTER_READ_SECONDS it lists each kind below in its own
+# namespace and posts the read to the desk's POST /cluster-read as
+#   {"taken_at": <epoch seconds>, "ok": true, "kinds": {"Deployment": [names], ...}}
+# The kinds are exactly the ones the DeletingPolicy deletes. The list grant is its own Role, workshop-mcp-room-reader
+# (resources.yaml), bound to this ServiceAccount alone, so no swap of the workshop-agent Role (guardrails-on/off,
+# guard-rbac-on/off, guard-agency-on/off, Challenge 8's fix and reset) takes it away; verify/test_room_reader_rbac.py
+# holds every one of those Roles to it.
+#
+# A read is all or nothing. Any list that does not come back a 200 list (a 403, a timeout, an API server that is down, a
+# body that is not a list) fails the whole read, and the reader posts {"ok": false, "kinds": {}}, which the desk applies
+# to no row: a list that failed is never reported as a kind with no names in it. A kind this account cannot list is in
+# no successful report, because a 403 on it fails the read.
+#
+# taken_at is the time before the first list, less CLUSTER_READ_MARGIN seconds. The desk marks a row only when the read
+# was taken after the row landed, and it stamps the landing with its own clock, in another pod and maybe on another
+# node. A read that started just before an apply does not list the new object, so the margin keeps a few milliseconds
+# of skew between the two clocks from passing it as a later read. The cost is a mark one read later for a row that
+# landed in those two seconds.
+ROOM_READ_KINDS = (("Deployment", "/apis/apps/v1", "deployments"),
+                   ("StatefulSet", "/apis/apps/v1", "statefulsets"),
+                   ("DaemonSet", "/apis/apps/v1", "daemonsets"),
+                   ("ReplicaSet", "/apis/apps/v1", "replicasets"),
+                   ("Job", "/apis/batch/v1", "jobs"),
+                   ("CronJob", "/apis/batch/v1", "cronjobs"),
+                   ("Pod", "/api/v1", "pods"))
+CLUSTER_READ_SECONDS = float(os.environ.get("CLUSTER_READ_SECONDS", "30"))
+CLUSTER_READ_TIMEOUT = float(os.environ.get("CLUSTER_READ_TIMEOUT", "10"))
+CLUSTER_READ_MARGIN = 2.0
+# Names are all a read needs, so the API server sends each object's metadata alone, not its whole spec.
+_METADATA_LIST = "application/json;as=PartialObjectMetadataList;g=meta.k8s.io;v=v1,application/json"
+_LIST_PAGE = 500
+
+
+class ReadFailed(RuntimeError):
+    """One list of a cluster read that did not come back as a list."""
+
+
+def _list_names(kind: str, base: str, plural: str, ns: str) -> list[str]:
+    """Every name of one kind in the namespace, page by page; ReadFailed on anything but a whole list."""
+    names: list[str] = []
+    cont = ""
+    while True:
+        query = f"limit={_LIST_PAGE}" + (f"&continue={urllib.parse.quote(cont, safe='')}" if cont else "")
+        code, body = _req("GET", f"{base}/namespaces/{ns}/{plural}?{query}", accept=_METADATA_LIST,
+                          timeout=CLUSTER_READ_TIMEOUT)
+        if code != 200:
+            raise ReadFailed(f"{kind}: HTTP {code}: {_status_message(body)[:200]}" if code
+                             else f"{kind}: no answer: {body[:200]}")
+        try:
+            d = json.loads(body)
+        except ValueError:
+            raise ReadFailed(f"{kind}: the answer was not JSON") from None
+        if not isinstance(d, dict) or d.get("kind") not in ("PartialObjectMetadataList", f"{kind}List") \
+                or "items" not in d:
+            raise ReadFailed(f"{kind}: the answer was not a list of {kind}")
+        items = [] if d["items"] is None else d["items"]   # an empty list may come back as null
+        if not isinstance(items, list):
+            raise ReadFailed(f"{kind}: the answer's items are not a list")
+        for item in items:
+            meta = item.get("metadata") if isinstance(item, dict) else None
+            name = meta.get("name") if isinstance(meta, dict) else None
+            if not isinstance(name, str) or not name:
+                raise ReadFailed(f"{kind}: an item of the list has no name")
+            names.append(name)
+        meta = d.get("metadata") if isinstance(d.get("metadata"), dict) else {}
+        cont = meta.get("continue") or ""
+        if not cont:
+            return names
+
+
+def read_room_workloads() -> dict:
+    """One cluster read of the room's workload kinds, as the report the desk's POST /cluster-read takes."""
+    taken_at = time.time() - CLUSTER_READ_MARGIN
+    ns = _ns()
+    kinds: dict[str, list[str]] = {}
+    for kind, base, plural in ROOM_READ_KINDS:
+        try:
+            kinds[kind] = _list_names(kind, base, plural, ns)
+        except ReadFailed as e:
+            return {"taken_at": taken_at, "ok": False, "kinds": {}, "failed": str(e)[:300]}
+    return {"taken_at": taken_at, "ok": True, "kinds": kinds}
+
+
+def post_cluster_read(report: dict) -> str:
+    """Send one read to the desk; what happened, in a line for the pod's log."""
+    req = urllib.request.Request(f"{TICKET_SITE_URL}/cluster-read", method="POST", data=json.dumps(report).encode(),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        return f"the desk refused the cluster read (HTTP {e.code})"
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return f"the cluster read could not reach the desk: {e}"
+    if not report.get("ok"):
+        return f"cluster read failed, posted as failed: {report.get('failed', '')}"
+    return "cluster reads posted to the desk"
+
+
+def cluster_read_once() -> str:
+    try:
+        return post_cluster_read(read_room_workloads())
+    except Exception as e:  # noqa: BLE001  (the loop must outlive any one read)
+        return f"cluster read raised: {e}"
+
+
+def _cluster_read_loop(stop: threading.Event) -> None:
+    last = ""
+    while True:
+        started = time.monotonic()
+        said = cluster_read_once()
+        if said != last:   # a line when what happens changes, not one every 30 s
+            print(said, flush=True)
+            last = said
+        if stop.wait(max(1.0, CLUSTER_READ_SECONDS - (time.monotonic() - started))):
+            return
+
+
+def start_cluster_reader() -> threading.Event:
+    """Start the reader in a daemon thread; set the returned event to stop it."""
+    stop = threading.Event()
+    threading.Thread(target=_cluster_read_loop, args=(stop,), name="cluster-reader", daemon=True).start()
+    return stop
+
+
 if __name__ == "__main__":
     _seed_local_data()
+    start_cluster_reader()
     # Streamable HTTP so agentgateway / kagent can front the server over the network in-cluster.
     mcp.run(transport="streamable-http")
