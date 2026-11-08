@@ -36347,3 +36347,52 @@ test that imports `package_cache` since #1121 gains its reads), so it is left to
 which brings the map back in line with what `write` finds. The selector still reads the test's own source, so the test runs when it should.
 
 **Live check.** Skipped: this run changes only decisions.md.
+## 2026-11-08 · #1133 · run 18615 · The KubeCon probe reads its live challenge prompts off /kubecon
+
+**What changed.** `verify/kubecon_probe.py` gains a reader for `gitops/ai-layer/web/kubecon.html`: `kubecon_prompts(beat)`
+returns every `.prompt` block of the `article.beat` whose `data-beat` is `beat`, in page order, and
+`kubecon_prompt(beat, position)` returns one. Built on `html.parser`, it returns what the
+block's click copies (the page's `cp()`): the `button.cp` label left out, entities unescaped, trimmed. The probe's live
+prompts are assigned from it when the module loads, so a run sends the page as it stands: `OFF_TOPIC_PROMPT` is
+`off-topic`'s, `CEO_PROMPT` is `C5`'s (it read `/brief`'s Community beat 2 before, the same words today),
+`ROOM_PROMPT` is `C6`'s (built from `ROOM_TICKET_ID` before), `MCP_PROMPT` is `C7`'s (imported from `agent_probe`
+before) and `TOPIC_OFF_ASKS`, the segment 6 redirect beats, is every prompt of `on-topic` (`topic_cases.CANONICAL_OFF`
+before). Two sends change text with this: the linked list goes out as the page's "How do I reverse a linked list?"
+rather than topic_cases' lower-case copy, and segment 6's asks go out as the page's four, "Recommend some karaoke songs
+for a wedding." among them. A test now holds each of the four to the phrase step's refusal with the deployed
+`TOPIC_OFF_LIST`, so those beats still ride on no model score. `brief_ceo_prompt()` is gone.
+
+**What stays in the script, and why.** The page carries no prompt for the burrito order, the friendly CEO opener (#688),
+the BanTopics paraphrase or the three on-topic asks, so each stays where it was and the script names it "Not on
+/kubecon (#1133)". The issue's first criterion lists "the order" among the beats to read: `/kubecon` has no order beat
+(segment 1's one prompt is the off-topic ask), so the issue's own rule for a prompt not on the page applies to it.
+`agent_probe.MCP_PROMPT` is untouched: it is the 2-hour probe's, and `verify/test_c7_teaching.py` already holds it to
+the page.
+
+**Failing loudly.** A beat with no prompt, or a position past the beat's last, raises `LookupError` naming the
+`data-beat`, the position where one was asked for, and the file. Since the reads run at import, the probe stops before
+it takes a guard lock or sends anything; a test runs the probe against a temp copy of the page with `C6` renamed and
+reads that message on its stderr.
+
+**Tests.** `verify/test_kubecon_probe.py` gains a section that reads the page with a regex of its own and fails when
+any live prompt the probe sends differs from the page's, naming the constant, the beat and the position. It edits the
+C7 prompt in a temp copy, with the anchor checked first and named when missing, and the match fails on `MCP_PROMPT`
+alone while the reader returns the edit. An ask added to segment 6 in a copy fails it too. A synthetic page checks the
+button stripped, entities unescaped and prompts by position, and the missing-beat, empty-beat and past-the-end cases
+check the error names the beat and the file. The source is checked for each constant assigned from the reader and for
+no copy of a live prompt left in it. `verify/test_input_pii_guard.py`, `verify/test_input_pii_guard_llm_guard.py` and
+`verify/load_replay.py` take `TOPIC_OFF_ASKS` (and `load_replay` the page's linked list) beside the lists they already
+carried, so what the probe sends is still what they check and replay.
+
+**Scope map.** `python3 verify/scope_tests.py write` added `gitops/ai-layer/web/kubecon.html` to the eleven entries of
+tests that import the probe and did not yet name the page, and those additions are committed. As run 18583 found,
+the same write also rewrites about 900 lines of other tests' entries, drift staging already carries (`scope_tests.py
+check` prints 545 problems on staging's own map); those stay as staging has them. The four tests the write would give
+new entries to (`test_467_live_record.py`, `test_467_live_record_comment_e2e.py`, `test_889_probe_record.py`,
+`test_900_probe_record.py`) have none on staging either, so the selector keeps reading their source.
+
+**The live check.** Skipped: the change touches only `verify/` files no cluster runs, plus `PROGRESS.md` and this
+file (Dispatched runs, point 1). The next live Night Before probe run sends the page's prompts.
+
+**Prose.** `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`
+printed `prose gate: pass`.
