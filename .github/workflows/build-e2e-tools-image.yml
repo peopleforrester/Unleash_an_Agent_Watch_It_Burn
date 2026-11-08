@@ -1,0 +1,77 @@
+# ABOUTME: Builds ghcr.io/peopleforrester/wib-e2e-tools from verify/e2e-tools.lock and pushes it (#1188), only when the
+# ABOUTME: lock or a build file changes and only to a tag ghcr.io lacks: the tag is the lock's SHA-256 and the build's.
+#
+# The image carries the tools tier's eleven pinned binaries, each fetched once here and SHA-256 checked against the lock
+# by verify/e2e-image/install.sh, so a host that runs the tier pulls this image once instead of fetching every binary
+# on every run (#1188). verify/e2e_image.py names the tag: the first 16 hex of e2e-tools.lock's SHA-256, then 8 of the
+# other build inputs', so a tag never names two images. The paths below are those inputs; a push that changes none of
+# them does not start this workflow, and a run whose tag ghcr.io already has pushes nothing.
+#
+# It builds on a GitHub-hosted runner, which has Docker and fetches from GitHub's own network, not on Tanjiro. The push
+# goes through scripts/ghcr_version_tag.py (#816), which never pushes over a tag ghcr.io has: the image's source-tree
+# label is its tag, so an existing tag reads as this build's and is left alone. GITHUB_TOKEN writes the package, which
+# it creates linked to this repository on its first push.
+name: build-e2e-tools-image
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [staging, main]
+    paths:
+      - 'verify/e2e-tools.lock'
+      - 'verify/e2e-image/**'
+      - 'verify/e2e_image.py'
+      - 'verify/e2e-image.sh'
+      - 'verify/.dockerignore'
+      - 'verify/python.lock'
+      - 'verify/package_cache.py'
+      - 'verify/artifact_cache.py'
+      - 'scripts/ghcr_version_tag.py'
+      - '.github/workflows/build-e2e-tools-image.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-e2e-tools-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The image this lock names, and its pins checked against the lock
+        id: image
+        run: |
+          set -euo pipefail
+          python3 verify/e2e_image.py check
+          echo "ref=$(python3 verify/e2e_image.py ref)" >> "${GITHUB_OUTPUT}"
+
+      - name: Build
+        run: bash verify/e2e-image.sh build
+
+      # The image's tools.txt, written by install.sh as it checked each binary, must be this lock's rows, and the
+      # runtimes the tier checks for must answer.
+      - name: The built image holds this lock's tools
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${PWD}:/w:ro" -w /w "${REF}" bash -c \
+            'python3 verify/e2e_image.py matches "${WIB_E2E_TOOLS}/tools.txt" && node --version && uv --version && python3 -c "import yaml"'
+
+      - name: Push to the tag, unless ghcr.io has it
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+          python3 scripts/ghcr_version_tag.py "${REF}" "${REF}" verify/e2e-image/Containerfile
