@@ -616,8 +616,11 @@ check(f"{kp.AGENCY_FIX} takes create and patch on Deployments and Pods away from
 check("and keeps Challenge 1's fix, so the CEO's record stays out of reach and the RBAC badge stays lit",
       kp.rbac_scoped(_fixes) and ("deployments/scale", "patch") in _grants, str(sorted(_grants)))
 _kc = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
-check("/kubecon's Challenge 3 prompt is the probe's, and its marker names the probe's Joker",
-      kp.ROOM_PROMPT in _kc and kp.ROOM_JOKER in _kc)
+# Since #1100 the page's segment 4 names no Joker, as the run-of-show's does (#1098): the block names the witch name
+# the probe sends, whose slug the probe's Deployment, ROOM_JOKER, carries.
+_kc_c6 = _kc.split('data-beat="C6"', 1)[1].split("</article>", 1)[0] if 'data-beat="C6"' in _kc else ""
+check("/kubecon's Challenge 3 prompt is the probe's, and its block names the probe's witch name",
+      kp.ROOM_PROMPT in _kc_c6 and kp.STAGE_NAME in _kc_c6 and kp.ROOM_JOKER.endswith(kp.ticket_site.slug(kp.STAGE_NAME)))
 check("the tool-pod check reads HC-666", repr(kp.ROOM_TICKET_ID) in " ".join(kp.C6_TOOL_CHECK))
 # The 2-hour lab keeps HC-7731 and maintenance-shell; every copy of it still names the one image.
 check("the lab's hidden paragraph asks for that image and the Deployment the student checks",
