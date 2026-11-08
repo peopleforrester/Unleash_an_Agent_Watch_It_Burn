@@ -39901,3 +39901,71 @@ app.kubernetes.io/name=agentgateway` shows a pod younger than the sync). Then th
 edits the static section of agentgateway-config and bumps the annotation to the value the test prints, and after
 Argo CD syncs it the pod has rolled again and `kubectl --context <ctx> -n agent logs deploy/agentgateway -c
 agentgateway` shows one `loaded config` line and no `Failed to reload`. The next run on #878 runs them.
+
+## 2026-11-08 · #878 · run 18772 · Run 17521's checksum annotation ported, and the static-section roll checked live on community
+
+**What this run did.** Run 17521 committed the entry above and its change (`2892ab31`) and then ended on the weekly API
+limit before it wrote a report, so nothing reached staging and the issue carried no comment saying why. This run
+cherry-picked that commit onto staging `42c9d9ec` (`bash verify/prior-drafts.sh 878 origin/staging` read one DRIFT
+line, decisions.md, which both sides only added to; the cherry-pick applied with no conflict), and
+`verify/test_agentgateway_config_checksum.py` passes on the current file: 14 PASS, `agentgateway-config checksum
+annotation is current`, with `7b5736c88625` still the value, since no commit since `92dfea31` touched the ConfigMap's
+string. What differs from the draft: the test has its `verify/scope-map.yaml` entry now (`python3
+verify/scope_tests.py write` added `gitops/ai-layer/agentgateway.yaml` and `gitops/bootstrap/apps/ai-layer.yaml` as
+its reads), which the map, landed after the draft, requires of a new test; the manifest, the test and the entry above
+are the draft's, unchanged.
+
+**Live check on watch-it-burn-community (run 18772, 21:28 to 21:33 UTC), the issue's own check.** The private cluster
+was not touched. On community the gateway was found at Deployment generation 10, one pod
+(`agentgateway-66d77d546d-chnzw`, started 2026-11-05 03:55:23 UTC, #480's restart), the ConfigMap at the committed
+string (sha256[:12] `7b5736c88625`), no checksum annotation, ai-layer Synced and Healthy at `3585a049`. Two steps:
+
+1. The annotation alone, with the committed value, added to the pod template (`kubectl --context
+   watch-it-burn-community -n agent patch deploy agentgateway --type merge -p '{"spec":{"template":{"metadata":
+   {"annotations":{"checksum/agentgateway-config":"7b5736c88625"}}}}}'`): generation 10 to 11, the pod rolled to
+   `agentgateway-698c849548-sb6zz` (started 21:29:40 UTC), `rollout status` green in 24 s. This is what promoting this
+   run does on each cluster through Argo CD: one roll.
+2. The issue's check, a static-section edit with the matching bump, as one commit would carry it: the ConfigMap's
+   `config:` section given `logging: { level: info }` (the default level, so nothing the gateway does changes; new
+   sha256[:12] `7dbad60d5710`) and the annotation set to that value, in two patches 1 s apart. Generation 11 to 12,
+   the pod rolled to `agentgateway-96bd95b9c-bfwg7` (started 21:31:46 UTC), `rollout status` green in 20 s. The new
+   pod's main container log opens with the v1.7.0 version block and `running with config`, and counts `Failed to
+   reload`=0, `deprecat`=0, `error`=0. Then the revert: the committed string patched back (the API answered
+   `patched (no change)`: ai-layer's selfHeal had already put the committed string back, under 20 s after the edit,
+   while the annotation, which is not in the desired manifest, stayed as patched; so whether `bfwg7` read the edited
+   or the committed string at 21:31:46 is not known, and `kubectl exec ... cat` cannot read it, the image has no
+   shell) and the annotation set back to `7b5736c88625`: generation 12 to 13, the pod rolled to
+   `agentgateway-698c849548-c5tjx` (started 21:32:35 UTC), whose log reads `state_manager loaded config from
+   File("/etc/agentgateway/config.yaml")` with `Failed to reload`=0 and `deprecat`=0.
+
+Left as: the ConfigMap at the committed string, ai-layer Synced and Healthy, the pod template carrying
+`checksum/agentgateway-config: "7b5736c88625"`, the value this change commits, so Argo CD's sync of this change rolls
+nothing more on community; the pod has restarted three times, as #480's check restarted it once. Two things the check
+showed beyond the issue's ask: a pod-template annotation another manager sets does not put ai-layer OutOfSync and is
+not reverted by selfHeal (restartedAt and the checksum both stayed while the ConfigMap edit was reverted), and a live
+ConfigMap edit on community lives under 20 s, so the only way a static-section change takes effect is the committed
+pair, ConfigMap string and annotation in one commit, which is what the test holds. The script and its two outputs
+were written under `/tmp` on hecaton's host and did not survive the session: every `/tmp/878-*` file, the scoped
+suite's log among them, was gone between 21:37 and 21:39 UTC while the suite ran, and `mount` then listed two tmpfs
+mounts on `/tmp`, so the run's later commands saw a fresh `/tmp`. The lines above are copied from the outputs as the
+run read them, and the suite was started again with its log in the run's own directory.
+
+**Not yet run on a cluster.** The sync of this change itself on watch-it-burn-private, once hecaton promotes the run:
+ai-layer syncs the pod template with the annotation, generation 7 moves on, and `kubectl --context
+watch-it-burn-private -n agent get pods -l app.kubernetes.io/name=agentgateway` shows a pod younger than the sync
+whose `-c agentgateway` log reads `loaded config` with no `Failed to reload`. Community already carries the value, so
+its sync changes nothing there.
+
+**Tests.** `python3 verify/test_agentgateway_config_checksum.py`: 14 PASS. The scoped offline suite,
+`HECATON_BASE_SHA=42c9d9ec bash verify/run-tests.sh` (236 of 387 offline tests, most because they read decisions.md or
+agentgateway.yaml), started as a background job with its log in the run's directory: every test green except
+`test_stage_switch_run.py`, which failed one check, `the ^C handler is put back after the close`, and passed in the
+foreground. CLAUDE.md's Tests own their inputs reads that as a test whose input it does not own: a non-interactive
+shell starts a background job (`cmd &`) with SIGINT ignored, Python then keeps `SIG_IGN` instead of installing
+`default_int_handler`, `StageSwitchRun._close` puts back what it found, and the check compared that against the
+default handler. Reproduced with `bash -c 'python3 verify/test_stage_switch_run.py > out & wait'` (the one FAIL) and
+fixed in the test, which now sets SIGINT to `default_int_handler` before the ^C-during-guards-off case, with a comment
+saying why; it passes from the foreground and from a background job. `stage_switch_run.py` is unchanged: restoring the
+handler it found is right. No other test under verify/ asserts a fixed SIGINT handler. The scoped tools tier selects 30
+tier tests on agentgateway.yaml (test_ai_layer_rollout.py, test_agentgateway_tracing_e2e.py among them); the run
+leaves that tier to the gate, as the run's governance says, and reports it so.
