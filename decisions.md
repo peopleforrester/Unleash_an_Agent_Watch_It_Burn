@@ -33417,3 +33417,9 @@ one line is in this change, and the rest of what `write` produced was other test
 
 **Live check.** Skipped: the change touches only CLAUDE.md, `verify/` files no cluster runs and this record, and
 Michael's ruling says this change needs none.
+
+**Suite results, run 18441.** On `6223f739`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=1bb822d3`, so
+scoped to this change, printed `95 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the new test among them,
+ending `PASS: CLAUDE.md point 1 holds both live-check lists (#1062)`), then `17 checks ran (the offline suite and 16
+tier tests) in 3m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No
+dependency was added. The log is `/var/lib/hecaton/runs/18441/e2e-tools-2.log`.
