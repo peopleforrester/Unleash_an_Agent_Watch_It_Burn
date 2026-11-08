@@ -1496,6 +1496,11 @@ sites:
     class: live
     kind: lab-endpoint
     target: the prompts wall's public host
+  verify/test_weather_feed_probe.py:
+  - match: .
+    lines: 14
+    class: none
+    why: a stand-in for the command (a guard that raises, or a stubbed urlopen) or a check on its calls or its text; nothing leaves the host
   verify/test_weather_feed_upstream_failure.py:
   - match: .
     lines: 1
