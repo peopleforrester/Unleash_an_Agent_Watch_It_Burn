@@ -34612,3 +34612,67 @@ as a second offline run in the same worktree, failed `verify/test_ops_view.py` o
 fleet.sh hosts": both runs wrote `fleet.sh ops`'s one `${LOG_DIR}/ops-hosts.tsv`. Alone it passed three times out of
 three and in both full runs, so the two runs raced on that file. No dependency was added. The logs are
 `/var/lib/hecaton/runs/18496/run-tests-2.log` and `/var/lib/hecaton/runs/18496/e2e-tools-3.log`.
+## 2026-11-08 · #647 · run 18508 · The post-talk purge is a script a run can run, tried on the scrub check's own spans; the scrub's live checks pass again on the changed collector
+
+Michael on #647, 2026-11-08: "Do all of it." `verify/prior-drafts.sh 647 origin/staging` printed NONE: every earlier
+draft (runs 10438, 12512, 15814, 17362) is on staging. Two parts of the issue were done and one was owed after the talk.
+This run checked the two again and made the third something a run can do on the day.
+
+- **Why the live checks ran again.** Since run 17362's check (2026-11-05), four commits changed the collector the scrub
+  lives in (`ea709dbe` and `267263cb` for #784 and #876, `3edae619` for #894, `a9e7798f` for #903). On
+  watch-it-burn-community (`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-community`, ACTIVE),
+  `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_collector_pii_scrub_live.py` printed 22 PASS and exit
+  0: sent trace `3ea09849ca3d5cde455d9f14c4428c59`, "APM: the scan read every span of the last 168h (68194 read)",
+  "Agent Observability (ml_app:burritobot): the scan read every span of the last 168h (12738 read)", no raw match in
+  either. `python3 verify/test_public_datadog_button_live.py` printed 11 PASS: both public hosts hide the Datadog button
+  and the private bot shows it. Nothing on the cluster changed (a port-forward and ConfigMap reads).
+- **Why the 2026-10-30 entry's "no purge script" no longer holds.** It said no run had a key to Whitney's org that could
+  delete, so a script could not be tried before its one use. Since 2026-11-05 `watch-it-burn/datadog` also holds a
+  `write-app-key`. Read with a GET to `/api/v2/current_user/application_keys`, it is Michael's `wib-fleet-monitors`
+  key, created 2026-11-03, unscoped, in the org whose public_id is the uuid in the secret's `org` field. With the read
+  pair, `POST /api/v2/llm-obs/deletion/data/llmobs` answers 403; with the write key, an empty body answers 400 and a
+  body with no query answers "query parameter is required and must contain @trace_id filter". The endpoint is no longer
+  in Datadog's published spec (in datadog-api-client-python 2.59.0 of 2026-08-12, gone from 2.60.0 of 2026-09-02 on,
+  and its docs page answers 404), but the route answers and works, as below. #890's rule that `dd_traces.py` never sends
+  the write key stands: that reader is a separate script and still sends only the read pair.
+- **The deletions tried, on fake data only.** The scrub check's three stored spans (ml_app `wib-pii-scrub-check`, fake
+  attendee text, from 2026-11-05 and this morning) were deleted by their Agent Observability trace ids, each request
+  with a window of one minute either side of the span. Datadog files that copy under its own `trace_id`, not the APM id.
+  Request `32d9ce0c-e6ca-4bb2-b2fc-452e5f5e16c5` named `431d1b11b1e85a4db4b5c70adf25285e`; the span was gone within 3
+  minutes and its window still held its other 42 spans. Request `eb49f439-cfaa-4a80-bd66-4ebd19ca45c4` named
+  `badc8af176b45e9f800ef488680624b6` OR an id that does not exist; its window went from 19 spans to 18. Request
+  `65236e86-b396-4130-ba54-2c7b7254644e` named `8215704de3cf5798a9880b3c0fcfa4f6`; its window went from 1 to 0. So a
+  request deletes only the traces it names, and the OR form works.
+- **The script.** `verify/dd_purge_public.py` lists every Agent Observability span under
+  `k8s.cluster.name:burritobot-public` in the window, of any ml_app, so the check's spans are in it, with the read pair.
+  It checks first that the key reaches the org the secret names, by public_id. A dry run prints what would go. With
+  `--apply` it checks the write key's org too and sends one request per 50 trace ids in start order, each naming its
+  ids as `@trace_id:(a OR b ...)` with the window of its spans padded by a minute; nothing is asked by tag or wildcard.
+  A 429 or 412 is waited out and retried, and any other refusal stops it. `--verify` exits 1 while any span is left.
+  `--service` narrows it to one service. It also prints the APM span count, because APM has no delete API: the data
+  deletion API takes `logs` only.
+- **The script, tried.** One new fake span (APM trace `3eb139e5251d645572941010f773db70`) went into the community
+  collector, then `python3 verify/dd_purge_public.py --profile accen-dev --from 2026-11-08 --service
+  wib-pii-scrub-check` listed 1 span in 1 trace, `--apply` sent request `f4a380b8-9d9c-4a7e-a0dd-91cbdffaf687`, and
+  `--verify` still exited 1 sixteen minutes later. That request went out 4 minutes after the span arrived and missed it.
+  A second `--apply` (request `0e6ff691-0ffe-4b99-98eb-db4f4acef293`) deleted it, and `--verify` printed "Purged: no
+  Agent Observability span is left for the cluster in the window." and exit 0 within 2 minutes. The run-of-show's step
+  says to run `--verify` after `--apply` and `--apply` again while it exits 1.
+- **What the purge will cover.** A dry run with `--from 2026-10-28`, the first build day, listed 20,888 Agent
+  Observability spans in 2,493 traces (50 requests) and counted 80,171 APM spans under
+  `kube_cluster_name:burritobot-public`. The APM spans, the four fake spans' APM copies among them, stay for retention
+  or Datadog support, as the step already said.
+
+**Tests.** `verify/test_dd_purge_public.py` (offline, 39 checks) runs the script against a fake org: the dry run sends no
+deletion and never the write key, listing has no ml_app filter, batches and windows, the OR query, the write key sent
+only to the deletion and its org check, both org guards, no write key, no read pair, 429 and 412 retried, other
+refusals stopping it, an accepted request with no id, a trace id no query can name, `--verify`, `--service`, and the
+time parsing. Six mutations of the script (deleting with the read pair, no org guard, a wildcard query, no retry, an
+ml_app filter that drops the check's spans, a window that misses the first span) each failed it with 2 or 3 FAIL lines.
+`verify/test_collector_pii_scrub.py` now also checks that the run-of-show's purge step names the script, `--apply`,
+`--verify` and `wib-pii-scrub-check`, and that the script deletes through the endpoint the step names. Both entries are
+in `verify/scope-map.yaml`. No dependency was added.
+
+**Not yet run.** The purge itself, on or after 2026-11-13, after the talk on 2026-11-12:
+`python3 verify/dd_purge_public.py --profile accen-dev --from 2026-10-28 --apply`, then `--verify` until it exits 0,
+then a comment on #647 with what went and the APM count left to retention.

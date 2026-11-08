@@ -1303,6 +1303,7 @@ reads:
     - gitops/otel-collector/values-burn.yaml
     - gitops/otel-collector/values.yaml
     - verify/collector_render.py
+    - verify/dd_purge_public.py
     - verify/pii_scrub_cases.py
   test_collector_pii_scrub_e2e.py:
     - gitops/ai-layer/resources.yaml
@@ -1747,6 +1748,12 @@ reads:
     - verify/charts_lock.py
     - verify/dd_traces.py
     - verify/gh_comments.py
+  test_dd_purge_public.py:
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/dd_purge_public.py
   test_dd_traces.py:
     - agent
     - infra/datadog-fleet/dashboard.yaml
