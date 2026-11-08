@@ -45332,3 +45332,23 @@ private bot's `/cost`.
 **The suites (run 19459).** This change is this decisions.md entry alone; it touches no file a cluster runs, so no
 further live check is owed. The prose gate ran on this entry. No dependency was added, and no test was written or
 changed, so the scoped `run-tests.sh` is left to validation.
+## 2026-11-08 · #1231 · run 18807 · A test holds docs/floor.md to the no-boundary line, what it means and the order of the two roots
+
+**What.** Test review run 18802 found that no test read the sentence #1035 added to docs/floor.md: the line the drift
+report writes for an account with no Config recorder and no `watch-it-burn-permissions-boundary`, and that the boundary
+root is applied before the audit root. `verify/test_drift_floor.py`, which already reads docs/floor.md, the drift report
+and the audit root, gains a section for it. The line is not copied into the test: it is rebuilt from the f-string in
+`infra/terraform/drift/drift-report.py` with `BOUNDARY_POLICY` and us-west-2 filled in, and floor.md must quote it in
+full, with its whitespace collapsed, since the doc wraps it. The section also checks that floor.md says when the line is
+written, why the order matters (the audit root looks the policy up by name and fails at plan without it), that
+`infra/terraform/aws/audit/main.tf` really does look the policy up by name, that floor.md tells the reader to apply the
+boundary root first and the audit root after it, and that, where the policy is there, the line names the audit root
+alone, as the report's other line does. A check fails naming the file when the report's f-string anchor is gone.
+
+**Checked to fail.** On a scratch edit of docs/floor.md, each of these failed its own check and the restored file was
+byte-identical: the order sentence swapped, the quoted line with the two roots swapped, the audit-root-alone sentence
+reworded, and the reason given for the cluster root instead of the audit root.
+
+**Tests run.** `python3 verify/test_drift_floor.py` passes. The test reads no file it did not read before, so
+`verify/scope-map.yaml` is unchanged. The full Test and E2E commands are left to hecaton's validation. No live check:
+the change touches only `verify/` and decisions.md, which no cluster runs. No dependency was added.
