@@ -37732,3 +37732,14 @@ out of this change.
 **Live check: skipped.** No cluster runs the module, and the change touches only files under `verify/` that no
 cluster runs. The only live act was a read-only GET of both clusters' `/controls`, to take the fixture's shape;
 nothing on either cluster was changed.
+
+**The suites (run 18703; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6 asks. The first run of
+`bash verify/run-e2e-tools.sh`, at `1c08a802` (log `/var/lib/hecaton/runs/18703/e2e-tools.log`), printed `103 tests
+ran` with one failure, `test_deck_shift_slide_citations.py`: the module's docstring cited the deck hashes of the
+Challenge 3 and 4 switches, which that test allows only in segments 4 and 5 and their readers. Its 10 tier tests were
+green (`11 checks ran ... in 4m38s`), `exit=1`. `4b439c73` names those switches by segment instead. The second run,
+at `4b439c73` (log `/var/lib/hecaton/runs/18703/e2e-tools-2.log`), printed `103 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `test_stage_switch_check.py` and `test_deck_shift_slide_citations.py` among them, then
+`15 checks ran (the offline suite and 14 tier tests) in 3m50s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
