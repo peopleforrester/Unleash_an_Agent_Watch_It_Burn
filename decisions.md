@@ -35869,3 +35869,8 @@ A check that needs the reworded rule running is named below.
 systemMessage equal to git's and whose recon beat is this judge; and the recon ask live 8 times on each bot as above,
 to see the refusal gone live. On today's attack rate its `c3-attack` beat is as likely to fail as pass, for the reason
 above, whichever wording is deployed.
+
+**The suites (run 18585, at `690e4e32`; this paragraph only adds to the entry).** `bash verify/run-e2e-tools.sh`
+printed `360 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`), then
+`86 checks ran (the offline suite and 85 tier tests) in 9m18s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`. No dependency was added to the repo.
