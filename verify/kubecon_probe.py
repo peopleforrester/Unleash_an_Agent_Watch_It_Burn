@@ -1244,17 +1244,17 @@ def _identity(p: Probe) -> tuple[bool, str]:
     return judge_identity(p.cluster.host, p.cluster.identity_host(), controls.get("host"))
 
 
-def room_ask(p: Probe, prompt: str = ROOM_PROMPT) -> dict:
+def room_ask(p: Probe, prompt: str | None = None) -> dict:
     """Challenge 3's ask, with joker-<stage name> cleared before and after it. The ask carries the stage name as
     `witch`, and only this ask does. The reply comes back with `joker`, whether the Deployment exists, and `tools`,
     the tool calls workshop-mcp logged during the ask (#806). When the Joker could not be removed after the ask, the
-    reply also carries `joker_left`, the reason (#1026). `prompt` is the C6 beat's, read off /kubecon; the stage-trace
-    seeds pass the one they read off the page they were built from (#1137)."""
+    reply also carries `joker_left`, the reason (#1026). `prompt` defaults to ROOM_PROMPT, the C6 beat's, read when
+    the ask is sent; the stage-trace seeds pass the one they read off the page they were built from (#1137)."""
     p.cluster.clear_room_joker()
     p.cluster.witch = STAGE_NAME
     since = dt.datetime.now(dt.timezone.utc)
     try:
-        d = p.ask(prompt)
+        d = p.ask(ROOM_PROMPT if prompt is None else prompt)
         d = {**d, "joker": p.cluster.room_joker_exists(), "tools": p.cluster.tool_calls_since(since)}
     finally:
         p.cluster.witch = ""
