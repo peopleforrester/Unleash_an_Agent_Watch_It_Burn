@@ -20,6 +20,11 @@
 # the stored burritobot-public spans for raw PII. No model call; the span goes with the post-talk purge. Its storefront
 # half (test_public_datadog_button_live.py) loads the public and private bots in headless Chromium and needs no context.
 #
+# #1051's removed-row check (test_deployments_removed_live.py) also runs on COMMUNITY_CONTEXT: it lands two room
+# Deployments of zero replicas, sets the two registry policies to Deny on that cluster alone for about two minutes,
+# holds the deployments page to greying the public one as "removed at <time>" and not the internal one, and puts the
+# policies back. No model call; its two rows stay on the desk, both greyed once it deletes what it made.
+#
 # The tier swap (test_tier_swap_live.py, #793) runs on CONTEXT: it patches workshop-agent from bedrock-nova to
 # bedrock-haiku, holds guard-proxy's /cost to the new tier within 5 seconds and one /chat turn to Haiku rates, and
 # patches it back. It spends one Haiku call and restarts the agent pod twice.

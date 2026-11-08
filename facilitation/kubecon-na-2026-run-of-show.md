@@ -607,8 +607,10 @@ reads Deny, `remove-untrusted-room-workloads` deletes, within a minute, every wo
 BurritoBot deployed for the room that runs an image from any other registry. The Tron
 game and any public image the room asked for go; Challenge 3's
 maintenance-shell and the room's Jokers, from `registry.burritobot.co`, stay, as does
-everything the platform runs. The deployments page still lists what landed, since it
-is a record of the room's asks. `guardrails-off` stops the sweep.
+everything the platform runs. The deployments page keeps every app that landed. One
+the sweep removed stays listed, greyed, and reads "..., removed at <time>" within about
+a minute and a half of `guardrails-on` (#1049, #1050); a `registry.burritobot.co` app's
+line is left as it was. `guardrails-off` stops the sweep.
 
 Both hostnames and their service hosts are served through the apex router, whose
 table carries the roster only (`./fleet.sh routes roster`, Night Before). No

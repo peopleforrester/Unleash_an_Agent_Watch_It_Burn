@@ -35348,3 +35348,55 @@ them. Staging had not changed that file since. Run alone here it passed.
 OFFLINE RENDER-GATE TESTS GREEN`, then `86 checks ran (the offline suite and 85 tier tests) in 12m37s, 4 at a time`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `test_enforce_floor.py` ended `All enforce-floor checks passed.` with
 no retry needed on a real repository. The prose gate printed `prose gate: pass`. No dependency was added.
+
+## 2026-11-08 · #1051 · run 18559 · The run-of-show says the deployments page greys a removed row, and a live test holds it on both KubeCon clusters
+
+**The run-of-show.** `facilitation/kubecon-na-2026-run-of-show.md`, in "The Kubernetes guardrails switch (#774)", said
+the deployments page "still lists what landed, since it is a record of the room's asks". Since #1049 (the desk marks a
+row) and #1050 (workshop-mcp reads the room's workloads every 30 s and tells the desk) it does more than that, so the
+paragraph now reads that the page keeps every app that landed, that one the sweep removed stays listed, greyed, and
+reads "..., removed at <time>" within about a minute and a half of `guardrails-on`, and that a
+`registry.burritobot.co` app's line is left as it was. `git grep -nF` on "record of the room" and "still lists what
+landed" across `verify` and `scripts` found no test that reads those words, so no test changed with them.
+`PROJECT_STATE.md`'s #773 section gets the same in one sentence.
+
+**The live test.** `verify/test_deployments_removed_live.py` (new, `# SUITE: e2e`, on `COMMUNITY_CONTEXT`) sits beside
+`verify/test_deployments_page_live.py` rather than inside it: that test only reads and dry-runs, and this one switches
+two policies and so holds the guard lock (`guard_lease.run_held`, #1016), which `verify/test_guard_lease.py` now names
+among its switchers. It reads the two registry policies, refuses to arm when the sweep would then delete any workload it
+did not create, creates two room-labelled Deployments of zero replicas (one on `public.ecr.aws`, one on
+`registry.burritobot.co`), reports each to the desk as deploy_app does (POST /landed with kind Deployment over a
+port-forward to svc/fake-ticket), checks both rows stay unmarked through a read, then arms. Arming is
+guardrails-on's Kyverno half on that one cluster, the two patches the terminal's `_kg on kyverno` makes
+(restrict-image-registries and deny-external-registries to Deny). The terminal's whole `guardrails-on` would also flip
+RBAC, KubeArmor and egress on both clusters, none of which the sweep reads, and would leave more to put back. It then
+polls /deployments.json until the public row reads removed, and checks in that same read that the public Deployment is
+gone, the internal one is there and its row is unmarked. It reads `https://deployments-<public host>/` and its
+/deployments.json through the console and runs the page's own script in node on those rows, as
+`verify/test_deployments_witch_line_e2e.py` runs it offline: the public line must read "Someone deployed nginx at <t>,
+removed at <t>" with the class the page greys, the internal line the same without ", removed at" and with no class. It
+always puts the policies back to what it read, deletes its Deployments, and compares the policies and the names of every
+Deployment, StatefulSet, DaemonSet, Job and CronJob in agent with what it found.
+
+The limit on the mark is 150 s from the arm. The sweep passes at each minute boundary, and the read that counts starts
+up to 32 s after the delete, so the worst case is about 95 s before the polling's own port-forwards; private measured
+91 s, too close to 120 s for a test that must not fail on a slow host. The test prints the measured time.
+
+**What it leaves.** Its two rows stay on the desk, which keeps landed rows in memory with no way to drop one (#1049
+keeps every row by design); restarting fake-ticket would drop the room's rows and tickets too, as
+`verify/desk_ticket_live.py` says of its tickets. Both end greyed: once the test deletes the internal Deployment, the next
+read marks it, which the test waits for, so the page still says what the cluster runs. On the community cluster that is
+`deployments.burritobot.co`, which the room reads; the rows read "Someone deployed nginx ..." and "Someone deployed
+maintenance-shell ...", as a probe's rows do.
+
+**Live check, run 18559.** Both clusters' ai-layer read `Synced Healthy` at `3c630161`, this run's base, which carries
+#1049 and #1050. Both registry policies read `[Audit]` on both. On watch-it-burn-community, with the 120 s limit of the
+first draft, `COMMUNITY_CONTEXT=watch-it-burn-community python3 verify/test_deployments_removed_live.py` printed every
+check PASS and `DEPLOYMENTS REMOVED-ROW LIVE CHECK GREEN`, exit 0: the public row was marked 54 s after the arm,
+`"at": "04:47:04", "removed_at": "04:49:00"`, the page's script rendered `Someone deployed nginx at 04:47:04, removed
+at 04:49:00` with class `removed` and `Someone deployed maintenance-shell at 04:47:07` with none, both policies went back
+to `['Audit']`, and the agent namespace's workloads matched what it found. On watch-it-burn-private, the same run with
+`COMMUNITY_CONTEXT=watch-it-burn-private` was green too: marked 91 s after the arm, `"at": "04:51:59", "removed_at":
+"04:54:22"`, on `https://deployments-burritobot-private.agenticburn.com/`, and left as found. The logs are
+`/var/lib/hecaton/runs/18559/live-community-1.log` and `/var/lib/hecaton/runs/18559/live-private-1.log`. The
+`agent/terminal-auth` Secret was not read or touched.

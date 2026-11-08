@@ -19,6 +19,8 @@ Built on staging, not yet run on a cluster. `deploy_app` turns a plain name (bus
 your deployments" once the visitor has one. 6d8505a repinned guard-proxy to 88b9b52, which forwards the witch name
 (guard-proxy-agenticburn#34/#35). Owed: apex-agenticburn's `deployments.burritobot.co`
 lookup, and `verify/test_deployments_page_live.py` on both KubeCon clusters. Details in decisions.md, 2026-11-02 · #773.
+Since #1049, #1050 and #1051 the page keeps every landed line and greys one the guardrails sweep removed as "removed
+at <time>"; `verify/test_deployments_removed_live.py` held that on both KubeCon clusters on 2026-11-08 (run 18559).
 
 ## guard-proxy prices the bound model (#793)
 
