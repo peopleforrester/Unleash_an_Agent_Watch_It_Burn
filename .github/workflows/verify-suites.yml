@@ -12,8 +12,9 @@
 # leaves it unset and runs everything.
 #
 # The workspace persists between jobs on a self-hosted runner, so checkout does not clean it; the step after it
-# removes every untracked and ignored file except verify/.tools, whose downloads fetch-e2e-tools.sh checks against
-# e2e-tools.lock again each run. The Terraform provider cache, about 2.4 GB, is not in the workspace at all: the
+# removes every untracked and ignored file except verify/.tools, whose binaries fetch-e2e-tools.sh extracts again each
+# run. Their downloads, and the pinned charts, are in the host artifact cache outside the workspace (#1118), checked
+# against e2e-tools.lock and verify/charts.lock on every hit. The Terraform provider cache, about 2.4 GB, is not in the workspace at all: the
 # e2e-tools job keeps it under the runner's tool cache, which outlives the job, and the lock-init test reads it warm
 # instead of downloading every provider again (#1114).
 #

@@ -59,7 +59,7 @@ ns = app["spec"]["destination"]["namespace"]
 
 with tempfile.TemporaryDirectory() as tmp:
     work = pathlib.Path(tmp)
-    # The pinned operator chart comes from verify/.tools/charts, fetched there once with a network error retried (#1028).
+    # The pinned operator chart comes from the host artifact cache by its charts.lock sum, pulled once on a miss (#1118).
     try:
         upstream = chart_fetch.pull(HELM, operator["repoURL"], operator["chart"], str(operator["targetRevision"]))
     except chart_fetch.ChartFetchError as e:

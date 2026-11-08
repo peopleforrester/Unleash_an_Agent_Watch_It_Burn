@@ -158,8 +158,8 @@ pulled: dict[tuple[str, str, str], pathlib.Path] = {}
 
 
 def upstream_chart(src: dict) -> pathlib.Path | str:
-    """The app's chart, from verify/.tools/charts, fetched once with a network error retried (#1028); on failure,
-    Helm's error."""
+    """The app's chart, from the host artifact cache by its charts.lock sum, pulled once on a miss (#1028,
+    #1118); on failure, the error, in Helm's words where Helm failed."""
     key = (src["repoURL"], src["chart"], str(src["targetRevision"]))
     if key not in pulled:
         try:

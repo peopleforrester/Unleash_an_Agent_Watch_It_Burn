@@ -14,7 +14,6 @@ import pathlib
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 
@@ -51,6 +50,8 @@ class Server:
         self.files: dict[str, bytes] = {}
         self.hits: dict[str, int] = {}
         self.gated: set[str] = set()
+        # path -> how many more requests for it answer 503 before it is served.
+        self.flaky: dict[str, int] = {}
         self.gate = threading.Event()
         self.lock = threading.Lock()
         srv = self
@@ -59,6 +60,10 @@ class Server:
             def do_GET(self):
                 with srv.lock:
                     srv.hits[self.path] = srv.hits.get(self.path, 0) + 1
+                    if srv.flaky.get(self.path, 0) > 0:
+                        srv.flaky[self.path] -= 1
+                        self.send_error(503)
+                        return
                 body = srv.files.get(self.path)
                 if body is None:
                     self.send_error(404)
@@ -96,22 +101,12 @@ class Server:
 
 
 def scratch_base() -> pathlib.Path:
-    """A new temp directory outside every git worktree: the first of TMPDIR, /tmp, /var/tmp and /dev/shm that is outside
-    one and takes a new directory. Hecaton points TMPDIR inside the run's worktree, where the helper rightly refuses a
-    root. In run 18422 the dispatcher's private /tmp and /var/tmp were deleted while the run was going (findmnt read
-    both as `//deleted`), so a mkdir there failed with ENOENT though the path was still a directory. With none usable
-    the test fails, naming each one and why."""
-    why = []
-    for cand in dict.fromkeys(map(pathlib.Path, (tempfile.gettempdir(), "/tmp", "/var/tmp", "/dev/shm"))):
-        tree = ac.worktree_of(cand)
-        if tree is not None:
-            why.append(f"{cand} is inside the git worktree {tree}")
-            continue
-        try:
-            return pathlib.Path(tempfile.mkdtemp(prefix="artifact-cache-test-", dir=cand))
-        except OSError as e:
-            why.append(f"{cand}: {e}")
-    raise SystemExit("FAIL: no temp directory outside a git worktree takes a new directory:\n  " + "\n  ".join(why))
+    """A new temp directory outside every git worktree (artifact_cache.scratch_dir, which says how it picks one); with
+    none usable the test fails, naming each candidate and why."""
+    try:
+        return ac.scratch_dir("artifact-cache-test-")
+    except ac.ArtifactCacheError as e:
+        raise SystemExit(f"FAIL: {e}")
 
 
 CLEAN = {k: v for k, v in os.environ.items()
@@ -284,6 +279,51 @@ def test_bad_download(base: pathlib.Path, srv: Server) -> None:
               and "not a SHA-256" in r.stderr, r.stderr)
 
 
+def test_retry(base: pathlib.Path, srv: Server) -> None:
+    print("a miss the network broke is asked again; a 404 and a mismatch are not (#1118)")
+    root, log = base / "cache-retry", base / "retry-fetch.log"
+    env = {"ARTIFACT_FETCH_LOG": str(log)}
+    srv.files["/flaky.bin"] = GOOD
+    srv.flaky["/flaky.bin"] = 2
+    url, waits = srv.url("/flaky.bin"), []
+    before = srv.hits.get("/flaky.bin", 0)
+    try:
+        got, err = ac.get_retrying(sha(GOOD), url, root=root, env=env, sleep=waits.append), ""
+    except ac.ArtifactCacheError as e:
+        got, err = None, str(e)
+    check(f"two 503s and then the file: it comes back ({err})", got == root / "sha256" / sha(GOOD)
+          and got.read_bytes() == GOOD)
+    check("after three requests", srv.hits.get("/flaky.bin", 0) - before == 3, str(srv.hits))
+    check(f"with the first two waits of BACKOFF between them ({waits})", waits == list(ac.BACKOFF[:2]))
+    lines = log_lines(log)
+    check("each attempt is its own line in the fetch log", [ln[4].split()[0] for ln in lines] == ["error", "error", "ok"],
+          str(lines))
+
+    srv.flaky["/down.bin"], srv.files["/down.bin"] = 99, GOOD
+    waits = []
+    try:
+        ac.get_retrying(sha(GOOD + b"x"), srv.url("/down.bin"), root=root, env=env, sleep=waits.append)
+        err = ""
+    except ac.ArtifactCacheError as e:
+        err = str(e)
+    check(f"a 503 on every attempt fails after the last ({err[:80]})", "503" in err and srv.hits.get("/down.bin") == 4
+          and waits == list(ac.BACKOFF), f"{srv.hits} {waits}")
+
+    for path, why in (("/nowhere.bin", "a 404"), ("/flaky.bin", "a download that does not match")):
+        waits, before = [], srv.hits.get(path, 0)
+        try:
+            ac.get_retrying(sha(b"other"), srv.url(path), root=root, env=env, sleep=waits.append)
+            err = ""
+        except ac.ArtifactCacheError as e:
+            err = str(e)
+        check(f"{why} fails on the first attempt, with no wait", err != "" and waits == []
+              and srv.hits.get(path, 0) - before == 1, f"{err} {waits} {srv.hits}")
+    check("a 503, a timeout and a reset are transient; a 404 is not",
+          ac.transient(ac.urllib.error.HTTPError("u", 503, "x", None, None)) and ac.transient(TimeoutError())
+          and ac.transient(ConnectionResetError()) and not ac.transient(ac.urllib.error.HTTPError("u", 404, "x", None, None))
+          and not ac.transient(None))
+
+
 def lock_waiter(pid: int) -> bool:
     """Whether pid is blocked in /proc/locks waiting for an flock, the `->` lines."""
     for ln in pathlib.Path("/proc/locks").read_text().splitlines():
@@ -337,6 +377,7 @@ def main() -> int:
         test_root_in_worktree(base, srv)
         test_mismatching_hit(base, srv)
         test_bad_download(base, srv)
+        test_retry(base, srv)
         test_concurrent(base, srv)
         test_miss_then_hit(base, srv)  # last: it shuts the server down to show a hit needs no network
     finally:

@@ -69,7 +69,7 @@ def short_image(ref: str) -> str:
 
 def helm(release: str, chart: str, repo: str, version: str, namespace: str, value_files: list[pathlib.Path],
          extra: tuple[str, ...] = ()) -> list:
-    # The pinned chart comes from verify/.tools/charts, fetched there once with a network error retried (#1028).
+    # The pinned chart comes from the host artifact cache by its charts.lock sum, pulled once on a miss (#1028, #1118).
     local = chart_fetch.pull("helm", repo, chart, version)
     cmd = (["helm", "template", release, str(local), "-n", namespace]
            + [a for f in value_files for a in ("-f", str(f))] + list(extra))
