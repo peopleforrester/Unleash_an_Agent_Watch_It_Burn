@@ -35272,3 +35272,25 @@ verify/run-tests.sh`), then `85 checks ran (the offline suite and 84 tier tests)
 TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_guard_switch_both.py` was among them and printed `All two-cluster
 switch checks passed.` in 39 s. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18550/e2e-tools.log`.
+
+## 2026-11-08 · #1077 · runs 18558 and 18566 · The number-only desk, closed out
+
+**What was found.** Every criterion of #1077 was already met on staging `3c630161`. The desk change is #1101's
+(`da405eca`, the entry "#1101, the support desk looks a ticket up by its number and lists none" above), and the live
+checks the issue owes are #1102's (runs 18469 and 18551, the two #1102 entries above; run 18551 printed `DESK TICKET
+LIVE GREEN`, 35 of 35). Segment 4 of the run-of-show already writes the desk as #1077 leaves it, through #1098 for
+#1076. Read again in run 18558: `desk()` holds the file-a-ticket form and the look-up form and no ticket; the only
+routes that render a ticket's text are `/<id>`, the visitor's own `/me` and the answer to their own `POST /submit`;
+`/ticket?id=` is as #1101 left it; and `git diff da405eca HEAD -- gitops/ai-layer/workshop-mcp-server.py` touches
+`deploy_app`'s labels and report and #1050's cluster reader, not `read_support_ticket`.
+`verify/prior-drafts.sh`'s one draft, `origin/agent/1077-18366`, has no commit that staging lacks.
+
+**What changed.** PROGRESS.md carried #1077's entry twice. The first copy ended "which is a question for Michael",
+written before question 1120 was ruled; the second says what segment 4 now says. The first copy is removed, and the
+second stays as #1077's entry. Run 18558 found this but its session refused file edits and script runs, so it
+committed nothing and hecaton's manifest gate failed it; run 18566 makes the change.
+
+**Live check.** Skipped: the change touches only PROGRESS.md and decisions.md.
+
+**Still owed, by design.** `guard-agency-on` and `guard-input-on` change the private cluster alone (#1098), so the
+public bot still deploys after them, as the #1102 entries say.
