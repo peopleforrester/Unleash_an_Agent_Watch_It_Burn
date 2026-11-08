@@ -40115,3 +40115,13 @@ locks free.
 
 **Not yet run on a cluster.** Nothing this change needs: both runs ran live from this branch. The probe is a script run
 by hand, and Argo CD syncs none of it, so promotion changes nothing on the clusters.
+
+**The suites (at `bcaf663f`; the probe itself is as the live runs ran it at `ed6a25a3`).** `bash verify/run-e2e-tools.sh`
+printed `364 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, then `86 checks ran (the
+offline suite and 85 tier tests) in 8m59s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The first
+try at `ed6a25a3` had two offline failures of this change's own making, both fixed in `2f1b585c`:
+`test_verify_harness.py` read the new timeout fake's argv list, which opened on kubectl, as a light test shelling out,
+and `test_deck_shift_slide_citations.py` found deck hashes and a slide number in the new stage-order anchors.
+`verify/scope-map.yaml` gains `verify/guard_lease.py` in `test_kubecon_probe.py`'s entry, by hand: `scope_tests.py
+check` also lists drift already on staging, left as it was. The prose gate printed `prose gate: pass`. No dependency
+was added.
