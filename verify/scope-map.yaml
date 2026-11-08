@@ -4992,6 +4992,20 @@ reads:
     - verify/e2e-tools.lock
     - verify/fixtures/lab_platform_operator_entry.tftest.hcl
     - verify/tf_plugin_cache.py
+  test_lab_private_banner.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
+  test_lab_private_banner_e2e.py:
+    - gitops/ai-layer/web/active-skin.js
+    - gitops/ai-layer/web/lab-events.js
+    - gitops/ai-layer/web/lab.html
+    - gitops/ai-layer/web/skin.js
+    - gitops/ai-layer/web/skins.js
   test_lab_progress_harvest.py:
     - challenges
     - scripts/harvest/06-lab-progress.py
