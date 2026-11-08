@@ -14,11 +14,14 @@ What this holds, offline:
   storefront's names do not pass cannot drop them.
 - The input guards see the prompt only, never the name, and the /prompts feed's `prompts` list is the prompt alone.
 - Since guard-proxy-agenticburn#59 (92fd19f, #1048) the feed carries each prompt's witch name in a `witches` list
-  at the same index, for the prompt wall (#921); a pin before it has no `witches`.
+  at the same index, for the prompt wall (#921); a pin before it has no `witches`. A turn with no usable name
+  (none, empty, blank, null, not a string, or not shaped <First> the <Creature>) lands in the feed as its prompt
+  with "" at that index.
 - Since guard-proxy-agenticburn#64 (5a48d25, #995) the message/send of a named turn carries the name as an
   X-Witch-Name header too, which kagent copies onto workshop-mcp's calls; a turn with no name carries none, and a
   pin before it sends none.
-- A /chat with no witch field, an empty or blank one, or a non-string one reaches the agent as the prompt alone.
+- A /chat with no witch field, an empty or blank one, a non-string one or a misshaped one reaches the agent as the
+  prompt alone.
 
 The live half (an HC-666 turn on a cluster that lands joker-<visitor slug>) is not here; see #803's decisions entry.
 """
@@ -233,11 +236,13 @@ else:
     check("a pin before #59 has no witches list in the feed", "witches" not in feed, raw_feed[:200])
 
 print("== a /chat with no witch name reaches the agent as the prompt alone ==")
-for label, body in [("no witch field", {"prompt": PROMPT}),
-                    ("an empty witch", {"prompt": PROMPT, "witch": ""}),
-                    ("a blank witch", {"prompt": PROMPT, "witch": "   "}),
-                    ("a null witch", {"prompt": PROMPT, "witch": None}),
-                    ("a non-string witch", {"prompt": PROMPT, "witch": {"name": names[0]}})]:
+NO_NAME = [("no witch field", {"prompt": PROMPT}),
+           ("an empty witch", {"prompt": PROMPT, "witch": ""}),
+           ("a blank witch", {"prompt": PROMPT, "witch": "   "}),
+           ("a null witch", {"prompt": PROMPT, "witch": None}),
+           ("a non-string witch", {"prompt": PROMPT, "witch": {"name": names[0]}}),
+           ("a witch not shaped <First> the <Creature>", {"prompt": PROMPT, "witch": "Bob"})]
+for label, body in NO_NAME:
     status, reply, message, headers = chat(body)
     check(f"{label}: the visitor gets the agent's reply", status == 200 and reply.get("reply") == REPLY,
           f"got {status} {reply}")
@@ -245,6 +250,37 @@ for label, body in [("no witch field", {"prompt": PROMPT}),
           f"parts {texts(message)}")
     check(f"{label}: the message/send carries no X-Witch-Name header", "x-witch-name" not in headers,
           f"headers {headers}")
+
+if has_witches_feed:
+    # #921's no-name case: the wall shows "someone who gave no name" for a "" entry, so each of these turns has to
+    # land in the feed as its prompt with "" at the same index, never as a stale or neighbouring name. A shaped
+    # name that moderation would mask is the last of them: it still reaches the agent, but the projected wall
+    # drops it whole. The name is checked against the pinned moderator first, so a changed wordlist reads as that.
+    MASKED = "Bastard the Ghoul"
+    check(f"the pinned moderator masks {MASKED!r} and the shape check passes it",
+          proxy.moderate(MASKED) != MASKED and bool(proxy._WITCH_NAME_RE.fullmatch(MASKED)),
+          f"moderate gave {proxy.moderate(MASKED)!r}")
+    status, _, message, _ = chat({"prompt": PROMPT, "witch": MASKED})
+    check(f"{MASKED!r}: the agent still receives the name", status == 200 and len(texts(message)) == 2,
+          f"got {status}, parts {texts(message)}")
+    NO_NAME.append(("a name moderation would mask", {"prompt": PROMPT, "witch": MASKED}))
+    with urllib.request.urlopen(f"{BASE}/prompts", timeout=10) as r:
+        raw_feed = r.read().decode("utf-8", "replace")
+    try:
+        feed = json.loads(raw_feed)
+    except ValueError:
+        feed = {}
+    prompts, witches = feed.get("prompts") or [], feed.get("witches")
+    n = len(NO_NAME)
+    check(f"after the {n} turns with no usable name, the witches list is still as long as the prompts",
+          isinstance(witches, list) and len(witches) == len(prompts), raw_feed[:200])
+    check(f"the feed keeps each of the {n} no-name turns' prompt as typed", prompts[-n:] == [PROMPT] * n,
+          f"prompts {prompts[-n:]}")
+    check(f"the feed gives each of the {n} no-name turns \"\" as its witch name",
+          isinstance(witches, list) and witches[-n:] == [""] * n, f"witches {(witches or [])[-n:]}")
+    check("the named turns before them keep their names in the feed",
+          isinstance(witches, list) and witches[-n - len(names):-n] == names,
+          f"witches {(witches or [])[-n - 3:-n]}")
 
 proxy_srv.shutdown()
 agent_srv.shutdown()
