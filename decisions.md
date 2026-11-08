@@ -35657,3 +35657,10 @@ and the classifier before the model.
 once #1042 puts #869's 8080 node rule on both clusters: `guard-input-on` from the private terminal prints `Switched on
 both clusters: this one and watch-it-burn-community.`, HC-666 on attackme comes back withheld, then `guard-input-off`.
 The live-pass child of #1132 runs it.
+
+**The suites (run 18563, at `4671281d`).** The first `bash verify/run-e2e-tools.sh` failed one offline check,
+`verify/test_kubecon_probe.py`'s `guard-input-on is the terminal's query`, which read guard-input-on's query from its
+old `_px` call. The query is unchanged, so the check now reads it from the `_both _toggle` call. The rerun, unscoped,
+printed `86 checks ran (the offline suite and 85 tier tests) in 12m40s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN`
+and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18563/e2e-tools-2.log`.
