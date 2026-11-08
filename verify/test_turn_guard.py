@@ -16,8 +16,12 @@ through, refuses the third identical call in a turn and every call after the twe
   beside the server in the workshop-mcp-src ConfigMap;
 - run_shell's parse-error hint, on what dash, the image's /bin/sh, prints;
 - the replay: verify/fixtures/load-replay-2026-11-05-turns.json is the replay's 504 turns as Datadog logged them
-  (tool names and per-turn argument ids only), and each is put through the guard. Every turn that ran on for 100 s
-  or more is refused by its 16th call, and every turn the guard touches is a retry loop.
+  (tool names, per-turn argument ids and each call's ok or error result, no argument text), and each is put through
+  the guard. Every turn that ran on for 100 s or more is refused by its 16th call, and every turn the guard touches
+  is a retry loop;
+- #885's question, answered from that record (#1055): the 80-call loop got a successful result every time and the
+  other twelve loops got errors, so #463's error result does not invite the retries on its own, and decisions.md's
+  #885 entry says so. The #1055 entry's turn counts are held to what the replay counts.
 
 The module is loaded against a stand-in FastMCP, since the offline suite has no `mcp`.
 """
@@ -32,6 +36,7 @@ import subprocess
 import sys
 import tempfile
 import types
+from collections import Counter
 from contextlib import redirect_stdout
 
 import yaml
@@ -305,7 +310,7 @@ check("the fixture holds both runs' 504 turns", len(turns) == 504 and {t["run"] 
 touched, runaway_cut, runaway = [], [], [t for t in turns if t["seconds"] >= 100]
 for i, t in enumerate(turns):
     g = tool_audit.TurnGuard()
-    refused = [n for n, (tool, arg) in enumerate(t["calls"])
+    refused = [n for n, (tool, arg, _) in enumerate(t["calls"])
                if tool in mcp_tools and g.admit(f"{i:032x}", tool, {"args": arg}) is not None]
     if refused:
         touched.append((t, refused))
@@ -317,7 +322,7 @@ check(f"every one is refused by its 16th call ({len(runaway_cut)} of {len(runawa
 
 def resent(t: dict) -> bool:
     seen: dict[tuple, int] = {}
-    for tool, arg in t["calls"]:
+    for tool, arg, _ in t["calls"]:
         if tool in mcp_tools:
             seen[(tool, arg)] = seen.get((tool, arg), 0) + 1
     return max(seen.values(), default=0) > SAME
@@ -327,8 +332,72 @@ check(f"every turn the guard touches resent one call more than {SAME} times ({le
       all(resent(t) for t, _ in touched), str([(len(t["calls"]), r[:3]) for t, r in touched if not resent(t)]))
 check(f"so {len(turns) - len(touched)} of the 504 turns, every one that was not a retry loop, are untouched",
       len(turns) - len(touched) == sum(1 for t in turns if not resent(t)))
-busiest = max(len({(tool, a) for tool, a in t["calls"] if tool in mcp_tools}) for t in turns if not resent(t))
+busiest = max(len({(tool, a) for tool, a, _ in t["calls"] if tool in mcp_tools}) for t in turns if not resent(t))
 check(f"the busiest turn that was not a loop made {busiest} distinct calls, under the cap of {CAP}", busiest < CAP)
+# A turn that resent any call more than twice, a workshop-mcp one or not: one more than the guard touches, since a
+# loop on another server's tool is not the guard's to refuse. #885's entry counted these as touched (#1055).
+looped_any = [t for t in turns if max(Counter((tool, a) for tool, a, _ in t["calls"]).values()) > SAME]
+off_server = [t for t in looped_any if not resent(t)]
+check(f"{len(looped_any)} turns resent a call more than {SAME} times, {len(touched)} of them a workshop-mcp call the "
+      f"guard touches and {len(off_server)} another server's tool it leaves alone",
+      len(looped_any) == len(touched) + len(off_server) and all(resent(t) for t, _ in touched),
+      str([[tool for tool, _, _ in t["calls"]] for t in off_server]))
+
+# #885's question, from the record (#1055): does #463's error result for a failed run_shell, by itself, invite the
+# retries? Each call in the fixture carries the result kagent logged for it. If only the loops that got errors
+# looped, the error result would be the cause; a loop that got a successful result every time shows it is not.
+print("== does #463's error result invite the retries? (the replay's record) ==")
+results = Counter(r for t in turns for _, _, r in t["calls"])
+check(f"every recorded call has its result, ok or error ({dict(results)})",
+      set(results) <= {"ok", "error"} and sum(results.values()) == 1188, str(results))
+check(f"{results['error']} of the 1188 calls came back as errors, the 525 #885's entry counts",
+      results["error"] == 525)
+
+
+def loop_of(t: dict) -> tuple[tuple, list[str]]:
+    """The call a turn resent most, and the result it got each time it ran."""
+    key, _ = Counter((tool, a) for tool, a, _ in t["calls"]).most_common(1)[0]
+    return key, [r for tool, a, r in t["calls"] if (tool, a) == key]
+
+
+loops = [loop_of(t) for t in runaway]
+ok_loops = [(k, rs) for k, rs in loops if set(rs) == {"ok"}]
+error_loops = [(k, rs) for k, rs in loops if set(rs) == {"error"}]
+check(f"each of the 13 long turns resent one run_shell call, and got the same result every time "
+      f"({len(ok_loops)} ok, {len(error_loops)} error)",
+      all(k[0] == "run_shell" for k, _ in loops) and len(ok_loops) + len(error_loops) == len(loops),
+      str([(k, Counter(rs)) for k, rs in loops]))
+check("the 80-call loop got a successful result every time",
+      [len(rs) for _, rs in ok_loops] == [80], str([(k, len(rs)) for k, rs in ok_loops]))
+error_runs = sorted(len(rs) for _, rs in error_loops)
+check(f"the other {len(error_loops)} loops got an error every time, "
+      f"{error_runs[0] if error_runs else 0} to {error_runs[-1] if error_runs else 0} times each",
+      len(error_loops) == 12 and all(n > SAME for n in error_runs), str(error_runs))
+# Both result shapes looped, so the error result does not invite the retries on its own. Were every loop an error
+# loop, the answer would be yes, and the entry below would be wrong.
+answer = "Not on its own." if ok_loops and error_loops else "Yes." if error_loops else "No."
+check("so the record answers: an error result does not invite the retries on its own", answer == "Not on its own.",
+      answer)
+
+decisions = (REPO / "decisions.md").read_text(encoding="utf-8")
+HEAD_885 = "## 2026-11-05 · #885 · run 17697 · "
+if HEAD_885 not in decisions:
+    sys.exit(f"decisions.md has no heading starting {HEAD_885!r}; the #885 entry this test reads was renamed or moved")
+entry_885 = decisions.split(HEAD_885, 1)[1].split("\n## ", 1)[0]
+check(f"decisions.md's #885 entry gives the record's answer, {answer!r}",
+      f"**Does #463's error result invite the retries?** {answer}" in entry_885)
+check("and gives the record's reason: the 80-call loop got a successful result, the failing loops got errors",
+      " ".join(entry_885.split()).count("The 80-call loop got a successful result every time, and the failing loops "
+                                        "got errors, so both shapes loop.") == 1)
+HEAD_1055 = "## 2026-11-09 · #1055 · run 18819 · "
+if HEAD_1055 not in decisions:
+    sys.exit(f"decisions.md has no heading starting {HEAD_1055!r}; the #1055 entry this test reads was renamed or moved")
+entry_1055 = " ".join(decisions.split(HEAD_1055, 1)[1].split("\n## ", 1)[0].split())
+check(f"decisions.md's #1055 entry counts the turns as this replay does: {len(touched)} touched, "
+      f"{len(turns) - len(touched)} untouched, {len(looped_any)} resent a call more than twice",
+      f"the guard touches {len(touched)} turns" in entry_1055
+      and f"the other {len(turns) - len(touched)} run as they did" in entry_1055
+      and f"{len(looped_any)} turns resent a call more than twice" in entry_1055, entry_1055[:400])
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

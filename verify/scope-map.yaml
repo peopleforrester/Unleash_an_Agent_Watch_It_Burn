@@ -8024,6 +8024,7 @@ reads:
     - verify/run-e2e-tools.sh
     - verify/ttyd_ws.py
   test_turn_guard.py:
+    - decisions.md
     - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/tool_audit.py
     - gitops/ai-layer/workshop-mcp-server.py

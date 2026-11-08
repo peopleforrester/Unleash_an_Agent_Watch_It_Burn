@@ -40509,3 +40509,46 @@ Not yet run on a cluster:
 
 **Tests.** This entry is the only change. No test was written or changed, so none was run here; hecaton's validation
 runs the offline tests that read decisions.md. The prose gate was run on this entry. No dependency was added.
+
+## 2026-11-09 · #1055 · run 18819 · #885's answer on #463's error result is read from each call's recorded result, and tested
+
+#885's entry answers "Does #463's error result invite the retries?" with "Not on its own", because the 80-call loop
+got a successful result every time and the failing loops got errors. Nothing checked it: the replay fixture kept only
+tool names and argument ids, so no test could see which result a loop got.
+
+**The record.** Datadog still held #644's two replays on 2026-11-09 (the community cluster's org, the read-only pair in
+`watch-it-burn/datadog`, this run's accen-dev session). kagent logs, for every tool call, a `Tool execution started`
+line and then either `Tool execution completed` or `Tool execution completed with error` (with a `Tool execution failed`
+beside the second), all keyed by `functionCallID`. The fixture's own query, 06:30Z to 07:30Z, returned the same 1,188
+started lines in the same 504 turns; results were read to 07:35Z, and each of the 1,188 calls has exactly one: 663 ok
+and 525 error, the 525 failed calls #885's entry counts.
+
+**The fixture.** `verify/fixtures/load-replay-2026-11-05-turns.json` now gives each call a third field, `ok` or
+`error`. Rebuilding it showed the old file's order differs from the record only where two calls of one turn share a
+millisecond (25 turns, parallel calls from one model response); every turn's position, run, length, seconds and tool
+set match. The rebuilt file breaks such ties by `functionCallID`, which makes the order reproducible, and says so in its
+`source`. Still no argument text is kept.
+
+**What the record shows.** Each of the 13 turns that ran on for 100 s or more resent one `run_shell` call and got the
+same result every time it ran: in one the call ran 80 times and came back ok all 80, and in the other 12 it came back
+an error every time, 14 to 30 times each (the 14 is the 63-call turn, where no single call was most of the turn). Both
+result shapes looped, so #885's answer stands: the error result does not invite the retries on its own.
+
+**The count, corrected.** #885's entry says "17 turns are touched in all ... the other 487 run as they did". The
+replay test counts otherwise, and it is right: the guard touches 16 turns, and the other 488 run as they did. 17 turns
+resent a call more than twice, but one of them resent `read_internal_config`, an evil-mcp tool, which workshop-mcp's
+guard never sees.
+
+**The test.** `verify/test_turn_guard.py` (offline) reads each call's result and checks: every call has one, 525 are
+errors, each long turn's loop got one result throughout, the 80-call loop got ok every time, the other 12 got an error
+every time, and so the record's answer is "Not on its own." It then reads #885's entry in decisions.md for that answer
+and its reason, and this entry for the counts above (16 touched, 488 untouched, 17 resent a call more than twice). A
+reworded heading of either entry stops the test with the heading it looked for. Mutations checked by hand: marking one
+call of the 80-call loop `error` failed the ok-loop check and the answer check; marking every call of it `error` made
+the record's answer "Yes."; changing #885's answer line to "Yes." failed the decisions check.
+
+**Live check.** None: the change touches only the fixture, `verify/test_turn_guard.py` and this file, which no cluster
+runs. The Datadog reads above were GETs and a log search with the read-only pair.
+
+**Tests run.** `python3 verify/test_turn_guard.py`, all checks passing. The full Test and E2E commands are left to
+hecaton's validation. No dependency was added.
