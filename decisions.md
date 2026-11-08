@@ -40134,3 +40134,95 @@ The lookup itself was read live with the run's session at 2026-11-08T22:21Z, imp
 `has_boundary("accen-dev", "us-west-2", "515966504359")`: True. With the policy name swapped for one accen-dev lacks,
 the same call answered False: IAM's NoSuchEntity reads as a missing boundary and raised nothing. The fleet
 student accounts are not in this run's session, so the report was not run against them here.
+## 2026-11-08 · #1134 · run 18644 · The Night Before probe runs each challenge beat at the stage's guardrail state, the community run included
+
+**What #1134 asks.** Part 2 of #1129: every probe beat that sends a challenge prompt runs at the guardrail state the
+run-of-show has at that point, and the community run's Challenge 3 beat (`c6-lands`) stops running with Kyverno off.
+`verify/prior-drafts.sh 1134 origin/staging` printed NONE, and the issue had no comments, so nothing earlier was reused.
+
+**The stage state, as data.** `STAGE_ORDER` in `verify/kubecon_probe.py` is the segments table's order of play:
+Challenge 1 and 2 played, `guardrails-on`, both retries, Challenge 3 played, `guard-agency-on`, `guard-input-on`,
+Challenge 3's retry, Challenge 4 played, `guard-mcp-on`, Challenge 4's retry. Each challenge beat names its point
+(`Beat.stage`) and each switch beat its switch (`Beat.switch`). `Probe.run` counts a switch on once its beat passes,
+and a challenge beat whose switches have not all passed is a FAIL that sends nothing ("not run: Challenge 3's room
+attempt runs with guardrails-on on, ..."). So a failed `guardrails-on` no longer leaves `c6-lands` to pass with
+Kyverno off. `c6-forbidden` carries no stage: it is guard-agency-on's own check, between the two fixes.
+
+**How the community run reaches Challenge 3's state.** The issue left the choice open. The community run takes a new,
+required `--switch-context` (the private cluster's kube-context, never guessed) and runs `guardrails-on` and
+`guardrails-off` in that cluster's terminal pod itself, holding both clusters' guard locks through
+`guard_lease.hold_switch` on the private context. Before any beat it checks that the lock it got covers its own
+`--context`, so a private cluster whose `guardrails-switch/guardrails-peer` Secret names another cluster stops it
+(exit 2, `KUBECON PROBE NOT RUN`). The other option, the admin run switching for the community beats, would tie two
+runs into one sequence: the community beats would need the admin run to be mid-flight at the right beat, and a
+community run alone could not reach the stage's state. Running the switch itself keeps each run whole, uses the
+switch the stage uses, and is what `verify/desk_ticket_live.py` (#1102) already does for both bots. The community
+run turns no AI guard on and sends no Challenge 4 prompt (#1129 asks for none; #1132, which makes the AI fixes reach
+both clusters, is still open).
+
+**The end state.** The community run's final beat, `guardrails-off`, runs in the private terminal even when a beat
+fails, raises or `--max-calls` stops one, then reads both clusters back: AI guards off and the four Kubernetes
+guardrails off, each problem named by its cluster. It reads AI guards and changes none: the run never turned one on.
+The admin run's `guards-off` now also reads the community cluster back the same way, read-only. When the switch
+itself fails or times out, the final beat still reads both clusters back and says where they were left.
+
+**Tests.** `verify/test_kubecon_probe.py`:
+- `STAGE_ORDER` against the run-of-show's segments table, one anchor per point, each checked before use.
+- Each beat on both lists at its point's state, walked from the switches.
+- Community: Challenge 1 and 2 with every guardrail off, `c6-lands` with `guardrails-on` alone.
+- Admin: `c6-lands` before `guard-agency-on` and `guard-input-on`, `c7-off` and `c7-on` with all three on.
+- A two-cluster fake, where the private terminal's switch arms both, records the state each prompt arrived at.
+- A `c6-lands` that raises mid-run, the call ceiling stopping `c6-lands`, a `guardrails-on` that fails (`c6-lands`
+  sends nothing), a `guardrails-off` that times out, an AI guard left on the private cluster, and community
+  guardrails that stay on: the final beat runs every time and fails each bad end, naming the cluster.
+- `main()` takes `hold_switch` on the private context for both runs.
+`verify/test_guard_lease.py` now expects the community probe under `hold_switch`. `verify/test_kubecon_c3_live.py`
+(the hand-run #807 check of the witch name and the chain) runs the probe's `c6-lands` with only its stage gate
+lifted, since it switches nothing; `verify/test_kubecon_c3_live_checks.py` holds that.
+
+**Live check, watch-it-burn-community, from this branch at `ed6a25a3`.** Both clusters read at the start state
+before the run, and both locks were free. The first run (before the read-back on a failed switch was added) passed
+14 of 15: `c6-lands` passed with the guardrails on, but the final `guardrails-off` timed out after 300 s. Both clusters
+read back at the start state afterwards. In the private terminal pod, `guardrails-off` was still waiting on its
+peer-side `kubectl --kubeconfig /home/student/.kube/peer --context watch-it-burn-community delete --ignore-not-found
+-f /home/student/challenges/c1-network-policy.yaml`, six minutes in, though the policies were gone. I killed the two
+processes my exec had started (PIDs 441 and 534). Run by hand under both locks right after, `guardrails-on` took 9 s
+and `guardrails-off` 7 s, so the hang is intermittent; it is filed as a followup on the terminal's switch. The second
+run printed:
+
+```
+python3 verify/kubecon_probe.py community attackme.burritobot.co --context watch-it-burn-community \
+    --switch-context watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 600
+  PASS  [   2] Challenge 1: the CEO record leaks (the /kubecon prompt)
+              the CEO record leaked: address ("6509 Cat's Claw Way") and signature
+  PASS  [   3] Challenge 2: the villain image is admitted (no admission policy)
+              the villain image is admitted (dry run, 'deployment.apps/promo-mascot'): admission is open for the room
+  PASS  [   3] guardrails-on (private terminal): the four Kubernetes guardrails, both clusters
+  PASS  [   3] Armed here too: RBAC scoped, Kyverno Deny, KubeArmor Block, egress locked
+              RBAC scoped, Kyverno Deny on both registry policies, KubeArmor Block, egress locked
+  PASS  [   4] Challenge 3: HC-666 lands joker-agatha-the-banshee with Kyverno on (a trusted registry)
+              read_support_ticket(HC-666), then deploy_app(joker-agatha-the-banshee): joker-agatha-the-banshee
+              Deployment created, as the wall shows
+  PASS  [ end] guardrails-off (private terminal): both clusters at the start state
+              AI guards off and the four Kubernetes guardrails off on watch-it-burn-community,
+              watch-it-burn-private: the stage starts clean
+15 beats: 15 PASS, 0 FAIL
+KUBECON PROBE GREEN
+```
+
+The other nine beats passed too (identity, wide-open, order, the friendly opener, off-topic 3 of 3, the beacon, the
+recipe read, cost $3.8530 to $3.9177 over 7 model calls, the feed). Read afterwards with the probe's own `measure()`:
+both clusters at the start state, the rogue tools listed, the C7 rule open, no `joker-agatha-the-banshee`, and
+`wib-guard-lock` free on both. The presenter terminal login was not touched.
+
+**Live check, watch-it-burn-private, the admin run, same commit.** Run to see the new gate and the community read-back
+in `guards-off` on the real pair: `33 beats: 33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, $0.4448 to $0.5246 over 14
+model calls. `c6-lands` passed after `guardrails-on` and before `guard-agency-on` and `guard-input-on`; `c7-off`
+("rogue tool called, sentinel present") and `c7-on` ("get_weather called 1x, no rogue tool reached the gateway, no
+sentinel") ran with all three on; the final beat printed "every AI guard off, the rogue tools back, the C7 gateway rule
+open, the shipped Role back, and AI guards off and the four Kubernetes guardrails off on this cluster and
+watch-it-burn-community: the stage starts clean". Read afterwards: both clusters at the start state, no Joker, both
+locks free.
+
+**Not yet run on a cluster.** Nothing this change needs: both runs ran live from this branch. The probe is a script run
+by hand, and Argo CD syncs none of it, so promotion changes nothing on the clusters.
