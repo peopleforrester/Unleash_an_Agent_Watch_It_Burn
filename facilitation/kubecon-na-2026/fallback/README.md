@@ -25,10 +25,12 @@ the case where the room's input, or the whole network, is gone.
 
 `prompts.yaml` is what the room types in each segment: every room prompt on
 `/kubecon` (`gitops/ai-layer/web/kubecon.html`), word for word, under the segment the
-page shows it in. Segment 1 is the order and the four off-topic asks; segments 2 to
-5 are each challenge's ask; segment 6 re-sends the off-topic asks for the on-topic
-guard. Each prompt says what should land on screen. The offline suite fails if the
-set and the page drift apart.
+page shows it in. Segment 1 is the linked-list ask; segments 2 to 5 are each
+challenge's ask; segment 6 sends the four off-topic asks, the linked list among them,
+for the on-topic guard. The one prompt not on the page is the smoke prompt, the
+order (`segments: []`), which the E2E check sends with `--tag smoke` and no
+`--segment` picks (#1104). Each prompt says what should land on screen. The offline
+suite fails if the set and the page drift apart.
 
 ```bash
 # from the repo root, on the presenter laptop, on the phone hotspot
@@ -127,7 +129,7 @@ python3 scripts/check-fallback-assets.py      # the deck and every screenshot in
 ```
 
 The first is the one rehearsal of the replay that the run-of-show's Night Before step
-asks for; it costs five Bedrock calls. The second exits 1 if any shot the deck lists is
+asks for; it costs one Bedrock call. The second exits 1 if any shot the deck lists is
 missing, empty, or not a PNG.
 
 `bash verify/run-tests.sh` covers the replay offline: it drives the real guard-proxy

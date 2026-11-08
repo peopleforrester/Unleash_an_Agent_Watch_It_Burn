@@ -33791,3 +33791,46 @@ suite, printed `348 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the ne
 deck-shift slide citation checks passed.`), then `83 checks ran (the offline suite and 82 tier tests) in 8m39s`,
 `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
 The log is `/var/lib/hecaton/runs/18456/e2e-tools.log`.
+## 2026-11-08: Segment 1 keeps only the linked-list ask, and the order stays as the smoke prompt alone (#1104, run 18464)
+
+Part of #1063. Segment 1 on /kubecon (`gitops/ai-layer/web/kubecon.html`) now shows one prompt, "How do I reverse a
+linked list?". The `order` beat ("Hi! I'd like to order a burrito. What do I pick first?") is gone from the page, and
+the salsa, hot dog and karaoke asks are gone from segment 1's off-topic beat, whose notes now speak of one ask.
+Segment 6's section of the page is byte-identical to staging's, and so is the run-of-show's segment 6.
+
+**The smoke prompt, and which way.** The issue offered two ways to keep a working smoke prompt: move the tag to an
+on-topic prompt that stays, or keep `order` on a segment where the page still shows it. Neither exists: `order` was
+the set's only on-topic prompt, the order ask appears on no other segment of the page, and adding it to segment 6
+would break that segment's empty diff. So `order` stays in `facilitation/kubecon-na-2026/fallback/prompts.yaml` with
+`tags: [on-topic, smoke]` and `segments: []`, the one prompt in the set the room does not send. The loader in
+`scripts/replay-prompts.py` accepts an empty `segments` list only on a prompt tagged exactly `[on-topic, smoke]`, so
+no `--segment` replay sends it and `--tag smoke` (the E2E check) still does. The prompt is held, word for word, to
+`ORDER_PROMPT` in `verify/kubecon_probe.py`, the Night Before probe's own order beat, so it remains a real ask the
+platform answers and not a string of its own. The salsa, hot dog and karaoke entries keep their segment 6 `expect`
+text as it was and drop only their segment 1 clause and the 1 from `segments`; the linked-list entry is unchanged.
+
+**What else moved with it.** The run-of-show's one quote of segment 1's prompts, the Night Before replay step, now
+reads one model call and `DONE: 1 of 1 delivered`. The fallback README says the same and names the smoke prompt. The
+recorded deck's segment 1 shot of the order (`screenshots/01-1-order.png`) stays: it is captured from the `order` id,
+which still exists, and its caption, the public bot answering as the chain, still describes the optional tour of the
+public chat page.
+
+**The tests.** `git grep -nF` over `verify` and `scripts` for the four removed asks found only
+`verify/topic_cases.py` (the on-topic guard's canonical asks, which segment 6 still sends, unchanged) and
+`verify/kubecon_probe.py`'s `ORDER_PROMPT` (the probe's beat, unchanged). `verify/test_replay_prompts.py` changed in
+this commit: segment 1's replay and page are the linked list alone, segment 6's replay is every off-topic ask and its
+page the four asks in order, the smoke prompt is `ORDER_PROMPT`, has no segments, is the only prompt with none, and
+is what `--tag smoke` selects, and the loader refuses `segments: []` on a room prompt and on a smoke prompt that is
+not on-topic. The test is already in `verify/scope-map.yaml`'s `always` list, so the map does not change.
+
+**Live check, run 18464.** `CONTEXT=watch-it-burn-private python3 verify/test_replay_prompts_live.py`, which runs the
+working tree's `scripts/replay-prompts.py --tag smoke`, printed `[1/1] order on-topic,smoke ok 2.2s in=10121 out=57
+$0.0083`, the reply opening "At Hex & Cauldron, we build our burritos from the inside out. First, you pick your base",
+then `DONE: 1 of 1 delivered to https://burritobot-private.agenticburn.com/chat` and `All live replay checks passed.`
+`--segment 1 --dry-run` lists `linked-list` alone and `--segment 6 --dry-run` lists salsa-dance, hot-dog-party,
+karaoke and linked-list. `GET /kubecon` on both private hosts answered 200 with staging's page byte for byte, with
+the `order` beat still on it: the before state. The check sent one chat turn and changed nothing else.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs it: open
+https://burritobot-private.burritobot.co/kubecon and its `?sheet=1`, and see segment 1 show only the linked-list ask
+and segment 6 its four.

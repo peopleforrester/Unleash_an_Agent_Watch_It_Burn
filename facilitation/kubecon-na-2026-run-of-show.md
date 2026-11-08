@@ -2106,12 +2106,12 @@ is merely slow rather than rebuilding:
   and how it is made: `facilitation/kubecon-na-2026/fallback/README.md`.
   - The replay, once, over the phone hotspot rather than the hotel network:
     `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1`.
-    It sends segment 1's prompts from `facilitation/kubecon-na-2026/fallback/prompts.yaml`
-    (the order and the four off-topic asks, five model calls, nothing that deploys
-    or reads a Secret), paced under guard-proxy's 150-a-minute window, and stops at
-    the first prompt that does not land. Every line should end `ok`, then `DONE: 5 of 5
-    delivered`; read the replies against each prompt's `expect`. Run it before the
-    community bot's last `reset-bot`, so its five turns are off the counter.
+    It sends segment 1's prompt from `facilitation/kubecon-na-2026/fallback/prompts.yaml`
+    (the linked-list ask, one model call, nothing that deploys or reads a Secret),
+    paced under guard-proxy's 150-a-minute window, and stops at the first prompt that
+    does not land. The line should end `ok`, then `DONE: 1 of 1 delivered`; read the
+    reply against the prompt's `expect`. Run it before the community bot's last
+    `reset-bot`, so its turn is off the counter.
   - The deck and every screenshot it lists are in place:
     `python3 scripts/check-fallback-assets.py`, which ends `recorded fallback ready`
     and exits 1 if any shot is missing, empty or not a PNG.

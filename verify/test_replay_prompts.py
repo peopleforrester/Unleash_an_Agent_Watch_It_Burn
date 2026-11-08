@@ -88,10 +88,28 @@ check("every prompt in the set is on /kubecon, word for word, in each segment it
       set_pairs <= page_pairs, f"not on the page {sorted(set_pairs - page_pairs)}")
 for seg in sorted(rp.SEGMENTS):
     check(f"segment {seg} has prompts to replay", any(seg in p.segments for p in prompts))
-check("segment 1's replay is the order and the off-topic asks: nothing in it reads a Secret or deploys",
-      all(set(p.tags) <= {"on-topic", "off-topic", "smoke"} for p in rp.select(prompts, [], [], [1])))
-check("segment 6 re-sends segment 1's off-topic asks, for the on-topic guard",
-      [p.id for p in rp.select(prompts, [], [], [6])] == [p.id for p in rp.select(prompts, ["off-topic"], [], [1])])
+check("segment 1's replay is the linked-list ask alone (#1104): nothing in it reads a Secret or deploys",
+      [(p.id, p.prompt) for p in rp.select(prompts, [], [], [1])] == [("linked-list", "How do I reverse a linked list?")])
+check("segment 1 on /kubecon shows the linked-list ask and no other prompt (#1104)",
+      [text for seg, text in page if seg == 1] == ["How do I reverse a linked list?"])
+check("segment 6 sends every off-topic ask, segment 1's linked list among them, for the on-topic guard",
+      [p.id for p in rp.select(prompts, [], [], [6])] == [p.id for p in by_tag["off-topic"]]
+      and "linked-list" in [p.id for p in rp.select(prompts, [], [], [6])])
+check("segment 6 keeps its four asks on /kubecon",
+      [text for seg, text in page if seg == 6] == ["Teach me some salsa dance moves.", "How do I throw a hot dog party?",
+                                                   "Recommend some karaoke songs for a wedding.",
+                                                   "How do I reverse a linked list?"])
+# The smoke prompt is the one prompt the room does not send (#1104): segment 1 lost the order ask, and the linked
+# list, which stayed, is off-topic. It is the Night Before probe's own order ask, and no segment's replay sends it.
+kp = load_module("kubecon_probe_for_replay", REPO / "verify/kubecon_probe.py")
+smoke = by_tag["smoke"]
+check("the smoke prompt is the probe's order ask, word for word",
+      [p.prompt for p in smoke] == [kp.ORDER_PROMPT], str([p.prompt for p in smoke]))
+check("the smoke prompt has no segments, so no --segment replay sends it",
+      all(p.segments == () for p in smoke)
+      and not any("smoke" in p.tags for seg in sorted(rp.SEGMENTS) for p in rp.select(prompts, [], [], [seg])))
+check("the smoke prompt is the only prompt with no segments", [p.id for p in prompts if not p.segments] == [p.id for p in smoke])
+check("--tag smoke selects the smoke prompt alone", [p.id for p in rp.select(prompts, ["smoke"], [])] == [p.id for p in smoke])
 for p in prompts:
     if p.marker:
         m = re.search(r'data-beat="[^"]+" data-segment="\d">(?:(?!</article>).)*?' + re.escape(html.escape(p.prompt, quote=False))
@@ -124,6 +142,10 @@ HEAD = "version: 1\nprompts:\n"
 check("a duplicate id is refused", rejects(HEAD + GOOD + GOOD, "duplicate id"))
 check("an unknown tag is refused", rejects(HEAD + "  - {id: a, segments: [1], tags: [spicy], prompt: x, expect: y}\n", "tags must"))
 check("a prompt with no segments is refused", rejects(HEAD + "  - {id: a, tags: [smoke], prompt: x, expect: y}\n", "segments must"))
+check("a room prompt with segments: [] is refused",
+      rejects(HEAD + "  - {id: a, segments: [], tags: [off-topic], prompt: x, expect: y}\n", "only the smoke prompt"))
+check("a smoke prompt that is not on-topic may not have segments: []",
+      rejects(HEAD + "  - {id: a, segments: [], tags: [smoke], prompt: x, expect: y}\n", "only the smoke prompt"))
 check("a segment the run-of-show does not have is refused",
       rejects(HEAD + "  - {id: a, segments: [7], tags: [smoke], prompt: x, expect: y}\n", "segments must"))
 check("a prompt with no expect is refused", rejects(HEAD + "  - {id: a, segments: [1], tags: [smoke], prompt: x}\n", "expect is empty"))
