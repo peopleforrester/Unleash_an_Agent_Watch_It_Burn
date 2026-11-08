@@ -34280,3 +34280,68 @@ suite, printed `350 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the ne
 ran (the offline suite and 83 tier tests) in 8m45s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`; the tier's
 `verify/test_kubecon_prompt_sheet_e2e.py` rendered the `?sheet=1` sheet with every prompt in order. The prose gate
 printed `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18478/e2e-tools.log`.
+
+## 2026-11-08 · #1080 · Run 18497 puts the sandbox env and a burritobot- service on the workloads whose logs still leave untagged, ported from run 17932's draft
+
+**Why this run.** #1080 is the child of #629 that delivers the tags for the workloads outside the platform's own
+Deployments. The work was on `origin/agent/629-17932`, which never landed (that run ended claim-stale).
+`bash verify/prior-drafts.sh 629 origin/staging` named it as the start, with six drift lines, all edits in place.
+
+**What was ported, and what differs from the draft.** Only the parts #1080 names were taken, file by file with `git
+apply -3`, and every hunk applied with no conflict on staging `fad187ce`:
+- `backstage/k8s/backstage.yaml`: the `ad.datadoghq.com/backstage.logs` annotation from 717f1fa0. It names service
+  `burritobot-backstage` and has a `mask_sequences` rule that renames Backstage's own JSON `service` key to
+  `backstage_service`, so Datadog no longer takes `backstage` or `rootHttpRouter` over the pod's tag.
+- `gitops/ai-layer/workshop-mcp-server.py`: `stamp_labels` from 717f1fa0. `_stamp_workload`, which both of
+  deploy_app's apply paths call (the manifest the model sent, and the plain room Joker it falls back to), now puts
+  `tags.datadoghq.com/service: burritobot-deployed-<name>` (cut to a valid 63-character label value) and
+  `tags.datadoghq.com/env: burritobot-kubecon-na-26` on every pod it creates, over any value the model wrote.
+  `verify/test_room_jokers.py` (from a94e2517) and `verify/test_c6_villain_endpoint.py` (from 717f1fa0) hold both
+  labels. The C6 test was not in #1080's list, but its checks compare a pod's labels exactly, so it moves with the
+  stamp.
+- `gitops/otel-collector/values.yaml`: the `deployment.environment.name` insert from 717f1fa0, with its checks in
+  `verify/test_lab_events.py` and `verify/test_lab_pipeline_collector.py`. The draft's `test_lab_events.py` hunk also
+  checked that every fleet-analytics dashboard query is scoped to the env. That half tests dashboard edits #1080 does
+  not port, so it was left out.
+- `verify/probe_pod.py` (dcb70b30), the tool-pin spike's `live-check.sh` and `tool-pin.yaml` (02f61045), and Beat 1's
+  sample workload in `verify/beat-01.sh` (47ff539c).
+- The pins in `verify/test_datadog_sandbox_names.py` for each of these, taken from the four commits, without 717f1fa0's
+  change of the monitors check to `env_filter`, because `infra/datadog-fleet/monitors.yaml` is not ported here.
+
+**New in this run.**
+- The app-profile-effect Jobs. Run 17336 (#562) ran `app-profile-effect-agent` and `-tutor` in `agent` on both
+  clusters, and run 17338 saw their logs reach the sandbox org as service `watch-it-burn` with no env. No file in any
+  branch holds those Jobs: run 17336's entry says they were modelled on the lab's `cloud-credential-probe` Job. That
+  Job's pod template in the `challenge-fixes` ConfigMap (`gitops/ai-layer/resources.yaml`) now carries
+  `tags.datadoghq.com/service: burritobot-cloud-credential-probe` and the env. Challenge 8 and
+  `verify/test_agent_cloud_credential_live.py` apply that template, and a Job copied from it starts with the labels.
+- `verify/test_datadog_sandbox_names.py` also renders every profile's collector through `verify/collector_render.py`
+  and checks that its resource processor inserts the env, and that each lab pipeline runs the resource processor,
+  after `transform/lab_contract` where that runs. On staging's code the new checks fail 12 times; on this change they
+  pass.
+- `verify/scope-map.yaml`: the names test's entry adds the files it now reads (`backstage/k8s/backstage.yaml`, the
+  tool-pin spike, `verify/beat-01.sh`, `verify/probe_pod.py` and what those scripts read). `python3
+  verify/scope_tests.py write` also rewrote the entries of more than a hundred other tests that staging's map lacks;
+  that drift is not this change's, so only this entry was kept.
+
+**Live check, run 18497, 2026-11-08, both clusters at staging `fad187ce`.** `WIB_DD_LOOKBACK_MIN=60 python3
+verify/test_datadog_sandbox_live.py`, with the run's session sourced:
+- Checks 1 and 3 PASS. Check 2 PASSES on the env (every log group carries `env:burritobot-kubecon-na-26`) and FAILS on
+  the service, for seven groups: `backstage` and `rootHttpRouter` on burritobot-private, `maintenance-shell` and
+  `promo-mascot` on burritobot-private, and `maintenance-shell`, `podinfo` and `tron-lightcycle-game` on
+  burritobot-public.
+- Check 4 FAILS on a second ml_app, `burritobot-agent`, beside `burritobot`. That is a span-side name and not this
+  issue's; #1084, the closing live run of #629, holds check 4.
+- A Logs aggregate over the last 90 minutes for `kube_cluster_name:burritobot-* -service:burritobot*`, grouped by
+  service, namespace and pod, shows every offender is either the Backstage pod (`backstage-db87f996d-ptlhh`, 834 lines
+  as `rootHttpRouter` and 51 as `backstage`) or a deploy_app workload in `agent`: room Jokers
+  (`joker-agatha-the-banshee-*`, `joker-agatha-the-basilisk-*`) and `maintenance-shell-*` logging as
+  `maintenance-shell`, `promo-mascot-*`, `podinfo-994-*` and `tron-game-*`. No probe, tool-pin or app-profile-effect
+  pod logged in that window. The deploy_app workloads were already gone from both clusters, and the live Backstage
+  Deployment on private has no log annotation: the before state this change fixes. The check only read; nothing
+  changed on either cluster.
+
+**Not yet run on a cluster.** Once hecaton promotes this and Argo CD syncs `backstage` on private and `ai-layer` on
+both (workshop-mcp reads its server from a ConfigMap that kustomize builds): `verify/test_datadog_sandbox_live.py` with the default
+60-minute lookback, an hour after the sync and after a room Joker is deployed, should show no `backstage`,
+`rootHttpRouter` or deploy_app image-name service in check 2. That is #1084's run.
