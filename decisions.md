@@ -34505,3 +34505,34 @@ was re-run on the final commit `16457a18` and printed `350 tests ran` and `ALL O
 `exit=0` (log `/var/lib/hecaton/runs/18504/run-tests-final.log`); the decisions-reading tests
 (`test_948_live_check_owed.py`, `test_american_english_gate.py`, `test_docs_current.py`, `test_952_suite_record.py`)
 are among them.
+## 2026-11-08 · #1065 · runs 18427 and 18520 · Segment 3's close matches the 2026-11-07 deck: the criteria are met by #1095, #1096, #1097, #1111 and #1112
+
+#1065 asked that the run-of-show and `/kubecon` follow the 2026-11-07 deck (rounds-agenticburn#77). Its work was split
+across five issues, all on staging at base `fc5a25dc`, so these runs change no content and record how each criterion is
+met, read from the files at the base rather than from the earlier entries. Run 18427 did the reading and ended without a
+report: its session's permission mode refused every edit, write and test command. Run 18520 records it here and runs
+the suites.
+
+- **Step 5** (`facilitation/kubecon-na-2026-run-of-show.md`, "One switch, depending on #774 (slide 28), then the room's
+  retry (slide 29)"): quotes slide 28 as `Let's turn on Kubernetes guardrails.`, says the line opens the admin terminal
+  at `https://burritobot-private.burritobot.co/lab` and the presenter clicks it and types `guardrails-on`, and puts the
+  retry on slide 29, "Try your attacks again.", with its note to reset the bot and use saved prompts. What it said about
+  `guardrails-on`, both registry policies, the Jokers (#775) and #990's cleanup is kept. #1095.
+- **Step 6** ("One set per guardrail (slides 30 to 42)"): RBAC 30 to 33, Kyverno 34 to 36 as "an admission policy",
+  KubeArmor 37 to 39 as "runtime security", NetworkPolicy 40 to 42, each recalling its attack, then "This attack was
+  prevented with" its guardrail, then its YAML. `git show 85803838` shows every fallback command (`c2-villain-image`,
+  `c3-secret-grep`, `c1-exfil-s3`), the `c1-fixed` and `c2-fixed` views and the Falco caution carried over word for word
+  into their sets. #1095, tested by #1111 (`verify/test_instructor_brief.py`).
+- **The segments table's row 3 and the paragraph under it** name slide 28's text, slide 29's retry and one set per
+  guardrail on slides 30 to 42. #1095, tested by #1112 (`verify/test_ros_segments_table_seg3.py`).
+- **`kubecon.html`**: segment 3's story and the switch beat, whose heading opens on slide 28's words
+  (`Let's turn on Kubernetes guardrails`), match the run-of-show. `git show db09ce77` changes only the story paragraph and that
+  beat's heading, who line, marker and notes; no `<div class="prompt">` line changed. #1096.
+- **Slide numbers**: #1097 swept `facilitation/`, `gitops/ai-layer/web/`, `challenges/` and `verify/` and found no
+  citation of live 29 to 32 as single guardrail slides and none of live 33 or later. Run 18427's grep for "slide" or
+  "slides" followed by 29 to 59, or a `#/` hash from 28 up, over those directories and `docs/` found only the new
+  numbering (28, 29, 30 to 42 and the slides inside each set).
+- **PROGRESS.md**: the `- (2026-11-08) #1065:` entry, added and pinned by #1097 (`verify/test_progress_entries.py`).
+
+**Not yet run on a cluster.** The page itself: look at `/kubecon` and its sheet after Argo CD syncs staging to the
+clusters, for segment 3's story and the switch beat as written here. These runs deploy nothing.
