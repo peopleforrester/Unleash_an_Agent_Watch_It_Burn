@@ -38129,3 +38129,89 @@ point 6 asks. `bash verify/run-e2e-tools.sh` at `33290e43` (log `/var/lib/hecato
 `test_support_desk_private_banner.py` and `test_public_images.py` among them, then `33 checks ran (the offline suite
 and 32 tier tests) in 9m26s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
 `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1184 · run 18721 · The stage-switch check in the Night Before list, and its second live run
+
+**What changed.** Last piece of #1146. The run-of-show's Night Before list has a new step, "Every stage switch
+reaches both clusters (#1146), after #1132's switches are built.", between the guardrails-switch step (#774) and the
+TLS check, so it comes before the admin probe, which switches both clusters under the same lock. It names the one
+command, `python3 verify/stage_switch_run.py --context <private-context> --kubeconfig /tmp/private.kubeconfig
+--profile accen-dev`, says what the command does in order, what a PASS and a FAIL line mean (the `terminal`,
+`start-state` and `as-found` lines included), the three verdicts and the two NOT RUN exit codes, and what this run
+found. `verify/test_stage_switch_night_before.py` (offline) holds the step to the script: the flags against its
+argparse, the talk order against `stage_switch_check.SWITCHES`, the closing pair against `stage_switch_run.CLOSE`,
+the verdict words against what the script prints, exit 3 against `guard_lease.BUSY_EXIT`, exit 4 against
+`NOT_AT_START_EXIT`, the `-off` commands it names against the terminal's entrypoint, and the step's place between
+the two steps around it. Its scope-map entry is the one `scope_tests.py write` computed for it; the other drift
+`write` printed was left out, as #1183 did.
+
+**Decided: the step goes in now, with the full pass named as owed.** The issue asks for a step that runs after
+#1132's switches are built. #1132 is closed and its terminal commands are in the private terminal, but this run's
+live check is RED for three causes outside this change, so the step carries the run's result and says the full
+pass is owed until those land, rather than reading as passed.
+
+**Live run (run 18721, watch-it-burn-private's terminal, both clusters, 17:06 to 17:16 UTC).** Before it, both
+`/controls` read every field off (Falco on the private cluster only), the lock was free on both, and the agent
+namespace's Roles were saved on both. `python3 verify/stage_switch_run.py --context watch-it-burn-private
+--kubeconfig "$KUBECONFIG" --profile accen-dev` printed (long lines cut; the full log is
+`/var/lib/hecaton/runs/18721/live/stage-switch-live.log`):
+
+    PASS  identity         private    kube-context and https://burritobot-private.burritobot.co are the same cluster
+    PASS  start            private    every field the closing commands turn off reads off
+    PASS  start            community  every field the closing commands turn off reads off
+    PASS  guardrails-on    private    guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    PASS  guardrails-on    community  guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+    FAIL  guard-agency-on  private    /controls after the switch does not carry infra.agency_scoped; it waits on #1132 (...)
+    FAIL  guard-agency-on  community  /controls after the switch does not carry infra.agency_scoped; it waits on #1132 (...)
+    FAIL  guard-input-on   terminal   the terminal's guard-input-on exited 1
+    PASS  guard-input-on   private    guard-input-on turned on ai.input_blocklist, ai.input_classifier
+    FAIL  guard-input-on   community  ai.input_blocklist reads false after the switch, not true; ai.input_classifier reads false ...
+    PASS  guard-mcp-on     private    guard-mcp-on turned on infra.tool_allowlist
+    PASS  guard-mcp-on     community  guard-mcp-on turned on infra.tool_allowlist
+    FAIL  guards-off       terminal   the terminal's guards-off exited 1
+    FAIL  guardrails-off   terminal   raised TimeoutExpired: Command '[... 'bash', '/home/student/guardrails-off']' timed out after 420 seconds
+    FAIL  start-state      private    ... does not carry infra.agency_scoped; it waits on #1132 ...; infra.tool_allowlist reads true, not false (guard-mcp-on)
+    FAIL  start-state      community  ... does not carry infra.agency_scoped; it waits on #1132 ...; infra.tool_allowlist reads true, not false (guard-mcp-on)
+    FAIL  as-found         private    infra.tool_allowlist read false at the start and true at the end
+    FAIL  as-found         community  infra.tool_allowlist read false at the start and true at the end
+    18 lines: 8 PASS, 10 FAIL
+    waiting on #1132 (agency_scoped, ...): guard-agency-on on private, community; start-state on private, community
+    STAGE SWITCH CHECK RED
+    exit=1
+
+Which switches still FAIL, and why:
+
+- `guard-agency-on`, both clusters: the switch applied `c6-least-privilege-role.yaml` on both, but the pinned
+  guard-proxy (`5772a5d8`, eight commits behind guard-proxy-agenticburn's main) does not send `agency_scoped`, so
+  `/controls` cannot show it. The repin is #1132's last piece.
+- `guard-input-on`, community cluster: the terminal printed "Switched on this cluster, but not on
+  watch-it-burn-community: it could not be reached, or it refused the change." Its peer step,
+  `kubectl get --raw /api/v1/namespaces/agent/services/guard-proxy:8080/proxy/toggle?...`, failed as in run 18714:
+  the control plane cannot dial guard-proxy on 8080 there (#1202; #1171 is #869's node rule on these clusters).
+- `guards-off`, terminal: the same peer toggle failed, and `guards-off` stops at its first failing step, so its
+  MCP step never ran and `tool_allowlist` stayed on on both clusters (#1203). That is the `start-state` and
+  `as-found` FAIL beyond `agency_scoped`.
+- `guardrails-off`, terminal, new on this run: it switched all four guardrails off on both clusters (both
+  `/controls` read them off after it), then hung on its last step, the community cluster's `kubectl delete
+  --ignore-not-found -f challenges/c1-network-policy.yaml` through the peer kubeconfig. The community cluster's
+  NetworkPolicies now carry the finalizer `networking.k8s.aws/resources` (the VPC CNI's network policy agent), so
+  `kubectl delete` waits for each to go, and that wait lists and watches NetworkPolicies. As the
+  `guardrails-switch:guardrails-switch` ServiceAccount, `kubectl auth can-i` on the community cluster answered
+  get yes, delete yes, list no, watch no, so the wait retries with no end, though all six policies were already
+  NotFound. The process was still in the terminal pod eight minutes on. Run 18714's `guardrails-off` did not hang;
+  when the finalizer arrived was not read. A followup in this run's report names the fix (`--wait=false` on the
+  terminal's deletes, or list and watch in the switch's Role).
+
+**Left as found.** The hung `kubectl delete` in the terminal pod was ended (`kill` on its pid; `guardrails-off`
+then exited). Then, under both clusters' lock, `python3 verify/guard_lease.py hold --with-peer --context
+watch-it-burn-private --kubeconfig "$KUBECONFIG" -- kubectl --context watch-it-burn-private -n agent exec
+deploy/web-terminal -c ttyd -- bash /home/student/guard-mcp-off` printed "Switched on both clusters: this one and
+watch-it-burn-community." and exited 0 (log `/var/lib/hecaton/runs/18721/live/guard-mcp-off-repair.log`). After it,
+both `/controls` read exactly what they read before the run (every field off, Falco on the private cluster only),
+the agent namespace's Roles on both are byte for byte what was saved before, both clusters have only their three
+shipped NetworkPolicies in `agent`, both ValidatingPolicies read Audit, evil-mcp's toolNames are full on both, and
+the lock is free on both. The command never read the `agent/terminal-auth` Secret.
+
+**Not yet run on a cluster.** The full pass: `python3 verify/stage_switch_run.py --context watch-it-burn-private`
+ending `STAGE SWITCH CHECK GREEN`. It is owed until the guard-proxy pin carries `agency_scoped`, the private
+terminal reaches the community cluster's guard-proxy on 8080 (#1202, #1171), `guards-off` runs every step (#1203),
+and `guardrails-off` no longer waits on a NetworkPolicy delete it cannot watch (this run's followup).
