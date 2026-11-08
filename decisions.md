@@ -36648,3 +36648,53 @@ with the pinned tools. The full command, run again, printed `363 tests ran`, `AL
 `86 checks ran (the offline suite and 85 tier tests) in 15m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. `bash verify/run-tests.sh` on its own also printed `363 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
 No dependency was added.
+## 2026-11-08 · #612 · run 18626 · Readiness row 9 to READY: 9 of 9 points READY, the probe and the audience path green on both clusters
+
+**Why the run before this one did nothing.** Run 18554's session refused every shell call, so it read the readiness
+document and committed nothing. This session allowed the shell. `verify/prior-drafts.sh 612 origin/staging` printed
+`LANDED origin/agent/612-18554` and a DRAFT for run 9632, whose two commits (the guard-proxy pin at the topic stage, and
+row 8's At risk label) staging has long since overtaken: row 8 is READY since #455 and guard-proxy is pinned at
+`5772a5d`. Nothing was taken from that draft.
+
+**What row 9 still claimed, and what the records say.** Its Open cell listed three things as not yet live and said
+the phone check was not filled in. Each had been done and recorded elsewhere, and the row was never updated:
+`verify/test_audience_path_live.py` exited 0 on attackme on 2026-11-05 (the #830 entry above); the one-address load
+replays ran at 500 and 150 sessions with the per-network zone gone on 2026-11-05 (the #644 entry), and again at 150
+after #885 on 2026-11-08 with no 502 and `LOAD REPLAY GREEN` (`facilitation/kubecon-na-2026-load-test.md`); Michael
+signed off the real-phone check on 2026-11-01 (#451, closed); and #452, the recorded fallback, closed on 2026-11-05.
+`python3 scripts/check-fallback-assets.py` printed `recorded fallback ready: all 14 files in place` on this run.
+
+**The judgment.** Row 9 moves to READY rather than being cut, so no agreement from Whitney is needed. The legend's
+READY is "everything this repo builds for the point is on staging; nothing is left but the Night Before run". What
+remains is the venue's own network, which only the room can try. The case a venue NAT creates, the whole room on one
+address, is what the live test's 80-conversation check and the load replays send, and the run-of-show's Rollback step
+2 covers a venue network that cannot carry the room. Whether to raise guard-proxy's 150 a minute for the cluster
+stays #450's call. That is a sizing choice the run-of-show already writes for 150 phones, and the refusal a phone
+sees there is a sentence.
+
+**Live checks, this run, at staging `cfe0c45f`** (Argo CD's ai-layer Synced and Healthy at that revision on both
+clusters before the checks; it moved to `9f4bd7d2` during them, whose changes are Datadog monitor tooling and tests
+only):
+
+- 12:05Z, `CONTEXT=watch-it-burn-community python3 verify/test_audience_path_live.py`: every check PASS, "All live
+  audience-path checks passed.", exit 0. 80 of 80 fresh conversations from one address got past nginx, 10 of 12 in one
+  conversation got through and the other 2 were refused in a sentence, and the probe turn took 3.2 s. `/cost` on
+  attackme went from $3.7175 to $3.7261 over one request.
+- 12:07Z to 12:09Z, `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
+  watch-it-burn-community --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait 900`: `12 beats: 12 PASS, 0
+  FAIL`, `KUBECON PROBE GREEN`, exit 0, $3.7261 to $3.7896 over 7 model calls.
+- 12:09Z to 12:15Z, the same with `admin burritobot-private.burritobot.co --context watch-it-burn-private`: `33 beats:
+  33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`, exit 0, $0.3566 to $0.4448 over 14 model calls, ending "the stage starts
+  clean".
+- Left as found: /controls on the private bot read every AI guard off and the four Kubernetes guardrails off after
+  the admin run. The only Joker on either cluster was `joker-ichabod-the-werewolf` on watch-it-burn-community, created
+  2026-11-07T19:17:55Z, before this run, and left alone. The probe removed its own Jokers. The probe turns are on each
+  bot's `/cost` until the Night Before's `reset-bot`. The `agent/terminal-auth` Secret was not touched.
+
+**What changed.** `docs/KUBECON-ABSTRACT-READINESS.md`: row 9 READY, its Evidence, Open and Live cells rewritten from
+the records above, the verdict dated 2026-11-08 reading 9 READY, 0 PARTIAL, 0 MISSING with the probe green on both
+clusters, the Assessed line, and a "Keeping this current" line. The run-of-show's open question 7 says what is proven
+and what is left, and its Probe record gains this run's entry. PROJECT_STATE.md's readiness paragraph says the same.
+
+**Not yet run on a cluster:** nothing. The change is records only, and the checks above ran on the revision it
+describes.

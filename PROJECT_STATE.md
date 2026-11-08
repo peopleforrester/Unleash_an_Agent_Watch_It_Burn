@@ -67,12 +67,13 @@ bring-up. Details in decisions.md, 2026-11-03 · #775 and 2026-11-05 · #775.
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
 Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667),
-and since against the four-challenge one: on 2026-11-05 it is 8 READY, 1 PARTIAL (9: ballroom sizing #450 and phones
-#451; its recorded fallback #452 is built), 0 MISSING. Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on
-2026-11-05 (#455): BanTopics is in `llm-guard-scanners`, so the on-topic guard refuses a paraphrase with no listed
-word, and a cpu.5 probe pod on watch-it-burn-private judged all 64 topic asks as written. The probe was green on both
-clusters on 2026-10-28, before the three-challenge order (#639) and C6's fetched ticket (#640). Update its rows
-and its record as fixes land.
+and since against the four-challenge one: on 2026-11-08 it is 9 READY, 0 PARTIAL, 0 MISSING (#612, spec milestone
+M3). Row 5 went READY on 2026-11-04 (#822). Row 8 went READY on 2026-11-05 (#455): BanTopics is in
+`llm-guard-scanners`, so the on-topic guard refuses a paraphrase with no listed word, and a cpu.5 probe pod on
+watch-it-burn-private judged all 64 topic asks as written. Row 9 went READY on 2026-11-08 (#612): the live
+audience-path test and the one-address load replays passed on attackme (#830, #644), Michael signed off the phones
+(#451) and the recorded fallback is built (#452). Only the room can try the venue network, and Rollback step 2
+covers it. Update its rows and its record as fixes land.
 
 ## KubeCon NA 2026 dates (#447)
 
