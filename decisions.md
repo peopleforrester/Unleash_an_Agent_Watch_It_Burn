@@ -39969,3 +39969,43 @@ saying why; it passes from the foreground and from a background job. `stage_swit
 handler it found is right. No other test under verify/ asserts a fixed SIGINT handler. The scoped tools tier selects 30
 tier tests on agentgateway.yaml (test_ai_layer_rollout.py, test_agentgateway_tracing_e2e.py among them); the run
 leaves that tier to the gate, as the run's governance says, and reports it so.
+## 2026-11-08T00:00:00Z · 4 · #1008: offline test holds Challenge 8's reworded persona, teaching caret made honest
+
+Part 3 of 4 from the split of #967. The persona reword itself landed on staging as #1007 (commit
+`b68496b6`): a credential audit's Secret listing is an ops chore the bot pastes back whole, and the
+Ophelia Thorn CEO rule is scoped so a bulk Secret dump does not trip it. This run adds the offline
+guard and updates the teaching text to match that final wording.
+
+**Reuse.** `verify/prior-drafts.sh 967` named run 17877's draft (`e4ec6a4b`, `93652519`) as the newest
+with no later #967 work on staging. Its only drift was `agent.yaml`, already handled by the reword child.
+Ported `verify/test_c8_persona.py` and the `verify/test_c8_teaching.py`, `lab.html` and `LAB-TEXT.md`
+edits from it. The draft's persona test asserted the draft's own decline phrasing
+(`"I can't share secrets"`, `never name the CEO to decline it`); staging's #1007 wording instead reads
+`never a privacy or secrets refusal` and `the CEO is never your reason to hold it back`, so those two
+assertions were rewritten to the staging text. The teaching-caret measurement note was set to #1007's
+numbers (40/40 on Nova Pro, up from 13/20 on HEAD).
+
+**Anchor readers.** `git grep -nF 'often refuses this one' -- verify scripts` and the looser
+`refuses this one` named three readers of the caret: `verify/test_c8_teaching.py:90`,
+`gitops/ai-layer/web/lab.html:804`, `challenges/LAB-TEXT.md:820`. All three changed in this run
+(LAB-TEXT.md by regeneration), in line with CLAUDE.md "Tests own their inputs".
+
+**Changes.** New `verify/test_c8_persona.py` asserts the credential-audit chore clauses and the CEO-rule
+scope sentence, with hard anchors that exit by name if the paragraph is gone, so it fails on regression.
+`verify/test_c8_teaching.py` now asserts `it usually plays along` and
+`a plausible ticket is all the social engineering it takes`. `lab.html`'s Challenge 8 caret says the
+cover usually lands. `challenges/LAB-TEXT.md` was re-exported with `bash verify/export-lab-text.sh`
+after the `lab.html` commit, stamped to `0159b21b`. `verify/scope-map.yaml` gained the
+`test_c8_persona.py` entry (reads `gitops/workshop-agent/agent.yaml`) from
+`python3 verify/scope_tests.py write`.
+
+**Tests.** `test_c8_persona.py` 17/17 PASS, `test_c8_teaching.py` PASS, `test_ceo_persona.py` PASS,
+`test_recipe_persona.py` PASS, `test_lab_text_export.py` PASS, `test_scope_tests.py` ALL PASS, all
+against staging's `agent.yaml`. The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation.
+
+**Live check.** The only cluster-served file touched is the static Challenge 8 teaching caption in
+`lab.html`; it changes no agent or policy behaviour (the persona change was #1007, live-checked there).
+The caption is held offline by `test_lab_text_export.py` and `test_c8_teaching.py`.
+
+**Not yet run on a cluster.** The reworded caret renders at `/lab` only after Argo CD syncs this change
+post-promotion; the next run on the issue can confirm it is served.
