@@ -36878,3 +36878,37 @@ printed `100 tests ran` (100 of the 365 offline tests, `test_chat_witch_name.py`
 RENDER-GATE TESTS GREEN` and `exit=0`. The tools tier was not run, under #1191's rule: no tier test reads the changed
 test, and the 14 the scoped selector picks are picked by these two records or are on the map's `always` list. The
 prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1192 · run 18643 · Staging's CI red was a superseded run read as red; ghcr_pull now asks a busy answer again
+
+**What the red was.** The heavy gate filed #1192 on staging `3cc0c64c` with both verify-suites jobs `cancelled`. No
+test failed there: Actions run 42479475016 was cut at 12:24:52Z and 12:25:07Z when Michael's push of `2800e073`
+(#1189) reached staging, which is the cancel #1113 put on staging on purpose. Hecaton's `mainline._ci` reads any
+conclusion outside success, neutral and skipped as fail, so an attempt that took `3cc0c64c` as the tip just before the
+push read its cancelled checks as red. That is the gap #1113's entry named and filed as hecaton#591, still open: it asks
+the gate to read a cancelled check on a staging tip as no result. The fix for that race belongs in hecaton.
+The last staging runs that finished red before it (`8c9c4dec`, `cfe0c45f`) failed on the yarn fixture, fixed by
+`fcc3acc4` under #1186, and on the weather service, #1188.
+
+**The criterion.** Staging CI passed on `d7a1b91e`, the tip at 12:52:53Z: Actions run 42482294498, `offline suite
+(verify/run-tests.sh)` success (12:53:10Z to 12:54:58Z) and `e2e tools suite (verify/run-e2e-tools.sh)` success
+(12:54:59Z to 12:57:11Z), read from the commit's check runs. Every staging run between `3cc0c64c` and `d7a1b91e`
+(`2800e073`, `45606927`, `0fb17c14`, `294d9b63`) was cancelled by the next push, as designed.
+
+**The change.** This run's whole tools tier on `45606927`, unscoped, went red on one check: `test_image_version_tags.py`
+exited 1 on `HTTP Error 503: The server is busy.` from the redirect of a ttyd layer's blob. `verify/ghcr_pull.py`
+asked a dropped connection again (#1047) but raised every HTTP answer at once, so one busy answer from GitHub's
+package host failed the check, and would fail staging CI the same way. `_retried` now treats `BUSY` (429, 502, 503,
+504) as it treats a drop: asked again up to `TRIES` (3) times with the same backoff, the last raised with "after 3
+tries" in its notes, which `served_digest` now adds to its reason. A 307, 401, 404 or any other code is still raised at
+once, so a private or missing package still reads as that. `verify/test_ghcr_pull.py` drives each busy code through
+two busy tries then the digest, a 503 on every try, five codes that are not busy, and `open_url` on a blob whose
+redirect answered 503; it printed 45 PASS and "All ghcr_pull step checks passed." `test_image_version_tags.py` alone,
+live against ghcr.io, then printed "Every watch-it-burn tag names the version inside its image."
+
+**Not changed, and why.** Turning off `cancel-in-progress` on staging would have kept a running staging run from being
+cancelled, but it reverses #1113, which Michael approved, and hecaton#591 closes the race where it is. One gap is left
+for a follow-up: since #1189 a staging push is scoped by the tip before it, so the changes of a push whose run was
+cancelled (here `2800e073`'s own `verify/ci-base-sha.sh` and `verify/test_verify_suites_workflow.py`) are never in
+any staging run's scope. Scoping by the newest staging ancestor whose verify-suites run finished green would close it.
+
+**Live check: skipped.** The change is to `verify/` files that no cluster runs.
