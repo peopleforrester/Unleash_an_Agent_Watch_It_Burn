@@ -38620,3 +38620,12 @@ run's `joker-agatha-the-banshee` was removed), the community cluster still has i
 rule run 18721 left.
 
 **Live check.** The issue's own work is the live run above.
+
+**The suites (run 18722; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, at `99f6e61e`. `bash verify/run-e2e-tools.sh` (log
+`/var/lib/hecaton/runs/18722/e2e-tools.log`), which runs the scoped `run-tests.sh` as one of its checks, printed
+`110 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite, with `test_stage_traces.py`,
+`test_stage_trace_slides.py` and `test_stage_trace_prompts.py` among them, then `16 checks ran (the offline suite and
+15 tier tests) in 4m27s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. `python3 verify/scope_tests.py write` added the new fixture to `test_stage_trace_slides.py`'s
+entry; the drift it printed for unrelated tests was left out. No dependency was added.
