@@ -40490,3 +40490,15 @@ both clusters: each should end `All ... checks passed.` for both hosts.
 `test_mobile_titles_e2e.py`, `test_order_complete_button_e2e.py`, `test_chat_saved_coc_e2e.py`, `test_mobile_layout.py`.
 The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to validation, as the governance asks. No dependency was
 added.
+
+**Resumed in run 18815: why run 18795 failed its gate.** Validation's `run-tests.sh` failed on
+`verify/test_order_complete_phrase.py`, an offline test that read the page on the literals `function winBubble(){` and
+`winBubble();`, which #1214 changed to `winBubble(reply)`. Run 18795 searched the tests for the scroll and markup
+literals it changed and updated `test_order_complete_button_e2e.py`, but searched for no `winBubble` literal, so it
+missed this one. The test now reads `winBubble(reply);` in the trigger, `function winBubble(reply){` as its anchor, and
+holds that `send()` keeps the bubble `botReply` returns (`const reply=botReply(data.reply);`). The page is unchanged.
+To catch any other test reading the old text, run 18815 ran, one at a time, each of the 175 offline tests
+`scope_tests.py select offline` names because they read a file this change touches: 154 passed at once, and the other
+21 failed only because the guard-proxy and llm-guard submodules were not checked out in this worktree. After
+`bash verify/ensure-submodules.sh`, those 21 and `test_chat_witch_name.py` passed. `scope_tests.py check` reads 0
+problems. The live after-check named above under "Not yet run on a cluster" is still owed after promotion.
