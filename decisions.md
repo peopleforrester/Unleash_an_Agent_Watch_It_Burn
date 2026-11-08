@@ -37901,3 +37901,12 @@ community cluster's workshop-agent Deployment rolled for each toolNames change, 
 waits on three things outside this change: the guard-proxy pin carrying `agency_scoped` (#1132's last piece), the
 control plane reaching guard-proxy on 8080 on the community cluster (#1042), and `guards-off` running every step when
 one fails (a followup in this run's report).
+
+**The suites (run 18714; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6 asks. `bash
+verify/run-e2e-tools.sh` at `4e474806` printed `78 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for its offline
+check, `test_stage_switch_run.py` among them, then `11 checks ran (the offline suite and 10 tier tests) in 3m37s, 4 at
+a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18714/e2e-tools.log`). After the
+decisions.md and PROGRESS.md commit, `bash verify/run-tests.sh` at `cfd9925e` ran 104 of 376 offline tests and printed
+`104 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0` (log `/var/lib/hecaton/runs/18714/run-tests.log`).
+The prose gate printed `prose gate: pass`. No dependency was added.
