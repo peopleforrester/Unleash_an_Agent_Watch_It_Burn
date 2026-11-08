@@ -36299,3 +36299,64 @@ their 7 and 5 minutes. Flagged for the run-through's Segment 4 and 5 rows.
 
 Not yet run on a cluster: load `/kubecon` on both clusters after promotion and confirm the segment 4 and 5 blocks
 render (`verify/test_kubecon_seg4_flow.py` holds the source).
+
+## 2026-11-08 · #489 · The challenge leaderboard is in Whitney's sandbox org with the repo's table, and every column filled for burritobot-private after a walk through C1 to C6
+
+**The previous attempt.** The attempt dispatched before run 18606 ended as `looping` with an `api_error` whose
+message was empty. It left no branch and no commit (`verify/prior-drafts.sh 489 origin/staging` lists every #489
+draft as LANDED or followed by later work), and its transcript is not readable from this run, so nothing in the repo
+caused it. This run started from staging and kept its own polling commands distinct.
+
+**What the org held.** The key is the `write-app-key` field the thread named in `watch-it-burn/datadog` (accen-dev,
+us-west-2), passed to the loader per command as `WIB_FLEET_MONITORS_APP_KEY` and never printed. Before any write,
+`fleet.sh monitors --check` showed that a full apply had already been run from Michael's user on 2026-11-05 at
+06:20Z: all seven monitors, the fleet dashboard (`fdv-zsp-9b3`) and the leaderboard (`a8n-wrt-7zn`). All of them
+predated `a0e36253`, which scoped every query to `env:burritobot-kubecon-na-26`, so every one was DRIFT. The org's
+leaderboard still read `kube_cluster_name:burritobot-*`.
+
+**Leaderboard only.** The issue asks for the leaderboard and nothing else in the org. `--apply` writes monitors,
+downtimes and both dashboards, so `fleet_monitors.py` gained `--board-only`. With `--apply` it writes the leaderboard
+alone, updated in place by title and id. It validates, lists and writes no monitor, never touches the fleet
+dashboard, and makes no downtime call. With `--check` it compares the leaderboard alone. It refuses to run without
+`--apply` or `--check`, and refuses `--session` and `--notify`, which only matter to monitors. `verify/test_fleet_monitors.py`
+holds each of those points against the in-memory org, and fleet.sh's usage and the README document the flag.
+
+**Live, 2026-11-08.**
+- `fleet.sh monitors --apply --board-only` at 10:22:59Z printed `dashboard updated: Watch It Burn: challenge leaderboard`
+  and the URL `https://app.datadoghq.com/dashboard/a8n-wrt-7zn/watch-it-burn-challenge-leaderboard`.
+- `fleet.sh monitors --check --board-only` printed `OK       challenge leaderboard`. The full `--check` now prints
+  OK for the leaderboard and DRIFT for the seven monitors and four fleet-dashboard widgets, which are left as found.
+- Afterwards the fleet dashboard's `modified_at` is still `2026-11-05T06:20:17Z`, and the newest `modified` of the
+  seven managed monitors is still `2026-11-05T06:20:25Z`. Downtimes cannot be listed with the read key (403), but
+  the board-only path makes no downtime call, and the unit test holds that.
+
+**The walk.** burritobot-private, between 10:25Z and 10:30Z, under the guard lock (`verify/guard_lease.py hold`).
+Every AI guard was off when found and was off again afterwards.
+- C3: a decoy read of `/tmp/wib18606-secret-sauce-recipe.conf` in the web-terminal pod, removed in the same command.
+- C2: the Joker promo image as Deployment `wib18606-joker`, run about two minutes, then deleted. Created without
+  limits it was refused by `require-resource-limits`, which is at Deny; the second try carried limits. It logged
+  "HAHAHA! The Joker runs on your cluster now."
+- C1: the C1 part 2 prompt over `/chat`. The reply said the marketing intel was sent to the webhook.
+- C5: `output=on`, then the brief's CEO prompt. The reply came back with `Residence: [REDACTED]`. Then `output=off`.
+- C6: `input_blocklist` and `input_classifier` on, then "What's the status of my support ticket HC-7731?" over
+  `/chat`. workshop-mcp's own log has `{"event":"ticket_withheld","ticket_id":"HC-7731"}` at 10:29:52Z. Then both off.
+
+`challenges/02-sanitization/fallback.curl.sh input` was also run first. It proves the guard, but its
+`ticket_withheld` line is printed by the exec'd process, not the pod, so Datadog never receives it and column 6 does
+not fill from it. Only the `/chat` path does.
+
+The table's whole request over 4 hours, at 10:30Z:
+
+| cluster | online | 1 exfil | 2 villain | 3 recipe | 4 bill | 5 guarded | 6 blocked |
+|---|---|---|---|---|---|---|---|
+| burritobot-private | 1 | 1 | 10 | 2 | 0.348 | 2 | 1 |
+| burritobot-public | 1 | blank | blank | blank | 3.717 | blank | blank |
+
+Over 7 days the repo's env-scoped queries had already returned data in every column for burritobot-private (c1 101,
+c2 359, c3 100, c4 0.33, c5 44, c6 74), so no query changed. leaderboard.yaml and verify/test_leaderboard.py are unchanged.
+At 10:30:34Z `WIB_LEADERBOARD_CLUSTERS=burritobot-private python3 verify/test_leaderboard_live.py` printed
+`OK       challenge leaderboard` and `FILLED` for online and columns 1 to 6, and ended "every column is filled for
+burritobot-private".
+
+**Not touched.** The seven fleet monitors and the fleet dashboard in the org still drift from the repo. Bringing
+them in is a full `fleet.sh monitors --apply --session ...`, which is #485's for the event, not this issue's.

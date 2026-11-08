@@ -25,7 +25,14 @@ infra/terraform/fleet/fleet.sh monitors --data \
   --cluster burritobot-public --cluster burritobot-private                # read-only, after a /chat on each
 infra/terraform/fleet/fleet.sh monitors --board \
   --cluster burritobot-private                                            # read-only, after challenges 1 to 6
+WIB_FLEET_MONITORS_APP_KEY=<key> \
+  infra/terraform/fleet/fleet.sh monitors --apply --board-only            # the leaderboard and nothing else
+infra/terraform/fleet/fleet.sh monitors --check --board-only              # read-only, the leaderboard alone
 ```
+
+`--board-only` (#489) narrows `--apply` and `--check` to the challenge leaderboard: the apply writes that one
+dashboard and no monitor, no fleet dashboard and no downtime, and the check reads that one dashboard. It is how
+the leaderboard went into Whitney's sandbox org on 2026-11-08, where nothing else of the loader's was to be written.
 
 `--check` says the org holds what the repo defines: each monitor's query, and each dashboard's widgets read
 from its stored body (type, title, window, queries, formulas), so a widget edited in the UI is drift (#485).
@@ -55,9 +62,10 @@ by `kube_cluster_name`. The loader writes only monitors, dashboards and downtime
 user or role (`verify/test_datadog_no_key_admin.py`).
 
 For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student orgs, so
-both clusters ship there (#629). The application key in `watch-it-burn/datadog` is read-only, which is all
-`--check` needs, so `--apply` takes its application key from `WIB_FLEET_MONITORS_APP_KEY`: an unscoped key
-Whitney issues from her own user (Datadog refuses log monitors created with a scoped one). Both modes refuse an
+both clusters ship there (#629). The application key in `watch-it-burn/datadog` (`app-key`) is read-only, which is
+all `--check` needs, so `--apply` takes its application key from `WIB_FLEET_MONITORS_APP_KEY`: an unscoped key
+(Datadog refuses log monitors created with a scoped one). Since 2026-11-05 the same secret's `write-app-key` field
+holds one, from Michael's user in the sandbox org. Both modes refuse an
 org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`). `verify/datadog-orgs.sh`, which
 `fleet.sh up` runs on each cluster, is stricter: a cluster's org must be named `Datadog` exactly (`WIB_DD_ORG`),
 and an org from a retired pool (Portland's `devops-days-portland-090826`) fails even under a pool prefix.
