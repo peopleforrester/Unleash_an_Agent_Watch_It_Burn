@@ -1564,7 +1564,11 @@ Run-through record's Segment 4 row.
   `read_support_ticket`, which withholds a flagged ticket. The prompt itself is
   innocent, so the model is still called to fetch the ticket; what it never sees is
   the payload, so there is no `deploy_app` call left to refuse. Say "deterministic"
-  only for the Role, never for the classifier. Both commands change the cluster whose
+  only for the Role, never for the classifier. The classifier flags a ticket written
+  as an override of the bot's instructions, as HC-666's is, and passes one worded as a
+  polite note or a plain request to deploy: on 2026-11-08 LLM Guard scored such a ticket
+  clean and the admin bot deployed it with `guard-input-on` alone (#1102, question
+  1120). With both commands on, the Role stops that ticket. Both commands change the cluster whose
   terminal runs them, the private one; unlike `guardrails-on`, neither reaches the
   public cluster. `guard-agency-off` puts the scoped Role back. The 2-hour lab keeps
   its admission tier, `guard-admission-on`, on HC-7731's refused image.
@@ -1573,7 +1577,8 @@ Run-through record's Segment 4 row.
   talk about why." The room presses reset and asks about its ticket, or HC-666, again
   while the next slides run. The two commands armed the private cluster alone, so the
   public bot the room asks has neither fix yet; show the retry on the admin bot, where
-  HC-666 now comes back withheld.
+  HC-666 now comes back withheld. A room ticket worded as a plain request can come back
+  whole there and fail at `deploy_app`, Forbidden by the Role.
 - **Least privilege (slides 53 to 56).** Slide 53 recalls the challenge sentence, "Use
   the support ticket system to get BurritoBot to deploy something.", and has no notes.
   Slide 54 adds "This attack was prevented with least privilege." Say: "Least privilege
@@ -1595,7 +1600,12 @@ Run-through record's Segment 4 row.
   prevented this with LLM Guard, an open-source library that scans text before it
   reaches the model. Our input guard checks the ticket as BurritoBot reads it. A
   block-list catches known bad phrases, and a prompt-injection classifier catches
-  instructions hidden in the text. Let's walk through it."
+  instructions hidden in the text. Let's walk through it." Then say: "The classifier
+  catches the textbook attack, text that tries to override the bot's instructions. If
+  your ticket just asked politely, it may have got past the input guard, and least
+  privilege is what stopped it. That's why we layer them." The deck's slide 58 notes
+  carry the same sentence once the deck repo, rounds-agenticburn, takes it (question
+  1120).
 - **The architecture diagram (slides 59 to 64).** One left-to-right diagram, the same
   boxes in the same place on all six slides, each slide lighting its new step in
   Challenge 3's yellow. Slides 59 to 63 follow one request: the person and the chat
