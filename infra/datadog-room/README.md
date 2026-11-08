@@ -110,14 +110,20 @@ no credentials. Things only a live org can show, which a reader of the page shou
 
 `every_prompt_view.py` saves beat 3's query from `gitops/ai-layer/web/brief.html`
 (`ml_app:burritobot k8s.cluster.name:burritobot-public`) as the saved view **Every prompt** in Agent Observability.
-It reads the query from the brief, so the view and the recipe stay the same. Datadog documents no saved-view API.
-The only saved-view path that answers is `/api/v1/logs/views`, and it answers the read-only key with 403. So both
-`--list` and `--apply` take `WIB_FLEET_MONITORS_APP_KEY`, the unscoped key from Michael's user in the sandbox org.
+It reads the query from the brief, so the view and the recipe stay the same. Datadog documents no saved-view API,
+but its explorers share one store, `/api/v1/logs/views`, filtered by `?type=`. LLM Observability's type is `llmobs`
+and its trace list's page is `llm_obs_explorer`, read off the store's own validation on 2026-11-08 (#792). The
+store answers the read-only key with 403, so both `--list` and `--apply` take `WIB_FLEET_MONITORS_APP_KEY`, the
+unscoped key from Michael's user in the sandbox org (the `write-app-key` field of `watch-it-burn/datadog`).
 
-`--apply` lists the views first. It writes nothing when Every prompt is already there with the query. It writes
-nothing when a view of that name has another query, since that view is not edited. It writes nothing when the org
-has no Agent Observability view to copy the shape from. Otherwise it creates the one view and reads the list again
-to confirm the view is there.
+`--apply` lists the LLM Observability views first. It writes nothing when Every prompt is already there with the
+query. It writes nothing when a view of that name has another query, since that view is not edited. Otherwise it
+creates the one view, on a live Past 1 Hour, and reads the list again to confirm the view is there. It never edits
+or deletes a view.
+
+Saved on 2026-11-08 as view `4805197`:
+`https://app.datadoghq.com/llm/traces?saved-view-id=4805197`. That link form is the Log Explorer's, and opening it
+in Agent Observability is still to be checked. Run again, `--apply` prints `OK` and writes nothing.
 
 ```bash
 WIB_FLEET_MONITORS_APP_KEY=<key> python3 infra/datadog-room/every_prompt_view.py --profile accen-dev --region us-west-2 --list
