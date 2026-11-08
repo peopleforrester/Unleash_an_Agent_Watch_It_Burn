@@ -14,7 +14,8 @@ the old Challenge 4 and close 51 on. This test holds:
   2. Every file git tracks or would track under `facilitation/`, `challenges/` and `verify/`, read with backticks
      and `*` blanked and whitespace flattened, cites no slide number in 44 to 64 after "slide" or "slides" (each
      number of a list or range: "slides 20 and 25 to 27") and no hash `#/N` with N of 43 or more, except in the
-     run-of-show's segment 4 (`### Segment 4:` to `### Segment 5:`) and its segments-table row 4, and in SEG4_READERS,
+     run-of-show's segment 4 (`### Segment 4:` to `### Segment 5:`) and its segments-table row 4, in the Night Before
+     step "Seed the stage's Datadog traces", which names the slide that opens each challenge's trace (#1139), and in SEG4_READERS,
      the tests that hold segment 4 to the deck, and the numbering line itself. Numbers of 65 or more after "slide" pass: they are the shifted ones.
      This test's own docstring and fixtures name the forms it bans, so it is the one file the search leaves out.
 
@@ -46,6 +47,9 @@ SEG4, SEG5, SEG6, ROW4, ROW5 = "### Segment 4:", "### Segment 5:", "### Segment 
 SEG4_READERS = {"verify/test_ros_seg4_flow.py", "verify/test_kubecon_seg4_flow.py", "verify/test_stage_trace_slides.py"}
 LOW, HIGH = 44, 64  # the new Challenge 3, which the old deck's Challenge 3, Challenge 4 and close numbers land in
 HASH_FROM = 43      # #/43 is slide 44
+# The Night Before step that names each challenge's Datadog link by hash, #/48 and #/68 among them (#1139), from its
+# first words to the next step's.
+SEED_STEP, NEXT_STEP = "- [ ] **Seed the stage's Datadog traces", "\n- [ ] **"
 
 S = "slide"
 NUM = r"(?:#/)?\d+"
@@ -88,8 +92,12 @@ def hits(text: str) -> list[str]:
 
 
 def ros_outside_seg4(ros: str) -> str:
-    """The run-of-show with segments 4 and 5 and the segments table's rows 4 and 5 cut out."""
+    """The run-of-show with segments 4 and 5, the segments table's rows 4 and 5 and the seed step cut out."""
     need(ros, SEG4, ROS_REL)
+    need(ros, SEED_STEP, ROS_REL)
+    i = ros.index(SEED_STEP)
+    need(ros[i + 1:], NEXT_STEP, f"{ROS_REL} after {SEED_STEP!r}")
+    ros = ros[:i] + ros[ros.index(NEXT_STEP, i) + 1:]
     need(ros, SEG6, ROS_REL)
     head, rest = ros.split(SEG4, 1)
     tail = rest.split(SEG6, 1)[1]
@@ -170,6 +178,12 @@ need(ros, SEG6 + " The OWASP close", ROS_REL)
 planted = ros.replace(SEG6 + " The OWASP close", SEG6 + " The OWASP close (slide 51)", 1)
 check("a pre-shift number planted in segment 6 is found",
       bool(scan({ROS_REL: planted}, me)))
+seed_end = ros.index(NEXT_STEP, ros.index(SEED_STEP)) + 1
+after_seed = ros[:seed_end] + "- [ ] **Open the deck at #/50 first.**\n" + ros[seed_end:]
+check("a stale hash planted in the Night Before step after the seed step is found",
+      bool(scan({ROS_REL: after_seed}, me)))
+check("the seed step cites the Challenge 3 and 4 links by hash, so cutting it is what makes it pass",
+      bool(hits(ros[ros.index(SEED_STEP):seed_end])))
 stale = {
     "an old Challenge 3 range": f"the support ticket on {S}s 44 to 50",
     "a pre-shift close slide": f"the close {S} (see {S} 58) links the vetting guide",
