@@ -1512,6 +1512,92 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_datadog_no_key_admin.py:
+    - CLAUDE.md
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - infra/org/boundary
+    - infra/reload-datadog-consumers.sh
+    - infra/terraform
+    - infra/terraform/**.tf
+    - infra/terraform/*.terraform/**/*.tf
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/dashboards/main.tf
+    - infra/terraform/fleet
+    - infra/terraform/fleet/**.py
+    - infra/terraform/fleet/**.sh
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/datadog-orgs.sh
+  test_datadog_orgs_sandbox.sh:
+    - CLAUDE.md
+    - agent
+    - agent/terminal-auth
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - cost
+    - docs/admin-console.md
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/workshop-agent/agent.yaml
+    - infra/datadog-cluster-identity.sh
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
+    - verify/datadog-orgs.sh
+    - verify/no-cloud.sh
   test_datadog_pool_row.sh:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh

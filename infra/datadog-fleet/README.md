@@ -45,11 +45,22 @@ rejected. Monitors are matched by their `wib-monitor:<key>` tag and updated in p
 from the file is deleted, and the dashboard is matched by title, so its URL is stable within an org. Run
 `--apply` once per event, against that event's instructor org.
 
+The sandbox org is shared (#1082): it also holds Viktor's "Choose Your Own Adventure: Inference - race" dashboard
+and the content-manager and commit-story dashboards and monitors. So a monitor is ours only when it carries the
+`managed-by:wib-fleet-monitors` tag, a `wib-monitor:<key>` tag and a name starting `[WIB fleet] `, and a
+dashboard only when its title is exactly one of ours, all of which start `Watch It Burn: `. The loader refuses a
+definition outside either prefix, and anything else in a listing is never edited or deleted. Every query is
+scoped to `env:burritobot-kubecon-na-26` (`env_filter` in `monitors.yaml`), never a cluster name, and grouped
+by `kube_cluster_name`. The loader writes only monitors, dashboards and downtimes: no API or application key,
+user or role (`verify/test_datadog_no_key_admin.py`).
+
 For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student orgs, so
 both clusters ship there (#629). The application key in `watch-it-burn/datadog` is read-only, which is all
 `--check` needs, so `--apply` takes its application key from `WIB_FLEET_MONITORS_APP_KEY`: an unscoped key
 Whitney issues from her own user (Datadog refuses log monitors created with a scoped one). Both modes refuse an
-org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`, as `verify/datadog-orgs.sh` uses).
+org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`). `verify/datadog-orgs.sh`, which
+`fleet.sh up` runs on each cluster, is stricter: a cluster's org must be named `Datadog` exactly (`WIB_DD_ORG`),
+and an org from a retired pool (Portland's `devops-days-portland-090826`) fails even under a pool prefix.
 
 `--notify @handle` (repeatable) adds a Datadog notification handle to every monitor. Without it the
 monitors still change state on the dashboard and the Monitors page, but they page nobody.
@@ -80,7 +91,7 @@ APM kept every span, and `no-traces` stayed green, because the collector's span 
 conversion that failed. Agent Observability's metrics carry `env`, `ml_app`, `service`, `version` and a few
 more, never a span's `k8s.cluster.name` (Datadog's metrics page: "other tags set on spans are not available as
 tags on Agent Observability metrics"), so this monitor cannot be per cluster. It is `scope: org`: one alert,
-no cluster filter, no group. The loader allows that only on `ml_obs.*` (`ORG_SCOPE_METRICS` in
+no cluster name and no group, scoped by the env like the rest. The loader allows that only on `ml_obs.*` (`ORG_SCOPE_METRICS` in
 `fleet_monitors.py`), refuses an `ml_obs.*` monitor without it, and `--data` checks its overall state, one value
 for the org, in place of a group per cluster.
 

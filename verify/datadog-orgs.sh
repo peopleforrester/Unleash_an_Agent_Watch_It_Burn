@@ -12,8 +12,11 @@
 #   verify/datadog-orgs.sh <kube-context> [aws-profile]           # one cluster
 #   verify/datadog-orgs.sh --pool [aws-profile]                   # the pool secret only
 #
-# Env: WIB_DD_POOL_PREFIX (default Datadog, Whitney's shared sandbox org for KubeCon NA 2026, #629) is the
-#      org-name prefix every cluster must be on. A per-event pool sets it to that pool's prefix.
+# Env: WIB_DD_ORG (default Datadog) is the one org every cluster must be on: Whitney's shared sandbox org for
+#      KubeCon NA 2026 (#629), matched by its whole name, so an org that only starts with it fails (#1082).
+#      WIB_DD_POOL_PREFIX names a per-event pool instead: set, a cluster passes on any org under that prefix.
+#      Unset, it is Datadog for the --pool check and the dual-shipping destination.
+#      A retired pool (the Portland and World's Fair prefixes in RETIRED_POOLS) fails either way.
 #      WIB_DD_MIN_DAYS (default 3) is the minimum days of pool validity left before this fails.
 #      WITB_DD_ADMIN_APP_KEY is the instructor org APP key, read from THIS environment. It used to be read
 #      off the cluster out of datadog-admin-secret, which meant a read credential for the org holding every
@@ -33,6 +36,10 @@ source "${_HERE_DDO}/../infra/terraform/fleet/fleet.sh" >/dev/null 2>&1 || true
 declare -F is_attendee_name >/dev/null || { echo "FATAL: could not load is_attendee_name from fleet.sh" >&2; exit 2; }
 
 PREFIX="${WIB_DD_POOL_PREFIX:-Datadog}"
+SANDBOX_ORG="${WIB_DD_ORG:-Datadog}"
+# The pools whose orgs expired: DevOpsDays Portland 2026-09-08 (#629 replaced it with the sandbox org) and the
+# AI Engineer World's Fair 2026-06-26 (#237). A cluster on one of them is on a dead trial org.
+RETIRED_POOLS=(devops-days-portland-090826 ai-eng-wf-062626)
 ADMIN_APP_KEY="${WITB_DD_ADMIN_APP_KEY:-}"
 MIN_DAYS="${WIB_DD_MIN_DAYS:-3}"
 REGION="${WIB_REGION:-us-west-2}"
@@ -63,6 +70,19 @@ sys.exit(rc)
 PY
 }
 
+# Is the cluster's org the one it must be on? Prints why not; returns 1 then.
+org_expected() {
+    local org="$1" r
+    for r in "${RETIRED_POOLS[@]}"; do
+        if [[ "$org" == "$r"* ]]; then echo "a retired pool's org ($r)"; return 1; fi
+    done
+    if [[ -n "${WIB_DD_POOL_PREFIX:-}" ]]; then
+        [[ "$org" == "$WIB_DD_POOL_PREFIX"* ]] || { echo "expected prefix $WIB_DD_POOL_PREFIX"; return 1; }
+    else
+        [[ "$org" == "$SANDBOX_ORG" ]] || { echo "expected the sandbox org $SANDBOX_ORG"; return 1; }
+    fi
+}
+
 check_cluster() {
     local ctx="$1" profile="$2"
     local api app org
@@ -72,11 +92,11 @@ check_cluster() {
     # application key does not carry (the KubeCon sandbox key answers it 403, #629). current_user includes the org.
     org="$(curl -s --max-time 20 -H "DD-API-KEY: $api" -H "DD-APPLICATION-KEY: $app" https://api.datadoghq.com/api/v2/current_user \
         | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(i for i in d["included"] if i["type"]=="orgs")["attributes"]["name"])' 2>/dev/null || echo "?")"
-    local rc=0
-    if [[ "$org" == "$PREFIX"* ]]; then
+    local rc=0 why
+    if why="$(org_expected "$org")"; then
         echo "  OK    $ctx -> $org"
     else
-        echo "  FAIL  $ctx -> $org (expected prefix $PREFIX)"; rc=1
+        echo "  FAIL  $ctx -> $org ($why)"; rc=1
     fi
     # Per-cluster identity (#242): without it every cluster reports kube_cluster_name=watch-it-burn.
     local ident want

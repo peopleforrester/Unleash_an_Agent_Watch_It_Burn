@@ -87,8 +87,8 @@ for profile in collector_render.PROFILE_APP:
     check(f"the {profile} collector's k8s.cluster.name reads cluster-identity/{KEY}", cref.get("key") == KEY, str(cref))
 
 monitors = yaml.safe_load((REPO / "infra/datadog-fleet/monitors.yaml").read_text())
-check("the fleet monitors filter on kube_cluster_name:burritobot-*",
-      monitors.get("cluster_filter") == "kube_cluster_name:burritobot-*")
+check("the fleet monitors and dashboards scope to env:burritobot-kubecon-na-26, not a cluster name",
+      monitors.get("env_filter") == "env:burritobot-kubecon-na-26")
 check("datadog-orgs.sh expects the sandbox org by default (its name is Datadog)",
       'PREFIX="${WIB_DD_POOL_PREFIX:-Datadog}"' in (REPO / "verify/datadog-orgs.sh").read_text())
 check("last_trace.py queries kube_cluster_name:burritobot-*",

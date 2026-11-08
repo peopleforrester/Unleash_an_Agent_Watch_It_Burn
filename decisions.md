@@ -34352,3 +34352,80 @@ in 8m48s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_lab_pipe
 pinned collector, was among them and passed. On `8f0a2d91`, `bash verify/run-tests.sh` printed `349 tests ran`,
 `ALL OFFLINE RENDER-GATE TESTS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
 The logs are `/var/lib/hecaton/runs/18497/e2e-tools.log` and `run-tests.log`.
+## 2026-11-08 · #1082 · run 18499 · Our Datadog views query only env:burritobot-kubecon-na-26, the loader writes only what it owns, and datadog-orgs.sh pins the one sandbox org
+
+**The env scope (ported from run 17932's 717f1fa0).** `bash verify/prior-drafts.sh 1082 origin/staging` printed NONE,
+and the issue names the draft on `origin/agent/629-17932`. 717f1fa0's hunks for `infra/datadog-fleet/{monitors,
+dashboard,leaderboard}.yaml`, `fleet_monitors.py`, `infra/terraform/dashboards/fleet-analytics.json`,
+`verify/test_fleet_monitors.py` and `verify/test_leaderboard.py` applied to staging 7762e453 with no conflict:
+staging has not touched those files since the draft's base b4180a8f, and the #485 signal-window code both sides kept
+is there. `monitors.yaml`'s `cluster_filter` becomes `env_filter: "env:burritobot-kubecon-na-26"`, the loader refuses
+a query, signal or dashboard query without it or with a `kube_cluster_name:` filter, and `--cluster` must name a
+`burritobot-` cluster. The draft's one-line pin in `verify/test_datadog_sandbox_names.py` came too. What differs from
+the draft: nothing in these files. The draft's other #629 parts (Backstage, the room Jokers' `stamp_labels`, the
+collector's env insert for the lab markers, the probe pods) are #1080's and are not ported here.
+
+**Every query in the four files.** `verify/test_fleet_monitors.py` now reads every `query` string in `monitors.yaml`,
+`dashboard.yaml`, `leaderboard.yaml` and `fleet-analytics.json`, nested groups and signals included, and fails on one
+that lacks the env as a whole tag or names a cluster. For each file it takes the env out of one query and shows the
+sweep catches it. The fleet alerts widget's monitor search (`tag:"managed-by:wib-fleet-monitors"`) is held to the
+managed tag instead.
+
+**Only our own objects.** Whitney's sandbox org also holds Viktor's "Choose Your Own Adventure: Inference - race"
+dashboard and the content-manager and commit-story dashboards and monitors. Until now the loader trusted Datadog's
+`monitor_tags` filter, and a monitor anyone else tagged `managed-by:wib-fleet-monitors` and `wib-monitor:<key>` could
+be updated or deleted. Now `owned()` needs the managed tag, a key tag and a name starting `[WIB fleet] `;
+`managed_monitors` and `plan_monitors` drop anything else. A dashboard is found only by its exact title, and the
+loader refuses a definition whose title does not start `Watch It Burn: ` or whose monitor name does not start
+`[WIB fleet] `. The test runs two applies and a check against an org that also lists three other people's monitors
+(two with our tags on them) and three other dashboards (one titled "Watch It Burn: fleet (Viktor's copy)"), and
+reads that no PUT or DELETE reached any of them and their bodies are unchanged.
+
+**No key, user or role.** In the same org the test runs `--apply`, `--check`, `--data` and `--board` and holds every
+call to an allowlist: monitor, dashboard and downtime writes, `/api/v2/query/scalar`, and reads of monitors,
+dashboards, downtimes and `/api/v2/current_user`. `verify/test_datadog_no_key_admin.py` (new) sweeps fleet.sh, the
+rest of `infra/terraform/fleet`, `infra/datadog-fleet`, `infra/datadog-cluster-identity.sh`,
+`infra/reload-datadog-consumers.sh` and `verify/datadog-orgs.sh` for a Datadog key, user, role, permission,
+service-account or invitation endpoint and for a curl that writes to Datadog, and every `.tf` under `infra/terraform`
+for a `datadog_api_key`, `datadog_application_key`, `datadog_user`, `datadog_role`, `datadog_service_account` or
+`datadog_user_role` resource. None is there. It builds each case to show the sweep catches it.
+
+**The single-org verification.** `verify/datadog-orgs.sh`, which `fleet.sh`'s `run_datadog_orgs_verify` runs, matched
+a prefix (`WIB_DD_POOL_PREFIX`, default `Datadog`), so an org named "Datadog Demo Org" passed. It now needs the org's
+whole name to be `WIB_DD_ORG` (default `Datadog`, the sandbox org's name read live below). `WIB_DD_POOL_PREFIX`, when
+set, still names a per-event pool. An org from a retired pool (`devops-days-portland-090826`, `ai-eng-wf-062626`)
+fails either way, so a stale Portland prefix in the environment cannot pass anything. `verify/test_datadog_orgs_sandbox.sh`
+(new) runs fleet.sh's own `run_datadog_orgs_verify` with kubectl and Datadog's `/api/v2/current_user` stubbed: both
+instructor clusters pass on `Datadog`, and eight other orgs fail (two Portland, one World's Fair, "Datadog Demo Org",
+"Datadog-trial-7", "datadog", "Acme Pool 007", and an answer naming no org). Against staging's script six of its 22
+checks fail.
+
+**The console Deployment's own labels.** The live `--data` run below read the env-scoped console query blank:
+`kubernetes_state.deployment.*` takes its tags from the Deployment's labels, and `console` in
+`gitops/ai-layer/resources.yaml` labelled only its pods. With `kube_cluster_name:burritobot-*` the same query answered
+1 for both clusters; scoped by the env, `workshop-agent` answered (kagent labels its Deployment and pods) and console
+did not. The console Deployment now carries `tags.datadoghq.com/env` and `tags.datadoghq.com/service` on itself, and
+`verify/test_fleet_monitors.py` checks the Deployment, not only its pods, for each `kubernetes_state.deployment`
+query's `kube_deployment`.
+
+**Live checks, 2026-11-08, this branch, read-only.**
+- `bash verify/datadog-orgs.sh <ctx> accen-dev` on watch-it-burn-private and watch-it-burn-community: `OK <ctx> ->
+  Datadog`, the identity OK, `instructor cluster, single org by design`, exit 0 on both. With
+  `WIB_DD_POOL_PREFIX=devops-days-portland-090826` on private: `FAIL ... -> Datadog`, exit 1.
+- `fleet_monitors.py --check`: `instructor org: Datadog`, all seven monitors found by the new ownership rule, each
+  `DRIFT` (the org still holds the cluster-name queries), and four fleet-dashboard and two leaderboard widgets `DRIFT`
+  for the same reason. That is what the next apply replaces.
+- `fleet_monitors.py --data --cluster burritobot-public --cluster burritobot-private`: every repo query answered for
+  both clusters but two. One was the console query, fixed above. The other was the live agent-obs-silent monitor in
+  No Data: `sum:ml_obs.trace{ml_app:burritobot,env:burritobot-kubecon-na-26}.as_count()` read 13 over 24 hours,
+  the same as without the env, and nothing in the last 5 minutes, so nobody had chatted.
+- Each metric query in the leaderboard and fleet-analytics, env-scoped against staging's version over 7 days: the
+  same series count for every one but `witb.lab.calls{span.name:lab.session.start}` (1 before, 0 after).
+  `witb.lab.calls` carries `env:N/A`: the collector's `transform/lab_contract` resets the lab markers' resource, and
+  the insert that puts the env back is #1080's. The lab-marker widgets on fleet-analytics, and the leaderboard's
+  room-Joker column, read blank until #1080 lands.
+
+**Not yet run on a cluster.** Owed once hecaton promotes this and Argo CD syncs `ai-layer`: `fleet_monitors.py --apply`
+with Whitney's `WIB_FLEET_MONITORS_APP_KEY` (a run has only the read-only key), then `--check` (exit 0) and `--data
+--cluster burritobot-public --cluster burritobot-private`, whose console query should then answer for both; after
+#1080, the fleet-analytics lab widgets and `--board`.

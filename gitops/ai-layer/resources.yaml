@@ -1510,7 +1510,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: console
-  labels: { app.kubernetes.io/name: console }
+  # The env and service on the Deployment itself, not only on its pods: kubernetes_state.deployment.* takes its
+  # tags from the Deployment's labels, so without them the fleet's console query scoped to the env reads blank
+  # (read live 2026-11-08, #1082), while workshop-agent, which kagent labels both ways, answers.
+  labels: { app.kubernetes.io/name: console, tags.datadoghq.com/service: burritobot-console, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
 spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: console } }
