@@ -2166,7 +2166,7 @@ try:
     with redirect_stdout(io.StringIO()) as _out:
         rc = kp.main(["community", "attackme.burritobot.co", "--context", "watch-it-burn-community",
                       "--switch-context", "watch-it-burn-private"])
-    check("main community: a private cluster whose switch does not reach the community context stops with exit 2 "
+    check("main community: a private cluster whose switch does not reach the community context stops with return code 2 "
           "before any beat", rc == 2 and "beats" not in _seen and "KUBECON PROBE NOT RUN" in _out.getvalue()
           and "does not reach watch-it-burn-community" in _out.getvalue(), _out.getvalue())
 finally:

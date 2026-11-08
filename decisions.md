@@ -40153,7 +40153,7 @@ required `--switch-context` (the private cluster's kube-context, never guessed) 
 `guardrails-off` in that cluster's terminal pod itself, holding both clusters' guard locks through
 `guard_lease.hold_switch` on the private context. Before any beat it checks that the lock it got covers its own
 `--context`, so a private cluster whose `guardrails-switch/guardrails-peer` Secret names another cluster stops it
-(exit 2, `KUBECON PROBE NOT RUN`). The other option, the admin run switching for the community beats, would tie two
+(return code 2, `KUBECON PROBE NOT RUN`). The other option, the admin run switching for the community beats, would tie two
 runs into one sequence: the community beats would need the admin run to be mid-flight at the right beat, and a
 community run alone could not reach the stage's state. Running the switch itself keeps each run whole, uses the
 switch the stage uses, and is what `verify/desk_ticket_live.py` (#1102) already does for both bots. The community

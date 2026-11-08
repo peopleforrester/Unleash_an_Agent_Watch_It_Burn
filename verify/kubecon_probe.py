@@ -86,7 +86,7 @@ each switches the community cluster too (#774). So both runs hold the lock on bo
 guard_lease.hold_switch): on the private context (an admin run's --context, a community run's --switch-context) and on
 the cluster that one's guardrails-switch/guardrails-peer Secret names, whose kube-context must be in the kubeconfig
 under that name. A community run whose private cluster's Secret does not name its --context stops before any beat
-(exit 2): that switch would not reach it. A third run holding either cluster's lock waits for the probe rather than
+(return code 2): that switch would not reach it. A third run holding either cluster's lock waits for the probe rather than
 reading a switch mid-run.
 
 Both runs read the one support desk both bots use (#1145, #1159) before any chat: the room's desk is the community
