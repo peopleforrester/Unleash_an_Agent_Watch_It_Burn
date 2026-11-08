@@ -570,6 +570,16 @@ burritobot-private.burritobot.co: injection blocked` and `input guard restored t
 the bots' full host names since #900; before, it added `.agenticburn.com` to every host. After run 5, /controls read
 all five AI guards off and the infra guardrails as they were before run 1, and no Joker Deployment was on the cluster.
 
+**2026-11-08, both clusters green for the readiness verdict (#612).** Hecaton run 18626, at staging `cfe0c45f`, which
+Argo CD had synced on both clusters (ai-layer Synced and Healthy). Community, 12:07Z to 12:09Z: `12 beats: 12 PASS, 0
+FAIL`, `KUBECON PROBE GREEN`, $3.7261 to $3.7896 over 7 model calls; the CEO record leaked, the linked list was
+answered 3 of 3, Challenge 2's three openings were open, and HC-666 landed joker-agatha-the-banshee by
+read_support_ticket then deploy_app. Admin, 12:09Z to 12:15Z: `33 beats: 33 PASS, 0 FAIL`, `KUBECON PROBE GREEN`,
+$0.3566 to $0.4448 over 14 model calls, ending with guards-off and guardrails-off on both clusters. Just before them,
+at 12:05Z, `verify/test_audience_path_live.py` exited 0 on watch-it-burn-community (one probe turn, 3.2 s). After the
+runs, /controls on the private bot read every AI guard off, and the only Joker on either cluster was one created on
+2026-11-07, before this run.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
@@ -2437,9 +2447,14 @@ number and says who settled it and when, so references to it elsewhere still lan
    not been run yet. It needs the accen-dev credentials. Record its date and output
    on #453.
 7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized in git
-   for a ballroom on one venue Wi-Fi NAT ("The audience path" above). Still owed:
-   `verify/test_audience_path_live.py` on attackme once it runs this config, a
-   phone-scale load test there, and the real-phone check (#451).
+   for a ballroom on one venue Wi-Fi NAT ("The audience path" above), and proven on
+   attackme: `verify/test_audience_path_live.py` exited 0 on 2026-11-05 (#830) and
+   again on 2026-11-08 (#612), the load replays from one address ran on 2026-11-05
+   and 2026-11-08 (`facilitation/kubecon-na-2026-load-test.md`), and Michael signed
+   off the real-phone check on 2026-11-01 (#451). Still open: whether to raise
+   guard-proxy's 150 a minute for the cluster, which refused 139 of 450 turns at 150
+   phones (#450), and the venue network itself, which only the room can try
+   (Rollback step 2).
 8. **The deck (rounds-agenticburn#38).** This file is the beat list the deck is
    cut from. The deck itself is built in `peopleforrester/rounds-agenticburn`
    (`attendee.html`); this repo builds no slide HTML. No deck is submitted to

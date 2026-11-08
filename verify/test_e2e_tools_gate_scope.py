@@ -71,8 +71,9 @@ check("it says never to rerun the whole script, naming run 18622", "Never rerun 
 check("the scoping paragraph says the whole tier runs only on FULL, and a doc-only range runs none and fetches nothing",
       "the whole tier only when that selection says FULL" in flat and "selects no tier test" in flat
       and "with no tier test run and no tool fetched" in flat, flat[:0])
-check("the polling item scopes a run's own command to its change",
-      '`HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)"`' in flat)
+check("the polling item scopes a run's own command to its change, with the form the #1191 point gives",
+      "change with the command form point 6 gives: then it runs only the tier tests the change touches" in flat
+      and 'HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/<script>' in flat)
 
 READS = "import pathlib, sys\nREPO = pathlib.Path(__file__).resolve().parents[1]\n"
 
