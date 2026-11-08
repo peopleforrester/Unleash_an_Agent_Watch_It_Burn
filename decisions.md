@@ -36240,3 +36240,38 @@ RENDER-GATE TESTS GREEN`, `73 checks ran (the offline suite and 72 tier tests) i
 CHECKS GREEN` and `exit=0`. `verify/test_platform_baseline.py`'s negative case for "measured: true with no numbers"
 now removes vllm's `build_seconds` and `requests` itself, since the entry is measured and the case can no longer
 count on them being absent. No dependency was added.
+
+## 2026-11-08 · #704 · run 18583 · Run 17970's timed cold build is ported onto staging
+
+**What this is.** Run 17970 did the whole of #704 on 2026-11-06: it built the fresh t3.2xlarge cluster
+watch-it-burn-attendee-099, timed `deploy-full-idp.sh local-inference` to every Application Healthy (1805 s), ran
+`verify/local-inference-live.py` to PASS, recorded the vllm entry with `measured: true`, and tore the cluster down,
+all as the entry above records. The run then ended `claim-stale`, so none of its seven commits reached staging
+(`251095d2`, `3c3eef43`, `2be27686`, `0c07d0f9`, `a61ea3f9`, `decbe1fa`, `8d9c1e4f` on `origin/agent/704-17970`).
+Under the dispatched-run rules (points 2 and 3), this run reuses that work rather than redoing it: the live run was
+done, its numbers are recorded, and `claim-stale` names nothing to fix.
+
+**How it was ported.** `bash verify/prior-drafts.sh 704 origin/staging` named `origin/agent/704-17970` as START, 7 of
+7 commits not in staging, 344 base commits since its base `13fc72b8`, with two DRIFT lines, both edits in place:
+`decisions.md` (an append on both sides) and `gitops/ai-layer/resources.yaml`, which staging's `2b07d881` and later
+commits edited for workshop-mcp's room reader, the output guard's marketing scrub and the always-on redaction. The
+draft's only change to that file is one comment line under the vLLM ModelConfig, saying the request is 1500m, and
+none of staging's edits touch those lines. All seven cherry-picked onto staging `4b1ef1fc` with no conflict. Nothing
+in the draft's content differs here. Two things are added: `verify/scope-map.yaml` gains the entry for
+`verify/test_vllm_fit_probe.py` (it reads `gitops/manifests/vllm-qwen3/vllm-qwen3.yaml` and `verify/vllm_fit_probe.py`),
+which run 17970 left out, so the selector read the test's source and named it as drift. `python3 verify/scope_tests.py
+write` also rewrote about 900 lines for other tests' entries, drift that other runs left; those stay as staging has
+them, since they are not this change's. `verify/scope_tests.py select offline` on this change runs everything anyway,
+because `platform-baseline.yaml` has no map entry.
+
+**The live check.** This run brings no cluster up (Dispatched runs, point 1), and the issue's live run is run 17970's,
+recorded above. What this run checked live, with the run's own `$KUBECONFIG` and the `accen-dev` session, 2026-11-08:
+`aws eks list-clusters --region us-west-2` listed `watch-it-burn-community` and `watch-it-burn-private` and nothing
+else, so watch-it-burn-attendee-099 is gone. On both contexts `kubectl get application -n argocd vllm-qwen3` returned
+NotFound, since neither runs the local-inference profile, and the `ai-layer` Application read `Synced Healthy` at
+`4b1ef1fc`; community lists 24 Applications and private 40. The change's only edit to what the two clusters run is the
+comment line in `gitops/ai-layer/resources.yaml`, which renders no object difference, so nothing on either cluster
+changes when this is promoted. Not yet run on a cluster: the entry above's repeat build from a staging that holds
+1500m, with no hand step.
+
+**Prose.** `python3 verify/prose_gate.py ... origin/staging` printed `prose gate: pass` on the ported tree.

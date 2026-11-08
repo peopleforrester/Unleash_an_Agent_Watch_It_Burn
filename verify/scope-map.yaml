@@ -6697,6 +6697,9 @@ reads:
     - images/villains/villain-banner.sh
     - policies/kyverno/restrict-image-registries.yaml
     - verify/registry_allowlist.py
+  test_vllm_fit_probe.py:
+    - gitops/manifests/vllm-qwen3/vllm-qwen3.yaml
+    - verify/vllm_fit_probe.py
   test_walkthrough_no_state.sh:
     - CLAUDE.md
     - agent
