@@ -34429,3 +34429,12 @@ query's `kube_deployment`.
 with Whitney's `WIB_FLEET_MONITORS_APP_KEY` (a run has only the read-only key), then `--check` (exit 0) and `--data
 --cluster burritobot-public --cluster burritobot-private`, whose console query should then answer for both; after
 #1080, the fleet-analytics lab widgets and `--board`.
+
+**Suite results, run 18499.** The first run of `bash verify/run-e2e-tools.sh` on 8349ff6f failed two offline tests:
+`test_room_view.py`, because `infra/datadog-room/room_view.py` uses `find_dashboard` for its own "BurritoBot: the
+room's view" title and the first cut put the `Watch It Burn: ` check inside it, and `test_no_cloud_by_hand.sh`, because
+the new sweep reads fleet.sh without the no-cloud guard. 2b092dfb holds the loader's titles in `apply` and leaves
+`find_dashboard` an exact-title lookup, and guards the sweep. On 2b092dfb, scoped by `HECATON_BASE_SHA=7762e453`, it
+printed `250 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `45 checks ran (the offline suite and 44 tier
+tests) in 11m44s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0` (`/var/lib/hecaton/runs/18499/e2e-tools-2.log`).
+The prose gate printed `prose gate: pass`.
