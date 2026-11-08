@@ -39332,3 +39332,85 @@ now has an entry in `verify/fetch-inventory.yaml`, class `none`. Each passed whe
 the fix commit selects, `HECATON_BASE_SHA=b269d747 bash verify/run-tests.sh`, printed `ALL OFFLINE RENDER-GATE TESTS
 GREEN`, exit 0 (log `/var/lib/hecaton/runs/18741/run-tests-fix.log`). The prose gate printed `prose gate: pass`. No
 dependency was added.
+## 2026-11-08 · #1215 · run 18753 · The test rows are off the one page, and the probe, the seeds and #1158's desk check remove their own
+
+`verify/prior-drafts.sh 1215 origin/staging` printed `NONE`.
+
+**What was on the page, and whose it was.** At 20:37 UTC `https://deployments.burritobot.co/deployments.json` read five
+rows: `desk-check-1158-community` (community, 19:19:38) and `desk-check-1158-private` (private, 19:19:27), ConfigMaps
+under Agatha the Gargoyle; and three `joker-agatha-the-banshee` Deployments under Agatha the Banshee, labelled private at
+19:46:45 and 20:02:49 and community at 19:58:38 (greyed at 19:58:54). The page's times are the desk pod's clock, UTC,
+not CET: the two ConfigMap rows match run 18737's recorded 19:19 deploys. So the 19:46:45 Joker is not run 18722's
+(#1140, the Night Before probe and seed runs). It is run 18740's (#1159, live 19:41 to 20:14 UTC): its admin probe's
+Challenge 3 beat at 19:46:45, its community probe's at 19:58:38, and its seed `c3-attack` (session
+`wib-stage-c3-attack-202611081958`) at 20:02:49. Run 18740's entry above names the same three rows. The name is the
+probe's own, `joker-<STAGE_NAME>`, `STAGE_NAME` being `Agatha the Banshee`, so none of them was a real landing.
+
+**What was on the clusters.** At 20:37:57 UTC neither cluster had a `desk-check-1158-*` ConfigMap (run 18737 deleted both)
+or a `joker-agatha-the-banshee` Deployment (the probe's ask deletes its Joker on every path). The only Joker left on
+either is `joker-ichabod-the-werewolf` on watch-it-burn-community, 0 of 0 replicas, 25 hours old, not a check's. It was
+left alone. The private desk's own page, `https://deployments-burritobot-private.burritobot.co/deployments.json`, read `[]`.
+
+**How the rows went.** At 20:39:20 UTC Argo CD synced both clusters' `ai-layer` to `3e113387`, the staging that carries
+#1159's `/desk-reset`. The new `fake-ticket-src` rolled watch-it-burn-community's `fake-ticket` (ReplicaSet
+`fake-ticket-7d8b55cdd7`), and the desk's rows, which live in its memory, went with the old pod. The restart also
+dropped the filed tickets the desk held (run 18737's HC-2038 among them); the fixed ones, HC-666 included, came back
+with the new pod. This run did not cause the restart: a read-only scan of the desk's tickets it had running by `kubectl
+exec` in that pod was cut off with exit 137 as the pod was stopped. Then, with the run's session sourced, `bash
+infra/terraform/fleet/fleet.sh desk-reset` printed
+
+    desk-reset: watch-it-burn-community (us-west-2), the public desk: every deploy row, fixed tickets kept
+      cleared 0 deploy row(s) and 0 filed ticket(s); 0 filed and 4 fixed ticket(s) kept
+    desk-reset: done; deployments.burritobot.co lists no deploy, the room's or the presenters'
+
+and exited 0. Both pages read `[]`, `https://support.burritobot.co/ticket?id=HC-666` answered 200, and `POST
+https://support.burritobot.co/desk-reset` from outside answered 403. That is the first of #1159's "Not yet run on a
+cluster" items, run. Removed, per cluster: on watch-it-burn-community's desk, the five rows above; on
+watch-it-burn-private, nothing was left to remove. `agent/terminal-auth` was not read or written.
+
+**Why nothing removed them before.** Each check deleted what it made on its cluster, but a row on the one page outlives
+its object. A private row is never greyed, since the community cluster's reader sees only its own Deployments, and the
+only way to clear a row was a desk restart, which also drops every filed ticket, or `/desk-reset`, which clears every row,
+the room's too.
+
+**The change.**
+1. `gitops/ai-layer/ticket_site.py` gains `POST /desk-forget`, on `/desk-reset`'s gate (the pod's own loopback, through
+   no proxy). `{"names": [...], "since": <epoch>, "tickets": [...]}` removes only the named rows that landed at or after
+   `since`, and the named filed tickets; a fixed ticket is never removed. It never clears the page: a body that names
+   nothing is a 400. `console.conf` refuses the path on the desk's public server.
+2. `verify/kubecon_probe.py`: `KubeconCluster.forget_on_desk` runs it in the desk's pod with `kubectl exec`, twice,
+   `DESK_REPORT_SETTLE_S` (3 s) apart, so a report the relay was still passing on goes too, and returns the reason
+   instead of raising. `room_ask`, the HC-666 ask of the probe's Challenge 3 beats and of the trace seeds, calls it in
+   the same `finally` that deletes the Joker, nested so it runs even when that delete raises. A row it cannot remove is
+   `row_left`, and fails the beat as `joker_left` does. The desk is the probe's own cluster on a community run; on an
+   admin run it is the guardrails peer that `guard_lease.hold_switch` already takes the lock on, from the same kubeconfig
+   (`peer_desk`), so the probe's command line is unchanged. An admin run with no peer fails its Challenge 3 beats
+   saying the row stays; it never looks on the private cluster's own desk.
+3. `verify/stage_traces.py`: the seed gets the same peer desk, and its two Challenge 3 seeds now fail on a Joker or row
+   left behind. Before this they ignored `joker_left`.
+4. `verify/one_desk_live.py` writes run 18737's by-hand check down as a script: a ticket filed on the public desk, read
+   by number in both bots' tool pods, one ConfigMap deployed by each, both rows read on the one page. Then, on every
+   path out, a raise or an interrupt included, it deletes both ConfigMaps, forgets both rows and its ticket on the desk,
+   and reads that nothing is left.
+
+`verify/desk_ticket_live.py` (#1102) still lands its Jokers' rows and leaves them; it predates the one desk, and the run
+report files it as a follow-up rather than widening this change.
+
+**Tests.** `verify/test_live_check_cleanup.py` (new, offline) drives the real `ticket_site.py`'s `/desk-forget` (only
+the check's rows and ticket go; a same-named row from before `since`, the room's rows and tickets and HC-666 stay; 403
+through a proxy, 404 on the deployments host, 400 on six bad bodies; the console's deny), runs `forget_on_desk`'s exec
+against that real desk (a late report caught by the second pass, a failing and a raising kubectl each a reason), drives
+`room_ask` on six paths (clean, the ask raising, the audit read raising, the Joker delete raising or failing, the desk
+failing) and asserts the row is asked off the desk once on each, checks `peer_desk` and that the admin probe's `main`
+hands its beats the peer, and runs `one_desk_live.DeskCheck` clean and on six failing paths, each leaving no ConfigMap,
+row or ticket. `test_kubecon_probe.py`'s fakes answer the desk, and `test_stage_traces.py` adds three seed checks.
+`fetch-inventory.yaml` classes the new in-pod `/desk-forget` read (live, cluster), the script's desk reads (live,
+lab-endpoint) and the test's local desk (loopback); the scope map has the new test's entry.
+
+**Not yet run on a cluster.** `/desk-forget` reaches the desk only once hecaton promotes this change and Argo CD syncs it;
+until then the deployed desk answers it 404 (read from outside after the 20:39 sync). So the live checks of the change itself are
+for the next run on the issue:
+- `python3 verify/one_desk_live.py --community-context watch-it-burn-community --private-context watch-it-burn-private
+  --kubeconfig "$KUBECONFIG" --profile accen-dev` ends `ONE DESK LIVE GREEN`, and the page then reads as it did before.
+- The Night Before probe's admin and community runs (`verify/kubecon_probe.py`) end with no `joker-agatha-the-banshee`
+  row on `https://deployments.burritobot.co/deployments.json`.
