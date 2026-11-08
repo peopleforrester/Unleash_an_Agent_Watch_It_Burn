@@ -37274,3 +37274,10 @@ watch-it-burn-community -n agent port-forward svc/fake-ticket 18080:8080`, `POST
 HC-900, `GET /ticket?id=HC-900` returns it, and a ticket filed at the public desk's form gets a four-digit number.
 The check files one ticket, HC-900, which stays until the desk restarts or #1144's reset clears it: a desk pod
 delete would also clear every ticket and row the room has, so the check does not use one.
+
+**The suites (run 18665, at `faffd115`; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6 asks. `bash
+verify/run-e2e-tools.sh` ran the offline suite as one of its checks, which printed `234 tests ran` and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `test_presenter_ticket_range.py` among them, then printed `36 checks ran (the offline suite
+and 35 tier tests) in 9m17s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18665/e2e-tools.log`.
