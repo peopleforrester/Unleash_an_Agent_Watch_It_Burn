@@ -37585,3 +37585,95 @@ suite and 34 tier tests) in 10m18s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GRE
 `test_kubecon_community_gate.py`, `test_kubecon_seg4_flow.py` and `test_scope_tests.py` were among those that ran.
 The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18681/e2e-tools.log`.
+
+## 2026-11-08 · #1200 · run 18690 · The tools tier runs on the Node on PATH, 24 or later
+
+Michael, 2026-11-08: "Run it with 26. Who says we need 24?" The exact-24 check in `verify/run-e2e-tools.sh` came from
+#572's run of 2026-10-25, which pinned the node test scripts to the Node of that day. His scope comment on the issue
+allowed either "26" or ">= 24" if the run checked that 24 works too.
+
+Decided: both runners refuse only a Node major below 24, so the tier runs on the Node on PATH. An exact 26 would have
+failed the tier on this dispatch host, whose `node` on PATH is `/var/lib/hecaton/cli/node`, Node 24.22.0, and 24 is the
+oldest Node those scripts have been run on. A major that does not read as a number is refused too. With no node on
+PATH, the tier now names the current Node.js release (nodejs.org) as what to install, naming no major. CI's e2e job installs Node 26 with `actions/setup-node` (`node-version: '26'`), and
+`verify/test_verify_suites_workflow.py` now fails a workflow whose e2e job has no setup-node step, installs a major
+below 24, or installs it after the suite.
+
+`verify/run-e2e.sh` moves with it, as the scope comment asked. Before moving it, the Backstage app was checked on
+Node 26.12.0 (`/var/lib/hecaton/toolchain/node/26`) in a scratch copy, with the committed yarn 4.13.0 release:
+`yarn install --immutable`, `yarn tsc` and `yarn workspace backend build` all exited 0, the native modules
+(better-sqlite3, @swc/core, esbuild and the rest) built with no failed build step, and `better-sqlite3` opened an
+in-memory database under Node 26. The Backstage `engines` ("22 || 24") and the image's node:24 base are left alone:
+they are Backstage's support policy and the image's own pin, and nothing on the clusters changes. Node 25 and later no
+longer bundle corepack (Node 26.12.0's `bin/` has only node, npm and npx), so `run-e2e.sh`'s missing line for corepack
+now says to install it with `npm install -g corepack`.
+
+There is no package.json, `.nvmrc` or lock for the node scripts under `verify/`; their only pins were the two
+runner checks and CI's setup-node, all three moved here. The tests that pinned 24 move with them:
+`verify/test_e2e_tools_tier.py` (Node 22 still refused, now as "Node 24 or later"; Node 24 and Node 26 both pass the
+check and reach the fetch; no node on PATH names no major), `verify/test_e2e_toolchain.py` and
+`verify/test_verify_harness.py`. Against the old runner, the tier test's three new or changed Node checks fail.
+
+No live check: the change touches `verify/` files no cluster runs and the CI workflow, nothing the clusters run.
+
+**Suite results, run 18690.** On `01835bfe`, with Node 26.12.0 first on PATH and `HECATON_BASE_SHA` set to the merge
+base, which `verify/scope_tests.py` read as FULL because the change touches both runners, `bash
+verify/run-e2e-tools.sh` printed `370 tests ran` for the offline suite, then `86 checks ran (the offline suite and 85
+tier tests) in 13m02s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The node tests ran on Node 26
+among them (`test_party_refresh_rate.py`, `test_wall_throttle_e2e.py`, `test_display_throttle_e2e.py`,
+`test_order_complete_button_e2e.py` and the rest). The prose gate printed `prose gate: pass`. The log is
+`/var/lib/hecaton/runs/18690/e2e-tools.log`.
+
+Not yet run: the CI e2e job on Node 26 runs when hecaton pushes this branch, and its verdict is that check's.
+## 2026-11-08 · #1137 · run 18686 · Every stage-trace seed reads its prompt off its /kubecon beat, through the probe's one reader
+
+**What was there.** The issue was written against an older `verify/stage_traces.py`. By this run's base (`754bbe17`),
+#1133 had moved the KubeCon probe's live prompts onto the page: `kp.CEO_PROMPT` is `kubecon_prompt("C5")`,
+`kp.ROOM_PROMPT` is `kubecon_prompt("C6")` and `kp.MCP_PROMPT` is `kubecon_prompt("C7")`, so the seeds were already
+sending page text, by way of the probe's module constants. What was left: `stage_traces.py` kept a second reader of
+its own (`kubecon_prompt(beat, page, which)`) for Challenge 2's prompt, no seed named the beat it reads, the seeds
+read the page once at import through constants rather than when the seed run is built, and nothing failed when a
+seed's prompt and its beat's prompt differed. `CEO_PROMPT` is not in `verify/agent_probe.py` and was not at the base
+either: #1133 left it in `verify/kubecon_probe.py`, where `test_ceo_persona.py` and
+`test_input_pii_guard_llm_guard.py` read it. `agent_probe.MCP_PROMPT` stays where it is, and no seed reads it. #1129
+(the probe sending the `/kubecon` prompts as written) is still open, but the reader it would share is #1133's
+`kp.kubecon_prompt`, which is now the only one.
+
+**The change.** `stage_traces.py` has no reader of its own. `SEED_BEATS` names each seed's beat and position, found
+by the prompt and not the number, since the page's beat names are the workshop's challenge numbers: Challenge 1's
+seeds read `C5` (the CEO's record), Challenge 2's the last prompt of `C3` (the recipe read after a reset, not the
+recon before it), Challenge 3's `C6` (HC-666) and Challenge 4's `C7` (the weather tool), each `-fixed` seed the same
+beat and position as its attack. `seed_prompts(page)` reads them through `kp.kubecon_prompt`, and
+`seed_beats(stamp, page)` builds the seed run from them, so a seed sends what the page carries when the run starts.
+`kp.room_ask` takes the prompt as an argument (the C6 one by default), so Challenge 3's seeds pass theirs, and
+`kp.kubecon_prompt` now says that a negative position counts from the end and refuses one past the beat's first.
+The two readers agree on every prompt the page carries today; the probe's is the one kept because it copies what
+`cp()` copies (`textContent`, trimmed), where the old one collapsed whitespace inside a prompt.
+
+**The seed with no /kubecon beat.** `c3-pii`. Its prompt is `stage_traces.PII_PROMPT`, a neighbor's test card,
+phone and e-mail, which the presenters do not send from the page; `OFF_PAGE_SEEDS` names it.
+
+**The test.** `verify/test_stage_trace_prompts.py` (offline) runs the seed beats against a fake probe and records
+what each seed sends, by its session id, then compares that with the page read by a regex of the test's own. On a
+temp copy of the page with the C5 prompt altered, the check fails naming `c1-attack` and `c1-fixed` and no other
+seed, and prints both lines. A copy with all four seed beats altered must have every `/kubecon` seed send the
+altered text, so a seed that sends a constant equal to today's page also fails: pointing `c4-fixed` at
+`kubecon_prompt("C7")` read at import, by hand, failed that check, and pointing it at `kp.MCP_PROMPT` failed the
+source check that no seed names a prompt constant. The test also checks that each talk challenge's beat carries
+that challenge's ask, that `c3-pii` sends `PII_PROMPT` and no beat carries it, and that `stage_traces.py` holds no
+copy of a page prompt. Its `verify/scope-map.yaml` entry is the one `scope_tests.py write` computed for it; the
+other drift `write` printed for unrelated tests was left out. `test_stage_traces.py`'s checks of the removed reader
+now check that the seeds read the probe's page through `kp.kubecon_prompt`.
+
+**Live check.** Skipped: the change touches only `verify/` scripts that run from the operator's host, none that a
+cluster runs, and no `/kubecon` prompt.
+
+**The suites (run 18686).** Scoped by `HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs
+point 6 asks. The first `bash verify/run-e2e-tools.sh`, at `28a9c26d` (log `/var/lib/hecaton/runs/18686/e2e-tools.log`), ran
+its 16 tier tests green, but its offline suite failed one test, `test_kubecon_c3_live_checks.py`: its check "the
+probe going back to the desk's copied ask fails, though the Joker lands" swaps `kp.ROOM_PROMPT` at run time, and
+`room_ask`'s new default had bound the old value when the function was defined. `188caaa9` reads the default when
+the ask is sent. The second run, at `188caaa9` (log `/var/lib/hecaton/runs/18686/e2e-tools-2.log`), printed `120 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, `test_stage_trace_prompts.py` and `test_kubecon_c3_live_checks.py`
+among them, then `20 checks ran (the offline suite and 19 tier tests) in 7m20s, 4 at a time`, `ALL E2E TOOLS TIER
+CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.

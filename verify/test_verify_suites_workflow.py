@@ -13,6 +13,9 @@ job sets GH_TOKEN to the run's own token and widens its permissions to contents 
 job reads no issue and keeps the workflow's contents: read alone. Before the tier, the e2e job runs
 verify/ci_chromium_libs.py, which unpacks the libraries and fonts Playwright's Chromium needs and Tanjiro lacks.
 
+#1200: the e2e job installs Node with actions/setup-node before the suite, at a major run-e2e-tools.sh accepts (24 or
+later; 26 since #1200), so the node harnesses never run on a Node the tier refuses.
+
 #1113: staging tests only its newest tip. The workflow-level concurrency group is the workflow and the ref, and on a
 staging push `cancel-in-progress` is true, so a newer push cancels the queued and running run before it. On an
 agent/** push the group carries the run id and `cancel-in-progress` is false, so no candidate's checks are cancelled
@@ -203,6 +206,19 @@ def problems(doc: dict, text: str) -> list[str]:
         found.append(f"e2e-tools: no step runs `{CHROMIUM_STEP}`, so Chromium cannot start on Tanjiro (#1047)")
     elif SUITES["e2e-tools"] in e2e_runs and e2e_runs.index(CHROMIUM_STEP) > e2e_runs.index(SUITES["e2e-tools"]):
         found.append(f"e2e-tools: `{CHROMIUM_STEP}` runs after the suite")
+    # #1200: the node harnesses run on the Node on PATH, which run-e2e-tools.sh refuses only below 24, so the e2e job
+    # installs a Node major of 24 or later (26 today) before the suite.
+    e2e_steps = e2e.get("steps") or []
+    node_steps = [i for i, st in enumerate(e2e_steps) if str(st.get("uses") or "").startswith("actions/setup-node@")]
+    if not node_steps:
+        found.append("e2e-tools: no actions/setup-node step, so the tier runs on whatever Node the runner has (#1200)")
+    for i in node_steps:
+        version = str((e2e_steps[i].get("with") or {}).get("node-version", ""))
+        if not re.fullmatch(r"\d+", version) or int(version) < 24:
+            found.append(f"e2e-tools: setup-node installs node-version {version!r}, not a major of 24 or later, "
+                         "which run-e2e-tools.sh refuses (#1200)")
+        if SUITES["e2e-tools"] in e2e_runs and i > e2e_runs.index(SUITES["e2e-tools"]):
+            found.append("e2e-tools: setup-node runs after the suite")
     if "permissions" in (jobs.get("offline") or {}):
         found.append("offline: has its own permissions; it reads nothing beyond the checkout")
     if set(jobs) != set(SUITES):
@@ -313,6 +329,12 @@ cases = {
     "issues: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"issues": "write"}),
     "contents: write on the e2e job": lambda d: d["jobs"]["e2e-tools"]["permissions"].update({"contents": "write"}),
     "permissions on the offline job": lambda d: d["jobs"]["offline"].update({"permissions": {"issues": "read"}}),
+    "Node 22 on the e2e job (#1200)": lambda d: [st["with"].update({"node-version": "22"})
+                                                 for st in d["jobs"]["e2e-tools"]["steps"]
+                                                 if str(st.get("uses", "")).startswith("actions/setup-node@")],
+    "no setup-node step on the e2e job (#1200)": lambda d: d["jobs"]["e2e-tools"].update(
+        {"steps": [st for st in d["jobs"]["e2e-tools"]["steps"]
+                   if not str(st.get("uses", "")).startswith("actions/setup-node@")]}),
     "no Chromium libraries step": lambda d: d["jobs"]["e2e-tools"].update(
         {"steps": [s for s in d["jobs"]["e2e-tools"]["steps"] if s.get("run", "").strip() != CHROMIUM_STEP]}),
     "the Chromium libraries step after the suite": lambda d: d["jobs"]["e2e-tools"].update(

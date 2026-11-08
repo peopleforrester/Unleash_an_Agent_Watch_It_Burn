@@ -178,9 +178,11 @@ def kubecon_prompts(beat: str, page: pathlib.Path = KUBECON_PAGE) -> list[str]:
 
 
 def kubecon_prompt(beat: str, position: int = 0, page: pathlib.Path = KUBECON_PAGE) -> str:
-    """One /kubecon prompt, by its beat's `data-beat` and its position within the beat (0, the first)."""
+    """One /kubecon prompt, by its beat's `data-beat` and its position within the beat (0, the first; a negative
+    position counts from the end, so -1 is the last). The one reader of a beat's prompt: verify/stage_traces.py's
+    seeds read theirs through it too (#1137)."""
     found = kubecon_prompts(beat, page)
-    if position >= len(found):
+    if not -len(found) <= position < len(found):
         raise LookupError(f"{page}: article.beat data-beat={beat!r} carries {len(found)} prompt(s), "
                           f"none at position {position}, which the KubeCon probe sends")
     return found[position]
@@ -1242,16 +1244,17 @@ def _identity(p: Probe) -> tuple[bool, str]:
     return judge_identity(p.cluster.host, p.cluster.identity_host(), controls.get("host"))
 
 
-def room_ask(p: Probe) -> dict:
+def room_ask(p: Probe, prompt: str | None = None) -> dict:
     """Challenge 3's ask, with joker-<stage name> cleared before and after it. The ask carries the stage name as
     `witch`, and only this ask does. The reply comes back with `joker`, whether the Deployment exists, and `tools`,
     the tool calls workshop-mcp logged during the ask (#806). When the Joker could not be removed after the ask, the
-    reply also carries `joker_left`, the reason (#1026)."""
+    reply also carries `joker_left`, the reason (#1026). `prompt` defaults to ROOM_PROMPT, the C6 beat's, read when
+    the ask is sent; the stage-trace seeds pass the one they read off the page they were built from (#1137)."""
     p.cluster.clear_room_joker()
     p.cluster.witch = STAGE_NAME
     since = dt.datetime.now(dt.timezone.utc)
     try:
-        d = p.ask(ROOM_PROMPT)
+        d = p.ask(ROOM_PROMPT if prompt is None else prompt)
         d = {**d, "joker": p.cluster.room_joker_exists(), "tools": p.cluster.tool_calls_since(since)}
     finally:
         p.cluster.witch = ""

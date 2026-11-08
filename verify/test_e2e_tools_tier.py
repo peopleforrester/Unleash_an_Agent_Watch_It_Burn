@@ -537,6 +537,7 @@ with tempfile.TemporaryDirectory() as t:
 
 print("== run-e2e-tools.sh stops before any test when it cannot have its tools ==")
 NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n'
+NODE26 = '#!/bin/sh\ncase "$1" in -p) echo 26 ;; --version) echo v26.12.0 ;; esac\n'
 NODE22 = '#!/bin/sh\ncase "$1" in -p) echo 22 ;; --version) echo v22.11.0 ;; esac\n'
 PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n", "xz": "#!/bin/sh\nexit 0\n"}
 
@@ -571,9 +572,42 @@ with tempfile.TemporaryDirectory() as t:
     vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
     make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE22})
     r = run(vdir / RUNNER.name, tmp, tmp / "bin")
-    check(f"a Node other than 24 fails the tier before any fetch (exit {r.returncode})",
-          r.returncode == 1 and "node v22.11.0 is on PATH; the node harnesses run on Node 24" in r.stderr
+    check(f"a Node below 24 fails the tier before any fetch (exit {r.returncode})",
+          r.returncode == 1 and "node v22.11.0 is on PATH; the node harnesses run on Node 24 or later" in r.stderr
           and not curl_calls(tmp), r.stderr)
+    check("no test ran", "== " not in r.stdout, r.stdout)
+
+# The tier runs on the Node on PATH (#1200): Node 24 and Node 26 both pass the Node check and reach the fetch, which
+# the bad lock then fails, so the only reason the tier stops is the fetch.
+for label, stub in (("24", NODE24), ("26", NODE26)):
+    with tempfile.TemporaryDirectory() as t:
+        tmp = pathlib.Path(t)
+        vdir = scratch(tmp, BAD_LOCK, (FETCH, RUNNER, BROWSERS))
+        make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": stub})
+        r = run(vdir / RUNNER.name, tmp, tmp / "bin")
+        check(f"Node {label} on PATH passes the Node check and the tier goes on to the fetch (exit {r.returncode})",
+              r.returncode == 1 and "the pinned tools could not be fetched" in r.stderr
+              and "node v" not in r.stderr and "node is not on PATH" not in r.stderr, r.stderr)
+
+# With no node on PATH at all, the tier says what to install and names no major. PATH here is only the fixture's bin,
+# holding the real python3, git and dirname and stubs for the rest, so the host's own node is not found.
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
+    bindir = tmp / "bin"
+    make_stubs(bindir, {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True),
+                        **{n: "#!/bin/sh\nexit 0\n" for n in ("tar", "sha256sum", "flock")}})
+    for real in ("python3", "git", "dirname"):
+        os.symlink(shutil.which(real), bindir / real)
+    env = {"PATH": str(bindir), "HOME": str(tmp), "TMPDIR": str(tmp), **TF_CACHE_ENV, **fetch_env(tmp, None)}
+    r = subprocess.run([BASH, str(vdir / RUNNER.name)], capture_output=True, text=True, timeout=120, env=env)
+    lines = [ln for ln in r.stderr.splitlines() if "node" in ln.lower()]
+    check(f"with no node on PATH the tier fails before any fetch (exit {r.returncode})",
+          r.returncode == 1 and "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip" in r.stderr
+          and not curl_calls(tmp), r.stderr)
+    check("it says to install the current Node.js release, naming no major",
+          lines == ["  - node is not on PATH; install the current Node.js release (nodejs.org) for the node harnesses"]
+          and not re.search(r"Node(\.js)? \d", r.stderr), r.stderr)
     check("no test ran", "== " not in r.stdout, r.stdout)
 
 with tempfile.TemporaryDirectory() as t:

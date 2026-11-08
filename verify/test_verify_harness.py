@@ -49,7 +49,8 @@ check("run-e2e.sh requires an explicit CONTEXT and passes it to kubectl",
 # never provides, so the suite failed on every machine without a system Chrome.
 check("run-e2e.sh runs Backstage's yarn through corepack",
       "corepack yarn test:e2e" in rune2e and "\n        && yarn " not in rune2e)
-check("run-e2e.sh requires Node 24", '!= "24"' in rune2e)
+check("run-e2e.sh refuses a Node below 24 and no other (#1200)",
+      "(( node_major < 24 ))" in rune2e and '!= "24"' not in rune2e)
 pwconfig = (REPO / "images/watch-it-burn-backstage/playwright.config.ts").read_text()
 check("playwright.config.ts launches the Chromium run-e2e.sh installs",
       "playwright install chromium" in rune2e and "generateProjects({ channel: 'chromium' })" in pwconfig)
