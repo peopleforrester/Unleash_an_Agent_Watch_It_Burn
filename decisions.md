@@ -36360,3 +36360,14 @@ burritobot-private".
 
 **Not touched.** The seven fleet monitors and the fleet dashboard in the org still drift from the repo. Bringing
 them in is a full `fleet.sh monitors --apply --session ...`, which is #485's for the event, not this issue's.
+
+**The suites (run 18606, at `b1f76fee`).** The first full `bash verify/run-e2e-tools.sh` could not start: GitHub
+releases answered 503 and 504 on three pinned tools. After `verify/fetch-e2e-tools.sh` fetched all 11, the second
+full run printed `361 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`. It was stopped at the shell's 60-minute
+limit, with three tier tests already failed on GitHub release downloads: `test_iam_policy_structural.py` and
+`test_terraform_lock_init.py` on the Datadog Terraform provider 3.91.0 zip (503), and
+`test_gateway_api_crds_upstream.py` on gateway-api v1.5.1's `standard-install.yaml` (read timed out). A plain curl of
+that file from this host also timed out after 60 seconds. The run scoped to this change, as the gate runs it
+(`HECATON_BASE_SHA=29995f0c`), selected 25 tier tests, those three among them. It printed `198 tests ran`,
+`ALL OFFLINE RENDER-GATE TESTS GREEN`, `26 checks ran (the offline suite and 25 tier tests) in 12m47s`,
+`ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added to the repo.
