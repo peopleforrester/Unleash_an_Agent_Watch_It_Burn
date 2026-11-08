@@ -36998,3 +36998,44 @@ re-measurement ran against Bedrock from the run directory, not on the bot.
 **What the run spent.** No calls on the live bot. About 480 Nova Pro `converse` calls across the before/after
 measurement and the two-draft comparison, run through boto3 1.40.70 and PyYAML 6.0.3 under `uv run --with` in the
 run directory only. No dependency was added to the repo.
+## 2026-11-08 · #1013 · run 18657 · A test holds #968's owed live run on the public bot, and the names its record uses
+
+**What #1013 asks.** Test review run 18016 found that no test checked #968's criterion that the live run on the
+public bot, once the recipe rule and guard-proxy's kitchen note are both on the community cluster, is named under
+"Not yet run on a cluster" in its decisions.md entry. `verify/prior-drafts.sh 1013 origin/staging` printed NONE, and
+the issue's only comment is the coordinator's restart of run 18067, which left no commits, so this is a first draft.
+
+**The test.** `verify/test_968_live_run_owed.py` (offline, so `bash verify/run-tests.sh` runs it) reads the three #968
+entries, runs 17897, 17919 and 17954, as literal text, and holds three things:
+
+1. The record. Run 17954 is #968's latest entry and carries exactly one **Not yet run on a cluster.** paragraph, with
+   exactly one clause naming a fallback prompt id. That clause says "The live run on the public bot", "as named in
+   the two entries above", one URL, `c3-recon` then `c3-attack` in one chat, Reset, then `c3-attack`, at least five
+   times each as run 17832 ran them for #953, once this rule and guard-proxy's note are both on
+   watch-it-burn-community.
+2. The two entries above. The only #968 entries before run 17954 are runs 17897 and 17919, in that order, and each
+   one's owed paragraph names the same run: the same URL, the same prompt ids in the same order with Reset before the
+   third, the same count and precedent, and the same cluster. Run 17897 writes "the community cluster", which the
+   test resolves to the roster's one community cluster.
+3. The names. Both prompt ids are prompts in `facilitation/kubecon-na-2026/fallback/prompts.yaml`, once each, the
+   recon one asking for the folders and the attack one for the recipe from burrito-data. The URL is
+   `gitops/ai-layer/web/event.js`'s `publicUrl`, and its host is in `publicHosts`. The cluster is the one community
+   row in `infra/terraform/fleet/roster.tsv`, which `fleet.sh` (sourced, its `public_host_for`,
+   `role_of_instructor_name` and `twin_rows`) gives the community role and publishes on that host. "guard-proxy's
+   note" is the kitchen note the recipe rule in `gitops/workshop-agent/agent.yaml` quotes, byte-equal to
+   `KITCHEN_NOTE` in `verify/test_recipe_persona.py`.
+
+Each check also runs against mutated copies, 41 in all: the 17954 entry with its heading, label, URL, prompt order,
+Reset, "in one chat", count, precedent, note or cluster struck or changed, a second owed paragraph or a later #968
+entry added; the two earlier entries with a heading, label, URL, Reset, count, precedent or cluster changed, or a third
+entry above; and the sheet, event.js, the roster, fleet.sh, the rule and `KITCHEN_NOTE` each with what the test reads
+changed. Every mutated copy is refused. A mutated `fleet.sh` is sourced from a scratch tree laid out as the repo's, and
+the test exits if the cut changed any fact other than the one it aims at, so a copy that failed to source cannot pass
+as a refusal. Its scope-map entry is added by hand: `python3 verify/scope_tests.py write` also rewrote several hundred
+unrelated lines of the map (drift already on staging, as run 18609 found), so only this test's entry, as `write`
+computed it, is committed.
+
+**Live check: skipped.** The change touches only `verify/` files no cluster runs and decisions.md.
+
+**Not yet run on a cluster.** Nothing here needs one: the test reads the tree. #968's own live run stays owed where
+its entries name it.
