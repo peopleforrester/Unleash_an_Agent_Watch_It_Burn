@@ -35294,3 +35294,10 @@ committed nothing and hecaton's manifest gate failed it; run 18566 makes the cha
 
 **Still owed, by design.** `guard-agency-on` and `guard-input-on` change the private cluster alone (#1098), so the
 public bot still deploys after them, as the #1102 entries say.
+
+**Suite results, run 18566.** On `a3747cc1`, `bash verify/run-e2e-tools.sh` with `HECATON_BASE_SHA=3c630161` printed
+`92 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `14 checks ran (the offline suite and 13 tier tests) in
+6m58s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Run one by one, the desk's tests passed:
+`verify/test_support_desk.py`, `_link`, `_live`, `_lookup` and `_named`, `verify/test_fake_ticket.py`,
+`verify/test_desk_ticket_live.py`, `verify/test_ros_seg4_flow.py` and `verify/test_kubecon_seg4_flow.py`. The prose
+gate printed `prose gate: pass`. No dependency was added. The log is `/var/lib/hecaton/runs/18566/e2e-tools.log`.
