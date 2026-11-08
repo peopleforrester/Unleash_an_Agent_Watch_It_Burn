@@ -491,25 +491,26 @@ tick();setInterval(tick,3000);
 </script>"""
 
 
-def _deploy_page(title: str, lead: str, witch_slug: str | None, empty: str) -> str:
+def _deploy_page(title: str, lead: str, witch_slug: str | None, empty: str, banner: str = "") -> str:
     """The page's rows come from /deployments.json every 3 s; with no witch to show for (None), it shows no rows."""
     script = "" if witch_slug is None else _DEPLOY_SCRIPT % (json.dumps(witch_slug), json.dumps(empty))
     return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>{html.escape(title)}</title><style>{_DEPLOY_STYLE}</style>"
-            f'<h1>{html.escape(title)}</h1><p class="meta">{html.escape(lead)}</p><ul id="deployments"></ul>{script}')
+            f'{banner}<h1>{html.escape(title)}</h1><p class="meta">{html.escape(lead)}</p><ul id="deployments"></ul>'
+            f"{script}")
 
 
-def deployments_page() -> str:
+def deployments_page(banner: str = "") -> str:
     return _deploy_page("Everything BurritoBot deployed", "Every app BurritoBot put on the cluster, newest first.", "",
-                        "Nothing deployed yet.")
+                        "Nothing deployed yet.", banner)
 
 
-def mine_page(name: str | None) -> str:
+def mine_page(name: str | None, banner: str = "") -> str:
     if not name:
         return _deploy_page("Your deployments", "Chat with BurritoBot first: your deployments show here under the "
-                            "name the chat page gives you.", None, "")
+                            "name the chat page gives you.", None, "", banner)
     return _deploy_page("Your deployments", f"Everything BurritoBot deployed for {name}, newest first.", slug(name),
-                        "Nothing deployed for you yet.")
+                        "Nothing deployed for you yet.", banner)
 
 log = logging.getLogger("fake-ticket")
 
@@ -556,6 +557,17 @@ def private_banner(page: str) -> str:
 def desk_banner(host: str) -> str:
     """The support desk's banner for a request's Host header: the private desk's banner, or nothing."""
     return private_banner("support desk") if PRIVATE_DESK_HOST.match((host or "").strip().lower()) else ""
+
+
+# The private deployments page's banner (#1179, part of #1142). deployments.burritobot.co (deck slide #/46) and the
+# private cluster's deployments-burritobot-private.burritobot.co (#/47) looked the same. Its page and its per-witch
+# view (/mine) take the same helper's banner on that Host; every other deployments Host gets the page as before.
+PRIVATE_DEPLOYMENTS_HOST = re.compile(r"^deployments-burritobot-private\.")
+
+
+def deployments_banner(host: str) -> str:
+    """The deployments page's banner for a request's Host header: the private page's banner, or nothing."""
+    return private_banner("deployments page") if PRIVATE_DEPLOYMENTS_HOST.match((host or "").strip().lower()) else ""
 
 
 def _shell(title: str, body: str, banner: str = "") -> str:
@@ -686,11 +698,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _deployments_get(self, url) -> None:
         """deployments-<cluster> and deployments.burritobot.co: the deployments page and nothing of the desk's."""
+        banner = deployments_banner(self.headers.get("Host") or "")
         if url.path == "/":
-            self._page(deployments_page())
+            self._page(deployments_page(banner))
         elif url.path == "/mine":
             asked = (urllib.parse.parse_qs(url.query).get("witch") or [""])[0]
-            self._page(mine_page(name_from_slug(asked) or self._cookie_witch()))
+            self._page(mine_page(name_from_slug(asked) or self._cookie_witch(), banner))
         elif url.path == "/deployments.json":
             self._send(200, deployments((urllib.parse.parse_qs(url.query).get("witch") or [""])[0][:80]))
         elif url.path == "/healthz":

@@ -2331,6 +2331,8 @@ reads:
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+  test_deployments_private_banner.py:
+    - gitops/ai-layer/ticket_site.py
   test_deployments_witch_line_e2e.py:
     - facilitation/kubecon-na-2026-audience-qr.svg
     - gitops/ai-layer
