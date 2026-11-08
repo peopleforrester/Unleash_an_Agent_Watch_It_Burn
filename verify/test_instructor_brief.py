@@ -551,12 +551,27 @@ check("the page has no one slide per guardrail, and no old slide 28 title",
 check("the switch's RBAC fallback reads the Role, which names the one Secret",
       "-n agent get role workshop-agent -o yaml" in _sw)
 _handoffs = re.findall(r'<p class="note"><b>Hand-off:</b> (.*?)</p>', KUBECON, re.S)
-for n, line in ((2, "Regarding excessive agency, there are a lot of Kubernetes guardrails you should already have"),
-                (3, "Those were the bot doing what it was asked. Next, the bot doing what a stranger asked.")):
+
+
+def _ros_handoff(n: int) -> str:
+    """Segment n's `- **Hand-off:**` line in the run-of-show, whitespace flattened, or "" when it has none."""
+    sec = ROS.split(f"### Segment {n}:", 1)[1].split(f"### Segment {n + 1}:", 1)[0]
+    return " ".join(sec.split("- **Hand-off:**", 1)[1].split("\n- **", 1)[0].split()) if "- **Hand-off:**" in sec else ""
+
+
+for n, line in ((2, "Regarding excessive agency, there are a lot of Kubernetes guardrails you should already have"),):
     sec = " ".join(KUBECON.split(f'<span class="n">SEGMENT {n}', 1)[1].split(f'<span class="n">SEGMENT {n + 1}', 1)[0]
                    .split())
     ros_sec = " ".join(ROS.split(f"### Segment {n}:", 1)[1].split(f"### Segment {n + 1}:", 1)[0].split())
     check(f"segment {n}'s hand-off is the run-of-show's", line in sec and line in ros_sec)
+# Segment 3's hand-off is slide #/42's note in the 2026-11-07 deck, word for word (rounds-agenticburn#82, #1098). The
+# run-of-show carries it as its whole Hand-off line; the /kubecon page's copy is #1100's, which adds its check here.
+_S3_HANDOFF = ('"Now let\'s transition to talking about new guardrails that you need to know about that are specific '
+               'to AI attacks."')
+check("segment 3's hand-off in the run-of-show is slide #/42's note, word for word (#1098)",
+      _ros_handoff(3) == _S3_HANDOFF)
+check("and the 2026-11-06 hand-off is gone from the run-of-show",
+      "Next, the bot doing what a stranger asked." not in " ".join(ROS.split()))
 
 print("== the OWASP close (#687, #842, #849) ==")
 _seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
@@ -616,7 +631,7 @@ check("the run-of-show's C6 fix says admission is not one of them, shows the For
       and _before(_ros_fix, "the Kubernetes API answers Forbidden", "Then `guard-input-on`"))
 check("the run-of-show names least privilege OWASP LLM06, Excessive Agency",
       "OWASP LLM06, Excessive Agency" in _ros_fix)
-check("the run-of-show says the Joker lands with Kyverno at Deny, from a registry it trusts",
+check("the run-of-show says HC-666's deployment lands with Kyverno at Deny, from a registry it trusts",
       "Kyverno is at Deny on both clusters by now and admits it" in " ".join(_ros_seg3.split()))
 check("the page's C6 premise puts least privilege before guard-input-on, and says Kyverno trusts the image",
       _before(_premise, "guard-agency-on", "guard-input-on") and "the internal registry Kyverno trusts" in _premise)

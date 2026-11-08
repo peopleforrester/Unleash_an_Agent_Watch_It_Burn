@@ -33423,3 +33423,67 @@ scoped to this change, printed `95 tests ran` and `ALL OFFLINE RENDER-GATE TESTS
 ending `PASS: CLAUDE.md point 1 holds both live-check lists (#1062)`), then `17 checks ran (the offline suite and 16
 tier tests) in 3m47s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No
 dependency was added. The log is `/var/lib/hecaton/runs/18441/e2e-tools-2.log`.
+
+## 2026-11-08 · #1098 · run 18442 · Segment 4 of the KubeCon run-of-show follows the 2026-11-07 deck's Challenge 3
+
+Part of #1076: the run-of-show half of the content change, in `facilitation/kubecon-na-2026-run-of-show.md` only.
+No earlier draft existed (`verify/prior-drafts.sh 1098 origin/staging` printed NONE, and the issue had no comments).
+The slides' text and notes are rounds-agenticburn#82's for `#/42` to `#/57` and #93's for the diagram on `#/58` to
+`#/63`; #93 replaced #89's swim-lane, so its six slides and notes are the ones used.
+
+**What changed.** Segment 3's hand-off is slide `#/42`'s note, word for word, as the whole Hand-off line. Segment 4
+is rewritten as one bullet per step in the deck's order, each citing its slide in the run-of-show's numbering (deck
+`#/43` is slide 44, so the segment runs 44 to 64), with the slides' lines quoted and their Say notes given: the desk
+(44) and its QR code (45), `Let's file a ticket.` (46), the challenge and play (47), the hint, the white text and the
+attack (48), the trace after it (49), LLM01 (50), the two commands from `/lab` (51), the retry (52), least privilege
+(53 to 56), the input guard (57 and 58) and the diagram (59 to 64), then the double duty. It opens with a paragraph
+on the numbering, the desk as #1077 leaves it, and the segment's timing. The segments table's row 4 names the same
+beats with their slide numbers. Segment 3's steps 1 to 6 are unchanged: the diff's hunks are line 864 (the row),
+1417 (the hand-off) and segment 4 below it.
+
+**Kept.** Kyverno at Deny admits HC-666's image because it trusts the internal registry; the desk's hosts, the
+bare name's route, `support-attackme`, the private desk, and `https://attackme.burritobot.co/support` answering 404;
+room deployments tiny and scaled to zero after five minutes; the Datadog Challenge 3 tab's `c3-attack`, `c3-fixed`
+and `c3-pii` views; `guard-agency-on`'s Role and its Forbidden, `guard-input-on`'s withheld ticket, in that order;
+the double duty. Dropped: the desk's wall, `/me`, every "Joker", the per-person page's path, which carries the
+word (the host is kept), and "a simple diagram on the slide", which the six diagram slides replace.
+
+**Timing.** The Say notes on the 21 slides come to 623 words, counted from the two issues' Say and Then say blocks,
+about 4 minutes 10 seconds at 150 words a minute, 63 of them under play on slides 47 and 48. With 3 minutes of play
+and the live steps the segment runs past its 7; segment 4 says so and leaves the figure to the rehearsal.
+
+**Three places the deck's notes and the platform differ, written as the platform has them.**
+1. Slide 46 (`#/45`) links `support.burritobot.co`, attackme's desk, and asks the admin bot to read the ticket back.
+   Each desk keeps its tickets in its own `fake-ticket` pod's memory (`TICKETS` in `gitops/ai-layer/ticket_site.py`,
+   one replica), and each cluster's `read_support_ticket` reads its own desk. So segment 4 files that ticket on
+   `support-burritobot-private.burritobot.co`, in a tab opened before the talk, and says the public bot reads one
+   filed through the slide's link. #82's own style line asks for this read-back to be confirmed at the run-through.
+2. Slide 52 (`#/51`) tells the room its retry "should no longer deploy anything". `guard-agency-on` applies its Role
+   with the terminal's own kubectl and `guard-input-on` toggles the local guard-proxy
+   (`gitops/ai-layer/web-terminal/entrypoint.sh`); unlike `guardrails-on`, neither calls `_peer`. Both change the
+   private cluster alone, so the room's public bot still deploys. Segment 4 says that and has the retry shown on the
+   admin bot. Arming both clusters, or changing the slide, is a followup in the run report.
+3. Slide 48's attack shows the deployment landing on "the deployments page". The admin bot's row is on
+   `deployments-burritobot-private.burritobot.co`, as the 2026-11-05 run-through record above shows;
+   `deployments.burritobot.co` is attackme's. Segment 4 names both.
+
+**Tests.** `verify/test_ros_seg4_flow.py` (new, offline, in `verify/scope-map.yaml` under `reads` alone; the rest of
+what `scope_tests.py write` produced was other tests' drift and is not in this change) holds segment 4's slide
+citations 44 to 64 in order, the beats in the deck's order, no Joker and no `/wall`, the kept facts, and row 4, each
+check also failing on a copy with a slide moved, the hint moved after LLM01, the old wall put back, the internal
+registry fact dropped, or the old row put back. `verify/test_instructor_brief.py` checked that segment 3's hand-off
+was the same on `/kubecon` and in the run-of-show; it now checks the run-of-show's line equals the `#/42` note and the
+old line is gone, and #1100, which changes the page, adds the page's side. `verify/test_support_desk_named.py` reads
+"the one the admin bot reads" for the private desk and checks the wall is gone, the two optional views are named and
+the desk is number-only. `verify/test_challenge_slide_headers.py` now requires segment 4's quoted Challenge 3 header.
+
+**Live check, read only, both clusters, 2026-11-08.** `curl` of `/ticket?id=HC-666` on `support.burritobot.co`,
+`support-attackme.burritobot.co` and `support-burritobot-private.burritobot.co` each answered `200 HC-666 card keeps
+failing at checkout`, and `https://attackme.burritobot.co/support` answered `404`. On each of
+`--context watch-it-burn-community` and `--context watch-it-burn-private`, `fake-ticket` runs `1 replicas`,
+`workshop-mcp`'s `TICKET_SITE_URL` is `http://fake-ticket.agent.svc.cluster.local:8080`, and the `workshop-agent`
+Role's `deployments` verbs are `["create","get","list","patch"]`. Nothing was changed on either cluster.
+
+**Not yet run on a cluster.** Filing a ticket on each desk and asking each bot about it by number, which writes a
+ticket into the desk's memory and is #1102's live check; the room's retry after `guard-agency-on` and
+`guard-input-on` on the public bot, which `verify/kubecon_probe.py community` would show still deploying.

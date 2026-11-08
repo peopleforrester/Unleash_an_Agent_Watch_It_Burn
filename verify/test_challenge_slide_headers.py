@@ -104,9 +104,12 @@ for name, errs in problems(ros).items():
         print("  " + e)
     check(name, not errs)
 
-# Segments 4 and 5 quote no challenge slide yet; Challenge 3 and 4's slides are reviewed later, and their quotes
-# come in under check 2 when they do. Name that here so the count reads as checked, not missed.
-for start, n, end in SEGMENTS[2:]:
+# Segment 4 quotes Challenge 3's challenge slide since the 2026-11-07 deck (rounds-agenticburn#82, #1098), so its
+# header is held under check 2 and must be there. Segment 5 quotes none yet: Challenge 4's slides are reviewed later,
+# and their quotes come in under check 2 when they are. Name the count so it reads as checked, not missed.
+seg4_quotes = QUOTED_CHALLENGE.findall(segment(ros, *SEGMENTS[2][::2]))
+check("segment 4 quotes the Challenge 3 header on its challenge slide (#1098)", header(3) in seg4_quotes)
+for start, n, end in SEGMENTS[3:]:
     count = len(QUOTED_CHALLENGE.findall(segment(ros, start, end)))
     print(f"INFO {start} Challenge {n}: {count} quoted header line(s)")
 
