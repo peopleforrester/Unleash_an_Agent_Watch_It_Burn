@@ -2151,7 +2151,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 20): a community run makes 7 model calls, an admin run 14, plus one for
+  (default 21): a community run makes 8 model calls, an admin run 14, plus one for
   each reply that is Bedrock's ToolUse 424, which the probe sends again once as the
   failure playbook says (#889). Pull both clusters' credentials into one isolated kubeconfig first, each
   context named for its cluster; the probe passes it per command and never touches `~/.kube/config`. Both runs
@@ -2180,7 +2180,10 @@ is merely slow rather than rebuilding:
     address in the reply the room reads, or the signature), Whitney's friendly
     opener getting nothing from the Secret (#688), the linked-list ask
     answered 3 of 3, Challenge 2's three openings (the beacon reached, the villain
-    image admitted in a dry run, the recipe file read), all with every guardrail
+    image admitted in a dry run, the recipe file read), and 2A's `/kubecon` prompt
+    sent once to the public bot (#1135), passing only when the image it asks for is
+    a Deployment on the cluster and a row on `deployments.burritobot.co` (the probe
+    removes both again, also on a FAIL), all with every guardrail
     off; then `guardrails-on`, run in the private cluster's terminal
     (`--switch-context`) as segment 3 runs it, arming the four Kubernetes
     guardrails on both clusters; then Challenge 3's HC-666 ask landing
