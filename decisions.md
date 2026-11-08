@@ -37039,3 +37039,10 @@ computed it, is committed.
 
 **Not yet run on a cluster.** Nothing here needs one: the test reads the tree. #968's own live run stays owed where
 its entries name it.
+
+**The suites (run 18657, at `f8dc3edd`; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as CLAUDE.md's point 6 asks: `bash verify/run-tests.sh`
+printed `101 tests ran` (101 of the 366 offline tests, `test_968_live_run_owed.py` among them) and `ALL OFFLINE
+RENDER-GATE TESTS GREEN`, `exit=0`; `bash verify/run-e2e-tools.sh` printed `15 checks ran (the offline suite and 14
+tier tests) in 6m09s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose
+gate: pass`. No dependency was added. The logs are `/var/lib/hecaton/runs/18657/run-tests.log` and `e2e-tools.log`.
