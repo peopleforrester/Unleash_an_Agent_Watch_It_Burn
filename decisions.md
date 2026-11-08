@@ -40023,3 +40023,48 @@ empty-context path; it prints `its FAIL line above is expected` and the test its
 No other change. `test_c8_persona.py` still passes 17/17 (the edit was in the docstring only). The
 `challenges/LAB-TEXT.md` stamp still names `0159b21b`, the unchanged last commit to touch `lab.html`,
 so `test_lab_text_export.py` stays green.
+
+## 2026-11-08 · #1035 · run 18799 · The drift report names the boundary root first for an account with no Config recorder and no boundary
+
+**Context.** #1035 was split from #981 (the "Fleet drift report" issue) by planning run 18053. The 2026-11-06T11:17Z
+report told aws1-student31 to aws1-student34 to "apply infra/terraform/aws/audit for this account", and that apply
+fails at plan in an account without `watch-it-burn-permissions-boundary`, because the audit root reads the policy
+with `data "aws_iam_policy"`. `bash verify/prior-drafts.sh 1035 origin/staging` printed NONE. For #981 it printed
+START from `origin/agent/981-17961`, whose commit f4475518 is this change, with four DRIFT lines, all edits in place
+(decisions.md, docs/floor.md, drift-report.py, test_drift_report.py). Run 17961 ended claim-stale, not failed.
+
+**Port.** f4475518 cherry-picked onto staging 1f79e18f with no conflict. Reread against the staging commits the
+drift lines name: ddcfc589 (fleet import-state) leaves `aws()`, its `ok_errors` and the `ids` map that `main()` fills
+from `sts get-caller-identity` as the draft used them, so `check_config(rep, prof, ids[prof])` still gets each
+account's own id. f7b2d95c and 4b277b12 edit other lines of the test and of docs/floor.md.
+
+**What differs from the draft.**
+
+- Its decisions.md entry was #981's triage. #1036 (run 18188) has since written that triage, with the four accounts
+  fixed by the boundary-then-audit apply of the night of 2026-11-06, so the draft's entry is not carried here; this
+  entry replaces it.
+- The test's existing check of the old line now matches the whole line, `NO recorder in us-west-2: apply
+  infra/terraform/aws/audit for this account`, and checks the report names no `infra/org/boundary` when the account
+  has the boundary, so both forms of the line are held exactly.
+- docs/floor.md quotes the new line, says the lookup is by the account's own ARN, that the boundary root is applied
+  first and the audit root after it, that an account with the boundary is told the audit root alone, and that the
+  four accounts had both roots applied in that order (#1036).
+
+**The change.** `has_boundary(profile, region, account_id)` calls `aws iam get-policy --policy-arn
+arn:aws:iam::<account>:policy/watch-it-burn-permissions-boundary` with the account's `--profile` and `--region`, and
+`ok_errors=("NoSuchEntity",)` makes a missing policy False rather than an Incomplete. `check_config` calls it only
+for an account with no recorder, so a healthy account costs no extra call. Without the boundary the line reads `NO
+recorder in us-west-2, and no watch-it-burn-permissions-boundary: apply infra/org/boundary, then
+infra/terraform/aws/audit, for this account`.
+
+**Tests.** `python3 verify/test_drift_report.py` passes. With staging's drift-report.py put back in its place, the
+same test fails exactly its two new checks: the IAM call by the account's ARN, profile (aws1-student31) and region
+(us-west-2), got `[]`, and the boundary-first line. The run then restored the changed file. Per the run's
+governance it ran only the test it changed; `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` are left
+to the gate's scoped validation.
+
+**Live.** The change touches `infra/terraform/drift/` and docs, which no cluster runs, so no cluster check applies.
+The lookup itself was read live with the run's session at 2026-11-08T22:21Z, importing drift-report.py and calling
+`has_boundary("accen-dev", "us-west-2", "515966504359")`: True. With the policy name swapped for one accen-dev lacks,
+the same call answered False: IAM's NoSuchEntity reads as a missing boundary and raised nothing. The fleet
+student accounts are not in this run's session, so the report was not run against them here.
