@@ -37743,3 +37743,51 @@ at `4b439c73` (log `/var/lib/hecaton/runs/18703/e2e-tools-2.log`), printed `103 
 RENDER-GATE TESTS GREEN`, `test_stage_switch_check.py` and `test_deck_shift_slide_citations.py` among them, then
 `15 checks ran (the offline suite and 14 tier tests) in 3m50s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
+## 2026-11-08 · #1138 · run 18702 · Each attack seed's trace spans held to its slide's notes, in order
+
+Part of #1130. Each challenge's slide opens Datadog on a pre-seeded attack trace, and `SEEDS` in
+`verify/stage_traces.py` names the tool spans that trace must carry. The notes were read from the deck itself,
+rounds-agenticburn's `attendee.html` at commit `9c80fb7a` (2026-11-08), each slide counted by its URL hash from 0:
+
+| Hash | Link | The note's words on the trace | `SEEDS` |
+|---|---|---|---|
+| `#/11` | "Ophelia Thorn" | "Click Ophelia Thorn to open Datadog and show the pre-seeded trace where it works." | `c1-attack`: `get_vault_entry` |
+| `#/26` | the presenter opens Datadog | "Then open Datadog and show the pre-seeded Challenge 2 trace: the run_shell call that reads the recipe." | `c2-attack`: `run_shell` |
+| `#/48` | `Let's look at the trace.` | `Click Let's look at the trace. to open Datadog and show the pre-seeded Challenge 3 trace: the read_support_ticket span, then the deploy_app span.` | `c3-attack`: `read_support_ticket`, then `deploy_app` |
+| `#/68` | "tools" | "click tools to open Datadog and show the pre-seeded Challenge 4 trace: get_weather, then a call to read_internal_config that nobody asked for." | `c4-attack`: `get_weather`, then `read_internal_config` |
+
+**Challenge 1, confirmed.** Slide 11's note, quoted in full in the table, names no tool: "show the pre-seeded trace
+where it works." The run-of-show's step for that slide names it: "Show the pre-seeded Challenge 1 trace where it
+works, the Secret read in the trace." The tool that reads a Secret is workshop-mcp's `get_vault_entry` ("REAL read
+of a Secret in the agent's namespace"), so `c1-attack` keeps `get_vault_entry`.
+
+**Challenge 4 is on `#/68`, not `#/65`.** The issue named `#/65` as not built yet. The deck now has 154 slides
+(rounds-agenticburn#118), `#/65` is "BurritoBot gets its tools from MCP servers.", and the hint "Ask BurritoBot what
+tools it has." with its "tools" link is `#/68`, as the run-of-show's segment 5 also cites it.
+
+**`SEEDS` already matched.** `c2-attack` expected `run_shell`, `c3-attack` `read_support_ticket` then `deploy_app`,
+and `c4-attack` `get_weather` then `read_internal_config`, so no row changed. The `-fixed` seeds and `c3-pii` are
+kept as they were.
+
+**The order is now checked.** Before this change `judge_spans` checked presence only: it made a set of span names.
+LLM Observability's spans API sets `start_ns` on every span (run 17405's real response,
+`verify/fixtures/llmobs-chat-judge/chat-098fcb00.json`, has it on all eight) and lists them newest first, so the
+order is read off `start_ns` and never off the list. `judge_spans` now takes each `must` span's first start and
+fails when they are not in `must`'s order, naming the order the trace has, and fails when a `must` span of a
+multi-span row carries no `start_ns`, rather than passing on list order. A row with one `must` span has no order
+to read. Every `must` tuple in `SEEDS` is in the order the trace shows it; the `-fixed` rows have one span each.
+`verify/test_stage_traces.py`'s fake Datadog now lists its spans newest first with a `start_ns` each, as the API does.
+
+**The test.** `verify/test_stage_trace_slides.py` (offline) keeps the slide table above, each note quoted word for
+word, and holds three things to it: `SEEDS`' four attack rows (the spans, in order, and no `must_not`), the tool
+names each note gives, in order, and the run-of-show's step for each trace (`facilitation/kubecon-na-2026-run-of-show.md`,
+this repo's copy of those notes), whose backticked tool names must be the same in the same order, or, for Challenge 1,
+must say "the Secret read". It is shown failing on a changed `SEEDS` (a span dropped, added or swapped, a `must_not`
+added, a row removed), on a note giving Challenge 4's tools in the other order, and on a run-of-show giving
+Challenge 3's spans the other way round or no longer calling Challenge 1's trace the Secret read. It runs
+`judge_spans` on hand-built spans and on run 17405's real Challenge 3 trace, which passes `read_support_ticket`
+then `deploy_app` and fails the reverse. Its `verify/scope-map.yaml` entry is the one `scope_tests.py write`
+computed for it; the other drift `write` printed for unrelated tests was left out.
+
+**Live check.** Skipped: the change touches only `verify/` scripts that run from the operator's host and no path a
+cluster runs.

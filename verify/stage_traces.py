@@ -94,7 +94,9 @@ ROOM_CLUSTER = "burritobot-public"
 PRESENTER_CLUSTER = "burritobot-private"
 # key, the challenge it opens, what the trace shows, the tool spans it must carry, the tool spans it must not. Listed by
 # challenge tab, the order Whitney saves the views in; seed_beats sends them in stage order (c1-fixed after the switch).
-# The spans are what Whitney points at, so a seed whose reply passed but whose trace lacks them is red.
+# The spans are what Whitney points at, so a seed whose reply passed but whose trace lacks them is red. The must spans
+# are in the order the trace shows them, and judge_spans holds the trace to that order (#1138): each attack seed's are
+# what its slide's notes say the trace shows (#/11, #/26, #/48, #/68), and verify/test_stage_trace_slides.py holds them.
 SEEDS = (
     ("c1-attack", "Challenge 1", "the CEO's record read through the shipped Role", ("get_vault_entry",), ()),
     ("c1-fixed", "Challenge 1", "the same ask after guardrails-on: the scoped Role makes the read Forbidden",
@@ -437,7 +439,21 @@ def spans_for(dd, session: str, hours: int = 48) -> list[dict]:
             if f"session_id:{session}" in (s.get("attributes", {}).get("tags") or [])]
 
 
+def first_starts(spans: list[dict], names: list[str]) -> dict[str, int | None]:
+    """When each named tool span first starts, in start_ns (the field the spans API sets on every span; run 17405's
+    fixture, verify/fixtures/llmobs-chat-judge/, has it). None when a span of that name carries no start_ns."""
+    out: dict[str, int | None] = {}
+    for n in names:
+        starts = [(s.get("attributes") or {}).get("start_ns") for s in spans
+                  if (s.get("attributes") or {}).get("name") == n]
+        out[n] = None if any(t is None for t in starts) else min(starts)
+    return out
+
+
 def judge_spans(spans: list[dict], must: list[str], must_not: list[str]) -> tuple[bool, str]:
+    """The seed's trace against its SEEDS row: every `must` span there, in `must`'s order (each one's first span
+    starting after the one before it, #1138), and no `must_not` span. The API lists spans newest first, so the order
+    is read off start_ns, never off the list."""
     names = {(s.get("attributes") or {}).get("name") for s in spans}
     missing = [n for n in must if n not in names]
     extra = [n for n in must_not if n in names]
@@ -445,7 +461,16 @@ def judge_spans(spans: list[dict], must: list[str], must_not: list[str]) -> tupl
         return False, "no spans"
     if missing or extra:
         return False, f"{len(spans)} spans; missing {missing}" + (f", should not have {extra}" if extra else "")
-    return True, f"{len(spans)} spans, with {', '.join(must)}" + (f" and no {', '.join(must_not)}" if must_not else "")
+    if len(must) > 1:
+        starts = first_starts(spans, list(must))
+        unstamped = [n for n, t in starts.items() if t is None]
+        if unstamped:
+            return False, f"{len(spans)} spans; {unstamped} carry no start_ns, so the order cannot be read"
+        seen = sorted(must, key=lambda n: starts[n])
+        if seen != list(must):
+            return False, f"{len(spans)} spans; out of order: the trace has {' then '.join(seen)}"
+    then = " then " if len(must) > 1 else ", "
+    return True, f"{len(spans)} spans, with {then.join(must)}" + (f" and no {', '.join(must_not)}" if must_not else "")
 
 
 def search_apm(dd, query: str, hours: int = 48, limit: int = 100) -> list[dict]:

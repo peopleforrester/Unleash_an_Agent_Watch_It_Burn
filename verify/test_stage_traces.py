@@ -231,7 +231,10 @@ class FakeDatadog:
             return {"data": []}
         key = next(k for k in self.tools if f"-{k}-" in sess)
         tags = [f"session_id:{sess}", "k8s.cluster.name:burritobot-private"]
-        return {"data": [{"attributes": {"name": n, "tags": tags}} for n in ["invocation", *self.tools[key]]]}
+        # Newest first, as the spans API lists them (run 17405's fixture), each stamped with its start_ns.
+        names = ["invocation", *self.tools[key]]
+        return {"data": [{"attributes": {"name": n, "tags": tags, "start_ns": 1_000 + i}}
+                         for i, n in reversed(list(enumerate(names)))]}
 
 
 # The cluster's guard lock (#1024) without a cluster: a stand-in hold that records the context it was asked for and
