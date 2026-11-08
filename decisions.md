@@ -35235,3 +35235,10 @@ workshop-agent Role on both still read the broad shipped rules afterwards, as fo
 **Not yet run on a cluster.** The changed command itself, once hecaton promotes this and Argo CD rolls the terminal:
 `guard-agency-on` from the private terminal (watch-it-burn-private), then a room `deploy_app` on attackme
 (watch-it-burn-community) comes back Forbidden, then `guard-agency-off`. The live-pass child of #1132 runs it.
+
+**Suite results, run 18550.** On `f8bd87b0`, with no `HECATON_BASE_SHA`, so unscoped, `bash verify/run-e2e-tools.sh`
+printed `356 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (which is `bash
+verify/run-tests.sh`), then `85 checks ran (the offline suite and 84 tier tests) in 16m36s, 4 at a time`, `ALL E2E
+TOOLS TIER CHECKS GREEN` and `exit=0`. `verify/test_guard_switch_both.py` was among them and printed `All two-cluster
+switch checks passed.` in 39 s. The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18550/e2e-tools.log`.
