@@ -37446,3 +37446,10 @@ watch-it-burn-community and watch-it-burn-private. Nothing was changed on either
 `https://support-burritobot-private.burritobot.co/`, `/wall` and `/me` each show the red banner above the heading; on
 watch-it-burn-community, `https://support.burritobot.co/`, `/wall` and `/me` show none. The same `curl` loop as above,
 counting `private (administrator)` per page, is the check.
+
+**The suites (run 18683, at `05fab293`; this paragraph only adds to the entry).** Scoped by
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)"`, as Dispatched runs point 6 asks; the change touches
+`ticket_site.py`, which tier tests read, so the scoped tools tier ran. `bash verify/run-e2e-tools.sh` printed
+`36 checks ran (the offline suite and 35 tier tests) in 10m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, its offline check among them. The prose gate printed `prose gate: pass`. No dependency was added. The log is
+`/var/lib/hecaton/runs/18683/e2e-tools.log`.
