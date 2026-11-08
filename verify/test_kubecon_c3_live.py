@@ -4,11 +4,15 @@
 """Needs kubectl, COMMUNITY_CONTEXT naming the kube-context of the community cluster (attackme, the live public bot),
 and the public internet. Every missing prerequisite is a failure, never a skip.
 
-verify/kubecon_probe.py is run by hand on the Night Before. This runs two of its community beats, unchanged:
+verify/kubecon_probe.py is run by hand on the Night Before. This runs two of its community beats:
 `identity` (the kube-context and https://<host> are the same cluster) and `c6-lands` (Challenge 3: HC-666 lands
-joker-<stage name> with Kyverno off, and workshop-mcp's audit log shows read_support_ticket on HC-666 and then
-deploy_app of that Joker, #806). It does not copy the beats, so a change to the probe's Challenge 3 flow is
-what runs here. Around them it holds the live cluster to the flow #764 moved the beat to:
+joker-<stage name>, and workshop-mcp's audit log shows read_support_ticket on HC-666 and then deploy_app of that
+Joker, #806). It does not copy the beats, so a change to the probe's Challenge 3 flow is what runs here. One thing is
+lifted: since #1134 the probe runs c6-lands only after guardrails-on, from the private cluster's terminal, as the
+stage does, and the probe's own community run checks that live. This test holds the witch name and the chain, so it
+runs the beat with its stage gate lifted (stage=None), at the guardrail state it finds the cluster in, and switches
+nothing. The Joker's image is the internal registry's, which both registry policies trust (#775), so the beat lands
+either way. Around them it holds the live cluster to the flow #764 moved the beat to:
 
 - the guard-proxy pod template carries git's checksum/proxy-py and has rolled out, so the bot runs the proxy.py that
   forwards the /chat body's `witch` to the agent (#803's repin to guard-proxy-agenticburn 88b9b52). When it does not,
@@ -32,6 +36,7 @@ Usage: COMMUNITY_CONTEXT=<kube-context> [KUBECONFIG=<isolated file>] python3 ver
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import pathlib
@@ -59,9 +64,10 @@ def git_proxy_checksum() -> str:
 
 
 def c3_beats() -> list[kp.Beat]:
-    """The probe's own identity and c6-lands beats, in its order, so the probe's current flow is what runs."""
+    """The probe's own identity and c6-lands beats, in its order, so the probe's current flow is what runs. c6-lands's
+    stage gate is lifted (#1134): this test switches no guardrail, and holds the witch name and the chain."""
     by_key = {b.key: b for b in kp.COMMUNITY}
-    return [by_key[k] for k in BEAT_KEYS]
+    return [dataclasses.replace(by_key[k], stage=None) for k in BEAT_KEYS]
 
 
 class RecordingCluster(kp.KubeconCluster):
