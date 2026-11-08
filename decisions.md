@@ -40570,5 +40570,8 @@ escalated to run on tanjiro-wsl2, because the applies have run.
 **Live check.** The reads above, all read-only. No file in the repo that a cluster runs is changed; this entry is the
 only change.
 
-**Tests run.** `python3 verify/prose_gate.py` on this entry. No test reads decisions.md's new text, so no other test is
-run, and the full Test and E2E commands are left to hecaton's validation. No dependency was added.
+**Tests run.** `python3 verify/prose_gate.py` printed `prose gate: pass`. The scoped
+`HECATON_BASE_SHA="$(git merge-base HEAD origin/staging)" bash verify/run-tests.sh` ran the 99 offline tests that read
+decisions.md and printed `ALL OFFLINE RENDER-GATE TESTS GREEN` with `exit=0`
+(`/var/lib/hecaton/runs/18818/scratch/run-tests.log`). A decisions.md change selects no tools-tier test, so
+`run-e2e-tools.sh` was not run. No dependency was added.
