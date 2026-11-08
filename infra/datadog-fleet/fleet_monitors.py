@@ -25,6 +25,10 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
                        dashboard answers for each cluster over its widget's window. Exit 1 on any blank. A
                        `scope: org` monitor (#810), on a metric with no cluster tag, must be in a state other
                        than No Data as a whole.
+    --apply --board-only, --check --board-only
+                       the same, for the challenge leaderboard alone (#489): the apply writes that one dashboard and
+                       no monitor, no fleet dashboard and no downtime, and the check reads that one dashboard. For an
+                       org where only the leaderboard is to be loaded, as Whitney's sandbox org was for KubeCon NA.
     --board --cluster NAME [--cluster NAME ...]
                        read-only, once a cluster has been walked through challenges 1 to 6 (#489, #862): the
                        challenge leaderboard is in the org with the table this repo defines, and the table's
@@ -36,10 +40,11 @@ The org. For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datado
 orgs, so both clusters ship there (#629, #454), and its keys are Secrets Manager watch-it-burn/datadog (the secret
 fleet.sh gives the clusters). The org name must start with WIB_DD_POOL_PREFIX (default "Datadog", as in
 verify/datadog-orgs.sh and room_view.py), so the monitors are never written into, or checked against, some other
-org. The application key in that secret is read-only, which --check needs and --apply cannot use: the apply
-writes monitors, downtimes and dashboards. --apply therefore takes the application key from
-WIB_FLEET_MONITORS_APP_KEY in this command's environment, a key Whitney issues from her own user. It must be
-unscoped: Datadog refuses log monitors created with a scoped one. Key values are never printed.
+org. The application key in that secret (app-key) is read-only, which --check needs and --apply cannot use: the
+apply writes monitors, downtimes and dashboards. --apply therefore takes the application key from
+WIB_FLEET_MONITORS_APP_KEY in this command's environment. Since 2026-11-05 the same secret's write-app-key field
+holds one: an unscoped key from Michael's user in Whitney's sandbox org. It must be unscoped: Datadog refuses log
+monitors created with a scoped one. Key values are never printed.
 
 The session window. The no-traces and agent-obs-silent monitors only mean something while students are at
 their keyboards; at any other time an idle cluster is a correct cluster. Monitors marked `session: true` are muted by downtimes
@@ -54,6 +59,7 @@ Usage (fleet.sh passes the profile and region; it is the normal way in):
     fleet.sh monitors --check
     fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private   # after a /chat on each
     fleet.sh monitors --board --cluster burritobot-private        # after walking that cluster through 1 to 6
+    WIB_FLEET_MONITORS_APP_KEY=<key> fleet.sh monitors --apply --board-only   # the leaderboard and nothing else
     python3 infra/datadog-fleet/fleet_monitors.py --profile accen-dev --region us-west-2 [--apply|--check]
 """
 from __future__ import annotations
@@ -527,18 +533,7 @@ def apply(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], notify: list[
         return 1
 
     # 2. The dashboards, each found by title so its URL survives re-applies.
-    urls = []
-    for label, dash in dashes:
-        if not dash["title"].startswith(TITLE_PREFIX):  # validate_dashboard refuses this before any call
-            raise ValueError(f"'{dash['title']}' is not one of our dashboard titles ({TITLE_PREFIX}...)")
-        existing = find_dashboard(dd, dash["title"])
-        if existing:
-            out = dd.call("PUT", f"/api/v1/dashboard/{existing['id']}", dash)
-            say(f"  dashboard updated: {dash['title']}")
-        else:
-            out = dd.call("POST", "/api/v1/dashboard", dash)
-            say(f"  dashboard created: {dash['title']}")
-        urls.append((label, f"https://app.{dd.site}{out.get('url') or '/dashboard/' + str(out.get('id'))}"))
+    urls = [(label, put_dashboard(dd, dash, say)) for label, dash in dashes]
 
     # 3. Monitors: update in place by key, create what is new, delete what left the file.
     for action, k, mid, body in plan_monitors(rendered, managed_monitors(dd)):
@@ -576,11 +571,32 @@ def apply(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], notify: list[
     return 0
 
 
-def check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], say=print) -> int:
+def put_dashboard(dd: Datadog, dash: dict, say=print) -> str:
+    """Write one of our dashboards, found by title so its URL survives re-applies. Returns its URL."""
+    if not dash["title"].startswith(TITLE_PREFIX):  # validate_dashboard refuses this before any call
+        raise ValueError(f"'{dash['title']}' is not one of our dashboard titles ({TITLE_PREFIX}...)")
+    existing = find_dashboard(dd, dash["title"])
+    if existing:
+        out = dd.call("PUT", f"/api/v1/dashboard/{existing['id']}", dash)
+        say(f"  dashboard updated: {dash['title']}")
+    else:
+        out = dd.call("POST", "/api/v1/dashboard", dash)
+        say(f"  dashboard created: {dash['title']}")
+    return f"https://app.{dd.site}{out.get('url') or '/dashboard/' + str(out.get('id'))}"
+
+
+def apply_board(dd: Datadog, dashes: list[tuple[str, dict]], say=print) -> int:
+    """--apply --board-only (#489): the challenge leaderboard alone. No monitor is validated, written or deleted, the
+    fleet dashboard is not touched and no downtime is cancelled or created."""
+    say(f"  {BOARD_LABEL}: {put_dashboard(dd, dict(dashes)[BOARD_LABEL], say)}")
+    return 0
+
+
+def check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], say=print, monitors: bool = True) -> int:
     """Read-only: does the live org hold exactly what this repo defines? Exit 1 on any drift."""
     drift = 0
-    live = {key_of(m): m for m in managed_monitors(dd) if key_of(m)}
-    for m in defs["monitors"]:
+    live = {key_of(m): m for m in managed_monitors(dd) if key_of(m)} if monitors else {}
+    for m in defs["monitors"] if monitors else []:
         lm = live.pop(m["key"], None)
         if lm is None:
             say(f"  MISSING  {m['key']}: not in the org (run fleet.sh monitors --apply)")
@@ -884,6 +900,9 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
                       help="read-only: every monitor and fleet-dashboard query returns data for every --cluster")
     mode.add_argument("--board", action="store_true",
                       help="read-only: the leaderboard is applied and every column is filled for every --cluster")
+    p.add_argument("--board-only", action="store_true",
+                   help="with --apply or --check: the challenge leaderboard alone, no monitor, fleet dashboard or "
+                        "downtime")
     p.add_argument("--cluster", action="append", default=[],
                    help="a kube_cluster_name that must be shipping, for --data, or that has walked challenges 1 to 6, "
                         "for --board (repeatable, at least one)")
@@ -908,6 +927,10 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
         problems.append("--data needs every cluster that should be shipping, one --cluster each")
     if a.board and not a.cluster:
         problems.append("--board needs every cluster that has walked challenges 1 to 6, one --cluster each")
+    if a.board_only and not (a.apply or a.check):
+        problems.append("--board-only only means something with --apply or --check")
+    if a.board_only and (a.session or a.notify):
+        problems.append("--session and --notify are for the monitors, which --board-only does not write")
     if a.cluster and not (a.data or a.board):
         problems.append("--cluster only means something with --data or --board")
     outside = [c for c in a.cluster if not c.startswith(CLUSTER_PREFIX)]
@@ -922,8 +945,12 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
 
     label = ("APPLY" if a.apply else "CHECK" if a.check else "DATA" if a.data else "BOARD" if a.board
              else "DRY-RUN")
-    print(f"[{label}] {len(defs['monitors'])} monitor(s) and dashboards "
-          + ", ".join(f"'{d['title']}'" for _, d in dashes))
+    if a.board_only:
+        dashes = [(lb, d) for lb, d in dashes if lb == BOARD_LABEL]
+        print(f"[{label}] the {BOARD_LABEL} '{dashes[0][1]['title']}' alone: no monitor, fleet dashboard or downtime")
+    else:
+        print(f"[{label}] {len(defs['monitors'])} monitor(s) and dashboards "
+              + ", ".join(f"'{d['title']}'" for _, d in dashes))
     if not (a.apply or a.check or a.data or a.board):
         for m in defs["monitors"]:
             print(f"  P{m.get('priority', '-')} {m['key']:<22} {m['type']:<12} {m['name']}")
@@ -951,13 +978,15 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
         print(f"  instructor org: {org} ({site}), api key from {SECRET_ID}"
               + (f", application key from {APP_KEY_ENV}" if a.apply else ""))
         if a.check:
-            return check(dd, defs, dashes)
+            return check(dd, defs, dashes, monitors=not a.board_only)
         if a.data:
             print(f"  every query must answer for: {', '.join(a.cluster)}")
             return data_check(dd, defs, dashes, a.cluster, now or dt.datetime.now(dt.timezone.utc))
         if a.board:
             print(f"  every leaderboard column must be filled for: {', '.join(a.cluster)}")
             return board_check(dd, dashes, a.cluster, now or dt.datetime.now(dt.timezone.utc))
+        if a.board_only:
+            return apply_board(dd, dashes)
         return apply(dd, defs, dashes, a.notify, session, now or dt.datetime.now(dt.timezone.utc))
     except RuntimeError as e:
         print(f"FAILED: {e}", file=sys.stderr)

@@ -501,6 +501,78 @@ rc, text = run(["--check"], FakeOrg())
 check("an empty org fails the check, naming every monitor and both dashboards",
       rc == 1 and text.count("MISSING") == len(mons) + 2 and "MISSING  challenge leaderboard" in text)
 
+print("== --board-only: the leaderboard alone, nothing else written or read (#489) ==")
+
+
+def board_only_keys_unread(*_):
+    raise AssertionError("keys read before the arguments were checked")
+
+
+LEADERBOARD = fm.load_dashboard(fm.LEADERBOARD_FILE)
+o = FakeOrg()
+run(["--apply", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], o)
+o_fleet = next(d["id"] for d in o.dashboards if d["title"] == dash["title"])
+o_board = next(d["id"] for d in o.dashboards if d["title"] == LEADERBOARD["title"])
+# The org as found in Whitney's sandbox org on 2026-11-08: everything applied, then the repo moved on, so the fleet
+# dashboard, the leaderboard and a monitor all differ from it. Only the leaderboard may be brought back.
+o.bodies[o_fleet]["widgets"].pop()
+o.bodies[o_board]["widgets"][1]["definition"]["time"] = {"live_span": "1h"}
+some_monitor = next(iter(o.monitors))
+o.monitors[some_monitor]["query"] = "max(last_5m):max:edited.in.ui{*} < 1"
+monitors_before, downtimes_before = copy.deepcopy(o.monitors), copy.deepcopy(o.downtimes)
+fleet_before = copy.deepcopy(o.bodies[o_fleet])
+calls_before = len(o.calls)
+rc, text = run(["--apply", "--board-only"], o)
+check("--apply --board-only exits 0", rc == 0)
+check("its one write is the leaderboard, updated in place by its id",
+      [(m, p) for m, p, _ in o.calls[calls_before:] if m != "GET"] == [("PUT", f"/api/v1/dashboard/{o_board}")])
+check("no monitor is validated, listed, written or deleted",
+      not any("/monitor" in p for _, p, _ in o.calls[calls_before:]) and o.monitors == monitors_before)
+check("no downtime is read, cancelled or created",
+      not any("/downtime" in p for _, p, _ in o.calls[calls_before:]) and o.downtimes == downtimes_before)
+check("the fleet dashboard is left as found, drift and all", o.bodies[o_fleet] == fleet_before)
+check("the leaderboard in the org is now leaderboard.yaml's", fm.dashboard_drift(o.bodies[o_board], LEADERBOARD) == [])
+check("its URL is printed, with no railway command, which is the fleet dashboard's",
+      f"challenge leaderboard: https://app.datadoghq.com/dashboard/{o_board}/fleet" in text
+      and "railway" not in text)
+check("it writes with the write key", all(h.get("DD-APPLICATION-KEY") == "WRITEKEY777777"
+                                          for _, _, h in o.calls[calls_before:]))
+check("the header says the leaderboard is applied alone", "alone: no monitor, fleet dashboard or downtime" in text)
+
+calls_before = len(o.calls)
+rc, text = run(["--check", "--board-only"], o, env={})
+check("--check --board-only passes on the leaderboard alone, whatever the monitors and fleet dashboard are",
+      rc == 0 and "OK       challenge leaderboard" in text and "MISSING" not in text and "DRIFT" not in text)
+check("it reads no monitor and not the fleet dashboard",
+      not any("/monitor" in p for _, p, _ in o.calls[calls_before:])
+      and ("GET", f"/api/v1/dashboard/{o_fleet}") not in [(m, p) for m, p, _ in o.calls[calls_before:]])
+check("--check --board-only never writes", all(m == "GET" for m, _, _ in o.calls[calls_before:]))
+rc, text = run(["--check"], o, env={})
+check("the whole --check still names the fleet dashboard and the monitor", rc == 1
+      and "DRIFT    fleet dashboard" in text and "DRIFT    " + fm.key_of(o.monitors[some_monitor]) in text)
+o.bodies[o_board]["widgets"][1]["definition"]["time"] = {"live_span": "1h"}
+rc, text = run(["--check", "--board-only"], o, env={})
+check("a leaderboard edited in the UI is DRIFT under --check --board-only",
+      rc == 1 and "DRIFT    challenge leaderboard" in text)
+rc, text = run(["--check", "--board-only"], FakeOrg(), env={})
+check("an org without the leaderboard is MISSING under --check --board-only, and only that",
+      rc == 1 and text.count("MISSING") == 1 and "MISSING  challenge leaderboard" in text)
+
+o = FakeOrg()
+rc, text = run(["--apply", "--board-only"], o)
+check("on an empty org it creates the leaderboard and nothing else", rc == 0
+      and o.writes() == [("POST", "/api/v1/dashboard")] and [d["title"] for d in o.dashboards] == [LEADERBOARD["title"]]
+      and o.monitors == {} and o.downtimes == [])
+rc, text = run(["--apply", "--board-only"], FakeOrg(), env={})
+check(f"--apply --board-only still needs {fm.APP_KEY_ENV}", rc == 1 and fm.APP_KEY_ENV in text)
+for argv, why in ((["--board-only"], "only means something with --apply or --check"),
+                  (["--board", "--board-only", "--cluster", "burritobot-private"], "only means something with --apply"),
+                  (["--apply", "--board-only", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], "--board-only does not write"),
+                  (["--apply", "--board-only", "--notify", "@oncall"], "--board-only does not write")):
+    o = FakeOrg()
+    rc, text = run(argv, o, keys=board_only_keys_unread)
+    check(f"{' '.join(argv)} is refused before any call", rc == 1 and why in text and o.calls == [])
+
 print("== data: every query returns data for every cluster (#706) ==")
 CLUSTERS = ["burritobot-public", "burritobot-private"]
 DATA_ARGS = ["--data", "--cluster", CLUSTERS[0], "--cluster", CLUSTERS[1]]
@@ -971,6 +1043,8 @@ check("it passes the account and region explicitly", '--profile "${WIB_DEFAULT_A
 check("usage documents it", "monitors [--apply|--check]" in fleet_src)
 check("usage documents the data check", "monitors --data --cluster NAME" in fleet_src)
 check("usage documents the leaderboard check", "monitors --board --cluster NAME" in fleet_src)
+check("usage documents the leaderboard-only apply and check (#489)",
+      "monitors --apply --board-only | --check --board-only" in fleet_src)
 
 print()
 if failures:
