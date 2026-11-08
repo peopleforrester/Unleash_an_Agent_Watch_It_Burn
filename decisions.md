@@ -34676,3 +34676,8 @@ in `verify/scope-map.yaml`. No dependency was added.
 **Not yet run.** The purge itself, on or after 2026-11-13, after the talk on 2026-11-12:
 `python3 verify/dd_purge_public.py --profile accen-dev --from 2026-10-28 --apply`, then `--verify` until it exits 0,
 then a comment on #647 with what went and the APM count left to retention.
+
+**The suites (run 18508, at `f826394f`).** `bash verify/run-e2e-tools.sh` ran the offline suite, which printed `351 tests
+ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` with `verify/test_dd_purge_public.py` among them, then `84 checks ran
+(the offline suite and 83 tier tests) in 13m44s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed
+`prose gate: pass`. The log is `/var/lib/hecaton/runs/18508/work/e2e-tools.log`.
