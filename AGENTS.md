@@ -212,7 +212,7 @@ to the fifth (#796).
    - A code change runs the tests that read the changed files: the scoped `run-tests.sh`, and the scoped
      `run-e2e-tools.sh` only when the change touches what a tier test reads.
    - The full tools tier runs only when `verify/scope_tests.py` returns FULL for the change, and at release points
-     (before each run-through and the Night Before), never on every promotion to main and never inside a run.
+     Michael names (the Night Before, or one he calls), never on every promotion to main and never inside a run.
      Michael's ruling of 2026-11-08: "Not before every main promotion." A tier
      failure is reported with the failing test, never answered by running the whole suite again (#1190).
    - To run one tier test alone, change it and run the scoped `run-e2e-tools.sh`: a changed test selects itself,
