@@ -33487,3 +33487,9 @@ Role's `deployments` verbs are `["create","get","list","patch"]`. Nothing was ch
 **Not yet run on a cluster.** Filing a ticket on each desk and asking each bot about it by number, which writes a
 ticket into the desk's memory and is #1102's live check; the room's retry after `guard-agency-on` and
 `guard-input-on` on the public bot, which `verify/kubecon_probe.py community` would show still deploying.
+
+**Suite results, run 18442.** On `0646219b`, `bash verify/run-e2e-tools.sh` with no `HECATON_BASE_SHA`, so the whole
+suite, printed `345 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` (the new test among them, ending `segment 4
+and its row follow the 2026-11-07 deck's Challenge 3`), then `83 checks ran (the offline suite and 82 tier tests) in
+9m36s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The prose gate printed `prose gate: pass`. No dependency was
+added. The log is `/var/lib/hecaton/runs/18442/e2e-tools.log`.
