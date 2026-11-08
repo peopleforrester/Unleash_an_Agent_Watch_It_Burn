@@ -33408,6 +33408,9 @@ point 1 names it. Its self-check drops each entry from a copy of the text in tur
 entry missing; it also fails when any of its three sentence anchors is gone. A first version read the JSON patches'
 `path: /metadata/...` lines in `ai-layer.yaml` as a source at the repo root; it now takes only relative paths.
 `verify/test_dispatched_runs.py` still passes, since the sentence it pins is kept and the new rule follows it.
+The first full run failed `test_no_cloud_by_hand.sh`, whose scan reads a line naming both `source` and `fleet.sh`
+as a test that runs `fleet.sh`; two docstring lines did, though the test only reads the file as text. They now say
+"path".
 
 **Scope map.** `scope_tests.py write` puts the test under `always`, since it builds paths from what it reads; that
 one line is in this change, and the rest of what `write` produced was other tests' existing drift and is not.

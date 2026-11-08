@@ -10,7 +10,7 @@ the records, docs, `facilitation/` or harness files skips it and says so in one 
 The live list is held two ways: each path the issue names is in it, and each path the repo itself says a cluster runs
 is in it too. That second half reads the tree: the top directory of every local source an Argo CD Application in
 gitops/bootstrap/apps/ names, every submodule in .gitmodules, and every verify/ script fleet.sh runs. A new Application
-source, submodule or fleet.sh call then fails here until point 1 names it. A self-check drops each entry from a copy
+path, submodule or fleet.sh call then fails here until point 1 names it. A self-check drops each entry from a copy
 of the text in turn and confirms the check reports it missing.
 """
 from __future__ import annotations
@@ -94,7 +94,7 @@ def lists(item: str) -> tuple[str, str]:
 
 
 def cluster_run_paths() -> list[str]:
-    """Each path the tree says a cluster runs: Application source tops, submodules, verify/ scripts fleet.sh runs."""
+    """Each path the tree says a cluster runs: Application path tops, submodules, verify/ scripts fleet.sh runs."""
     paths: set[str] = set()
     for app in sorted(APPS.glob("*.yaml")):
         for src in re.findall(r"^\s+path:\s*['\"]?([^'\"\s]+)", app.read_text(encoding="utf-8"), re.M):
