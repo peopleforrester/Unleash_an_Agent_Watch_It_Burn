@@ -204,9 +204,25 @@ def run(cluster: str, *commands: str, race: bool = False) -> tuple[dict, list[su
                                           "toolNames": None, "calls": []}))
         env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}",
                "FAKE_STATE": str(state_path)}
-        results = [subprocess.run(["bash", str(home / c)], env=env, capture_output=True, text=True, timeout=60)
-                   for c in commands]
+        results = [toggle(home / c, env) for c in commands]
         return json.loads(state_path.read_text()), results
+
+
+# Each fake kubectl call starts python3, and a toggle makes up to 19 of them. On the shared host at a load of 40
+# that took 15 seconds for guards-off on its own and over 60 inside the offline suite, and the old fixed 60-second
+# limit raised a traceback that ended the whole test (run 17968). The limit only catches a toggle that hangs, so it
+# is 300 seconds, and a toggle that reaches it exits naming the toggle and the limit.
+TOGGLE_LIMIT_SECONDS = 300
+
+
+def toggle(path: pathlib.Path, env: dict) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(["bash", str(path)], env=env, capture_output=True, text=True,
+                              timeout=TOGGLE_LIMIT_SECONDS)
+    except subprocess.TimeoutExpired:
+        print(f"\nFAIL: the toggle {path.name} did not finish in {TOGGLE_LIMIT_SECONDS} seconds against the fake "
+              "kubectl; it hangs, or the host is too loaded to start its python3 fake calls")
+        sys.exit(1)
 
 
 def patched_cm(state: dict) -> bool:

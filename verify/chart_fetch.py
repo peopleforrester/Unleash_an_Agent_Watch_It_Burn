@@ -18,8 +18,10 @@ that scan the tree for text (test_mesh_enrollment.py found istio.io/dataplane-mo
 untarred), and the cache sits outside every worktree in any case.
 
 A pull that fails on a network error (an EOF, a reset or refused connection, a timeout, a failed name lookup, a 429 or
-a 5xx) is tried again, up to ATTEMPTS times in all, and each retry is printed. Any other error, a chart or version not
-in the repository included, fails at once with Helm's own words, and so does the last network error."""
+a 5xx, or Helm saying a repository cannot be reached on a GET of its index, #989) is tried again, up to ATTEMPTS times
+in all, and each retry is printed with Helm's error, so a tier log names every attempt's error. Any other error, a
+chart or version not in the repository included, fails at once with Helm's own words, and so does the last network
+error."""
 from __future__ import annotations
 
 import pathlib
@@ -43,8 +45,11 @@ BACKOFF = (2, 5, 10)
 ATTEMPTS = len(BACKOFF) + 1
 
 # Helm's words for a fetch the network broke, as Go's net/http, crypto/tls and net packages and an HTTP status put them.
+# `cannot be reached: Get "` is Helm's own wrapper around a GET of index.yaml that net/http could not complete, whatever
+# cause follows it: run 17888 (#938) failed on that line with its cause cut off, so the wrapper is retried on its own
+# (#989). A 404 under the same wrapper reads `cannot be reached: failed to fetch`, and is not retried.
 NETWORK_ERROR = re.compile(
-    r"\bEOF\b|connection reset|connection refused|broken pipe|i/o timeout|TLS handshake timeout"
+    r"cannot be reached: Get \"|\bEOF\b|connection reset|connection refused|broken pipe|i/o timeout|TLS handshake timeout"
     r"|Client\.Timeout|context deadline exceeded|timeout awaiting|no such host|server misbehaving"
     r"|temporary failure in name resolution|network is unreachable|http2: "
     r"|\b(?:429|50[0234])\b(?: [A-Z]|$)|Too Many Requests|Bad Gateway|Service Unavailable|Gateway Timeout",
