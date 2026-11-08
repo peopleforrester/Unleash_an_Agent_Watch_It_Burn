@@ -37547,3 +37547,45 @@ among them (`test_party_refresh_rate.py`, `test_wall_throttle_e2e.py`, `test_dis
 `/var/lib/hecaton/runs/18690/e2e-tools.log`.
 
 Not yet run: the CI e2e job on Node 26 runs when hecaton pushes this branch, and its verdict is that check's.
+## 2026-11-08 · #1137 · run 18686 · Every stage-trace seed reads its prompt off its /kubecon beat, through the probe's one reader
+
+**What was there.** The issue was written against an older `verify/stage_traces.py`. By this run's base (`754bbe17`),
+#1133 had moved the KubeCon probe's live prompts onto the page: `kp.CEO_PROMPT` is `kubecon_prompt("C5")`,
+`kp.ROOM_PROMPT` is `kubecon_prompt("C6")` and `kp.MCP_PROMPT` is `kubecon_prompt("C7")`, so the seeds were already
+sending page text, by way of the probe's module constants. What was left: `stage_traces.py` kept a second reader of
+its own (`kubecon_prompt(beat, page, which)`) for Challenge 2's prompt, no seed named the beat it reads, the seeds
+read the page once at import through constants rather than when the seed run is built, and nothing failed when a
+seed's prompt and its beat's prompt differed. `CEO_PROMPT` is not in `verify/agent_probe.py` and was not at the base
+either: #1133 left it in `verify/kubecon_probe.py`, where `test_ceo_persona.py` and
+`test_input_pii_guard_llm_guard.py` read it. `agent_probe.MCP_PROMPT` stays where it is, and no seed reads it. #1129
+(the probe sending the `/kubecon` prompts as written) is still open, but the reader it would share is #1133's
+`kp.kubecon_prompt`, which is now the only one.
+
+**The change.** `stage_traces.py` has no reader of its own. `SEED_BEATS` names each seed's beat and position, found
+by the prompt and not the number, since the page's beat names are the workshop's challenge numbers: Challenge 1's
+seeds read `C5` (the CEO's record), Challenge 2's the last prompt of `C3` (the recipe read after a reset, not the
+recon before it), Challenge 3's `C6` (HC-666) and Challenge 4's `C7` (the weather tool), each `-fixed` seed the same
+beat and position as its attack. `seed_prompts(page)` reads them through `kp.kubecon_prompt`, and
+`seed_beats(stamp, page)` builds the seed run from them, so a seed sends what the page carries when the run starts.
+`kp.room_ask` takes the prompt as an argument (the C6 one by default), so Challenge 3's seeds pass theirs, and
+`kp.kubecon_prompt` now says that a negative position counts from the end and refuses one past the beat's first.
+The two readers agree on every prompt the page carries today; the probe's is the one kept because it copies what
+`cp()` copies (`textContent`, trimmed), where the old one collapsed whitespace inside a prompt.
+
+**The seed with no /kubecon beat.** `c3-pii`. Its prompt is `stage_traces.PII_PROMPT`, a neighbor's test card,
+phone and e-mail, which the presenters do not send from the page; `OFF_PAGE_SEEDS` names it.
+
+**The test.** `verify/test_stage_trace_prompts.py` (offline) runs the seed beats against a fake probe and records
+what each seed sends, by its session id, then compares that with the page read by a regex of the test's own. On a
+temp copy of the page with the C5 prompt altered, the check fails naming `c1-attack` and `c1-fixed` and no other
+seed, and prints both lines. A copy with all four seed beats altered must have every `/kubecon` seed send the
+altered text, so a seed that sends a constant equal to today's page also fails: pointing `c4-fixed` at
+`kubecon_prompt("C7")` read at import, by hand, failed that check, and pointing it at `kp.MCP_PROMPT` failed the
+source check that no seed names a prompt constant. The test also checks that each talk challenge's beat carries
+that challenge's ask, that `c3-pii` sends `PII_PROMPT` and no beat carries it, and that `stage_traces.py` holds no
+copy of a page prompt. Its `verify/scope-map.yaml` entry is the one `scope_tests.py write` computed for it; the
+other drift `write` printed for unrelated tests was left out. `test_stage_traces.py`'s checks of the removed reader
+now check that the seeds read the probe's page through `kp.kubecon_prompt`.
+
+**Live check.** Skipped: the change touches only `verify/` scripts that run from the operator's host, none that a
+cluster runs, and no `/kubecon` prompt.
