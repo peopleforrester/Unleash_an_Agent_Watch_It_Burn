@@ -502,9 +502,8 @@ def all_downtimes(dd: Datadog, limit: int = 100) -> list[dict]:
 
 
 def find_dashboard(dd: Datadog, title: str) -> dict | None:
-    """Our dashboard by its exact title. Every other dashboard in the shared org is never written (#1082)."""
-    if not title.startswith(TITLE_PREFIX):
-        raise ValueError(f"'{title}' is not one of our dashboard titles ({TITLE_PREFIX}...)")
+    """A dashboard by its exact title, so no other dashboard in the shared org is written (#1082). room_view.py uses
+    it too, for its own title; the loader's own titles are held to TITLE_PREFIX by validate_dashboard and apply."""
     hits = [d for d in dd.call("GET", "/api/v1/dashboard").get("dashboards", []) if d.get("title") == title]
     return hits[0] if hits else None
 
@@ -530,6 +529,8 @@ def apply(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], notify: list[
     # 2. The dashboards, each found by title so its URL survives re-applies.
     urls = []
     for label, dash in dashes:
+        if not dash["title"].startswith(TITLE_PREFIX):  # validate_dashboard refuses this before any call
+            raise ValueError(f"'{dash['title']}' is not one of our dashboard titles ({TITLE_PREFIX}...)")
         existing = find_dashboard(dd, dash["title"])
         if existing:
             out = dd.call("PUT", f"/api/v1/dashboard/{existing['id']}", dash)

@@ -890,11 +890,13 @@ rc, text = run(["--check"], org, env={})
 check("--check passes and names none of theirs as EXTRA",
       rc == 0 and "EXTRA" not in text and "retired-race" not in text and "content-manager" not in text)
 try:
-    fm.find_dashboard(fm.Datadog("datadoghq.com", "A", "B", http=org), VIKTOR["title"])
+    fm.apply(fm.Datadog("datadoghq.com", "A", "B", http=org), defs, [("viktor", {**VIKTOR, "widgets": []})], [], None,
+             dt.datetime(2026, 9, 8, 12, 0, tzinfo=dt.timezone.utc), say=lambda *_: None)
     refused = False
 except ValueError:
     refused = True
-check("find_dashboard refuses a title that is not one of ours", refused)
+check("apply refuses to write a dashboard whose title is not one of ours, before any write",
+      refused and org.bodies["vik-tor-run"] == foreign_bodies["vik-tor-run"])
 
 print("== every write the loader can make is a monitor, a dashboard or a downtime; no key, user or role (#1082) ==")
 # Every mode once, against the shared org above, then the paths: a write to an API or application key, a user, a

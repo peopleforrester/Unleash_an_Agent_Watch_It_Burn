@@ -22,6 +22,12 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 FLEET = REPO / "infra/terraform/fleet/fleet.sh"
+sys.path.insert(0, str(REPO / "verify"))
+
+# Offline means offline (#859): this test only reads fleet.sh, but any subprocess gets aws, kubectl, eksctl,
+# terraform and helm as stubs that log the call and fail (verify/no_cloud.py). The last check reads the log.
+import no_cloud  # noqa: E402
+no_cloud.setup()
 
 failures: list[str] = []
 
@@ -102,6 +108,13 @@ check("not caught: the read datadog-orgs.sh makes",
 check("caught: a Terraform datadog_api_key", bool(tf_hits('resource "datadog_api_key" "x" {\n  name = "y"\n}')))
 check("caught: a Terraform datadog_user_role", bool(tf_hits('resource "datadog_user_role" "x" {}')))
 check("not caught: the dashboards' own resource", not tf_hits('resource "datadog_dashboard_json" "fleet" {}'))
+
+print()
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls)
+if _calls:
+    print("".join(f"        {line}\n" for line in _calls.splitlines()), end="")
 
 print()
 if failures:

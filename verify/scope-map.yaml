@@ -1560,6 +1560,8 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/datadog-orgs.sh
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
   test_datadog_orgs_sandbox.sh:
     - CLAUDE.md
     - agent
@@ -2484,6 +2486,7 @@ reads:
     - infra/org/boundary
     - infra/terraform/aws/cluster/main.tf
     - infra/terraform/aws/network
+    - infra/terraform/dashboards/fleet-analytics.json
     - infra/terraform/fleet
     - infra/terraform/fleet/backups.py
     - infra/terraform/fleet/backups.tsv
@@ -2506,6 +2509,7 @@ reads:
     - verify/agent_obs_flow.py
     - verify/agent_probe.py
     - verify/collector_render.py
+    - verify/guard_lease.py
     - verify/kubecon_probe.py
     - verify/topic_cases.py
   test_fleet_pool_reconcile.sh:
