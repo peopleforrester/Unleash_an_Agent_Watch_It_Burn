@@ -36030,3 +36030,10 @@ decisions.md, which no cluster runs.
 
 **Not yet run on a runner.** The workflows run once hecaton pushes this branch: verify-suites.yml's two jobs on Tanjiro
 are the first to take the cache step. The GitHub-hosted workflows run on their next matching push to staging.
+
+**The suites (run 18569, at `da6eb41a`).** The first unscoped `bash verify/run-e2e-tools.sh` at `e7da00b9` had the tier
+green and the offline suite red on one check: `test_package_cache.py`'s scan for package installs read the words of
+the new test's own fetch pattern as an install. The pattern now spells them so the scan does not match it, and it
+matches the same commands. The rerun printed `360 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then `86
+checks ran (the offline suite and 85 tier tests) in 10m06s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. The prose gate printed `prose gate: pass`. No dependency was added.
