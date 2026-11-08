@@ -132,6 +132,14 @@ to the fifth (#796).
    in a run, validate on one of the two, and a step written for a fresh attendee cluster runs on one of them
    instead. In a run, write the change and its offline test, run `bash verify/run-tests.sh` and
    `bash verify/run-e2e-tools.sh`, run the live check, and put what it printed in the change's decisions.md entry.
+   Since Michael's ruling of 2026-11-07 (#1062), a run checks live only when the issue's own work is a live check
+   or a live run, or when the change touches what the clusters run: `gitops/`, `policies/`, `images/`,
+   `gitops/workshop-agent/agent.yaml` (the agent prompt), `infra/terraform/fleet/fleet.sh`, the guard-proxy or
+   llm-guard submodule pointer (`gitops/ai-layer/guard-proxy`, `images/llm-guard`), another path an Argo CD
+   Application in `gitops/bootstrap/apps/` sources (`backstage/`, `observability-idp/`, `security/`), or a script
+   `fleet.sh` runs on a cluster (`verify/datadog-orgs.sh`, `verify/fleet-walkthrough.sh`). A change that touches
+   only `decisions.md`, `PROGRESS.md`, `PROJECT_STATE.md`, docs, `facilitation/`, or files under `verify/` that no
+   cluster runs skips the live check and says so in one line of its decisions.md entry.
    A live check that changes a cluster leaves it as found. The clusters take a change from staging, through Argo
    CD, once hecaton promotes the run, so a check that needs the change itself running is named, by its E2E test or
    command, under "Not yet run on a cluster" in that entry, and the next run on the issue runs it. When the issue's

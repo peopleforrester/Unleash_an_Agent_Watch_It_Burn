@@ -46,6 +46,7 @@ always:
   test_chat_span_token_counts.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_turn_cancel.py: it runs git ls-tree, which reads the tree or history as a whole
   test_chat_witch_name.py: it runs git ls-tree, which reads the tree or history as a whole
+  test_claude_md_live_check_scope.py: line 138 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time
   test_compile_design_doc.py: 'line 44 builds a path under the repo root from a value it finds at run time; scripts/compile-design-doc.py: line 62 builds a path under the repo root from a value it finds at run time'
   test_cost_gauge_unchanged.py: it runs git ls-tree, show, which reads the tree or history as a whole
   test_datadog_log_services_render.py: line 108 builds a path under the repo root from a value it finds at run time; line 93 builds a path under the repo root from a value it finds at run time; line 96 builds a path under the repo root from a value it finds at run time; line 103 builds a path under the repo root from a value it finds at run time

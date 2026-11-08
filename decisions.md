@@ -33383,3 +33383,34 @@ TIER CHECKS GREEN` and `exit=0`. `verify/test_support_desk_live.py` was among th
 desks as deployed today; it reads the desk's heading on `/` and HC-666 on `/ticket/HC-666`, so the change keeps it
 green once it rolls out. The prose gate printed `prose gate: pass`. No dependency was added. The log is
 `/var/lib/hecaton/runs/18436/e2e-tools.log`.
+
+## 2026-11-08 · #1062 · run 18441 · A dispatched run checks live only for a live-check issue or a change to what the clusters run
+
+**What changed.** CLAUDE.md's "Dispatched runs" point 1 had every run check live on watch-it-burn-community or
+watch-it-burn-private, a run whose change was one decisions.md entry or one test included. Michael ruled on
+2026-11-07 that this stops. Point 1 now says a run checks live only when the issue's own work is a live check or a
+live run, or when the change touches what the clusters run, and that a change touching only `decisions.md`,
+`PROGRESS.md`, `PROJECT_STATE.md`, docs, `facilitation/` or files under `verify/` that no cluster runs skips the live
+check and says so in one line of its decisions.md entry. Everything else in point 1 is as it was: the two clusters,
+no create or teardown, `--context` on every `kubectl`, a cluster left as found, and "Not yet run on a cluster".
+
+**What the clusters run.** The issue names `gitops/`, `policies/`, `images/`, the agent prompt at
+`gitops/workshop-agent/agent.yaml`, `fleet.sh` and the guard-proxy and llm-guard submodule pointers. Point 1 names
+those and three more kinds the tree shows a cluster runs: the other top directories an Argo CD Application in
+`gitops/bootstrap/apps/` sources (`backstage/`, `observability-idp/`, `security/`), and the two `verify/` scripts
+`fleet.sh` runs during a converge (`verify/datadog-orgs.sh`, `verify/fleet-walkthrough.sh`). Without them a change
+to a Backstage chart or to the walkthrough would have read as a harness change and skipped a check it needs.
+
+**The test.** `verify/test_claude_md_live_check_scope.py` holds both lists as the issue words them, and derives the
+second half of the live list from the tree: each local Application source's top directory, each `.gitmodules` path
+and each `${INFRA_DIR}/../verify/` script `fleet.sh` calls. A new source, submodule or `fleet.sh` call fails it until
+point 1 names it. Its self-check drops each entry from a copy of the text in turn and confirms the check reports that
+entry missing; it also fails when any of its three sentence anchors is gone. A first version read the JSON patches'
+`path: /metadata/...` lines in `ai-layer.yaml` as a source at the repo root; it now takes only relative paths.
+`verify/test_dispatched_runs.py` still passes, since the sentence it pins is kept and the new rule follows it.
+
+**Scope map.** `scope_tests.py write` puts the test under `always`, since it builds paths from what it reads; that
+one line is in this change, and the rest of what `write` produced was other tests' existing drift and is not.
+
+**Live check.** Skipped: the change touches only CLAUDE.md, `verify/` files no cluster runs and this record, and
+Michael's ruling says this change needs none.
