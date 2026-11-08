@@ -34583,3 +34583,15 @@ the promoted commit, whose `Chromium's libraries and fonts, unpacked for this jo
 
 No dependency was added: the writer uses gpgv, dpkg and the Debian keyring the host has, and the runtime uses dpkg-query
 and dpkg-deb, which every Debian host has.
+
+**Suite results, run 18529.** On `29b8e7bc`, with no `HECATON_BASE_SHA`, so the whole suite, and
+`PLAYWRIGHT_BROWSERS_PATH` set to a new empty directory so the tier itself had to install the browsers,
+`bash verify/run-e2e-tools.sh` printed `352 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`, then
+`84 checks ran (the offline suite and 83 tier tests) in 19m31s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`, with `test_playwright_browsers.py`, `test_ci_chromium_libs.py`, `test_e2e_tools_tier.py` and the four
+Playwright tests green among them. The tier unpacked `chromium-1248`, `chromium_headless_shell-1248` and `ffmpeg-1013`
+into that directory from the cache. The host cache's fetch log held 6 `cdn.playwright.dev` and `snapshot.debian.org`
+lines before the run (the three zips and three Packages indexes the two lock writers fetched) and 6 after, so the tier
+made no network fetch of a browser or a library package. The 39 other lines it added are this pool's first fetch of
+the E2E tools and the pinned charts, whose cache was empty, which #1118 covers. The prose gate printed `prose gate:
+pass`. The log is `/var/lib/hecaton/runs/18529/e2e-tools-1.log`.
