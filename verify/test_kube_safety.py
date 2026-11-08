@@ -26,7 +26,8 @@ check("CLAUDE.md documents the kube-context safety rule", "Kube-context safety" 
 # four days. A path list has to be remembered; this property is visible in the file itself.
 hits = []
 for f in REPO.rglob("*.sh"):  # actual scripts only; docs may name the prohibition
-    if ".git" in str(f):
+    # tmp/ is the repo's ignored scratch, where hecaton's TMPDIR sits and other tests write and remove files (#1119).
+    if ".git" in str(f) or f.relative_to(REPO).parts[0] == "tmp":
         continue
     txt = f.read_text()
     if "kubectl config use-context" not in txt:

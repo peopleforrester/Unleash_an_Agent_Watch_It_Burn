@@ -1,6 +1,6 @@
 # ABOUTME: test_terraform_lock_init.py runs an init the network broke again, in a new empty directory, and fails any
 # ABOUTME: other init at once (#1047). Offline: it is run against a stub terraform that answers as told.
-"""Offline. The real inits are test_terraform_lock_init.py in the tools tier, against registry.terraform.io.
+"""Offline. The real inits are test_terraform_lock_init.py in the tools tier, against the provider mirror.
 
 On Tanjiro's CI runner (Actions run 42407284907) one provider query to registry.terraform.io ran out of time and the
 tier went red. The tier test now asks again when terraform's output reads as the network failing, and never when the
@@ -48,8 +48,8 @@ ROOTS = SRC.count('"infra/')
 def run(fail_runs: str, words: str) -> tuple[int, str, int]:
     """The tier test's exit, output and how many times it ran terraform, with a stub that fails the runs fail_runs
     names (a shell case pattern, `*` for all, `0` for none) printing words."""
-    # Outside the checkout, since the tier test refuses a plugin cache inside it and TMPDIR can be (#1114). The stub
-    # never writes the cache, so an offline run leaves nothing behind.
+    # Outside the checkout, since the tier test refuses a cache inside it and TMPDIR can be (#1114). The stub never
+    # writes the cache, so an offline run leaves nothing behind.
     with tf_plugin_cache.scratch("tf-lock-init-retry-") as td:
         tmp = pathlib.Path(td)
         (tmp / "words").write_text(words)
@@ -59,15 +59,21 @@ def run(fail_runs: str, words: str) -> tuple[int, str, int]:
                         f'case $n in {fail_runs}) cat "{tmp}/words" >&2; exit 1;; esac\n'
                         'echo "Terraform has been successfully initialized!"\n')
         stub.chmod(0o755)
-        # A plugin cache of its own, so an offline run never creates the shared one.
-        env = {**os.environ, "TERRAFORM": str(stub), "TF_LOCK_INIT_BACKOFF": "0,0",
-               "TF_PLUGIN_CACHE_DIR": str(tmp / "plugin-cache")}
+        # An artifact root of its own with the provider mirror's config already written, as a workflow's
+        # `tf_plugin_cache.py prepare` leaves it, so the tier test fills nothing and an offline run never touches the
+        # network or the shared cache (#1119).
+        root = tmp / "artifacts"
+        env = {k: v for k, v in os.environ.items() if k != "HECATON_TOOLS_CACHE"}
+        env.update({"TERRAFORM": str(stub), "TF_LOCK_INIT_BACKOFF": "0,0", "WIB_ARTIFACT_CACHE": str(root),
+                    "TF_CLI_CONFIG_FILE": str(tf_plugin_cache.write_config(root)),
+                    "TF_PLUGIN_CACHE_DIR": str(tmp / "plugin-cache")})
         p = subprocess.run([sys.executable, str(TEST)], capture_output=True, text=True, env=env, timeout=120)
         runs = int((tmp / "n").read_text()) if (tmp / "n").exists() else 0
     return p.returncode, p.stdout + p.stderr, runs
 
 
 check("the tier test inits five roots", ROOTS == 5, str(ROOTS))
+check("the tier test fills the provider mirror before its inits", "tf_plugin_cache.terraform_env(" in SRC)
 
 print("== one init the network broke is run again, and the tier test passes ==")
 code, out, runs = run("1", NETWORK)

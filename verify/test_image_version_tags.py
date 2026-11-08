@@ -123,6 +123,9 @@ def named(image: str) -> set[str]:
     """Every whole watch-it-burn:<image>... reference in the repo's files, the dated records left out."""
     out = set()
     for p in sorted(REPO.rglob("*")):
+        # tmp/ is the repo's ignored scratch, where hecaton's TMPDIR sits and other tests write and remove files (#1119).
+        if p.relative_to(REPO).parts[0] == "tmp":
+            continue
         if p.is_file() and p.suffix in (".yaml", ".yml", ".sh", ".py", ".md", ".lock") and ".tools" not in p.parts \
                 and "transcripts" not in p.parts and p.name not in ("decisions.md", "DECISION-LOG.md"):
             # A whole reference only: a template such as web-terminal-ttyd-${v} or -<v> is not one.

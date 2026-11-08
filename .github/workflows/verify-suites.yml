@@ -99,8 +99,6 @@ jobs:
       issues: read
     env:
       GH_TOKEN: ${{ github.token }}
-      # Outside the workspace, so the clean step never removes it and verify/tf_plugin_cache.py accepts it (#1114).
-      TF_PLUGIN_CACHE_DIR: ${{ runner.tool_cache }}/terraform-plugin-cache
     concurrency:
       group: verify-suites-e2e-tools-${{ github.ref }}
       cancel-in-progress: false
@@ -138,6 +136,13 @@ jobs:
 
       - name: HECATON_BASE_SHA, the merge base with origin/staging
         run: bash verify/ci-base-sha.sh
+
+      # The host artifact cache (verify/artifact_cache.py, #1117) under the runner's tool cache, outside the workspace,
+      # so the clean step never removes it and it outlives the job. The terraform tests' provider mirror and plugin
+      # cache live in it (verify/tf_plugin_cache.py, #1119). Set here, not in the job's env: the runner context is not
+      # available there, and a job env naming it failed the whole workflow file (Actions run 42427273324).
+      - name: WIB_ARTIFACT_CACHE, the host artifact cache under the runner's tool cache
+        run: echo "WIB_ARTIFACT_CACHE=$RUNNER_TOOL_CACHE/wib-artifacts" >> "$GITHUB_ENV"
 
       # Playwright's Chromium needs shared libraries and fonts that Tanjiro's Debian lacks (libnspr4.so first, #1047),
       # and the host takes nothing from apt. This unpacks the missing Debian packages under the job's temp directory,

@@ -1,6 +1,6 @@
 # ABOUTME: Plans the cluster root against a mocked aws provider (`terraform test`) and holds lab-platform-operator's
 # ABOUTME: access entry to #873: on attendee seats only, in accounts that hold the role, group learner-apps, no policy.
-# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io)
+# SUITE: e2e (needs terraform on PATH, or TERRAFORM, and network to registry.terraform.io for modules and a cold cache)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 # E2E SERIAL: terraform (run-e2e-tools.sh runs one such test at a time: they share the provider cache, #1005)
 #
@@ -11,11 +11,14 @@
 import os, pathlib, shutil, subprocess, sys, tempfile
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "verify"))
+import tf_plugin_cache  # noqa: E402
+
 ROOT = REPO / "infra/terraform/aws/cluster"
 CASES = REPO / "verify/fixtures/lab_platform_operator_entry.tftest.hcl"
 RUNS = ["seat_in_an_account_with_the_role", "seat_in_the_base_account", "community_cluster_with_the_role",
         "admin_cluster_with_the_role"]
-# The aws provider is ~800 MB on a cold cache; a healthy init fits well inside this bound (#572).
+# The aws provider is ~800 MB unpacked on a cold plugin cache; a healthy init fits well inside this bound (#572).
 TIMEOUT = 600
 failures = []
 
@@ -40,6 +43,12 @@ env = {**os.environ, "TF_IN_AUTOMATION": "1", "CHECKPOINT_DISABLE": "1"}
 for k in ("AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
     env.pop(k, None)
 env["AWS_CONFIG_FILE"] = env["AWS_SHARED_CREDENTIALS_FILE"] = os.devnull
+# The providers come from the host artifact cache's mirror, never a download (tf_plugin_cache.py, #1119).
+try:
+    env = tf_plugin_cache.terraform_env(env, [ROOT / ".terraform.lock.hcl"])
+except tf_plugin_cache.CacheError as e:
+    print(f"FAIL: {e}", file=sys.stderr)
+    sys.exit(1)
 
 with tempfile.TemporaryDirectory(prefix="tf-operator-entry-") as tmp:
     work = pathlib.Path(tmp)

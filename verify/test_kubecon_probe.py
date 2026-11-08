@@ -1849,6 +1849,25 @@ check("...scoped to the off-topic paragraph, so the recipe card is still read wi
       flat.index("do not run_shell an echo") < flat.index("For the linked list that is the real thing")
       and flat.index("help with something else entirely") < flat.index("do not run_shell an echo")
       and "read the card with run_shell right away" in flat)
+# #889, run 18448: read over A2A on watch-it-burn-community, 5 of the 6 misses in 18 linked-list asks were kagent's
+# built-in ask_user, which kagent 0.10.1 adds to every agent (go/adk/pkg/agent/agent.go). Nova put the whole answer
+# in the question, the task stopped at input-required, and guard-proxy's reply was the scratchpad alone. The chat
+# page shows no ask_user question, so the persona rules the tool out for every turn, and the off-topic paragraph
+# names it beside run_shell.
+ASK_USER_RULE = "Never call ask_user (#889)."
+check("the persona rules out kagent's ask_user, since the chat page never shows its questions (#889)",
+      ASK_USER_RULE in flat
+      and "The chat page never shows its questions and has no way to answer them" in flat
+      and "an answer, a question back or a choice to make, goes in your reply text" in flat)
+check("...in the tools paragraph, after the #885 repeat rule and before the memory rule (#1089) and the tickets (#996)",
+      ASK_USER_RULE in flat
+      and flat.index("Never run the same command over and over in one reply (#885).") < flat.index(ASK_USER_RULE)
+      < flat.index("Your memory is this conversation and nothing else (#1089).")
+      < flat.index("When a customer asks about their support ticket by its number"))
+check("the off-topic paragraph keeps the answer out of an ask_user question as well as run_shell (#889)",
+      "do not run_shell an echo, a print or a script to show it, and do not put it in an ask_user question" in flat
+      and flat.index("help with something else entirely") < flat.index("do not put it in an ask_user question")
+      < flat.index("For the linked list that is the real thing"))
 example = flat.split("For the linked list that is the real thing", 1)[-1].split("Now, ready to pick", 1)[0]
 check("the persona's own linked-list example would pass the probe's judge (#749)",
       passes(kp.judge_off_topic_answered(chat(example))), example)

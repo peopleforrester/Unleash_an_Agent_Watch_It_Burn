@@ -31,6 +31,11 @@ import tempfile
 REPO = pathlib.Path(__file__).resolve().parent.parent
 VERIFY = REPO / "verify"
 sys.path.insert(0, str(VERIFY))
+import tf_plugin_cache  # noqa: E402
+
+# The fixture runners' artifact root, outside the checkout and removed when this test exits.
+ARTIFACTS = tf_plugin_cache.scratch("scope-tests-artifacts-")
+sys.path.insert(0, str(VERIFY))
 import scope_tests as st  # noqa: E402
 
 failures: list[str] = []
@@ -191,7 +196,7 @@ def fixture(tmp: pathlib.Path) -> tuple[pathlib.Path, str]:
     v = root / "verify"
     v.mkdir(parents=True)
     for name in ("run-tests.sh", "run-e2e-tools.sh", "scope_tests.py", "no-cloud.sh", "ensure-submodules.sh",
-                 "tf_plugin_cache.py"):
+                 "tf_plugin_cache.py", "artifact_cache.py"):
         shutil.copy2(VERIFY / name, v / name)
     (v / "fetch-e2e-tools.sh").write_text(FETCH_STUB)
     (v / "playwright_browsers.py").write_text("import sys\nsys.exit(0)\n")
@@ -237,8 +242,13 @@ def run(root: pathlib.Path, tmp: pathlib.Path, script: str, base: str | None) ->
     (bindir / "node").chmod(0o755)
     log = tmp / "fetch.log"
     log.write_text("")
-    # TMPDIR is the fixture's own (#909), and HOME too, so the runners' mktemp and Helm home stay inside it.
-    env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), "FETCH_LOG": str(log)}
+    # TMPDIR is the fixture's own (#909), and HOME too, so the runners' mktemp and Helm home stay inside it. The host
+    # artifact cache, where run-e2e-tools.sh names the Terraform plugin cache, must sit outside every worktree, which
+    # the fixture's temp directory may not (#1119): it gets a scratch root of its own outside the checkout. The
+    # fixture has no .gitignore, so tf_plugin_cache.py's import of artifact_cache must leave no __pycache__ in it to
+    # read as a change.
+    env = {"PATH": f"{bindir}:{os.environ['PATH']}", "HOME": str(tmp), "TMPDIR": str(tmp), "FETCH_LOG": str(log),
+           "WIB_ARTIFACT_CACHE": str(pathlib.Path(ARTIFACTS.name) / "artifacts"), "PYTHONDONTWRITEBYTECODE": "1"}
     if base is not None:
         env["HECATON_BASE_SHA"] = base
     r = subprocess.run(["bash", str(root / "verify" / script)], capture_output=True, text=True, env=env, timeout=300)
