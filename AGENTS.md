@@ -105,7 +105,7 @@ as drift. `python3 verify/scope_audit.py offline` (or `tools`) holds the map aga
 The tools tier is run only where the change warrants it (#1190). Michael, 2026-11-08: "If the change warrants it then
 it goes end-to-end." On the promotion gate `HECATON_BASE_SHA` is main's SHA (hecaton#619), so `run-e2e-tools.sh` runs
 the tier tests `scope_tests.py select tools` names for origin/main..tip, and the whole tier only when that selection
-says FULL: the tools lock, the map's rules, a shared harness file, or a path no entry covers. A changed prose file
+says FULL: the tools lock, the map's rules, a shared test helper, or a path no entry covers. A changed prose file
 (`.md`, `.mdx`, `.html`, the files the ai-isms gate reads) selects no tier test, so a doc-only range (the run-of-show,
 PROGRESS.md, decisions.md, the /kubecon copy) promotes on the scoped offline tests and the prose gate, with no tier
 test run and no tool fetched. `verify/test_e2e_tools_gate_scope.py` drives the runner on each kind of range.

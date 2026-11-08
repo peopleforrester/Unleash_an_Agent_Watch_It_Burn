@@ -36648,3 +36648,57 @@ with the pinned tools. The full command, run again, printed `363 tests ran`, `AL
 `86 checks ran (the offline suite and 85 tier tests) in 15m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
 `exit=0`. `bash verify/run-tests.sh` on its own also printed `363 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
 No dependency was added.
+
+## 2026-11-08 · #1190 · run 18637 · The gate's tools tier runs only where the range warrants it
+
+**What Michael asked.** On 2026-11-08: "I don't need every commit that's being promoted to main to get the full tool
+tier... If the change warrants it then it goes end-to-end." His correction on #1190 replaced the first criterion: the
+gate runs `verify/scope_tests.py select tools` against origin/main..tip, the whole tier only on FULL, and a docs-only
+range promotes on the scoped offline tests and the prose gate.
+
+**What was already there, and what was not.** `run-e2e-tools.sh` already scoped itself by `HECATON_BASE_SHA` (#1018),
+and hecaton sets that to main's SHA on the gate (hecaton#619), so the range was already origin/main..tip. What kept a
+doc-only range from being doc-only was the map: on staging `3cc0c64c` a decisions.md change alone selected 13 tier
+tests, 5 that read decisions.md (the GitHub comment checks and `test_image_version_tags.py`) and 8 `always` render
+tests, and a `/kubecon` copy edit selected 21. Each of those fetched the pinned tools.
+
+**The rule.** `scope_tests.select()` now sets changed prose aside for the tools suite: `PROSE = (".md", ".mdx", ".html")`,
+the ai-isms gate's own list (`prose_gate.PUBLIC_PROSE`, which the new test holds it equal to). A range of prose alone
+returns SCOPED with no tier test, the `always` ones included, so the runner checks for no tool, fetches nothing and no
+longer names a Terraform cache. A prose path no entry covers no longer runs the whole tier either. The offline suite
+selects on prose exactly as before. A mixed range runs the tier tests its other paths select. Michael's ruling settles
+the trade-off, named here once: a tier test that reads a prose file (a comment check reading a decisions.md entry, a
+Playwright render of `/kubecon`) no longer runs for an edit to that file alone; it runs on the next range that touches
+its code, or in a run that names it.
+
+**What a failure prints.** A failed check's log is copied to `verify/.e2e-logs/<test>.log` (gitignored, so it never
+reads as a change; `E2E_TOOLS_LOG_DIR` overrides it), and the runner prints `FAILED: <check> (exit N); its log: <path>`
+ahead of the check's block, then a list of every failure with its log and its rerun command ahead of the timings. A
+tier test's rerun is `bash verify/run-e2e-tools.sh <test>`, a new form that runs the named tier tests alone with the
+pinned tools and no offline suite; an offline failure's rerun is each failed test's own `python3 verify/<test>`, read
+from the suite's `SOME TESTS FAILED:` list. CLAUDE.md's Dispatched runs gains point 7 (fix it, rerun that one, never
+the whole script, citing run 18622 on #1186), the scoping paragraph after #1018's, and in point 4 the
+`HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)"` prefix that scopes a run's own command. #1191 asks for more
+CLAUDE.md text than this (a prose change never runs `run-e2e-tools.sh` inside a run); that is left to it.
+
+**Tests.** `verify/test_e2e_tools_gate_scope.py`, offline, copies the real runner, `run-tests.sh` and `scope_tests.py`
+into a fixture repo with three offline and four tier tests, one of them `always`, and a tier test reading each doc of
+the doc-only range. A doc-only range (decisions.md, PROGRESS.md, a run-of-show, the page's copy) runs the offline tests
+that read it, no tier test, and logs no call to the fetch, curl or the cache stub. A code range (a chart value and the
+page's event.js) runs the render, the page and the always test and leaves the decisions.md reader. A lock change says
+FULL and runs all. A failed tier test is named first with its kept log and rerun command; that command runs it alone,
+and passes once the cause is fixed; a failed offline test on a doc-only range names its own command and fetches nothing.
+With the prose rule switched off the doc-only checks fail. `verify/test_scope_tests.py`'s decisions.md check now
+expects no tier test, and a display.js change is held to its render tests, short of half the tier.
+
+**Scope map.** Only the new test's entry is added, under `always` (it copies scope_tests.py and imports prose_gate.py,
+which read git history). `scope_tests.py write` would also rewrite about 900 lines of drift staging carries; those stay
+as staging has them, as in run 18615.
+
+**The live check.** Skipped: the change touches only `verify/` files no cluster runs, CLAUDE.md, `.gitignore`,
+PROGRESS.md and this file (Dispatched runs, point 1).
+
+**The suites (run 18637, at `2899e98a`).** The change edits the runner and `scope_tests.py`, both in the map's full
+list, so `HECATON_BASE_SHA="$(git merge-base origin/staging HEAD)" bash verify/run-e2e-tools.sh` ran everything and
+printed `364 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`, `86 checks ran (the offline suite and 85 tier tests) in
+13m01s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. No dependency was added.
