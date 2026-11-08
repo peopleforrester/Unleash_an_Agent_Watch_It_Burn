@@ -432,6 +432,10 @@ reads:
     - verify/no-cloud.sh
     - verify/no_cloud.py
     - verify/test_backups.py
+  test_998_sg_cause_record.py:
+    - decisions.md
+    - infra/terraform/aws/cluster/main.tf
+    - verify/node_sg_rules.py
   test_a2a_usage_key.py:
     - VERSIONS.lock
     - cost/README.md
