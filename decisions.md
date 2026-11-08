@@ -36681,3 +36681,11 @@ also rewrote several hundred unrelated lines of the map, drift already on stagin
 `write` computed it, is committed.
 
 **Live check.** Skipped: the change touches only `verify/` files no cluster runs and decisions.md.
+
+**The suites (run 18636, at `c4ffb461`; this paragraph only adds to the entry).** `bash verify/run-e2e-tools.sh`
+printed `363 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN` for the offline suite (`bash verify/run-tests.sh`,
+`test_968_cause_record.py` among them), then `86 checks ran (the offline suite and 85 tier tests) in 15m17s, 4 at a
+time`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. Run 18609's first two tries of the same command failed on GitHub
+release fetches (HTTP 502 and 504, then read timeouts on the Datadog provider, the Gateway API bundle and the charts),
+none of which reads this change; its offline suite was green at 363 there too. The prose gate printed `prose gate:
+pass`. No dependency was added.
