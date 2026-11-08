@@ -5916,6 +5916,26 @@ reads:
     - infra/terraform/aws/cluster/main.tf
     - verify/backstage-footprint.sh
     - verify/backstage_footprint.py
+  test_stage_switch_check.py:
+    - agent
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/guard-proxy
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/stage_switch_check.py
+    - verify/topic_cases.py
   test_stage_trace_prompts.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
