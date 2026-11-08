@@ -36448,3 +36448,36 @@ OFFLINE RENDER-GATE TESTS GREEN` (which answers `bash verify/run-tests.sh`), the
 `HECATON_BASE_SHA=48f00830 bash verify/run-tests.sh` printed `91 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN` and
 `exit=0`, `verify/test_progress_entries.py` among them. The prose gate printed `prose gate: pass`. No dependency was
 added.
+
+## 2026-11-08 · #988 · run 18605 · question 1124: #988 closes with its Docker Hub criterion replaced by #991's ruling
+
+**The question.** Question 1124 asked whether #988 can close with its second criterion, "No pull reaches Docker Hub",
+treated as replaced by the later in-person ruling recorded under #991. Runs 18523 and 18579 both stopped on it: the
+behaviour that ships is #991's (`deploy_app` applies the room's image as written, Docker Hub included, and #714 holds
+only for the platform's own images), and a run cannot mark a criterion met when its wording says the opposite.
+
+**The answer.** "Close 988: the Docker Hub criterion is replaced by issue 991's ruling." Decided by hecaton's research
+under Michael's standing rules, not by Michael.
+
+**What it changes.** No code. Criterion 2 is read as #991 rules: a Docker Hub image the room asks `deploy_app` for is
+pulled as written, neither rewritten to `public.ecr.aws/docker/library/` nor refused, and
+`verify/test_no_docker_hub.py` keeps #714 for everything the platform runs and builds. `verify/test_public_images.py`
+holds criterion 1 with the ghcr.io, quay.io and Docker Hub images reaching the apply as written. The Docker Hub
+anonymous pull limit stays the risk #991's entry records. With that, every criterion of #988 is met, and this run ends
+`done`.
+
+**The port.** `verify/prior-drafts.sh 988 origin/staging` printed `START from origin/agent/988-18523`, whose three
+commits (48f00830, 7897eb5e, 89bfa834) never reached staging because run 18579 ended needs-decision on this question.
+The verdict was three edits in place (PROGRESS.md, decisions.md, `gitops/ai-layer/workshop-mcp-server.py`), and all
+three cherry-picked onto `29995f0c` without conflict. The draft is unchanged. Since run 18579's live check on
+`7fddcd00`, the only staging commit in `deploy_app`'s server, the agent prompt, the policies or the `/kubecon` sheet is
+0d4df117 (#997), which rewords Challenge 3's recon in the prompt and leaves Challenge 2 alone. After the port,
+`git grep -niE 'six[- ]image|six pinned|six images|PUBLIC_IMAGES|_resolve_public_images|OFFICIAL_MIRROR|_move_off_docker_hub'`
+over the four files criterion 4 names prints nothing.
+
+**Live read (run 18605, read only).** After `. "$HECATON_CLUSTER_ENV"`, with `--context` on each call: both clusters'
+`restrict-image-registries` and `deny-external-registries` read `["Audit"]` (guardrails off, as run 18579 left them),
+every Argo CD Application reads Synced and Healthy, those on this repo at `29995f0c` or `55258a67`, and the `agent`
+namespace on watch-it-burn-community holds no `infinite-mario`, so run 18579's test Deployment is gone. This run did not
+take the guardrails A/B again: its only code change is the ported comment, and run 18579's A/B (entry above) is the
+criterion 3 evidence. Nothing owed on a cluster.
