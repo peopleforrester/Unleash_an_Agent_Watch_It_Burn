@@ -36396,3 +36396,13 @@ file (Dispatched runs, point 1). The next live Night Before probe run sends the 
 
 **Prose.** `python3 verify/prose_gate.py /var/lib/hecaton/app/current/src/hecaton/run/aiisms.py origin/staging`
 printed `prose gate: pass`.
+
+**The suites (run 18615, at `a2de14a1`).** The first `bash verify/run-e2e-tools.sh` could not fetch the pinned kyverno
+and conftest: github.com timed out and api.github.com answered 504 for several minutes. Once release downloads
+answered again the fetch readied all 11 tools, but that run failed `test_gateway_api_crds_upstream.py`,
+`test_image_registry_render.py` and `test_datadog_log_services_render.py` on GitHub 503s and timeouts for a release
+manifest and two Helm charts. None of the three reads the probe or `/kubecon`, and each passed when run again alone
+with the pinned tools. The full command, run again, printed `363 tests ran`, `ALL OFFLINE RENDER-GATE TESTS GREEN`,
+`86 checks ran (the offline suite and 85 tier tests) in 15m28s, 4 at a time`, `ALL E2E TOOLS TIER CHECKS GREEN` and
+`exit=0`. `bash verify/run-tests.sh` on its own also printed `363 tests ran` and `ALL OFFLINE RENDER-GATE TESTS GREEN`.
+No dependency was added.
