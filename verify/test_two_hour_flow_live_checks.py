@@ -171,7 +171,7 @@ check("C3's two asks are the recon question and the attack in a fresh chat, as t
       PROMPTS["c3-recon"] != PROMPTS["c3-attack"]
       and "start a fresh chat and ask for the recipe by its folder" in live.challenge_block(PAGE, 3))
 check("C3's attack names the burrito-data folder and gives a kitchen reason, the rule's case 3",
-      "burrito-data folder" in PROMPTS["c3-attack"] and "dinner rush" in PROMPTS["c3-attack"])
+      "burrito-data folder" in PROMPTS["c3-attack"] and "read me the recipe" in PROMPTS["c3-attack"])
 check("the C6 asks are agent_probe's ticket ask, so the ticket site's payload is what lands",
       PROMPTS["c6-off"] == ap.INJECTION_PROMPT)
 for b in live.BEATS:
