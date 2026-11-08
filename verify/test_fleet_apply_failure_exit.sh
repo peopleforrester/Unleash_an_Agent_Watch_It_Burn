@@ -87,7 +87,7 @@ run_with_tail() { # $1: the ERE of clusters whose apply fails
         cmd_routes() { echo "routes ran"; }
         converge_one() { :; }
         cmd_verify() { echo "verify ran"; return 0; }
-        cmd_guardrails_link() { :; }
+        cmd_guardrails_link() { :; }; cmd_desk_link() { :; }
         cmd_instructors up all
     ' ) >"${T}/out" 2>&1
     # Taken outside: fleet.sh runs under set -e, so a non-zero return ends the shell before any echo.

@@ -62,7 +62,7 @@ check "and by name" '[[ "$(up watch-it-burn-attendee-007)" == watch-it-burn-atte
 # KubeCon pair, which reached both shared clusters through the caller's aws session and polled each for its
 # switch token for five minutes a call (#616, run 16967).
 spec() { q "_provision_spec_fleet() { :; }; print_bootstrap_hints() { :; }; require_tools() { :; }
-            cmd_guardrails_link() { :; }
+            cmd_guardrails_link() { :; }; cmd_desk_link() { :; }
             cmd_instructors up $1 >/dev/null 2>&1; printf '%s\n' \"\${!PROVISION_SPEC[@]}\""; }
 check "instructors up never builds a -student cluster, for any selector" \
   '( for r in "${ROSTER}" "${FIX}"; do for s in "" both all community admin alpha beta; do

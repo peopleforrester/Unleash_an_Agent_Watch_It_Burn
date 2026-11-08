@@ -205,7 +205,7 @@ for n in "${COMMUNITY}" "${PRIVATE}"; do
 done
 reset
 WIB_TERMINAL_USER="" WIB_TERMINAL_PASSWORD="" WIB_TERMINAL_ENV="${T}/no-such.env" \
-  src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; print_bootstrap_hints() { :; }; cmd_guardrails_link() { :; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
+  src "require_tools() { echo REQUIRE-TOOLS >&2; }; _provision_spec_fleet() { echo BUILD-RAN >&2; }; print_bootstrap_hints() { :; }; cmd_guardrails_link() { :; }; cmd_desk_link() { :; }; WIB_ROSTER_PROFILES=kubecon; rc=0; (cmd_instructors up all) || rc=\$?; echo rc=\${rc}" >"${T}/out"
 check "instructors up of only the KubeCon pair, which writes no login there, does not need the presenter login" \
   'grep -qx "rc=0" "${T}/out" && grep -q "BUILD-RAN" "${T}/stderr" && ! grep -q "REFUSING instructors up" "${T}/stderr"'
 # A roster with a presenter cluster beside the pair: that one's Secret is written from mrf-secrets, so the check holds.

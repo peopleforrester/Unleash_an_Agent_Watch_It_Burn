@@ -86,7 +86,7 @@ check "it ends in seconds, not on the five-minute token poll (took ${took}s)" '[
 check "the test fails" '[[ "${rc}" -ne 0 ]]'
 check "and names the kubeconfig the link tried to write for the live community cluster" \
   'grep -E "^    aws eks update-kubeconfig .*--name watch-it-burn-community" <<<"${out}" >/dev/null'
-run link616 "cmd_guardrails_link() { :; }"
+run link616 "cmd_guardrails_link() { :; }; cmd_desk_link() { :; }"
 check "with the link stubbed, as #616 left both tests, it passes" '[[ "${rc}" -eq 0 ]] && ! grep -q "CALLED A CLOUD TOOL" <<<"${out}"'
 
 echo "== the tools tier stubs only the tools it pins no copy of (#865) =="

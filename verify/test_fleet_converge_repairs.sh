@@ -173,7 +173,7 @@ boot() { src "provider_write_kubeconfig() { :; }; bootstrap_student_aws() { echo
     load_roster; $1
     cat \"\${FAIL_FILE}\" 2>/dev/null; rm -f \"\${FAIL_FILE}\""; }
 # The Night Before build: every roster cluster 'instructors up all' selects, with the profile it selects.
-night="$(src '_provision_spec_fleet() { :; }; require_tools() { :; }; cmd_guardrails_link() { :; }; load_roster; cmd_instructors up all >/dev/null 2>&1
+night="$(src '_provision_spec_fleet() { :; }; require_tools() { :; }; cmd_guardrails_link() { :; }; cmd_desk_link() { :; }; load_roster; cmd_instructors up all >/dev/null 2>&1
     for k in "${!PROVISION_SPEC[@]}"; do echo "${k} $(cut -d"|" -f2 <<<"${PROVISION_SPEC[$k]}")"; done | sort')"
 # KubeCon (event.sh's WIB_ROSTER_PROFILES=kubecon, #774): the pair whose four Kubernetes guardrails start off.
 check "instructors up all selects the two roster clusters, on the KubeCon profiles" \

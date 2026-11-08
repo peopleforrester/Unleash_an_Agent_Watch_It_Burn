@@ -71,7 +71,7 @@ check "no hostname anywhere is a roundN name" \
 
 echo "== the profile follows the role, and the event picks the pair (#774) =="
 spec() { q "_provision_spec_fleet() { :; }; print_bootstrap_hints() { :; }; require_tools() { :; }
-            cmd_guardrails_link() { :; }
+            cmd_guardrails_link() { :; }; cmd_desk_link() { :; }
             cmd_instructors up $1 >/dev/null 2>&1
             for k in \"\${!PROVISION_SPEC[@]}\"; do echo \"\${k}=\$(cut -d'|' -f2 <<<\"\${PROVISION_SPEC[\$k]}\")\"; done | sort"; }
 check "workshop: community bootstraps the unguarded profile" \

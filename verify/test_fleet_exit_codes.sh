@@ -45,7 +45,7 @@ src() {
         terraform() { :; }
         print_bootstrap_hints() { echo "hints printed"; }
         cmd_verify() { echo "verify ran on: $*"; return "${VERIFY_RC:-0}"; }
-        cmd_guardrails_link() { echo "guardrails-link ran"; return "${LINK_RC:-0}"; }
+        cmd_guardrails_link() { echo "guardrails-link ran"; return "${LINK_RC:-0}"; }; cmd_desk_link() { :; }
         '"$1"'
         echo "rc=$?"
     ' 2>&1 )

@@ -38,6 +38,10 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+# desk-link's checks run fleet.sh, behind fakes of their own; anything that got past them to a real aws, kubectl,
+# eksctl, terraform or helm would log the call and fail, even when the test is run by hand (verify/no_cloud.py).
+import no_cloud  # noqa: E402
+no_cloud.setup()
 from bootstrap_chart import (PUBLIC_DESK_COMPONENT, ai_layer_for, all_profiles, app_names, REPO,  # noqa: E402
                              use_public_desk)
 
@@ -383,6 +387,10 @@ with tempfile.TemporaryDirectory() as t:
     check("and no call is on the agent/terminal-auth Secret (#1074)", not [c for c in every if "terminal-auth" in c["args"]])
     r = desk_link("watch-it-burn-private", "watch-it-burn-private")
     check("desk-link refuses one cluster linked to itself", r.returncode == 2)
+
+print("== offline means offline ==")
+_calls = no_cloud.calls()
+check("no check above called aws, kubectl, eksctl, terraform or helm", not _calls, _calls)
 
 print()
 if failures:

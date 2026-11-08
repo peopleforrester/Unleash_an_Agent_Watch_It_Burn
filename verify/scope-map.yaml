@@ -6077,6 +6077,8 @@ reads:
     - scripts/reload-routes.sh
     - security
     - verify/bootstrap_chart.py
+    - verify/no-cloud.sh
+    - verify/no_cloud.py
   test_public_images.py:
     - agent
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
