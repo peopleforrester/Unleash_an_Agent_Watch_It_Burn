@@ -1556,9 +1556,18 @@ reads:
   test_datadog_sandbox_names.py:
     - CLAUDE.md
     - agent
+    - backstage
+    - backstage/k8s/backstage.yaml
+    - challenges/01-cncf-wall
     - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
     - cost
     - docs/admin-console.md
+    - docs/research/2026-10-24-tool-pin-spike
+    - docs/research/2026-10-24-tool-pin-spike/gateway_bind.py
+    - docs/research/2026-10-24-tool-pin-spike/live-check.sh
+    - docs/research/2026-10-24-tool-pin-spike/probe.py
+    - docs/research/2026-10-24-tool-pin-spike/requirements.txt
+    - docs/research/2026-10-24-tool-pin-spike/tool-pin.yaml
     - gitops
     - gitops/**.yaml
     - gitops/ai-layer
@@ -1572,6 +1581,7 @@ reads:
     - gitops/manifests/datadog/datadog-agent.yaml
     - gitops/otel-collector
     - gitops/workshop-agent/agent.yaml
+    - images/tool-pin/tool_pin.py
     - infra
     - infra/*values*.yaml
     - infra/datadog-cluster-identity.sh
@@ -1598,13 +1608,17 @@ reads:
     - infra/terraform/fleet/providers/local.sh
     - infra/terraform/fleet/roster.tsv
     - infra/terraform/fleet/scheduled-up.sh
+    - policies
     - scripts/harvest_cluster_access.sh
     - scripts/harvest_terminal_credential.sh
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
+    - verify/beat-01.sh
     - verify/collector_render.py
     - verify/datadog-orgs.sh
+    - verify/guard_lease.py
     - verify/last_trace.py
+    - verify/probe_pod.py
   test_datadog_secret_fields.py:
     - gitops
     - gitops/**.yaml

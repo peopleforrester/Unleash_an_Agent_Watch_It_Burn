@@ -15,6 +15,10 @@ Deployment, the node has it cached, and it carries sh and curl (images/workshop-
 from __future__ import annotations
 
 LIMITS = {"limits": {"cpu": "200m", "memory": "128Mi"}, "requests": {"cpu": "50m", "memory": "32Mi"}}
+# Whitney's sandbox org files every log from the KubeCon clusters under env:burritobot-kubecon-na-26 and a burritobot-
+# service (#629). The Datadog Agent names a pod's logs from these labels; without them a probe's logs went out under
+# the image's short name, watch-it-burn, with no env (oneroot-* pods on both clusters, 2026-11-05, hecaton run 17338).
+DD_LABELS = {"tags.datadoghq.com/service": "burritobot-live-probe", "tags.datadoghq.com/env": "burritobot-kubecon-na-26"}
 
 
 def shell_pod(name: str, namespace: str, image: str, script: str) -> dict:
@@ -22,7 +26,7 @@ def shell_pod(name: str, namespace: str, image: str, script: str) -> dict:
     return {
         "apiVersion": "v1",
         "kind": "Pod",
-        "metadata": {"name": name, "namespace": namespace},
+        "metadata": {"name": name, "namespace": namespace, "labels": dict(DD_LABELS)},
         "spec": {
             "restartPolicy": "Never",
             "automountServiceAccountToken": False,

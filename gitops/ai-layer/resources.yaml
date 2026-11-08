@@ -1319,7 +1319,10 @@ data:
       ttlSecondsAfterFinished: 900
       template:
         metadata:
-          labels: { app.kubernetes.io/name: cloud-credential-probe }
+          # The tags.datadoghq.com labels file this pod's logs under BurritoBot's service and env in Datadog.
+          labels: { app.kubernetes.io/name: cloud-credential-probe,
+                    tags.datadoghq.com/service: burritobot-cloud-credential-probe,
+                    tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         spec:
           serviceAccountName: agent-sa
           # No Kubernetes token in this pod, as in BurritoBot's. The AWS credential still arrives: it is a
