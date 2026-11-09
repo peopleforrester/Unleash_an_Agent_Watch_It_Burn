@@ -25,6 +25,12 @@
 # holds the deployments page to greying the public one as "removed at <time>" and not the internal one, and puts the
 # policies back. No model call; its two rows stay on the desk, both greyed once it deletes what it made.
 #
+# #1209's live criterion (test_private_removed_row_live.py, #1250) runs on PRIVATE_CONTEXT and COMMUNITY_CONTEXT: it
+# lands a public and an internal room Deployment of zero replicas on the private cluster, reported through desk-relay,
+# and one of the public name on the community cluster, sets the private cluster's two registry policies to Deny for
+# about two minutes, and holds deployments.burritobot.co to greying the private public row alone. It holds the guard
+# lock on both, puts the policies back, deletes all three and removes their rows with /desk-forget. No model call.
+#
 # #885's last criterion (test_load_replay_live.py, #1056) also runs on COMMUNITY_CONTEXT: once the turn guard is synced
 # there, it runs `load_replay.py attackme.burritobot.co --yes --users 150 --harvest <dir>` and fails on any turn
 # answered 502 after guard-proxy's PROXY_TIMEOUT. The harvest is the gitignored Portland prompts, named by

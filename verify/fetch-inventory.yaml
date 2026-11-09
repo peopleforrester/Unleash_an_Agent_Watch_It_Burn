@@ -666,6 +666,22 @@ sites:
     lines: 5
     class: loopback
     why: the support desk's own server on 127.0.0.1, which the test starts (#1221)
+  verify/test_private_removed_row_live.py:
+  - match: urlopen\(r, timeout=20\)
+    lines: 1
+    class: live
+    kind: cluster
+    target: 'the one desk''s POST /desk-forget on its own loopback, from inside the community cluster''s fake-ticket pod with kubectl exec (#1215)'
+  - match: urlopen\(req, timeout=30
+    lines: 1
+    class: live
+    kind: cluster
+    target: a service on a workshop cluster, reached through a kubectl port-forward on 127.0.0.1
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: lab-endpoint
+    target: the deployments page's public host
   verify/test_presenter_ticket_range.py:
   - match: urlopen
     lines: 1
