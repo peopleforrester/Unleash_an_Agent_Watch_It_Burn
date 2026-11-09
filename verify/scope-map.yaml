@@ -2115,7 +2115,9 @@ reads:
     - infra/terraform/aws/cluster/main.tf
     - verify/artifact-cache.sh
     - verify/artifact_cache.py
+    - verify/iam_plan_render.py
     - verify/node_sg_rules.py
+    - verify/tf_module_cache.py
     - verify/tf_plugin_cache.py
   test_cost_counter.py:
     - gitops/ai-layer/guard-proxy
@@ -5636,6 +5638,7 @@ reads:
     - verify/collector_render.py
     - verify/lab-events-harness.js
   test_lab_platform_operator_entry.py:
+    - VERSIONS.lock
     - infra
     - infra/**/.terraform.lock.hcl
     - infra/terraform/aws/cluster
@@ -5646,6 +5649,8 @@ reads:
     - verify/artifact_cache.py
     - verify/e2e-tools.lock
     - verify/fixtures/lab_platform_operator_entry.tftest.hcl
+    - verify/iam_plan_render.py
+    - verify/tf_module_cache.py
     - verify/tf_plugin_cache.py
   test_lab_private_banner.py:
     - gitops/ai-layer/web/active-skin.js
@@ -8491,6 +8496,8 @@ reads:
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
+    - verify/iam_plan_render.py
+    - verify/tf_module_cache.py
     - verify/tf_plugin_cache.py
   test_terraform_lock_init_retry.py:
     - CLAUDE.md
@@ -8522,7 +8529,9 @@ reads:
     - verify/chart_fetch.py
     - verify/charts.lock
     - verify/charts_lock.py
+    - verify/iam_plan_render.py
     - verify/test_terraform_lock_init.py
+    - verify/tf_module_cache.py
     - verify/tf_plugin_cache.py
   test_terraform_mirror_lock.py:
     - infra
