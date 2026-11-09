@@ -46700,3 +46700,17 @@ Passed: `python3 verify/test_scope_tests.py` with `HECATON_BASE_SHA` set, `test_
 `test_kubearmor_snitch_admission.py` and `test_fetch_inventory.py`. The live test on watch-it-burn-community passed
 21 of 21 again. This run's change has no cluster-side part: the live test and the policy test are files under
 `verify/` that no cluster runs, so it had no live check of its own.
+
+## #1264: test_kubearmor_config_tracked.py and #1236's require-resource-limits (run 19535, 2026-11-09)
+
+The policy stays as #1236 wrote it and the test follows it. #1236's shape is right: a single matchCondition,
+`!(request.namespace == 'kubearmor' && request.kind.kind != 'Pod')`, with no namespaceSelector or objectSelector,
+skips KubeArmor's workload objects (the snitch Job, the enforcer DaemonSet, the operator's Deployment and
+ReplicaSet) and still judges their Pods, which #1081's LimitRange fills with limits. #1235's namespaceSelector would
+have left the namespace's Pods unjudged too, and #1236 is the design checked live on watch-it-burn-private.
+Run 19532 (ea520974, recorded in d13bbd51 under #1241) already rewrote the test's two checks to that shape and put
+the policy in the test's scope-map entry, so staging d13bbd51 met this issue's criteria when this run started, and
+this run changed no code. On d13bbd51, with `HECATON_BASE_SHA` set: `test_kubearmor_config_tracked.py`,
+`test_scope_tests.py`, `test_kubearmor_snitch_admission.py`, `test_kyverno_cel_policies.py` and
+`test_fetch_inventory.py` (ending `All fetch inventory checks passed.`) pass. The change is this entry alone, so it
+has no live check, and no cluster command was run.
