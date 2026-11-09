@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # ABOUTME: The code-of-conduct pattern matches in time linear in the text (#1300): floor.py and every copy of it under
 # ABOUTME: gitops/ are timed on 1,000 and 4,000 characters of each repeated leetspeak pair, and fail growing faster.
-"""Offline: floor.py, the two ports of it (workshop-mcp-server.py and ticket_site.py, run from their own block) and the
+"""Offline: floor.py, the two ports of it (workshop-mcp-server.py and ticket_site.py, run from their own block), the
 copies of floor.portable_pattern() that verify/coc_pattern_copies.py finds (the admission policy's and the collector's),
-standard library and PyYAML only. No cluster, no network.
+and the pinned guard-proxy submodule's proxy.py conduct_matches() (#1288), standard library and PyYAML only. No
+cluster, no network.
 
 Runs 19692 and 19727 timed the floor for #1292 and found a 4,000-character run of `5$` took a second in
 workshop-mcp-server.py's coc_spans(), and floor.py the same: each letter of a term was its whole class repeated, so a
@@ -26,6 +27,8 @@ The chat page's JavaScript port is timed on the same cases in node by the test_c
 from __future__ import annotations
 
 import codecs
+import importlib.util
+import os
 import pathlib
 import re
 import sys
@@ -119,6 +122,22 @@ by_regex.setdefault(floor.portable_pattern(), []).insert(0, "floor.portable_patt
 for regex, where in by_regex.items():
     COPIES[" and ".join(where) + f" ({len(regex):,} characters, in Python's re)"] = finditer(regex)
 
+# The pinned guard-proxy runs the floor on /chat since #1288 (48cc2ca and later): conduct_matches() on every turn,
+# whatever the toggles say, and the prompt wall's moderate() on the same pattern. It is a Python ThreadingHTTPServer
+# with no prompt-length cap, so a quadratic run holds the GIL and stalls every /chat in the room. f75aa2f built each
+# letter the pre-#1300 way: a 4,000-character run of '$' took 2.2 s and 16,000 took 35 s (run 19825);
+# guard-proxy-agenticburn#83 is the fix. Its default list is read, so PROFANITY_LIST is unset for the import.
+GP_PROXY = REPO / "gitops/ai-layer/guard-proxy/proxy.py"
+if not GP_PROXY.is_file():
+    sys.exit(f"FAIL {GP_PROXY.relative_to(REPO)} is missing; run bash verify/ensure-submodules.sh")
+os.environ.pop("PROFANITY_LIST", None)
+os.environ.pop("CONDUCT_GUARDRAIL_ID", None)
+_spec = importlib.util.spec_from_file_location("gp_coc_linear", GP_PROXY)
+_gp = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_gp)
+COPIES["gitops/ai-layer/guard-proxy/proxy.py conduct_matches() (the pinned guard-proxy's /chat check)"] = \
+    _gp.conduct_matches
+
 ALL = cases.cases()
 print(f"== 1. each of {len(ALL)} runs, at {SHORT:,} and {LONG:,} characters, on each of {len(COPIES)} copies ==")
 for name, fn in COPIES.items():
@@ -130,6 +149,9 @@ for name, fn in COPIES.items():
             worst = (short, long, label)
         if not ok:
             bad.append(f"{label}: {short:.1f} ms at {SHORT:,}, {long:.1f} ms at {LONG:,}")
+            if len(bad) == 5:  # the five printed below are enough to fail it; a quadratic copy costs seconds a run
+                print(f"        stopped timing {name} at its fifth failing run")
+                break
     for line in bad[:5]:
         print(f"        {line}")
     check(f"{name}: every run of {LONG:,} characters under {LIMIT_MS:.0f} ms and at most {GROWTH:.0f} times its "
