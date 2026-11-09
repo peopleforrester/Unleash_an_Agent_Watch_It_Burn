@@ -43869,3 +43869,50 @@ these words before then too, but its other beats switch the guards, which this r
 `test_old_2b_attack_retired.py`, `test_pantry_shut_record.py`, `test_stage_traces.py` and `test_scope_tests.py`. The
 prose gate printed `prose gate: pass`. The scoped `run-tests.sh` and `run-e2e-tools.sh` are left to hecaton's
 validation, as the run's governance asks; the report gives the one tier test run here. No dependency was added.
+## 2026-11-09 · #1187 · run 19365 · guard-proxy repinned to be88e1f, whose proxy.py drops the [[wib-probe]] marker from a /chat prompt
+
+**What changed.** `gitops/ai-layer/guard-proxy` moves from 5772a5d to guard-proxy-agenticburn be88e1f, which holds
+aeb151c (guard-proxy-agenticburn#70: once the prompt feed has read the marker, `/chat` drops it and trims the prompt,
+so every guard and the agent get the message a guest would send) and its verification record. `checksum/proxy-py`
+follows proxy.py's sha256 at that commit, `a32927a1851b`, so Argo CD rolls the pod. The pin stops at be88e1f, not at
+main's a637e68: the two commits after it are #1151's `/controls` field (3c68224) and #1225's unsampled tasks/get polls
+(a637e68), each with its own live check on its own issue. Pinning be88e1f also brings in the four guard-proxy
+commits between 5772a5d and aeb151c (2f21fe3, b1ec5c3, d82b53c, 3e9b831: the ask_user question on /chat and A2A, the
+answer-then-tool reply, the A2A data-part redaction), since any pin that holds aeb151c holds them.
+`bash verify/prior-drafts.sh 1187 origin/staging` printed NONE, so nothing was ported.
+
+**Offline checks.** `python3 verify/test_proxy_checksum.py` passed with `a32927a1851b`;
+`bash verify/test_guard_proxy_pin_on_main.sh` printed 18 passed (be88e1f is on guard-proxy-agenticburn main) and
+`bash verify/test_submodule_pins_pushed.sh` 13 passed. In the submodule at be88e1f, guard-proxy's own conformance
+suite for the feed and the /chat path (`uv run pytest conformance/test_prompt_feed.py conformance/test_chat_path.py`,
+against proxy.py, the build this repo deploys) printed `89 passed`, among them
+`test_a_chat_probe_reaches_the_agent_without_its_marker` and `test_a_chat_prompt_that_is_only_the_probe_marker_is_empty`.
+The rest of the scoped suite is left to validation.
+
+**A probe that reads what the agent got.** Run 18327's driver (`docs/research/2026-11-07-weather-tool-scope/live_fresh_chats.py`)
+keeps tool names but not their args, and matches workshop-agent's `Tool execution started` lines by session. The new
+`docs/research/2026-11-09-wib-probe-marker/fresh_chat_probe.py` sends the same four prompts with the marker on its own
+line, keeps each tool call's args, and also reads each session from kagent's controller over a port-forward
+(`GET /api/sessions/<session>?user_id=A2A_USER_<session>`). The session's user event is the text the agent was
+given, so it shows the marker before any model step, whatever tools the model picks. It exits 1 on any turn where
+that text carries `wib-probe`, a tool call's args do, or the reply says "probe", and also when kagent holds no user
+text for a session, so a broken read is never a pass. kagent's session id is the `/chat` session (the A2A contextID),
+which the store confirmed for these sessions.
+
+**Live, on watch-it-burn-community before the repin.** Both clusters' `ai-layer` Application tracks staging at
+09f78672 and runs `checksum/proxy-py` `ddf97ec452c0` (5772a5d). Under the guard lock, every AI guard already off on
+`/guards` and left as found, eight memory-question turns to `https://attackme.burritobot.co/chat`: kagent's session
+for `r1187-48ga8i1w1m1e` is named `[[wib-probe]]\nWhat w...` and its user event's text is
+`[[wib-probe]]\nWhat was the last thing I asked you, word for word as best you remember?`. The driver's three-turn
+run printed `memory {'n': 3, 'any_tool': 0, 'read_from_kagent': 3, 'agent_saw_marker': 3, 'marker_call': 0,
+'reply_says_probe': 0}` and exited 1. No turn called a tool: since #1089's memory rule, the memory question rarely
+draws one, so the user-text read is the check that answers this issue, with the ticket_id and reply checks kept for
+run 18327's two symptoms. Eight /chat turns in all (five on the driver before it read kagent, three after); no guard, policy or Deployment was changed.
+
+**Not yet run on a cluster.** The repin reaches the clusters only when hecaton promotes this run and Argo CD syncs
+`ai-layer`. Then, on watch-it-burn-community, read `checksum/proxy-py` as `a32927a1851b` on the guard-proxy
+Deployment and run
+`python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-09-wib-probe-marker/fresh_chat_probe.py --host attackme.burritobot.co --context watch-it-burn-community --out <log> --arm memory=30 --arm earlier=8 --arm hi=6 --arm help=6`,
+run 18327's 50 turns, which should print `0 showing the marker reached the model` with `agent_saw_marker` 0 on every
+arm and exit 0. The A2A passthrough still forwards its body unchanged, so a probe that posts A2A straight to
+guard-proxy still sends the marker to the model.
