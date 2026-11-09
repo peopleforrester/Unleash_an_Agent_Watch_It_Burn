@@ -43187,3 +43187,12 @@ shows `backstage/backstage` running `watch-it-burn:backstage-1.52.0-node24.22.2@
 Backstage. **Not yet run on a cluster:** the image rebuild with the plugin (README step 1 and the Dockerfile's
 `yarn workspaces focus --all --production`), and `verify/run-e2e.sh`'s `backstage playwright (corepack yarn test:e2e)`
 check, the first full install to run corepack-check and the plugin together.
+
+## 2026-11-09 · #1167 · run 19283 · Run 19253's draft gets its fetch-inventory entries
+
+Run 19253's two commits failed the `tests` gate on `verify/test_fetch_inventory.py` (#1116), which fails on any line
+under verify/ that names a fetch command and that `verify/fetch-inventory.yaml` does not claim. The three new files name
+`yarn install` in docstrings and check messages, and `yarn_pins.py`'s `urlopen` reads registry.npmjs.org to write the
+lock; `test_package_cache.py`'s new allowlist line raised its count from 13 to 14. This run adds the three entries (the
+`urlopen` line classed live, upstream-index, the rest none) and the new count. Nothing else in the draft changed. That
+test now passes. No live check: the change is the inventory alone, and run 19253's entry above stands for the rest.
