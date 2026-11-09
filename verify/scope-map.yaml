@@ -3118,6 +3118,8 @@ reads:
     - verify/package_cache.py
     - verify/playwright_browsers.py
     - verify/python.lock
+  test_feedback_admin_1162_record.py:
+    - verify/test_feedback_admin_1162_live.py
   test_feedback_links.py:
     - gitops/ai-layer/web/active-skin.js
     - gitops/ai-layer/web/burritbot.html
