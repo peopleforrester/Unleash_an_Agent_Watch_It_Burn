@@ -42850,3 +42850,31 @@ terraform, so `verify/fetch-inventory.yaml` now classes them `none`, 4 lines, as
 command's text. The `--context is empty` line in that gate's output is the expected message of a check that passed,
 not a failure. Tests run: `python3 verify/test_fetch_inventory.py`, `python3 verify/test_floor_rebuild_state.py` and
 `python3 verify/test_scope_tests.py`, all passing. No live check: the change is under `verify/` and no cluster runs it.
+
+## 2026-11-09 · #1168 · run 19260 · The save of Challenge 2's Tron, Infinite Mario and Tetris images is escalated to netcup
+
+**What the archive holds.** Read through sources on 2026-11-09, `~/repos/private/image-archive/manifest.tsv` still
+has its header and the 84 lines of the three saves (66 dated 2026-11-04, 9 dated 2026-11-05, 9 dated 2026-11-06), and
+the newest log is `save-Unleash_an_Agent_Watch_It_Burn-2026-11-06.log`. No line names
+`docker.io/iamassif731/tron-lightcycle-game`, `quay.io/kenmoini/infinite-mario` or `docker.io/bsord/tetris`, so the
+fourth save this issue asks for has not run, and the three images.lock rows stay `-`.
+
+**The digests still answer anonymously.** Fetched on 2026-11-09 with a pull token and no login, each locked manifest
+hashes to its row's digest: Tron `sha256:610c7c0e...` (an OCI image manifest, 15 layers, from Docker Hub), Infinite
+Mario `sha256:146c00f5...` (an OCI image manifest, 12 layers, from quay.io) and Tetris `sha256:2ffffd2f...` (a Docker
+v2 manifest, 7 layers, from Docker Hub). A save with an empty Docker config can pull all three.
+
+**Why this run did not save them.** The archive is under michael's home on netcup and `mirror-images.sh save` needs
+his Docker daemon. This run's user reads his files through sources only, and the `netcup` verb, which runs a command
+as michael, is the custodian tier's. The save is in this run's escalation as one command for the custodian. It clones
+staging at `19d67630` into a fresh temporary directory, runs
+`~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .` there with `DOCKER_CONFIG` pointing at an
+empty `{}` config, then `python3 verify/test_images_saved.py`, and appends both outputs, their exit codes and
+`git diff images.lock` to `~/repos/private/image-archive/save-Unleash_an_Agent_Watch_It_Burn-<date>.log`. It should
+print SAVED for the three rows and HAVE for every other row, and the test should exit 0.
+
+**What is left.** The next run on #1168 reads that log and the manifest through sources, copies the save's date into
+the saved column of each of the three rows whose ref and digest match a new manifest line, as runs 17350, 17393 and
+17809 did, updates the images.lock header's sentence on the three games, and records the test's exit.
+
+**Live check.** None: this change touches only decisions.md, which no cluster runs.
