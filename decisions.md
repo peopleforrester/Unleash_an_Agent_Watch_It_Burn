@@ -46545,3 +46545,11 @@ build to load the plugin from `.yarnrc.yml`.
 **Tests run.** `python3 verify/test_yarn_pins.py` and `python3 verify/test_yarn_pins_e2e.py`, each exit 0, and the
 prose gate. `python3 verify/scope_tests.py write` left the map as it was. The scoped Test and E2E commands are left to
 validation. No dependency was added.
+
+**Run 19529, after run 19497 failed validation.** The tests gate failed on `verify/test_fetch_inventory.py` alone. Its
+line scan finds every line that names a Node fetch, comments and messages included, and the new docstrings, comments
+and check messages that say "yarn install" raised the count of lines the `none` entries claim in
+`verify/fetch-inventory.yaml`: `verify/test_yarn_pins.py` from 3 to 5, `verify/test_yarn_pins_e2e.py` from 3 to 5 and
+`verify/yarn_pins.py` from 2 to 3. None of these lines runs a fetch, so the counts were raised in the inventory and no
+class changed. `python3 verify/fetch_inventory.py check` and `python3 verify/test_fetch_inventory.py` now pass. The
+other tests the gate ran had passed.
