@@ -9627,6 +9627,20 @@ reads:
     - verify/run-e2e-tools.sh
     - verify/run-e2e.sh
     - weaver/registry
+  test_wib_digests_signed.py:
+    - '**.json'
+    - '**.sh'
+    - '**.yaml'
+    - '**.yml'
+    - '*Dockerfile'
+    - '*Dockerfile.*'
+    - images.lock
+    - verify/wib_pins.py
+  test_wib_pins.py:
+    - images
+    - images.lock
+    - verify/ghcr_pull.py
+    - verify/wib_pins.py
   test_witch_name_vocab.py:
     - gitops/ai-layer/ticket_site.py
     - gitops/ai-layer/web/burritbot.html

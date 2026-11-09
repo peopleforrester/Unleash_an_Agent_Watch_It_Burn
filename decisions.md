@@ -48324,3 +48324,49 @@ Nothing on either cluster was changed: every write was a server dry run.
 
 **Tests.** No test was added or changed: the change is this entry alone, and `verify/test_coc_admission.py` already
 holds the policy offline. The prose gate was run on it.
+## 2026-11-09 · #1282 · run 19646 · A tools-tier test holds every pinned watch-it-burn digest to its cosign .sig tag
+
+**What.** `verify/test_wib_digests_signed.py` (SUITE e2e, E2E TIER tools) reads every
+`ghcr.io/peopleforrester/watch-it-burn` digest images.lock pins in its digest column, and every one a manifest pins: a
+tracked YAML, JSON, shell script or Dockerfile that names `ghcr.io/peopleforrester/watch-it-burn...@sha256:...`, or a
+Helm values or kustomize block that splits it into repository and tag, as `gitops/bootstrap/apps/kyverno.yaml` does.
+For each digest it does an anonymous HEAD of the image and of `sha256-<digest>.sig`, the tag cosign v2 writes and
+Kyverno 1.19 reads, and fails naming each digest, where it is pinned and what ghcr.io answered. The reading and the
+verdict are `verify/wib_pins.py`; `verify/test_wib_pins.py` holds them to fixtures and a stub ghcr.io offline. Tests'
+own fixtures (`verify/test_*`) are not manifests: `verify/test_reset_bot.sh` pins a made-up digest. A commented-out
+image line is not a pin. The package is read whole, since the policy's glob `watch-it-burn*` crosses the slash.
+
+**Scope.** The tier test reads the tree by suffix (`**.yaml`, `**.yml`, `**.json`, `**.sh`, Dockerfiles), so the
+scope map selects it for a change to one of those files or to images.lock, and not for a prose change. It runs in
+about 17 seconds and fetches no pinned tool. The docstrings name the signing script without its path, since naming
+`verify/sign-images.sh` (which runs `grep -r`) would have put the test on the always list.
+
+**What it found: four pinned digests have no .sig tag.** On 2026-11-09 it read 13 digests (13 in images.lock, 10 of
+them also in manifests). Nine answer 200 for the image and its `.sig`. Four answer 404 for `.sig` (and for the
+cosign v3 bundle tag `sha256-<digest>` and `.att`, and the referrers API lists nothing):
+
+- `kyverno-v1.19.1-pr17085@sha256:6889b414...`, `kyverno-background-controller-v1.19.1-pr17085@sha256:89d0d815...`
+  and `kyverno-reports-controller-v1.19.1-pr17085@sha256:90dac88c...`, #1015's counter-fix builds, pinned in
+  `gitops/bootstrap/apps/kyverno.yaml` and images.lock rows 125 to 127. Both clusters run them (read only:
+  `kubectl get pods -n kyverno` on watch-it-burn-private and watch-it-burn-community shows each pod's imageID at these
+  digests). They were admitted because Kyverno's own webhook leaves its namespace out: the
+  `ivpol.validate.kyverno.svc-fail` webhook on watch-it-burn-private carries `kubernetes.io/metadata.name NotIn
+  [kyverno]` beside the kube-system set kyverno.yaml adds. The policy's header says an image of ours in any namespace
+  must be signed; the kyverno namespace is the one place that does not hold. `verify/sign-images.sh` would not have
+  signed them either: it finds tags on `image:` keys and in Dockerfiles, and these are Helm `tag:` values.
+- `llm-guard-model-zeroshot-8e7e5af5@sha256:c01ca964...`, images.lock row 79, the zero-shot weights' scratch image
+  llm-guard-cpu-offline's Dockerfile builds cpu.5 from. No Pod runs it.
+
+So the test fails on staging today and the issue's "passes on staging today" is not met. The test is not scoped
+around the four: the criterion names every digest in images.lock, and the repo's test rules forbid a known-open
+list. The fix is signing those four digests with the workshop key and cosign2 on netcup, where the key is (as for
+#1276's `-8` build); this run has neither. The run escalates that act, and the next run on the issue reruns
+`bash verify/run-e2e-tools.sh test_wib_digests_signed.py` and, once green, the issue closes.
+
+**Live check.** The change touches only files under `verify/` that no cluster runs and decisions.md, so it needs no
+live check; the two read-only `kubectl get` calls above were for the finding. Nothing on either cluster was changed.
+
+**Tests.** `python3 verify/test_wib_pins.py` passed (24 checks). `python3 verify/test_wib_digests_signed.py` failed
+as described, on the four digests and on nothing else. `python3 verify/scope_tests.py check`,
+`python3 verify/test_scope_tests.py`, `python3 verify/test_fetch_inventory.py` and `python3 verify/test_e2e_tools_tier.py` passed. The whole Test and E2E
+commands are left to validation. No dependency was added.
