@@ -43396,6 +43396,7 @@ this change touches against its merge base `19d67630`. The commit had been rebas
 `test_cluster_provenance.py` (87 checks), `test_fleet_import_state.py`, `test_drift_floor.py` and `test_scope_tests.py`,
 each exit 0. Nothing that reads AWS changed, so the live test was not run again; its output above stands.
 ## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; the persona now says never to call ask_user and to ask in its reply
+## 2026-11-07 · #1094 · run 18386 · A turn that ends in kagent's ask_user shows the guest Nova's scratchpad; a draft persona rule against ask_user (dropped by run 19291, below)
 
 **Why this run.** Run 18327 (#1089) asked fresh chats "What was the last thing I asked you, word for word as best you
 remember?" and on 8 of 30 Nova called kagent's built-in `ask_user`; the chat page then showed the model's planning
@@ -43497,3 +43498,85 @@ and the next run on it runs it.
 RENDER-GATE TESTS GREEN`, with `test_ask_user_persona.py` (`ALL ASK_USER PERSONA CHECKS GREEN`) and
 `test_weather_tool_scope.py` among them, then `26 checks ran (the offline suite and 25 tier tests) in 7m05s, 4 at a
 time`, `ALL E2E TOOLS TIER CHECKS GREEN`, `exit=0`. The prose gate printed `prose gate: pass`.
+
+## 2026-11-09 · #1094 · run 19291 · #889's ask_user rule is live and the guest still reads planning text; the fix is guard-proxy-agenticburn#72's, and run 18386's persona rule is dropped
+
+**Why this run.** Run 18386's draft never landed: hecaton stopped it on a revalidation for overlap, not for a failure.
+`verify/prior-drafts.sh 1094 origin/staging` printed START from `origin/agent/1094-18386` with three in-place drift
+lines (decisions.md, `gitops/workshop-agent/agent.yaml` by `b68496b6` for #1007, `verify/scope-map.yaml` by `d7f9f294`),
+so both commits were cherry-picked. The scope map conflicted on a neighbouring entry and kept both. `b68496b6` does not
+touch the ask_user lines. What the drift check could not name is `ad07f70d` (#889, 2026-11-08): it put "Never call
+ask_user (#889)." in the persona's tools paragraph, a rule that says what run 18386's says, so the draft's own test
+failed at its check that no other line names ask_user. This run read the cluster again before choosing between them.
+
+**What the guest sees, read live with #889's rule deployed.** On watch-it-burn-community Argo CD's `workshop-agent`
+read Synced and Healthy at staging `02d5f6ae`, and the Agent's live systemMessage was byte-equal to git's at that commit,
+with "Never call ask_user (#889)." in it. guard-proxy's `/app/proxy.py` read sha256 `ddf97ec452c0...`, the pin
+`5772a5d`, matching `checksum/proxy-py`. Then, from 03:44:54Z to 03:46:36Z under the guard lock, the command run
+18386 left under "Not yet run on a cluster":
+`python3 verify/guard_lease.py hold --context watch-it-burn-community --profile accen-dev -- python3 docs/research/2026-11-07-weather-tool-scope/live_fresh_chats.py --host attackme.burritobot.co --context watch-it-burn-community --out /var/lib/hecaton/runs/19291/live/fresh.jsonl --arm memory=30 --arm earlier=8 --seed 1094`.
+
+| Question | Fresh chats | `ask_user` in workshop-agent's log | Reply that is planning text |
+| --- | --- | --- | --- |
+| the memory question | 30 | 3 | 1 (trial 26) |
+| "What did we talk about earlier?" | 8 | 1 | 1 (trial 2) |
+
+guard-proxy logged four `thinking_only_retry` and two `thinking_only_surfaced` in that window, one retry per
+`ask_user` turn. The two surfaced turns called `ask_user` on the send and again on the retry, and the guest read
+"The guest has not provided any new input since my previous message. I need to inform them again that I cannot recall
+the last thing they asked without additional context or information." and "The guest is asking about past conversation
+topics. I should check the conversation history for any relevant information." The other two `ask_user` turns answered
+on the retry, but one of them from the pending question: "The last thing you asked me was about the weather in Salt
+Lake City. Currently, it is partly cloudy with a temperature of 75°F", on a fresh chat that had asked nothing about the
+weather. No guest saw the question Nova asked on any of the four. A reply counts as planning text here when the text
+outside its `<thinking>` block, which is what `burritbot.html` shows, is the scratchpad's own words. So #889's rule cut
+`ask_user` from run 18327's 8 of 30 to 3 of 30 on the memory question, and the guest still reads planning text.
+
+**Run 18386's persona rule is dropped.** It was measured on the Bedrock replica against the persona before #889's rule.
+This run measured again with the `[[wib-probe]]` line the live driver sends, 60 memory questions each, from 03:47Z to
+03:49Z: staging's persona (#889 alone) 0 `ask_user`; staging plus run 18386's paragraph 0, with one
+`read_support_ticket` and one reply with nothing past the scratchpad; #889's paragraph with run 18386's words folded in
+0. A fourth arm sent the guest's message twice, as the live task history lists it (the new `--twice` flag in
+`ask_user_replica.py`): 0 of 60 on staging's persona. The replica gives 0 where the cluster gives 3 of 30, so it cannot
+tell these prompts apart, and a second paragraph saying what #889's already says has no measurement behind it. The
+persona stays as staging has it.
+
+**The choice: guard-proxy shows the question, of the three the issue names.**
+- The Agent cannot drop `ask_user`: kagent v0.10.1 adds it to every Agent, and the CRD has no field (run 18386, above).
+- The persona already says it, since #889, and the live numbers above are what it does.
+- guard-proxy showing the question holds on every `ask_user` turn, whatever the model does, and it already exists.
+  guard-proxy-agenticburn#72 (closed 2026-11-08, commit `2f21fe3`, on its main) reads the questions from the status
+  message's `adk_request_confirmation` part when a task stops input-required on `ask_user`, replies with them one per
+  line, sends no reasoning-only retry, and sends `tasks/cancel` so the chat's next message runs as a new task. Its
+  follow-ups `b1ec5c3` and `3e9b831` redact and scrub that question on the A2A passthrough. In the live tasks Nova put
+  its answer in the question ("The last thing you asked me was: ..."), so the guest gets that answer.
+
+The fix reaches the clusters with a repin of `gitops/ai-layer/guard-proxy` to a guard-proxy main commit at or after
+`2f21fe3`, with `checksum/proxy-py` set to that commit's `proxy.py` hash. Every repin in this repo's history is
+Michael's own commit (`c51e1851`, `e9aa982e`, `9f2b575c`, `a65f748d`, `6d8505a8`, `ef66c770`), and #1092 and #1151 say
+so, so this run does not repin. #1225 and #1187 already ask for a repin to guard-proxy's main (`a637e68` today), which
+contains `2f21fe3`; that one repin covers this issue too.
+
+**The offline test.** `verify/test_ask_user_persona.py` is now `verify/test_ask_user_reply.py`, without the persona
+checks (#889's rule stays held by `verify/test_kubecon_probe.py`). It reads the two live tasks in
+`verify/fixtures/ask-user-input-required-2026-11-07.json` as before, then replays them through the pinned `proxy.py`
+with every guard off behind a stand-in agent. When the pin's `proxy.py` is `5772a5d`'s (sha256 `ddf97ec452c0...`) it
+holds the gap: two sends and the first task's planning text. Any other pin must show the guest task 1's question, with
+no scratchpad, one send and one `tasks/cancel` for task 1, so the repin turns the test to the fix and a repin without
+it fails. Run on this tree it printed `ALL ASK_USER REPLY CHECKS GREEN` on the gap branch. Pointed at guard-proxy
+main's `proxy.py` (`a637e68`, sha256 `5e0c8390277e...`, exported to `/var/lib/hecaton/runs/19291/gp-main`) it took the
+fix branch and printed the question as the reply and `ALL ASK_USER REPLY CHECKS GREEN`. On a copy of main whose
+`ask_user_questions` returns nothing it failed all four fix checks. Its scope-map entry is the one
+`python3 verify/scope_tests.py write` printed, and `python3 verify/scope_tests.py check` read 0 problems.
+
+**What the run spent and changed.** 38 `/chat` turns on the public bot, with four retries: `/cost` read 502 requests
+and $4.7200 before and 544 and $5.1080 after. The replica arms made 240 trials of `us.amazon.nova-pro-v1:0`, about $2
+at the replica's per-call figure. No guard, policy, Secret or Deployment was switched; the guard lock was released. The
+presenter terminal login was not read or touched. No dependency was added. The per-trial data is in
+`/var/lib/hecaton/runs/19291/live/` and `/var/lib/hecaton/runs/19291/bedrock/` on hecaton's host.
+
+**Not yet run on a cluster.** After Michael repins guard-proxy to a main commit at or after `2f21fe3` and Argo CD rolls
+`ai-layer`, read `/app/proxy.py`'s sha256 in the guard-proxy pod against `checksum/proxy-py`, then run the same
+`live_fresh_chats.py` command with `--arm memory=30 --arm earlier=8`. It should show no reply that is planning text,
+guard-proxy's log no `thinking_only_surfaced` and an `ask_user_reply` and a `task_cancel` for each `ask_user` turn that
+workshop-agent's log shows. That is this issue's second criterion, and the next run on it runs it.
