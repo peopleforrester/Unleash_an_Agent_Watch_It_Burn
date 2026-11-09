@@ -54,6 +54,16 @@ spec:
         podLabels: { tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         controller:
           podLabels: { tags.datadoghq.com/service: burritobot-kagent-controller }
+          # The Go agent runtime the controller starts for a runtime: go Agent (#1222, question 1138): v0.10.1 with its
+          # MCP client sending the active execute_tool span's trace context, so the gateway's tools/call pair hangs
+          # under that span in the turn's trace. Built by images/kagent-mcp-traceparent/build.sh, pinned in
+          # images.lock, held by verify/test_kagent_mcp_traceparent.py. The controller writes registry/repository:tag
+          # into the agent's Deployment as it stands, so the tag carries the digest. Drop it when kagent moves to a
+          # release that sends the trace context itself (kagent-dev/kagent#2809, in the 1.0 line only).
+          goAgentImage:
+            registry: ghcr.io
+            repository: peopleforrester/watch-it-burn
+            tag: "golang-adk-0.10.1-mcptrace@sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5"
         ui:
           podLabels: { tags.datadoghq.com/service: burritobot-kagent-ui }
         kagent-tools:

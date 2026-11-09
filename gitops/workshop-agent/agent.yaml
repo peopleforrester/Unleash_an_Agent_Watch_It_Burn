@@ -549,7 +549,9 @@ spec:
           # names none), and workshop-mcp's run_shell and get_vault_entry then keep the recipe out of their output.
           # traceparent is the turn, for workshop-mcp's turn guard (#885): guard-proxy injects its /chat span's W3C
           # traceparent on each A2A request of a turn, and the same headerRoundTripper carries it onto that turn's
-          # MCP requests. tool_audit.py reads the trace id as the turn and refuses the third identical call, and
+          # MCP requests. The patched runtime kagent.yaml pins (#1222) then replaces it with the execute_tool span's
+          # own context, the same trace id under a nearer parent, and keeps it as sent when no span is active.
+          # tool_audit.py reads the trace id as the turn and refuses the third identical call, and
           # every call after the twentieth, in it. kagent's one MCP session carries every conversation, so nothing
           # else marks a turn.
           allowedHeaders:

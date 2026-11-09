@@ -138,12 +138,13 @@ config:
           # (log.rs start_outbound, read at tag v1.7.0), so it is kept too: the A2A backend is the one plain-HTTP
           # call, subtype "Http" (MCP calls are "Mcp", model calls "Llm").
           #
-          # The kept tools/call pair is its own parentless trace in APM, one per tool call, and stays one (#877).
-          # kagent's MCP client sends no traceparent: golang-adk v0.10.1 builds it on a plain http.Transport
-          # (go/adk/pkg/mcp/registry.go, createTransport, read at tag v0.10.1), and its execute_tool span has no HTTP
-          # child. The gateway follows a context on :3001 when one arrives: an MCP exchange sent with a traceparent
-          # (burritobot-private, 2026-11-05) put tools/call under the parent it named. The collector sees one span at
-          # a time and cannot give it the agent's, so the pair stays apart until kagent sends one.
+          # The kept tools/call pair (#877). Stock golang-adk v0.10.1 sends no trace context of its own on an MCP call
+          # (go/adk/pkg/mcp/registry.go, createTransport, read at tag v0.10.1), so an evil-mcp call's pair was a
+          # parentless trace, and a workshop-mcp call's hung under the gateway's A2A hop through the traceparent
+          # agent.yaml forwards (#885). The gateway follows a context on :3001 when one arrives, and the collector
+          # sees one span at a time and cannot give the pair the agent's. The runtime kagent.yaml pins is patched to
+          # inject the active execute_tool span's context into every MCP request (#1222,
+          # images/kagent-mcp-traceparent), with no client span of its own, so the pair hangs under execute_tool.
           #
           # The A2A hops on :3000 include guard-proxy's tasks/get polls (#877): once a second while a tool runs, each
           # one guard-proxy POST, this SERVER span, the Http CLIENT span and the agent's server span, all inside the

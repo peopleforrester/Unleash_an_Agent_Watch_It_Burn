@@ -1,0 +1,72 @@
+# ABOUTME: Build kagent v0.10.1's Go agent runtime with its MCP client sending the active span's trace context (#1222)
+# ABOUTME: into a loopback registry, and copy it to the ghcr.io tag images.lock pins only when its digest is the pinned one.
+name: build-kagent-mcp-traceparent
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [staging, main]
+    paths:
+      - 'images/kagent-mcp-traceparent/**'
+      - 'images.lock'
+      - 'verify/e2e-tools.lock'
+      - 'verify/ci-artifact-cache.sh'
+      - 'verify/artifact_cache.py'
+      - 'verify/artifact-cache.sh'
+      - 'verify/image_cache.py'
+      - 'verify/git_mirror.py'
+      - '.github/workflows/build-kagent-mcp-traceparent.yml'
+      - 'scripts/ghcr_version_tag.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-kagent-mcp-traceparent
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Any Go from 1.21 on will do: build.sh sets GOTOOLCHAIN=go1.27.1, so the go command fetches that release and
+      # checks it against the Go checksum database, and the binary is the one a run builds on its own host.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - name: WIB_ARTIFACT_CACHE, the runner's artifact cache outside the workspace
+        run: bash verify/ci-artifact-cache.sh
+      - name: Fetch the pinned crane
+        run: |
+          set -euo pipefail
+          read -r name version sha url member < <(grep -E '^crane[[:space:]]' verify/e2e-tools.lock)
+          [ "${name}" = crane ] || { echo "verify/e2e-tools.lock has no crane row" >&2; exit 1; }
+          archive="$(bash verify/artifact-cache.sh get "${sha}" "${url}")"
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/bin" "${member}"
+          echo "CRANE=${RUNNER_TEMP}/bin/crane" >> "${GITHUB_ENV}"
+          "${RUNNER_TEMP}/bin/crane" version
+      # build.sh reads its pinned base from the runner's artifact cache as an OCI layout keyed by its digest
+      # (verify/image_cache.py), pushed to this registry before crane append builds on it, and the kagent source from
+      # the cache's bare mirror at its pinned commit (verify/git_mirror.py), as the Kyverno counter fix's build does
+      # (#1216). It runs the patch's Go tests before it builds.
+      - name: Build the runtime with build.sh into crane's registry on loopback
+        run: |
+          nohup "${CRANE}" registry serve --address 127.0.0.1:5000 >"${RUNNER_TEMP}/registry.log" 2>&1 &
+          for _ in $(seq 50); do curl -fsS http://127.0.0.1:5000/v2/ >/dev/null 2>&1 && break; sleep 0.2; done
+          curl -fsS http://127.0.0.1:5000/v2/ >/dev/null
+          bash images/kagent-mcp-traceparent/build.sh 127.0.0.1:5000
+      # The digest is pinned in images.lock before the first push, as the Jokers' and Kyverno's are (#775, #1015).
+      # ghcr_version_tag.py copies the build to its tag only when the tag lacks the pinned digest and the build's digest
+      # is that digest; a build that comes out at any other digest is not pushed, and the script exits 1 naming both.
+      # The push is not a signature: verify/sign-images.sh signs the digest where the workshop key lives.
+      - name: Copy the build to its pinned ghcr.io tag
+        env:
+          GHCR_USER: peopleforrester
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          for tag in golang-adk-0.10.1-mcptrace; do
+            python3 scripts/ghcr_version_tag.py "crane:127.0.0.1:5000/peopleforrester/watch-it-burn:${tag}" "ghcr.io/peopleforrester/watch-it-burn:${tag}" images.lock
+          done
