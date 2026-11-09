@@ -48490,9 +48490,17 @@ Totals after the change: 971 call sites in 254 files. By family, `summary` count
 **Tests.** `verify/test_fetch_inventory.py` gains a sample for each family, the forms above that are found and the
 look-alikes that are not, a check that every FROM line of every Dockerfile under images/ is claimed by a pinned
 container-image entry, and a scratch repository where a new Dockerfile with `FROM python:3.12` and an apt-get install
-of jq fails on each of its three lines though none names curl. It passed. `verify/test_package_cache.py` passed.
-`verify/test_fleet_contract.py` stops in this worktree before its inventory check, on the guard-proxy submodule not
-being checked out, the same on the base commit; its check that no web-terminal Dockerfile line is classed live was run
-alone on the new inventory and holds. The whole Test and E2E commands are left to validation.
+of jq fails on each of its three lines though none names curl. It passed.
+
+**The first run's gate failure (run 19643).** Validation failed `verify/test_no_docker_hub.py`, which the run had not
+run. That test reads every tracked line for `buildah from <image>`, the inventory included, and the Backstage README
+entry's why read "its buildah from and apt-get lines", so it took "and" for a Docker Hub base. The why now reads "the
+base buildah pulls and the apt-get line among them", and the test passes. Run 19674 then ran every offline test the
+scope map ties to the changed verify files, and those that read every tracked line: `test_no_docker_hub.py`,
+`test_fetch_inventory.py`, `test_beat03_c7.py`, `test_chart_fetch.py`, `test_fleet_contract.py` (with the guard-proxy
+submodule checked out, which the first run lacked), `test_ghcr_pull.py`, `test_images_saved_judge.py`,
+`test_kyverno_counter_fix.py`, `test_plan_policy.py`, `test_playwright_browsers.py`, `test_verify_harness.py`,
+`test_workflow_artifact_cache.py`, `test_walkthrough_no_state.sh`, `test_package_cache.py` and `test_scope_tests.py`.
+All passed. The whole Test and E2E commands are left to validation.
 
 **Live check.** None: the change touches only files under verify/ that no cluster runs. No dependency was added.
