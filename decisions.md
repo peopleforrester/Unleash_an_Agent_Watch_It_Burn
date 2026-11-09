@@ -48630,3 +48630,35 @@ under another name was accepted on both, so each API server compiles the new exp
 on both clusters, and a dry-run create of a ConfigMap named with a term in `agent` is refused by
 code-of-conduct-names. The rest is as run 19672's entry above names: the repin's restart, `always_on` in
 `/controls`, and the KubeCon probe's community and admin runs with the check on.
+
+## 2026-11-09 · #1290 · run 19691 · a test holds the #1267 research note to its per-surface table and its dated, sourced vendor claims
+
+**What.** Test review run 19687 found that no test read #1267's first criterion: a research note in `docs/research/`
+naming, per surface, what reaches the screen today, the option chosen and why, with each vendor claim dated and
+sourced. `verify/test_coc_floor_spike.py` reruns the note's measurement but reads none of that. New
+`verify/test_coc_floor_note.py` reads `docs/research/2026-11-09-coc-floor/README.md` and fails when:
+
+- one of the eight surfaces #1267 lists (the prompt wall, the chat page's saved-prompts rail, the prompt sent to the
+  bot, the bot's reply, the support desk, the deployments page, the cluster objects, the Datadog traces) has no row,
+  or more than one, in "The surfaces" table, or a row's "What reaches the screen today", "Chosen" or "Why" cell is
+  empty;
+- a code name a row cites is gone from the row or from the repo: `COC_TERMS` in `burritbot.html`, `/submit` and
+  `record_landing` in `ticket_site.py`, `deploy_app` and `run_shell` in `workshop-mcp-server.py`,
+  `transform/scrub_pii` in `values-burn.yaml`. guard-proxy's `proxy.py` is a submodule and is left to the pin tests;
+- the opening line or the vendor section's heading loses its read date, a date is not YYYY-MM-DD or is after today,
+  or the two disagree;
+- any of the 12 vendor claims (six Bedrock bullets, two agentgateway bullets, kagent, LLM Guard, Datadog, the
+  OpenTelemetry Collector) carries no link and no backticked file at a released version, or one of those six vendor
+  blocks is gone, or a vendor the surfaces table relies on (Bedrock, Datadog, the collector) has no block.
+
+It then writes nine faults into a copy of the note (a row removed, a cited name dropped, a Why and a today cell
+emptied, the Datadog links stripped, the Datadog block removed, the heading undated, a future read date, the opening's
+date dropped) and fails if any goes uncaught. Each fault's anchor is checked first and named when the note is
+reworded. The note's "today" column is held as written on 2026-11-09, not to what has landed since (the a7a5a36
+repin, the collector mask); the test checks that each row says something and that its code names still exist.
+
+**Tests.** `python3 verify/test_coc_floor_note.py` passes (8 surfaces, 12 claims, 9 faults caught) and
+`python3 verify/test_scope_tests.py` passes with the test's new `verify/scope-map.yaml` entry. The rest of the suites
+are left to validation.
+
+**Live check.** None: the change is a test under `verify/` that no cluster runs.

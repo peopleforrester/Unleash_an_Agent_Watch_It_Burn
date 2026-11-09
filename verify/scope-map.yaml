@@ -1917,6 +1917,14 @@ reads:
     - scripts/push_vtt_aws_creds.sh
     - scripts/reload-routes.sh
     - verify/topic_cases.py
+  test_coc_floor_note.py:
+    - docs/research/2026-11-09-coc-floor/README.md
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/workshop-mcp-server.py
+    - gitops/otel-collector/values-burn.yaml
   test_coc_floor_spike.py:
     - agent
     - challenges/PROMPT-CATALOG.md
