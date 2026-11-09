@@ -41723,3 +41723,29 @@ this run changes only decisions.md, so the selector names no tools-tier test (a 
 `run-e2e-tools.sh` was not re-run and nothing was fetched. No scope-map entry changes, because no test was added.
 
 **Live check.** This run's work is the live check itself, above.
+
+## 2026-11-09: #1165, a test that the old 2B attack prompt has no copy left in the repo (run 18940)
+
+#1106 replaced Challenge 2B's attack-after-reset prompt (the line cook with the bog-water recipe card) with Whitney's
+blood-oath wording, and one of its criteria was that `git grep -nF` for the old prompt's closing sentence finds no
+copy anywhere in the repo. Test review run 18525 found no test held it: the C3 tests read only the copies they know
+about, so a stray copy in a doc or a script passed every test.
+
+`verify/test_old_2b_attack_retired.py` now holds it. It runs the criterion's own `git grep -nF` over the tracked tree
+and fails on any line it prints, or on any exit but 0 and 1 (a broken grep is not a pass). It also reads every
+tracked text file with each line's leading comment or quote marker dropped and its whitespace squashed, so a copy
+wrapped across lines (a reflowed Markdown paragraph, a comment broken at the line limit) fails too, which a per-line
+grep misses. Both checks are first run on a scratch repo holding one copy on a line and one wrapped in a shell
+comment, and must name each. The sentence is built from two halves in the test so the test is not itself a copy.
+There is no exemption list: nothing tracked quotes the old sentence today, decisions.md included (#1106's own record
+was reworded in 50cadee3).
+
+The test is in `verify/scope-map.yaml`'s `always` list, as `scope_tests.py write` placed it: it runs `git grep` and
+`git ls-files`, which read the tree as a whole, so every change runs it. It takes under a second.
+
+**Run.** `python3 verify/test_old_2b_attack_retired.py`: all six checks PASS, exit 0. Planting the sentence in
+`docs/ABSTRACT.md` on one line failed both repo checks; planting it wrapped across two lines failed the sweep; the
+file was restored after each. The whole Test and E2E commands were not run here: validation runs the tests that read
+the changed files.
+
+**Live check.** Skipped: the change touches only `verify/` files no cluster runs and decisions.md.
