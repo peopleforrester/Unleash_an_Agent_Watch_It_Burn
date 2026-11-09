@@ -44146,3 +44146,30 @@ and the as-found row reads every field it turns off back to off on both. The fou
 which read true before the run and still does (no stage switch or closing command turns it off).
 
 **Live check.** The issue's own work is a live check, and it ran as above. No file a cluster runs changed.
+
+## 2026-11-09 · #1206 · run 19394 · A test for the Night Before seed step's four Datadog links
+
+#1139 rewrote the run-of-show's Night Before step "Seed the stage's Datadog traces" around the deck's four Datadog
+links, and test review run 18720 found no test reading it. `verify/test_stage_trace_slides.py` holds each segment's
+own step and the slides' notes to `SEEDS`, but not this step's table or its two bullets on reaching a seed.
+
+`verify/test_stage_seed_links.py` reads the step from "**The four Datadog links.**" to "**The `-fixed` seeds and
+`c3-pii`**" and holds it to `verify/stage_traces.py` rather than to a copy of its words:
+
+- The table has four rows, `#/11`, `#/26`, `#/48` and `#/68` in deck order, each with its segment and the words its
+  link sits on (`"Ophelia Thorn"`, Whitney opening Datadog, `"Let's look at the trace."`, `"tools"`).
+- Each row's seed is the attack seed `SEEDS` lists for its challenge, its session is `session_id(seed, "<stamp>")`,
+  and its spans cell names the seed's `must` spans in `SEEDS`' order and none of its `must_not`.
+- The filtered link is, word for word, the presenters tab URL `views()` builds (`ml_app` and the admin cluster).
+- For each of the four seeds, the filtered bullet's typed `session_id:` term, added to the link's own query, holds
+  every term of the seed's own search as its `views()` link carries it; the home bullet types the filtered link's page
+  and searches exactly that query. Both set Past 7 Days and end on clicking the one trace.
+
+Each check is then shown failing on a changed step, each on its own message: a row dropped, Challenge 3's spans
+swapped, Challenge 4's second span dropped, a session or a seed keyed to a `-fixed` seed, the link words changed, the
+link pointed at the room's cluster, either bullet's session filter taken out or changed, the home bullet on APM's page
+or another app, either bullet off Past 7 Days, and the home bullet not clicking the trace. The test passed, 18 checks.
+Every literal the cases edit on is checked first and named when missing. `verify/scope-map.yaml` has its entry from
+`scope_tests.py write`.
+
+**Live check.** Skipped: the change is a test under `verify/` that no cluster runs.

@@ -7630,6 +7630,30 @@ reads:
     - infra/terraform/aws/cluster/main.tf
     - verify/backstage-footprint.sh
     - verify/backstage_footprint.py
+  test_stage_seed_links.py:
+    - agent
+    - agent/desk-report-token
+    - challenges/c3-secret-grep/agent-prompt.txt
+    - challenges/c3-secret-grep/fallback.kubectl.sh
+    - facilitation/kubecon-na-2026-run-of-show.md
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/ticket_site.py
+    - gitops/ai-layer/web/burritbot.html
+    - gitops/ai-layer/web/event.js
+    - gitops/ai-layer/web/kubecon.html
+    - gitops/bootstrap/apps/kubearmor.yaml
+    - gitops/workshop-agent/agent.yaml
+    - images/workshop-mcp/Dockerfile
+    - infra/datadog-fleet/dashboard.yaml
+    - infra/datadog-fleet/fleet_monitors.py
+    - infra/datadog-fleet/leaderboard.yaml
+    - infra/datadog-fleet/monitors.yaml
+    - verify/agent_probe.py
+    - verify/guard_lease.py
+    - verify/kubecon_probe.py
+    - verify/stage_traces.py
+    - verify/topic_cases.py
   test_stage_switch_check.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
