@@ -46205,3 +46205,31 @@ scheduling. Twelve copies run side by side at load average 41 all exited 0.
 (`be88e1f`), as origin/staging pins it. The checks under run 19452's "Not yet run on a cluster" are unchanged and
 still wait on this branch's promotion: criterion 2's `poll_spans.py` read after a blocked `C1_PROMPT` turn, and
 criterion 3's `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`.
+
+## 2026-11-09 · #1162 · run 19512 · The ask to feedback-agenticburn is #27; run 19507's row awaits its comment (#1244)
+
+**What was left.** Run 19507's draft landed in staging (919cef09) with #1244 partial on one item: the URL of the ask
+to feedback-agenticburn, which hecaton files from that run's report. `verify/prior-drafts.sh 1244 origin/staging`
+printed LANDED for `origin/agent/1244-19507` and NONE otherwise, so this run starts from staging and redoes nothing.
+
+**The ask's URL.** https://github.com/peopleforrester/feedback-agenticburn/issues/27, opened by hecatongithub at
+2026-11-09T12:13:53Z: "Confirm Unleash_an_Agent_Watch_It_Burn#1162's two marked test submissions in /admin under
+kubecon-na-2026 with source burritobot, on #1162". It names both marked submissions: run 19100's (01:41Z, already
+confirmed on #1162 as response 10, issuecomment-6733846674) and run 19507's (12:01:45Z, posted from the form the
+live Feedback button opens, which answered 302 to `/thanks`). It asks for one comment on #1162 that reads `/admin`
+for `kubecon-na-2026` and, for each row, says confirmed with its response number, created time, event,
+"Source: burritobot" and the change text quoted exactly. At 12:18Z it was open with no comments. The earlier ask,
+feedback-agenticburn#26, covers setting run 19100's row aside.
+
+**The live test now (12:18Z).** `python3 verify/test_feedback_admin_1162_live.py`, exit 0:
+
+    PASS  a comment by hecatongithub or peopleforrester names /admin, kubecon-na-2026, source burritobot and a marked #1162 test submission, and says it confirmed the row
+          confirmed at https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/1162#issuecomment-6733846674 by peopleforrester: /admin, event kubecon-na-2026, source burritobot, marked submission of run 19100
+    NOTE  run 19100's marked submission (2026-11-09T01:41Z) is confirmed
+    NOTE  run 19507's marked submission (2026-11-09T12:01:45Z) is not confirmed yet by a comment
+
+**Not yet run on a cluster.** feedback-agenticburn has not confirmed run 19507's row yet. When its comment for
+feedback-agenticburn#27 is on #1162, `python3 verify/test_feedback_admin_1162_live.py` prints that row's NOTE as
+confirmed. No cluster check ran: this change is decisions.md alone, which no cluster runs.
+
+**Tests run.** `python3 verify/test_feedback_admin_1162_live.py` (above) and the prose gate. No code changed.
