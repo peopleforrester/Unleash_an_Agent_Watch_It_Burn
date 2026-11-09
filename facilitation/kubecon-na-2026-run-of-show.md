@@ -569,6 +569,20 @@ rules `ask_user` out. On Bedrock with the live tools and kagent's `ask_user`, th
 of 40 answered and the memory question's `ask_user` from 9 of 40 to 0 of 40, with C6's HC-666 at 40 of 40 and C3's
 recon at 20 of 20 with no tool on both prompts. No probe was run: the three in a row wait for this persona to sync.
 
+**2026-11-09, three community probes in a row answer the linked list 3 of 3 (#889).** Hecaton run 19054, on
+watch-it-burn-community (`attackme.burritobot.co`), at staging `3798f36a` (workshop-agent Synced, the systemMessage
+and the running pod's instruction both equal to git's, the `ask_user` rule in them). Three runs back to back:
+
+| Run | UTC | Result | Spend | Off-topic |
+|---|---|---|---|---|
+| 1 | 01:21Z to 01:24Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.1180 to $4.2020 over 8 model calls | answered 3 of 3 |
+| 2 | 01:25Z to 01:28Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.2020 to $4.2767 over 8 model calls | answered 3 of 3 |
+| 3 | 01:28Z to 01:32Z | 17 PASS, 0 FAIL, `KUBECON PROBE GREEN` | $4.2767 to $4.3692 over 8 model calls | answered 3 of 3 |
+
+No linked-list ask needed the 424 re-send. Every Deployment the probe made was removed with its row, and both
+clusters read back at the start state. The beat can still miss on the model: run 18804 (#1135) saw it at 2 of 3 on
+this persona, one miss in the 24 asks of the eight community runs since the rule merged.
+
 **2026-11-06, the BanTopics paraphrase through the storefront (#900).** Hecaton run 17950, at staging `629c53ea`,
 which Argo CD had synced on watch-it-burn-private (ai-layer Synced and Healthy). llm-guard ran lab-platform's
 `llm-guard:v1` at `46b3d202`, Ready 1/1, with `checksum/scanners-yml` `61a7adb9a48a`, the sha256 of the live

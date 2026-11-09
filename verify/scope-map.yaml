@@ -231,6 +231,9 @@ reads:
     - verify/record_467.py
     - verify/test_kyverno_cel_live.py
     - verify/topic_cases.py
+  test_889_closing_probes.py:
+    - decisions.md
+    - facilitation/kubecon-na-2026-run-of-show.md
   test_889_probe_record.py:
     - agent
     - challenges/c3-secret-grep/agent-prompt.txt
