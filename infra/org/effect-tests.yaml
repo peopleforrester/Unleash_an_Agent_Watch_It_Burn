@@ -111,6 +111,13 @@ boundary:
     action: cloudtrail:StopLogging
     resource: "*"
     expect: explicitDeny
+  # guard-proxy's code-of-conduct classifier call (#1279): the ceiling must not refuse it, or the cluster grant below
+  # is granted and still denied.
+  - name: a bounded role can still call a Bedrock guardrail
+    identity: allow-all
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:us-west-2:${account_id}:guardrail/a1b2c3d4e5f6
+    expect: allowed
 
 # Run against a plan of infra/terraform/aws/cluster: the roles one attendee cluster creates.
 cluster:
@@ -164,7 +171,7 @@ cluster:
   - name: the tutor can invoke its Sonnet profile
     identity: [aws_iam_policy.tutor_bedrock_invoke]
     action: bedrock:InvokeModel
-    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.anthropic.claude-sonnet-5
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.anthropic.claude-sonnet-4-6
     context:
       aws:PrincipalTag/eks-cluster-name: ${cluster_name}
       aws:PrincipalTag/kubernetes-namespace: agent
@@ -173,7 +180,7 @@ cluster:
   - name: the tutor's grant does not reach the agent's ServiceAccount
     identity: [aws_iam_policy.tutor_bedrock_invoke]
     action: bedrock:InvokeModel
-    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.anthropic.claude-sonnet-5
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.anthropic.claude-sonnet-4-6
     context:
       aws:PrincipalTag/eks-cluster-name: ${cluster_name}
       aws:PrincipalTag/kubernetes-namespace: agent
@@ -238,6 +245,105 @@ cluster:
       aws:ResourceTag/attendee: ${cluster_name}
       aws:ResourceTag/consumer: agent
     expect: implicitDeny
+  # guard-proxy's one cloud credential (#1279): ApplyGuardrail on its own cluster's code-of-conduct guardrail, matched
+  # by the guardrail's tags as the application profiles are, and on the US cross-Region profile the call routes
+  # through. Nothing else: not from another ServiceAccount, not another guardrail, not a model, not the guardrail's
+  # settings.
+  - name: guard-proxy can apply its own cluster's code-of-conduct guardrail
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:${region}:${account_id}:guardrail/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: guard-proxy
+    expect: allowed
+  - name: guard-proxy can route the call through the US guardrail profile in another Region
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:us-east-2:${account_id}:guardrail-profile/us.guardrail.v1:0
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+    expect: allowed
+  - name: the guardrail grant does not reach the agent's ServiceAccount
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:${region}:${account_id}:guardrail/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: agent-sa
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: guard-proxy
+    expect: implicitDeny
+  - name: the guardrail grant does not work for another cluster's session
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:${region}:${account_id}:guardrail/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: some-other-cluster
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: guard-proxy
+    expect: implicitDeny
+  - name: guard-proxy cannot apply another cluster's guardrail
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:${region}:${account_id}:guardrail/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: some-other-cluster
+      aws:ResourceTag/consumer: guard-proxy
+    expect: implicitDeny
+  - name: guard-proxy cannot apply a guardrail that is not its own on its own cluster
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:ApplyGuardrail
+    resource: arn:aws:bedrock:${region}:${account_id}:guardrail/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: agent
+    expect: implicitDeny
+  - name: guard-proxy cannot invoke a model
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.amazon.nova-pro-v1:0
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+    expect: implicitDeny
+  - name: guard-proxy cannot change its guardrail's settings
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: bedrock:UpdateGuardrail
+    resource: arn:aws:bedrock:${region}:${account_id}:guardrail/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: guard-proxy-reader
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: guard-proxy
+    expect: implicitDeny
+  - name: guard-proxy cannot create a role
+    identity: [aws_iam_policy.guard_proxy_guardrail]
+    action: iam:CreateRole
+    resource: arn:aws:iam::${account_id}:role/escape
+    expect: denied
   # The attendee's own IAM user (#549): its key reaches its own cluster and no other, and the boundary it now
   # carries stops it from minting itself more access.
   - name: the attendee user can describe its own cluster

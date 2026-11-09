@@ -49871,6 +49871,160 @@ reads `validationActions ["Deny"]` and ready `true`. Nothing was created and no 
 **Left to validation.** Only this entry changed, so the scoped Test and E2E commands and the next heavy gate run
 `bash verify/run-e2e-tools.sh`; this run did not run either whole.
 
+## 2026-11-09 · #1279 · run 19636 · The /chat code-of-conduct guardrail, guard-proxy's grant on it, and its id as guard-proxy env
+
+The spike #1267 chose Bedrock Guardrails for the abuse on the `/chat` prompt that no term list sees. This change
+defines that guardrail in the cluster root, gives guard-proxy's ServiceAccount `bedrock:ApplyGuardrail` on it and
+nothing more, and hands its id and version to guard-proxy as env. Nothing in AWS was changed by the run: the
+guardrail and the role exist once an operator applies the cluster root, and guard-proxy calls the guardrail once
+guard-proxy-agenticburn reads the env (both follow-ups below).
+
+**The guardrail.** `aws_bedrock_guardrail.coc` in `infra/terraform/aws/cluster/main.tf`, one per cluster as the
+tagged inference profiles are, named `<cluster>-coc`. It is `guardrail-standard.json` from the spike's directory with
+the chosen mix: HATE, INSULTS and SEXUAL at MEDIUM, VIOLENCE at LOW, Standard tier, the US cross-Region profile
+`us.guardrail.v1:0`, "Keep it kind." as both block messages. Each filter BLOCKs on input. Output evaluation is off
+(`output_enabled = false`, action NONE), since guard-proxy checks the prompt alone and the reply is masked by the term
+floor. MISCONDUCT, PROMPT_ATTACK and the managed profanity list are left out, as the spike chose. The provider
+(hashicorp/aws 6.70.0) takes the profile as an ARN: the bare id failed plan with "Invalid ARN Value", so it is
+`arn:aws:bedrock:<region>:<account>:guardrail-profile/us.guardrail.v1:0`. The account quota is 100 guardrails, and
+50 load balancers per account per Region bound the clusters an account holds first.
+
+**The version.** `aws_bedrock_guardrail_version.coc` publishes a numbered version, since DRAFT changes under a running
+caller. A change to the filters, the profile or the input message replaces it (`replace_triggered_by` on those
+attributes, so a new event's tags do not burn one of the 20 versions a guardrail may hold), and `skip_destroy` keeps
+the old one until the guardrail goes, so a guard-proxy still on it keeps working until the pin moves it.
+
+**The grant.** `aws_iam_policy.guard_proxy_guardrail` on a new Pod Identity role, `module.guard_proxy_pod_identity`,
+bound to `agent:guard-proxy-reader`, the ServiceAccount guard-proxy runs as, and carrying the canonical boundary.
+Two statements, both `bedrock:ApplyGuardrail` alone, both held to that ServiceAccount on this cluster by the Pod
+Identity session tags. The first is on `guardrail/*` in the cluster's Region, matched by the guardrail's own tags
+(project, attendee = the cluster, consumer = guard-proxy): its id is Bedrock's pick, and a policy naming it would be
+unknown at plan, which the policy pipeline cannot check, the reason the application profiles are matched the same
+way. The second is on the guardrail profile in any Region, which the Bedrock user guide ("Permissions for using
+cross-Region inference with Amazon Bedrock Guardrails") requires for each Region the profile routes to (us-east-1,
+us-east-2 and us-west-2 from us-west-2; a standby in another US Region routes to its own list). AWS's service
+reference gives ApplyGuardrail exactly these two resource types, and a guardrail-profile carries no tags. The boundary
+needed no change: its ceiling is Allow everything, and none of its denies touches Bedrock.
+
+**infra/org's tests.** `infra/org/effect-tests.yaml` has a boundary case (a bounded role can still call
+ApplyGuardrail) and nine cluster cases: guard-proxy can apply its own guardrail and route through the profile in
+us-east-2, and cannot from agent-sa, for another cluster's session, on another cluster's guardrail, on a guardrail
+tagged for another consumer, invoke a model, update the guardrail or create a role. Running check 4 showed "the tutor can invoke
+its Sonnet profile" already failing on staging: it and the case after it named `us.anthropic.claude-sonnet-5`, which
+#882 moved the tutor off, so both now name `us.anthropic.claude-sonnet-4-6`, the tutor's model. `verify/iam_plan_render.py` plans the new policy,
+module, guardrail and version, so a setting the provider refuses fails the render.
+
+**The env.** guard-proxy's Deployment (`gitops/ai-layer/resources.yaml`) reads `BEDROCK_GUARDRAIL_ID`,
+`BEDROCK_GUARDRAIL_VERSION` and `BEDROCK_GUARDRAIL_REGION` from the `id`, `version` and `region` keys of the
+`agent/coc-guardrail` ConfigMap, each optional, so a cluster applied before this starts guard-proxy as before. The
+cluster root outputs `coc_guardrail` with those three, and `fleet.sh pin_coc_guardrail`, run after
+`pin_bedrock_profiles` in `bootstrap_one` and in converge's `repair_one`, writes the ConfigMap and restarts
+guard-proxy's pod only when the map changed, since a pod reads its env at start. It records `<cluster>:coc-guardrail`
+in the ledger when the state has no output or the version is not a number. The ConfigMap is not in git, so Argo CD
+leaves it alone. Pod Identity already injects `AWS_REGION` (read on watch-it-burn-private's agentgateway pod);
+`BEDROCK_GUARDRAIL_REGION` states the guardrail's own Region beside its id. `import-state.py` has rules for both new
+resource types: a cluster built before #1279 has no guardrail, which is left to the next apply.
+
+**Tests run.** New: `verify/test_coc_guardrail_tf.py` (the settings against the spike's file and README, the grant
+against guard-proxy's ServiceAccount) and `verify/test_pin_coc_guardrail.sh` (31 checks, terraform and kubectl
+shimmed), both pass. Changed and passing: `verify/test_fleet_import_state.py`, `verify/test_tf_module_cache.py`
+(seven module calls), `verify/test_iam_policy_structural.py` (seven bounded roles, 20 checks). Also passing:
+`test_iam_policy_pipeline.py`, `test_iam_policy_coverage.py`, `test_fleet_contract.py`, `test_pin_bedrock_profiles.sh`,
+`test_fetch_inventory.py`, `test_event_tag.py`, `test_terraform_module_pins.py`, `test_scope_tests.py`,
+`test_no_cloud_by_hand.sh` and `test_no_presenter_login.py`. Against AWS, reading policies as text and changing
+nothing: `IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py` passed
+checks 1, 2 and 4, every effect case included, and before the tutor fix `pipeline.py effect --suite cluster` failed
+only on the tutor case. The whole Test and E2E commands were not run; validation runs the scoped ones.
+
+**Live check.** On watch-it-burn-private, the rendered guard-proxy Deployment applied with `--dry-run=server` as
+Argo CD's controller printed `deployment.apps/guard-proxy configured (server dry run)`; as the operator it was refused
+by block-argocd-drift, as that policy is meant to. On both clusters guard-proxy runs as `guard-proxy-reader`, there is
+no `coc-guardrail` ConfigMap, and agent's Pod Identity associations are agent-sa, agentgateway and web-terminal, none
+for guard-proxy. accen-dev us-west-2 holds no guardrail.
+
+**Not yet run on a cluster.** The cluster root's apply on watch-it-burn-community and watch-it-burn-private (an
+operator's act, not a run's), then `infra/terraform/fleet/fleet.sh converge instructors`, whose `pin_coc_guardrail`
+writes the ConfigMap. Then, on either cluster, guard-proxy's env names the guardrail, and an ApplyGuardrail call from
+a pod running as `guard-proxy-reader` returns GUARDRAIL_INTERVENED on an insult and NONE on a stage prompt.
+
+## 2026-11-09 · #1279 · run 19648 · The tests gate failure: the admission policy did not list guard-proxy-reader, and two fleet tests did not stub the new pin
+
+**Cause.** Run 19636's tests gate failed on three tests. `verify/test_agent_bypass_shapes.py` found a real gap in the
+change, and the test was right to fail. `restrict-agent-spawned-workloads` refuses an agent-spawned workload that runs as a
+ServiceAccount holding Bedrock credentials, and its list (`modelIdentities`, and the refusal's message) is kept by hand
+beside the Pod Identity associations in `infra/terraform/aws/cluster/main.tf`. #1279 added the association for
+`guard-proxy-reader`, which holds `bedrock:ApplyGuardrail`, and did not add it to the list. So an agent-namespace
+workload could have run as that account. `verify/test_fleet_converge_repairs.sh` and `verify/test_fleet_standbys.sh`
+failed for a second reason: bootstrap and converge now call `pin_coc_guardrail`, which those tests stub for every
+sibling pin (`pin_bedrock_profiles`, "its own test: ..."), but not for the new one. The unstubbed pin read a fake
+state with no `coc_guardrail` output, recorded `<cluster>:coc-guardrail` as failed, and sent unanswered `terraform`
+and `kubectl` calls, which the offline guard reports. The line `FAIL: --context is empty` in the gate's tail came from
+`verify/test_burritobot_cluster_live_logic.py`, which passes (exit 0): it prints that line on purpose for its negative
+check, and the gate's summary read it as a failure. No change to that test.
+
+**Fix.** `guard-proxy-reader` is added to `modelIdentities` and to the refusal's message in
+`policies/kyverno/restrict-agent-spawned-workloads.yaml`, and to the two comments that list those accounts
+(`deny-llm-endpoint-bypass.yaml`, `agent-deny-imds.yaml`). The two shell tests stub `pin_coc_guardrail` the way they
+stub `pin_bedrock_profiles`. The converge test also asserts that bootstrap runs the pin once per roster cluster
+(`pin-coc` twice), the check its `pin-bedrock` line already makes. No product code outside the policy changed.
+
+**Consequence to know.** A cluster whose state predates #1279 has no `coc_guardrail` output, so converge on it now
+records `<cluster>:coc-guardrail` as failed until its cluster root is applied. That is the state it is in: guard-proxy
+has no classifier to call there. It is the same behaviour `pin_bedrock_profiles` has had since #513 for clusters
+applied before the tagged profiles.
+
+**Tests run.** Offline: `test_agent_bypass_shapes.py` (matches its sources), `test_fleet_converge_repairs.sh` (82
+passed), `test_fleet_standbys.sh` (40 passed), `test_policy_spec.py`, `test_student_aws_creds_namespace.py`,
+`test_imds_credential_theft.py`, `test_agent_cloud_credential.py`, `test_c6_villain_endpoint.py`, `test_weather_feed.py`,
+`test_chat_path_ingress.py`, `test_public_desk.py`, `test_student_aws_push.sh`, `test_scope_tests.py`. Tools tier, each run
+alone with `bash verify/run-e2e-tools.sh <test>` (`ALL E2E TOOLS TIER CHECKS GREEN`): `test_kyverno_cel_policies.py`,
+`test_c8_pod_secret_mount.py`, `test_cloud_credential_probe_admission.py`, `test_policy_spec_kustomize.py`. The
+other offline tests that call the bootstrap, repair and up paths (`test_attendee_iam_user.sh`, `test_cluster_roles.sh`,
+`test_fleet_apply_failure_exit.sh`, `test_fleet_exit_codes.sh`, `test_platform_floor.sh`, `test_repair_agent_tools.sh`,
+`test_agent_tools_sync.py`, `test_deploy_full_idp_context.py`, `test_hostname_tag.py`, `test_round_names_retired.py`,
+`test_imds_credential_theft.py`, `test_public_pod_cap.py`) also passed, so no other test reaches the new pin unstubbed.
+
+**Live check.** Skipped: the change touches a policy and tests, and the policy reaches the clusters only through Argo
+CD after promotion. The cluster-side check is the one already written up under "Not yet run on a cluster" above.
+
+## 2026-11-09: #1279 resumed (run 19785): the tests gate's test_coc_admission.py failure, and guard-proxy's own env names
+
+**Why the gate failed.** Run 19648's draft (`origin/agent/1279-19636`) was cut from staging 31d03d8d. On that tree
+`verify/test_coc_admission.py` fails one check, "variables.floor is floor.portable_pattern()", with or without the
+draft: a worktree of the draft's tip reproduces it. Staging's own 9ca2ebf5 fixed it later (#1277's JSON-escape edges
+had turned that test red on staging). The draft changes nothing the test reads for that check. This run ported the
+draft's four commits onto staging 1af2ef24 as `prior-drafts.sh` said: two edits in place (`gitops/ai-layer/resources.yaml`,
+`verify/scope-map.yaml`, where both sides' new entries are kept) and the decisions.md append. On that base
+`test_coc_admission.py` passes every check.
+
+**What differs from the draft.** Michael's comment on the issue, from the guard-proxy repin for #1267, says guard-proxy
+reads other names than the draft wrote. guard-proxy-agenticburn 48cc2ca (its commit message, README and config code)
+reads `CONDUCT_GUARDRAIL_ID` and `CONDUCT_GUARDRAIL_VERSION`, which turn the call on, and `AWS_REGION`, the region it
+signs for. An id without a version, or without a region, stops it at start. Under the draft's `BEDROCK_GUARDRAIL_*`
+names guard-proxy would never call the guardrail and nothing would say so. The guard-proxy Deployment now takes those
+three names from the `coc-guardrail` ConfigMap's id, version and region keys, each optional, so all three are set or
+none. The comments in the cluster root and in `fleet.sh`, and `verify/test_pin_coc_guardrail.sh`'s env check, name
+them the same way. guard-proxy's current pin (a7a5a369) is three commits behind 48cc2ca and ignores the env until the
+#1267 repin lands. The guardrail, the grant, the policy and the pin are the draft's, unchanged.
+
+**Tests run,** each once, alone: `test_pin_coc_guardrail.sh` (31 passed), `test_fleet_converge_repairs.sh`,
+`test_fleet_standbys.sh` (40 passed), `test_coc_guardrail_tf.py`, `test_fleet_import_state.py`,
+`test_iam_policy_structural.py`, `test_iam_policy_coverage.py`, `test_tf_module_cache.py`, `test_agent_cloud_credential.py`,
+`test_agent_bypass_shapes.py`, `test_coc_admission.py`, `test_scope_tests.py`: all exit 0. The whole Test and E2E
+commands were not run; validation runs the scoped ones, the Kyverno CLI tier tests included.
+
+**Live check,** read-only, with no change to either cluster. On watch-it-burn-community and watch-it-burn-private
+guard-proxy runs as `guard-proxy-reader` with one ready replica, sets no guardrail or AWS env today, and there is no
+`agent/coc-guardrail` ConfigMap. agent's Pod Identity associations on watch-it-burn-private are web-terminal, agent-sa
+and agentgateway, none for guard-proxy, and accen-dev us-west-2 lists no guardrail. The renamed guard-proxy Deployment,
+applied with `--dry-run=server` as Argo CD's controller, printed `deployment.apps/guard-proxy configured (server dry run)`
+on both clusters. `policies/kyverno/restrict-agent-spawned-workloads.yaml` the same way printed `configured` on
+watch-it-burn-private and `created` on watch-it-burn-community, where that policy is not applied today.
+
+**Not yet run on a cluster.** Unchanged from the draft's entry: the cluster root's apply on both clusters (an operator's
+act), then `infra/terraform/fleet/fleet.sh converge instructors` to write the ConfigMap, then guard-proxy's env naming
+the guardrail and an ApplyGuardrail call as `guard-proxy-reader` returning GUARDRAIL_INTERVENED on an insult and NONE
+on a stage prompt, once guard-proxy is pinned at or after 48cc2ca.
 ## 2026-11-09 · #1300 · run 19752 · the code-of-conduct pattern matches in time linear in the text, in floor.py and every copy
 
 **The cause.** Each letter of a term was its whole class repeated (`[s5$]+`). A symbol stand-in is neither a letter nor

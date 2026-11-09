@@ -384,6 +384,26 @@ class ClusterResolver(Resolver):
         return self.aws.one([p["inferenceProfileId"] for p in profiles if p["inferenceProfileName"] == after["name"]],
                             f"application inference profiles named {after['name']}")
 
+    # The code-of-conduct guardrail (#1279), found by its name. A cluster built before it has none: that is
+    # configuration committed after the build, left for the next apply like a rule the group lacks.
+    def guardrail(self, name: str) -> dict:
+        found = [g for g in self.aws("bedrock", "list-guardrails")["guardrails"] if g["name"] == name]
+        if not found:
+            raise Absent(f"no guardrail named {name}")
+        return self.aws.one(found, f"guardrails named {name}")
+
+    def r_aws_bedrock_guardrail(self, address, after, planned):
+        return f"{self.guardrail(after['name'])['id']},DRAFT"
+
+    def r_aws_bedrock_guardrail_version(self, address, after, planned):
+        # The newest numbered version: the one the last apply published (skip_destroy keeps the older ones).
+        g = self.guardrail(planned_at(planned, "aws_bedrock_guardrail.coc")["name"])
+        versions = self.aws("bedrock", "list-guardrails", "--guardrail-identifier", g["id"])["guardrails"]
+        numbered = sorted(int(v["version"]) for v in versions if str(v.get("version", "")).isdigit())
+        if not numbered:
+            raise Absent(f"guardrail {g['id']} has no published version")
+        return f"{g['arn']},{numbered[-1]}"
+
     def node_sg(self) -> str:
         sgs = self.aws("ec2", "describe-security-groups", "--filters",
                        f"Name=vpc-id,Values={self.cluster['resourcesVpcConfig']['vpcId']}",
