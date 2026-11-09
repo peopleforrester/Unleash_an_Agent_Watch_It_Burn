@@ -48968,3 +48968,36 @@ Run-through record's Segment 3 row stay empty for the timed run.
 
 **Test.** `python3 verify/test_seg3_timing.py`, once; the prose gate. No live check: the change is prose that no
 cluster runs.
+
+## 2026-11-09 · #1297 · run 19712 · a test for #1040's timed rehearsal: the Rehearsal column is timed on every beat or on none, tied to the Run-through record
+
+**Why.** Test review run 19710 found no test on #1040's criterion that Michael and Whitney time segment 3 in a
+rehearsal, beat by beat, against the budget. `verify/test_seg3_timing.py` summed the Rehearsal column only once every
+cell was filled, and nothing required it filled. `verify/prior-drafts.sh 1297 origin/staging` printed NONE.
+
+**What the test now holds.** Five new checks in `verify/test_seg3_timing.py`, on the run-of-show
+(`facilitation/kubecon-na-2026-run-of-show.md`):
+
+- The Rehearsal column is an m:ss time on every beat and on its Segment 3 row, or empty on all of them. A column timed
+  in part fails, since the criterion is beat by beat.
+- Once run-through 1 or 2 in the Run-through record has a Date other than "not yet run", or a Segment 3 time, every
+  beat must be timed. A run-through on record without segment 3's beat times fails.
+- Once the column is timed, its Segment 3 total must be the Segment 3 time of run-through 1 or 2, as the Timing
+  paragraph asks. A total written only under Delivered fails.
+- While the column is empty, the Timing paragraph must still say "Rehearsal column waits on a later one". Once the
+  column is timed, it must no longer say that.
+
+The existing check that a filled column adds up stays. Each new check fails on a copy built to break it, and a copy
+with every beat timed, the total in run-through 1's Segment 3 row, a date, and the "waits" sentence gone passes all
+checks. So the test admits the timed run when it lands.
+
+**Why not a test that requires the column filled today.** The rehearsal has not run (question 1146, run 19708).
+A test that required the times now would be red on staging until Michael and Whitney rehearse, and the Test command
+runs only tests that pass everywhere, with no skip or known-open list. The test therefore holds the record. An empty
+column must be stated as waiting, and any run-through on record must carry the beat times. Criteria 2 to 4 of #1040,
+the timed run itself, stay open on #1040 and wait on the two of them rehearsing.
+
+**Test.** `python3 verify/test_seg3_timing.py` printed `SEGMENT 3 TIMING GREEN`, 29 checks.
+`python3 verify/scope_tests.py write` added nothing: the test reads no new file.
+
+**No live check.** The change is an offline test and this entry. No cluster runs either.
