@@ -66,9 +66,10 @@ jobs:
       # Every terraform init below takes its providers from a filesystem mirror in the host artifact cache, outside the
       # workspace, filled through verify/artifact_cache.py by each committed lock's zh: SHA-256 (#1119). The fixtures
       # and plan-fleet's `init -upgrade` get the newest locked version their constraints allow. OpenTofu reads the
-      # same CLI config and installs its registry.opentofu.org providers directly, into the same plugin cache.
-      - name: Fill the Terraform provider mirror (verify/tf_plugin_cache.py prepare)
-        run: python verify/tf_plugin_cache.py prepare >> "$GITHUB_ENV"
+      # same CLI config and takes its registry.opentofu.org providers from the same mirror: --opentofu fills them from
+      # infra/policy/plan/opentofu/.terraform.lock.hcl, and no provider on either host is downloaded by an init (#1131).
+      - name: Fill the Terraform and OpenTofu provider mirror (verify/tf_plugin_cache.py prepare --opentofu)
+        run: python verify/tf_plugin_cache.py prepare --opentofu >> "$GITHUB_ENV"
 
       - name: Plan the fleet roots (aws/network, aws/cluster) against a local AWS mock
         run: python infra/policy/plan/plan-fleet.py --tf terraform "$PLAN_DIR"

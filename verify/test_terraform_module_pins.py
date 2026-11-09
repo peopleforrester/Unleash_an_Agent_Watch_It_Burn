@@ -45,9 +45,11 @@ def required_providers(tf):
 
 
 def locked_constraints(lock):
-    """{source: constraints-string} for every provider block in a .terraform.lock.hcl."""
+    """{source: constraints-string} for every provider block in a .terraform.lock.hcl. registry.opentofu.org is read
+    too: infra/policy/plan/opentofu's lock is tofu's, which records its providers under that host (#1131)."""
     out = {}
-    for src, body in re.findall(r'^provider\s+"registry\.terraform\.io/([^"]+)"\s*\{(.*?)^\}', lock, re.S | re.M):
+    for src, body in re.findall(r'^provider\s+"registry\.(?:terraform\.io|opentofu\.org)/([^"]+)"\s*\{(.*?)^\}', lock,
+                                re.S | re.M):
         c = re.search(r'constraints\s*=\s*"([^"]*)"', body)
         out[src.lower()] = c.group(1) if c else ""
     return out
@@ -57,6 +59,9 @@ def locked_constraints(lock):
 print("the checker itself")
 check("a `~> 21.0` module range is not a minor pin", not MINOR_PIN.match("~> 21.0"))
 check("a `~> 21.29.0` module range is a minor pin", bool(MINOR_PIN.match("~> 21.29.0")))
+check("an OpenTofu lock's constraint is read under its own host",
+      locked_constraints('provider "registry.opentofu.org/hashicorp/aws" {\n  constraints = "6.71.0"\n}\n')
+      == {"hashicorp/aws": "6.71.0"})
 check("a module without a version is found as unpinned",
       registry_modules('module "x" {\n  source = "terraform-aws-modules/vpc/aws"\n}\n') == [("x", "terraform-aws-modules/vpc/aws", None)])
 

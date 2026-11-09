@@ -1,5 +1,5 @@
-# ABOUTME: Serves every Terraform provider a committed lock pins from the host artifact cache (#1119): a filesystem mirror
-# ABOUTME: filled through artifact_cache.get() by each zip's zh: SHA-256, a CLI config that installs only from it, a plugin cache.
+# ABOUTME: Serves every Terraform and OpenTofu provider a committed lock pins from the host artifact cache (#1119, #1131): a
+# ABOUTME: filesystem mirror filled through artifact_cache.get() by each zip's zh: SHA-256, a CLI config installing only from it.
 """Where the terraform inits under verify/ and .github/workflows/ take their providers from.
 
 #1114 moved the plugin cache out of the checkout; #1119 takes the downloads away from terraform altogether. Everything
@@ -18,11 +18,15 @@ the lock records. The lock is the root of trust, as it is for terraform: a packa
 never fetched. The zip then comes through artifact_cache.get(), which re-hashes a hit, fetches a miss once under a
 per-sum lock and logs it, and fails on any mismatch without downloading again.
 
-The CLI config installs registry.terraform.io providers from the mirror only: no `direct` source covers them, so a
-provider the mirror lacks fails init by name and is never downloaded. Other hosts are left to `direct`; the one in use
-is registry.opentofu.org, where OpenTofu (which reads the same TF_CLI_CONFIG_FILE) resolves hashicorp/aws in
-plan-policy.yml. terraform init still checks each zip from the mirror against the lock (zh: for the zip's bytes, h1:
-for its contents), and a cached provider in the plugin cache only when its h1: is one the lock records:
+The CLI config installs registry.terraform.io and registry.opentofu.org providers from the mirror only: no `direct`
+source covers either, so a provider the mirror lacks fails init by name and is never downloaded. OpenTofu reads the
+same TF_CLI_CONFIG_FILE and resolves `hashicorp/<type>` on registry.opentofu.org (#1131), whose packages are OpenTofu's
+own builds: their SHA-256s are none of the zh: hashes a registry.terraform.io lock records, so only a lock recorded for
+registry.opentofu.org vouches for them, infra/policy/plan/opentofu/.terraform.lock.hcl. A provider's zh: hashes vouch
+only for its own address, host included, so a registry.terraform.io lock never admits a registry.opentofu.org zip.
+Only callers that run tofu fill that half (opentofu=True, `prepare --opentofu`), so the inits that run terraform alone
+fetch no OpenTofu zip. terraform init still checks each zip from the mirror against the lock (zh: for the zip's bytes,
+h1: for its contents), and a cached provider in the plugin cache only when its h1: is one the lock records:
 test_terraform_mirror_lock.py holds that a mirror zip the lock does not match fails init.
 
 terraform_env(env) is what a test gives its terraform: the mirror filled and the config written, or, when the caller
@@ -32,8 +36,9 @@ dropped from what it returns; iam_plan_render.py sets it again for its lock-less
 
 Command line:
   tf_plugin_cache.py           create the plugin cache and print its path (run-e2e-tools.sh locks it, #1005)
-  tf_plugin_cache.py prepare   fill the mirror for every committed lock and print TF_CLI_CONFIG_FILE= and
-                               TF_PLUGIN_CACHE_DIR= lines, for "$GITHUB_ENV" or `env`
+  tf_plugin_cache.py prepare   fill the mirror for every committed lock's registry.terraform.io providers and print
+                               TF_CLI_CONFIG_FILE= and TF_PLUGIN_CACHE_DIR= lines, for "$GITHUB_ENV" or `env`
+  tf_plugin_cache.py prepare --opentofu   the same, with the registry.opentofu.org providers too, for a job running tofu
 Any failure prints one line starting TERRAFORM PROVIDER CACHE UNUSABLE to stderr and exits 1.
 """
 from __future__ import annotations
@@ -55,7 +60,9 @@ import artifact_cache  # noqa: E402
 
 PLUGIN_SUBDIR = "terraform-plugin-cache"
 PROVIDERS_SUBDIR = "terraform-providers"
-MIRRORED_HOST = "registry.terraform.io"
+TERRAFORM_HOST = "registry.terraform.io"
+OPENTOFU_HOST = "registry.opentofu.org"
+MIRRORED_HOSTS = (TERRAFORM_HOST, OPENTOFU_HOST)
 APP = "unleash-watch-it-burn"
 MARKER = "# Written by verify/tf_plugin_cache.py (#1119)."
 TIMEOUT = 60
@@ -201,8 +208,9 @@ def ensure(env: Mapping[str, str]) -> pathlib.Path:
 
 def registry_url(p: Locked, plat: str) -> str:
     host, ns, typ = p.parts
-    if host != MIRRORED_HOST:
-        raise CacheError(f"{p.lock}: {p.address} is on {host}; only {MIRRORED_HOST} providers are mirrored")
+    if host not in MIRRORED_HOSTS:
+        raise CacheError(f"{p.lock}: {p.address} is on {host}; only {' and '.join(MIRRORED_HOSTS)} providers are "
+                         "mirrored")
     os_name, arch = plat.split("_", 1)
     return f"https://{host}/v1/providers/{ns}/{typ}/{p.version}/download/{os_name}/{arch}"
 
@@ -290,11 +298,15 @@ def fill_one(p: Locked, root: pathlib.Path, plat: str, *, fetch_meta: MetaFetche
 
 def fill(locks: Iterable[pathlib.Path | Locked], root: pathlib.Path, *, plat: str | None = None,
          fetch_meta: MetaFetcher = registry_meta, fetch: artifact_cache.Fetcher = artifact_cache.url_fetch,
-         env: Mapping[str, str] | None = None) -> list[Filled]:
-    """Every provider the locks pin, in the mirror under root. The same version locked twice is filled once."""
+         env: Mapping[str, str] | None = None, opentofu: bool = False) -> list[Filled]:
+    """Every provider the locks pin, in the mirror under root. The same version locked twice is filled once. The
+    registry.opentofu.org providers are filled only with opentofu, for a caller that runs tofu."""
     plat = plat or this_platform()
     seen: dict[tuple[str, str], Locked] = {}
     for p in read_locks(locks):
+        if p.parts[0] == OPENTOFU_HOST and not opentofu:
+            continue
+        # The key holds the host: a registry.terraform.io lock's zh: hashes never vouch for an OpenTofu zip.
         key = (p.address, p.version)
         if key in seen:
             # Two locks of one version may record different platforms; a zip either vouches for passes both.
@@ -305,10 +317,11 @@ def fill(locks: Iterable[pathlib.Path | Locked], root: pathlib.Path, *, plat: st
 
 def render_config(mirror: pathlib.Path) -> str:
     q = json.dumps(str(mirror))
-    pattern = json.dumps(f"{MIRRORED_HOST}/*/*")
+    pattern = ", ".join(json.dumps(f"{h}/*/*") for h in MIRRORED_HOSTS)
     return (f"{MARKER}\n"
-            "# Every registry.terraform.io provider comes from the mirror below, which holds only zips the host artifact\n"
-            "# cache checked against a committed lock's zh: hash; none is ever downloaded. Other hosts install directly.\n"
+            "# Every registry.terraform.io and registry.opentofu.org provider comes from the mirror below, which holds\n"
+            "# only zips the host artifact cache checked against a committed lock's zh: hash; none is ever downloaded.\n"
+            "# Other hosts install directly.\n"
             f"# mirror: {mirror}\n"
             "provider_installation {\n"
             "  filesystem_mirror {\n"
@@ -329,9 +342,11 @@ def write_config(root: pathlib.Path) -> pathlib.Path:
     return path
 
 
-def check_prepared(env: Mapping[str, str]) -> None:
+def check_prepared(env: Mapping[str, str], opentofu_locks: Iterable[pathlib.Path | Locked] = (),
+                   plat: str | None = None) -> None:
     """The caller's TF_CLI_CONFIG_FILE is one this module wrote, for a mirror outside every worktree, and its
-    TF_PLUGIN_CACHE_DIR is usable and outside every worktree too."""
+    TF_PLUGIN_CACHE_DIR is usable and outside every worktree too. With opentofu_locks, the mirror also holds each
+    registry.opentofu.org zip they pin, so a job that ran `prepare` without --opentofu fails here, not inside tofu."""
     cfg = outside_worktrees(pathlib.Path(env["TF_CLI_CONFIG_FILE"]), "TF_CLI_CONFIG_FILE")
     try:
         text = cfg.read_text(encoding="utf-8")
@@ -341,7 +356,15 @@ def check_prepared(env: Mapping[str, str]) -> None:
     if not text.startswith(MARKER) or not m or text != render_config(pathlib.Path(m.group(1))):
         raise CacheError(f"TF_CLI_CONFIG_FILE names {cfg}, which is not a config verify/tf_plugin_cache.py wrote; "
                          "unset it, or set it from `python3 verify/tf_plugin_cache.py prepare`")
-    outside_worktrees(pathlib.Path(m.group(1)), "provider mirror")
+    mirror = outside_worktrees(pathlib.Path(m.group(1)), "provider mirror")
+    tofu = [p for p in read_locks(opentofu_locks) if p.parts[0] == OPENTOFU_HOST]
+    if tofu:
+        plat = plat or this_platform()
+        missing = [f"{p.address} {p.version}" for p in tofu
+                   if not (mirror / pathlib.Path(*p.parts) / p.zip_name(plat)).is_file()]
+        if missing:
+            raise CacheError(f"the mirror {mirror} holds no {plat} zip for {', '.join(missing)}; fill it with "
+                             "`python3 verify/tf_plugin_cache.py prepare --opentofu`")
     if not env.get("TF_PLUGIN_CACHE_DIR"):
         raise CacheError(f"TF_CLI_CONFIG_FILE is set ({cfg}) but TF_PLUGIN_CACHE_DIR is not; `prepare` prints both")
     writable_dir(pathlib.Path(env["TF_PLUGIN_CACHE_DIR"]), "TF_PLUGIN_CACHE_DIR")
@@ -349,16 +372,19 @@ def check_prepared(env: Mapping[str, str]) -> None:
 
 def terraform_env(env: Mapping[str, str], locks: Iterable[pathlib.Path | Locked] | None = None, *,
                   root: pathlib.Path | None = None, fetch_meta: MetaFetcher = registry_meta,
-                  fetch: artifact_cache.Fetcher = artifact_cache.url_fetch, plat: str | None = None) -> dict[str, str]:
-    """env for a terraform that reads providers only from the host artifact cache. With no TF_CLI_CONFIG_FILE set, the
-    mirror is filled for locks (every committed lock when None) and the config written; with one set, it is checked."""
+                  fetch: artifact_cache.Fetcher = artifact_cache.url_fetch, plat: str | None = None,
+                  opentofu: bool = False) -> dict[str, str]:
+    """env for a terraform (or, with opentofu, a tofu) that reads providers only from the host artifact cache. With no
+    TF_CLI_CONFIG_FILE set, the mirror is filled for locks (every committed lock when None) and the config written;
+    with one set, it is checked."""
     out = dict(env)
     out.pop("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", None)
+    locks = committed_locks() if locks is None else list(locks)
     if env.get("TF_CLI_CONFIG_FILE"):
-        check_prepared(env)
+        check_prepared(env, locks if opentofu else (), plat)
         return out
     root = outside_worktrees(root, "artifact cache root") if root is not None else root_of(env)
-    fill(committed_locks() if locks is None else locks, root, plat=plat, fetch_meta=fetch_meta, fetch=fetch, env=env)
+    fill(locks, root, plat=plat, fetch_meta=fetch_meta, fetch=fetch, env=env, opentofu=opentofu)
     out["TF_CLI_CONFIG_FILE"] = str(write_config(root))
     out["TF_PLUGIN_CACHE_DIR"] = str(writable_dir(plugin_cache(root), "Terraform plugin cache"))
     return out
@@ -369,16 +395,16 @@ def main(argv: list[str]) -> int:
         if not argv:
             print(ensure(os.environ))
             return 0
-        if argv == ["prepare"]:
+        if argv in (["prepare"], ["prepare", "--opentofu"]):
             env = {k: v for k, v in os.environ.items() if k != "TF_CLI_CONFIG_FILE"}
             root = root_of(env)
-            for f in fill(committed_locks(), root, env=env):
+            for f in fill(committed_locks(), root, env=env, opentofu="--opentofu" in argv):
                 state = "looked up and verified" if f.looked_up else "verified"
                 print(f"{f.provider.address} {f.provider.version}: {f.zip} ({state})", file=sys.stderr)
             print(f"TF_CLI_CONFIG_FILE={write_config(root)}")
             print(f"TF_PLUGIN_CACHE_DIR={writable_dir(plugin_cache(root), 'Terraform plugin cache')}")
             return 0
-        raise CacheError("usage: tf_plugin_cache.py [prepare]")
+        raise CacheError("usage: tf_plugin_cache.py [prepare [--opentofu]]")
     except CacheError as e:
         print(f"TERRAFORM PROVIDER CACHE UNUSABLE: {e}", file=sys.stderr)
         return 1

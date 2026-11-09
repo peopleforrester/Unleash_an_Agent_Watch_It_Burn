@@ -630,7 +630,7 @@ sites:
     lines: 2
     class: pinned
     kind: terraform-provider
-    pin: 'the infra/ .terraform.lock.hcl files (each provider zip''s zh: SHA-256), filled into the artifact cache'
+    pin: 'the infra/ .terraform.lock.hcl files (each provider zip''s zh: SHA-256; registry.opentofu.org''s from infra/policy/plan/opentofu, #1131), filled into the artifact cache'
     cached: true
   - match: .
     lines: 4
@@ -1234,7 +1234,7 @@ sites:
     lines: 1
     class: pinned
     kind: terraform-provider
-    pin: .terraform.lock.hcl of the root it inits, its providers served from the artifact cache's mirror (tf_plugin_cache.py)
+    pin: 'the infra/ .terraform.lock.hcl files, infra/policy/plan/opentofu''s for its tofu (#1131), served from the artifact cache''s mirror (tf_plugin_cache.py)'
     cached: true
   verify/test_playwright_browsers.py:
   - match: .
@@ -1393,7 +1393,7 @@ sites:
     why: comments, docstrings or messages that name the command; none runs it
   verify/test_tf_plugin_cache.py:
   - match: .
-    lines: 10
+    lines: 9
     class: none
     why: a stand-in for the command (a shim, stub or fake) or a check on its calls or its text; nothing leaves the host
   verify/test_tier_swap_live.py:
