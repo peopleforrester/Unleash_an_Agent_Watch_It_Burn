@@ -49936,3 +49936,57 @@ problems. The other tests that read these files are left to validation.
 Not yet run on a cluster: `python3 verify/deploy_coc_live.py --context <ctx>` without `--source` once Argo CD has
 synced this change, and the reading of `variables.floor` on both clusters as 17,989 characters equal to
 `floor.portable_pattern()`.
+
+## 2026-11-09 · #1301 · run 19789 · the code-of-conduct floor folds the dotless i to i, on every surface that runs it
+
+**Why.** floor.py's `fold()` runs NFKD and then lower case, and the dotless i `ı` (U+0131) has no decomposition, so
+it stayed as it was. The pinned guard-proxy matches its 40 terms with Python's `re.IGNORECASE`, whose case folding
+counts `ı` as `i`, so a term spelt with `ı` in place of `i` is masked on the wall today and passed the proposed floor.
+The RE2 form had the same gap for a second reason: Go's case folding keeps U+0131 in an orbit of its own, so the
+pattern's `(?i)` never reads it as `i`. Python's own `(?i)` does, which is why the offline tests that compiled the
+RE2 form with Python's `re` could not see it.
+
+**Change.**
+- `floor.py`: `_HOMOGLYPH` maps `ı` to `i`. A new `_RE2_UNFOLDED = {"i": "ı"}` names the letters Python's case
+  folding joins and RE2's does not; `portable_pattern()` turns every class holding `i` into `(?:[...]|ı|\\u0131)`, so
+  the form matches the letter as written and as guard-proxy's `json.dumps` escapes it. The pattern grew from 17,989 to
+  20,341 characters, 168 classes.
+- `python3 verify/coc_pattern_copies.py write` regenerated the copies in the admission policy
+  (`gitops/namespaces/code-of-conduct-names.yaml`) and the collector (`gitops/otel-collector/values.yaml`).
+- The page's `COC_LOOKALIKE` in `burritbot.html` gained `ı` to `i`, and the port block of
+  `workshop-mcp-server.py` and `ticket_site.py` gained it in `_COC_HOMOGLYPH`.
+- The spike's README says the floor maps the dotless i and why the RE2 form lists it.
+
+**Tests.** `test_coc_floor_spike.py` checks that the proposed floor flags each of the 52 terms holding an `i`, spelt
+with `ı` for every `i`, end to end, and that the RE2 form masks each of them as written and JSON-escaped. It compiles
+the form with `re.ASCII`, which has Python fold case on ASCII letters alone, as RE2 does the `i`. On the old floor.py
+both checks fail (52 missed); on this one they pass, and the stage checks still pass: neither floor nor the RE2 form
+flags any of the 2,906 stage texts, and the form and the folded floor agree on the 151 abuse texts that need no
+folding. `coc_mask_cases.mask()` now compiles with `re.ASCII` for the same reason, and `term_cases()` gained a
+dotless-i case, so `test_collector_coc_mask.py` fails on the old pattern (the dotless case and both JSON-encoded
+checks) and passes on this one, and `test_collector_coc_mask_e2e.py` sends the case through the real collector.
+`test_coc_admission.py` checks that the policy's pattern, read the same way, matches each dotless-i term.
+`test_deploy_coc.py` checks that both ports' look-alike tables are floor.py's, the dotless i included.
+`test_chat_coc.py` already held `COC_LOOKALIKE` to `_HOMOGLYPH`.
+
+Run once each, all PASS: test_coc_floor_spike, test_collector_coc_mask, test_coc_admission, test_deploy_coc,
+test_chat_coc, test_coc_pattern_copies, test_coc_pattern_linear (19 s, the new alternatives keep every copy linear),
+test_scope_tests, test_chat_coc_e2e with node from the host's PATH (its 'a dotless i' case now reads True on both
+sides), and `bash verify/run-e2e-tools.sh test_collector_coc_mask_e2e.py` with the pinned otelcol-contrib v0.160.0:
+all PASS, 1 check in 0m34s. No test reads a new file, so the scope map is unchanged. The other tests that read these
+files are left to validation.
+
+A Go program run by hand (go 1.27.2, `regexp`, which is RE2) on the 52 dotless-i spellings: the old pattern matched 3
+as written and 3 JSON-escaped (terms that match on other letters), this one 52 and 52. Both match all 52 plain terms.
+
+Turkish text is not on stage, and the stage texts hold no `ı`, so the fold adds no false positive there.
+
+**Live check**, on watch-it-burn-community and watch-it-burn-private, changing nothing:
+- `kubectl apply --dry-run=server -f gitops/namespaces/code-of-conduct-names.yaml`: both API servers accept the
+  20,341-character pattern and the binding. The deployed `variables.floor` is the 17,989-character pattern from #1300.
+- In each workshop-mcp pod, the deployed `/app/server.py`'s port: a term on its own is flagged, the same term with `ı`
+  is not, and `_COC_HOMOGLYPH` has no U+0131. That is the gap this change closes.
+
+Not yet run on a cluster: once Argo CD has synced this change, the reading of `variables.floor` on both clusters as
+20,341 characters equal to `floor.portable_pattern()`, and in the workshop-mcp pod, the same one-line check that the
+port flags the term spelt with `ı` (`coc_hit`).
