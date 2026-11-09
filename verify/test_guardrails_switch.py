@@ -465,13 +465,30 @@ for st in ("on", "off"):
                     continue
                 res = {"Role": "roles", "KubeArmorPolicy": "kubearmorpolicies", "NetworkPolicy": "networkpolicies"}[d["kind"]]
                 name = d["metadata"]["name"] if res == "roles" else "*"
-                for verb in (("get", "patch", "create") if a[0] == "apply" else ("delete",)):
+                # A delete waits for the object to go unless the call passes --wait=false, and that wait lists and
+                # watches the kind while a finalizer holds the object (networking.k8s.aws/resources on every
+                # NetworkPolicy the VPC CNI's policy agent sees), so a wait the grant cannot list and watch never
+                # ends (#1208).
+                waits = "--wait=false" not in a
+                for verb in (("get", "patch", "create") if a[0] == "apply"
+                             else ("delete", "list", "watch") if waits else ("delete",)):
                     if res == "roles" and verb == "create":
                         continue  # the Role exists from git; apply patches it
                     need.add(("agent", res, name, verb))
                 if res == "roles":
                     need.add(("agent", res, name, "escalate"))
     missing = sorted(n for n in need if n[3] not in GRANT.get(n[:3], set()))
+    if st == "off":
+        # The grant run 18721 met (#1208): get, create, patch and delete on NetworkPolicies, no list or watch.
+        old = {k: v - {"list", "watch"} for k, v in GRANT.items()}
+        old_missing = sorted(n for n in need if n[3] not in old.get(n[:3], set()))
+        dels = [c["args"] for c in ran if c["cluster"] != "this" and c["args"][0] == "delete"]
+        check("guardrails-off: its deletes on the other cluster wait for the object to go (no --wait=false), so the "
+              "check below holds list and watch on each kind it deletes, and fails on the grant that hung run 18721 "
+              "(#1208)",
+              len(dels) == 2 and not any("--wait=false" in d for d in dels)
+              and {("agent", "networkpolicies", "*", "watch"), ("agent", "kubearmorpolicies", "*", "watch")}
+              <= set(old_missing), str(old_missing))
     check(f"guardrails-{st}: everything it asks of the other cluster is inside the guardrails-switch grant",
           not missing and bool(need), str(missing))
 
