@@ -40474,6 +40474,43 @@ watch-it-burn-private --kubeconfig "$KUBECONFIG" --profile accen-dev --lock-wait
 /var/lib/hecaton/runs/18805/live/stage-traces.json`, stamp `202611082248`): all 17 beats PASS, the one-desk beat and
 both Challenge 3 seeds among them, and
 
+## 2026-11-09 · #1130 · run 18879 · #1130 closed out: its children meet the build criteria, run 18805's seeds ended SEEDED GREEN, and all nine traces read back from Datadog
+
+`verify/prior-drafts.sh 1130 origin/staging` printed `NONE`: both earlier branches, `origin/agent/1130-18476` and
+`origin/agent/1130-18786`, are in staging. Run 18786 on this issue ended with no commit, because its session refused
+every `python3`, `bash` and Edit call; this session ran them, and this entry is the record that run could not write.
+
+**The build criteria, met by #1130's children, read at `5fe32e81`.**
+1. The seeds read their prompts from `/kubecon` (#1137): `SEED_BEATS` in `verify/stage_traces.py` reads Challenge 1
+   off the C5 beat, Challenge 2 off the last prompt of C3, Challenge 3 off C6 and Challenge 4 off C7, each through
+   `kp.kubecon_prompt`, and each `-fixed` seed sends its attack's prompt. No seed reads `CEO_PROMPT` or `MCP_PROMPT`,
+   which stay in `verify/agent_probe.py` for the checks that use them. The one seed with no beat is `c3-pii`, which
+   sends the script's own `PII_PROMPT` (`OFF_PAGE_SEEDS`).
+2. `verify/test_stage_trace_prompts.py` fails when a seed's prompt and its beat's differ. Run here, it printed `Every
+   stage-trace seed prompt is its /kubecon beat's.`, its drift check failing the altered copy on `c1-attack` and
+   `c1-fixed` alone.
+3. `SEEDS` holds `c1-attack` to `get_vault_entry`, `c2-attack` to `run_shell`, `c3-attack` to `read_support_ticket` then
+   `deploy_app`, and `c4-attack` to `get_weather` then `read_internal_config` (#1138, with #1140's tie for calls one
+   model turn asks for together). `verify/test_stage_trace_slides.py` holds them to the deck's notes and the
+   run-of-show. The issue's table puts Challenge 4 on `#/65`; #1138 read the deck at rounds-agenticburn `9c80fb7a` and
+   found the "tools" hint on `#/68`, which the run-of-show, `/kubecon` and `verify/test_ros_seg4_flow.py` all use.
+4. The run-of-show's Night Before step "Seed the stage's Datadog traces" is built around the four links, `#/11`,
+   `#/26`, `#/48` and `#/68`, each with its seed, session and spans, and how to reach the trace from the filtered Agent
+   Observability link and from the Datadog home page link (#1139).
+5. PROGRESS.md has the entries of #1137, #1138, #1139 and #1140, and now this one.
+
+**The green seed run.** Run 18805 (#1159, decisions.md 2026-11-09) ran `python3 verify/stage_traces.py seed
+burritobot-private.burritobot.co --context watch-it-burn-private ...` from the start state, after #1134's Role fix had
+ended the `guardrails-off` hang, and it ended `SEEDED GREEN`: stamp `202611082248`, all 17 beats PASS, 9 of 9 traces
+complete in Datadog in 171 s. That is the first full green seed run on record.
+
+**Read back from Datadog (live, this run, 2026-11-09).** The run 18805 views file is in that run's directory, which
+this run cannot read, so the views were built again from the stamp with the script's own `views()` and read with
+`read_seeds`, the code `stage_traces.py check` runs, through the repo's read-only Datadog key, over the last 48 hours.
+No cluster was touched. It printed:
+
+    PASS  c1-attack   ... 6 spans, with get_vault_entry
+    PASS  c1-fixed    ... 6 spans, with get_vault_entry
     PASS  c2-attack   ... 6 spans, with run_shell
     PASS  c2-fixed    ... 6 spans, with run_shell
     PASS  c3-attack   ... 8 spans, with read_support_ticket then deploy_app
@@ -41430,3 +41467,22 @@ hand labels, then the admin probe's `Challenge 2: recipe read blocked and alerte
 
 **Tests run.** None: this run changed only decisions.md and PROGRESS.md, which no cluster runs. The prose gate was run
 on both. No dependency was added.
+    PASS  c3-pii      ... 2 spans, refused by input_classifier, no agent span, none of the PII
+    PASS  c4-attack   ... 8 spans, with get_weather with read_internal_config, asked for in one model turn
+    PASS  c4-fixed    ... 12 spans, with get_weather
+    STAGE TRACES GREEN
+
+So the four attack traces the slides open are `wib-stage-c1-attack-202611082248` (`#/11`),
+`wib-stage-c2-attack-202611082248` (`#/26`), `wib-stage-c3-attack-202611082248` (`#/48`) and
+`wib-stage-c4-attack-202611082248` (`#/68`), each found by adding `session_id:<session>` to the slide's Agent
+Observability search on Past 7 Days, as the run-of-show step says. The log is `/tmp/run18879-check.log` on the host.
+
+**Owed, and not a run's.** Whitney opening each of the four from its slide's link and confirming it shows what the
+slide says. #1210, the model skipping `run_shell` in `c2-fixed` or the tool call in `c4-fixed` on some tries, stays
+open: one green run does not settle it, and a seed run on the night before the talk can still go red on it.
+
+**Live check.** The Datadog read above; no cluster was read or changed, and `agent/terminal-auth` was not touched.
+The change itself touches only decisions.md and PROGRESS.md, which no cluster runs.
+
+**Tests.** `python3 verify/test_stage_trace_prompts.py` passed, run here once. The prose gate was run on this entry
+and the PROGRESS.md line. No dependency was added.
