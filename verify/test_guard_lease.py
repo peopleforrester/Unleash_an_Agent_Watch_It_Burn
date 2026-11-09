@@ -544,7 +544,21 @@ try:
 except RuntimeError as e:
     check("a peer the kubeconfig has no context for raises, naming the peer and asking for a kubeconfig with it",
           "also switches wib-community" in str(e) and "context named wib-community" in str(e), str(e))
+    check("and its error is the create's, not the cleanup read's that failed after it on the same missing context "
+          "(#1234)", "could not create Lease" in str(e) and "could not read Lease" not in str(e), str(e))
 check("and leaves no Lease behind", missing.apis["wib-private"].lease is None, str(missing.apis["wib-private"].lease))
+cleanup_logs: list[str] = []
+try:
+    with gl.hold("wib-gone", what="t", runner=missing.run, log=cleanup_logs.append):
+        check("hold on a context the kubeconfig lacks is an error", False, "it ran")
+except RuntimeError as e:
+    check("#1234: a failed acquire whose cleanup read also fails raises the acquire's own error (could not create "
+          "Lease), naming the missing context",
+          str(e).startswith("could not create Lease") and 'context "wib-gone" does not exist' in str(e),
+          f"{type(e).__name__}: {e}")
+    check("and the cleanup's own failure is logged, not lost",
+          any("could not check wib-gone for a Lease to clean up" in m and "could not read Lease" in m
+              for m in cleanup_logs), "\n".join(cleanup_logs))
 lost_one = gl.SwitchHold([gl.GuardLease("wib-community", runner=fleet.run), gl.GuardLease("wib-private", runner=fleet.run)])
 lost_one.leases[1].lost = "the lock was lost: held by 'x'"
 check("a SwitchHold reports a loss on either cluster, naming it",
@@ -645,6 +659,36 @@ try:
           ok is False and not ran and said and said[0].startswith("FAILED") and "1-900-17950" in said[0], str(said))
 finally:
     gl.hold = real_hold
+# #1234: with_peer, a peer the kubeconfig has no context for makes the real hold_switch raise LockUnavailable.
+real_switch = gl.hold_switch
+gone = Fleet(wib_private=fk.FakeLeaseApi(peer="wib-gone"))
+gl.hold_switch = functools.partial(real_switch, runner=gone.run, log=lambda m: None)
+ran, notes, said = [], [], []
+try:
+    ok = gl.run_held("wib-private", lambda: ran.append(1), lambda n, c, d: notes.append((n, c)), "t", with_peer=True,
+                     wait=0, out=said.append)
+    check("#1234: when hold_switch raises LockUnavailable, run_held returns False, runs nothing, checks nothing, prints "
+          "FAILED naming the cluster it could not lock, and leaves no Lease",
+          ok is False and not ran and not notes and len(said) == 1 and said[0].startswith("FAILED: NOT RUN")
+          and "wib-gone" in said[0] and gone.apis["wib-private"].lease is None, f"{ok} {ran} {notes} {said}")
+except Exception as e:  # noqa: BLE001 - the check is that nothing escapes run_held
+    check("#1234: run_held turns LockUnavailable into FAILED instead of raising", False, f"{type(e).__name__}: {e}")
+finally:
+    gl.hold_switch = real_switch
+gl.hold = hold_on_api
+api.lease = None
+try:
+    run_held_raised = None
+    try:
+        gl.run_held("ctx-private", lambda: (_ for _ in ()).throw(gl.LockUnavailable("from the body")),
+                    lambda n, c, d: None, "t", wait=0, out=said.append)
+    except gl.LockUnavailable as e:
+        run_held_raised = str(e)
+    check("run_held catches only the lock's own errors: a LockUnavailable the body raises propagates, and the lock is "
+          "released", run_held_raised == "from the body" and api.lease is None
+          and verbs(api)[-2:] == ["get", "delete"], f"{run_held_raised} {api.lease}")
+finally:
+    gl.hold = real_hold
 check("WIB_GUARD_LEASE_WAIT sets the default wait", gl.default_wait({gl.WAIT_ENV: "12"}) == 12.0
       and gl.default_wait({}) == gl.WAIT_S)
 try:
@@ -683,6 +727,20 @@ check("with WIB_GUARD_LEASE_WAIT=0 and the peer held, it exits BUSY_EXIT at once
       and not (work / "ran2").exists() and ctx_lease("wib-private") is None and time.monotonic() - t0 < 30,
       f"rc {r.returncode}: {r.stderr}")
 (work / "lease-wib-community.json").unlink()
+# #1234: a peer the kubeconfig has no context for, as kubectl answers one.
+(work / "bin/kubectl").write_text(f'#!/usr/bin/env bash\nif [ "$2" = wib-gone ]; then echo \'error: context '
+                                  f'"wib-gone" does not exist\' >&2; exit 1; fi\nFAKE_LEASE_STATE="{work}/lease-$2.json" '
+                                  f'exec {sys.executable} {VERIFY / "fake_lease_kubectl.py"} "$@"\n')
+r = subprocess.run([sys.executable, str(VERIFY / "guard_lease.py"), "hold", "--with-peer", "--context", "wib-private",
+                    "--wait", "0", "--", "touch", str(work / "ran3")],
+                   env={**ENV, "FAKE_LEASE_PEERS": json.dumps({"wib-private": "wib-gone"})}, capture_output=True,
+                   text=True, timeout=60)
+said_lines = [ln for ln in r.stderr.splitlines() if ln.startswith("guard-lease: NOT RUN:")]
+check("#1234: hold --with-peer with a peer the kubeconfig lacks prints one NOT RUN line naming it, exits "
+      "UNAVAILABLE_EXIT with no traceback, runs nothing, and leaves no Lease",
+      r.returncode == gl.UNAVAILABLE_EXIT != 0 and len(said_lines) == 1 and "context named wib-gone" in said_lines[0]
+      and "nothing was run" in said_lines[0] and "Traceback" not in r.stderr and not (work / "ran3").exists()
+      and ctx_lease("wib-private") is None, f"rc {r.returncode}: {r.stderr}")
 
 # --- #1016: every live check that switches guardrails or policies takes the lock --------------------------------------
 print("== every live check that switches guardrails or policies takes the lock ==")

@@ -83,6 +83,9 @@ ENV = "WIB_GUARD_LEASE"
 WAIT_ENV = "WIB_GUARD_LEASE_WAIT"
 # `hold`'s exit code when the lock stayed busy for the whole wait.
 BUSY_EXIT = 3
+# `hold --with-peer`'s exit code when a cluster the switch reaches could not be locked (LockUnavailable): the
+# KubeCon probe's NOT RUN code for the same case.
+UNAVAILABLE_EXIT = 2
 API_PATH = f"/apis/coordination.k8s.io/v1/namespaces/{NAMESPACE}/leases/{NAME}"
 # Where the terminal's guardrails switch finds the other KubeCon cluster (gitops/guardrails-switch, fleet.sh
 # guardrails-link): the Secret's `name` is that cluster's name.
@@ -320,8 +323,14 @@ def hold(context: str, kubeconfig: str | None = None, profile: str | None = None
     except LeaseBusy:
         raise
     except BaseException:
-        # Interrupted (a SIGTERM, a ^C) after a create that may have won: delete the Lease if it is ours.
-        lease.release(unsure=True)
+        # Interrupted (a SIGTERM, a ^C) after a create that may have won: delete the Lease if it is ours. A cleanup that
+        # fails too (its read hits the same missing context or refusal the create did) is logged, and the acquire's
+        # own error is the one raised, so the message names the step that failed first (#1234).
+        try:
+            lease.release(unsure=True)
+        except Exception as cleanup:  # noqa: BLE001 - the acquire's error matters more than the cleanup's
+            lease.log(f"could not check {context} for a Lease to clean up after the failed acquire: {cleanup}; "
+                      f"a Lease it wrote frees itself {lease.duration} s after it was written")
         raise
     before = os.environ.get(ENV)
     stop = threading.Event()
@@ -436,15 +445,22 @@ def run_held(context: str, body: Callable[[], object], check: Callable[[str, boo
              with_peer: bool = False, kubeconfig: str | None = None, profile: str | None = None,
              wait: float | None = None, out: Callable[[str], None] = print) -> bool:
     """For a live check: run body() holding the lock on `context` (and its guardrails peer, with_peer), then check
-    that the lock held throughout. False, having run nothing and printed FAILED naming the holder, when the lock
-    stayed busy for the whole wait; the caller then exits non-zero."""
+    that the lock held throughout. False, having run nothing and printed FAILED, when the lock stayed busy for the
+    whole wait (naming the holder) or, with_peer, could not be taken on a cluster the switch reaches (LockUnavailable,
+    naming it, #1234); the caller then exits non-zero. Only the lock's own errors are caught: body()'s propagate."""
     held = hold_switch if with_peer else hold
-    try:
-        with held(context, kubeconfig, profile, what=what, wait=default_wait() if wait is None else wait) as lease:
-            body()
-    except LeaseBusy as e:
-        out(f"FAILED: the guard lock stayed busy, so no check ran and nothing was changed: {e}")
-        return False
+    with ExitStack() as stack:
+        try:
+            lease = stack.enter_context(held(context, kubeconfig, profile, what=what,
+                                             wait=default_wait() if wait is None else wait))
+        except LeaseBusy as e:
+            out(f"FAILED: the guard lock stayed busy, so no check ran and nothing was changed: {e}")
+            return False
+        except LockUnavailable as e:
+            out(f"FAILED: NOT RUN, the guard lock could not be taken on every cluster the guardrails switch reaches, "
+                f"so no check ran and nothing was changed: {e}")
+            return False
+        body()
     check("the guard lock was held for the whole check (no other run switched guards or guardrails meanwhile)",
           lease.lost is None, lease.lost or "")
     return True
@@ -503,6 +519,10 @@ def main(argv: list[str] | None = None) -> int:
     except LeaseBusy as e:
         print(f"guard-lease: {e}; nothing was run", file=sys.stderr)
         return BUSY_EXIT
+    except LockUnavailable as e:
+        # hold_switch raises it only before its body, so the command never started (#1234).
+        print(f"guard-lease: NOT RUN: {e}; nothing was run", file=sys.stderr)
+        return UNAVAILABLE_EXIT
 
 
 if __name__ == "__main__":

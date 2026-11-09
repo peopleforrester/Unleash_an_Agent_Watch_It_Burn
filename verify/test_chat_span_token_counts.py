@@ -67,7 +67,7 @@ check(f"the pin {pin_sha[:7]} contains guard-proxy-agenticburn#49's chat-span to
 # thread, which starts with an empty context, so the current span is a ContextVar, as the real API keeps it.
 class _Ctx:
     def __init__(self, trace_id: int, span_id: int, valid: bool = True):
-        self.trace_id, self.span_id, self.is_valid = trace_id, span_id, valid
+        self.trace_id, self.span_id, self.is_valid, self.trace_state = trace_id, span_id, valid, None
 
 
 class _Span:
@@ -132,10 +132,23 @@ otel_metrics.Observation = lambda value, attributes=None: (value, attributes)
 otel_metrics.get_meter = lambda *a, **k: types.SimpleNamespace(create_observable_gauge=lambda *a, **k: None)
 otel_propagate = types.ModuleType("opentelemetry.propagate")
 otel_propagate.extract = lambda carrier: None
-otel_propagate.inject = lambda carrier: None
-otel.trace, otel.metrics, otel.propagate = otel_trace, otel_metrics, otel_propagate
+otel_propagate.inject = lambda carrier, context=None: None
+# guard-proxy-agenticburn#77 (a637e68): proxy.py suppresses urllib's instrumentation for each tasks/get poll and
+# injects the poll's unsampled traceparent from a NonRecordingSpan, so the stand-in carries those names too.
+otel_context = types.ModuleType("opentelemetry.context")
+otel_context._SUPPRESS_HTTP_INSTRUMENTATION_KEY = "suppress_http_instrumentation"
+otel_context.set_value = lambda key, value, context=None: {key: value}
+otel_context.attach = lambda ctx: object()
+otel_context.detach = lambda token: None
+otel_trace.TraceFlags = type("TraceFlags", (int,), {"DEFAULT": 0, "SAMPLED": 1})
+otel_trace.SpanContext = lambda trace_id, span_id, is_remote=False, trace_flags=None, trace_state=None: \
+    types.SimpleNamespace(trace_id=trace_id, span_id=span_id, trace_flags=trace_flags, trace_state=trace_state)
+otel_trace.NonRecordingSpan = lambda span_context: types.SimpleNamespace(get_span_context=lambda: span_context)
+otel_trace.set_span_in_context = lambda span, context=None: {"span": span}
+otel.trace, otel.metrics, otel.propagate, otel.context = otel_trace, otel_metrics, otel_propagate, otel_context
 sys.modules.update({"opentelemetry": otel, "opentelemetry.trace": otel_trace,
-                    "opentelemetry.metrics": otel_metrics, "opentelemetry.propagate": otel_propagate})
+                    "opentelemetry.metrics": otel_metrics, "opentelemetry.propagate": otel_propagate,
+                    "opentelemetry.context": otel_context})
 
 
 class Agent(BaseHTTPRequestHandler):
