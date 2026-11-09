@@ -48711,3 +48711,37 @@ lines (`git grep` for them under verify and scripts found none). No dependency w
 
 **Not yet run on a cluster.** The desk and deployments parts of the floor, #1268 and #1269, are not on staging; the
 probe runs again with them once they land.
+
+## 2026-11-09 · #1291 · run 19696 · a test holds the #1267 note's mapping of the code of conduct's categories to what the floor catches and what it cannot
+
+**What.** Test review run 19687 found that no test read #1267's criterion "the CNCF Code of Conduct's categories
+mapped to what the floor catches and what it cannot", the table under "What the CNCF Code of Conduct rules out" in
+`docs/research/2026-11-09-coc-floor/README.md`. `verify/test_coc_floor_spike.py` holds catch counts per abuse-set
+category and `verify/test_coc_floor_note.py` the surfaces table; neither reads this one. New
+`verify/test_coc_floor_mapping.py` reads the section and fails when:
+
+- one of the six things the codes name that the section quotes (sexualized language; insulting or derogatory comments
+  and personal or political attacks; harassment; others' private information; violence and threats; the Linux
+  Foundation code's abusive, offensive or degrading language) is no longer quoted, or a row it maps to is gone; the
+  eight rows are held by name;
+- a row's term floor cell or its "What neither catches" cell is empty;
+- an "N of M" count names no abuse-set category, a cell gives counts for categories other than the ones held for it,
+  M is not the abuse set's size for the category, or N differs from `results.json`: the term floor column against
+  `term-proposed`, the classifier column against `term-proposed+bedrock-standard-coc-medium+violence-low` (the choice
+  the note makes), "from Bedrock alone" against `bedrock-standard-coc-medium+violence-low`;
+- the floor as it runs (`floor.py` on `terms-proposed.rot13`) catches fewer texts of a category than the term floor
+  column states, or does not flag a phrase that column quotes as caught ("heil hitler", "kill yourself", "kys");
+- a phrase the "What neither catches" column quotes is in no abuse-set text, so nothing measured it, or the floor as
+  it runs flags it ("a clown who can't code", "imbecile machine", "I know where you live").
+
+The classifier's misses are held to `results.json`'s counts only: the spike kept no per-text Bedrock verdicts, so the
+test cannot check that Bedrock missed each quoted example. It then writes twelve faults into a copy of the note and
+two into the floor (the 40-term list in its place, and the list with "imbecile" added) and fails if any goes
+uncaught. Each fault's anchor is checked first and named when the note is reworded.
+
+**Tests.** `python3 verify/test_coc_floor_mapping.py` passes (6 quotes, 8 rows, 14 faults caught, 0.24 s) and
+`python3 verify/test_scope_tests.py` passes with the test's new `verify/scope-map.yaml` entry, which
+`python3 verify/scope_tests.py write` produced from what `corpus.py` reads. The rest of the suites are left to
+validation.
+
+**Live check.** None: the change is a test under `verify/` that no cluster runs.
