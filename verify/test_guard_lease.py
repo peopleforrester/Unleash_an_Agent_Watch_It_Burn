@@ -757,7 +757,8 @@ SWITCHERS = {"verify/kubecon_probe.py": "hold_switch", "verify/stage_traces.py":
              "verify/test_recipe_block_live.py": "with_peer=True", "verify/test_kyverno_cel_live.py": "guard_lease.hold(",
              "verify/beat-01.sh": "guard_lease.py\" hold", "verify/c1-exfil-block.sh": "guard_lease.py\" hold",
              "verify/test_drift_selfheal_live.py": "guard_lease.run_held(",
-             "verify/test_deployments_removed_live.py": "guard_lease.run_held("}
+             "verify/test_deployments_removed_live.py": "guard_lease.run_held(",
+             "verify/test_private_removed_row_live.py": "with_peer=True"}
 READERS = {"verify/test_kubecon_c3_live.py": "guard_lease.run_held(", "verify/test_two_hour_flow_live.py":
            "guard_lease.run_held(", "verify/test_room_cleanup_live.py": "guard_lease.hold("}
 live_files = [f for f in list(VERIFY.glob("*.py")) + list(VERIFY.glob("*.sh"))
