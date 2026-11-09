@@ -13,6 +13,7 @@
 
 import asyncio
 import base64
+import codecs
 import json
 import os
 import re
@@ -20,6 +21,7 @@ import ssl
 import subprocess
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -684,9 +686,126 @@ def _scale_to_zero(base: str, ns: str, plural: str, name: str) -> None:
         print(f"scaling {name} to zero failed (HTTP {code}): {body[:200]}", flush=True)
 
 
+# --- the code-of-conduct floor (#1269, part of #1267) ---------------------------------------------------------------
+# The #1267 spike's proposed term floor, docs/research/2026-11-09-coc-floor/floor.py's Floor("proposed"), carried here
+# whole and on the standard library alone, since this file runs by itself from its ConfigMap. It is always on: no
+# guardrail switch reaches it. Each character of a text is folded on its own before matching (zero-width characters
+# dropped, accents and compatibility forms reduced to their base letter, Cyrillic and Greek look-alikes mapped to
+# Latin, lower case), so a match maps back onto the original text one to one. Each term then matches as a whole word
+# with repeated letters, leetspeak, "*" for a vowel, or spelt out with one separator between every letter. The terms
+# are ROT13-encoded, as the spike keeps them, so the tree and a search of it show none. This block is the same in
+# workshop-mcp-server.py and ticket_site.py; verify/test_deploy_coc.py holds the two copies equal, the terms equal to
+# the spike's terms-proposed.rot13, and the match to floor.py's on the spike's texts.
+_COC_TERMS_ROT13 = (
+    'shpx,shpxf,shpxrq,shpxre,shpxref,shpxvat,shpxva,shpxnoyr,shpxsnpr,shpxurnq,shpxjvg,spx,shx,shd,sipx,cuhpx,zbgure'
+    'shpxre,zbgureshpxvat,fuvg,fuvgf,fuvggl,fuvggvat,fuvggrq,fuvgurnq,fuvgsnpr,ohyyfuvg,ubefrfuvg,qvcfuvg,phag,ovgpu,'
+    'ovgpurf,ovgpuvat,ovngpu,onfgneq,qvpx,qvpxurnq,pbpx,pbpxfhpxre,chffl,nffubyr,nefrubyr,qhzonff,wnpxnff,jnaxre,gjng'
+    ',cevpx,fgsh,tgsb,jgs,avttre,avttn,snttbg,snt,qlxr,genaal,genaavr,furznyr,ergneq,ergneqrq,gneq,fcnm,zbatbybvq,xvx'
+    'r,fcvp,puvax,tbbx,jrgonpx,ornare,enturnq,gbjryurnq,cnxv,pbba,jbc,qntb,ubaxl,erqfxva,mvccreurnq,frk,cbea,cbeab,oy'
+    'bjwbo,unaqwbo,phz,phzfubg,qvyqb,ubeal,gvgf,gvggvrf,obbof,ahqrf,rebgvp,guerrfbzr,nany frk,wrex bss,wnpx bss,anxrq'
+    ' obql,fyhg,juber,encr,encrq,encvfg,encvat,xvyy lbhefrys,xvyy hefrys,xlf,unat lbhefrys,urvy uvgyre,fvrt '
+    'urvy,juvgr cbjre,tnf gur wrjf,craqrwb,craqrwn,zvreqn,chgn,chgb,pnoeba,puvatn,puvatnqn,znevpba,wbqre,pbñb,iretn,c'
+    'hgnva,zreqr,pbaaneq,fnybcr,raphyr,raphyre,chgr,fpurvffr,fpurvßr,uherafbua,sbgmr,jvpufre,svpx '
+    'qvpu,fpuynzcr,pnenyub,cbeen,ivnqb,ohprgn,inssnaphyb,fgebamb,pnmmb,chggnan'
+)
+COC_TERMS = tuple(codecs.decode(_COC_TERMS_ROT13, "rot13").split(","))
+_COC_LEET = {"a": "4@", "b": "8", "c": "(", "e": "3", "g": "9", "i": "1!|", "l": "1|", "o": "0", "s": "5$", "t": "7+"}
+_COC_SEP = r"[\s._*\-]"
+_COC_ZERO_WIDTH = frozenset("\u00ad\u200b\u200c\u200d\u2060\ufeff")
+# Cyrillic and Greek letters that render as Latin ones
+_COC_HOMOGLYPH = str.maketrans("аеорсухіјѕԁԛԝкмтвнАЕОРСУХІЈЅКМТВНαοερτυνκιΑΒΕΖΗΙΚΜΝΟΡΤΥΧ",
+                               "aeopcyxijsdqwkmtbhaeopcyxijskmtbhaoeptuvkiabezhikmnoptyx")
+
+
+def _coc_fold(text: str) -> tuple[str, list[int]]:
+    """The text folded one character at a time, and for each folded character the index it came from."""
+    out, where = [], []
+    for i, ch in enumerate(text):
+        if ch in _COC_ZERO_WIDTH:
+            continue
+        base = unicodedata.normalize("NFKD", ch)
+        base = "".join(c for c in base if not unicodedata.combining(c)) or ch
+        base = base[0].translate(_COC_HOMOGLYPH).lower()
+        out.append(base[0] if base else ch)
+        where.append(i)
+    return "".join(out), where
+
+
+def _coc_letter(ch: str) -> str:
+    alts = re.escape(ch) + "".join(re.escape(c) for c in _COC_LEET.get(ch, ""))
+    return "[" + alts + (r"\*" if ch in "aeiou" else "") + "]"
+
+
+def _coc_term(term: str) -> str:
+    words = _coc_fold(term)[0].split()
+    joined = (_COC_SEP + "+").join("".join(_coc_letter(c) + "+" for c in w) for w in words)
+    if len(words) == 1 and len(words[0]) >= 3:
+        return f"(?:{joined}|{_COC_SEP.join(_coc_letter(c) for c in words[0])})"
+    return f"(?:{joined})"
+
+
+_COC_RE = re.compile(r"(?<![a-z0-9])(?:" + "|".join(_coc_term(t) for t in sorted(COC_TERMS, key=len, reverse=True))
+                     + r")s?(?![a-z0-9])")
+
+
+def coc_spans(text: str) -> list[tuple[int, int]]:
+    """Where in the text the floor's terms are, as (start, end) indexes into the text as given."""
+    folded, where = _coc_fold(str(text or ""))
+    return [(where[m.start()], where[m.end() - 1] + 1) for m in _COC_RE.finditer(folded)]
+
+
+def coc_hit(*texts) -> bool:
+    """Whether any of the texts carries a term of the floor."""
+    return any(coc_spans(t) for t in texts)
+
+
+def coc_mask(text: str, with_: str = "[redacted]") -> str:
+    """The text with each of the floor's terms replaced by `with_`."""
+    text = str(text or "")
+    out, last = [], 0
+    for a, b in coc_spans(text):
+        out.append(text[last:a] + with_)
+        last = b
+    return "".join(out) + text[last:]
+# --- end of the code-of-conduct floor ---------------------------------------------------------------------------------
+
+
 def _refuse(what: str, why: str) -> None:
     """A manifest deploy_app will not apply. "deploy failed for " is what the collector marks a tool span ERROR on."""
     raise RuntimeError(f"deploy failed for {what}: {why}. Nothing was deployed.")
+
+
+# deploy_app's code-of-conduct check (#1269). A deploy's name, image and witch name go on the deployments page, which
+# is on screen, and the resource lands in the cluster under its name. deploy_app applies any single namespaced
+# resource, so every string the manifest carries is checked (names, labels, annotations, image, env, args, and the
+# keys too), as are the manifest as sent and requested_by, whatever the guardrails' state. The refusal names no term
+# and repeats nothing of the manifest, so the bot can pass it on to the room as it is. It is raised before the
+# manifest is read any further, so no later refusal quotes the manifest back, and nothing reaches the desk: a refused
+# deploy is not a row on the page.
+COC_DEPLOY_REFUSAL = ("it has words in it that the event's code of conduct rules out, in a name, a label, the image or "
+                      "another field, so the cantina will not deploy it. Tell the person that plainly, and ask them "
+                      "for the deploy again without those words")
+
+
+def _manifest_strings(obj) -> list[str]:
+    """Every string in a parsed manifest, keys and values, at any depth (a stack, not recursion, so no nesting of a
+    manifest can raise RecursionError here)."""
+    found, stack = [], [obj]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            found.append(item)
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return found
+
+
+def _refuse_coc(*texts) -> None:
+    if coc_hit(*texts):
+        _refuse("this manifest", COC_DEPLOY_REFUSAL)
 
 
 # The shapes the room's model (Nova Pro) sends deploy_app's manifest in, which deploy_app reads rather than refuses
@@ -937,10 +1056,14 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     # nothing was (2026-10-30, verify/test_deploy_app_errors.py).
     if not manifest.strip():
         _refuse("an empty manifest", "send the resource as YAML or JSON")
+    # The code-of-conduct check (#1269), always on: the text as sent first, so a manifest that does not parse is not
+    # quoted back with a term in the parse error, then every string it parses to, which catches a JSON \u escape.
+    _refuse_coc(manifest, requested_by)
     try:
         obj, written_by = _parse_manifest(manifest)
     except Exception as e:  # noqa: BLE001
         _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
+    _refuse_coc(*_manifest_strings(obj), written_by)
     obj = _one_object(obj)
     if isinstance(obj, dict) and "requested_by" in obj:
         # The call's own argument written as a field of the manifest (#906): on 2026-11-05 two of three HC-666 asks on
@@ -953,6 +1076,7 @@ def deploy_app(manifest: str = "", requested_by: str = "") -> str:
     # and a name a ticket talks the model into writing never stands in for the person chatting. The model's
     # requested_by, or the one it wrote into the manifest, is read only when the request carries no name.
     requested_by = _request_witch() or str(requested_by or "").strip() or written_by
+    _refuse_coc(requested_by)
     if isinstance(obj, (str, int, float)) and not isinstance(obj, bool):
         # Only a name, "Tron" or 2048. Until #991 deploy_app wrote a Deployment of that name on a pinned nginx (#939);
         # now nothing chooses an image for the model, so it is told to send the manifest with the image it means.
