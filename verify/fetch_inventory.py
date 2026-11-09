@@ -41,7 +41,7 @@ like one added under verify/. A crane held in a variable is found where the vari
 
 The inventory, this file and its test are left out of the scan: they are the scan's own definition, and each names
 every command it looks for. None of them fetches anything. So is VENDORED, third-party code checked in whole: the yarn
-release Backstage's .yarnrc.yml runs, whose own fetches are the `yarn install` call sites classed where they run.
+release Backstage's .yarnrc.yml runs, whose own fetches are classed at each place the app's yarn is run.
 """
 from __future__ import annotations
 

@@ -414,6 +414,8 @@ ALLOWED = {
                                     "uv.lock, whose hashes uv checks, with UV_CACHE_DIR the artifact root's",
     "verify/test_prompts_wall_suite.py": "quotes that command",
     "verify/test_prompts_wall_suite_e2e.py": "quotes that command",
+    "verify/fetch-inventory.yaml": "the fetch inventory (#1116) quotes an install line in an entry's match or why to "
+                                   "class it, the images/ Dockerfiles' pip installs among them (#1251); it runs none",
     "verify/test_wall_clock_burst_sister_e2e.py": "`uv run --frozen` on a sister repo's own uv.lock, whose hashes uv "
                                                   "checks, with UV_CACHE_DIR the artifact root's",
 }
