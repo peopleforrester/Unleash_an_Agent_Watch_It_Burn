@@ -44327,3 +44327,51 @@ accen-dev`, whose closing guards-off is this script.
 **Tests run.** `python3 verify/test_guards_all_both.py` (17 PASS). `verify/test_topic_guard.py` stops on a missing
 `gitops/ai-layer/guard-proxy/proxy.py` because the submodule is not checked out in this worktree. That is the same at
 the base and has nothing to do with this change. Validation runs the scoped suites.
+
+## 2026-11-09 · #1209 · run 19400 · The private cluster's cluster reads reach the public desk, with the token, and grey only rows labelled private
+
+**What was wrong.** Since #1158 the private cluster's deploys land on deployments.burritobot.co under "private", and the
+public desk's cluster reads mark only its own cluster's rows. But the private cluster's reader (#1050) posted its reads
+through desk-relay's `/cluster-read` to the private cluster's own desk, so nothing ever greyed a private row when Kyverno's
+remove-untrusted-room-workloads deleted that workload on watch-it-burn-private.
+
+**The change, as the issue proposed it.** The desk (`ticket_site.py`) gains `POST /remote-cluster-read`, gated exactly as
+`/remote-landed` is: the desk's plain 404 with no token configured, a 401 without the token in `X-Desk-Report-Token`,
+and with it the read is applied to the rows labelled `DESK_REMOTE_CLUSTER` alone. `record_cluster_read` now takes the
+cluster a read covers (this desk's own when none is named), so an in-cluster `/cluster-read` still marks only
+`DESK_CLUSTER`'s rows. The desk-remote-reports component's route file holds a second location, `/remote-cluster-read`,
+POST only, refused at the console without the header, at 512k, the desk's `MAX_READ_BODY`. desk-relay now sends
+`/cluster-read` to the public desk's `/remote-cluster-read` with the token, and answers 503 naming the Secret when it
+has none, as it does a deploy report.
+
+**What else changed with it.** The relay no longer reaches any in-cluster desk, so `DESK_LOCAL_URL` is gone from
+`desk_relay.py` and `desk-relay.yaml`, and the relay's NetworkPolicy drops its in-namespace TCP 8080 rule: it keeps TCP
+443 and DNS. The private cluster's own desk gets no deploy report from its own bot (workshop-mcp's `TICKET_SITE_URL` is
+the relay there), so it had no row a read could grey, and it gets no read now.
+
+**Tests.** `verify/test_desk_remote_reports.py` drives the real desk on localhost: with no token `/remote-cluster-read`
+is a 404; with one, each wrong or missing token is a 401 and marks nothing; with rows on both sides, one name landed on
+both, a private read marks private rows only and a community read community rows only, a failed or earlier read marks
+nothing, and a desk with neither label set keeps the two apart too. It reads both locations in the route file.
+`verify/test_public_desk.py` puts the real relay between the real workshop-mcp reader (`post_cluster_read`) and the real
+public desk: a read reaches `/remote-cluster-read` and no in-cluster desk, with no token it is a 503 and nothing is sent,
+a wrong token's 401 comes back, a read over 512k is refused at the relay, the private row the read no longer lists
+shows greyed on `/deployments.json`, and the community read that follows marks the community row and not the second
+private one. Both pass: `python3 verify/test_desk_remote_reports.py`, `python3 verify/test_public_desk.py`.
+`verify/test_bootstrap_chart_render.py`, the tools tier test that builds both components with kustomize, is left to
+validation.
+
+**Live check (read only, before promotion).** On watch-it-burn-private, desk-relay was up 11h with
+`DESK_LOCAL_URL=http://fake-ticket.agent.svc.cluster.local:8080`, and its last 200 log lines held 50
+`POST /cluster-read -> 200`, the reader's 30-second reads going to the private desk; the DeletingPolicy
+remove-untrusted-room-workloads was present. On watch-it-burn-community, fake-ticket ran with `DESK_CLUSTER=community`
+and `DESK_REMOTE_CLUSTER=private`. `POST https://support.burritobot.co/remote-cluster-read` without the token answered
+404 (no such route yet) and `/remote-landed` 401, and `deployments.burritobot.co/deployments.json` listed 0 rows. Nothing
+was changed on either cluster.
+
+**Not yet run on a cluster.** The clusters take this change from staging through Argo CD once hecaton promotes the run.
+Then: desk-relay's log reads `POST /cluster-read -> 200` with the public desk's answer, and a private deploy from outside
+registry.burritobot.co, removed by remove-untrusted-room-workloads once guardrails-on arms Kyverno on
+watch-it-burn-private, reads greyed, "removed at", under private on deployments.burritobot.co, while a community row
+stays as it was; then the cluster is left as found and the row removed with `/desk-forget`. The issue's third
+criterion waits on that check.
