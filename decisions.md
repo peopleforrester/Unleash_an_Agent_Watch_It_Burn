@@ -43395,3 +43395,56 @@ this change touches against its merge base `19d67630`. The commit had been rebas
 #1045 commits edit docs/floor.md's rebuild section and add a test of its commands. Rerun alone after the rewording:
 `test_cluster_provenance.py` (87 checks), `test_fleet_import_state.py`, `test_drift_floor.py` and `test_scope_tests.py`,
 each exit 0. Nothing that reads AWS changed, so the live test was not run again; its output above stands.
+## 2026-11-09 · #1229 · run 19305 · The room is at the start state: start-check exits 0; this run's beacon-reset still has no token
+
+**Where the issue stood.** Runs 19104 and 19132 are on staging (`051217f5`, `4dbe9503`): desk-reset ended `done`, and
+beacon-reset could not resolve the provisioning admin token, so at 01:47Z both beacon views read 321. Run 19132 escalated
+a `railway run` on the provisioning service, pinned to commit `1c7f7b49`, that runs beacon-reset and start-check with the
+service's own token. This run started from staging `f64d1e2d`, with nothing to port, and ran every command from
+`infra/terraform/fleet/` with the run's `accen-dev` session sourced. The `agent/terminal-auth` Secret was not read or
+written on either cluster.
+
+**What changed between runs.** At 04:04:09Z, before any reset, `./fleet.sh start-check` already exited 0. Both
+https://beacon.burritobot.co/beacon/view and https://agenticburn.com/beacon/view answered 200 with `data-count="0"`.
+The provisioning app keeps the count in its database, so a redeploy does not zero it: something posted `/beacon/reset`
+with the admin token between 01:55Z and 04:04Z, most likely run 19132's escalated act. This run cannot read that act's
+output, and no comment on #1229 or #1239 records it.
+
+**desk-reset**, on watch-it-burn-community, at 04:04:46Z, exit 0:
+
+```
+desk-reset: watch-it-burn-community (us-west-2), the public desk: every deploy row, fixed tickets kept
+  cleared 0 deploy row(s) and 0 filed ticket(s); 0 filed and 4 fixed ticket(s) kept
+desk-reset: done; deployments.burritobot.co lists no deploy, the room's or the presenters'
+```
+
+`GET /deployments.json` answered `[]` with 200 on deployments.burritobot.co and on
+deployments-burritobot-private.burritobot.co, which is still served. `GET https://support.burritobot.co/ticket?id=HC-666`
+answered 200 with id HC-666, subject "card keeps failing at checkout", status open.
+
+**beacon-reset**, at 04:04:52Z, exit 1, posting nothing:
+
+```
+beacon-reset: FAIL cannot resolve the provisioning admin token; the beacon count was not reset. It comes from
+  an exported WIB_ADMIN_TOKEN, or the Railway variables of watch-it-burn-provisioning on a host logged in
+  to Railway (railway login), or ADMIN_TOKEN in ~/secrets/projects/watch-it-burn-provisioning.env
+```
+
+Nothing has changed since run 19104: `railway whoami` printed "Unauthorized. Please login with `railway login`", there
+is no secrets env file, no `WIB_ADMIN_TOKEN` is set, and the AWS session's only secret is `watch-it-burn/datadog`. #1239,
+filed by run 19104 with this same output, tracks the token route a run needs. No token was printed.
+
+**start-check** right after the two resets, at 04:04:52Z, exit 0:
+
+```
+  PASS  https://deployments.burritobot.co/deployments.json lists 0 deploy rows
+  PASS  https://deployments-burritobot-private.burritobot.co/deployments.json lists 0 deploy rows
+  PASS  https://beacon.burritobot.co/beacon/view reads 0 beacons
+start-check: every deployments page lists no deploy and the beacon view reads zero
+```
+
+**Not yet run on a cluster.** `./fleet.sh beacon-reset` from a run, ending `beacon-reset: done; the beacon view reads
+zero`. It needs #1239's token route, and it is that issue's third criterion as well. The beacon count is already zero,
+so the room does not wait on it. Nothing in the repo was changed apart from this entry.
+
+**Tests run.** None besides the prose gate: the change is this entry alone.
