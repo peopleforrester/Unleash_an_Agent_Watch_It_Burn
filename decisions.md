@@ -48503,7 +48503,7 @@ What they found, and how it is classed:
 - The rest name the commands and run none: the Backstage README's by-hand steps, and the strings and checks in
   `test_c1_dns_exfil.py`, `test_ci_chromium_libs.py`, `test_images_lock.py` and `test_no_docker_hub.py`.
 
-Totals after the change: 971 call sites in 254 files. By family, `summary` counts 5 pinned and 11 none lines for
+Totals after the change: 972 call sites in 255 files. By family, `summary` counts 5 pinned and 12 none lines for
 `dockerfile-from`, and 2 pinned, 8 live and 11 none for `apt`; a line counts once for each family it matches. `python3 verify/fetch_inventory.py check` reads "every call site classed", with no NOTE.
 
 **Tests.** `verify/test_fetch_inventory.py` gains a sample for each family, the forms above that are found and the
@@ -48521,5 +48521,14 @@ submodule checked out, which the first run lacked), `test_ghcr_pull.py`, `test_i
 `test_kyverno_counter_fix.py`, `test_plan_policy.py`, `test_playwright_browsers.py`, `test_verify_harness.py`,
 `test_workflow_artifact_cache.py`, `test_walkthrough_no_state.sh`, `test_package_cache.py` and `test_scope_tests.py`.
 All passed. The whole Test and E2E commands are left to validation.
+
+**The second run's gate failure (run 19674).** Validation failed `verify/test_fetch_inventory.py` on
+`verify/test_wib_pins.py:93`, a line the run never saw: #1282 added that test to staging (commit dcaa09d7) after this
+draft's scan was taken, and its shell fixture string holds `\nFROM ghcr.io/{WIB}-next@{D}\n`, which the new
+`dockerfile-from` family finds by design, a FROM in capitals after `\n` in a test string. The family is right and the
+line runs nothing, so run 19677 gives the file an entry of class none (the test parses the string for its digest pin;
+nothing is built or pulled), which brings the totals to 972 sites in 255 files and 12 none lines for `dockerfile-from`.
+`test_fetch_inventory.py` and `test_no_docker_hub.py` (which reads the new why) pass, and `fetch_inventory.py check`
+reads "every call site classed". The whole Test command is left to validation.
 
 **Live check.** None: the change touches only files under verify/ that no cluster runs. No dependency was added.
