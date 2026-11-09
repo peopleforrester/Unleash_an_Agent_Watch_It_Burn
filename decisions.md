@@ -50076,3 +50076,32 @@ Then, on each: the agent's GETs on agentgateway :3001 are answered 405 (`kubectl
 deploy/agentgateway -c agentgateway | grep 'http.method=GET'`), the agent's evil-mcp GETs on :3003 no longer end at 30
 seconds (`-c agentgateway-c7`), and `PRIVATE_CONTEXT=watch-it-burn-private COMMUNITY_CONTEXT=watch-it-burn-community
 python3 verify/test_coc_floor_probes_live.py` runs green on both. The next run on #1303 runs those three.
+
+## 2026-11-10 · #1304 · run 19823 · test_backups.py no longer hangs on the host's load or on the shared temp directory
+
+The tools-tier gate on staging 4e4ee5c5 failed the offline suite on `verify/test_backups.py` alone (exit 1). The gate's
+log, under `/var/lib/hecaton/gate/`, cannot be read from a run, so which check failed is not known. The test passed
+here every time: alone, eight copies at once, three times beside 48 busy loops, after every offline test that sorts
+before it in the suite's order, and with no environment but HOME, PATH and TMPDIR. Nothing it reads changed between
+4e4ee5c5 and staging d14467fc. Two of its checks hung on inputs the test did not own, so both now depend on the test
+alone:
+
+- "every console LB is read at once" timed 17 lookups of 0.4 s each and asked for under 2.5 s. That is a bound on the
+  host's load, and the host runs at load 12 on 16 cores with the tier's four checks and other runs beside it. Each
+  lookup now waits at a `threading.Barrier` until all 17 are in flight (30 s timeout), and the check asks that the
+  barrier held and every LB came back. One after another, the first wait breaks the barrier and every lookup returns
+  None; run with `ThreadPoolExecutor(max_workers=1)` forced, the barrier broke and no LB was read, so the check fails
+  on the fault it is there for.
+- "a dry run writes no roster file" listed `backups-*` in the host's temp directory, where any process may write. The
+  dry runs, in the test and in each `backups.py` it starts, now get a temp directory inside the test's own, and the
+  check lists only that one.
+
+The failing check is not known, so these two are the inputs this run found the test did not own, not a proven cause.
+The test does read the proxy variables too: with `http_proxy` set to a dead port, its seven local self-check checks
+fail. That is not changed here, since nothing shows the gate sets a proxy and no other loopback test here guards
+against one.
+
+**Tests.** `python3 verify/test_backups.py`: ALL PASS, once. Not run: `bash verify/run-e2e-tools.sh` and the scoped
+Test command, left to validation, which reruns `test_backups.py` in the gate.
+
+**Live check.** None: the change touches only `verify/test_backups.py` and this file, which no cluster runs.

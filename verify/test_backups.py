@@ -319,12 +319,18 @@ check("a drill on the roster cluster promotes b01 with every console healthy",
 check("and leaves the private bot alone", routed("burritobot-private.agenticburn.com") == "lb-private:443")
 
 print("== a region outage does not stall or blind the watcher ==")
-import time as _t  # noqa: E402
 w = watcher()
-w.lb_of = lambda c: (_t.sleep(0.4), LBS.get(c.name))[1]
-t0 = _t.monotonic(); w.refresh(); took = _t.monotonic() - t0
-check("every console LB is read at once, not one after another (17 slow lookups in well under 17 x 0.4 s)",
-      took < 2.5, f"{took:.1f}s")
+# Every lookup waits at a barrier until all of them are in flight, so the check holds on how many ran at once, not on
+# a wall-clock bound: `took < 2.5 s` for 17 lookups of 0.4 s each hung on the host's load, and the gate on staging
+# 4e4ee5c5 failed this test on a host at load 12 with four checks running (#1304). One after another, the first
+# lookup's wait breaks the barrier, every lookup returns None, and the check fails.
+_n_lookups = sum(len(p) for p in pools.values())
+_all_in_flight = threading.Barrier(_n_lookups, timeout=30)
+w.lb_of = lambda c: (_all_in_flight.wait(), LBS.get(c.name))[1]
+w.lbs.clear(); w.refresh()
+check(f"every console LB is read at once, not one after another (all {_n_lookups} lookups in flight together)",
+      not _all_in_flight.broken and all(w.lbs.get(c.name) == LBS.get(c.name) for p in pools.values() for c in p),
+      str({n: lb for n, lb in w.lbs.items() if lb != LBS.get(n)}))
 w.lb_of = lambda c: None if c.region == "us-east-2" else LBS.get(c.name)
 w.refresh()
 check("a lookup that fails keeps the LB already known", w.lbs["watch-it-burn-community-b01"] == LBS["watch-it-burn-community-b01"])
@@ -506,7 +512,11 @@ check("a converge that repairs it makes the region green", rc_repaired == 0)
 check("a converge that cannot repair it leaves the region failed", rc_broken == 1 and ran_broken == ["instructors", "converge"])
 
 print("== up and down, dry run: one fleet.sh run per region, standbys kept out of the router ==")
-# A live `backups.py up` on this host writes its own backups-* roster files; only the dry runs' would be a fault.
+# A live `backups.py up` on this host writes its own backups-* roster files; only the dry runs' would be a fault. The
+# dry runs below, in this process and in each backups.py they start, get a temp directory of the test's own, so the
+# check reads only what they wrote and never another process's files in the host's shared one (#1304).
+_own_tmp = T / "tmp"; _own_tmp.mkdir()
+os.environ["TMPDIR"] = str(_own_tmp); tempfile.tempdir = str(_own_tmp)
 _tmp_before = {p.name for p in pathlib.Path(tempfile.gettempdir()).iterdir() if p.name.startswith("backups-")}
 # A lab VPC directory holding the home region's state and no us-east-2 one, whatever is deployed today: #643
 # applied the real us-east-2 and us-east-1 VPCs on 2026-10-31, and the refusal below is about a region without one.
