@@ -46000,3 +46000,45 @@ verify/fetch-inventory.yaml said 5. The entry now reads 6 lines, class loopback,
 Run 18886 ran the tests that read build.sh and missed this one, which reads every test's call sites. Tests run here:
 test_fetch_inventory.py, `fetch_inventory.py check`, test_scope_tests.py and test_joker_build_digest.py (31 PASS, on
 the branch as rebased onto staging), all green. No live check: the inventory is read by no cluster.
+## 2026-11-09 · #1234 · run 19478 · A failed acquire keeps its own error through cleanup, and run_held and `hold --with-peer` say NOT RUN on LockUnavailable
+
+**What changed.** Run 18850 (#1053) found two gaps in `verify/guard_lease.py`, and this change closes both.
+
+- `hold()` cleans up after an acquire that failed for a reason other than a busy lock by calling `release(unsure=True)`,
+  which reads the Lease again. When that read failed for the same reason (a context missing from the kubeconfig), its
+  "could not read Lease" error replaced the acquire's "could not create Lease" error. The cleanup now runs inside its own
+  try: a cleanup failure is logged, naming the context and the cleanup's error, and the acquire's own error is the one
+  raised. A Lease the acquire may have written still frees itself LEASE_S seconds later, as before.
+- `run_held` caught only LeaseBusy, so with `with_peer` a LockUnavailable from `hold_switch` (a peer with no context in
+  the kubeconfig, or a guardrails-peer Secret it cannot read) ended a live check in a traceback. It now prints
+  `FAILED: NOT RUN, the guard lock could not be taken ...` naming the cluster and returns False, and its callers then
+  exit non-zero as they do for a busy lock. It now takes the lock through an ExitStack and catches the lock's errors
+  only around that step, so a LeaseBusy or LockUnavailable that the check's body raises propagates, not read as "no
+  check ran".
+- `guard_lease.py hold --with-peer` now catches LockUnavailable, prints one `guard-lease: NOT RUN: ...; nothing was run`
+  line and exits UNAVAILABLE_EXIT (2, the KubeCon probe's NOT RUN code for the same case) with the command never
+  started.
+
+**Tests.** `verify/test_guard_lease.py` gained five checks: `hold` on a missing context raises "could not create Lease"
+naming the context and logs the cleanup's failed read; `hold_switch`'s LockUnavailable for a missing peer carries the
+create's error and not the read's; `run_held(with_peer=True)` over the real `hold_switch` with a missing peer returns
+False, runs and checks nothing, prints FAILED naming the peer and leaves no Lease; a LockUnavailable raised by the body
+propagates and the Lease is released; and the CLI `hold --with-peer`, with a fake kubectl that answers the peer's
+context as missing, prints one NOT RUN line, exits 2 with no traceback, runs nothing and leaves no Lease. Against
+the base `guard_lease.py` the first four fail and the CLI check stops on the missing UNAVAILABLE_EXIT; with the change
+the whole file passes. Only that test file was run; the whole Test and E2E commands were not, and validation runs
+the tests that read the changed files. No dependency was added.
+
+**Live check.** Skipped: the change touches only `verify/guard_lease.py` and its test, and no cluster runs them.
+
+**Run 19478's gate failure, and run 19492.** Run 19478 also committed one line of `verify/scope-map.yaml` that
+#1220's desk-host change left out (`verify/support_desk_hosts.py` among `test_desk_ticket_live.py`'s reads), since
+`verify/test_scope_tests.py` failed on it at that base. Touching that entry made validation run
+`test_desk_ticket_live.py`, which at that base was itself broken by #1224's one-desk change: it read
+`desk_ticket_live.PUBLIC_DESK`, which no longer exists (`AttributeError ... Did you mean: 'PUBLIC_BOT'?`). Nothing in
+this change caused it. Staging fixed both in 964892e5 (#1257), the map line included, so run 19492 rebased this change
+onto staging, dropped the map commit, and this entry is the one commit's record. `python3 verify/test_guard_lease.py`
+and `verify/test_scope_tests.py` ran again on the rebased tree; `test_desk_ticket_live.py` ran too, as the test that
+failed the gate. The scoped `run-tests.sh` (157 of 422 offline tests) ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0, and the scoped
+`run-e2e-tools.sh` (the offline suite and the 10 tier tests that read `verify/guard_lease.py`) ended `ALL E2E TOOLS TIER
+CHECKS GREEN`, exit 0, in 6m23s.
