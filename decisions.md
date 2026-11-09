@@ -44250,3 +44250,35 @@ runs. Run 18817's entry above holds the live check on watch-it-burn-private and 
 
 **Tests run.** `python3 verify/test_fetch_inventory.py` (exit 0, "All fetch inventory checks passed") and
 `python3 verify/test_scope_tests.py`. The scoped Test and E2E commands are left to hecaton's validation.
+## 2026-11-09 · #1204 · run 19388 · Run-of-show segments 2 to 5 reach each seeded trace from its slide's link, not a Datadog tab's saved view
+
+#1139 rewrote the Night Before step "Seed the stage's Datadog traces" around the deck's four Datadog links: the
+presenter reaches each seed by searching its session id, `wib-stage-<key>-<stamp>`, on Past 7 Days, from the filtered
+Agent Observability link or the Datadog home page. The segments still spoke of the old setup. They now say the same
+as that step:
+
+- "Datadog on stage": the room's `burritobot-public` tab stays, and the presenters' traces open from the deck, each
+  seed searched by its session id on Past 7 Days; "one saved view per challenge" is gone. "The trace view without
+  Datadog" names the pre-seeded traces reached from each slide's link, and its C6 line names the `c3-fixed` seed.
+- Segment 2's trace step, segment 3's step 4, segment 4's `#/48` step and segment 5's `#/68` step each search their
+  attack seed's session id on Past 7 Days and name the Night Before step. Step 6's RBAC and KubeArmor sets find
+  `c1-fixed` and `c2-fixed` the same way, on the tab their challenge's link opened. Segment 4 names `c3-fixed` as the
+  same search with its own key and `c3-pii` in APM's traces, since a refused prompt reaches no model; segment 5 names
+  `c4-fixed` the same way. The segments table's rows 4 and 5 say "the seeded trace its link opens" for the tab.
+
+The seed keys (`c1-attack` to `c4-fixed`, and `c3-pii`) stay, so the tests that read them hold.
+
+**Tests.** `verify/test_ros_seg4_flow.py` renames its three "saved view" facts to seeds, reads "`c3-pii` in APM's
+traces" for "`c3-pii` in Trace Explorer", adds the c3-attack session id on Past 7 Days, and reads row 4's "the seeded
+trace its link opens (`#/48`)". `verify/test_stage_trace_slides.py` gains a section for #1204: nothing before the
+Night Before names a saved view or a Datadog Challenge N tab, and each of the four attack steps names its seed's
+`wib-stage-<key>-<stamp>`, Past 7 Days and the step; each check is shown failing with the old Challenge 3 wording put
+back and with Challenge 4's session id removed. `verify/test_kubecon_seg4_flow.py`, which the issue names, reads the
+presenter page `gitops/ai-layer/web/kubecon.html` for those labels, not the run-of-show, so it is unchanged: the
+page is outside this issue's criteria and still says "Datadog Challenge N tab", which `verify/test_instructor_brief.py`
+also holds. A grep of `verify/` and `scripts/` for every four-word run of the removed lines finds no other test that
+reads them. Run alone, each exit 0: `test_stage_trace_slides.py`, `test_ros_seg4_flow.py`,
+`test_kubecon_seg4_flow.py`, `test_instructor_brief.py`; `scope_tests.py check` reads 0 problems and the prose gate
+passes.
+
+**Live check.** Skipped: the change touches only `facilitation/`, `verify/` tests no cluster runs, and this file.

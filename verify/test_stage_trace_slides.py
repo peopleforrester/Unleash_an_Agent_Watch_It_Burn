@@ -176,6 +176,41 @@ need(flat(ros), c1_ros, ROS_REL)
 check("a run-of-show whose Challenge 1 step no longer says the Secret read fails",
       bool(ros_drift(flat(ros).replace(c1_ros, "the record in the trace"), SLIDES)))
 
+print("== the segments reach each seed from its slide's link, as the Night Before step says (#1204) ==")
+# #1139 put the deck's four Datadog links in place of the old saved views; the segments name no saved view and no
+# per-challenge Datadog tab, and each attack step searches its seed's session id on Past 7 Days, naming the step.
+NIGHT_BEFORE, SEED_STEP = "\n## Night Before\n", "**Seed the stage's Datadog traces (#648)"
+OLD_SETUP = re.compile(r"saved view|Challenge \d tab\b")
+need(ros, NIGHT_BEFORE, ROS_REL)
+need(ros.split(NIGHT_BEFORE, 1)[1], SEED_STEP, f"{ROS_REL}'s Night Before")
+
+
+def old_setup(text: str) -> list[str]:
+    """Each place before the Night Before that still names a saved view or a Datadog Challenge N tab."""
+    return OLD_SETUP.findall(flat(text.split(NIGHT_BEFORE, 1)[0]))
+
+
+def unsearched(text: str, slides) -> list[str]:
+    """Each attack step that does not search its seed's session id on Past 7 Days, as the Night Before step says."""
+    return [f"{seed}: its step names no `wib-stage-{seed}-<stamp>`, Past 7 Days or the seed step"
+            for _, _, seed, _, _, (start, end) in slides
+            if not all(w in ros_step(text, start, end) for w in
+                       (f"`wib-stage-{seed}-<stamp>`", "Past 7 Days", "\"Seed the stage's Datadog traces\""))]
+
+
+check("no segment names a saved view or a Datadog Challenge N tab", not old_setup(ros), str(old_setup(ros)))
+check("each attack step searches its seed's session id on Past 7 Days, naming the Night Before step",
+      not unsearched(ros, SLIDES), "; ".join(unsearched(ros, SLIDES)))
+c3_seed = "That seed, `c3-attack`, shows"
+need(flat(ros), c3_seed, ROS_REL)
+check("a segment with the Challenge 3 tab's saved view put back fails",
+      bool(old_setup(ros.replace("That\n  seed, `c3-attack`, shows",
+                                 "The Datadog Challenge 3 tab's first saved view, `c3-attack`, shows"))))
+c4_search = "`wib-stage-c4-attack-<stamp>`"
+need(ros, c4_search, ROS_REL)
+check("a Challenge 4 step without its session id fails",
+      bool(unsearched(ros.replace(c4_search, "the seed"), SLIDES)))
+
 print("== judge_spans holds the trace to the order, on start_ns ==")
 must = ["read_support_ticket", "deploy_app"]
 in_order = [span("deploy_app", 30), span("read_support_ticket", 20), span("invocation", 10)]  # newest first

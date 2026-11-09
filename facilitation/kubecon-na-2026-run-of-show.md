@@ -940,8 +940,8 @@ beats give way first.
 | 1 | 3 | M | The title (no QR), a hello, why a burrito bot, "You get access to an insecure BurritoBot.", the privacy slide "Nothing you type here is private.", whose "THE PROMPT WALL" link opens the prompt wall `prompts.burritobot.co`, then "BurritoBot!" with its QR and `attackme.burritobot.co`, wide open, whose link opens the public bot; during the opening minute of play, an optional quick tour of the public chat page, then the Prompt Wall tab, then back to the deck | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 5 | M+W | Challenge 1: the two-slide tee-up, the challenge slide and the public bot, the prompt wall optional during play, then the hint slide naming Ophelia Thorn; Whitney's live attack on the private bot, then its trace in Datadog, opened from the hint slide's "Ophelia Thorn" link (the Secret read); no fix here; it ends on the OWASP Top 10 for LLM Applications, opened from `genai.owasp.org/llm-top-10/`, naming LLM02 and LLM06 | Pulls the CEO's home address out of the bot | 4, 7 |
 | 3 | 5 | W+M | Challenge 2, the Kubernetes catch-all: "It is time for Challenge 2!", "Everything you already knew about Kubernetes security", "BurritoBot has none of these things.", the challenge sentence on slide 17, then the three attacks built up one per slide on slides 18 to 20, where play starts ("pick just one attack") and the prompt wall goes up after a minute; a hint slide for each attack (slides 21 to 26), whose "deploy" link opens the deployments wall, and the recap of all three with their hints and one more minute of play (slide 27), the beacon view opened from the `agenticburn.com/beacon` link; Whitney's live attack on the private bot, the recipe read, then its pre-seeded trace `c2-attack`, the same read; then, depending on #774, "Let's turn on Kubernetes guardrails." (slide 28), whose link opens the admin terminal, where `guardrails-on` arms RBAC, Kyverno admission, KubeArmor and the egress NetworkPolicy on both clusters; then "Try your attacks again." (slide 29), the room resetting its bot and retrying its saved prompts, and one set per guardrail on slides 30 to 42 (RBAC, an admission policy, runtime security, NetworkPolicy), each recalling its attack, naming the fix and showing its YAML | Deploys a public image, reads the recipe file, posts to the beacon; after the switch (#774), tries Challenges 1 and 2 again and is stopped | 3, 4, 5, 7 |
-| 4 | 7 | W+M | Challenge 3, `#/43` to `#/64`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then its trace on the Datadog Challenge 3 tab (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/56` to `#/64`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
-| 5 | 5 | M+W | Challenge 4, `#/68` to `#/98`: BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/65` and `#/66`); "Find the poisoned MCP tool." (`#/67`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/68`), then Michael's live weather ask on the private bot and its trace on the Datadog Challenge 4 tab; LLM03, Supply Chain (`#/69`); "Let's turn on an MCP gateway." (`#/70`), `guard-mcp-on` on the private bot; "Try your attack again." (`#/71`), the room's retry depending on #1132; the MCP gateway, agentgateway in the notes (`#/72` and `#/73`); the two diagrams, one weather question without and then with the gateway (`#/74` to `#/96`); and its rule before and after (`#/97` and `#/98`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
+| 4 | 7 | W+M | Challenge 3, `#/43` to `#/64`: BurritoBot's support desk (`#/43`), its QR code, `support.burritobot.co`, the room's first look at it (`#/44`), where a ticket is filed and looked up by its number and none can be browsed; "Let's file a ticket." (`#/45`), an ordinary ticket the presenters file on the one desk in their reserved range, HC-900 to HC-999, that the admin bot reads back by its number and the room's bot can read too; the challenge sentence (`#/46`), its "deploy" opening the room's deployments page, the deployments page and the prompt wall optional during play; the hint, HC-666 (`#/47`), whose white text the presenters select live to show, then their live attack on the private bot and its deployment landing on the one deployments page, `deployments.burritobot.co`, tagged with its cluster; Kyverno, at Deny since segment 3's switch (#774), admits it from the internal registry; then the seeded trace its link opens (`#/48`); LLM01, Prompt Injection (`#/49`); "Let's turn on some guardrails." (`#/50`), whose link opens the admin terminal, where `guard-agency-on`, then `guard-input-on`, run on the private bot; "Try your attack again." (`#/51`), the room's retry on the public bot, which both commands reach (#1132); "Pesky RBAC!" and the optional Kyverno question (`#/52`), the Role before and after (`#/53` and `#/54`); LLM Guard, with products that do the same (`#/55`); the nine-slide architecture diagram, a request's path, where LLM Guard checks the ticket and the dead ticket (`#/56` to `#/64`) | Writes its own injection ticket or asks BurritoBot to read HC-666, then tries again | 4, 5, 6, 7 |
+| 5 | 5 | M+W | Challenge 4, `#/68` to `#/98`: BurritoBot gets its tools from MCP servers, and not every one can be trusted (`#/65` and `#/66`); "Find the poisoned MCP tool." (`#/67`), the prompt wall optional during play; the hint, "Ask BurritoBot what tools it has." (`#/68`), then Michael's live weather ask on the private bot and the seeded trace its "tools" link opens; LLM03, Supply Chain (`#/69`); "Let's turn on an MCP gateway." (`#/70`), `guard-mcp-on` on the private bot; "Try your attack again." (`#/71`), the room's retry depending on #1132; the MCP gateway, agentgateway in the notes (`#/72` and `#/73`); the two diagrams, one weather question without and then with the gateway (`#/74` to `#/96`); and its rule before and after (`#/97` and `#/98`) | Hunts for the poisoned tool, then tries again | 2, 4, 6, 7 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
@@ -967,10 +967,14 @@ their 7 and 5 minutes, so the talk runs past its 30 minutes unless something is 
 two diagram walks are where the minutes went; each segment's Timing paragraph gives its
 slides.
 
-**Datadog on stage** (#648). Whitney keeps two tabs: `burritobot-public` is the
-room, `burritobot-private` is the presenters, so the room's volume never buries the
-trace being shown. Every trace she shows is pre-seeded the night before, one saved
-view per challenge in presentation order, so nobody waits for a span to arrive.
+**Datadog on stage** (#648). The room and the presenters are kept apart: the
+`burritobot-public` tab Whitney keeps is the room, and the presenters' traces open
+from the deck, so the room's volume never buries the trace being shown. Every trace
+shown is seeded the night before, each on its own session, so nobody waits for a span
+to arrive. Each challenge's slide that shows its trace links to Datadog, and from that
+link the presenter searches the seed's session id, `wib-stage-<key>-<stamp>`, on Past
+7 Days and clicks the one trace, as the Night Before step "Seed the stage's Datadog
+traces" says.
 Datadog comes up when it explains the attack (the tool call, the Secret read, the
 policy block), not as a product tour. If the Datadog side is not ready, the Grafana
 view on the private cluster carries the same beats
@@ -995,8 +999,9 @@ more (#687), so this is where the surface is decided.
 
 **Which surface is shown.** Decide it the night before and say it on stage:
 
-- **Datadog reachable:** the pre-seeded `burritobot-private` views in Whitney's
-  sandbox org (#629), and the `burritobot-public` tab for the room's own prompts.
+- **Datadog reachable:** the pre-seeded `burritobot-private` traces in Whitney's
+  sandbox org (#629), each reached from its slide's link by its session id, and the
+  `burritobot-public` tab for the room's own prompts.
 - **Datadog unreachable:** the Grafana view on the private cluster, which reads Tempo and
   needs no Datadog key (#500):
   `https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`. Login
@@ -1018,7 +1023,7 @@ cluster. The panels carry the internal ids:
 - **C6:** Challenge 3, the HC-666 ask sent after `guard-input-on`. The prompt is
   innocent, so the model is called and there are input tokens: open the trace and
   `read_support_ticket` returns the guard's withheld notice, with no `deploy_app`
-  after it. This is the same trace as segment 4's Datadog Challenge 3 tab, and the
+  after it. This is the same ask as segment 4's `c3-fixed` seed in Datadog, and the
   Grafana C6 panel lists exactly these turns (#709).
 - **C7:** Challenge 4, the weather-tool ask that never reached
   `read_internal_config`. The panel beside it lists the calls that did reach it; the
@@ -1169,6 +1174,9 @@ real-looking home address to chat.
   Datadog's Agent Observability traces filtered to the admin cluster in a new tab
   (`https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+k8s.cluster.name%3Aburritobot-private`).
   Show the pre-seeded Challenge 1 trace where it works, the Secret read in the trace.
+  The seed was sent the night before, so search its session id,
+  `wib-stage-c1-attack-<stamp>`, on Past 7 Days and click the one trace, as the Night
+  Before step "Seed the stage's Datadog traces" says.
 - **No fix in this segment (#776, 2026-11-01 review):** Challenge 1 no longer runs a
   fix of its own, so no RBAC command is run here. RBAC moves into the Challenge 2
   guardrails switch in segment 3 (#774): the one command that turns on RBAC, Kyverno
@@ -1405,13 +1413,16 @@ in the Run-through record's Segment 3 row.
    no recon first. On `/kubecon` it is the second prompt in "Read the recipe off the
    filesystem", the one marked as the presenters' send. It lands, since the private
    cluster's guardrails are off too. Move on whether or not it works. Then open Datadog
-   and show the pre-seeded Challenge 2 trace (#648, #843): the Datadog Challenge 2 tab's
-   first saved view, `c2-attack`, is the same recipe read, with the `run_shell` call
-   that greps `/tmp/burrito-data` and the recipe it hands back. The live attack and the
+   from the slide's link and show the pre-seeded Challenge 2 trace (#648, #843): search
+   its session id, `wib-stage-c2-attack-<stamp>`, on Past 7 Days and click the one
+   trace, as the Night Before step "Seed the stage's Datadog traces" says. That seed,
+   `c2-attack`, is the same recipe read, with the `run_shell` call that greps
+   `/tmp/burrito-data` and the recipe it hands back. The live attack and the
    seed are the same ask, so what the room just watched is what the trace shows. The
    recipe read is also the one attack that leaves nothing behind: a public image stays
-   deployed, and a beacon post moves the count the room watches. The same tab's second
-   saved view, `c2-fixed`, is for step 6's KubeArmor set (slides 37 to 39).
+   deployed, and a beacon post moves the count the room watches. Its fixed seed,
+   `c2-fixed`, is the same search with its own key on the same tab, for step 6's
+   KubeArmor set (slides 37 to 39).
 5. **One switch, depending on #774 (slide 28), then the room's retry (slide 29).**
    Slide 28 reads (rounds-agenticburn#77, Whitney's walk on 2026-11-07):
 
@@ -1462,8 +1473,9 @@ in the Run-through record's Segment 3 row.
      `verbs: ["get"]`. agent-sa's Role reads one Secret by name, the agent's own
      `workshop-agent` config Secret, so the CEO's record is out of reach. It has no
      fallback script; the room's own Challenge 1 ask, coming back Forbidden after
-     step 5, is the proof. If the room's retry is not on screen, the Datadog
-     Challenge 1 tab's `c1-fixed` view is the same ask after the switch:
+     step 5, is the proof. If the room's retry is not on screen, the `c1-fixed` seed
+     is the same ask after the switch, found by its session id,
+     `wib-stage-c1-fixed-<stamp>`, on Past 7 Days on the tab segment 2's link opened:
      `get_vault_entry` is still in the trace, its result Forbidden, and the record is
      not in the reply (#855).
    - **Kyverno, "an admission policy", slides 34 to 36.** Slide 34 recalls the
@@ -1483,8 +1495,9 @@ in the Run-through record's Segment 3 row.
      and its notes name KubeArmor. Slide 39 shows the `block-recipe-snoop` policy:
      `/tmp/burrito-data/config/legacy/` and everything under it, `action: Block`.
      C3 read the recipe off the filesystem: KubeArmor. Blocked inline in the kernel by
-     KubeArmor, and caught by KubeArmor's own alert for the denied attempt. The Datadog
-     Challenge 2 tab's `c2-fixed` view is the same recipe ask after the switch: the
+     KubeArmor, and caught by KubeArmor's own alert for the denied attempt. The
+     `c2-fixed` seed, found by its session id, `wib-stage-c2-fixed-<stamp>`, on Past 7
+     Days on the tab step 4's link opened, is the same recipe ask after the switch: the
      `run_shell` call is still in the trace, and the recipe is not in the reply. One command
      shows prevention and detection doing different jobs:
      `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
@@ -1636,12 +1649,15 @@ its 7 minutes.
   opens Datadog's Agent Observability traces filtered to the admin cluster, in its own
   tab, the same link as `#/11`'s "Ophelia Thorn". Say: "Wait. How did that support
   ticket cause BurritoBot to deploy something?! Let's look at the trace to see the
-  agent's reasoning." Show the pre-seeded Challenge 3 trace (#648), the Datadog
-  Challenge 3 tab's first saved view, `c3-attack`: the `read_support_ticket` span
-  returning HC-666, then the `deploy_app` call it leads to. After the trace, say: "Do
-  you know the name for this type of attack?" The same tab keeps two more saved views
-  for after the fix: `c3-fixed`, the same ask after both commands, the guard's withheld
-  notice with no `deploy_app` after it; and `c3-pii` in Trace Explorer, the input
+  agent's reasoning." Show the pre-seeded Challenge 3 trace (#648): from the link,
+  search its session id, `wib-stage-c3-attack-<stamp>`, on Past 7 Days and click the
+  one trace, as the Night Before step "Seed the stage's Datadog traces" says. That
+  seed, `c3-attack`, shows the `read_support_ticket` span returning HC-666, then the
+  `deploy_app` call it leads to. After the trace, say: "Do you know the name for this
+  type of attack?" Two more seeds are for after the fix, each the same search with its
+  own key: `c3-fixed`, on the same tab, the same ask after both commands, the guard's
+  withheld notice with no `deploy_app` after it; and `c3-pii` in APM's traces, since a
+  refused prompt reaches no model and so is not in Agent Observability, the input
   guard's double duty below: the `/chat` root span decided by `input_classifier`, zero
   tokens, no agent span, and none of the neighbor's card, phone or e-mail anywhere in
   it.
@@ -1748,7 +1764,8 @@ its 7 minutes.
   scanner with the same four patterns attackme's collector scrubs (#647, #648). Names
   and street addresses are not caught. The same `guard-input-on` arms it, and the
   reply names the scanner: `blocked by the input guardrail: Regex, risk 1.00`. The
-  Datadog Challenge 3 tab's `c3-pii` view shows it.
+  `c3-pii` seed shows it, in APM's traces, found by its session id as the Night Before
+  step "Seed the stage's Datadog traces" says.
 - **Delivers:** point 4, point 5 (least privilege), and point 6 (pre-inference
   prompt analysis).
 - **Hand-off:** "Both of those talked the bot out of it, or caught it at the
@@ -1807,8 +1824,9 @@ and `guard-mcp-on` with its reload delay. See the total under "The segments, in 
   short. Then say: "Wait. How did checking the weather cause BurritoBot to share the
   super duper secret recipe? Leaking this leads to company ruin! Let's look at the
   trace to see the agent's reasoning." Click "tools" and show the pre-seeded Challenge
-  4 trace on the Datadog Challenge 4 tab: `get_weather`, then a call to
-  `read_internal_config` that nobody asked for. After the trace, say: "Do you know the
+  4 trace, found from that link by its session id, `wib-stage-c4-attack-<stamp>`, on
+  Past 7 Days, as the Night Before step "Seed the stage's Datadog traces" says:
+  `get_weather`, then a call to `read_internal_config` that nobody asked for. After the trace, say: "Do you know the
   name for this type of attack?"
 
   The solve, for the presenters only: the weather tool comes from an MCP server nobody
@@ -1830,8 +1848,9 @@ and `guard-mcp-on` with its reload delay. See the total under "The segments, in 
   tool was never registered. Give the gateway the measured reload delay before
   re-asking. Measured reload delay: not measured yet (the Night Before C7 step fills it
   in). Optionally, send the same weather prompt on the admin bot: the forecast comes
-  back, and the recipe doesn't. The Challenge 4 tab shows the fixed trace, without the
-  `read_internal_config` call.
+  back, and the recipe doesn't. The `c4-fixed` seed, the same search with its own key
+  on the tab "tools" opened, shows the fixed trace, without the `read_internal_config`
+  call.
 - **The retry (`#/71`).** It reads "Try your attack again." Say: "Reset your bot and
   ask BurritoBot about the weather again. This time the poisoned tool isn't there to
   call." The room's retry works only once #1132 is built: it makes `guard-mcp-on`
