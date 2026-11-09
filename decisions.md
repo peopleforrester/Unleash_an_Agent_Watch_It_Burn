@@ -46165,3 +46165,18 @@ burritobot-private watch-it-burn-private accen-dev`, then `python3
 docs/research/2026-11-09-unsampled-polls/poll_spans.py --context watch-it-burn-private --since <that time>`, which
 should print `tasks/get polls 0`, gateway and agent poll spans 0, and PASS, and rerun `CONTEXT=watch-it-burn-private
 python3 verify/one_root_probe.py`.
+
+## 2026-11-09 · #1225 · run 19477 · run 19452's draft failed the tests gate on the fetch inventory, now classed
+
+**Why run 19452 did not land.** Validation's `bash verify/run-tests.sh` failed one test, `test_fetch_inventory.py`:
+`verify/c1-exfil-block.sh: entry 2 (match '.') claims 2 lines, the inventory says 1`. Run 19452's `C1_PROMPT` line puts
+the default prompt, with its `https://beacon.burritobot.co/beacon` URL, on a line of its own (line 64), and the scan reads
+that URL as a call site. The script never fetches it; the agent is asked to send to it. So `verify/fetch-inventory.yaml`'s `none`
+entry for the script now claims two lines, the usage comment and that prompt. `python3 verify/fetch_inventory.py check`
+printed `every call site classed` and `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks
+passed.` Run 19452's scoped run of 284 tests started before it edited the script, so it never ran that test on the edit; a
+run reruns each test that reads a verify script it edits after its scoped run, `fetch-inventory.yaml`'s test among them.
+
+**Cluster state.** origin/staging still pins guard-proxy at be88e1f and both clusters' `agent/guard-proxy` still carry
+`checksum/proxy-py` `a32927a1851b`, so the checks under run 19452's "Not yet run on a cluster" still wait on this
+branch's promotion. This change touches only `verify/`, which no cluster runs, and has no live check of its own.

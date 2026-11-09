@@ -267,9 +267,9 @@ sites:
     kind: lab-endpoint
     target: the lab's public endpoint (https://<host>/chat, /cost, /controls and the pages) on a workshop cluster
   - match: .
-    lines: 1
+    lines: 2
     class: none
-    why: comments, docstrings or messages that name the command; none runs it
+    why: the usage comment, and the default C1_PROMPT, whose beacon URL is text the agent is asked to send to; neither runs a fetch
   verify/c1-winrate.py:
   - match: urlopen
     lines: 1
