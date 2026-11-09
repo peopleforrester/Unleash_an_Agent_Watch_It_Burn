@@ -17,19 +17,28 @@ With every library found the shell still stops on its first text when fontconfig
 FONTCONFIG_FILE names a fonts.conf that reads them. Before writing anything, the shell renders a page of text to a
 PNG with what was unpacked, so the step fails, not a test after it.
 
-Where the host already has every library and a font, the script writes nothing: once EDM's build carries them, this
-step does no work.
+A host with fonts can still lack the faces the tier is measured in (#1252). Tanjiro draws the chat page's Arial in
+DejaVu Sans (its 139.16px re-roll button is DejaVu's width, rendered on netcup with DejaVu alone), so three Playwright
+tests that pass on netcup failed on its widths. So a host that lacks any font MEASURED_FONTS names gets those
+packages unpacked, and FONTCONFIG_FILE names a fonts.conf that reads them with the host's own fonts and rules. Last,
+the shell measures a line in Arial and in Liberation Sans, and the step fails unless they match and Liberation Sans
+is a face the host holds.
+
+Where the host already has every library and every measured font, the script writes nothing: once EDM's build
+carries them, this step does no work.
 
 Nothing here falls back. No GITHUB_ENV, a browser the pinned Playwright does not list, a missing library this table
 does not name, a failed apt step, or a library `ldd` still cannot find afterwards exits 1, naming which.
 """
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import re
 import subprocess
 import sys
+import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from playwright_browsers import BROWSERS, PLAYWRIGHT, TIMEOUT, UV, ensure, listing  # noqa: E402
@@ -68,6 +77,17 @@ LIB_DIRS = ["usr/lib/x86_64-linux-gnu", "lib/x86_64-linux-gnu"]
 # monospace (DejaVu), their metric-compatible Liberation set, and colour emoji; netcup, where the tier is green, has
 # all of them.
 FONT_PACKAGES = ["fontconfig-config", "fonts-dejavu-core", "fonts-liberation", "fonts-noto-color-emoji"]
+# The font each of those families' packages ships, which a host with fonts must also have, or get unpacked (#1252). The
+# chat page asks for -apple-system, "Segoe UI", Roboto, then Arial: on Linux the first face fontconfig holds for any
+# of them is Liberation Sans, Arial's metric twin, as on netcup where the hecaton gate runs the tier green, and
+# close in width to the Roboto and San Francisco a phone draws it in. Tanjiro's Arial fell to DejaVu Sans, about 15%
+# wider: "Get a new witch name" was 139px against netcup's 118px, the 390px witch line wrapped
+# and the card header was 91px, and the private bot's 768px bar ran 13px past the edge (staging 429d97e1, #1252).
+MEASURED_FONTS = {
+    "fonts-dejavu-core": "DejaVuSans.ttf",
+    "fonts-liberation": "LiberationSans-Regular.ttf",
+    "fonts-noto-color-emoji": "NotoColorEmoji.ttf",
+}
 # fontconfig-config's postinst links these from debconf's defaults (hinting style slight, no bitmaps except emoji).
 # Without 10-hinting-slight, glyph advances round differently and the BurritoBot header button is 81px wide in its
 # 80px box at a 360px viewport (test_mobile_titles_e2e.py, run 18178).
@@ -144,14 +164,18 @@ def main(argv: list[str]) -> int:
     try:
         binary = shell_binary()
         missing = ldd(binary)
-        need_fonts = not host_has_fonts()
-        if not missing and not need_fonts:
-            print(f"ci_chromium_libs: {binary} finds every library it links against, and the host has fonts; "
-                  "nothing to unpack")
+        no_fonts = not host_has_fonts()
+        font_pkgs = FONT_PACKAGES if no_fonts else missing_font_packages(font_dirs())
+        if not missing and not font_pkgs:
+            arial_face(binary, root, dict(os.environ))
+            print(f"ci_chromium_libs: {binary} finds every library it links against, the host has "
+                  f"{', '.join(MEASURED_FONTS.values())}, and Arial draws as Liberation Sans; nothing to unpack")
             return 0
-        wanted = sorted(set(packages_for(missing)) | (set(FONT_PACKAGES) if need_fonts else set()))
-        print(f"ci_chromium_libs: {binary} lacks {', '.join(missing) or 'no library'}"
-              f"{'; the host has no fonts' if need_fonts else ''}; asking apt for {', '.join(wanted)}")
+        wanted = sorted(set(packages_for(missing)) | set(font_pkgs))
+        fonts_why = ("; the host has no fonts" if no_fonts else
+                     f"; the host's fonts lack {', '.join(MEASURED_FONTS[p] for p in font_pkgs)}" if font_pkgs else "")
+        print(f"ci_chromium_libs: {binary} lacks {', '.join(missing) or 'no library'}{fonts_why}; "
+              f"asking apt for {', '.join(wanted)}")
         pkgs = unpack(wanted, root, unpacked)
         env: dict[str, str] = {}
         if missing:
@@ -159,9 +183,10 @@ def main(argv: list[str]) -> int:
             still = ldd(binary, env={**os.environ, **env})
             if still:
                 raise Failed(f"after unpacking {', '.join(pkgs)}, ldd still finds no {', '.join(still)}")
-        if need_fonts:
+        if font_pkgs:
             env["FONTCONFIG_FILE"] = str(write_fonts_conf(unpacked, root))
         probe(binary, root, {**os.environ, **env})
+        arial_face(binary, root, {**os.environ, **env})
     except Failed as e:
         print(f"ci_chromium_libs: {e}", file=sys.stderr)
         return 1
@@ -224,6 +249,54 @@ def host_has_fonts(etc: pathlib.Path = pathlib.Path("/etc/fonts"),
     return any(p.suffix.lower() in FONT_SUFFIXES for d in dirs if d.is_dir() for p in d.rglob("*"))
 
 
+def font_dirs(home: pathlib.Path = pathlib.Path.home()) -> tuple[pathlib.Path, ...]:
+    """The directories Debian's fontconfig reads fonts from: the system's, the local admin's and the user's own."""
+    return (pathlib.Path("/usr/share/fonts"), pathlib.Path("/usr/local/share/fonts"), home / ".local/share/fonts",
+            home / ".fonts")
+
+
+def missing_font_packages(dirs: tuple[pathlib.Path, ...]) -> list[str]:
+    """The packages of MEASURED_FONTS whose font no directory in dirs holds, sorted."""
+    have = {p.name for d in dirs if d.is_dir() for p in d.rglob("*")}
+    return sorted(pkg for pkg, name in MEASURED_FONTS.items() if name not in have)
+
+
+# A page that measures one line of the chat page's words in Arial, in Liberation Sans and in a family no host has, in
+# the canvas the tier's witch-name measure uses, and writes the three widths as its body.
+FACE_PAGE = ("<body><script>const c = document.createElement('canvas').getContext('2d');"
+             "const w = f => { c.font = '16px ' + f; return c.measureText('Get a new witch name, Wilhelmina').width; };"
+             "document.body.textContent = JSON.stringify({arial: w('Arial'), liberation: w('\"Liberation Sans\"'),"
+             " none: w('\"WIB No Such Family\"')});</script></body>")
+
+
+def face_widths(dom: str) -> dict:
+    """The widths FACE_PAGE wrote, read from the shell's --dump-dom output; output without them fails, showing it."""
+    m = re.search(r"<body>(\{.*?\})</body>", dom, re.S)
+    if not m:
+        raise Failed(f"the shell's --dump-dom of the font page printed no widths: {dom[:300]!r}")
+    return json.loads(m.group(1))
+
+
+def face_verdict(widths: dict) -> str:
+    """'' when Arial draws as a Liberation Sans the host really has; otherwise why not, with the widths."""
+    if abs(widths["liberation"] - widths["none"]) < 0.01:
+        return (f"Liberation Sans measures as a family no host has ({widths}), so fontconfig holds no Liberation Sans")
+    if abs(widths["arial"] - widths["liberation"]) >= 0.01:
+        return (f"Arial measures {widths['arial']:.2f}px and Liberation Sans {widths['liberation']:.2f}px ({widths}), "
+                "so the chat page's Arial falls to another face than the one the tier is measured in")
+    return ""
+
+
+def arial_face(binary: pathlib.Path, root: pathlib.Path, env: dict) -> None:
+    """The shell, with env, draws Arial as Liberation Sans, as netcup's does, or this fails saying what it drew."""
+    root.mkdir(parents=True, exist_ok=True)
+    dom = run([str(binary), "--no-sandbox", "--dump-dom", "data:text/html," + urllib.parse.quote(FACE_PAGE)],
+              "the shell's font measure", env=env, cwd=root)
+    why = face_verdict(face_widths(dom))
+    if why:
+        raise Failed(why)
+
+
 def relink(conf_d: pathlib.Path, unpacked: pathlib.Path) -> None:
     """fontconfig-config's conf.d links point at /usr/share/fontconfig; point each into the unpacked tree instead,
     and add the links its postinst makes from debconf's defaults, which an unpack never runs (POSTINST_LINKS)."""
@@ -241,9 +314,10 @@ def relink(conf_d: pathlib.Path, unpacked: pathlib.Path) -> None:
 
 
 def fonts_conf(unpacked: pathlib.Path, conf_d: pathlib.Path, cache: pathlib.Path) -> str:
-    """A fonts.conf that reads the unpacked fonts and rules, and the host's own font directories."""
+    """A fonts.conf that reads the unpacked fonts and rules, and the host's own font directories, the user's included,
+    since on a host that has fonts it replaces the host's fonts.conf for the job (#1252)."""
     dirs = "\n".join(f"  <dir>{d}</dir>" for d in (unpacked / "usr/share/fonts", "/usr/share/fonts",
-                                                   "/usr/local/share/fonts"))
+                                                   "/usr/local/share/fonts", "~/.local/share/fonts", "~/.fonts"))
     return ('<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n<fontconfig>\n'
             f"{dirs}\n  <cachedir>{cache}</cachedir>\n"
             f'  <include ignore_missing="yes">{conf_d}</include>\n</fontconfig>\n')
@@ -256,7 +330,7 @@ def write_fonts_conf(unpacked: pathlib.Path, root: pathlib.Path) -> pathlib.Path
     else:
         conf_d = pathlib.Path("/etc/fonts/conf.d")
     if not any(p.suffix.lower() in FONT_SUFFIXES for p in (unpacked / "usr/share/fonts").rglob("*")):
-        raise Failed(f"unpacking {', '.join(FONT_PACKAGES)} left no font file under {unpacked / 'usr/share/fonts'}")
+        raise Failed(f"unpacking the font packages left no font file under {unpacked / 'usr/share/fonts'}")
     path = root / "fonts.conf"
     path.write_text(fonts_conf(unpacked, conf_d, root / "fontconfig-cache"))
     return path

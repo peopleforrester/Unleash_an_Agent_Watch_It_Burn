@@ -33,6 +33,7 @@ import tempfile
 import threading
 import time
 import types
+from http.client import HTTPConnection  # the module name `http` is this file's request helper below
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -181,6 +182,26 @@ def http(method: str, url: str, body: bytes | None = None, headers: dict | None 
         return e.code, e.read().decode()
 
 
+def oversized(url: str, length: int) -> int:
+    """POST that declares a body of `length` bytes and sends none of it, and return the status.
+
+    The relay refuses on the declared Content-Length without reading the body, then closes. A client still writing the
+    body raced that close: staging 429d97e1's CI got BrokenPipeError instead of the 413 (#1252). Sending the headers
+    alone checks the same refusal with no race: the relay has everything it reads before it answers."""
+    parts = urllib.parse.urlsplit(url)
+    conn = HTTPConnection(parts.hostname, parts.port, timeout=5)
+    try:
+        conn.putrequest("POST", parts.path)
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("Content-Length", str(length))
+        conn.endheaders()
+        r = conn.getresponse()
+        r.read()
+        return r.status
+    finally:
+        conn.close()
+
+
 # A ticket filed the way the room and the presenters file one on support.burritobot.co: the desk's own form.
 code, page = http("POST", f"{PUBLIC}/submit", urllib.parse.urlencode(
     {"body": "<p>My cauldron order never arrived. Please check order 4471.</p>"}).encode(),
@@ -255,7 +276,7 @@ code, body = http("POST", f"{RELAY}/landed", json.dumps({"name": "relay-wrong", 
 check(f"a token the public desk does not hold: its 401 comes back, and nothing lands ({code})",
       code == 401 and not landed_rows("relay-wrong"))
 token_file.write_text(TOKEN, encoding="utf-8")
-code, _ = http("POST", f"{RELAY}/landed", b"x" * (4 * 1024 + 1), {"Content-Type": "application/json"})
+code = oversized(f"{RELAY}/landed", 4 * 1024 + 1)
 check(f"a report over the public console's 4k is refused at the relay ({code})", code == 413)
 
 print("== read by number only (#1077) ==")
@@ -308,7 +329,7 @@ check(f"with the token, a private read that still lists relay-landed reaches the
 check("it reached the public desk on /remote-cluster-read, and no in-cluster desk",
       public_seen[before:].count("/remote-cluster-read") == 2 and "/cluster-read" not in public_seen
       and len(local_seen) == local_before, f"{public_seen[before:]} {local_seen[local_before:]}")
-code, _ = http("POST", f"{RELAY}/cluster-read", b"x" * (512 * 1024 + 1), {"Content-Type": "application/json"})
+code = oversized(f"{RELAY}/cluster-read", 512 * 1024 + 1)
 check(f"a read over the public console's 512k is refused at the relay ({code})", code == 413)
 
 # Kyverno's remove-untrusted-room-workloads deletes relay-landed on the private cluster: the private reader's next read,

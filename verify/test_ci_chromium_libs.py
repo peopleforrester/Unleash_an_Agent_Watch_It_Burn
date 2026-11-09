@@ -85,6 +85,49 @@ with tempfile.TemporaryDirectory() as tmp:
     (fonts / "truetype" / "x" / "X-Regular.TTF").write_text("")
     check("a fonts.conf and one font file, in any case: fonts", c.host_has_fonts(etc, (fonts, t / "missing")))
 
+    print("== the fonts the tier is measured in (#1252) ==")
+    check("the measured fonts are Liberation Sans (Arial's twin), DejaVu Sans and Noto Color Emoji",
+          c.MEASURED_FONTS == {"fonts-liberation": "LiberationSans-Regular.ttf", "fonts-dejavu-core": "DejaVuSans.ttf",
+                               "fonts-noto-color-emoji": "NotoColorEmoji.ttf"}, str(c.MEASURED_FONTS))
+    check("each measured font's package is one a host with no fonts gets too",
+          set(c.MEASURED_FONTS) <= set(c.FONT_PACKAGES), str(set(c.MEASURED_FONTS) - set(c.FONT_PACKAGES)))
+    tanjiro = t / "tanjiro-fonts"
+    (tanjiro / "truetype" / "dejavu").mkdir(parents=True)
+    (tanjiro / "truetype" / "dejavu" / "DejaVuSans.ttf").write_text("")
+    got = c.missing_font_packages((tanjiro, t / "missing"))
+    check("a host with DejaVu alone, as Tanjiro draws, lacks Liberation and the emoji",
+          got == ["fonts-liberation", "fonts-noto-color-emoji"], str(got))
+    user = t / "home" / ".local/share/fonts"
+    user.mkdir(parents=True)
+    (user / "LiberationSans-Regular.ttf").write_text("")
+    (user / "NotoColorEmoji.ttf").write_text("")
+    got = c.missing_font_packages((tanjiro, user))
+    check("a font in the user's own directory counts: DejaVu there and Liberation and the emoji here lack nothing",
+          got == [], str(got))
+    check("font_dirs reads the system's, the local admin's and the user's two",
+          c.font_dirs(t / "home") == (pathlib.Path("/usr/share/fonts"), pathlib.Path("/usr/local/share/fonts"),
+                                      t / "home/.local/share/fonts", t / "home/.fonts"))
+
+    print("== Arial drawn as Liberation Sans ==")
+    # Widths the pinned shell printed on netcup for FACE_PAGE's line: with the host's fonts, and with DejaVu alone.
+    netcup = c.face_widths('<html><head></head><body>{"arial":245.43,"liberation":245.43,"none":277}</body></html>')
+    check("the widths are read from the shell's --dump-dom", netcup == {"arial": 245.43, "liberation": 245.43,
+                                                                        "none": 277}, str(netcup))
+    check("netcup's widths pass: Arial is Liberation Sans, and Liberation Sans is no fallback",
+          c.face_verdict(netcup) == "", c.face_verdict(netcup))
+    why = c.face_verdict({"arial": 277, "liberation": 277, "none": 277})
+    check("DejaVu alone fails, saying the host holds no Liberation Sans", "holds no Liberation Sans" in why, why)
+    why = c.face_verdict({"arial": 277, "liberation": 245.43, "none": 277})
+    check("Liberation Sans held but Arial drawn in another face fails, naming both widths",
+          "277.00" in why and "245.43" in why, why)
+    try:
+        c.face_widths("<html><body></body></html>")
+        check("a dump with no widths fails", False, "no Failed raised")
+    except c.Failed as e:
+        check("a dump with no widths fails, showing what it printed", "printed no widths" in str(e), str(e))
+    check("the font page measures Arial, Liberation Sans and a family no host has, in a canvas",
+          all(s in c.FACE_PAGE for s in ("w('Arial')", "w('\"Liberation Sans\"')", "measureText", "No Such Family")))
+
     print("== fontconfig-config's rules, relinked ==")
     unpacked = t / "root"
     avail = unpacked / "usr/share/fontconfig/conf.avail"
@@ -122,6 +165,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check("fonts.conf reads the unpacked fonts, the host's, the relinked rules and a cache of the job's own",
           all(s in conf for s in (f"<dir>{unpacked}/usr/share/fonts</dir>", "<dir>/usr/share/fonts</dir>",
                                   f"<cachedir>{t / 'cache'}</cachedir>", f">{conf_d}</include>")), conf)
+    check("fonts.conf reads the user's font directories too, since on a host with fonts it replaces the host's",
+          "<dir>~/.local/share/fonts</dir>" in conf and "<dir>~/.fonts</dir>" in conf, conf)
 
     print("== Debian's archive as the only source ==")
     rel = t / "os-release"
