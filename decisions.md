@@ -46042,3 +46042,67 @@ and `verify/test_scope_tests.py` ran again on the rebased tree; `test_desk_ticke
 failed the gate. The scoped `run-tests.sh` (157 of 422 offline tests) ended `ALL OFFLINE RENDER-GATE TESTS GREEN`, exit 0, and the scoped
 `run-e2e-tools.sh` (the offline suite and the 10 tier tests that read `verify/guard_lease.py`) ended `ALL E2E TOOLS TIER
 CHECKS GREEN`, exit 0, in 6m23s.
+
+## 2026-11-09 · #1162 · run 19507 · A test holds #1162's /admin criterion: a comment on #1162 confirms a marked submission (#1244)
+
+**What #1244 asks.** Run 19100's test review found #1162's last criterion untested: a test submission shows in the
+feedback app's `/admin` under `kubecon-na-2026` with source `burritobot`. `/admin` answers 403 to this repo's runs,
+so the confirmation is a comment on #1162 and a live test reads it, as #1166 did for #647.
+`verify/prior-drafts.sh 1244 origin/staging` printed NONE, and #1244 had no comments.
+
+**Run 19100's row is confirmed already.** Michael posted the confirmation on #1162 at 2026-11-09T06:32:42Z
+(issuecomment-6733846674), after a feedback-agenticburn run read `/admin` and its CSV export for
+peopleforrester/feedback-agenticburn#26: response 10, created 2026-11-09 01:41:46 UTC, event `kubecon-na-2026`,
+source `burritobot`, usefulness 3, anonymous, change text `TEST submission by Unleash_an_Agent_Watch_It_Burn#1162
+hecaton run 19100, please set aside`. Keeping it out of the talk's tallies is feedback-agenticburn#26's "Set aside"
+action, merged there and not yet deployed to Railway.
+
+**The fresh submission, from the button's URL.** At 12:01:31Z `curl https://attackme.burritobot.co/event.js` served
+`feedbackUrl: "https://feedback.burritobot.co/?source=burritobot"` (line 27), the URL #1243 found the live button
+opens. That page answered 200, and its form posts to `/submit` with a hidden `source=burritobot` and no other hidden
+field. At 2026-11-09T12:01:45Z this run posted that form as it serves it: source `burritobot`, usefulness 3,
+anonymous, no email, change text `TEST submission by Unleash_an_Agent_Watch_It_Burn#1162 hecaton run 19507, please
+set aside`. It answered 302 to `/thanks`, which answered 200 ("Thank you!") with one outbound link,
+`https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553`. `/admin` answered 403.
+
+**The ask.** A dispatched run may not write an issue or a comment, so the ask goes to peopleforrester/feedback-agenticburn
+as a follow-up in run 19507's report, which hecaton files. It names both marked submissions (run 19100's at 01:41Z,
+already confirmed as response 10, and run 19507's at 12:01:45Z) and asks for a comment on #1162 that reads `/admin`
+for `kubecon-na-2026`, says "confirmed", and gives each row's source and change text. Its URL is not known to this
+run; the next run on #1244 records it here from #1244's thread.
+
+**The tests.**
+
+- `verify/feedback_admin_1162.py` holds `comment_verdict(body)`, a pure function. A comment passes when it names
+  `/admin`, `kubecon-na-2026`, the row's source `burritobot` ("Source: burritobot"; the link's `?source=burritobot`
+  does not count) and a marked #1162 submission by its change text. Beyond the issue's four items it needs two more,
+  because run 19100's own report on #1162 names all four while only asking for the check: the word "confirmed", and
+  no word that `/admin` was not read ("/admin answers 403", "could not read", "can only be confirmed"). Without the
+  two, the live test passed on that report. A failing reason names every item missing. `AUTHORS` is the repo owner
+  and hecatongithub, as which a feedback-agenticburn run's report also lands.
+- `verify/test_feedback_admin_1162_live.py` (`# SUITE: e2e`, no `# E2E TIER` line, so `run-e2e.sh` runs it and the
+  tools tier does not) reads #1162's comments through `verify/gh_comments.py`, holds the ones by `AUTHORS` to the
+  verdict, and prints, as a NOTE, which marked submission each passing comment confirms.
+- `verify/test_feedback_admin_1162_record.py` (offline) passes Michael's comment, copied in, and the same record bolded,
+  in backticks and wrapped. It fails that comment with each of the five items cut, each reason naming only the cut
+  item, and run 19100's report, whose only lack is that it says `/admin` was not read. It refuses `?source=burritobot`
+  alone, a #1163 marker, a marker with no "please set aside" and a longer event slug, and checks the live test's
+  suite lines.
+- `verify/scope-map.yaml` has the record test's entry from `python3 verify/scope_tests.py write`, run again after the
+  first commit, when it added the reads that come through `gh_comments.py`. The live test needs no entry of its own.
+
+**The live test now (12:07Z).**
+
+    PASS  a comment by hecatongithub or peopleforrester names /admin, kubecon-na-2026, source burritobot and a marked #1162 test submission, and says it confirmed the row
+          confirmed at https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/1162#issuecomment-6733846674 by peopleforrester: /admin, event kubecon-na-2026, source burritobot, marked submission of run 19100
+    NOTE  run 19100's marked submission (2026-11-09T01:41Z) is confirmed
+    NOTE  run 19507's marked submission (2026-11-09T12:01:45Z) is not confirmed yet by a comment
+    exit=0
+
+**Not yet run on a cluster.** feedback-agenticburn has not confirmed run 19507's row yet. Once its comment is on
+#1162, `python3 verify/test_feedback_admin_1162_live.py` prints the NOTE for run 19507 as confirmed. No cluster check
+ran: the change is three verify/ files and the scope map, none of which a cluster runs.
+
+**Tests run.** `python3 verify/test_feedback_admin_1162_record.py` (all PASS, exit 0),
+`python3 verify/test_feedback_admin_1162_live.py` (above, exit 0), `python3 verify/test_scope_tests.py` (ALL PASS,
+exit 0) and the prose gate. No dependency was added.
