@@ -1585,8 +1585,10 @@ spec:
       # The grace period covers the sleep plus the longest /chat turn, the 285s proxy_read_timeout in console.conf,
       # so a turn in flight when the rollout starts still gets its answer. The other half is the agent namespace's
       # elbv2.k8s.aws/pod-readiness-gate-inject label (gitops/namespaces/namespaces.yaml): the new pod is Ready, and
-      # the old one is deleted, only once the NLB has the new one registered and healthy.
-      # verify/test_console_rollout_drain.py holds all three.
+      # the old one is deleted, only once the NLB has the new one registered and healthy. The NLB keeps a reused
+      # connection on the old pod through the whole sleep, so console.conf's keepalive_time 10s closes each one
+      # during it, on a response, and the router's next connection goes to the new pod (run 19661's rollout).
+      # verify/test_console_rollout_drain.py holds all four.
       terminationGracePeriodSeconds: 340
       containers:
         - name: nginx
