@@ -45317,3 +45317,104 @@ which way to go. It changes no cluster and no `gitops/` file.
 
 Live check: none. This run changes only decisions.md, and it read neither cluster. Criterion 2, a Challenge 1 turn on
 watch-it-burn-private with the tools/call pair inside the turn's trace in Tempo, waits on the answer.
+
+## 2026-11-09 · #1222 · run 19447 · question 1138: kagent's Go agent runtime is rebuilt from v0.10.1 so each MCP call carries its execute_tool span's trace context
+
+**Question 1138.** How should the workshop get kagent's fix that joins each MCP tool call's gateway spans to the
+BurritoBot turn's trace? Answer: Patch 0.10.1's agent runtime. Decided by hecaton's research under Michael's standing
+rules, not by Michael. It cites #1015's entry (a patched build of the running release over a prerelease of a new
+line), #389 (latest GA of each component, and kagent 1.0.0-rc3 is a release candidate), and the change cadence
+rules. What it changes: the controller's Go runtime image is a build of this repo's, not kagent's own, until kagent
+moves to a release that sends the trace context itself. The issue's second criterion now reads "after the patched
+runtime runs" where it read "after kagent is bumped to that release". Run 19434's entry above has the upstream
+research. Its comment naming kagent-dev/kagent#2809 is on the issue, which meets the first criterion.
+
+**What Tempo showed first (watch-it-burn-private, 2026-11-09 about 08:00Z, the three days before).** A TraceQL search
+for the gateway's `tools/call <server>_<tool>` client spans, with each trace's root read off the search result:
+
+    176 evil-mcp     calls, every one a trace of its own (root: the gateway's tools/call)
+    418 workshop-mcp calls up to 2026-11-07 06:03Z, each a trace of its own
+    299 workshop-mcp calls from 2026-11-07 12:54Z on, each inside the turn's trace (root: burritobot POST /chat)
+
+The split is #885 (ce95bc99): agent.yaml's `allowedHeaders` forwards the turn's traceparent from the A2A request onto
+workshop-mcp calls, and evil-mcp names no header. In the turn's trace, though, the pair hangs off the gateway's A2A
+client span (`POST workshop-agent.agent.svc.cluster.local:8080`), the span that traceparent names. It does not hang
+off `execute_tool`. Trace `10802fa565bcac62f342b5f834cc279a` (2026-11-08 01:18Z) shows it: both of its gateway
+`tools/call` server spans are children of span `f564412bcab90076`, a sibling of the agent's `POST /` server span.
+So the issue's premise held for evil-mcp only, and for workshop-mcp the parent was the wrong span.
+
+**Why header-only, not #2809's otelhttp.** #2809 wraps the transport in `otelhttp.NewTransport` (v0.69.0, the one
+go.mod pins). That adds an `HTTP POST` client span of kagent's for every request a call makes, the session's
+initialize, notification and tools/list as well as its tools/call, since kagent opens a session per tool use. No rule
+in `gitops/otel-collector/values.yaml` sorts those spans, and the gateway's spans would hang under them. #2809's own
+description names a header-only injection as the alternative. `images/kagent-mcp-traceparent/mcp-traceparent.patch`
+is that: a round tripper that injects the global propagator's fields (traceparent, tracestate, baggage) for the
+request's active span and records nothing. It is the innermost layer, under `headerRoundTripper`, so the active
+`execute_tool` span outranks the traceparent `allowedHeaders` forwards. Both are the turn's trace, so #885's turn guard
+in workshop-mcp, keyed on the trace id, reads the same id. With no active span (a session's initialize and tools/list)
+the request goes as it came. The context reaches the request: ADK v2.1.0 starts `execute_tool` and passes its context
+to the tool (internal/llminternal/base_flow.go, `ctx.WithContext(sctx)`), mcptoolset passes it to
+`ClientSession.CallTool`, and go-sdk v1.6.1 builds the POST with `http.NewRequestWithContext(ctx, ...)`
+(mcp/streamable.go). A new package is not involved: the otel, propagation and trace modules are in kagent's go.mod.
+
+**The patch's own tests.** It adds `go/adk/pkg/mcp/trace_context_test.go`, seven tests. Among them, one runs a real
+MCP session (go-sdk's streamable HTTP server in httptest): it connects with no span and calls a tool under an
+`execute_tool` span. The tools/call POST must carry that span's traceparent and the initialize POST none. With Go
+1.27.1 in a scratch clone of v0.10.1, `go test ./adk/pkg/mcp/` printed `ok`. On stock v0.10.1 with only the test file
+added, four failed: `TestCreateTransport_InjectsActiveSpan`, `_InjectsWithoutHeaderLayer`,
+`_ActiveSpanOutranksForwardedTraceparent` and `TestCallTool_CarriesExecuteToolSpan`. The three no-span cases pass on
+both, as they should.
+
+**The build.** `images/kagent-mcp-traceparent/build.sh` follows #1015's Kyverno build. The source is kagent v0.10.1 at
+a3d26eaf (the commit upstream's binary names) from the artifact cache's mirror, with the patch applied, and the
+package's tests run before the build. Only /app is rebuilt, with go1.27.1 and GOAMD64=v2 (what `go version -m` reads
+off upstream's binary), as one ustar layer over upstream's linux/amd64 image of the images.lock row
+`golang-adk:0.10.1@sha256:12035320...`. Upstream's `-X` version ldflags are left out: the runtime does not link
+go/core/internal/version, so they set nothing. The first build with them came out at another digest, so the pin is
+the build without them. Two clean builds (fresh Go build caches, fresh loopback registries) gave
+`sha256:59bc5777ae74609446fde57324f4e33e606c819dd32fffc543243c0e7940f6c5`, which images.lock pins as
+`watch-it-burn:golang-adk-0.10.1-mcptrace`. The built image keeps upstream's entrypoint /app, user 65532 and labels,
+adds `io.github.peopleforrester.watch-it-burn.kagent-patch`, and its /app answers `--help`.
+`.github/workflows/build-kagent-mcp-traceparent.yml` builds it on a staging or main push and copies it to the tag only
+at that digest (`scripts/ghcr_version_tag.py`'s `crane:` row).
+
+**Where it runs.** `gitops/bootstrap/apps/kagent.yaml` sets `controller.goAgentImage` to ghcr.io,
+peopleforrester/watch-it-burn and that tag at the digest. Chart 0.10.1 writes the three into the controller's
+ConfigMap (GO_IMAGE_REGISTRY, _REPOSITORY, _TAG; its pod restarts on the checksum annotation), and the controller's
+`resolveRuntimeImage` joins them as registry/repository:tag for a non-sandbox agent. The comments in
+`gitops/otel-collector/values.yaml` and `gitops/workshop-agent/agent.yaml` that described the stock runtime now
+describe this one, and VERSIONS.lock names it under kagent.
+
+**Signing.** `verify-image-signatures` is at Deny on watch-it-burn-private and absent on watch-it-burn-community (read
+live, this run). It requires the workshop key's cosign signature on every `ghcr.io/peopleforrester/watch-it-burn*`
+image, and no run or workflow holds that key. So on private the new agent Pod is refused at admission until the pushed
+digest is signed, and the report escalates that signature. Both clusters' workshop-agent Deployments roll with
+`maxSurge: 1, maxUnavailable: 0` (read live), so the stock Pod keeps serving until the new one is admitted and Ready.
+On community the build runs once the workflow has pushed it. `verify/sign-images.sh` reads only `image:` lines, so it
+does not find this reference in the chart's registry/repository/tag form, and the escalation signs the digest by name.
+
+**Tests.** `verify/test_kagent_mcp_traceparent.py` (offline, 29 checks) holds the pieces to each other. The patch is
+pinned by its sha256 and injects under the header layer with no client span. The build is held to the chart's
+release, its commit, toolchain and base row. The controller's goAgentImage must be the build's tag at a digest with an
+images.lock row from this build. The workflow must build it and copy only that tag. A kagent bump without carrying the
+fix goes red there. Run alone, each exit 0: `test_kagent_mcp_traceparent.py`, `test_images_lock.py`,
+`test_kagent_version_pins.py`, `test_workflow_registry_writes.py`, `test_public_images.py`, `test_image_signing.py`,
+`test_ghcr_version_tag.py` and `test_scope_tests.py` (after `scope_tests.py write` added the new test's entry).
+`test_images_lock_render.py` exited 1 on three checks that are not this change: GitHub answered 504 on each of four
+fetches of the falcosidekick 0.14.0 and tempo 3.0.0 charts, and kustomize found no guard-proxy submodule checkout.
+Its row checks passed, among them "no rendered image without a row". The 44 tools-tier tests the scoped selector
+names for this change are left to validation.
+
+**Live check.** The change touches `gitops/` and `images/`. This run read both clusters (Tempo on private, the
+signature policy, the agent Deployments and the controller ConfigMap on both) and changed nothing on them.
+
+Not yet run on a cluster:
+- Once hecaton promotes this, `build-kagent-mcp-traceparent` has pushed the digest, the escalated signature is on it,
+  and Argo CD has synced kagent: confirm that the workshop-agent Pod on watch-it-burn-private runs
+  `ghcr.io/peopleforrester/watch-it-burn:golang-adk-0.10.1-mcptrace@sha256:59bc5777...`. Then send one Challenge 1
+  turn (`bash verify/c1-exfil-block.sh burritobot-private watch-it-burn-private accen-dev`) and read its trace from
+  Tempo. Every gateway `tools/call` server span in it must be a child of a burritobot-agent `execute_tool` span. A
+  TraceQL search over the turn's window for `{ resource.service.name = "burritobot-gateway" && name = "tools/call" }`
+  must return no trace whose root is the gateway's `tools/call`, evil-mcp's included.
+- Then `CONTEXT=watch-it-burn-private python3 verify/one_root_probe.py`, and on watch-it-burn-community the same turn
+  read through APM, since the issue names APM too.
