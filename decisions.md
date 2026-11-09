@@ -41148,3 +41148,12 @@ printed `4 tests audited, 0 with reads their entries miss`, exit 0.
 0 problems. This change edits the map's bounds and `scope_tests.py`, so the gate's scoped runners run everything for it;
 the full Test and E2E commands are left to hecaton's validation. No live cluster check: the change touches only files
 under `verify/` that no cluster runs, and decisions.md. No dependency was added.
+
+**Run 19263, after run 18853's gate.** Run 18853's validation failed on `test_fetch_inventory.py`, not on this change's
+own tests. Between its run and its rebase, staging gained #1116's fetch call-site scan, and three lines of this change
+name a git clone in words: sister_tree.py's bound in `verify/scope-map.yaml`, the comment on the empty bound in
+`verify/scope_tests.py`, and two lines of `verify/test_scope_tests.py` that check sister_tree.py's clone call. None of
+them runs a fetch. `verify/fetch-inventory.yaml` now classes each as `none`, and the test_scope_tests.py entry claims 3
+lines instead of 1. `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.`;
+`python3 verify/test_scope_tests.py` printed `ALL PASS` and `python3 verify/scope_tests.py check` reported 0 problems on
+the rebased tree.
