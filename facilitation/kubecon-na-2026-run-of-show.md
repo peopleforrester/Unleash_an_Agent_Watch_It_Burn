@@ -2173,12 +2173,16 @@ is merely slow rather than rebuilding:
   `guard-input-on`, `guard-mcp-on`) switch both clusters from the private terminal, as
   `guardrails-on` does, so the room's retry on the public bot meets the fix too. This
   step proves each one does, after the guardrails step above and before the admin
-  probe. From the repo root, with the private cluster's credentials in their own
-  kubeconfig (it never falls back to the current-context):
+  probe. From the repo root, with both clusters' credentials in one isolated
+  kubeconfig, each context named for its cluster (`watch-it-burn-private` and
+  `watch-it-burn-community`), the same file the probe below uses. It takes the guard
+  lock on both clusters by those names, so a kubeconfig holding the private cluster
+  alone stops it before anything is switched (measured 2026-11-09, #1146). It never
+  falls back to the current-context:
 
   ```bash
   python3 verify/stage_switch_run.py --context <private-context> \
-      --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+      --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
   ```
 
   It holds both clusters' guard lock from its first read to its last, stops unless the
@@ -2386,7 +2390,7 @@ is merely slow rather than rebuilding:
 
   ```bash
   python3 verify/stage_traces.py pii burritobot-private.burritobot.co \
-      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+      --context <private-context> --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
   ```
 
   Then, in Whitney's org, an APM retention filter that keeps the seeds: APM, then
@@ -2398,7 +2402,7 @@ is merely slow rather than rebuilding:
 
   ```bash
   python3 verify/stage_traces.py seed burritobot-private.burritobot.co \
-      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+      --context <private-context> --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
   ```
 
   Each seed is its own session, `wib-stage-<key>-<stamp>`, where `<key>` is the seed

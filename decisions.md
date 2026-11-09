@@ -46572,3 +46572,74 @@ the gateway rule on private). Scoped offline suite and prose gate: see the commi
 **Not yet run on a cluster:** `python3 verify/kubecon_probe.py community attackme.burritobot.co --context
 watch-it-burn-community --switch-context watch-it-burn-private ...`, which now runs `guard-mcp-on` and `c7-on`. It runs
 at the Night Before (#1146 adds the switch check next to it).
+
+## 2026-11-09 · #1146, #1184 · the Night Before stage-switch check, live, every switch on both clusters (by hand)
+
+`python3 verify/stage_switch_run.py --context watch-it-burn-private --kubeconfig <both clusters> --profile accen-dev`,
+from this repo at staging `c4786186` plus #1152, holding the guard lock on both clusters, ended `STAGE SWITCH CHECK
+GREEN`, exit 0:
+
+```
+PASS  identity         private    kube-context and https://burritobot-private.burritobot.co are the same cluster
+PASS  start            private    every field the closing commands turn off reads off
+PASS  start            community  every field the closing commands turn off reads off
+PASS  guardrails-on    private    guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+PASS  guardrails-on    community  guardrails-on turned on infra.rbac_scoped, infra.kyverno, infra.kubearmor, infra.networkpolicy
+PASS  guard-agency-on  private    guard-agency-on turned on infra.agency_scoped
+PASS  guard-agency-on  community  guard-agency-on turned on infra.agency_scoped
+PASS  guard-input-on   private    guard-input-on turned on ai.input_blocklist, ai.input_classifier
+PASS  guard-input-on   community  guard-input-on turned on ai.input_blocklist, ai.input_classifier
+PASS  guard-mcp-on     private    guard-mcp-on turned on infra.tool_allowlist
+PASS  guard-mcp-on     community  guard-mcp-on turned on infra.tool_allowlist
+PASS  start-state      private    every stage switch's field reads off (Falco not judged)
+PASS  start-state      community  every stage switch's field reads off (Falco not judged)
+PASS  as-found         private    every field the closing commands turn off reads as it did at the start
+PASS  as-found         community  every field the closing commands turn off reads as it did at the start
+STAGE SWITCH CHECK GREEN
+```
+
+`guard-mcp-on` printed its reload times: the private gateway served the narrowed rule 1 s after the write, and kagent
+rolled the community workshop-agent with the narrowed allow-list 5 s after it. `agency_scoped` is in both clusters'
+`/controls` (guard-proxy pin `a637e68`), so `guard-agency-on` is judged on it and passes. Both clusters were left as
+found (the `as-found` lines).
+
+**The step's kubeconfig was wrong.** The first try, with a kubeconfig holding the private cluster alone, stopped before
+switching anything: `LockUnavailable ... context "watch-it-burn-community" does not exist`. The runner takes the lock
+on both clusters by their context names, as the probe and `stage_traces.py seed` do. The Night Before step now passes
+the probe's two-context `/tmp/kubecon.kubeconfig` and says the contexts must be named for their clusters, and the
+`stage_traces.py pii` and `seed` commands, which had the same private-only path, use it too.
+`verify/test_stage_switch_night_before.py` holds the step to it.
+
+## 2026-11-09 · #1144, #1229 · desk-reset, beacon-reset and start-check, live (by hand)
+
+From `infra/terraform/fleet/`, on this host, which is logged in to Railway:
+
+```
+desk-reset: watch-it-burn-community (us-west-2), the public desk: every deploy row, fixed tickets kept
+  cleared 0 deploy row(s) and 0 filed ticket(s); 0 filed and 4 fixed ticket(s) kept
+desk-reset: done; deployments.burritobot.co lists no deploy, the room's or the presenters'
+  PASS  https://watch-it-burn-provisioning-production.up.railway.app/beacon/reset answered 200, cleared 0 beacon(s)
+  PASS  https://beacon.burritobot.co/beacon/view reads 0
+beacon-reset: done; the beacon view reads zero
+  PASS  https://deployments.burritobot.co/deployments.json lists 0 deploy rows
+  PASS  https://beacon.burritobot.co/beacon/view reads 0 beacons
+start-check: every deployments page lists no deploy and the beacon view reads zero
+```
+
+Each exited 0. `beacon-reset` resolved the admin token through the Railway CLI (`resolve_admin_token`), which a
+dispatched run cannot reach (#1239); no token was printed. `https://agenticburn.com/beacon/view` also read
+`data-count="0"`. #1229's earlier run left beacon-reset red for want of the token; all three now pass back to back.
+
+## 2026-11-09 · #760 · the challenge trace check, live (by hand)
+
+Per the 2026-11-09 coordinator note on #760 (Michael's 2026-11-08 ruling: no run-through is owed), one live run now
+and the Night Before step, which the run-of-show already has ("Check each challenge's trace shape (#760)").
+`python3 verify/challenge_traces.py --profile accen-dev` ended `CHALLENGE TRACES GREEN`, exit 0:
+
+- Challenge 1 (get_vault_entry): PASS, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A944e1bbfaa6b5c6685e3e0a030c4bf1f
+- Challenge 2 (deploy_app, run_shell): PASS, deploy_app https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A9d4df82c95c55ac79f4e88604312da6b and run_shell https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3Af8ca22833f645313a22b6adc48f6cdfe
+- Challenge 3 (read_support_ticket, deploy_app): PASS, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3A45070f98aceb5c30ae3249b4eef39a84
+- Challenge 4 (get_weather, read_internal_config): PASS, https://app.datadoghq.com/llm/traces?query=ml_app%3Aburritobot+trace_id%3Ac0e0fc89546d56b19ffbce53a59dd921
+
+No failure, so no issue is filed. Challenge 2, red on 2026-11-07, passes since #1109 judges each of its calls in its
+own chat.

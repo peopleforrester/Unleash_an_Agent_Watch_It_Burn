@@ -4,10 +4,10 @@
 
     # what the deployed input guard refuses: no model call, nothing toggled; must end REFUSES 5 OF 5
     python3 verify/stage_traces.py pii burritobot-private.burritobot.co \\
-        --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+        --context <private-context> --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
 
     python3 verify/stage_traces.py seed burritobot-private.burritobot.co \\
-        --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+        --context <private-context> --kubeconfig /tmp/kubecon.kubeconfig --profile accen-dev
 
     # the next morning: every seeded trace is still in LLM Observability, read back to the seed's own start
     python3 verify/stage_traces.py check --profile accen-dev

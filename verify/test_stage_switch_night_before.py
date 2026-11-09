@@ -99,7 +99,11 @@ check(f"every flag the block passes is one the script takes ({flags} within {sor
       bool(flags) and set(flags) <= taken)
 check("the block names the private cluster's context explicitly (no current-context)", "--context <private-context>" in command)
 check("the block passes an isolated kubeconfig and the AWS profile",
-      "--kubeconfig /tmp/private.kubeconfig" in command and "--profile accen-dev" in command)
+      "--kubeconfig /tmp/kubecon.kubeconfig" in command and "--profile accen-dev" in command)
+# The lock is taken on both clusters by their context names (guard_lease.hold_switch), so a private-only kubeconfig
+# stops the run before any switch (#1146's live run, 2026-11-09): the step says to hold both, named for the clusters.
+check("the step says the kubeconfig holds both clusters' contexts, named for them",
+      "`watch-it-burn-private` and `watch-it-burn-community`" in re.sub(r"\s+", " ", step))
 
 print("== the switches, their fields and the closing pair are the script's ==")
 names = [f"`{s}`" for s in ssc.SWITCHES]
