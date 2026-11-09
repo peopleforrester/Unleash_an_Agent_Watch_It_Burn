@@ -5,7 +5,9 @@
 # Usage:
 #   bash verify/e2e-image.sh ref      print the image this checkout's lock and build files name
 #   bash verify/e2e-image.sh build    build that image locally (the workflow's step, and a host's way to make it)
-#   bash verify/e2e-image.sh run      run `bash verify/run-e2e-tools.sh` inside it
+#   bash verify/e2e-image.sh run [<tier test>...]
+#                                     run `bash verify/run-e2e-tools.sh` inside it, with the tier tests named, if any,
+#                                     passed on to run alone (#1190)
 #
 # The runtime is podman when the host has it, else docker. `run` uses the image when the host holds the tag, pulls it
 # once when it does not, and then starts it with --pull=never, so a second run on the host pulls nothing. When neither
@@ -111,7 +113,8 @@ case "${cmd}" in
         forward() { [[ -z "${container_pid}" ]] || kill -s "$1" "${container_pid}" 2>/dev/null || true; }
         trap 'forward INT' INT
         trap 'forward TERM' TERM
-        "${rt}" "${args[@]}" "${ref}" bash -c 'mkdir -p "${HOME}" && exec bash verify/run-e2e-tools.sh' &
+        shift
+        "${rt}" "${args[@]}" "${ref}" bash -c 'mkdir -p "${HOME}" && exec bash verify/run-e2e-tools.sh "$@"' tier "$@" &
         container_pid=$!
         rc=0
         while true; do
@@ -121,7 +124,7 @@ case "${cmd}" in
         exit "${rc}"
         ;;
     *)
-        printf 'usage: bash verify/e2e-image.sh ref|build|run\n' >&2
-        exit 2
+        printf 'usage: bash verify/e2e-image.sh ref|build|run [<tier test>...]\n' >&2
+        exit 1
         ;;
 esac
