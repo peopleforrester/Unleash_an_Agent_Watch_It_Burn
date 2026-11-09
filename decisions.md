@@ -47416,3 +47416,57 @@ gate output is another test's expected failure case, not a red.
 guard-proxy on 127.0.0.1, started by the test in front of a stand-in agent that the test also starts. Then
 `python3 verify/test_fetch_inventory.py` printed `All fetch inventory checks passed.` Nothing that a cluster runs
 changed, so no live check was run. Run 19549's live record above stands.
+
+## 2026-11-09 · #1262 · run 19574 · A live test holds watch-it-burn-private to one Ready KubeArmor enforcer per node and snitch-written node labels, at Deny
+
+**What #1262 asks.** Test review run 19522 found no test for #1235's criterion: on watch-it-burn-private, with
+require-resource-limits at Deny, a node replacement ends with the KubeArmor enforcer DaemonSet at one Ready pod per
+node and no hand-put node labels. The Armed beat's `unenforced_nodes` covered the enforcer half; nothing read who wrote
+the node's `kubearmor.io/*` labels. `verify/prior-drafts.sh 1262 origin/staging` printed NONE and the issue had no
+comments.
+
+**The change.**
+- `verify/test_kubearmor_node_replacement_live.py` (`# SUITE: e2e`, `PRIVATE_CONTEXT`, read-only). It fails when the
+  context is not watch-it-burn-private; when require-resource-limits is not at Deny or lacks git's
+  `kubearmor-workloads-judged-at-their-pods` matchCondition; when no node is Ready; and, per Ready node, when the node
+  has no `kubearmor.io/*` labels, when any of them is owned in the node's managedFields by a field manager other than
+  `snitch` (alone or beside it, or by none), or when the node has other than one Ready `kubearmor-app=kubearmor` pod;
+  and when an enforcer DaemonSet has fewer Ready pods than it schedules. A run cannot replace a node group, so the
+  test causes no replacement: it reads the end state any replacement must reach, and run after a real one it holds
+  the new node to it.
+- `verify/test_kubearmor_node_replacement_checks.py`, offline: the live test's `run` against fake clusters. The
+  healthy fakes (one node shaped on run 19566's read, two nodes, an ARN-form cluster name, a NotReady node beside a
+  healthy one) pass; 16 cases fail by name, among them run 19479's read (the nine labels owned by `kubectl-label` at
+  2026-11-08T23:53:21Z), a label co-owned by the snitch and `kubectl-edit`, run 18849's DESIRED 0 node, a node with
+  labels and no enforcer pod, two enforcer pods on one node, the policy at Audit and the policy without the
+  condition. It holds the live test's condition equal to git's policy file. `python3 verify/scope_tests.py write`
+  added its map entry.
+
+**Live check on watch-it-burn-private (read-only, nothing changed).** `PRIVATE_CONTEXT=watch-it-burn-private python3
+verify/test_kubearmor_node_replacement_live.py`, exit 0:
+
+    PASS  the kube-context is watch-it-burn-private
+    PASS  require-resource-limits is at Deny, the state the criterion is about
+    PASS  require-resource-limits carries git's kubearmor-workloads-judged-at-their-pods, so the snitch Job a new node runs is admitted
+    PASS  the cluster has a Ready node
+    PASS  ip-10-0-90-97.us-west-2.compute.internal: carries the snitch's kubearmor.io/* labels
+    PASS  ip-10-0-90-97.us-west-2.compute.internal: no kubearmor.io/* label put there by hand (each owned by `snitch` alone)
+    PASS  ip-10-0-90-97.us-west-2.compute.internal: one Ready KubeArmor enforcer pod
+    PASS  enforcer DaemonSet kubearmor---cf83e: every pod it schedules is Ready (0/0)
+    PASS  enforcer DaemonSet kubearmor-bpf-containerd-98c2c: every pod it schedules is Ready (1/1)
+
+The node's ten `kubearmor.io/*` labels are owned by manager `snitch` at 2026-11-09T14:33:46Z, run 19566's relabel.
+`kubearmor---cf83e` is a DaemonSet of empty selector values, DESIRED 0, that the operator made while run 19566 had the
+labels off; it schedules nothing. On watch-it-burn-community the same read showed its node's labels owned by `snitch`
+at 2026-11-08T23:24:58Z and one Ready enforcer; that cluster runs no require-resource-limits, so the test is not
+pointed at it.
+
+**Not yet run on a cluster.** A real node replacement on watch-it-burn-private, which is not a run's to cause. After
+the next one, `PRIVATE_CONTEXT=watch-it-burn-private python3 verify/test_kubearmor_node_replacement_live.py` holds the
+new node.
+
+**Tests.** `python3 verify/test_kubearmor_node_replacement_checks.py` passed, and failed with the live test's hand-put
+judge disabled (three cases) and with its one-pod judge loosened to at least one (the two-pod case).
+`python3 verify/test_scope_tests.py` and `python3 verify/test_verify_harness.py` passed. The whole Test and E2E
+commands were not run; validation runs the tests that read the changed files. No tools-tier test reads them. No
+dependency was added.

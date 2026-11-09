@@ -5124,6 +5124,9 @@ reads:
     - gitops/kubearmor-config/templates/kubearmorconfig.yaml
     - gitops/kubearmor-config/values.yaml
     - policies/kyverno/require-resource-limits.yaml
+  test_kubearmor_node_replacement_checks.py:
+    - policies/kyverno/require-resource-limits.yaml
+    - verify/test_kubearmor_node_replacement_live.py
   test_kubearmor_snitch_admission.py:
     - gitops/bootstrap/apps/kubearmor.yaml
     - gitops/bootstrap/apps/kyverno-policies.yaml
