@@ -4,7 +4,7 @@
 #
 # Why. The guardrail's id is Bedrock's pick and its version is published by the apply, so neither can be committed:
 # they reach the cluster here, as pin_bedrock_profiles hands over the tagged profiles' ARNs (#513). guard-proxy reads
-# BEDROCK_GUARDRAIL_ID, _VERSION and _REGION from this ConfigMap at start (gitops/ai-layer/resources.yaml), so a pin
+# CONDUCT_GUARDRAIL_ID, CONDUCT_GUARDRAIL_VERSION and AWS_REGION from this ConfigMap at start (gitops/ai-layer/resources.yaml), so a pin
 # that wrote the map and left the pod running would leave the classifier unconfigured until some later restart.
 #
 # Usage: verify/test_pin_coc_guardrail.sh      (offline; terraform and kubectl are shims)
@@ -128,8 +128,8 @@ for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
                     print(e["name"], ref["key"], ref.get("optional"))
 P
 )"
-check "BEDROCK_GUARDRAIL_ID, _VERSION and _REGION come from the id, version and region keys, each optional" \
-  '[[ "${envs}" == $'"'"'BEDROCK_GUARDRAIL_ID id True\nBEDROCK_GUARDRAIL_VERSION version True\nBEDROCK_GUARDRAIL_REGION region True'"'"' ]]'
+check "guard-proxy's own names (48cc2ca), CONDUCT_GUARDRAIL_ID, CONDUCT_GUARDRAIL_VERSION and AWS_REGION, come from the id, version and region keys, each optional" \
+  '[[ "${envs}" == $'"'"'CONDUCT_GUARDRAIL_ID id True\nCONDUCT_GUARDRAIL_VERSION version True\nAWS_REGION region True'"'"' ]]'
 tf="$(sed -n '/^output "coc_guardrail" {/,/^}/p' "${REPO}/infra/terraform/aws/cluster/main.tf")"
 check "the cluster root's coc_guardrail output carries the guardrail id, the published version and the region" \
   'grep -q "id      = aws_bedrock_guardrail.coc.guardrail_id" <<<"${tf}" &&

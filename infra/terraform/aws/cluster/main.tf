@@ -1040,7 +1040,7 @@ output "agent_bedrock_role_arn" {
 }
 
 # The code-of-conduct guardrail guard-proxy calls (#1279). fleet.sh pin_coc_guardrail writes it into the agent
-# namespace's coc-guardrail ConfigMap, which guard-proxy reads as BEDROCK_GUARDRAIL_ID, _VERSION and _REGION.
+# namespace's coc-guardrail ConfigMap, which guard-proxy reads as CONDUCT_GUARDRAIL_ID, CONDUCT_GUARDRAIL_VERSION and AWS_REGION.
 output "coc_guardrail" {
   value = {
     id      = aws_bedrock_guardrail.coc.guardrail_id

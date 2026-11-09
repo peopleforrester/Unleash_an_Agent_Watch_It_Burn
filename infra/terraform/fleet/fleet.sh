@@ -1576,9 +1576,10 @@ pin_bedrock_profiles() {
 
 # The /chat code-of-conduct classifier (#1279). The cluster root creates this cluster's Bedrock guardrail and
 # publishes a version; its id is Bedrock's pick, so it reaches guard-proxy here, as agent/coc-guardrail, whose id,
-# version and region keys guard-proxy reads as BEDROCK_GUARDRAIL_ID, _VERSION and _REGION (gitops/ai-layer/
-# resources.yaml). A pod reads its env at start, so guard-proxy is restarted when the map changes, and only then:
-# the first pin after a bring-up, and a new version after a settings change. Not an Argo object, so selfHeal keeps it.
+# version and region keys guard-proxy reads as CONDUCT_GUARDRAIL_ID, CONDUCT_GUARDRAIL_VERSION and AWS_REGION
+# (gitops/ai-layer/resources.yaml). A pod reads its env at start, so guard-proxy is restarted when the map changes,
+# and only then: the first pin after a bring-up, and a new version after a settings change. Not an Argo object, so
+# selfHeal keeps it.
 COC_GUARDRAIL_CM=coc-guardrail
 
 pin_coc_guardrail() {
