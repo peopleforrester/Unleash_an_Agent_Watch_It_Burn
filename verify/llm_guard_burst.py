@@ -9,7 +9,8 @@
     ... -- python3 - --phases '[{"name": "b", "burst": 50, "mix": ["long"]}]' --url http://10.0.0.1:8000 \\
         < verify/llm_guard_burst.py
 
-Why. From slide 50 on, guard-input-on sends every room prompt to attackme through LLM Guard's classifier (#1148).
+Why. From Challenge 3's "Let's turn on some guardrails." on (the run-of-show's segment 4), guard-input-on sends
+every room prompt to attackme through LLM Guard's classifier (#1148), and the next slide asks the room to retry.
 guard-proxy calls it before its own rate limits (proxy.py _chat_turn: the input guards, then the per-session and
 cluster caps), so the 150-a-minute cluster cap does not bound what LLM Guard is sent: a room told to send again
 sends at once. LLM Guard runs each scan on a thread of its own and times it out at scan_prompt_timeout (10 s,

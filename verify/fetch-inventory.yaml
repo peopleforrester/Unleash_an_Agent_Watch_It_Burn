@@ -458,6 +458,12 @@ sites:
     lines: 4
     class: none
     why: comments, docstrings or messages that name the command; none runs it
+  verify/llm_guard_burst.py:
+  - match: urlopen
+    lines: 1
+    class: live
+    kind: cluster
+    target: 'LLM Guard''s POST /analyze/prompt on a workshop cluster, from inside guard-proxy''s pod with kubectl exec (#1172); the offline test points it at a fake on 127.0.0.1'
   verify/load_replay.py:
   - match: urlopen
     lines: 2

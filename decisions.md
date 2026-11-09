@@ -43576,7 +43576,7 @@ and `test_scope_tests.py`. The rest of the scoped suite is left to validation.
 **No live check.** The change is under `verify/`, which no cluster runs, and this entry (#1062).
 ## 2026-11-09 · #1172 · run 19288 · LLM Guard holds the cluster cap but not the room's bursts at 1 CPU, so its CPU limit goes to 3
 
-**The spec.** #1172: from slide 50 on, `guard-input-on` sends every room prompt to attackme through LLM Guard's
+**The spec.** #1172: from Challenge 3's `Let's turn on some guardrails.` slide on, `guard-input-on` sends every room prompt to attackme through LLM Guard's
 `/analyze/prompt` (#1148). Read the scan latency and any prompt refused on timeout during the live pass or a load
 replay, and raise llm-guard's replicas or CPU limit if it queues. `verify/prior-drafts.sh 1172 origin/staging` printed
 NONE and the issue had no comments, so this run started from staging at `a66e5732`.
@@ -43655,3 +43655,14 @@ community, as found. Nothing reached a model, so no spend.
 **Not yet run on a cluster.** Once hecaton promotes this and Argo CD rolls llm-guard: on each KubeCon cluster,
 `kubectl --context <cluster> -n agent exec -i deploy/guard-proxy -c proxy -- python3 - < verify/llm_guard_burst.py`
 should end `BURST GREEN` with the 3 CPU limit in place. The next run on #1172 runs it.
+
+**Run 19341: the tests gate.** Run 19288 failed validation on two offline tests, each read alone here. Neither was about
+the change's substance. `verify/test_fetch_inventory.py` named `verify/llm_guard_burst.py:64`, its `urlopen`, as a fetch
+call site with no entry, so `verify/fetch-inventory.yaml` now classes it `live`, kind `cluster`: LLM Guard's
+`/analyze/prompt` from inside guard-proxy's pod, with the offline test pointing it at a fake on 127.0.0.1.
+`verify/test_deck_shift_slide_citations.py` (#1099) refused the tool's docstring, which quoted the issue's "slide 50"
+from the deck before the 2026-11-07 shift. In today's deck `guard-input-on` runs on `#/50` and the room's retry is `#/51`,
+both inside the new Challenge 3's numbers, which only segment 4's own text may cite. So the docstring, and this entry's
+spec line, now name the slide by its title. Rerun alone, each passed: the fetch inventory checks, the deck-shift
+checks and `verify/test_llm_guard_burst.py`. No live check was rerun, because the manifest change is unchanged
+since run 19288's replay, and no dependency was added.
