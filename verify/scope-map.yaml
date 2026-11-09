@@ -3318,14 +3318,55 @@ reads:
     - verify/test_drift_selfheal_live.py
   test_e2e_image.py:
     - .github/workflows/build-e2e-tools-image.yml
+    - agent
+    - agent/*
+    - agent/desk-report-token
+    - agent/terminal-auth
+    - challenges/*
+    - challenges/01-cncf-wall/toggle-kyverno-enforce.sh
+    - challenges/c1-network-policy.yaml
+    - challenges/c3-kubearmor-policy.yaml
+    - challenges/c5-scoped-role.yaml
+    - challenges/c8-broad-role.yaml
+    - cost
+    - docs/admin-console.md
     - facilitation/kubecon-na-2026-audience-qr.svg
+    - gitops/ai-layer
+    - gitops/ai-layer/agentgateway.yaml
+    - gitops/ai-layer/kustomization.yaml
     - gitops/ai-layer/resources.yaml
+    - gitops/ai-layer/tool_audit.py
+    - gitops/ai-layer/web-terminal/entrypoint.sh
     - gitops/ai-layer/web/event.js
+    - gitops/workshop-agent/agent.yaml
     - images.lock
     - images/llm-guard
     - images/workshop-mcp/Dockerfile
+    - infra/datadog-fleet
+    - infra/org/boundary
+    - infra/terraform/aws/cluster/main.tf
+    - infra/terraform/aws/network
+    - infra/terraform/fleet
+    - infra/terraform/fleet/backups.py
+    - infra/terraform/fleet/backups.tsv
+    - infra/terraform/fleet/check-tls.sh
+    - infra/terraform/fleet/event.sh
+    - infra/terraform/fleet/fleet.sh
+    - infra/terraform/fleet/logs
+    - infra/terraform/fleet/preflight.sh
+    - infra/terraform/fleet/providers/*.sh
+    - infra/terraform/fleet/providers/aws.sh
+    - infra/terraform/fleet/providers/azure.sh
+    - infra/terraform/fleet/providers/gcp.sh
+    - infra/terraform/fleet/providers/local.sh
+    - infra/terraform/fleet/roster.tsv
+    - infra/terraform/fleet/scheduled-up.sh
     - scripts/audience-qr.py
     - scripts/ghcr_version_tag.py
+    - scripts/harvest_cluster_access.sh
+    - scripts/harvest_terminal_credential.sh
+    - scripts/push_vtt_aws_creds.sh
+    - scripts/reload-routes.sh
     - verify
     - verify/.dockerignore
     - verify/artifact-cache.sh
