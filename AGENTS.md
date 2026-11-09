@@ -109,7 +109,8 @@ binary is fetched once, at build, and checked against the lock's SHA-256. The ta
 build files' (`python3 verify/e2e_image.py ref`), and `.github/workflows/build-e2e-tools-image.yml` pushes it from
 staging only when that tag is new. `bash verify/e2e-image.sh run` runs the tier inside it with podman or docker: it
 uses the image when the host has the tag and pulls it once when not, so a second run pulls nothing, and with neither
-it fails naming the image and `bash verify/e2e-image.sh build`, never downloading a binary itself. Inside, gh answers
+it fails naming the image and `bash verify/e2e-image.sh build`, never downloading a binary itself. Tier tests named
+after `run` (`bash verify/e2e-image.sh run test_ttyd_ws_auth.py`) run alone inside it, as with the runner. Inside, gh answers
 `gh issue view` through the host's own gh (`verify/gh_relay.py`), and the host's artifact cache is mounted for the
 Terraform providers, charts and wheels. Once the image is on ghcr.io and pullable, `run-e2e-tools.sh` itself runs
 through it and `fetch-e2e-tools.sh` goes (the rest of #1188).

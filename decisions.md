@@ -53370,3 +53370,44 @@ fetched the 11 tools from the artifact cache and printed `365 tests ran`, `ALL O
 
 **No new dependency** is added to the repo. The image pins uv 0.13.7, as `verify-suites.yml` already does, and Python
 3.12.16 and 3.13.18, the builds uv 0.13.7 installs for the two Pythons `python.lock` is locked for.
+
+## 2026-11-09 · #1188 · run 19536 · Run 18630's image half, ported to staging and through the skip-markers gate
+
+**What this run took from run 18630.** `bash verify/prior-drafts.sh 1188 origin/staging` printed START from
+`origin/agent/1188-18630`: four commits, all drift edits in place and a decisions.md append. Hecaton's comment on the
+issue says why it did not land: the `skip-markers` gate failed on `exit 2` in `verify/test_gh_relay.py`. The draft was
+cherry-picked onto staging `d13bbd51`. Two files conflicted, and both sides were kept. In `verify/run-e2e-tools.sh`,
+staging's #1190 block for tier tests named on the command line comes first, then the draft's in-image block. In
+`verify/test_workflow_artifact_cache.py`, `build-kyverno-counter-fix.yml` (#1216) and the draft's
+`build-e2e-tools-image.yml` both stay in `JOBS`. The eight collector tests that staging's `d98816c4` and `5b35b83e`
+edited merged cleanly, and each still reads `OTELCOL_CONTRIB` first.
+
+**What differs from the draft.** The gh relay now refuses any gh call other than `gh issue view` with exit code 1, not
+2. Nothing read the code: `verify/gh_comments.py` tells a missing token apart by gh's exit 4, which the relay passes
+through as before. The skip-markers gate counts `exit 2` in a test file as exit-as-skip, so the test now holds exit
+code 1, and its docstring says so. `bash verify/e2e-image.sh run` now passes the tier tests named after `run` to
+`run-e2e-tools.sh` inside the image, so the #1190 way to rerun one test works in the image too.
+`verify/test_e2e_image.py` holds both forms: with no test named nothing follows the runner, and with two named both
+reach it. Its usage line exits 1. `python3 verify/scope_tests.py write` widened `test_e2e_image.py`'s entry with the
+paths the runner it drives reads, which `verify/test_scope_tests.py` asked for. The tag is now
+`51ec299b51b3558f-76a8eafc`: the lock's half is unchanged, and the build half moved because staging's #1185 added
+Checkov and moto to `python.lock` and changed `package_cache.py`.
+
+**Checked in this run.** `bash verify/e2e-image.sh build` built `ghcr.io/peopleforrester/wib-e2e-tools:51ec299b51b3558f-76a8eafc`
+with podman from staging's current build inputs, exit 0 (log `/var/lib/hecaton/runs/19536/e2e-image-build.log`).
+`bash verify/e2e-image.sh run test_collector_one_root_e2e.py` then found the image on the host and pulled nothing. It
+printed `only the tier tests named: test_collector_one_root_e2e.py`, `1 checks ran (the 1 tier tests named, no offline
+suite) in 0m41s`, `ALL E2E TOOLS TIER CHECKS GREEN` and `exit=0`. The test read the image's collector through
+`OTELCOL_CONTRIB` (log `/var/lib/hecaton/runs/19536/e2e-image-one.log`). Offline, each test this run changed or ported
+passed alone: `python3 verify/test_e2e_image.py`, `python3 verify/test_gh_relay.py`,
+`python3 verify/test_workflow_artifact_cache.py` and `python3 verify/test_scope_tests.py`. The skip-markers scanner,
+`hecaton/run/skipmarks.py`, counts the same markers in every changed test file at the base and at this tip. Neither
+the whole Test command nor the whole E2E command was run: validation runs the tests that read these files.
+
+**What is left, unchanged from run 18630.** `run-e2e-tools.sh` itself running through the image and refusing to
+download, CI and the gate using the image, and the offline test of that refusal all wait on the image being pullable
+from ghcr.io. An anonymous token read of `ghcr.io/v2/peopleforrester/wib-e2e-tools/tags/list` answered 403 on
+2026-11-09, so it is not there. The workflow pushes it once these commits reach staging. The next run on #1188 checks
+that pull and makes the switch.
+
+**Live check.** None: this change touches `verify/`, `.github/workflows/` and prose, and no cluster runs any of it.
